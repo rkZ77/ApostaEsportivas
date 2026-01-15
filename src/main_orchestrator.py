@@ -12,94 +12,18 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 # Pós-jogo: avaliação das recomendações
 
 
+# Refatorado para usar serviço dedicado
 def run_post_game_evaluation():
-    conn = get_connection()
-    cursor = conn.cursor()
-    collector = ApiFootballCollector()
-    cursor.execute('''
-        SELECT br.id, br.match_id, br.market, br.team_side, br.line, m.id as api_football_id
-        FROM bet_recommendations br
-        JOIN matches m ON br.match_id = m.idcop
-        WHERE br.recommendation IS NOT NULL AND (br.result IS NULL OR br.evaluated_at IS NULL)
-    ''')
-    recs = cursor.fetchall()
-    if not recs:
-        print("Nenhuma recomendação pendente para avaliação.")
-        cursor.close()
-        conn.close()
-        return
-    for rec_id, match_id, market, team_side, line, api_football_id in recs:
-        cursor.execute('SELECT status FROM matches WHERE id=%s', (match_id,))
-        row = cursor.fetchone()
-        if not row or row[0] != 'finished':
-            continue
-        stats = collector.get_fixture_statistics(api_football_id)
-        # Seleção dos valores corretos para cada time/total
-        if team_side == 'home':
-            goals = stats.get('home', {}).get('Goals', 0)
-            corners = stats.get('home', {}).get('Corner Kicks', 0)
-            cards = stats.get('home', {}).get(
-                'Yellow Cards', 0) + stats.get('home', {}).get('Red Cards', 0)
-        elif team_side == 'away':
-            goals = stats.get('away', {}).get('Goals', 0)
-            corners = stats.get('away', {}).get('Corner Kicks', 0)
-            cards = stats.get('away', {}).get(
-                'Yellow Cards', 0) + stats.get('away', {}).get('Red Cards', 0)
-        else:  # total
-            goals = (stats.get('home', {}).get('Goals', 0) or 0) + \
-                (stats.get('away', {}).get('Goals', 0) or 0)
-            corners = (stats.get('home', {}).get('Corner Kicks', 0) or 0) + \
-                (stats.get('away', {}).get('Corner Kicks', 0) or 0)
-            cards = (
-                (stats.get('home', {}).get('Yellow Cards', 0) or 0) + (stats.get('home', {}).get('Red Cards', 0) or 0) +
-                (stats.get('away', {}).get('Yellow Cards', 0) or 0) +
-                (stats.get('away', {}).get('Red Cards', 0) or 0)
-            )
-        # ...restante da lógica de avaliação...
-        if market == 'goals':
-            if (team_side == 'total' and goals > line) or (team_side != 'total' and goals > line):
-                result = 'GREEN'
-            else:
-                result = 'RED'
-        elif market == 'corners':
-            if (team_side == 'total' and corners > line) or (team_side != 'total' and corners > line):
-                result = 'GREEN'
-            else:
-                result = 'RED'
-        elif market == 'cards':
-            if (team_side == 'total' and cards > line) or (team_side != 'total' and cards > line):
-                result = 'GREEN'
-            else:
-                result = 'RED'
-        cursor.execute('UPDATE bet_recommendations SET result=%s, evaluated_at=%s WHERE id=%s',
-                       (result, datetime.now(), rec_id))
-    conn.commit()
-    print("Avaliação pós-jogo concluída.")
-    cursor.close()
-    conn.close()
+    from services.post_game_evaluation_service import evaluate_recommendations
+    evaluate_recommendations()
 
 # Métricas do robô
 
 
+# Refatorado para usar serviço dedicado
 def run_metrics():
-    conn = get_connection()
-    cursor = conn.cursor()
-    cursor.execute(
-        'SELECT COUNT(*) FROM bet_recommendations WHERE result IS NOT NULL')
-    total = cursor.fetchone()[0]
-    cursor.execute(
-        "SELECT COUNT(*) FROM bet_recommendations WHERE result='GREEN'")
-    greens = cursor.fetchone()[0]
-    cursor.execute(
-        "SELECT COUNT(*) FROM bet_recommendations WHERE result='RED'")
-    reds = cursor.fetchone()[0]
-    taxa = (greens / total * 100) if total > 0 else 0
-    print(f"Total apostas avaliadas: {total}")
-    print(f"Greens: {greens}")
-    print(f"Reds: {reds}")
-    print(f"Taxa de acerto: {taxa:.2f}%")
-    cursor.close()
-    conn.close()
+    from services.metrics_service import get_metrics
+    get_metrics()
 
 # Orquestrador principal
 
@@ -109,16 +33,49 @@ def main():
     # Coleta dos jogos futuros
     collector = ApiFootballCollector()
     matches = collector.get_fixtures()
+    from services.historical_stats_service import HistoricalStatsService
+    stats_service = HistoricalStatsService()
     suggestions = []
-    for match in matches:
-        fixture_id = match["match_id"]
-        league = match["league"]
-        home_team = match["homeTeam"]["name"]
-        away_team = match["awayTeam"]["name"]
-        match_datetime = match["startTimestamp"]
+    for fixture in matches:
+        # Aceita formato do ApiFootballCollector
+        required_keys = ["match_id", "homeTeam", "awayTeam",
+                         "league", "country", "startTimestamp"]
+        if not all(k in fixture for k in required_keys):
+            print(f"[WARN] Fixture ignorado por formato inesperado: {fixture}")
+            continue
+        fixture_id = fixture["match_id"]
+        league = fixture["league"]
+        home_team_id = fixture["homeTeam"].get("id")
+        away_team_id = fixture["awayTeam"].get("id")
+        league_id = fixture.get("league_id") or None
+        match_datetime = fixture["startTimestamp"]
+        from services.team_service import ensure_team_exists, get_team_id_by_name
+        # Ignora fixtures com times sem id
+        if not home_team_id or not away_team_id:
+            print(f"[WARN] Fixture ignorado: time sem id - {fixture}")
+            continue
+        # Garante que os times existem no banco
+        ensure_team_exists(home_team_id, home_team, league_id)
+        ensure_team_exists(away_team_id, away_team, league_id)
+        if not all([fixture_id, league, home_team_id, away_team_id, home_team, away_team, match_datetime]):
+            print(f"[WARN] Dados incompletos no fixture: {fixture}")
+            continue
         # Garante que o jogo existe na tabela matches
         ensure_match_exists(fixture_id, league, home_team,
                             away_team, match_datetime)
+        # Consulta estatísticas históricas dos times
+        home_stats = stats_service.get_team_stats(home_team_id)
+        away_stats = stats_service.get_team_stats(away_team_id)
+        print(
+            f"[PRE-JOGO] Estatísticas {home_team} (ID {home_team_id}): {home_stats}")
+        print(
+            f"[PRE-JOGO] Estatísticas {away_team} (ID {away_team_id}): {away_stats}")
+        for market in ["goals", "corners", "cards"]:
+            for side in ["total", "home", "away"]:
+                suggestions.append(
+                    (fixture_id, league, home_team, away_team, market, side, match_datetime))
+        print(
+            f"[PRE-JOGO] Estatísticas {away_team} (ID {away_team_id}): {away_stats}")
         for market in ["goals", "corners", "cards"]:
             for side in ["total", "home", "away"]:
                 suggestions.append(

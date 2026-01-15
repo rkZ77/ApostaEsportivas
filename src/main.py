@@ -5,7 +5,7 @@ Pré-jogo, baseado em estatísticas históricas.
 
 
 from collectors.api_football_collector import ApiFootballCollector
-from collectors.betano_collector import BetanoCollector
+from collectors.odds_api_collector import OddsApiCollector
 from analytics.goals_model import prob_goals_total, prob_goals_team
 from analytics.corners_model import prob_corners_total, prob_corners_team
 from analytics.cards_model import prob_cards_total, prob_cards_team
@@ -15,7 +15,7 @@ from services.bet_recommendation_service import save_recommendation
 LEAGUE_IDS = [39, 140, 78, 475]
 HISTORICAL_GAMES = 10
 collector = ApiFootballCollector()
-betano = BetanoCollector()
+odds_api = OddsApiCollector()
 
 
 def main():
@@ -25,27 +25,28 @@ def main():
     if not matches:
         print("[INFO] Nenhum jogo das ligas suportadas hoje ou amanhã.")
         return
+    from services.team_service import get_team_id_by_name
+    from services.historical_stats_service import HistoricalStatsService
+    stats_service = HistoricalStatsService()
     for match in matches:
         home_team = match["homeTeam"]["name"]
         away_team = match["awayTeam"]["name"]
-        # Exemplo de uso de estatísticas históricas (ajuste conforme integração real)
-        # home_id = ... # obter id do time se disponível
-        # away_id = ...
-        # home_stats = collector.get_team_historical_stats(home_id, HISTORICAL_GAMES)
-        # away_stats = collector.get_team_historical_stats(away_id, HISTORICAL_GAMES)
-        print(f"[DEBUG] Jogo encontrado: {home_team} x {away_team}")
-        # home_id = match["homeTeam"]["id"]  # Não existe mais campo id no time
-        # away_id = match["awayTeam"]["id"]  # Não existe mais campo id no time
         match_event_id = match["match_id"]
-
-        home_stats = sofa.get_team_historical_stats(home_id, HISTORICAL_GAMES)
-        away_stats = sofa.get_team_historical_stats(away_id, HISTORICAL_GAMES)
-        odds = betano.get_odds_by_match(home_team, away_team)
+        # Resolve team_id via tabela teams
+        home_team_id = get_team_id_by_name(home_team)
+        away_team_id = get_team_id_by_name(away_team)
+        if not home_team_id or not away_team_id:
+            print(
+                f"[WARN] Não foi possível resolver team_id para: {home_team} ou {away_team}. Nenhuma sugestão gerada.")
+            continue
+        home_stats = stats_service.get_team_stats(home_team_id)
+        away_stats = stats_service.get_team_stats(away_team_id)
+        odds = odds_api.get_odds_by_match(home_team, away_team)
         print(f"[DEBUG] Odds retornadas: {odds if odds else '{}'}")
 
         if not odds:
             print(
-                "[INFO] Jogo sem odds disponíveis na Betano. Nenhuma sugestão gerada.")
+                "[INFO] Jogo sem odds disponíveis na Odds API. Nenhuma sugestão gerada.")
             continue
 
         # Mercado: ESCANTEIOS
