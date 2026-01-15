@@ -1,77 +1,98 @@
 import os
-import requests
 import psycopg2
-from psycopg2.extras import execute_values
+import requests
+from dotenv import load_dotenv
+
+load_dotenv()  # <- ESSENCIAL
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
+
+if not API_KEY:
+    raise RuntimeError("API_FOOTBALL_KEY não definida no ambiente")
+
 DB_HOST = os.getenv("DB_HOST", "localhost")
 DB_PORT = os.getenv("DB_PORT", "5432")
-DB_NAME = os.getenv("DB_NAME", "apostas")
+DB_NAME = os.getenv("DB_NAME", "football_stats")
 DB_USER = os.getenv("DB_USER", "postgres")
-DB_PASS = os.getenv("DB_PASS", "postgres")
+DB_PASS = os.getenv("DB_PASS", "Pereira2310!")
 
-LEAGUES = {
-    "Premier League": 39,
-    "La Liga": 140,
-    "Bundesliga": 78,
-    "Paulistão A1": 475
+HEADERS = {
+    "x-apisports-key": API_KEY
 }
 
-API_URL = "https://v3.football.api-sports.io/teams"
-HEADERS = {"x-apisports-key": API_KEY}
+LEAGUES = [
+    {"league_id": 39, "season": 2025},   # Premier League
+    {"league_id": 140, "season": 2025},  # La Liga
+    {"league_id": 78, "season": 2025},   # Bundesliga
+    {"league_id": 475, "season": 2026},  # Paulistão A1
+]
 
+# =========================
+# CONEXÃO COM BANCO
+# =========================
 
-def get_teams_by_league(league_id):
-    params = {"league": league_id, "season": "2025"}
-    response = requests.get(API_URL, headers=HEADERS, params=params)
-    response.raise_for_status()
-    data = response.json()
-    return [
-        {
-            "team_id": team["team"]["id"],
-            "team_name": team["team"]["name"],
-            "league_id": league_id
-        }
-        for team in data.get("response", [])
-    ]
-
-
-def insert_teams(teams):
-    conn = psycopg2.connect(
-        host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
+def get_connection():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS
     )
+
+# =========================
+# SYNC DE TIMES
+# =========================
+
+def sync_teams():
+    if not API_KEY:
+        raise RuntimeError("API_FOOTBALL_KEY não definida no ambiente")
+
+    conn = get_connection()
     cur = conn.cursor()
-    sql = """
-        INSERT INTO teams (team_id, team_name, league_id)
-        VALUES %s
-        ON CONFLICT (team_id) DO NOTHING;
-    """
-    values = [(t["team_id"], t["team_name"], t["league_id"]) for t in teams]
-    execute_values(cur, sql, values)
-    conn.commit()
+
+    for item in LEAGUES:
+        print(f"[INFO] Buscando times da liga {item['league_id']} - temporada {item['season']}")
+
+        url = "https://v3.football.api-sports.io/teams"
+        params = {
+            "league": item["league_id"],
+            "season": item["season"]
+        }
+
+        r = requests.get(url, headers=HEADERS, params=params)
+        r.raise_for_status()
+        data = r.json().get("response", [])
+
+        print(f"[INFO] {len(data)} times encontrados")
+
+        for t in data:
+            team = t.get("team")
+            if not team:
+                continue
+
+            cur.execute("""
+    INSERT INTO teams (id, name, country, league_id, season)
+    VALUES (%s, %s, %s, %s, %s)
+    ON CONFLICT (id) DO NOTHING
+""", (
+    team["id"],
+    team["name"],
+    team["country"],
+    item["league_id"],
+    item["season"]
+))
+
+        conn.commit()
+        print(f"[OK] Liga {item['league_id']} sincronizada\n")
+
     cur.close()
     conn.close()
+    print("[FINALIZADO] Times sincronizados com sucesso.")
 
-
-def main():
-    for league_name, league_id in LEAGUES.items():
-        teams = get_teams_by_league(league_id)
-        print(f"[INFO] Times encontrados na liga {league_name}: {len(teams)}")
-        # Check which teams are new before insert
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
-        )
-        cur = conn.cursor()
-        cur.execute(
-            "SELECT team_id FROM teams WHERE league_id = %s", (league_id,))
-        existing_ids = set(row[0] for row in cur.fetchall())
-        new_teams = [t for t in teams if t["team_id"] not in existing_ids]
-        print(f"[INFO] Times novos inseridos: {len(new_teams)}")
-        cur.close()
-        conn.close()
-        if new_teams:
-            insert_teams(new_teams)
-
+# =========================
+# MAIN
+# =========================
 
 if __name__ == "__main__":
-    main()
+    sync_teams()
