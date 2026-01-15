@@ -6,49 +6,36 @@ load_dotenv()
 
 API_KEY = os.getenv("ODDS_API_KEY")
 
-BASE_URL = "https://api.the-odds-api.com/v4/sports/soccer/odds"
-
-MARKETS_MAP = {
-    "GOLS": "totals",
-    "CORNERS": "corners_totals",
-    "CARDS": "cards_totals"
-}
-
 class OddsCollectorService:
 
-    def get_odds_for_fixture(self, home_team, away_team):
+    def get_odds_by_event_id(self, sport_key, event_id):
+        url = f"https://api.the-odds-api.com/v4/sports/{sport_key}/events/{event_id}/odds"
+
         params = {
             "apiKey": API_KEY,
             "regions": "eu",
-            "markets": ",".join(MARKETS_MAP.values()),
+            "markets": "totals,corners_totals,cards_totals",
             "oddsFormat": "decimal"
         }
 
-        response = requests.get(BASE_URL, params=params)
-        response.raise_for_status()
+        r = requests.get(url, params=params)
+        r.raise_for_status()
 
-        events = response.json()
+        data = r.json()
+        return self._parse_markets(data)
 
-        # 🔎 filtro local por times
-        for event in events:
-            if (
-                event["home_team"].lower() == home_team.lower()
-                and event["away_team"].lower() == away_team.lower()
-            ):
-                return self._extract_markets(event)
-
-        return []
-
-    def _extract_markets(self, event):
-        odds_list = []
+    def _parse_markets(self, event):
+        odds = []
 
         for bookmaker in event.get("bookmakers", []):
             for market in bookmaker.get("markets", []):
                 for outcome in market.get("outcomes", []):
-                    odds_list.append({
+                    odds.append({
+                        "bookmaker": bookmaker["key"],
                         "market": market["key"],
+                        "side": outcome["name"],
                         "line": outcome.get("point"),
-                        "odd": outcome.get("price")
+                        "odd": outcome["price"]
                     })
 
-        return odds_list
+        return odds
