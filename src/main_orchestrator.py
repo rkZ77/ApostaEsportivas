@@ -19,7 +19,7 @@ def run_post_game_evaluation():
     cursor.execute('''
         SELECT br.id, br.match_id, br.market, br.team_side, br.line, m.id as api_football_id
         FROM bet_recommendations br
-        JOIN matches m ON br.match_id = m.id
+        JOIN matches m ON br.match_id = m.idcop
         WHERE br.recommendation IS NOT NULL AND (br.result IS NULL OR br.evaluated_at IS NULL)
     ''')
     recs = cursor.fetchall()
