@@ -4,94 +4,51 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ODDS_API_KEY = os.getenv("ODDS_API_KEY")
-if not ODDS_API_KEY:
-    raise RuntimeError("ODDS_API_KEY não definida no ambiente")
+API_KEY = os.getenv("ODDS_API_KEY")
 
 BASE_URL = "https://api.the-odds-api.com/v4/sports/soccer/odds"
 
-BOOKMAKERS_ALLOWED = ["bet365", "pinnacle"]
-
-# Mapeamento interno de mercados
-MARKET_MAP = {
-    "GOALS": {
-        "api_market": "totals",
-        "lines": [1.5, 2.5, 3.5]
-    },
-    "CORNERS": {
-        "api_market": "corners_totals",
-        "lines": [8.5, 9.5, 10.5]
-    },
-    "CARDS": {
-        "api_market": "cards_totals",
-        "lines": [3.5, 4.5, 5.5]
-    }
+MARKETS_MAP = {
+    "GOLS": "totals",
+    "CORNERS": "corners_totals",
+    "CARDS": "cards_totals"
 }
-
 
 class OddsCollectorService:
 
-    def __init__(self):
-        self.headers = {}
-        self.params_base = {
-            "apiKey": ODDS_API_KEY,
+    def get_odds_for_fixture(self, home_team, away_team):
+        params = {
+            "apiKey": API_KEY,
             "regions": "eu",
-            "markets": ",".join(
-                m["api_market"] for m in MARKET_MAP.values()
-            ),
+            "markets": ",".join(MARKETS_MAP.values()),
             "oddsFormat": "decimal"
         }
-
-    def get_odds_for_fixture(self, home_team: str, away_team: str):
-        """
-        Retorna odds normalizadas por mercado.
-        """
-        params = self.params_base.copy()
-        params["home_team"] = home_team
-        params["away_team"] = away_team
 
         response = requests.get(BASE_URL, params=params)
         response.raise_for_status()
 
         events = response.json()
-        if not events:
-            return []
 
-        odds_results = []
-
+        # 🔎 filtro local por times
         for event in events:
-            for bookmaker in event.get("bookmakers", []):
-                if bookmaker["key"] not in BOOKMAKERS_ALLOWED:
-                    continue
+            if (
+                event["home_team"].lower() == home_team.lower()
+                and event["away_team"].lower() == away_team.lower()
+            ):
+                return self._extract_markets(event)
 
-                for market in bookmaker.get("markets", []):
-                    normalized = self._parse_market(market)
-                    odds_results.extend(normalized)
+        return []
 
-        return odds_results
+    def _extract_markets(self, event):
+        odds_list = []
 
-    # ===========================
-    # NORMALIZAÇÃO
-    # ===========================
-    def _parse_market(self, market_data):
-        results = []
+        for bookmaker in event.get("bookmakers", []):
+            for market in bookmaker.get("markets", []):
+                for outcome in market.get("outcomes", []):
+                    odds_list.append({
+                        "market": market["key"],
+                        "line": outcome.get("point"),
+                        "odd": outcome.get("price")
+                    })
 
-        for market_key, config in MARKET_MAP.items():
-            if market_data["key"] != config["api_market"]:
-                continue
-
-            for outcome in market_data.get("outcomes", []):
-                if outcome["name"].lower() != "over":
-                    continue
-
-                line = float(outcome.get("point", 0))
-                if line not in config["lines"]:
-                    continue
-
-                results.append({
-                    "market": market_key,
-                    "line": line,
-                    "odd": float(outcome["price"])
-                })
-
-        return results
+        return odds_list

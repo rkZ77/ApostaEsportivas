@@ -1,11 +1,21 @@
-from src.services.historical_stats_service import HistoricalStatsService
-from src.services.value_analysis_service import ValueAnalysisService
+from src.collectors.odds_collector_service import OddsCollectorService
 
-hist_service = HistoricalStatsService()
-value_service = ValueAnalysisService()
+def main():
+    odds_service = OddsCollectorService()
 
-stats = hist_service.get_team_stats(7848)  # Manchester United
-result = value_service.analyze_over_goals(stats, odd=1.95)
-result = value_service.analyze_over_corners(stats, odd=1.85, line=5.5) 
+    odds = odds_service.get_odds_for_fixture(
+        home_team="Manchester United",
+        away_team="Chelsea"
+    )
 
-print(result)
+    print("\n=== ODDS RETORNADAS ===")
+
+    if not odds:
+        print("❌ Nenhuma odd retornada")
+        return
+
+    for o in odds:
+        print(o)
+
+if __name__ == "__main__":
+    main()
