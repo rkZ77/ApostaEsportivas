@@ -1,20 +1,27 @@
-from src.collectors.odds_collector_service import OddsCollectorService
+import requests
+import os
+from dotenv import load_dotenv
 
-def main():
-    service = OddsCollectorService()
+load_dotenv()
 
-    # EVENT ID REAL da Odds API (pegue do endpoint /events)
-    EVENT_ID = "037d7b6bb128546961e2a06680f63944"
-    SPORT_KEY = "soccer_epl"
+API_KEY = os.getenv("ODDS_API_KEY")
 
-    odds = service.get_odds_by_event_id(
-        sport_key=SPORT_KEY,
-        event_id=EVENT_ID
-    )
+url = "https://api.the-odds-api.com/v4/sports/soccer_epl/events"
+params = {
+    "apiKey": API_KEY,
+    "regions": "eu"
+}
 
-    print("ODDS RETORNADAS:")
-    for o in odds:
-        print(o)
+r = requests.get(url, params=params)
+r.raise_for_status()
 
-if __name__ == "__main__":
-    main()
+events = r.json()
+
+print(f"Eventos encontrados: {len(events)}")
+
+for e in events[:5]:
+    print({
+  "id": "3fd1e970c718bfc0f99a7e4575e46f49",
+  "home": "Manchester United",
+  "away": "Manchester City",
+    })
