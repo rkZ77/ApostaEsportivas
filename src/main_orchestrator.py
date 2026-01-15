@@ -1,4 +1,5 @@
 
+
 from datetime import datetime
 from database.db_connection import get_connection
 from main import main as run_pre_game
@@ -7,7 +8,12 @@ from services.match_service import ensure_match_exists
 from collectors.api_football_collector import ApiFootballCollector
 import sys
 import os
+import locale
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+# Debug: Verificação de encoding Python e locale
+print("Python encoding:", sys.getdefaultencoding())
+print("Locale preferred encoding:", locale.getpreferredencoding())
 
 # Pós-jogo: avaliação das recomendações
 
@@ -36,6 +42,9 @@ def main():
     from services.historical_stats_service import HistoricalStatsService
     stats_service = HistoricalStatsService()
     suggestions = []
+    # Filtro de data: apenas hoje e hoje+1 (UTC)
+    now_utc = int(datetime.utcnow().timestamp())
+    tomorrow_utc = now_utc + 86400
     for fixture in matches:
         # Aceita formato do ApiFootballCollector
         required_keys = ["match_id", "homeTeam", "awayTeam",
@@ -49,6 +58,10 @@ def main():
         away_team_id = fixture["awayTeam"].get("id")
         league_id = fixture.get("league_id") or None
         match_datetime = fixture["startTimestamp"]
+        # Filtro de data para pré-jogo
+        if not (now_utc <= match_datetime <= tomorrow_utc):
+            print(f"[DEBUG] Jogo ignorado por data: fixture_id {fixture_id}")
+            continue
         from services.team_service import ensure_team_exists, get_team_id_by_name
         # Ignora fixtures com times sem id
         if not home_team_id or not away_team_id:

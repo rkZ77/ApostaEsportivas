@@ -13,11 +13,13 @@ LEAGUES = [
 
 def get_api_key():
     api_key = os.getenv("API_FOOTBALL_KEY")
+    print(f"[DEBUG] API_FOOTBALL_KEY inicial: {api_key}")
     if not api_key:
         try:
             from dotenv import load_dotenv
             load_dotenv()
             api_key = os.getenv("API_FOOTBALL_KEY")
+            print(f"[DEBUG] API_FOOTBALL_KEY após load_dotenv: {api_key}")
         except ImportError:
             pass
     if not api_key:

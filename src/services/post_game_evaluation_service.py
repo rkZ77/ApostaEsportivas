@@ -18,15 +18,22 @@ GOALS_LINE = 2.5
 
 
 def get_pending_recommendations():
-    conn = psycopg2.connect(host=DB_HOST, port=DB_PORT,
-                            dbname=DB_NAME, user=DB_USER, password=DB_PASS)
-    cur = conn.cursor()
+    print("[DEBUG] DB_HOST:", repr(DB_HOST), type(DB_HOST))
+    print("[DEBUG] DB_PORT:", repr(DB_PORT), type(DB_PORT))
+    print("[DEBUG] DB_NAME:", repr(DB_NAME), type(DB_NAME))
+    print("[DEBUG] DB_USER:", repr(DB_USER), type(DB_USER))
+    print("[DEBUG] DB_PASS:", repr(DB_PASS), type(DB_PASS))
     conn = psycopg2.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-                            user=DB_USER, password=DB_PASS, client_encoding='UTF8')
+                            user=DB_USER, password=DB_PASS)
+    conn.set_client_encoding('UTF8')
+    cur = conn.cursor()
     cur.execute("""
-        SELECT id, fixture_id, market, line FROM recommendations
-        WHERE status = 'PENDING' AND market = 'GOLS' AND line = %s
-    """, (GOALS_LINE,))
+    SELECT id, fixture_id, market, line
+    FROM bet_recommendations
+    WHERE status = 'PENDING'
+      AND market = 'GOLS'
+      AND line = %s
+""", (GOALS_LINE,))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -57,11 +64,10 @@ def evaluate_recommendations():
     greens = 0
     reds = 0
     evaluated = 0
-    conn = psycopg2.connect(host=DB_HOST, port=DB_PORT,
-                            dbname=DB_NAME, user=DB_USER, password=DB_PASS)
-    cur = conn.cursor()
     conn = psycopg2.connect(host=DB_HOST, port=DB_PORT, dbname=DB_NAME,
-                            user=DB_USER, password=DB_PASS, client_encoding='UTF8')
+                            user=DB_USER, password=DB_PASS)
+    conn.set_client_encoding('UTF8')
+    cur = conn.cursor()
     for rec_id, fixture_id, market, line in recs:
         total_goals = get_fixture_goals(fixture_id)
         if total_goals is None:
