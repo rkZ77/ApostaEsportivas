@@ -1,88 +1,58 @@
 class ValueAnalysisService:
     """
-    Serviço responsável por calcular:
-    - probabilidade estimada
-    - valor esperado (EV)
-    - decisão de VALUE BET
+    Responsável por transformar estatísticas + odds
+    em probabilidade real e Expected Value
     """
 
-    # Limites defensivos por mercado (controle de risco)
-    MAX_PROBABILITY = {
-        "GOALS": 0.80,
-        "CORNERS": 0.78,
-        "CARDS": 0.75
-    }
+    def implied_probability(self, odd: float) -> float:
+        if odd <= 1:
+            return 0.0
+        return 1 / odd
 
-    MIN_EV = 0.05  # 5% mínimo de valor esperado
+    def expected_value(self, prob: float, odd: float) -> float:
+        return (prob * odd) - 1
 
-    def __init__(self):
-        pass
-
-    # =========================
-    # MÉTODO PRINCIPAL
-    # =========================
-    def analyze(
-        self,
-        market: str,
-        historical_stats: dict,
-        line: float,
-        odd: float,
-        context: str = "total"  # total | home | away
-    ):
-        """
-        Retorna análise de valor para qualquer mercado.
-        """
-
-        if market == "GOALS":
-            metric = "avg_goals_for"
-        elif market == "CORNERS":
-            metric = "avg_corners"
-        elif market == "CARDS":
-            metric = "avg_cards"
-        else:
-            raise ValueError(f"Mercado não suportado: {market}")
-
-        avg_value = historical_stats.get(context, {}).get(metric, 0.0)
-
-        probability = self._estimate_probability(avg_value, line)
-        probability = min(probability, self.MAX_PROBABILITY[market])
-
-        expected_value = (probability * odd) - 1
+    def has_value(self, prob: float, odd: float, min_prob=0.30):
+        ev = self.expected_value(prob, odd)
 
         return {
-            "market": market,
-            "line": line,
-            "odd": odd,
-            "probability_model": round(probability, 4),
-            "expected_value": round(expected_value, 4),
-            "has_value": expected_value >= self.MIN_EV
+            "probability": prob,
+            "implied_probability": self.implied_probability(odd),
+            "expected_value": ev,
+            "has_value": prob >= min_prob and ev > 0
         }
 
-    # =========================
-    # MODELO DE PROBABILIDADE
-    # =========================
-    def _estimate_probability(self, avg: float, line: float) -> float:
+    def probability_from_stats(self, market, line, stats_home, stats_away):
         """
-        Modelo simples, robusto e controlado.
+        Calcula probabilidade baseada em estatísticas históricas
         """
 
-        if avg <= 0:
-            return 0.01
+        if market == "totals":  # GOLS
+            avg_goals = (
+                stats_home["avg_goals_for"] +
+                stats_away["avg_goals_for"]
+            ) / 2
 
-        ratio = avg / line
+            return min(avg_goals / line, 1)
 
-        # Curva suavizada
-        if ratio >= 1.40:
-            return 0.78
-        elif ratio >= 1.25:
-            return 0.72
-        elif ratio >= 1.10:
-            return 0.65
-        elif ratio >= 1.00:
-            return 0.58
-        elif ratio >= 0.90:
-            return 0.48
-        elif ratio >= 0.80:
-            return 0.38
-        else:
-            return 0.25
+        if market == "corners_totals":
+            avg_corners = (
+                stats_home["avg_corners"] +
+                stats_away["avg_corners"]
+            ) / 2
+
+            return min(avg_corners / line, 1)
+
+        if market == "cards_totals":
+            avg_cards = (
+                stats_home["avg_cards"] +
+                stats_away["avg_cards"]
+            ) / 2
+
+            return min(avg_cards / line, 1)
+
+        # Resultado (1X2) – simplificado por enquanto
+        if market == "h2h":
+            return 0.33
+
+        return 0.0

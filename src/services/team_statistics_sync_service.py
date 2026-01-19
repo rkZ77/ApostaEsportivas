@@ -1,163 +1,117 @@
 import os
 import psycopg2
 import requests
-from dotenv import load_dotenv
-from datetime import datetime
-
-load_dotenv()
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
-if not API_KEY:
-    raise RuntimeError("API_FOOTBALL_KEY não definida")
 
-DB_HOST = "localhost"
-DB_PORT = 5432
-DB_NAME = "football_stats"
-DB_USER = "postgres"
-DB_PASS = "Pereira2310!"
+DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_PORT = os.getenv("DB_PORT", "5432")
+DB_NAME = os.getenv("DB_NAME", "football_stats")
+DB_USER = os.getenv("DB_USER", "postgres")
+DB_PASS = os.getenv("DB_PASS", "Pereira2310!")
 
-API_URL = "https://v3.football.api-sports.io/teams/statistics"
-HEADERS = {"x-apisports-key": API_KEY}
-
-
-def get_connection():
-    return psycopg2.connect(
-        host=DB_HOST,
-        port=DB_PORT,
-        dbname=DB_NAME,
-        user=DB_USER,
-        password=DB_PASS
-    )
+ALLOWED_LEAGUES = {
+    39,  # Premier League
+    71,  # Brasileirão A
+    103,  # Paulista
+    140,  # La Liga
+    78,  # Bundesliga
+}
 
 
-def safe_float(value, default=0.0):
-    try:
-        return float(value)
-    except (TypeError, ValueError):
-        return default
+class TeamStatisticsSyncService:
 
+    def __init__(self):
+        if not API_KEY:
+            raise RuntimeError("API_FOOTBALL_KEY não definida")
+        self.base_url = "https://v3.football.api-sports.io"
 
-def safe_int(value, default=0):
-    try:
-        return int(value)
-    except (TypeError, ValueError):
-        return default
+    def _connect(self):
+        return psycopg2.connect(
+            host=DB_HOST, port=DB_PORT,
+            dbname=DB_NAME, user=DB_USER, password=DB_PASS
+        )
 
+    def _load_unique_teams(self):
+        conn = self._connect()
+        cur = conn.cursor()
 
-def fetch_team_statistics(team_id, league_id, season):
-    r = requests.get(
-        API_URL,
-        headers=HEADERS,
-        params={"team": team_id, "league": league_id, "season": season}
-    )
-    r.raise_for_status()
-    return r.json().get("response", {})
+        cur.execute("""
+            SELECT DISTINCT home_id FROM fixtures
+            WHERE league_id = ANY(%s)
+            UNION
+            SELECT DISTINCT away_id FROM fixtures
+            WHERE league_id = ANY(%s)
+        """, (list(ALLOWED_LEAGUES), list(ALLOWED_LEAGUES)))
 
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
 
-def sync_team_statistics():
-    conn = get_connection()
-    cur = conn.cursor()
+        return [r[0] for r in rows if r[0] is not None]
 
-    cur.execute("""
-        SELECT id, league_id, season
-        FROM teams
-    """)
-    teams = cur.fetchall()
+    def fetch_team_stats(self, team_id):
+        url = f"{self.base_url}/teams/statistics"
+        headers = {"x-apisports-key": API_KEY}
+        params = {
+            "team": team_id,
+            "season": 2025,
+        }
 
-    print(f"[INFO] Sincronizando estatísticas de {len(teams)} times")
+        r = requests.get(url, headers=headers, params=params)
 
-    for team_id, league_id, season in teams:
-        try:
-            stats = fetch_team_statistics(team_id, league_id, season)
-            if not stats:
-                print(f"[WARN] Sem estatísticas para time {team_id}")
-                continue
+        if r.status_code != 200:
+            return None
 
-            fixtures = stats.get("fixtures", {})
-            goals = stats.get("goals", {})
-            cards = stats.get("cards", {})
+        data = r.json()["response"]
 
-            goals_for_total = safe_int(
-                goals.get("for", {}).get("total", {}).get("total")
-            )
-            goals_against_total = safe_int(
-                goals.get("against", {}).get("total", {}).get("total")
-            )
+        return {
+            "team_id": team_id,
+            "avg_goals_for": data["goals"]["for"]["average"]["total"],
+            "avg_goals_against": data["goals"]["against"]["average"]["total"],
+            "avg_corners": data.get("corners", {}).get("for", 0),
+            "avg_cards": data.get("cards", {}).get("yellow", {}).get("average", 0),
+        }
 
-            avg_goals_for = safe_float(
-                goals.get("for", {}).get("average", {}).get("total")
-            )
-            avg_goals_against = safe_float(
-                goals.get("against", {}).get("average", {}).get("total")
-            )
+    def save_team_stats(self, stats):
+        conn = self._connect()
+        cur = conn.cursor()
 
-            home_avg_goals_for = safe_float(
-                goals.get("for", {}).get("average", {}).get("home")
-            )
-            away_avg_goals_for = safe_float(
-                goals.get("for", {}).get("average", {}).get("away")
-            )
-
-            yellow_avg = safe_float(
-                cards.get("yellow", {}).get("average")
-            )
-            red_avg = safe_float(
-                cards.get("red", {}).get("average")
-            )
-
-            matches_played = safe_int(
-                fixtures.get("played", {}).get("total")
-            )
-
-            cur.execute("""
-                INSERT INTO team_season_statistics (
-                    team_id, league_id, season,
-                    matches_played,
-                    goals_for, goals_against,
-                    avg_goals_for, avg_goals_against,
-                    home_avg_goals_for, away_avg_goals_for,
-                    avg_yellow_cards, avg_red_cards,
-                    last_updated
-                )
-                VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
-                ON CONFLICT (team_id, league_id, season)
-                DO UPDATE SET
-                    matches_played = EXCLUDED.matches_played,
-                    goals_for = EXCLUDED.goals_for,
-                    goals_against = EXCLUDED.goals_against,
-                    avg_goals_for = EXCLUDED.avg_goals_for,
-                    avg_goals_against = EXCLUDED.avg_goals_against,
-                    home_avg_goals_for = EXCLUDED.home_avg_goals_for,
-                    away_avg_goals_for = EXCLUDED.away_avg_goals_for,
-                    avg_yellow_cards = EXCLUDED.avg_yellow_cards,
-                    avg_red_cards = EXCLUDED.avg_red_cards,
-                    last_updated = NOW()
-            """, (
+        cur.execute("""
+            INSERT INTO team_statistics (
                 team_id,
-                league_id,
-                season,
-                matches_played,
-                goals_for_total,
-                goals_against_total,
                 avg_goals_for,
                 avg_goals_against,
-                home_avg_goals_for,
-                away_avg_goals_for,
-                yellow_avg,
-                red_avg,
-                datetime.utcnow()
-            ))
+                avg_corners,
+                avg_cards
+            )
+            VALUES (%s,%s,%s,%s,%s)
+            ON CONFLICT (team_id)
+            DO UPDATE SET
+                avg_goals_for     = EXCLUDED.avg_goals_for,
+                avg_goals_against = EXCLUDED.avg_goals_against,
+                avg_corners       = EXCLUDED.avg_corners,
+                avg_cards         = EXCLUDED.avg_cards
+        """, (
+            stats["team_id"],
+            stats["avg_goals_for"],
+            stats["avg_goals_against"],
+            stats["avg_corners"],
+            stats["avg_cards"]
+        ))
 
-            print(f"[OK] Time {team_id} sincronizado")
+        conn.commit()
+        cur.close()
+        conn.close()
 
-        except Exception as e:
-            print(f"[ERRO] Time {team_id}: {e}")
+    def sync(self):
+        teams = self._load_unique_teams()
+        print(f"[STATS] Encontrados {len(teams)} times para atualizar.")
 
-    conn.commit()
-    cur.close()
-    conn.close()
-    print("[FINALIZADO] Estatísticas sincronizadas")
-
-
-if __name__ == "__main__":
-    sync_team_statistics()
+        for team_id in teams:
+            stats = self.fetch_team_stats(team_id)
+            if stats:
+                self.save_team_stats(stats)
+                print(f"[STATS] Atualizado team {team_id}")
+            else:
+                print(f"[WARN] Time {team_id} sem estatísticas")

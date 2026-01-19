@@ -1,131 +1,95 @@
 import datetime
-import psycopg2
-import requests
-from dotenv import load_dotenv
-import os
-
+from src.collectors.fixture_collector_service import FixtureCollectorService
 from src.services.pre_game_suggestion_service import PreGameSuggestionService
-from src.services.post_game_evaluation_service import PostGameEvaluationService
+from src.services.post_game_evaluation_service import evaluate_recommendations
+from src.services.metrics_service import get_metrics
 
+from dotenv import load_dotenv
 load_dotenv()
-
-API_KEY = os.getenv("API_FOOTBALL_KEY")
-HEADERS = {"x-apisports-key": API_KEY}
-
-DB_HOST = "localhost"
-DB_PORT = 5432
-DB_NAME = "football_stats"
-DB_USER = "postgres"
-DB_PASS = "Pereira2310!"
 
 
 class MainOrchestrator:
 
     def __init__(self):
+        self.fixture_collector = FixtureCollectorService()
         self.pre_game = PreGameSuggestionService()
-        self.post_game = PostGameEvaluationService()
 
-    # ---------------------------------------------------------------------
-    # ETAPA 1 — CARREGAR PARTIDAS DO DIA
-    # ---------------------------------------------------------------------
-    def get_today_fixtures(self):
-        today = datetime.datetime.utcnow().date()
-
-        params = {
-            "date": today.strftime("%Y-%m-%d")
+        # Ligas suportadas pelo sistema
+        self.SUPPORTED_LEAGUES = {
+            39,     # Premier League
+            71,     # Brasileirão Série A
+            475,    # Paulistão (A1)
+            140,    # La Liga
+            78      # Bundesliga
         }
 
-        url = "https://v3.football.api-sports.io/fixtures"
+    # ---------------------------
+    # ETAPA 1 - FIXTURES
+    # ---------------------------
+    def run_fixtures(self):
+        today = datetime.date.today()
+        tomorrow = today + datetime.timedelta(days=1)
 
-        print(f"\n[FIXTURES] Buscando jogos do dia... {today}")
+        print("========== ETAPA 1: FIXTURES ==========")
+        print(f"[FIXTURES] Buscando jogos {today} e {tomorrow}")
 
-        r = requests.get(url, headers=HEADERS, params=params)
-        r.raise_for_status()
+        fixtures_today = self.fixture_collector.get_fixtures_by_date(today)
+        fixtures_tomorrow = self.fixture_collector.get_fixtures_by_date(
+            tomorrow)
 
-        data = r.json().get("response", [])
+        fixtures = fixtures_today + fixtures_tomorrow
 
-        fixtures = []
-        for f in data:
-            fixtures.append({
-                "fixture_id": f["fixture"]["id"],
-                "league_id": f["league"]["id"],
-                "home_team": f["teams"]["home"]["name"],
-                "away_team": f["teams"]["away"]["name"],
-                "match_datetime": f["fixture"]["timestamp"]
-            })
+        # Filtrar apenas ligas suportadas
+        fixtures = [
+            f for f in fixtures
+            if f["league_id"] in self.SUPPORTED_LEAGUES
+        ]
 
-        print(f"[FIXTURES] Encontrados {len(fixtures)} jogos para hoje.")
+        print(
+            f"[FIXTURES] Encontrados {len(fixtures)} jogos das ligas suportadas.")
+
+        # Salvar no banco
+        self.fixture_collector.save_fixtures(fixtures)
 
         return fixtures
 
-    # ---------------------------------------------------------------------
-    # ETAPA 2 — EXECUTAR PRÉ-JOGO
-    # ---------------------------------------------------------------------
+    # ---------------------------
+    # ETAPA 2 - PRE GAME
+    # ---------------------------
     def run_pre_game(self):
-        fixtures = self.get_today_fixtures()
+        print("\n========== ETAPA 2: PRÉ-JOGO ==========")
+        fixtures = self.run_fixtures()
 
         if not fixtures:
-            print("[PRE-JOGO] Nenhum jogo encontrado. Encerrando etapa.")
+            print("[PRE-JOGO] Nenhum jogo encontrado das ligas suportadas.")
             return
-
-        print("\n========== ETAPA 2: PRÉ-JOGO ==========")
 
         for fx in fixtures:
             self.pre_game.generate_pre_game(fx)
 
-        print("========== PRÉ-JOGO FINALIZADO ==========\n")
-
-    # ---------------------------------------------------------------------
-    # ETAPA 3 — EXECUTAR PÓS-JOGO
-    # ---------------------------------------------------------------------
+    # ---------------------------
+    # ETAPA 3 - PÓS-JOGO
+    # ---------------------------
     def run_post_game(self):
         print("\n========== ETAPA 3: PÓS-JOGO ==========")
-        self.post_game.run()
-        print("========== PÓS-JOGO FINALIZADO ==========\n")
+        evaluate_recommendations()
 
-    # ---------------------------------------------------------------------
-    # ETAPA 4 — GERAR MÉTRICAS SIMPLES
-    # ---------------------------------------------------------------------
+    # ---------------------------
+    # ETAPA 4 - METRICS
+    # ---------------------------
     def run_metrics(self):
-
-        conn = psycopg2.connect(
-            host=DB_HOST, port=DB_PORT,
-            dbname=DB_NAME, user=DB_USER, password=DB_PASS
-        )
-        cur = conn.cursor()
-
-        cur.execute("""
-            SELECT
-                COUNT(*) FILTER (WHERE recommendation = 'GREEN'),
-                COUNT(*) FILTER (WHERE recommendation = 'RED')
-            FROM bet_recommendations
-        """)
-
-        greens, reds = cur.fetchone()
-
-        cur.close()
-        conn.close()
-
-        total = greens + reds if greens + reds > 0 else 1
-        accuracy = greens / total * 100
-
         print("\n========== ETAPA 4: MÉTRICAS ==========")
-        print(f"Greens: {greens}")
-        print(f"Reds: {reds}")
-        print(f"Taxa de acerto: {accuracy:.2f}%")
-        print("========== MÉTRICAS FINALIZADAS ==========\n")
+        get_metrics()
 
-    # ---------------------------------------------------------------------
+    # ---------------------------
     # EXECUTAR TUDO
-    # ---------------------------------------------------------------------
+    # ---------------------------
     def run_all(self):
         print("\n========== ORCHESTRATOR INICIADO ==========")
 
         self.run_pre_game()
         self.run_post_game()
         self.run_metrics()
-
-        print("========== ORCHESTRATOR FINALIZADO ==========\n")
 
 
 if __name__ == "__main__":
