@@ -1,5 +1,5 @@
 
-from database.db_connection import get_connection
+from src.database.db_connection import get_connection
 
 
 def get_team_id_by_name(team_name):
@@ -9,7 +9,7 @@ def get_team_id_by_name(team_name):
     row = cursor.fetchone()
     cursor.close()
     conn.close()
-    return row[0] if row else None
+    return row[0] if row else N      one
 
 
 def ensure_team_exists(team_id, team_name, league_id):

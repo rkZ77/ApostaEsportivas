@@ -3,8 +3,8 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
-
 API_KEY = os.getenv("ODDS_API_KEY")
+
 
 class OddsCollectorService:
 
@@ -19,10 +19,13 @@ class OddsCollectorService:
         }
 
         r = requests.get(url, params=params)
-        r.raise_for_status()
 
-        data = r.json()
-        return self._parse_markets(data)
+        # Evento pode expirar — isso NÃO é erro lógico
+        if r.status_code == 404:
+            return []
+
+        r.raise_for_status()
+        return self._parse_markets(r.json())
 
     def _parse_markets(self, event):
         odds = []
@@ -31,6 +34,7 @@ class OddsCollectorService:
             for market in bookmaker.get("markets", []):
                 for outcome in market.get("outcomes", []):
                     odds.append({
+                        "event_id": event["id"],
                         "bookmaker": bookmaker["key"],
                         "market": market["key"],
                         "side": outcome["name"],

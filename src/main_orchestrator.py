@@ -1,113 +1,133 @@
-
-
-from datetime import datetime
-from database.db_connection import get_connection
-from main import main as run_pre_game
-from services.pre_game_suggestion_service import save_pre_game_suggestion
-from services.match_service import ensure_match_exists
-from collectors.api_football_collector import ApiFootballCollector
-import sys
+import datetime
+import psycopg2
+import requests
+from dotenv import load_dotenv
 import os
-import locale
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Debug: Verificação de encoding Python e locale
-print("Python encoding:", sys.getdefaultencoding())
-print("Locale preferred encoding:", locale.getpreferredencoding())
+from src.services.pre_game_suggestion_service import PreGameSuggestionService
+from src.services.post_game_evaluation_service import PostGameEvaluationService
 
-# Pós-jogo: avaliação das recomendações
+load_dotenv()
 
+API_KEY = os.getenv("API_FOOTBALL_KEY")
+HEADERS = {"x-apisports-key": API_KEY}
 
-# Refatorado para usar serviço dedicado
-def run_post_game_evaluation():
-    from services.post_game_evaluation_service import evaluate_recommendations
-    evaluate_recommendations()
-
-# Métricas do robô
+DB_HOST = "localhost"
+DB_PORT = 5432
+DB_NAME = "football_stats"
+DB_USER = "postgres"
+DB_PASS = "Pereira2310!"
 
 
-# Refatorado para usar serviço dedicado
-def run_metrics():
-    from services.metrics_service import get_metrics
-    get_metrics()
+class MainOrchestrator:
 
-# Orquestrador principal
+    def __init__(self):
+        self.pre_game = PreGameSuggestionService()
+        self.post_game = PostGameEvaluationService()
 
+    # ---------------------------------------------------------------------
+    # ETAPA 1 — CARREGAR PARTIDAS DO DIA
+    # ---------------------------------------------------------------------
+    def get_today_fixtures(self):
+        today = datetime.datetime.utcnow().date()
 
-def main():
-    print("--- Fase Pré-Jogo: Sugestões ---")
-    # Coleta dos jogos futuros
-    collector = ApiFootballCollector()
-    matches = collector.get_fixtures()
-    from services.historical_stats_service import HistoricalStatsService
-    stats_service = HistoricalStatsService()
-    suggestions = []
-    # Filtro de data: apenas hoje e hoje+1 (UTC)
-    now_utc = int(datetime.utcnow().timestamp())
-    tomorrow_utc = now_utc + 86400
-    for fixture in matches:
-        # Aceita formato do ApiFootballCollector
-        required_keys = ["match_id", "homeTeam", "awayTeam",
-                         "league", "country", "startTimestamp"]
-        if not all(k in fixture for k in required_keys):
-            print(f"[WARN] Fixture ignorado por formato inesperado: {fixture}")
-            continue
-        fixture_id = fixture["match_id"]
-        league = fixture["league"]
-        home_team_id = fixture["homeTeam"].get("id")
-        away_team_id = fixture["awayTeam"].get("id")
-        league_id = fixture.get("league_id") or None
-        match_datetime = fixture["startTimestamp"]
-        # Filtro de data para pré-jogo
-        if not (now_utc <= match_datetime <= tomorrow_utc):
-            print(f"[DEBUG] Jogo ignorado por data: fixture_id {fixture_id}")
-            continue
-        from services.team_service import ensure_team_exists, get_team_id_by_name
-        # Ignora fixtures com times sem id
-        if not home_team_id or not away_team_id:
-            print(f"[WARN] Fixture ignorado: time sem id - {fixture}")
-            continue
-        # Garante que os times existem no banco
-        ensure_team_exists(home_team_id, home_team, league_id)
-        ensure_team_exists(away_team_id, away_team, league_id)
-        if not all([fixture_id, league, home_team_id, away_team_id, home_team, away_team, match_datetime]):
-            print(f"[WARN] Dados incompletos no fixture: {fixture}")
-            continue
-        # Garante que o jogo existe na tabela matches
-        ensure_match_exists(fixture_id, league, home_team,
-                            away_team, match_datetime)
-        # Consulta estatísticas históricas dos times
-        home_stats = stats_service.get_team_stats(home_team_id)
-        away_stats = stats_service.get_team_stats(away_team_id)
-        print(
-            f"[PRE-JOGO] Estatísticas {home_team} (ID {home_team_id}): {home_stats}")
-        print(
-            f"[PRE-JOGO] Estatísticas {away_team} (ID {away_team_id}): {away_stats}")
-        for market in ["goals", "corners", "cards"]:
-            for side in ["total", "home", "away"]:
-                suggestions.append(
-                    (fixture_id, league, home_team, away_team, market, side, match_datetime))
-        print(
-            f"[PRE-JOGO] Estatísticas {away_team} (ID {away_team_id}): {away_stats}")
-        for market in ["goals", "corners", "cards"]:
-            for side in ["total", "home", "away"]:
-                suggestions.append(
-                    (fixture_id, league, home_team, away_team, market, side, match_datetime))
-    # Salvar sugestões sem odds/probabilidade/resultado
-    count_saved = 0
-    for s in suggestions:
-        save_pre_game_suggestion(*s)
-        count_saved += 1
-    print(f"[INFO] Sugestões pré-jogo salvas: {count_saved}")
-    try:
-        run_pre_game()
-    except Exception as e:
-        print(f"[AVISO] Erro na fase pré-jogo: {e}. Continuando fluxo.")
-    print("--- Fase Pós-Jogo: Avaliação ---")
-    run_post_game_evaluation()
-    print("--- Fase de Métricas ---")
-    run_metrics()
+        params = {
+            "date": today.strftime("%Y-%m-%d")
+        }
+
+        url = "https://v3.football.api-sports.io/fixtures"
+
+        print(f"\n[FIXTURES] Buscando jogos do dia... {today}")
+
+        r = requests.get(url, headers=HEADERS, params=params)
+        r.raise_for_status()
+
+        data = r.json().get("response", [])
+
+        fixtures = []
+        for f in data:
+            fixtures.append({
+                "fixture_id": f["fixture"]["id"],
+                "league_id": f["league"]["id"],
+                "home_team": f["teams"]["home"]["name"],
+                "away_team": f["teams"]["away"]["name"],
+                "match_datetime": f["fixture"]["timestamp"]
+            })
+
+        print(f"[FIXTURES] Encontrados {len(fixtures)} jogos para hoje.")
+
+        return fixtures
+
+    # ---------------------------------------------------------------------
+    # ETAPA 2 — EXECUTAR PRÉ-JOGO
+    # ---------------------------------------------------------------------
+    def run_pre_game(self):
+        fixtures = self.get_today_fixtures()
+
+        if not fixtures:
+            print("[PRE-JOGO] Nenhum jogo encontrado. Encerrando etapa.")
+            return
+
+        print("\n========== ETAPA 2: PRÉ-JOGO ==========")
+
+        for fx in fixtures:
+            self.pre_game.generate_pre_game(fx)
+
+        print("========== PRÉ-JOGO FINALIZADO ==========\n")
+
+    # ---------------------------------------------------------------------
+    # ETAPA 3 — EXECUTAR PÓS-JOGO
+    # ---------------------------------------------------------------------
+    def run_post_game(self):
+        print("\n========== ETAPA 3: PÓS-JOGO ==========")
+        self.post_game.run()
+        print("========== PÓS-JOGO FINALIZADO ==========\n")
+
+    # ---------------------------------------------------------------------
+    # ETAPA 4 — GERAR MÉTRICAS SIMPLES
+    # ---------------------------------------------------------------------
+    def run_metrics(self):
+
+        conn = psycopg2.connect(
+            host=DB_HOST, port=DB_PORT,
+            dbname=DB_NAME, user=DB_USER, password=DB_PASS
+        )
+        cur = conn.cursor()
+
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE recommendation = 'GREEN'),
+                COUNT(*) FILTER (WHERE recommendation = 'RED')
+            FROM bet_recommendations
+        """)
+
+        greens, reds = cur.fetchone()
+
+        cur.close()
+        conn.close()
+
+        total = greens + reds if greens + reds > 0 else 1
+        accuracy = greens / total * 100
+
+        print("\n========== ETAPA 4: MÉTRICAS ==========")
+        print(f"Greens: {greens}")
+        print(f"Reds: {reds}")
+        print(f"Taxa de acerto: {accuracy:.2f}%")
+        print("========== MÉTRICAS FINALIZADAS ==========\n")
+
+    # ---------------------------------------------------------------------
+    # EXECUTAR TUDO
+    # ---------------------------------------------------------------------
+    def run_all(self):
+        print("\n========== ORCHESTRATOR INICIADO ==========")
+
+        self.run_pre_game()
+        self.run_post_game()
+        self.run_metrics()
+
+        print("========== ORCHESTRATOR FINALIZADO ==========\n")
 
 
 if __name__ == "__main__":
-    main()
+    orchestrator = MainOrchestrator()
+    orchestrator.run_all()
