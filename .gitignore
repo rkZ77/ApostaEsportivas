@@ -1,0 +1,53 @@
+# Secrets — nunca commitar
+.env
+.env.*
+!.env.example
+
+# Repos separados / dados privados
+ApostaEsportivas/
+.claude/
+scripts/
+logs/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.venv/
+venv/
+env/
+
+# Node / Frontend
+node_modules/
+dist/
+.nuxt/
+.output/
+*.local
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Uploads locais
+website/backend/static/avatars/

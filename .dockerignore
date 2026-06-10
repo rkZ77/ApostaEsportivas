@@ -1,0 +1,31 @@
+.git/
+.vscode/
+.idea/
+
+# Python envs e cache
+venv/
+.venv/
+ApostaEsportivas/venv/
+website/backend/venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+
+# Node
+website/frontend/node_modules/
+website/frontend/dist/
+
+# Env
+.env
+.env.*
+
+# Logs
+logs/
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Avatars locais
+website/backend/static/avatars/

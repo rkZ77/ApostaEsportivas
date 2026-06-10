@@ -1,0 +1,722 @@
+import { Link } from 'react-router-dom'
+import { useState, useEffect } from 'react'
+import axios from 'axios'
+
+const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const TEAM_LOGO = (id?: number | null) =>
+  id ? `https://media.api-sports.io/football/teams/${id}.png` : null
+const LEAGUE_LOGO = (id: number) =>
+  id === 1 ? '/logo-copa-mundo.png' : `https://media.api-sports.io/football/leagues/${id}.png`
+
+// Ícone genérico de liga (fallback quando logo da API não carrega)
+function LeagueIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      <circle cx="12" cy="12" r="10" strokeOpacity={0.5}/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" strokeOpacity={0.5}/>
+      <path d="M2 12h20" strokeOpacity={0.5}/>
+    </svg>
+  )
+}
+
+// ── Ícones ───────────────────────────────────────────────────────────────────
+function Check() {
+  return (
+    <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+    </svg>
+  )
+}
+function X() {
+  return (
+    <svg className="w-4 h-4 text-zinc-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+      <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+
+// ── Tipos ─────────────────────────────────────────────────────────────────────
+interface RecentTip {
+  match_date: string
+  home_team_name: string
+  away_team_name?: string
+  home_team_id?: number
+  away_team_id?: number
+  market: string
+  line?: string
+  odd: number
+  result: string
+  profit: number
+  source: string
+}
+interface PublicData {
+  summary: { total: number; greens: number; profit: number; roi: number }
+  recent: RecentTip[]
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+const RESULT_CLS: Record<string, string> = {
+  GREEN:      'bg-green-500/10 text-green-400 border-green-500/30',
+  RED:        'bg-red-500/10 text-red-400 border-red-500/30',
+  PUSH:       'bg-zinc-700/50 text-zinc-400 border-zinc-700',
+  'HALF-WIN': 'bg-teal-500/10 text-teal-400 border-teal-500/30',
+  'HALF-LOSS':'bg-orange-500/10 text-orange-400 border-orange-500/30',
+}
+const RESULT_LBL: Record<string, string> = {
+  GREEN: 'GREEN', RED: 'RED', PUSH: 'PUSH', 'HALF-WIN': '½ WIN', 'HALF-LOSS': '½ LOSS',
+}
+const SRC_CLS: Record<string, string> = {
+  vip: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  free: 'text-green-400 bg-green-500/10 border-green-500/20',
+  multiplas: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+}
+const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
+
+// ── Ligas ativas (do banco) ───────────────────────────────────────────────────
+interface League { league_id: number; name: string; season: number; logo_url: string }
+
+function ActiveLeagues() {
+  const [leagues, setLeagues] = useState<League[]>([])
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/public/leagues`)
+      .then(r => setLeagues(r.data))
+      .catch(() => {})
+  }, [])
+
+  if (!leagues.length) return null
+
+  return (
+    <section className="border-y border-zinc-800/60 bg-zinc-950">
+      <div className="max-w-5xl mx-auto px-4 py-10">
+        <p className="text-center text-xs text-zinc-500 uppercase tracking-widest font-bold mb-8">
+          Ligas &amp; torneios cobertos
+        </p>
+        <div className="flex flex-wrap items-center justify-center gap-8">
+          {leagues.map(({ league_id, name, logo_url }) => (
+            <div key={league_id} className="flex flex-col items-center gap-2">
+              <div className="w-10 h-10 relative flex items-center justify-center">
+                <img
+                  src={logo_url}
+                  alt={name}
+                  className="w-10 h-10 object-contain"
+                  onError={e => {
+                    e.currentTarget.style.display = 'none'
+                    const fb = e.currentTarget.nextElementSibling as HTMLElement
+                    if (fb) fb.style.display = 'flex'
+                  }}
+                />
+                <div className="absolute inset-0 items-center justify-center hidden">
+                  <LeagueIcon className="w-8 h-8 text-zinc-600" />
+                </div>
+              </div>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-zinc-300 leading-tight">{name}</p>
+                <p className="text-[10px] text-green-500 font-bold">Ativo</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function TeamLogo({ id, name }: { id?: number | null; name: string }) {
+  const src = TEAM_LOGO(id)
+  if (!src) return null
+  return (
+    <img src={src} alt={name} width={18} height={18}
+      className="w-4.5 h-4.5 object-contain shrink-0"
+      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+  )
+}
+
+// ── Últimos 6 resultados ─────────────────────────────────────────────────────
+function RecentResults() {
+  const [data, setData] = useState<PublicData | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/public/results`)
+      .then(r => setData(r.data))
+      .catch(() => setData(null))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const s = data?.summary
+  const winRate = s && s.total > 0 ? ((s.greens / s.total) * 100).toFixed(0) : null
+  const recent6 = (data?.recent ?? []).slice(0, 6)
+
+  return (
+    <section id="resultados" className="py-24 bg-zinc-950 border-y border-zinc-800/60">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-12">
+          <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Transparência total</p>
+          <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
+          <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+            Todos os picks gerados pela IA ficam registrados. Win rate e lucro auditáveis por qualquer pessoa.
+          </p>
+        </div>
+
+        {/* Stats */}
+        {s && s.total > 0 && (
+          <div className="grid grid-cols-3 gap-4 mb-10 max-w-lg mx-auto">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
+              <div className="text-3xl font-black text-green-500">{winRate}%</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
+              <div className="text-3xl font-black text-white">{s.total}</div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Picks</div>
+            </div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
+              <div className={`text-3xl font-black ${(s.profit ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                {(s.profit ?? 0) >= 0 ? '+' : ''}{Number(s.profit ?? 0).toFixed(1)}u
+              </div>
+              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Lucro</div>
+            </div>
+          </div>
+        )}
+
+        {/* Lista */}
+        {loading ? (
+          <div className="flex justify-center py-12">
+            <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+          </div>
+        ) : recent6.length > 0 ? (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
+              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Últimas 6 dicas finalizadas</span>
+              <span className="text-xs text-zinc-600">Atualizado automaticamente</span>
+            </div>
+            <div className="divide-y divide-zinc-800/50">
+              {recent6.map((tip, i) => (
+                <div key={i} className="flex items-center gap-3 px-5 py-3.5">
+                  <div className="w-14 shrink-0 text-center">
+                    <span className="text-xs text-zinc-500">
+                      {new Date(tip.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SRC_CLS[tip.source] ?? ''}`}>
+                        {SRC_LBL[tip.source] ?? tip.source}
+                      </span>
+                      <TeamLogo id={tip.home_team_id} name={tip.home_team_name} />
+                      <span className="text-sm font-semibold text-white truncate">{tip.home_team_name}</span>
+                      {tip.away_team_name && tip.away_team_name !== '--' && (
+                        <>
+                          <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                          <span className="text-sm font-semibold text-white truncate">{tip.away_team_name}</span>
+                          <TeamLogo id={tip.away_team_id} name={tip.away_team_name} />
+                        </>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-500 truncate">
+                      {tip.market && tip.market !== '--' ? tip.market : ''}
+                      {tip.line && tip.line !== '--' ? ` ${tip.line}` : ''}
+                      {' · Odd '}{Number(tip.odd).toFixed(2)}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${RESULT_CLS[tip.result] ?? 'text-zinc-500'}`}>
+                      {RESULT_LBL[tip.result] ?? tip.result}
+                    </span>
+                    <span className={`text-sm font-black w-12 text-right ${tip.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      {tip.profit >= 0 ? '+' : ''}{Number(tip.profit).toFixed(2)}u
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="px-5 py-4 border-t border-zinc-800 text-center bg-zinc-950/50">
+              <Link to="/login" className="text-sm text-green-500 hover:text-green-400 font-bold transition-colors">
+                Ver histórico completo com filtros → Criar conta grátis
+              </Link>
+            </div>
+          </div>
+        ) : (
+          <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── Landing ───────────────────────────────────────────────────────────────────
+export default function Landing() {
+  const [chatDemo, setChatDemo] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setChatDemo(n => (n + 1) % 3), 3000)
+    return () => clearInterval(t)
+  }, [])
+
+  const chatMessages = [
+    { q: 'Qual o melhor pick para hoje na Copa?', a: 'Analisando os 64 jogos da Copa do Mundo 2026... Brasil x Croácia: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambas as seleções marcaram em 80% dos confrontos recentes.' },
+    { q: 'Como está a forma do Brasil nos últimos 5 jogos?', a: 'Brasil: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da Copa. Pick recomendado: Gols Over 1.5.' },
+    { q: 'Explica a Alavancagem Copa', a: 'A Alavancagem começa com R$50 e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 greens transforma R$50 em +R$300. Reset automático no RED.' },
+  ]
+
+  return (
+    <div className="min-h-screen bg-black text-white overflow-x-hidden">
+
+      {/* ── NAVBAR ──────────────────────────────────────────────────────────── */}
+      <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md">
+        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
+            <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
+            <span className="hidden sm:inline-flex items-center gap-1 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+              Copa 2026
+            </span>
+          </div>
+          <div className="flex items-center gap-5">
+            <a href="#resultados" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Resultados</a>
+            <a href="#como-funciona" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
+            <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
+            <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2">Entrar</Link>
+            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors">
+              Teste grátis 2 dias
+            </Link>
+          </div>
+        </div>
+      </nav>
+
+      {/* ── HERO ────────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden">
+        {/* Troféu no fundo */}
+        <img src="/trofeu.png" alt="" aria-hidden="true"
+          className="absolute right-0 top-0 h-full max-w-[55%] object-contain object-right opacity-[0.07] pointer-events-none select-none hidden md:block"
+          onError={e => (e.currentTarget.style.display = 'none')} />
+        {/* Background gradients */}
+        <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-yellow-400/5" />
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
+        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-green-500/5 rounded-full blur-3xl pointer-events-none" />
+
+        <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+
+            {/* Texto */}
+            <div>
+              {/* Badge Copa */}
+              <div className="inline-flex items-center gap-2 mb-6">
+                <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-8 h-8 object-contain" />
+                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+                  Copa do Mundo 2026
+                </span>
+              </div>
+
+              <h1 className="text-4xl md:text-5xl font-black leading-[1.1] mb-6 tracking-tight">
+                A IA que vai te ajudar a
+                <br />
+                <span className="text-green-500">lucrar na Copa</span>
+                <br />
+                do Mundo 2026
+              </h1>
+
+              <p className="text-zinc-400 text-base md:text-lg leading-relaxed mb-8">
+                Analisamos todas as <span className="text-white font-bold">48 seleções</span> e{' '}
+                <span className="text-white font-bold">64 jogos</span> com inteligência artificial.
+                Picks com edge positivo, odds em tempo real e uma IA que responde suas dúvidas.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 mb-8">
+                <Link to="/login"
+                  className="bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
+                  Começar teste gratuito: 2 dias VIP
+                </Link>
+                <a href="#resultados"
+                  className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
+                  Ver picks recentes
+                </a>
+              </div>
+
+              <p className="text-xs text-zinc-600">Sem cartão de crédito · 2 dias de VIP completo · Depois vira Free automaticamente</p>
+            </div>
+
+            {/* Card de destaque Copa */}
+            <div className="hidden md:block">
+              <div className="relative">
+                <div className="absolute -inset-4 bg-gradient-to-br from-green-500/10 to-yellow-400/10 rounded-3xl blur-xl" />
+                <div className="relative bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4">
+                  {/* Header */}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                      <span className="text-xs font-bold text-green-500 uppercase tracking-widest">Pick do Dia · Copa 2026</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Exemplo</span>
+                      <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded font-bold">VIP</span>
+                    </div>
+                  </div>
+                  {/* Mock pick card */}
+                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-5 h-5 object-contain" />
+                      <span className="text-xs text-zinc-500">Copa do Mundo 2026 · Fase de Grupos</span>
+                    </div>
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-black text-white text-sm">Brasil × Croácia</span>
+                      <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-bold">74% conf.</span>
+                    </div>
+                    <p className="text-xs text-zinc-400 mb-3">Gols Over 2.5 · Odd 1.82 · Bet365</p>
+                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full" style={{ width: '74%' }} />
+                    </div>
+                  </div>
+                  {/* Stats rápidas */}
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    {[['68%', 'Win Rate'], ['+47u', 'Lucro Mês'], ['1.82', 'Odd Média']].map(([v, l]) => (
+                      <div key={l} className="bg-zinc-900 rounded-xl p-2.5">
+                        <div className="text-sm font-black text-green-400">{v}</div>
+                        <div className="text-[10px] text-zinc-600 mt-0.5">{l}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {/* Múltiplas de hoje */}
+                  <div className="bg-zinc-900 border border-blue-400/20 rounded-xl p-3">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-xs font-bold text-blue-400">Múltipla do Dia</span>
+                      <span className="text-xs text-zinc-500">Odd 4.20</span>
+                    </div>
+                    <p className="text-xs text-zinc-400">3 seleções · Brasil + Argentina + França Over</p>
+                  </div>
+                  {/* Nota exemplo */}
+                  <p className="text-center text-[10px] text-zinc-700 border-t border-zinc-800/60 pt-3">
+                    Exemplo ilustrativo. Picks reais gerados diariamente pela IA.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── LIGAS MONITORADAS — dinâmico do banco ──────────────────────────── */}
+      <ActiveLeagues />
+
+      {/* ── RESULTADOS ─────────────────────────────────────────────────────── */}
+      <RecentResults />
+
+      {/* ── AGENTE IA ──────────────────────────────────────────────────────── */}
+      <section id="como-funciona" className="py-24">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-16 items-center">
+            {/* Texto */}
+            <div>
+              <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Agente IA exclusivo</p>
+              <h2 className="text-3xl md:text-4xl font-black mb-5 leading-tight">
+                Converse com uma IA<br />
+                <span className="text-green-500">especialista em futebol</span>
+              </h2>
+              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+                Diferente de outras IAs genéricas, o nosso agente é treinado 100% no contexto de apostas esportivas.
+                Pergunte sobre qualquer jogo, seleção, mercado ou estratégia e receba análises com base nos dados reais do sistema.
+              </p>
+              <ul className="space-y-3 mb-8">
+                {[
+                  'Analisa picks do dia sob demanda',
+                  'Explica cada mercado e odd recomendada',
+                  'Compara times com estatísticas reais',
+                  'Sugere estratégias de banca para a Copa',
+                  'Disponível 24/7, resposta em segundos',
+                ].map(t => (
+                  <li key={t} className="flex items-center gap-3 text-sm text-zinc-300">
+                    <Check />
+                    {t}
+                  </li>
+                ))}
+              </ul>
+              <Link to="/login" className="inline-block bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 font-bold px-6 py-3 rounded-xl text-sm transition-colors">
+                Experimentar o agente IA →
+              </Link>
+            </div>
+
+            {/* Demo chat */}
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-sm font-black text-white">Agente PickIA</span>
+                </div>
+                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">Futebol · Copa 2026</span>
+              </div>
+              <div className="p-4 space-y-3 min-h-[260px]">
+                <div className="flex justify-end">
+                  <div className="bg-green-600 text-white text-sm px-4 py-2.5 rounded-2xl rounded-tr-sm max-w-[80%]">
+                    {chatMessages[chatDemo].q}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                    <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
+                    </svg>
+                  </div>
+                  <div className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm px-4 py-2.5 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed">
+                    {chatMessages[chatDemo].a}
+                  </div>
+                </div>
+              </div>
+              <div className="px-4 pb-4">
+                <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                  <span className="text-zinc-600 text-sm flex-1">Pergunte sobre qualquer jogo...</span>
+                  <div className="w-7 h-7 bg-green-600 rounded-lg flex items-center justify-center">
+                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                    </svg>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── COMO FUNCIONA ──────────────────────────────────────────────────── */}
+      <section className="py-20 bg-zinc-950 border-y border-zinc-800/60">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Tecnologia</p>
+            <h2 className="text-3xl font-black mb-3">Como a IA gera os picks</h2>
+            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+              Não é palpite. É processamento de dados em escala, análise estatística e modelos
+              treinados para o mercado de apostas esportivas.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-3 gap-5">
+            {[
+              {
+                n: '01', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/20',
+                title: 'Coleta de dados',
+                desc: 'Estatísticas completas de cada jogo: gols, escanteios, cartões, posse, forma recente e confrontos diretos. Todas as 48 seleções da Copa analisadas continuamente.',
+              },
+              {
+                n: '02', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20',
+                title: 'Análise estatística',
+                desc: 'A IA calcula médias por contexto (casa/fora), tendências recentes, força ofensiva e defensiva. Compara probabilidades reais com as odds do mercado para encontrar edge.',
+              },
+              {
+                n: '03', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20',
+                title: 'Geração de picks',
+                desc: 'Apenas recomendações com EV positivo e confiança mínima entram no sistema. Picks VIP, Múltiplas e Alavancagem Copa gerados automaticamente todo dia.',
+              },
+            ].map(({ n, color, bg, title, desc }) => (
+              <div key={n} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
+                <div className={`absolute -top-3 -right-3 text-7xl font-black opacity-5 ${color}`}>{n}</div>
+                <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border text-sm font-black mb-4 ${bg} ${color}`}>{n}</div>
+                <h3 className="text-base font-black text-white mb-2">{title}</h3>
+                <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-4 font-semibold">Mercados analisados</p>
+            <div className="flex flex-wrap gap-2">
+              {['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios',
+                'Cartões', 'Gols 1º Tempo', 'Múltiplas', 'Alavancagem'].map(m => (
+                <span key={m} className="bg-zinc-800 border border-zinc-700/60 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-lg">
+                  {m}
+                </span>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── PLANOS ─────────────────────────────────────────────────────────── */}
+      <section id="planos" className="py-24">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Planos</p>
+            <h2 className="text-3xl font-black mb-3">Comece de graça, evolua quando quiser</h2>
+            <p className="text-zinc-400 text-sm max-w-md mx-auto">
+              Teste 2 dias com acesso VIP completo. Sem cartão de crédito. Depois escolha seu plano.
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-5">
+            {/* Free */}
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7">
+              <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-2">Free</p>
+              <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
+              <p className="text-zinc-500 text-xs mb-6">Para sempre</p>
+              <div className="space-y-2.5 mb-8">
+                {[
+                  [true,  '1 pick gratuito por dia'],
+                  [true,  'Histórico do Pick Free'],
+                  [true,  'Resultados de todos os picks'],
+                  [true,  'Detalhes de picks resolvidos'],
+                  [false, 'Picks VIP (10–20/dia)'],
+                  [false, 'Múltiplas geradas por IA'],
+                  [false, 'Alavancagem Copa'],
+                  [false, 'Agente IA de futebol'],
+                ].map(([ok, t]) => (
+                  <div key={t as string} className="flex items-center gap-2.5">
+                    {ok ? <Check /> : <X />}
+                    <span className={`text-sm ${ok ? 'text-zinc-200' : 'text-zinc-600'}`}>{t as string}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/login" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
+                Criar conta grátis
+              </Link>
+            </div>
+
+            {/* Trial — destaque */}
+            <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-7 overflow-hidden">
+              <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
+              <div className="absolute top-3.5 right-4">
+                <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                  Começar agora
+                </span>
+              </div>
+              <p className="text-xs text-green-500 uppercase tracking-widest font-bold mb-2">Teste VIP</p>
+              <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
+              <p className="text-zinc-400 text-xs mb-6">2 dias completos · Sem compromisso</p>
+              <div className="space-y-2.5 mb-8">
+                {[
+                  'Pick Free + todos os Picks VIP',
+                  'Múltiplas geradas pela IA',
+                  'Alavancagem Copa do Mundo',
+                  'Agente IA de futebol',
+                  'Histórico completo com filtros',
+                  'Análise estatística de cada jogo',
+                  'Comunidade VIP exclusiva',
+                  'Após 2 dias → Free automaticamente',
+                ].map(t => (
+                  <div key={t} className="flex items-center gap-2.5">
+                    <Check />
+                    <span className="text-sm text-zinc-200">{t}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/login" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-xl text-sm transition-colors">
+                Ativar teste gratuito
+              </Link>
+            </div>
+
+            {/* VIP */}
+            <div className="bg-zinc-900 border border-yellow-400/30 rounded-2xl p-7 overflow-hidden relative">
+              <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
+              <p className="text-xs text-yellow-400 uppercase tracking-widest font-bold mb-2">VIP</p>
+              <p className="text-3xl font-black text-white mb-0.5">A partir de</p>
+              <p className="text-zinc-400 text-xs mb-6">R$ 29,90/mês</p>
+              <div className="space-y-2.5 mb-8">
+                {[
+                  'Tudo do Teste VIP',
+                  'Acesso permanente sem expiração',
+                  'Sem limite de período',
+                  'Suporte prioritário',
+                  'Copa do Mundo 2026 completa',
+                  'Temporadas europeias (em breve)',
+                ].map(t => (
+                  <div key={t} className="flex items-center gap-2.5">
+                    <Check />
+                    <span className="text-sm text-zinc-200">{t}</span>
+                  </div>
+                ))}
+              </div>
+              <Link to="/planos" className="block text-center bg-yellow-400/10 border border-yellow-400/30 hover:bg-yellow-400/20 text-yellow-400 font-black py-2.5 rounded-xl text-sm transition-colors">
+                Ver planos VIP
+              </Link>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── COPA ROADMAP ────────────────────────────────────────────────────── */}
+      <section className="py-20 bg-zinc-950 border-t border-zinc-800/60">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <div className="flex items-center justify-center gap-3 mb-4">
+              <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
+              <h2 className="text-3xl font-black">Cobertura total da Copa 2026</h2>
+            </div>
+            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+              Do grupo às finais, a IA analisa cada jogo antes de acontecer e entrega os melhores picks do torneio.
+            </p>
+          </div>
+          <div className="grid md:grid-cols-4 gap-4">
+            {[
+              { fase: 'Fase de Grupos', jogos: '48 jogos', detalhe: '6 grupos · 4 seleções cada', cor: 'text-green-400', border: 'border-green-500/20 bg-green-500/5' },
+              { fase: 'Oitavas', jogos: '8 jogos', detalhe: 'Eliminatória simples', cor: 'text-blue-400', border: 'border-blue-400/20 bg-blue-400/5' },
+              { fase: 'Quartas e Semis', jogos: '6 jogos', detalhe: 'Odds mais altas · Mais valor', cor: 'text-yellow-400', border: 'border-yellow-400/20 bg-yellow-400/5' },
+              { fase: 'Final', jogos: '1 jogo', detalhe: 'O maior evento do futebol', cor: 'text-orange-400', border: 'border-orange-400/20 bg-orange-400/5' },
+            ].map(({ fase, jogos, detalhe, cor, border }) => (
+              <div key={fase} className={`rounded-2xl p-5 border text-center ${border}`}>
+                <div className={`text-2xl font-black mb-1 ${cor}`}>{jogos}</div>
+                <div className="text-sm font-bold text-white mb-1">{fase}</div>
+                <div className="text-xs text-zinc-500">{detalhe}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
+            <p className="text-sm text-zinc-400 mb-1">
+              <span className="text-white font-bold">Após a Copa 2026:</span> Temporadas europeias entram no sistema
+            </p>
+            <div className="flex items-center justify-center gap-6 mt-4">
+              {[2, 39, 140, 78, 135].map(id => (
+                <img key={id} src={LEAGUE_LOGO(id)} alt="" className="w-8 h-8 object-contain opacity-50"
+                  onError={e => (e.currentTarget.style.display='none')} />
+              ))}
+              <span className="text-xs text-zinc-600 font-semibold">e mais...</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA FINAL ──────────────────────────────────────────────────────── */}
+      <section className="py-24 border-t border-zinc-800/60 relative overflow-hidden">
+        <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-yellow-400/5" />
+        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
+        <div className="max-w-2xl mx-auto px-4 text-center relative">
+          <div className="flex items-center justify-center gap-3 mb-6">
+            <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
+          </div>
+          <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
+            A Copa começa em breve.
+            <br />
+            <span className="text-green-500">Comece agora.</span>
+          </h2>
+          <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
+            Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span> Sem cartão de crédito.
+            Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.
+          </p>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
+            <Link to="/login"
+              className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto">
+              Criar conta grátis: 2 dias VIP
+            </Link>
+            <a href="#resultados"
+              className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto text-center">
+              Ver resultados primeiro
+            </a>
+          </div>
+          <p className="text-xs text-zinc-600 mt-4">Sem compromisso · Após 2 dias vira Free automaticamente</p>
+        </div>
+      </section>
+
+      {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
+      <footer className="border-t border-zinc-800 py-8 bg-zinc-950">
+        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-2.5">
+            <img src="/logo.png" alt="PickIA" className="w-7 h-7 rounded-full object-cover" />
+            <span className="text-sm font-black text-zinc-300">Pick<span className="text-green-500">IA</span></span>
+            <span className="text-xs text-zinc-600">· Copa do Mundo 2026</span>
+          </div>
+          <p className="text-xs text-zinc-600 text-center">
+            Picks gerados por inteligência artificial. Aposte com responsabilidade. +18.
+          </p>
+          <Link to="/login" className="text-xs text-zinc-500 hover:text-green-400 transition-colors font-semibold">
+            Entrar na plataforma →
+          </Link>
+        </div>
+      </footer>
+
+    </div>
+  )
+}
