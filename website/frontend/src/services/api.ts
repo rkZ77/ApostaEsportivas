@@ -3,7 +3,7 @@ import axios from 'axios'
 // withCredentials envia/recebe cookies httpOnly automaticamente
 const api = axios.create({ baseURL: '/api', withCredentials: true })
 
-let _refreshing: Promise<void> | null = null
+let _refreshing: Promise<unknown> | null = null
 
 api.interceptors.response.use(
   (res) => res,
