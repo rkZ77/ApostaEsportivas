@@ -1,0 +1,591 @@
+﻿import os
+import json
+from datetime import datetime, date
+from decimal import Decimal
+from dotenv import load_dotenv, find_dotenv
+from anthropic import Anthropic
+
+from utils.db_utils import get_connection
+from services.fixtures_service import FixturesService
+from services.odds_service import OddsService
+from services.standings_service import StandingsService
+from services.team_stats_service import TeamStatsService
+from services.match_stats_service import MatchStatsService
+from services.ai_performance_service import AIPerformanceService
+from services.national_team_profile_service import NationalTeamProfileService
+from ai.ai_suggestions_service import translate_market
+from ai.prompts.team_prompt_builder import TeamPromptBuilder
+
+load_dotenv(find_dotenv())
+
+# ============================================================
+# CONFIG
+# ============================================================
+AI_MODEL_NAME = os.getenv("AI_MODEL_NAME")
+BANKROLL      = float(os.getenv("BANKROLL", "1000"))
+
+client              = Anthropic()
+fixtures_svc        = FixturesService()
+odds_svc            = OddsService()
+standings_svc       = StandingsService()
+team_stats_svc      = TeamStatsService()
+match_stats_svc     = MatchStatsService()
+performance_svc     = AIPerformanceService()
+national_team_svc   = NationalTeamProfileService()
+team_prompt_builder = TeamPromptBuilder()
+
+
+# ============================================================
+# SERIALIZAÇÃO
+# ============================================================
+def _clean(obj):
+    if isinstance(obj, dict):
+        return {k: _clean(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_clean(v) for v in obj]
+    if isinstance(obj, (datetime, date)):
+        return obj.isoformat()
+    if isinstance(obj, Decimal):
+        return float(obj)
+    return obj
+
+
+# ============================================================
+# SYSTEM PROMPT
+# ============================================================
+SYSTEM_PROMPT = """Você é um analista quantitativo especializado em apostas múltiplas (combinadas) com base estatística rigorosa.
+
+Sua função: analisar cada jogo, identificar o mercado com maior edge real, detectar correlações e montar múltiplas apenas com base estatística sólida em AMBOS os picks.
+
+PRINCÍPIOS:
+- Múltiplas ampliam risco — só monte se AMBOS os picks tiverem score_base >= 0.65
+- Correlação é o maior inimigo: nunca combine picks dependentes
+- Odd individual: MÍNIMO 1.40, MÁXIMO 1.90 — fora dessa faixa o pick é inválido
+- Odd total: MÍNIMO 2.00, MÁXIMO 3.00 — fora dessa faixa a múltipla é inválida
+- Odd copiada literalmente dos dados fornecidos — nunca inventar
+- Qualidade acima de quantidade: prefira no_bet a uma múltipla fraca
+- Seleção de linha: para Over/Under escolha SEMPRE a linha mais conservadora com odd 1.40–1.90.
+  Para Over: linha mais baixa. Para Under: linha mais alta. Exemplo: Over 8.5 @ 1.50 > Over 9.5 @ 1.90.
+- Mercados proibidos: Match Winner (1X2), Resultado Final direto — use Dupla Chance ou Handicap se quiser resultado.
+
+SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum texto fora do JSON."""
+
+
+# ============================================================
+# USER PROMPT
+# ============================================================
+USER_PROMPT_TEMPLATE = """
+--- CALIBRAÇÃO: DESEMPENHO HISTÓRICO PRÓPRIO ---
+{desempenho}
+gap>+0.10 com n≥10 → superconfiante → reduza score_base | hit<0.50 com n≥15 → edge negativo → score_base máx 0.60 | n<10 → ignore | multiplas.hit<0.35 → exija score_combo≥0.70
+
+--- JOGOS DO DIA + DADOS BRUTOS ---
+
+{fixtures_formatados}
+
+--- ETAPA 1: MELHOR MERCADO POR JOGO ---
+
+Para cada jogo: identifique o mercado com maior edge real (edge = prob_real − 1/odd > 0).
+Calcule score_base = (coerencia×0.45) + (estabilidade×0.30) + (reasoning×0.15) + (odds×0.10)
+
+Coerência:   1.0=dados confirmam | 0.7=parcialmente | 0.4=inconsistência | 0.0=sem evidência
+Estabilidade: 1.0=8+/10 confirmam | 0.7=6-7/10 | 0.4=4-5/10 | 0.0=sem padrão
+Reasoning:   1.0=dado numérico dos dados | 0.7=lógica com base | 0.3=superficial | 0.0=genérico
+Odds:        1.0=odd 1.40–1.90 | 0.0=fora desta faixa → DESCARTAR imediatamente
+
+Linha: escolha a mais conservadora dentro de 1.40–1.90 (odd mais próxima de 1.40).
+Descarte o jogo se nenhum mercado atingir score_base≥0.55 ou nenhuma linha válida em 1.40–1.90.
+
+--- ETAPA 2: CORRELAÇÃO ---
+
+Proibido combinar: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.
+Ideal: market_types DIFERENTES + jogos sem relação entre si.
+
+--- ETAPA 3: MONTAGEM ---
+
+1. Ordene picks aprovados por score_base
+2. Para cada par: score_combo = (A+B)/2, penalizar -0.10 se perfis parecidos ou alta variância
+   odd_total = odd_A × odd_B — descarte se <2.00 ou >3.00
+3. multipla_1 = maior score_combo válido | multipla_2 = segundo melhor (só se score_combo≥0.60)
+   Sem par válido → no_bet
+
+Verificação: odd individual 1.40–1.90? odd_total 2.00–3.00? market_types diferentes? sem mesmo fixture? score_base≥0.55? odds copiadas dos dados?
+
+--- SAÍDA JSON ---
+
+Sem múltipla: {{"no_bet": true, "motivo": "motivo em uma frase"}}
+
+Com múltiplas:
+{{
+  "multipla_1": {{
+    "name": "MULTIPLA_1",
+    "games": [
+      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}},
+      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}}
+    ],
+    "odd_final": 0.00,
+    "score_combo": 0.00,
+    "reason": "Cite dados brutos que validam cada pick e por que têm baixa correlação."
+  }},
+  "multipla_2": {{
+    "name": "MULTIPLA_2",
+    "games": [
+      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}},
+      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}}
+    ],
+    "odd_final": 0.00,
+    "score_combo": 0.00,
+    "reason": "Segunda melhor — justifique com dados brutos."
+  }}
+}}
+
+multipla_2 é OPCIONAL — inclua só se score_combo≥0.60.
+"""
+
+
+# ============================================================
+# CARREGA DADOS BRUTOS COMPLETOS DO FIXTURE
+# 9 blocos — mesmo padrão do ai_suggestions_service
+# ============================================================
+def load_fixture_context(
+    fixture_id: int,
+    home_team_id: int,
+    away_team_id: int,
+    league_id: int,
+    season: str,
+) -> dict:
+    fixture = _clean({
+        "fixture_id":   fixture_id,
+        "league_id":    league_id,
+        "season":       season,
+        "home_team_id": home_team_id,
+        "away_team_id": away_team_id,
+    })
+
+    try:
+        home_standing = standings_svc.get_team_standing(home_team_id, league_id, season)
+        away_standing = standings_svc.get_team_standing(away_team_id, league_id, season)
+    except Exception:
+        home_standing, away_standing = None, None
+
+    try:
+        home_stats = team_stats_svc.get_stats(home_team_id, league_id, season, "HOME")
+    except Exception:
+        home_stats = None
+
+    try:
+        away_stats = team_stats_svc.get_stats(away_team_id, league_id, season, "AWAY")
+    except Exception:
+        away_stats = None
+
+    try:
+        last10_home = match_stats_svc.get_all_matches(home_team_id, season, league_id, is_home=True)
+    except Exception:
+        last10_home = []
+
+    try:
+        last10_away = match_stats_svc.get_all_matches(away_team_id, season, league_id, is_home=False)
+    except Exception:
+        last10_away = []
+
+    try:
+        total_home = match_stats_svc.get_total_matches(home_team_id, season, league_id)
+    except Exception:
+        total_home = []
+
+    try:
+        total_away = match_stats_svc.get_total_matches(away_team_id, season, league_id)
+    except Exception:
+        total_away = []
+
+    try:
+        odds = odds_svc.load_odds_by_fixture(fixture_id)
+    except Exception:
+        odds = []
+
+    return {
+        "fixture":     fixture,
+        "standings":   _clean({"home": home_standing, "away": away_standing}),
+        "home_stats":  _clean(home_stats),
+        "away_stats":  _clean(away_stats),
+        "last10_home": _clean(last10_home),
+        "last10_away": _clean(last10_away),
+        "total_home":  _clean(total_home),
+        "total_away":  _clean(total_away),
+        "odds":        _clean(odds),
+    }
+
+
+# ============================================================
+# FORMATA FIXTURES + DADOS BRUTOS COMPLETOS PARA A IA
+# 9 blocos por jogo (mesmo padrão do VIP)
+# ============================================================
+def format_fixtures_for_llm(fixtures: list) -> str:
+    lines = []
+    for i, fx_data in enumerate(fixtures, 1):
+        fx  = fx_data["fixture"]
+        ctx = fx_data["context"]
+
+        lines.append("=" * 60)
+        lines.append(f"JOGO #{i}  (fixture_id: {fx['fixture_id']})")
+        lines.append(f"{fx['home_team']} x {fx['away_team']}")
+        lines.append(f"Data: {fx['match_datetime']}  Liga: {fx.get('league_name', fx['league_id'])}")
+        lines.append("=" * 60)
+
+        # Perfis de seleção para jogos da Copa do Mundo
+        if fx.get("league_id") == 1:
+            try:
+                home_profile = national_team_svc.get_team_profile(
+                    fx["home_team_id"], fx["season"], fixture_id=fx["fixture_id"]
+                )
+                away_profile = national_team_svc.get_team_profile(
+                    fx["away_team_id"], fx["season"], fixture_id=fx["fixture_id"]
+                )
+                profiles_text = team_prompt_builder.get_world_cup_context(home_profile, away_profile)
+                if profiles_text:
+                    lines.append(profiles_text)
+            except Exception as e:
+                print(f"[MULTIPLA] Erro ao buscar perfis Copa fixture {fx['fixture_id']}: {e}")
+
+        _j = lambda o: json.dumps(o, ensure_ascii=False, separators=(',', ':'))
+
+        lines.append("\nFIXTURE:")
+        lines.append(_j(ctx["fixture"]))
+
+        if ctx.get("standings"):
+            lines.append("\nCLASSIFICAÇÃO:")
+            lines.append(_j(ctx["standings"]))
+
+        if ctx.get("odds"):
+            lines.append("\nMERCADOS E ODDS:")
+            lines.append(_j(ctx["odds"]))
+
+        if ctx.get("home_stats"):
+            lines.append(f"\nESTATÍSTICAS CASA ({fx['home_team']}):")
+            lines.append(_j(ctx["home_stats"]))
+
+        if ctx.get("away_stats"):
+            lines.append(f"\nESTATÍSTICAS FORA ({fx['away_team']}):")
+            lines.append(_j(ctx["away_stats"]))
+
+        if ctx.get("last10_home"):
+            lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
+            lines.append(_j(ctx["last10_home"][:8]))
+
+        if ctx.get("last10_away"):
+            lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
+            lines.append(_j(ctx["last10_away"][:8]))
+
+        if ctx.get("total_home"):
+            lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
+            lines.append(_j(ctx["total_home"][:8]))
+
+        if ctx.get("total_away"):
+            lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
+            lines.append(_j(ctx["total_away"][:8]))
+
+        lines.append("")
+    return "\n".join(lines)
+
+
+# ============================================================
+# CHECK — JÁ TEM MÚLTIPLA HOJE?
+# ============================================================
+def has_today_multipla() -> bool:
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("SELECT COUNT(*) FROM picks_multiplas WHERE match_date = CURRENT_DATE")
+    count = cur.fetchone()[0]
+    cur.close()
+    conn.close()
+    return count >= 1
+
+
+# ============================================================
+# BUSCA FIXTURES DO DIA DIRETAMENTE (independente do VIP)
+# ============================================================
+def get_today_fixtures() -> list:
+    return fixtures_svc.get_fixtures_today()
+
+
+# ============================================================
+# CHAMADA À IA
+# ============================================================
+def run_multipla_llm(fixtures: list) -> dict:
+    fixtures_formatados = format_fixtures_for_llm(fixtures)
+    desempenho = performance_svc.format_for_prompt()
+    user_prompt = USER_PROMPT_TEMPLATE.format(
+        fixtures_formatados=fixtures_formatados,
+        desempenho=desempenho,
+    )
+
+    try:
+        response = client.messages.create(
+            model=AI_MODEL_NAME,
+            max_tokens=8096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        raise Exception(f"[MULTIPLA] Erro na API Anthropic: {e}")
+
+    raw = response.content[0].text.strip()
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start == -1 or end == 0:
+        raise Exception(f"[MULTIPLA] JSON não encontrado na resposta:\n{raw[:500]}")
+    raw = raw[start:end]
+
+    try:
+        return json.loads(raw)
+    except Exception as e:
+        raise Exception(f"[MULTIPLA] JSON inválido: {e}\nRAW:\n{raw[:500]}")
+
+
+# ============================================================
+# CRIA TABELA SE NÃO EXISTIR
+# ============================================================
+def create_multipla_table():
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS picks_multiplas (
+            id            SERIAL PRIMARY KEY,
+            multipla_name TEXT,
+            games         JSONB,
+            total_odd     NUMERIC,
+            stake         NUMERIC,
+            stake_pct     NUMERIC,
+            score_combo   NUMERIC,
+            match_date    DATE,
+            result        TEXT,
+            profit        NUMERIC,
+            sent          BOOLEAN DEFAULT FALSE,
+            reasoning     TEXT,
+            created_at    TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS score_combo NUMERIC;")
+    conn.commit()
+    cur.close()
+    conn.close()
+
+
+# ============================================================
+# STAKE PARA MÚLTIPLAS (conservador)
+# ============================================================
+def calculate_multipla_stake(total_odd: float, bankroll: float = BANKROLL):
+    # Odd 2.00–2.49 → 3% | Odd 2.50–2.99 → 2% | Odd 3.00 → 1%
+    # Ex (bankroll R$1000): R$30 / R$20 / R$10
+    o = float(total_odd)
+
+    if o >= 3.00:
+        stake_pct = 0.01
+    elif o >= 2.50:
+        stake_pct = 0.02
+    else:
+        stake_pct = 0.03
+
+    stake_pct = max(0.01, min(stake_pct, 0.03))
+    stake = round(bankroll * stake_pct, 2)
+    return stake, round(stake_pct, 4)
+
+
+# ============================================================
+# SALVA MÚLTIPLA NO BANCO
+# ============================================================
+def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, score_combo: float):
+    conn = get_connection()
+    cur = conn.cursor()
+
+    for g in games_info:
+        if "market" in g:
+            g["market"] = translate_market(g["market"])
+
+    total_odd = 1.0
+    for g in games_info:
+        odd = g.get("odd")
+        if odd:
+            total_odd *= float(odd)
+    total_odd = round(total_odd, 2)
+
+    stake, stake_pct = calculate_multipla_stake(total_odd)
+
+    match_date = datetime.now().date()
+    for g in games_info:
+        fx = fx_map.get(g.get("fixture_id"))
+        if fx:
+            dt = fx["match_datetime"]
+            if isinstance(dt, str):
+                dt = datetime.fromisoformat(dt)
+            if hasattr(dt, "date"):
+                match_date = dt.date()
+            break
+
+    cur.execute("""
+        INSERT INTO picks_multiplas
+        (multipla_name, games, total_odd, stake, stake_pct, score_combo, match_date, reasoning)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+    """, (
+        name,
+        json.dumps(games_info, default=str),
+        total_odd,
+        stake,
+        stake_pct,
+        round(score_combo, 4),
+        match_date,
+        reasoning,
+    ))
+
+    conn.commit()
+    cur.close()
+    conn.close()
+
+    print(
+        f"[SAVE] {name} | odd total {total_odd} | "
+        f"score {round(score_combo * 100)}% | stake R${stake} ({round(stake_pct * 100)}%)"
+    )
+
+    return total_odd, stake_pct
+
+
+# ============================================================
+# GERA MENSAGEM PARA O GRUPO (TELEGRAM/WHATSAPP)
+# ============================================================
+def generate_multipla_message(resultados: dict, fx_map: dict) -> str:
+    today = datetime.now().strftime("%d/%m/%Y")
+
+    lines = []
+    lines.append("🎯 *MÚLTIPLAS DO DIA*")
+    lines.append(f"📅 {today}")
+    lines.append("─" * 30)
+
+    emojis = {"MULTIPLA_1": "🥇", "MULTIPLA_2": "🥈"}
+
+    for name, info in resultados.items():
+        emoji = emojis.get(name, "🎲")
+        games_data = info.get("games_data", [])
+
+        lines.append(f"\n{emoji} *{name}*")
+        for g in games_data:
+            fx = fx_map.get(g.get("fixture_id"))
+            if fx:
+                lines.append(f"  ⚽ {fx['home_team']} x {fx['away_team']}")
+                lines.append(f"  📊 {g['market']} → *{g['line']}*")
+                lines.append(f"  💰 Odd: {g['odd']}")
+                lines.append("")
+
+        lines.append(f"  🎯 Odd total: *{info['odd']}*")
+        lines.append(f"  📈 Score: *{info['score']}%*")
+        lines.append(f"  💵 Gestão: *{info['gestao']}%* do bankroll")
+
+    lines.append("\n─" * 30)
+    lines.append("🔒 Picks simples completos no VIP")
+    lines.append("👉 Entre em contato para assinar")
+
+    return "\n".join(lines)
+
+
+# ============================================================
+# PIPELINE COMPLETO
+# ============================================================
+def run_multipla_pipeline() -> dict | None:
+    print("[MULTIPLA] Verificando multiplas do dia...")
+
+    if has_today_multipla():
+        print("[MULTIPLA] Multipla de hoje ja existe. Nada a fazer.")
+        return None
+
+    print("[MULTIPLA] Buscando fixtures do dia...")
+    fixtures_raw = get_today_fixtures()
+
+    if len(fixtures_raw) < 2:
+        print("[MULTIPLA] Menos de 2 fixtures disponiveis — sem multipla.")
+        return None
+
+    print(f"[MULTIPLA] Carregando dados para {len(fixtures_raw)} fixture(s)...")
+    fixtures = []
+    fx_map   = {}
+
+    for fx in fixtures_raw:
+        try:
+            ctx = load_fixture_context(
+                fx["fixture_id"],
+                fx["home_team_id"],
+                fx["away_team_id"],
+                fx["league_id"],
+                fx["season"],
+            )
+            if not ctx.get("odds"):
+                print(f"  [SKIP] Sem odds para {fx['home_team']} x {fx['away_team']} — ignorando.")
+                continue
+
+            fixtures.append({"fixture": fx, "context": ctx})
+            fx_map[fx["fixture_id"]] = fx
+
+        except Exception as e:
+            print(f"  [WARN] Erro ao carregar {fx['fixture_id']}: {e}")
+
+    if len(fixtures) < 2:
+        print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis — sem multipla.")
+        return None
+
+    print(f"[MULTIPLA] Enviando {len(fixtures)} jogo(s) para IA montar multiplas...")
+    try:
+        multipla_json = run_multipla_llm(fixtures)
+    except Exception as e:
+        print(f"[MULTIPLA] Erro na IA: {e}")
+        return None
+
+    if multipla_json.get("no_bet"):
+        motivo = multipla_json.get("motivo", "criterios nao atingidos")
+        print(f"[MULTIPLA] NO BET — {motivo}")
+        return None
+
+    create_multipla_table()
+
+    resultados = {}
+
+    for key in ["multipla_1", "multipla_2"]:
+        if key not in multipla_json:
+            continue
+
+        group      = multipla_json[key]
+        name       = group["name"]
+        reasoning  = group.get("reason", "")
+        score      = float(group.get("score_combo", 0))
+        games_info = group.get("games", [])
+
+        valid_fids = [g["fixture_id"] for g in games_info if g.get("fixture_id") in fx_map]
+        if len(valid_fids) < 2:
+            print(f"[MULTIPLA] {name} — fixture_ids invalidos retornados pela IA, pulando.")
+            continue
+
+        total_odd, stake_pct = save_multipla(name, games_info, fx_map, reasoning, score)
+
+        resultados[name] = {
+            "odd":        total_odd,
+            "score":      round(score * 100),
+            "gestao":     round(stake_pct * 100),
+            "games_data": games_info,
+        }
+
+    if not resultados:
+        print("[MULTIPLA] Nenhuma multipla valida salva.")
+        return None
+
+    print("\n[MULTIPLA] Mensagem para o grupo:")
+    print("-" * 40)
+    msg = generate_multipla_message(resultados, fx_map)
+    print(msg)
+    print("-" * 40)
+
+    print("[MULTIPLA] Pipeline concluido!")
+    return resultados
+
+
+# ============================================================
+# EXECUÇÃO DIRETA
+# ============================================================
+if __name__ == "__main__":
+    run_multipla_pipeline()

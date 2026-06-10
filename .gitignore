@@ -3,11 +3,13 @@
 .env.*
 !.env.example
 
-# Repos separados / dados privados
-ApostaEsportivas/
+# Dados privados
 .claude/
 scripts/
 logs/
+
+# Venv do ApostaEsportivas
+ApostaEsportivas/venv/
 *.key
 *.pem
 *.p12
