@@ -35,7 +35,7 @@ def _compute_streak(results: list[str]) -> dict:
 @router.get("")
 def get_leaderboard(
     current_user: dict = Depends(get_current_user),
-    sort: str = Query("roi", regex="^(roi|yield_roi|win_rate|picks|streak)$"),
+    sort: str = Query("roi", pattern="^(roi|yield_roi|win_rate|picks|streak)$"),
     days: int = Query(0, ge=0),
 ):
     conn = get_connection()
