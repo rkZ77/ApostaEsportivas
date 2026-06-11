@@ -14,7 +14,7 @@ from database import get_connection
 from auth_utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
-    set_auth_cookies, clear_auth_cookies,
+    set_auth_cookies, set_access_cookie, clear_auth_cookies,
     get_current_user, decode_token,
     REFRESH_COOKIE_NAME,
 )
@@ -347,9 +347,8 @@ def refresh_token(request: Request, response: Response):
         "plan": user["plan"], "plan_expires_at": plan_expires_at,
         "avatar_url": user.get("avatar_url"),
     }
-    new_access  = create_access_token(token_data)
-    new_refresh = create_refresh_token(token_data)
-    set_auth_cookies(response, new_access, new_refresh)
+    new_access = create_access_token(token_data)
+    set_access_cookie(response, new_access)  # não renova o refresh → sessão expira em 30 dias
     return {"status": "ok"}
 
 

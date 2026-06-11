@@ -15,7 +15,7 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 2   # 2 horas; refresh token cuida da renovação
-REFRESH_TOKEN_EXPIRE_DAYS = 7
+REFRESH_TOKEN_EXPIRE_DAYS = 30
 
 COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
@@ -66,6 +66,19 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         samesite="strict",
         max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
         path="/api/auth/refresh",
+    )
+
+
+def set_access_cookie(response, access_token: str) -> None:
+    """Atualiza apenas o access token (sem renovar o refresh token)."""
+    response.set_cookie(
+        key=COOKIE_NAME,
+        value=access_token,
+        httponly=True,
+        secure=_IS_PRODUCTION,
+        samesite="strict",
+        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        path="/",
     )
 
 
