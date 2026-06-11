@@ -255,6 +255,46 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
         conn.close()
 
 
+@router.get("/alavancagem-serie")
+def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT bankroll_start FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"has_banca": False, "current_bankroll": 0.0, "initial_bankroll": 0.0}
+
+        initial = float(row["bankroll_start"])
+        bankroll = initial
+
+        cur.execute("""
+            SELECT pa.result, pa.odd_combined
+            FROM user_followed_picks uf
+            JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+            WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem' AND pa.result IS NOT NULL
+            ORDER BY pa.match_date ASC
+        """, (user_id,))
+
+        for pick in cur.fetchall():
+            result = pick["result"]
+            odd = float(pick["odd_combined"] or 1)
+            if result == "GREEN":
+                bankroll = round(bankroll + bankroll * (odd - 1), 2)
+            elif result == "RED":
+                bankroll = initial
+
+        return {
+            "has_banca": True,
+            "current_bankroll": round(bankroll, 2),
+            "initial_bankroll": initial,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.delete("/follow/{pick_id}/{pick_type}")
 def unfollow_pick(pick_id: int, pick_type: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]

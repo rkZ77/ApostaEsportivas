@@ -517,13 +517,19 @@ function MultiplaCard({ m, onClick }: { m: any; onClick?: () => void }) {
 }
 
 // ─── Alavancagem card ─────────────────────────────────────────────────────────
-function AlavancagemCard({ pick, onClick }: { pick: any; onClick?: () => void }) {
+function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?: () => void; userBankroll?: number }) {
   const isCombo        = pick.tipo === 'combinacao'
-  const stake          = Number(pick.stake ?? pick.bankroll_before ?? 50)
-  const potReturn      = Number(pick.potential_return ?? 0)
   const oddCombined    = Number(pick.odd_combined ?? 0)
+  // Usa banca pessoal do usuário se disponível, senão a da série global
+  const stake          = userBankroll != null ? userBankroll : Number(pick.stake ?? pick.bankroll_before ?? 50)
+  const potReturn      = oddCombined > 0 ? stake * oddCombined : Number(pick.potential_return ?? 0)
   const confPct        = Math.round((pick.confidence_media ?? 0) * 100)
-  const profit         = pick.profit != null ? Number(pick.profit) : null
+  // Profit proporcional: se tiver banca pessoal, calcula sobre ela
+  const profit = pick.profit != null
+    ? (userBankroll != null && Number(pick.stake ?? pick.bankroll_before ?? 50) > 0
+        ? Number(pick.profit) / Number(pick.stake ?? pick.bankroll_before ?? 50) * userBankroll
+        : Number(pick.profit))
+    : null
   const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
   const [following, setFollowing] = useState(false)
 
@@ -565,7 +571,7 @@ function AlavancagemCard({ pick, onClick }: { pick: any; onClick?: () => void })
       {/* Banca */}
       <div className="bg-zinc-900 rounded-xl p-3 mb-4 grid grid-cols-3 gap-3 text-center">
         <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Stake</div>
+          <div className="text-xs text-zinc-500 mb-0.5">Sua banca</div>
           <div className="text-lg font-black text-orange-400">R${stake.toFixed(2)}</div>
         </div>
         <div>
@@ -573,7 +579,7 @@ function AlavancagemCard({ pick, onClick }: { pick: any; onClick?: () => void })
           <div className="text-lg font-black text-green-400">{oddCombined.toFixed(2)}</div>
         </div>
         <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Retorno</div>
+          <div className="text-xs text-zinc-500 mb-0.5">Retorno pot.</div>
           <div className="text-lg font-black text-white">R${potReturn.toFixed(2)}</div>
         </div>
       </div>
@@ -612,7 +618,7 @@ function AlavancagemCard({ pick, onClick }: { pick: any; onClick?: () => void })
         </div>
         {profit != null && (
           <span className={`text-lg font-black ${profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-            {profit >= 0 ? '+' : ''}R${profit.toFixed(2)}
+            {profit >= 0 ? '+' : ''}R${Math.abs(profit).toFixed(2)}
           </span>
         )}
       </div>
@@ -909,6 +915,7 @@ export default function Dashboard() {
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
+  const [userAlavSerie, setUserAlavSerie] = useState<{ has_banca: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
@@ -933,6 +940,7 @@ export default function Dashboard() {
   useEffect(() => {
     if (!canSeeVip) return
     api.get('/suggestions/vip/meta').then(r => setMeta(r.data)).catch(() => {})
+    api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
   }, [canSeeVip])
 
   useEffect(() => {
@@ -1130,11 +1138,18 @@ export default function Dashboard() {
                   <SectionHeader color="bg-orange-400" label="Alavancagem" badge="VIP" />
                   <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
                     <p className="text-xs text-zinc-400 leading-relaxed">
-                      Banca composta: começa em <span className="text-orange-400 font-bold">R$50</span> e reinveste o lucro a cada GREEN.
-                      Reset automático no RED. Odds alvo ~1.50 (faixa 1.40–1.60).
+                      Banca composta: começa em{' '}
+                      <span className="text-orange-400 font-bold">
+                        {userAlavSerie?.has_banca ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
+                      </span>{' '}
+                      e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo ~1.50.
                     </p>
                   </div>
-                  <AlavancagemCard pick={today.alavancagem} onClick={() => openDetail(today.alavancagem.id, 'alavancagem')} />
+                  <AlavancagemCard
+                    pick={today.alavancagem}
+                    onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
+                    userBankroll={userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : undefined}
+                  />
                   <button onClick={() => setTab('alavancagem')}
                     className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
                     Ver histórico da série →
@@ -1426,6 +1441,24 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
+                {/* Aviso: cadastre sua banca */}
+                {userAlavSerie && !userAlavSerie.has_banca && (
+                  <div className="card p-5 border-orange-500/30 bg-orange-500/5 text-center">
+                    <div className="w-10 h-10 bg-orange-500/15 border border-orange-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
+                      <svg className="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                    </div>
+                    <p className="text-white font-black text-sm mb-1">Cadastre sua banca para participar</p>
+                    <p className="text-zinc-400 text-xs mb-4 max-w-xs mx-auto">
+                      A alavancagem usa sua banca como stake. Configure o valor inicial para ver os picks personalizados.
+                    </p>
+                    <Link to="/banca" className="inline-block bg-orange-500 hover:bg-orange-400 text-white font-black px-5 py-2 rounded-xl text-sm transition-colors">
+                      Cadastrar banca →
+                    </Link>
+                  </div>
+                )}
+
                 {/* Stats da série */}
                 {(() => {
                   const oldest = [...alavancagem].reverse()
@@ -1440,12 +1473,8 @@ export default function Dashboard() {
                     if (a.result === 'GREEN') currentStreak++
                     else break
                   }
-                  const last = alavancagem[0]
-                  const bankroll = last?.bankroll_after != null
-                    ? Number(last.bankroll_after)
-                    : last?.bankroll_before != null
-                    ? Number(last.bankroll_before)
-                    : 50
+                  const userBankroll  = userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : null
+                  const initialBankroll = userAlavSerie?.has_banca ? userAlavSerie.initial_bankroll : 50
 
                   return (
                     <div>
@@ -1460,9 +1489,14 @@ export default function Dashboard() {
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                           {[
-                            { label: 'Banca Atual',  value: `R$${bankroll.toFixed(2)}`, color: bankroll > 50 ? 'text-green-400' : 'text-orange-400', sub: bankroll > 50 ? `+R$${(bankroll - 50).toFixed(2)}` : 'Início da série' },
-                            { label: 'Resets (RED)', value: String(resets),             color: resets > 0 ? 'text-red-400' : 'text-zinc-500',        sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
-                            { label: 'Série Atual',  value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '—', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
+                            {
+                              label: 'Sua banca atual',
+                              value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '—',
+                              color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
+                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.has_banca ? 'Início da série' : 'Cadastre sua banca',
+                            },
+                            { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-zinc-500', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
+                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '—', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
                             { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '—', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
                           ].map(({ label, value, color, sub }) => (
                             <div key={label} className="card p-4 text-center">
@@ -1482,7 +1516,10 @@ export default function Dashboard() {
                   <div>
                     <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
                     {today?.alavancagem ? (
-                      <AlavancagemCard pick={today.alavancagem} />
+                      <AlavancagemCard
+                        pick={today.alavancagem}
+                        userBankroll={userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : undefined}
+                      />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
