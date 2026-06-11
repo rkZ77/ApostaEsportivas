@@ -54,7 +54,7 @@ def list_users(current_user: dict = Depends(require_admin)):
         cur.execute("""
             SELECT u.id, u.name, u.email, u.plan, u.subscription_type,
                    u.active, u.expires_at, u.created_at,
-                   ub.bankroll_current, ub.unit_value
+                   ub.bankroll_start AS bankroll_current, ub.unit_value
             FROM users u
             LEFT JOIN user_banca ub ON ub.user_id = u.id
             ORDER BY u.created_at DESC
