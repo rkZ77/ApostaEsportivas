@@ -67,6 +67,11 @@ export default function Navbar() {
           <Link to="/leaderboard" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/leaderboard')}`}>
             Ranking
           </Link>
+          {!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial') && (
+            <Link to="/planos" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${pathname === '/planos' ? 'text-green-500 font-semibold' : 'text-yellow-400 hover:text-yellow-300'}`}>
+              Meu Plano
+            </Link>
+          )}
           {!isAdmin && user?.plan !== 'vip' && user?.plan !== 'trial' && (
             <Link to="/planos" className={`px-3 py-1.5 rounded-lg text-sm transition-colors text-yellow-400 hover:text-yellow-300 ${isActive('/planos')}`}>
               VIP
