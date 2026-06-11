@@ -52,9 +52,12 @@ def list_users(current_user: dict = Depends(require_admin)):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT id, name, email, plan, subscription_type, active, expires_at, created_at
-            FROM users
-            ORDER BY created_at DESC
+            SELECT u.id, u.name, u.email, u.plan, u.subscription_type,
+                   u.active, u.expires_at, u.created_at,
+                   ub.bankroll_current, ub.unit_value
+            FROM users u
+            LEFT JOIN user_banca ub ON ub.user_id = u.id
+            ORDER BY u.created_at DESC
         """)
         return [dict(r) for r in cur.fetchall()]
     finally:
@@ -151,13 +154,33 @@ def admin_stats(current_user: dict = Depends(require_admin)):
     try:
         cur.execute("""
             SELECT
-                COUNT(*) AS total,
-                COUNT(*) FILTER (WHERE plan = 'vip')   AS vip,
-                COUNT(*) FILTER (WHERE plan = 'free')  AS free,
-                COUNT(*) FILTER (WHERE active = true)  AS ativos
+                COUNT(*)                                        AS total,
+                COUNT(*) FILTER (WHERE plan = 'vip')           AS vip,
+                COUNT(*) FILTER (WHERE plan = 'trial')         AS trial,
+                COUNT(*) FILTER (WHERE plan = 'free')          AS free,
+                COUNT(*) FILTER (WHERE active = true)          AS ativos,
+                COUNT(*) FILTER (WHERE plan = 'vip'
+                    AND expires_at IS NOT NULL
+                    AND expires_at < NOW() + INTERVAL '7 days'
+                    AND expires_at > NOW())                     AS vip_expirando
             FROM users
         """)
-        return dict(cur.fetchone())
+        users_row = dict(cur.fetchone())
+
+        cur.execute("""
+            SELECT
+                (SELECT COUNT(*) FROM ai_suggestions
+                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS vip_picks,
+                (SELECT COUNT(*) FROM picks_alavancagem
+                 WHERE match_date = CURRENT_DATE)                            AS alavancagem,
+                (SELECT COUNT(*) FROM picks_free
+                 WHERE match_date = CURRENT_DATE)                            AS dica,
+                (SELECT COUNT(*) FROM picks_multiplas
+                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
+        """)
+        picks_row = dict(cur.fetchone())
+
+        return {**users_row, "picks_hoje": picks_row}
     finally:
         cur.close()
         conn.close()

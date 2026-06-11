@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 
 interface User {
   id: number
@@ -13,6 +14,23 @@ interface User {
   active: boolean
   expires_at: string | null
   created_at: string
+  bankroll_current: number | null
+  unit_value: number | null
+}
+
+interface Stats {
+  total: number
+  vip: number
+  trial: number
+  free: number
+  ativos: number
+  vip_expirando: number
+  picks_hoje: {
+    vip_picks: number
+    alavancagem: number
+    dica: number
+    multiplas: number
+  }
 }
 
 const SUBSCRIPTION_TYPES = [
@@ -23,25 +41,43 @@ const SUBSCRIPTION_TYPES = [
   { value: 'anual',      label: 'Anual'      },
 ]
 
-const PLAN_FILTER = ['todos', 'free', 'vip', 'admin'] as const
+const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
 type PlanFilter = typeof PLAN_FILTER[number]
+
+const planBadge = (plan: string) => {
+  if (plan === 'vip')   return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30'
+  if (plan === 'trial') return 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+  if (plan === 'admin') return 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
+  return 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+}
+
+const expiryWarning = (expires_at: string | null) => {
+  if (!expires_at) return null
+  const days = Math.ceil((new Date(expires_at).getTime() - Date.now()) / 86400000)
+  if (days < 0)  return <span className="text-xs text-red-400 font-semibold">Expirado</span>
+  if (days <= 7) return <span className="text-xs text-orange-400 font-semibold">{days}d</span>
+  return null
+}
 
 export default function Admin() {
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
-  const [users, setUsers] = useState<User[]>([])
-  const [stats, setStats] = useState<any>(null)
+  const [users, setUsers]     = useState<User[]>([])
+  const [stats, setStats]     = useState<Stats | null>(null)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
-  const [search, setSearch] = useState('')
+  const [search, setSearch]   = useState('')
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
 
-  useEffect(() => {
-    if (!isAdmin) { navigate('/picks'); return }
+  const reload = () =>
     Promise.all([api.get('/admin/users'), api.get('/admin/stats')])
       .then(([u, s]) => { setUsers(u.data); setStats(s.data) })
       .finally(() => setLoading(false))
+
+  useEffect(() => {
+    if (!isAdmin) { navigate('/picks'); return }
+    reload()
   }, [isAdmin])
 
   const setPlan = async (id: number, plan: string) => {
@@ -65,13 +101,12 @@ export default function Admin() {
   }
 
   const deleteUser = async (id: number, name: string) => {
-    if (!window.confirm(`Deletar usuário "${name}"? Esta ação é irreversível.`)) return
+    if (!window.confirm(`Desativar usuário "${name}"?`)) return
     try {
       await api.delete(`/admin/users/${id}`)
-      setUsers(u => u.filter(x => x.id !== id))
-      if (stats) setStats((s: any) => ({ ...s, total: s.total - 1 }))
+      setUsers(u => u.map(x => x.id === id ? { ...x, active: false } : x))
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Erro ao deletar usuário')
+      alert(err.response?.data?.detail || 'Erro ao desativar usuário')
     }
   }
 
@@ -82,6 +117,7 @@ export default function Admin() {
       setUsers(u => [data, ...u])
       setNewUser({ name: '', email: '', password: '', plan: 'free' })
       setCreating(false)
+      reload()
     } catch (err: any) { alert(err.response?.data?.detail || 'Erro') }
   }
 
@@ -99,10 +135,12 @@ export default function Admin() {
   )
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black flex flex-col">
       <Navbar />
+
+      {/* Header */}
       <div className="bg-zinc-950 border-b border-zinc-800">
-        <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/picks')} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
             <div>
@@ -116,40 +154,73 @@ export default function Admin() {
         </div>
       </div>
 
-      <main className="max-w-6xl mx-auto px-4 py-8">
-        {/* Stats */}
+      <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+
+        {/* Stats — usuários */}
         {stats && (
-          <div className="grid grid-cols-4 gap-4 mb-8">
-            {[
-              { label: 'Total',  value: stats.total,  color: 'text-white' },
-              { label: 'VIP',    value: stats.vip,    color: 'text-yellow-400' },
-              { label: 'Free',   value: stats.free,   color: 'text-zinc-400' },
-              { label: 'Ativos', value: stats.ativos, color: 'text-green-500' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="stat-card text-center">
-                <div className={`text-4xl font-black ${color}`}>{value}</div>
-                <div className="text-xs text-zinc-500 uppercase tracking-wider">{label}</div>
+          <>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+              {[
+                { label: 'Total',         value: stats.total,         color: 'text-white' },
+                { label: 'VIP',           value: stats.vip,           color: 'text-yellow-400' },
+                { label: 'Trial',         value: stats.trial,         color: 'text-blue-400' },
+                { label: 'Free',          value: stats.free,          color: 'text-zinc-400' },
+                { label: 'Ativos',        value: stats.ativos,        color: 'text-green-500' },
+                { label: 'VIP expirando', value: stats.vip_expirando, color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-zinc-600' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="stat-card text-center py-3">
+                  <div className={`text-3xl font-black ${color}`}>{value}</div>
+                  <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Picks de hoje */}
+            <div className="card p-4 mb-6">
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Picks de hoje</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                {[
+                  { label: 'VIP',         value: stats.picks_hoje.vip_picks,   target: '—' },
+                  { label: 'Alavancagem', value: stats.picks_hoje.alavancagem, target: 1   },
+                  { label: 'Dica do Dia', value: stats.picks_hoje.dica,        target: 1   },
+                  { label: 'Múltiplas',   value: stats.picks_hoje.multiplas,   target: 1   },
+                ].map(({ label, value, target }) => {
+                  const ok = target === '—' ? value > 0 : value >= (target as number)
+                  return (
+                    <div key={label} className="flex items-center gap-3 bg-zinc-900 rounded-xl px-4 py-3">
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? 'bg-green-500' : 'bg-zinc-700'}`} />
+                      <div>
+                        <div className="text-white font-bold text-lg leading-none">{value}</div>
+                        <div className="text-zinc-500 text-xs mt-0.5">{label}</div>
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            ))}
-          </div>
+            </div>
+          </>
         )}
 
         {/* Criar usuário */}
         {creating && (
-          <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 md:grid-cols-5 gap-3">
+          <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
             <input className="input" placeholder="Nome" value={newUser.name} onChange={e => setNewUser(v => ({ ...v, name: e.target.value }))} required />
             <input className="input" placeholder="Email" type="email" value={newUser.email} onChange={e => setNewUser(v => ({ ...v, email: e.target.value }))} required />
-            <input className="input" placeholder="Senha" type="password" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} required />
+            <input className="input" placeholder="Senha (min 10 chars, maiúscula, número)" type="password" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} required />
             <select className="input" value={newUser.plan} onChange={e => setNewUser(v => ({ ...v, plan: e.target.value }))}>
               <option value="free">Free</option>
+              <option value="trial">Trial</option>
               <option value="vip">VIP</option>
               <option value="admin">Admin</option>
             </select>
-            <button type="submit" className="btn-primary">Criar</button>
+            <div className="flex gap-2">
+              <button type="submit" className="btn-primary flex-1">Criar</button>
+              <button type="button" onClick={() => setCreating(false)} className="px-3 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white text-sm transition-colors">✕</button>
+            </div>
           </form>
         )}
 
-        {/* Busca + filtro por plano */}
+        {/* Busca + filtro */}
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <input
             className="input flex-1 text-sm"
@@ -157,7 +228,7 @@ export default function Admin() {
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
-          <div className="flex gap-1">
+          <div className="flex gap-1 flex-wrap">
             {PLAN_FILTER.map(p => (
               <button
                 key={p}
@@ -175,13 +246,13 @@ export default function Admin() {
           <span className="text-zinc-600 text-xs self-center whitespace-nowrap">{filtered.length} usuário(s)</span>
         </div>
 
-        {/* Tabela */}
-        <div className="card overflow-hidden">
+        {/* Tabela — desktop */}
+        <div className="card overflow-hidden hidden md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  {['Usuário', 'Email', 'Plano', 'Tipo', 'Validade VIP', 'Status', 'Cadastro', 'Ações'].map(h => (
+                  {['Usuário', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Ações'].map(h => (
                     <th key={h} className="text-left text-zinc-500 font-medium px-4 py-3 uppercase text-xs tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -189,33 +260,41 @@ export default function Admin() {
               <tbody>
                 {filtered.map(u => (
                   <tr key={u.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
-                    <td className="px-4 py-3 text-white font-semibold whitespace-nowrap">{u.name}</td>
-                    <td className="px-4 py-3 text-zinc-400 text-xs">{u.email}</td>
                     <td className="px-4 py-3">
-                      <span className={u.plan === 'vip' ? 'badge-vip' : u.plan === 'admin' ? 'badge-admin' : 'badge-free'}>
+                      <div className="font-semibold text-white">{u.name}</div>
+                      <div className="text-zinc-500 text-xs">{u.email}</div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${planBadge(u.plan)}`}>
                         {u.plan.toUpperCase()}
                       </span>
                     </td>
-                    {/* Tipo de plano */}
                     <td className="px-4 py-3">
-                      <select
-                        value={u.subscription_type ?? ''}
-                        onChange={e => setSubscriptionType(u.id, e.target.value)}
-                        className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500"
-                      >
-                        {SUBSCRIPTION_TYPES.map(t => (
-                          <option key={t.value} value={t.value}>{t.label}</option>
-                        ))}
-                      </select>
+                      <div className="flex flex-col gap-1">
+                        <select
+                          value={u.subscription_type ?? ''}
+                          onChange={e => setSubscriptionType(u.id, e.target.value)}
+                          className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500"
+                        >
+                          {SUBSCRIPTION_TYPES.map(t => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                          ))}
+                        </select>
+                        <div className="flex items-center gap-1">
+                          <input
+                            type="date"
+                            value={u.expires_at ? u.expires_at.slice(0, 10) : ''}
+                            onChange={e => setExpiresAt(u.id, e.target.value)}
+                            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500 w-32"
+                          />
+                          {expiryWarning(u.expires_at)}
+                        </div>
+                      </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <input
-                        type="date"
-                        value={u.expires_at ? u.expires_at.slice(0, 10) : ''}
-                        onChange={e => setExpiresAt(u.id, e.target.value)}
-                        className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500 w-36"
-                        title="Data de expiração VIP"
-                      />
+                    <td className="px-4 py-3 text-xs text-zinc-400">
+                      {u.bankroll_current != null
+                        ? <><div className="text-white font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-zinc-600">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
+                        : <span className="text-zinc-700">—</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-lg font-medium ${u.active ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -233,6 +312,7 @@ export default function Admin() {
                           className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
                         >
                           <option value="free">Free</option>
+                          <option value="trial">Trial</option>
                           <option value="vip">VIP</option>
                           <option value="admin">Admin</option>
                         </select>
@@ -246,20 +326,20 @@ export default function Admin() {
                         >
                           {u.active ? 'Desativar' : 'Ativar'}
                         </button>
-                        <button
-                          onClick={() => deleteUser(u.id, u.name)}
-                          className="text-xs px-2 py-1 rounded-lg border border-zinc-800 text-zinc-600 hover:border-red-800 hover:text-red-500 transition-colors"
-                          title="Deletar usuário"
-                        >
-                          ×
-                        </button>
+                        {u.active && (
+                          <button
+                            onClick={() => deleteUser(u.id, u.name)}
+                            className="text-xs px-2 py-1 rounded-lg border border-zinc-800 text-zinc-600 hover:border-red-800 hover:text-red-500 transition-colors"
+                            title="Desativar usuário"
+                          >✕</button>
+                        )}
                       </div>
                     </td>
                   </tr>
                 ))}
                 {filtered.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-600 text-sm">
+                    <td colSpan={7} className="px-4 py-8 text-center text-zinc-600 text-sm">
                       Nenhum usuário encontrado.
                     </td>
                   </tr>
@@ -268,7 +348,65 @@ export default function Admin() {
             </table>
           </div>
         </div>
+
+        {/* Cards — mobile */}
+        <div className="flex flex-col gap-3 md:hidden">
+          {filtered.length === 0 && (
+            <p className="text-center text-zinc-600 text-sm py-8">Nenhum usuário encontrado.</p>
+          )}
+          {filtered.map(u => (
+            <div key={u.id} className="card p-4">
+              <div className="flex items-start justify-between mb-3">
+                <div>
+                  <div className="font-semibold text-white">{u.name}</div>
+                  <div className="text-zinc-500 text-xs mt-0.5">{u.email}</div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${planBadge(u.plan)}`}>
+                    {u.plan.toUpperCase()}
+                  </span>
+                  <span className={`text-xs px-2 py-1 rounded-lg font-medium ${u.active ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                    {u.active ? 'Ativo' : 'Inativo'}
+                  </span>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 mb-3">
+                <div>Tipo: <span className="text-zinc-300">{u.subscription_type ?? '—'}</span></div>
+                <div className="flex items-center gap-1">
+                  Expira: <span className="text-zinc-300">{u.expires_at ? u.expires_at.slice(0, 10) : '—'}</span>
+                  {expiryWarning(u.expires_at)}
+                </div>
+                <div>Banca: <span className="text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : '—'}</span></div>
+                <div>Cadastro: <span className="text-zinc-300">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
+              </div>
+
+              <div className="flex gap-2 flex-wrap">
+                <select
+                  value={u.plan}
+                  onChange={e => setPlan(u.id, e.target.value)}
+                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none flex-1"
+                >
+                  <option value="free">Free</option>
+                  <option value="trial">Trial</option>
+                  <option value="vip">VIP</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button
+                  onClick={() => toggleActive(u.id, u.active)}
+                  className={`text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                    u.active ? 'border-red-700 text-red-400' : 'border-green-700 text-green-400'
+                  }`}
+                >
+                  {u.active ? 'Desativar' : 'Ativar'}
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
       </main>
+      <Footer />
     </div>
   )
 }
