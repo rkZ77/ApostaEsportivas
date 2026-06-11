@@ -1037,9 +1037,50 @@ export default function Dashboard() {
           todayLoading ? <Spinner /> : (
             <div className="space-y-8">
 
+              {/* Barra de status do plano */}
+              {!isAdmin && daysUntilExpiry !== null && (isVip || user?.plan === 'trial') && (() => {
+                const isTrial = user?.plan === 'trial'
+                const totalDays = isTrial ? 2 : 30
+                const pct = Math.max(0, Math.min(100, (daysUntilExpiry / totalDays) * 100))
+                const isExpiring = isTrial ? daysUntilExpiry <= 1 : daysUntilExpiry <= 5
+                const expiryDate = new Date(Date.now() + daysUntilExpiry * 24 * 3600000)
+                const expiryStr = expiryDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+                return (
+                  <div className={`card p-4 ${isExpiring ? 'border-red-500/30 bg-red-500/5' : ''}`}>
+                    <div className="flex items-center gap-3">
+                      <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full border ${isTrial ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'}`}>
+                        {isTrial ? 'TESTE' : 'VIP'}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between mb-1.5">
+                          <span className="text-xs text-zinc-500">
+                            <span className={`font-black text-base ${isExpiring ? 'text-red-400' : 'text-white'}`}>{daysUntilExpiry}</span>
+                            {' '}dia{daysUntilExpiry !== 1 ? 's' : ''} restante{daysUntilExpiry !== 1 ? 's' : ''}
+                            <span className="text-zinc-700 ml-1.5">· expira {expiryStr}</span>
+                          </span>
+                          <Link to="/planos" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 ml-3">
+                            Ver plano →
+                          </Link>
+                        </div>
+                        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${isExpiring ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </div>
+                      {isExpiring && (
+                        <Link to="/checkout" className="shrink-0 text-xs bg-yellow-400 text-black font-black py-1.5 px-3 rounded-lg hover:bg-yellow-300 transition-colors whitespace-nowrap">
+                          Renovar →
+                        </Link>
+                      )}
+                    </div>
+                  </div>
+                )
+              })()}
+
               {/* Stats rápidas do mês — para todos */}
               <QuickStats stats={quickStats} />
-
 
               {/* Pick do Dia — visível para todos */}
               <section>
