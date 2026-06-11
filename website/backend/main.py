@@ -102,10 +102,41 @@ async def rate_limiter(request: Request, call_next):
     return response
 
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import Response as _Response
+import httpx as _httpx
 import pathlib as _pathlib
 _avatars_dir = _pathlib.Path(__file__).parent / "static" / "avatars"
 _avatars_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_pathlib.Path(__file__).parent / "static")), name="static")
+
+_LOGO_BASE = "https://media.api-sports.io/football"
+_LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"}
+
+@app.get("/api/proxy/team/{team_id}.png", include_in_schema=False)
+async def proxy_team_logo(team_id: int):
+    if not (1 <= team_id <= 999999):
+        return _Response(status_code=400)
+    try:
+        async with _httpx.AsyncClient(timeout=6.0) as client:
+            r = await client.get(f"{_LOGO_BASE}/teams/{team_id}.png")
+            if r.status_code == 200:
+                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+    except Exception:
+        pass
+    return _Response(status_code=404)
+
+@app.get("/api/proxy/league/{league_id}.png", include_in_schema=False)
+async def proxy_league_logo(league_id: int):
+    if not (1 <= league_id <= 999999):
+        return _Response(status_code=400)
+    try:
+        async with _httpx.AsyncClient(timeout=6.0) as client:
+            r = await client.get(f"{_LOGO_BASE}/leagues/{league_id}.png")
+            if r.status_code == 200:
+                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+    except Exception:
+        pass
+    return _Response(status_code=404)
 
 app.include_router(auth.router)
 app.include_router(suggestions.router)

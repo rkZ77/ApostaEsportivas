@@ -22,7 +22,7 @@ interface OddRow {
   bookmaker_name: string; market_type: string; side_team: string
 }
 
-const TEAM_LOGO = (id?: number) => id ? `https://media.api-sports.io/football/teams/${id}.png` : null
+const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 
 const resultColor: Record<string, string> = {
   W: 'bg-green-500 text-black',
@@ -119,7 +119,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
 
   return (
-    <div className="fixed inset-0 z-50 flex" onClick={onClose}>
+    <div className="fixed inset-0 z-[60] flex" onClick={onClose}>
       {/* overlay */}
       <div className="flex-1 bg-black/70 backdrop-blur-sm hidden sm:block" />
 

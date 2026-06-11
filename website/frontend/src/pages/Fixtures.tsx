@@ -22,13 +22,13 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
 function isLive(status: string)     { return ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(status) }
 function isFinished(status: string) { return ['FT', 'AET', 'PEN'].includes(status) }
 
-const TEAM_LOGO = (id?: number) => id ? `https://media.api-sports.io/football/teams/${id}.png` : null
+const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = {
   1: '/logo-copa-mundo.png',
 }
-const leagueLogo = (league_id: number, apiLogo?: string) =>
-  LOCAL_LEAGUE_LOGOS[league_id] ?? apiLogo
+const leagueLogo = (league_id: number) =>
+  LOCAL_LEAGUE_LOGOS[league_id] ?? `/api/proxy/league/${league_id}.png`
 
 function TeamLogo({ id, name, side }: { id?: number; name: string; side: 'left' | 'right' }) {
   const src = TEAM_LOGO(id)
@@ -88,7 +88,7 @@ export default function Fixtures() {
       grouped.push({
         key: f.league_name,
         league_id: f.league_id,
-        logo: leagueLogo(f.league_id, f.league_logo),
+        logo: leagueLogo(f.league_id),
         flag: f.league_flag,
         country: f.league_country,
         games: [],
