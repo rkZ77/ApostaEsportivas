@@ -166,9 +166,21 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
           </Link>
         )}
       </div>
-      <Link to="/profile" className="shrink-0 text-zinc-600 hover:text-zinc-400 transition-colors text-xs border border-zinc-800 hover:border-zinc-700 px-3 py-2 rounded-lg hidden sm:block">
-        Editar perfil
-      </Link>
+      <div className="shrink-0 hidden sm:flex flex-col gap-1.5">
+        <Link to="/profile" className="text-zinc-600 hover:text-zinc-400 transition-colors text-xs border border-zinc-800 hover:border-zinc-700 px-3 py-2 rounded-lg text-center">
+          Editar perfil
+        </Link>
+        {!isAdmin && (isVip || user?.plan === 'trial') && (
+          <Link to="/planos" className="text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg text-center font-semibold">
+            Meu Plano
+          </Link>
+        )}
+        {!isAdmin && !isVip && user?.plan !== 'trial' && (
+          <Link to="/checkout" className="text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg text-center font-semibold">
+            Upgrade VIP
+          </Link>
+        )}
+      </div>
     </div>
   )
 }
@@ -1036,57 +1048,6 @@ export default function Dashboard() {
         {tab === 'hoje' && (
           todayLoading ? <Spinner /> : (
             <div className="space-y-8">
-
-              {/* Barra de status do plano */}
-              {!isAdmin && (isVip || user?.plan === 'trial') && (() => {
-                const isTrial = user?.plan === 'trial'
-                const days = daysUntilExpiry
-                const hasDays = days !== null
-                const totalDays = isTrial ? 2 : 30
-                const pct = hasDays ? Math.max(0, Math.min(100, (days! / totalDays) * 100)) : 100
-                const isExpiring = hasDays && (isTrial ? days! <= 1 : days! <= 5)
-                const expiryStr = hasDays
-                  ? new Date(Date.now() + days! * 24 * 3600000).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
-                  : null
-                return (
-                  <div className={`card p-4 ${isExpiring ? 'border-red-500/30 bg-red-500/5' : ''}`}>
-                    <div className="flex items-center gap-3">
-                      <span className={`shrink-0 text-xs font-black px-2.5 py-1 rounded-full border ${isTrial ? 'text-green-400 bg-green-500/10 border-green-500/20' : 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'}`}>
-                        {isTrial ? 'TESTE' : 'VIP'}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center justify-between mb-1.5">
-                          <span className="text-xs text-zinc-500">
-                            {hasDays ? (
-                              <>
-                                <span className={`font-black text-base ${isExpiring ? 'text-red-400' : 'text-white'}`}>{days}</span>
-                                {' '}dia{days !== 1 ? 's' : ''} restante{days !== 1 ? 's' : ''}
-                                {expiryStr && <span className="text-zinc-700 ml-1.5">· expira {expiryStr}</span>}
-                              </>
-                            ) : (
-                              <span className="text-white font-semibold">Plano {isTrial ? 'Teste' : 'VIP'} ativo</span>
-                            )}
-                          </span>
-                          <Link to="/planos" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 ml-3">
-                            Ver plano →
-                          </Link>
-                        </div>
-                        <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${isExpiring ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                      </div>
-                      {isExpiring && (
-                        <Link to="/checkout" className="shrink-0 text-xs bg-yellow-400 text-black font-black py-1.5 px-3 rounded-lg hover:bg-yellow-300 transition-colors whitespace-nowrap">
-                          Renovar →
-                        </Link>
-                      )}
-                    </div>
-                  </div>
-                )
-              })()}
 
               {/* Stats rápidas do mês — para todos */}
               <QuickStats stats={quickStats} />
