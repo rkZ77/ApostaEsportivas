@@ -264,12 +264,17 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT bankroll_start FROM user_banca WHERE user_id = %s", (user_id,))
+        cur.execute("""
+            SELECT alav_bankroll_init
+            FROM user_banca
+            WHERE user_id = %s
+        """, (user_id,))
         row = cur.fetchone()
-        if not row:
-            return {"has_banca": False, "current_bankroll": 0.0, "initial_bankroll": 0.0}
 
-        initial = float(row["bankroll_start"])
+        if not row or row["alav_bankroll_init"] is None:
+            return {"configured": False, "current_bankroll": 0.0, "initial_bankroll": 0.0}
+
+        initial = float(row["alav_bankroll_init"])
         bankroll = initial
 
         cur.execute("""
@@ -284,15 +289,38 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
             result = pick["result"]
             odd = float(pick["odd_combined"] or 1)
             if result == "GREEN":
-                bankroll = round(bankroll + bankroll * (odd - 1), 2)
+                bankroll = round(bankroll * odd, 2)
             elif result == "RED":
                 bankroll = initial
 
         return {
-            "has_banca": True,
+            "configured": True,
             "current_bankroll": round(bankroll, 2),
             "initial_bankroll": initial,
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.put("/alavancagem-init")
+def set_alavancagem_init(body: dict, current_user: dict = Depends(get_current_user)):
+    bankroll_init = body.get("bankroll_init")
+    if not bankroll_init or float(bankroll_init) <= 0:
+        raise HTTPException(400, "Valor deve ser maior que zero.")
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO user_banca (user_id, bankroll_start, alav_bankroll_init)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE
+                SET alav_bankroll_init = EXCLUDED.alav_bankroll_init,
+                    updated_at = NOW()
+        """, (user_id, float(bankroll_init), float(bankroll_init)))
+        conn.commit()
+        return {"ok": True, "initial_bankroll": float(bankroll_init)}
     finally:
         cur.close()
         conn.close()

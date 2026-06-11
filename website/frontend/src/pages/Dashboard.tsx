@@ -952,7 +952,9 @@ export default function Dashboard() {
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
-  const [userAlavSerie, setUserAlavSerie] = useState<{ has_banca: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
+  const [userAlavSerie, setUserAlavSerie] = useState<{ configured: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
+  const [alavInitInput, setAlavInitInput] = useState('')
+  const [alavInitSaving, setAlavInitSaving] = useState(false)
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
 
   const [quickStats, setQuickStats] = useState<any>(null)
@@ -1026,6 +1028,22 @@ export default function Dashboard() {
       .then(r => { setMultiplas(r.data); setMLoaded(true) })
       .catch(() => setMultiplas([]))
       .finally(() => setMLoading(false))
+  }
+
+  const saveAlavInit = async () => {
+    const val = parseFloat(alavInitInput)
+    if (!val || val <= 0) return
+    setAlavInitSaving(true)
+    try {
+      await api.put('/banca/alavancagem-init', { bankroll_init: val })
+      const r = await api.get('/banca/alavancagem-serie')
+      setUserAlavSerie(r.data)
+      setAlavInitInput('')
+    } catch (e: any) {
+      alert(e.response?.data?.detail || 'Erro ao salvar')
+    } finally {
+      setAlavInitSaving(false)
+    }
   }
 
   function doFetchAlavancagem(f: AlavFilters) {
@@ -1179,7 +1197,7 @@ export default function Dashboard() {
                     <p className="text-xs text-zinc-400 leading-relaxed">
                       Banca composta: começa em{' '}
                       <span className="text-orange-400 font-bold">
-                        {userAlavSerie?.has_banca ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
+                        {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
                       </span>{' '}
                       e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo ~1.50.
                     </p>
@@ -1187,7 +1205,7 @@ export default function Dashboard() {
                   <AlavancagemCard
                     pick={today.alavancagem}
                     onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
-                    userBankroll={userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : undefined}
+                    userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                   />
                   <button onClick={() => setTab('alavancagem')}
                     className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
@@ -1480,23 +1498,51 @@ export default function Dashboard() {
               </div>
             ) : (
               <>
-                {/* Aviso: cadastre sua banca */}
-                {userAlavSerie && !userAlavSerie.has_banca && (
-                  <div className="card p-5 border-orange-500/30 bg-orange-500/5 text-center">
-                    <div className="w-10 h-10 bg-orange-500/15 border border-orange-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
-                      <svg className="w-5 h-5 text-orange-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
+                {/* Config banca Copa alavancagem */}
+                <div className="card p-5 border-orange-500/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div>
+                      <p className="text-xs font-black text-orange-400 uppercase tracking-widest">Banca Copa Alavancagem</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal — reinveste a cada GREEN, reseta no RED</p>
                     </div>
-                    <p className="text-white font-black text-sm mb-1">Cadastre sua banca para participar</p>
-                    <p className="text-zinc-400 text-xs mb-4 max-w-xs mx-auto">
-                      A alavancagem usa sua banca como stake. Configure o valor inicial para ver os picks personalizados.
-                    </p>
-                    <Link to="/banca" className="inline-block bg-orange-500 hover:bg-orange-400 text-white font-black px-5 py-2 rounded-xl text-sm transition-colors">
-                      Cadastrar banca →
-                    </Link>
+                    {userAlavSerie?.configured && (
+                      <div className="text-right">
+                        <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
+                        <div className="text-xs text-zinc-600">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
+                      </div>
+                    )}
                   </div>
-                )}
+                  {(!userAlavSerie?.configured || alavInitInput) ? (
+                    <div className="flex gap-2 mt-2">
+                      <input
+                        type="number"
+                        min="1"
+                        step="10"
+                        placeholder={userAlavSerie?.configured ? `Atual: R$${userAlavSerie.initial_bankroll.toFixed(0)}` : 'Ex: 100'}
+                        value={alavInitInput}
+                        onChange={e => setAlavInitInput(e.target.value)}
+                        className="input flex-1 text-sm"
+                      />
+                      <button
+                        onClick={saveAlavInit}
+                        disabled={alavInitSaving || !alavInitInput}
+                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black px-4 py-2 rounded-xl text-sm transition-colors"
+                      >
+                        {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
+                      </button>
+                      {userAlavSerie?.configured && (
+                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-xl border border-zinc-700 text-zinc-500 text-sm hover:text-white transition-colors">✕</button>
+                      )}
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setAlavInitInput(String(userAlavSerie.initial_bankroll))}
+                      className="text-xs text-zinc-600 hover:text-orange-400 transition-colors underline"
+                    >
+                      Alterar valor inicial
+                    </button>
+                  )}
+                </div>
 
                 {/* Stats da série */}
                 {(() => {
@@ -1512,8 +1558,8 @@ export default function Dashboard() {
                     if (a.result === 'GREEN') currentStreak++
                     else break
                   }
-                  const userBankroll  = userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : null
-                  const initialBankroll = userAlavSerie?.has_banca ? userAlavSerie.initial_bankroll : 50
+                  const userBankroll  = userAlavSerie?.configured ? userAlavSerie.current_bankroll : null
+                  const initialBankroll = userAlavSerie?.configured ? userAlavSerie.initial_bankroll : 50
 
                   return (
                     <div>
@@ -1532,7 +1578,7 @@ export default function Dashboard() {
                               label: 'Sua banca atual',
                               value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '—',
                               color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
-                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.has_banca ? 'Início da série' : 'Cadastre sua banca',
+                              sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
                             },
                             { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-zinc-500', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
                             { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '—', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
@@ -1557,7 +1603,7 @@ export default function Dashboard() {
                     {today?.alavancagem ? (
                       <AlavancagemCard
                         pick={today.alavancagem}
-                        userBankroll={userAlavSerie?.has_banca ? userAlavSerie.current_bankroll : undefined}
+                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                       />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
