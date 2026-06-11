@@ -132,6 +132,11 @@ export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; o
         <div className="bg-zinc-800 rounded-lg p-2 text-center">
           <div className="text-xs text-zinc-500 mb-0.5">Stake</div>
           <div className="text-sm font-bold text-white">{s.stake ?? 1}u</div>
+          {banca && (
+            <div className="text-[10px] text-zinc-500 mt-0.5">
+              R${((s.stake ?? 1) * banca.unit_value).toFixed(0)}
+            </div>
+          )}
         </div>
       </div>
 

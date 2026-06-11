@@ -417,8 +417,8 @@ def save_pick(result: dict, bankroll: float):
     tipo = result.get("tipo", "simples")
     odd_combined      = float(result["odd_combined"])
     confidence_media  = float(result.get("confidence_media", p1["confidence"]))
-    stake             = round(bankroll, 2)
-    potential_return  = round(stake * odd_combined, 2)
+    stake             = 1.0  # 1 unidade = 100% da banca no sistema alavancagem
+    potential_return  = round(odd_combined, 2)  # retorno em unidades
 
     # Traduz mercados
     p1["market"] = translate_market(p1["market"])
@@ -429,7 +429,7 @@ def save_pick(result: dict, bankroll: float):
     print(f"  {p1['home_team']} x {p1['away_team']} | {p1['market']} {p1.get('line','')} @ {p1['odd']}")
     if p2:
         print(f"  + {p2['home_team']} x {p2['away_team']} | {p2['market']} {p2.get('line','')} @ {p2['odd']}")
-    print(f"  Odd combinada: {odd_combined} | Stake: R${stake} | Retorno potencial: R${potential_return}")
+    print(f"  Odd combinada: {odd_combined} | Stake: 1u (R${bankroll:.2f}) | Retorno potencial: {potential_return:.2f}u")
 
     conn = get_connection()
     cur  = conn.cursor()
@@ -455,7 +455,7 @@ def save_pick(result: dict, bankroll: float):
         p2["odd"] if p2 else None, p2.get("bet_house") if p2 else None,
         p2.get("confidence") if p2 else None, p2.get("prob_real") if p2 else None,
         p2.get("reasoning") if p2 else None,
-        odd_combined, confidence_media, stake, potential_return, stake,
+        odd_combined, confidence_media, stake, potential_return, bankroll,
     ))
     conn.commit()
     cur.close()

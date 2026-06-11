@@ -406,8 +406,6 @@ HISTÓRICO FORA
     # CÁLCULO DE STAKE (Kelly fracionado — 25% Kelly)
     #
     # Faixa: 2% mínimo, 5% máximo do bankroll
-    #   R$1000 → R$20 mín / R$50 máx
-    #   R$500  → R$10 mín / R$25 máx
     # --------------------------------------------------------
     def calculate_stake(self, confidence, odd):
         p = float(confidence)
@@ -415,15 +413,16 @@ HISTÓRICO FORA
 
         ev = (p * o) - 1
         if ev <= 0:
-            return 0, 0
+            return 0.5, 0.0
 
         kelly = ev / (o - 1)
-        stake_fraction = kelly * 0.25
-        stake = BANKROLL * stake_fraction
-        stake = max(BANKROLL * 0.02, min(stake, BANKROLL * 0.05))
-        stake_pct = stake / BANKROLL
+        half_kelly = kelly / 2
+        # 1u = 1% da banca; resultado arredondado para 0.5u mais próximo, entre 0.5u e 5u
+        units = half_kelly * 100
+        units = max(0.5, min(5.0, units))
+        units = round(units * 2) / 2
 
-        return round(stake, 2), round(stake_pct, 4)
+        return units, round(half_kelly, 4)
 
     # --------------------------------------------------------
     # GERAR E SALVAR NO BANCO (com ON CONFLICT para evitar duplicatas)
@@ -502,7 +501,7 @@ HISTÓRICO FORA
             f"{chosen['market']} {chosen['line']} | odd {odd} | "
             f"edge {round(float(chosen.get('edge', 0)) * 100, 1)}% | "
             f"conf {round(conf * 100)}% | EV {ev} | "
-            f"stake R${stake} ({round(stake_pct * 100)}%)"
+            f"stake {stake}u (½ Kelly {round(stake_pct * 100, 1)}%)"
         )
 
         # 3. Salva no banco — ON CONFLICT ignora duplicata do mesmo fixture

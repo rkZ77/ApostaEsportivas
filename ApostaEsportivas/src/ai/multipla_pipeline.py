@@ -374,21 +374,16 @@ def create_multipla_table():
 # ============================================================
 # STAKE PARA MÚLTIPLAS (conservador)
 # ============================================================
-def calculate_multipla_stake(total_odd: float, bankroll: float = BANKROLL):
-    # Odd 2.00–2.49 → 3% | Odd 2.50–2.99 → 2% | Odd 3.00 → 1%
-    # Ex (bankroll R$1000): R$30 / R$20 / R$10
+def calculate_multipla_stake(total_odd: float):
+    # Odd ≥3.00 → 1u | Odd ≥2.50 → 2u | Odd <2.50 → 3u
     o = float(total_odd)
-
     if o >= 3.00:
-        stake_pct = 0.01
+        units = 1.0
     elif o >= 2.50:
-        stake_pct = 0.02
+        units = 2.0
     else:
-        stake_pct = 0.03
-
-    stake_pct = max(0.01, min(stake_pct, 0.03))
-    stake = round(bankroll * stake_pct, 2)
-    return stake, round(stake_pct, 4)
+        units = 3.0
+    return units, 0.0
 
 
 # ============================================================
