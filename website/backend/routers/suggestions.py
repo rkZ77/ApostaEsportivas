@@ -1,5 +1,6 @@
-﻿from fastapi import APIRouter, Depends, Query
+﻿from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+import psycopg2.extras
 from database import get_connection
 from auth_utils import get_current_user, require_vip
 
@@ -545,6 +546,65 @@ def get_suggestion_detail(
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/{fixture_id}/standings")
+async def get_standings_for_fixture(
+    fixture_id: int,
+    current_user: dict = Depends(get_current_user),
+):
+    """Classificação da liga do jogo — direto da API-Football (sem cache)."""
+    from futebol_agent.api_football import get_standings
+
+    conn = get_connection()
+    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    try:
+        cur.execute(
+            "SELECT league_id, home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
+            (fixture_id,),
+        )
+        fx = cur.fetchone()
+    finally:
+        cur.close()
+        conn.close()
+
+    if not fx:
+        return {"groups": [], "home_team_id": None, "away_team_id": None}
+
+    league_id = fx["league_id"]
+    home_id   = fx["home_team_id"]
+    away_id   = fx["away_team_id"]
+
+    try:
+        raw_groups = await get_standings(league_id)
+    except Exception:
+        return {"groups": [], "home_team_id": home_id, "away_team_id": away_id}
+
+    def _fmt(entry: dict) -> dict:
+        team  = entry.get("team", {})
+        stats = entry.get("all", {})
+        goals = stats.get("goals", {})
+        return {
+            "pos":     entry.get("rank"),
+            "team_id": team.get("id"),
+            "team":    team.get("name"),
+            "pts":     entry.get("points"),
+            "played":  stats.get("played"),
+            "won":     stats.get("win"),
+            "draw":    stats.get("draw"),
+            "lost":    stats.get("lose"),
+            "gf":      goals.get("for"),
+            "ga":      goals.get("against"),
+            "gd":      entry.get("goalsDiff"),
+            "form":    entry.get("form", ""),
+        }
+
+    groups = []
+    for group in raw_groups:
+        name = group[0].get("group", "") if group else ""
+        groups.append({"group": name, "teams": [_fmt(e) for e in group]})
+
+    return {"groups": groups, "home_team_id": home_id, "away_team_id": away_id}
 
 
 @router.get("/history")

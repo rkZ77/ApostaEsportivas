@@ -377,7 +377,10 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 
       {/* Footer: Apostei + Ver detalhes */}
       <div className="flex items-center justify-between">
-        {!dica.result && (
+        {!dica.result && !banca && (
+          <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
+        )}
+        {!dica.result && banca && (
           <button
             onClick={handleFollow}
             disabled={following || followed}
@@ -541,16 +544,20 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 
       {/* Footer actions */}
       <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
-        <button
-          onClick={handleFollow}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
-            followed
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-          }`}
-        >
-          {followed ? 'Apostei' : '+ Apostei'}
-        </button>
+        {!m.result && !banca ? (
+          <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
+        ) : !m.result && banca ? (
+          <button
+            onClick={handleFollow}
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+              followed
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+            }`}
+          >
+            {followed ? 'Apostei' : '+ Apostei'}
+          </button>
+        ) : <span />}
         <span className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
           Ver detalhes →
         </span>
@@ -668,16 +675,20 @@ function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?:
 
       {/* Footer actions */}
       <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
-        <button
-          onClick={handleFollow}
-          className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
-            followed
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-              : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
-          }`}
-        >
-          {followed ? 'Apostei' : '+ Apostei'}
-        </button>
+        {!pick.result && userBankroll == null ? (
+          <span className="text-[11px] text-zinc-600 italic">Configure sua banca de alavancagem para registrar</span>
+        ) : !pick.result ? (
+          <button
+            onClick={handleFollow}
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+              followed
+                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+            }`}
+          >
+            {followed ? 'Apostei' : '+ Apostei'}
+          </button>
+        ) : <span />}
         <span className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
           Ver detalhes →
         </span>
@@ -1131,6 +1142,51 @@ export default function Dashboard() {
         {tab === 'hoje' && (
           todayLoading ? <Spinner /> : (
             <div className="space-y-8">
+
+              {/* Resumo das bancas — visível para VIPs */}
+              {canSeeVip && (bancaSummary || userAlavSerie) && (
+                <div className="grid grid-cols-2 gap-3">
+                  {/* Banca Geral */}
+                  <div className={`rounded-xl border p-3.5 ${bancaSummary?.has_banca ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-900/50 border-dashed border-zinc-800'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Banca Geral</span>
+                      {!bancaSummary?.has_banca && (
+                        <span className="text-[10px] text-yellow-500 font-bold">Não configurada</span>
+                      )}
+                    </div>
+                    {bancaSummary?.has_banca ? (
+                      <>
+                        <div className="text-xl font-black text-white">R${Number(bancaSummary.bankroll_current).toFixed(2)}</div>
+                        <div className="text-[11px] text-zinc-600 mt-0.5">{bancaSummary.unit_value ? `1u = R$${Number(bancaSummary.unit_value).toFixed(2)}` : '—'}</div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-600 mt-1">Configure em <a href="/profile" className="text-green-400 underline">Perfil</a></p>
+                    )}
+                  </div>
+                  {/* Banca Alavancagem */}
+                  <div className={`rounded-xl border p-3.5 ${userAlavSerie?.configured ? 'bg-zinc-900 border-orange-500/20' : 'bg-zinc-900/50 border-dashed border-zinc-800'}`}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Alavancagem</span>
+                      {!userAlavSerie?.configured && (
+                        <span className="text-[10px] text-yellow-500 font-bold">Não configurada</span>
+                      )}
+                    </div>
+                    {userAlavSerie?.configured ? (
+                      <>
+                        <div className="text-xl font-black text-orange-400">R${Number(userAlavSerie.current_bankroll).toFixed(2)}</div>
+                        <div className="text-[11px] text-zinc-600 mt-0.5">
+                          início R${Number(userAlavSerie.initial_bankroll).toFixed(2)}
+                          {userAlavSerie.current_bankroll > userAlavSerie.initial_bankroll && (
+                            <span className="text-green-400 ml-1">+R${(userAlavSerie.current_bankroll - userAlavSerie.initial_bankroll).toFixed(2)}</span>
+                          )}
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-xs text-zinc-600 mt-1">Configure na aba <button onClick={() => setTab('alavancagem')} className="text-orange-400 underline">Alavancagem</button></p>
+                    )}
+                  </div>
+                </div>
+              )}
 
               {/* Stats rápidas do mês — para todos */}
               <QuickStats stats={quickStats} />

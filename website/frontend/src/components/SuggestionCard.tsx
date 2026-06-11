@@ -170,7 +170,10 @@ export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; o
 
 
       <div className="mt-3 flex items-center justify-between">
-        {!s.result && (
+        {!s.result && !banca && (
+          <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
+        )}
+        {!s.result && banca && (
           <button
             onClick={handleFollow}
             disabled={following || followed}

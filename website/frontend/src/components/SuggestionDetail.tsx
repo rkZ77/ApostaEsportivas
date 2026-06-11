@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, TrendingUp, BarChart2, Activity, Tag, MessageCircle } from 'lucide-react'
+import { X, TrendingUp, BarChart2, Activity, List, MessageCircle } from 'lucide-react'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 
@@ -75,9 +75,11 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab] = useState<string>('ia')
+  const [standings, setStandings] = useState<any>(null)
+  const [standingsLoading, setStandingsLoading] = useState(false)
 
   useEffect(() => {
-    setLoading(true); setData(null); setTab('ia')
+    setLoading(true); setData(null); setTab('ia'); setStandings(null)
     api.get(`/suggestions/${id}/detail`, { params: { pick_type: pickType } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
@@ -87,15 +89,26 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
     return () => window.removeEventListener('keydown', onKey)
   }, [id])
 
+  useEffect(() => {
+    if (tab !== 'standings' || standings || standingsLoading) return
+    const fixtureId = data?.suggestion?.fixture_id
+    if (!fixtureId) return
+    setStandingsLoading(true)
+    api.get(`/suggestions/${fixtureId}/standings`)
+      .then(r => setStandings(r.data))
+      .catch(() => setStandings({ groups: [] }))
+      .finally(() => setStandingsLoading(false))
+  }, [tab, data])
+
   const hasFullDetail = pickType === 'vip' || pickType === 'free'
   const tabs = [
-    { key: 'ia',     label: 'Pick',    Icon: TrendingUp    },
+    { key: 'ia',        label: 'Pick',           Icon: TrendingUp   },
     ...(hasFullDetail ? [
-      { key: 'stats', label: 'Médias', Icon: BarChart2     },
-      { key: 'form',  label: 'Forma',  Icon: Activity      },
-      { key: 'odds',  label: 'Odds',   Icon: Tag           },
+      { key: 'stats',    label: 'Médias',         Icon: BarChart2    },
+      { key: 'form',     label: 'Forma',          Icon: Activity     },
+      { key: 'standings',label: 'Classificação',  Icon: List         },
     ] : []),
-    { key: 'social', label: 'Chat',   Icon: MessageCircle  },
+    { key: 'social',    label: 'Chat',            Icon: MessageCircle },
   ]
 
   const s = data?.suggestion
@@ -403,35 +416,70 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA ODDS ─────────────────────────────────────────── */}
-              {tab === 'odds' && (
-                <div className="space-y-4">
-                  {data.odds.length === 0 ? (
-                    <p className="text-zinc-500 text-center py-10 text-sm">Sem odds disponíveis.</p>
-                  ) : (() => {
-                    const groups: Record<string, OddRow[]> = {}
-                    for (const o of data.odds) {
-                      const key = o.market_type || 'Outros'
-                      if (!groups[key]) groups[key] = []
-                      groups[key].push(o)
-                    }
-                    return Object.entries(groups).map(([type, rows]) => (
-                      <div key={type}>
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-semibold">{type}</p>
-                        <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
-                          {rows.map((o, i) => (
-                            <div key={i} className="flex items-center gap-3 px-4 py-2.5 border-b border-zinc-800/40 last:border-0 hover:bg-zinc-800/30 transition-colors">
-                              <div className="flex-1 min-w-0">
-                                <div className="text-xs text-white font-medium truncate">{o.market_name}</div>
-                                <div className="text-[10px] text-zinc-500">{o.value_name} · {o.bookmaker_name}</div>
-                              </div>
-                              <span className="text-green-400 font-black text-sm shrink-0">{Number(o.odd_value).toFixed(2)}</span>
-                            </div>
-                          ))}
+              {/* ── ABA CLASSIFICAÇÃO ────────────────────────────────── */}
+              {tab === 'standings' && (
+                <div>
+                  {standingsLoading ? (
+                    <div className="flex items-center justify-center h-40">
+                      <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+                    </div>
+                  ) : !standings || standings.groups.length === 0 ? (
+                    <p className="text-zinc-500 text-center py-10 text-sm">Classificação não disponível.</p>
+                  ) : standings.groups.map((g: any, gi: number) => (
+                    <div key={gi} className={gi > 0 ? 'mt-6' : ''}>
+                      {standings.groups.length > 1 && (
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-semibold">{g.group}</p>
+                      )}
+                      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                        {/* Header */}
+                        <div className="grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-zinc-800 text-[10px] text-zinc-600 font-semibold uppercase">
+                          <span>#</span>
+                          <span>Time</span>
+                          <span className="text-center">Pts</span>
+                          <span className="text-center">J</span>
+                          <span className="text-center">V</span>
+                          <span className="text-center">E</span>
+                          <span className="text-center">SG</span>
                         </div>
+                        {g.teams.map((t: any, i: number) => {
+                          const isHome = t.team_id === standings.home_team_id
+                          const isAway = t.team_id === standings.away_team_id
+                          const logo = t.team_id ? `https://media.api-sports.io/football/teams/${t.team_id}.png` : null
+                          return (
+                            <div
+                              key={i}
+                              className={`grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-zinc-800/40 last:border-0 items-center ${
+                                isHome ? 'bg-green-500/8 border-l-2 border-l-green-500' :
+                                isAway ? 'bg-blue-500/8 border-l-2 border-l-blue-500' : ''
+                              }`}
+                            >
+                              <span className={`text-xs font-black ${isHome || isAway ? 'text-white' : 'text-zinc-500'}`}>{t.pos}</span>
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                {logo && (
+                                  <img src={logo} alt="" className="w-4 h-4 object-contain shrink-0" referrerPolicy="no-referrer"
+                                    onError={e => (e.currentTarget.style.display = 'none')} />
+                                )}
+                                <span className={`text-xs truncate ${isHome ? 'text-green-400 font-bold' : isAway ? 'text-blue-400 font-bold' : 'text-zinc-300'}`}>
+                                  {t.team}
+                                </span>
+                              </div>
+                              <span className={`text-xs font-black text-center ${isHome || isAway ? 'text-white' : 'text-zinc-300'}`}>{t.pts}</span>
+                              <span className="text-[11px] text-zinc-500 text-center">{t.played}</span>
+                              <span className="text-[11px] text-green-500 text-center">{t.won}</span>
+                              <span className="text-[11px] text-zinc-500 text-center">{t.draw}</span>
+                              <span className={`text-[11px] text-center font-semibold ${(t.gd ?? 0) > 0 ? 'text-green-400' : (t.gd ?? 0) < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                                {(t.gd ?? 0) > 0 ? '+' : ''}{t.gd}
+                              </span>
+                            </div>
+                          )
+                        })}
                       </div>
-                    ))
-                  })()}
+                      <div className="flex gap-3 mt-2 px-1">
+                        <span className="flex items-center gap-1 text-[10px] text-green-400"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />{s?.home_team_name}</span>
+                        <span className="flex items-center gap-1 text-[10px] text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{s?.away_team_name}</span>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
 
