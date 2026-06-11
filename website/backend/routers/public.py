@@ -144,7 +144,7 @@ def public_results(
             date_cond   = "AND TO_CHAR(match_date, 'YYYY-MM') = %s"
             date_params = (month,)
         else:
-            date_cond   = "AND match_date >= CURRENT_DATE - INTERVAL '30 days'"
+            date_cond   = ""
             date_params = ()
 
         single = source in ("vip", "free", "multiplas", "alavancagem")

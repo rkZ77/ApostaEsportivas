@@ -4,7 +4,7 @@ export default function Footer() {
   return (
     <footer className="border-t border-zinc-800 bg-zinc-950 mt-12">
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+        <div className="flex flex-col items-center gap-5 sm:flex-row sm:justify-between">
 
           {/* Logo + tagline */}
           <div className="flex items-center gap-2.5">
@@ -33,7 +33,7 @@ export default function Footer() {
           </div>
 
           {/* Disclaimer */}
-          <p className="text-xs text-zinc-700 text-center">
+          <p className="text-xs text-zinc-700 text-center sm:text-right">
             Picks por IA. Aposte com responsabilidade. +18.
           </p>
         </div>

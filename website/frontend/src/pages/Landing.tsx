@@ -163,20 +163,20 @@ function RecentResults() {
 
         {/* Stats */}
         {s && s.total > 0 && (
-          <div className="grid grid-cols-3 gap-4 mb-10 max-w-lg mx-auto">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
-              <div className="text-3xl font-black text-green-500">{winRate}%</div>
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
+          <div className="grid grid-cols-3 gap-3 mb-10 max-w-lg mx-auto">
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
+              <div className="text-2xl sm:text-3xl font-black text-green-500">{winRate}%</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
-              <div className="text-3xl font-black text-white">{s.total}</div>
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Picks</div>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
+              <div className="text-2xl sm:text-3xl font-black text-white">{s.total}</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Picks</div>
             </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 text-center">
-              <div className={`text-3xl font-black ${(s.profit ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
+              <div className={`text-2xl sm:text-3xl font-black ${(s.profit ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                 {(s.profit ?? 0) >= 0 ? '+' : ''}{Number(s.profit ?? 0).toFixed(1)}u
               </div>
-              <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">Lucro</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Lucro</div>
             </div>
           </div>
         )}
@@ -194,39 +194,38 @@ function RecentResults() {
             </div>
             <div className="divide-y divide-zinc-800/50">
               {recent6.map((tip, i) => (
-                <div key={i} className="flex items-center gap-3 px-5 py-3.5">
-                  <div className="w-14 shrink-0 text-center">
-                    <span className="text-xs text-zinc-500">
+                <div key={i} className="flex items-center gap-2 px-3 sm:px-5 py-3">
+                  <div className="w-10 sm:w-14 shrink-0 text-center">
+                    <span className="text-[10px] sm:text-xs text-zinc-500">
                       {new Date(tip.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                    <div className="flex items-center gap-1 mb-0.5 flex-wrap">
                       <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SRC_CLS[tip.source] ?? ''}`}>
                         {SRC_LBL[tip.source] ?? tip.source}
                       </span>
                       <TeamLogo id={tip.home_team_id} name={tip.home_team_name} />
-                      <span className="text-sm font-semibold text-white truncate">{tip.home_team_name}</span>
+                      <span className="text-xs sm:text-sm font-semibold text-white truncate">{tip.home_team_name}</span>
                       {tip.away_team_name && tip.away_team_name !== '--' && (
                         <>
-                          <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                          <span className="text-sm font-semibold text-white truncate">{tip.away_team_name}</span>
-                          <TeamLogo id={tip.away_team_id} name={tip.away_team_name} />
+                          <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+                          <span className="text-xs sm:text-sm font-semibold text-white truncate">{tip.away_team_name}</span>
                         </>
                       )}
                     </div>
-                    <p className="text-xs text-zinc-500 truncate">
+                    <p className="text-[10px] sm:text-xs text-zinc-500 truncate">
                       {tip.market && tip.market !== '--' ? tip.market : ''}
                       {tip.line && tip.line !== '--' ? ` ${tip.line}` : ''}
-                      {' · Odd '}{Number(tip.odd).toFixed(2)}
+                      {' · '}{Number(tip.odd).toFixed(2)}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${RESULT_CLS[tip.result] ?? 'text-zinc-500'}`}>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${RESULT_CLS[tip.result] ?? 'text-zinc-500'}`}>
                       {RESULT_LBL[tip.result] ?? tip.result}
                     </span>
-                    <span className={`text-sm font-black w-12 text-right ${tip.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      {tip.profit >= 0 ? '+' : ''}{Number(tip.profit).toFixed(2)}u
+                    <span className={`text-xs sm:text-sm font-black w-10 sm:w-12 text-right ${tip.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      {tip.profit >= 0 ? '+' : ''}{Number(tip.profit).toFixed(1)}u
                     </span>
                   </div>
                 </div>
