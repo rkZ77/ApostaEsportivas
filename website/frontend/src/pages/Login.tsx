@@ -13,7 +13,7 @@ function formatCPF(v: string) {
 function validateCPF(cpf: string): boolean {
   const d = cpf.replace(/\D/g, '')
   if (d.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(d)) return false  // todos iguais: 111.111.111-11
+  if (/^(\d)\1{10}$/.test(d)) return false
   let s = 0
   for (let i = 0; i < 9; i++) s += parseInt(d[i]) * (10 - i)
   const d1 = (s * 10 % 11) % 10
@@ -28,23 +28,33 @@ function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
 }
 
+type LoginMethod = 'username' | 'email' | 'cpf'
+
 export default function Login() {
   const { login, register } = useAuth()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
 
-  const [mode, setMode]         = useState<'login' | 'register'>('login')
+  const [mode, setMode]             = useState<'login' | 'register'>('login')
+  const [loginMethod, setLoginMethod] = useState<LoginMethod>('username')
+
+  // Login fields
+  const [loginUsername, setLoginUsername] = useState('')
+  const [loginEmail, setLoginEmail]       = useState('')
+  const [loginCpf, setLoginCpf]           = useState('')
+
+  // Register fields
   const [name, setName]         = useState('')
   const [username, setUsername] = useState('')
   const [cpf, setCpf]           = useState('')
   const [phone, setPhone]       = useState('')
   const [email, setEmail]       = useState('')
-  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')
-  const [error, setError]       = useState('')
-  const [loading, setLoading]   = useState(false)
   const [refCode, setRefCode]   = useState('')
+
+  const [error, setError]     = useState('')
+  const [loading, setLoading] = useState(false)
 
   useEffect(() => {
     const ref = searchParams.get('ref')
@@ -58,47 +68,45 @@ export default function Login() {
     }
   }, [])
 
-  const handleCpf = (v: string) => setCpf(formatCPF(v))
+  const handleLoginCpf = (v: string) => setLoginCpf(formatCPF(v))
+  const handleRegCpf   = (v: string) => setCpf(formatCPF(v))
+
+  const getIdentifier = () => {
+    if (loginMethod === 'username') return loginUsername.trim()
+    if (loginMethod === 'email')    return loginEmail.trim()
+    return loginCpf.trim()
+  }
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
 
-    if (mode === 'register' && !validateEmail(email)) {
-      setError('Email inválido.')
-      return
-    }
-
-    if (mode === 'register') {
+    if (mode === 'login') {
+      const id = getIdentifier()
+      if (!id) { setError('Preencha o campo de identificação.'); return }
+      if (loginMethod === 'email' && !validateEmail(id)) { setError('Email inválido.'); return }
+      if (loginMethod === 'cpf' && id.replace(/\D/g, '').length !== 11) { setError('CPF inválido.'); return }
+    } else {
       if (!name.trim() || name.trim().split(' ').filter(Boolean).length < 2) {
         setError('Informe seu nome completo (nome e sobrenome).')
         return
       }
-      if (!validateCPF(cpf)) {
-        setError('CPF inválido. Verifique os dígitos informados.')
-        return
-      }
-      const phoneDigits = phone.replace(/\D/g, '')
-      if (phoneDigits.length < 10) {
+      if (!validateEmail(email)) { setError('Email inválido.'); return }
+      if (!validateCPF(cpf)) { setError('CPF inválido. Verifique os dígitos informados.'); return }
+      if (phone.replace(/\D/g, '').length < 10) {
         setError('Informe um telefone ou WhatsApp válido com DDD.')
         return
       }
-      if (password.length < 8) {
-        setError('A senha deve ter pelo menos 8 caracteres.')
-        return
-      }
-      if (password !== confirm) {
-        setError('As senhas não coincidem.')
-        return
-      }
+      if (password.length < 8) { setError('A senha deve ter pelo menos 8 caracteres.'); return }
+      if (password !== confirm) { setError('As senhas não coincidem.'); return }
     }
 
     setLoading(true)
     try {
       if (mode === 'login') {
-        await login(identifier.trim(), password)
+        await login(getIdentifier(), password)
       } else {
-        const cleanUsername = username.trim().replace(/^@/, '') || undefined
+        const cleanUsername = username.trim() || undefined
         await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), cleanUsername, refCode || undefined)
         localStorage.removeItem('ref_code')
       }
@@ -113,8 +121,15 @@ export default function Login() {
   const switchMode = () => {
     setMode(m => m === 'login' ? 'register' : 'login')
     setError('')
+    setLoginUsername(''); setLoginEmail(''); setLoginCpf('')
     setName(''); setUsername(''); setCpf(''); setPhone(''); setConfirm('')
   }
+
+  const loginTabs: { key: LoginMethod; label: string }[] = [
+    { key: 'username', label: 'Usuário' },
+    { key: 'email',    label: 'E-mail'  },
+    { key: 'cpf',      label: 'CPF'     },
+  ]
 
   return (
     <div className="min-h-screen bg-black flex items-stretch">
@@ -124,7 +139,6 @@ export default function Login() {
         <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
 
-        {/* Troféu decorativo ao fundo */}
         <img src="/trofeu.png" alt="" aria-hidden="true"
           className="absolute inset-0 w-full h-full object-contain opacity-[0.06] pointer-events-none select-none"
           onError={e => (e.currentTarget.style.display = 'none')} />
@@ -133,7 +147,6 @@ export default function Login() {
           <img src="/logo.png" alt="Pick IA" className="w-52 h-52 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
           <h1 className="text-5xl font-black text-white tracking-tight mb-3">Pick<span className="text-green-500">IA</span></h1>
           <p className="text-zinc-400 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
-
           <div className="grid grid-cols-3 gap-4 mt-6">
             {['IA Avançada', 'Copa 2026', '+600 picks'].map(label => (
               <div key={label} className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 text-center">
@@ -147,6 +160,7 @@ export default function Login() {
       {/* Right panel — form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 overflow-y-auto">
         <div className="w-full max-w-sm">
+
           {/* Mobile logo */}
           <div className="flex lg:hidden flex-col items-center mb-10">
             <img src="/logo.png" alt="Pick IA" className="w-24 h-24 mb-3" />
@@ -161,6 +175,53 @@ export default function Login() {
           </p>
 
           <form onSubmit={submit} className="space-y-4">
+
+            {/* ── LOGIN ─────────────────────────────────────────────────────── */}
+            {mode === 'login' && (
+              <>
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-2 font-medium">Login ID</label>
+                  {/* Tabs estilo Betano */}
+                  <div className="flex rounded-xl overflow-hidden border border-zinc-700 mb-3">
+                    {loginTabs.map(tab => (
+                      <button
+                        key={tab.key}
+                        type="button"
+                        onClick={() => { setLoginMethod(tab.key); setError('') }}
+                        className={`flex-1 py-2 text-xs font-bold transition-colors ${
+                          loginMethod === tab.key
+                            ? 'bg-green-500 text-black'
+                            : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                        }`}
+                      >
+                        {tab.label}
+                      </button>
+                    ))}
+                  </div>
+
+                  {loginMethod === 'username' && (
+                    <input type="text" value={loginUsername}
+                      onChange={e => setLoginUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      required className="input w-full" placeholder="seu_usuario"
+                      autoComplete="username" maxLength={20} autoFocus />
+                  )}
+                  {loginMethod === 'email' && (
+                    <input type="email" value={loginEmail}
+                      onChange={e => setLoginEmail(e.target.value)}
+                      required className="input w-full" placeholder="seu@email.com"
+                      autoComplete="email" autoFocus />
+                  )}
+                  {loginMethod === 'cpf' && (
+                    <input type="text" value={loginCpf}
+                      onChange={e => handleLoginCpf(e.target.value)}
+                      required className="input w-full" placeholder="000.000.000-00"
+                      inputMode="numeric" autoComplete="off" autoFocus />
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* ── REGISTER ──────────────────────────────────────────────────── */}
             {mode === 'register' && (
               <>
                 <div>
@@ -174,19 +235,23 @@ export default function Login() {
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">
                     Usuário <span className="text-zinc-600 font-normal">(opcional)</span>
                   </label>
-                  <div className="relative">
-                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm select-none">@</span>
-                    <input type="text" value={username}
-                      onChange={e => setUsername(e.target.value.replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                      className="input pl-7" placeholder="seu_usuario"
-                      autoComplete="username" maxLength={20} />
-                  </div>
+                  <input type="text" value={username}
+                    onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                    className="input" placeholder="seu_usuario"
+                    autoComplete="username" maxLength={20} />
                   <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras, números e _. Gerado automaticamente se vazio.</p>
+                </div>
+                <div>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
+                  <input type="email" value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required className="input" placeholder="seu@email.com"
+                    autoComplete="email" />
                 </div>
                 <div>
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
                   <input type="text" value={cpf}
-                    onChange={e => handleCpf(e.target.value)}
+                    onChange={e => handleRegCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
                     inputMode="numeric" autoComplete="off" />
                   <p className="text-xs text-zinc-600 mt-1">1 conta por CPF. Necessário para o teste grátis.</p>
@@ -201,26 +266,7 @@ export default function Login() {
               </>
             )}
 
-            <div>
-              {mode === 'register' ? (
-                <>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
-                  <input type="email" value={email}
-                    onChange={e => setEmail(e.target.value)}
-                    required className="input" placeholder="seu@email.com"
-                    autoComplete="email" />
-                </>
-              ) : (
-                <>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">E-mail, usuário ou CPF</label>
-                  <input type="text" value={identifier}
-                    onChange={e => setIdentifier(e.target.value)}
-                    required className="input" placeholder="seu@email.com / @usuario / 000.000.000-00"
-                    autoComplete="username" />
-                </>
-              )}
-            </div>
-
+            {/* Senha — comum aos dois modos */}
             <div>
               <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
               <input type="password" value={password}
@@ -258,7 +304,12 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-6 text-center space-y-3">
+          <div className="mt-5 text-center space-y-3">
+            {mode === 'login' && (
+              <Link to="/forgot-password" className="block text-zinc-500 text-sm hover:text-zinc-300 transition-colors">
+                Esqueceu sua senha? <span className="text-green-500 font-semibold">Clique aqui</span>
+              </Link>
+            )}
             <div>
               <span className="text-zinc-500 text-sm">
                 {mode === 'login' ? 'Não tem conta? ' : 'Já tem conta? '}
@@ -270,12 +321,8 @@ export default function Login() {
                 {mode === 'login' ? 'Criar conta grátis' : 'Entrar'}
               </button>
             </div>
-            {mode === 'login' && (
-              <Link to="/forgot-password" className="block text-zinc-600 text-xs hover:text-zinc-400 transition-colors">
-                Esqueci minha senha
-              </Link>
-            )}
           </div>
+
         </div>
       </div>
     </div>
