@@ -123,14 +123,14 @@ export default function Profile() {
   const currentAvatar = avatarPreview ?? user?.avatar_url ?? null
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black relative">
       <Navbar />
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
           <div>
             <h1 className="text-base font-black text-white">Meu Perfil</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Altere nome, foto e senha da sua conta</p>
+            <p className="text-zinc-500 text-xs mt-0.5">Gerencie suas informações e preferências</p>
           </div>
         </div>
       </div>
@@ -163,8 +163,13 @@ export default function Profile() {
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold truncate">{user?.name}</p>
             {meData?.username && <p className="text-green-500 text-xs font-semibold">@{meData.username}</p>}
-            <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
-            <p className="text-zinc-600 text-xs mt-1">Clique na foto para alterar</p>
+            <p className="text-zinc-500 text-xs truncate mt-0.5">{user?.email}</p>
+            <p className="text-zinc-600 text-xs mt-1.5 flex items-center gap-1">
+              <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+              </svg>
+              Toque na foto para trocar
+            </p>
           </div>
           <span className={planBadge[user?.plan ?? 'free'] ?? 'badge-free'}>
             {user?.plan === 'vip' ? 'VIP' : user?.plan === 'trial' ? 'TESTE' : user?.plan === 'admin' ? 'ADMIN' : 'FREE'}
@@ -173,21 +178,22 @@ export default function Profile() {
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-5">
+          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Informações pessoais</p>
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">Nome</label>
+            <label className="text-xs text-zinc-500 block mb-1.5">Nome completo</label>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} required />
           </div>
 
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">Usuário</label>
+            <label className="text-xs text-zinc-500 block mb-1.5">Nome de usuário <span className="text-zinc-600 font-normal">(para login)</span></label>
             <input className="input w-full" value={username}
               onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               placeholder="seu_usuario" maxLength={20} />
-            <p className="text-xs text-zinc-600 mt-1">Usado para login. 3–20 caracteres, letras minúsculas, números e _.</p>
+            <p className="text-xs text-zinc-600 mt-1">3–20 caracteres · letras minúsculas, números e _</p>
           </div>
 
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">WhatsApp / Telefone <span className="text-zinc-600">(opcional)</span></label>
+            <label className="text-xs text-zinc-500 block mb-1.5">WhatsApp <span className="text-zinc-600 font-normal">(opcional)</span></label>
             <input className="input w-full" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" type="tel" />
           </div>
 
@@ -207,11 +213,11 @@ export default function Profile() {
           )}
 
           <hr className="border-zinc-800" />
-          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Trocar senha</p>
+          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Alterar senha</p>
 
           <div>
             <label className="text-xs text-zinc-500 block mb-1.5">Senha atual</label>
-            <input type="password" className="input w-full" placeholder="Deixe em branco para não alterar"
+            <input type="password" className="input w-full" placeholder="Preencha apenas se quiser trocar"
               value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} />
           </div>
           <div className="grid grid-cols-2 gap-3">
@@ -298,6 +304,12 @@ export default function Profile() {
           )}
         </div>
       </main>
+
+      {/* Copa do Mundo 2026 — canto inferior direito */}
+      <div className="fixed bottom-6 right-6 flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity pointer-events-none select-none">
+        <img src="/logo-copa-mundo.png" alt="Copa do Mundo 2026" className="w-14 h-14 object-contain drop-shadow-lg" />
+        <span className="text-zinc-500 text-[10px] font-semibold tracking-wide">Copa 2026</span>
+      </div>
     </div>
   )
 }
