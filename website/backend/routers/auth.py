@@ -325,6 +325,18 @@ def refresh_token(request: Request, response: Response):
         if not row or not row["active"]:
             raise HTTPException(status_code=401, detail="Usuário inativo")
         user = dict(row)
+
+        # Auto-expire: se VIP/trial expirou, baixa para free no banco agora
+        if user["plan"] in ("vip", "trial") and user.get("expires_at"):
+            exp = user["expires_at"]
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp:
+                cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (user["id"],))
+                conn.commit()
+                user["plan"] = "free"
+                user["expires_at"] = None
+
     finally:
         cur.close(); conn.close()
 
