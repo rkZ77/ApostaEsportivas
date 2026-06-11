@@ -67,6 +67,33 @@ def _validate_cpf(cpf: str) -> str:
         raise HTTPException(400, "CPF inválido.")
     return digits
 
+_USERNAME_RE = re.compile(r"^[a-z0-9_]{3,20}$")
+
+
+def _generate_username(name: str, cur) -> str:
+    """Gera username único a partir do primeiro nome."""
+    base = re.sub(r"[^a-z0-9]", "", name.split()[0].lower())[:15] or "user"
+    for _ in range(20):
+        candidate = base + str(secrets.randbelow(9000) + 1000)
+        cur.execute("SELECT id FROM users WHERE username = %s", (candidate,))
+        if not cur.fetchone():
+            return candidate
+    return base + secrets.token_hex(3)
+
+
+def _resolve_identifier(identifier: str) -> tuple[str, str]:
+    """Detecta tipo do identificador e retorna (tipo, valor_normalizado).
+    Tipos: 'email', 'cpf', 'username'
+    """
+    stripped = identifier.strip()
+    digits = re.sub(r"\D", "", stripped)
+    if len(digits) == 11:
+        return "cpf", digits
+    if "@" in stripped:
+        return "email", stripped.lower()
+    return "username", stripped.lower()
+
+
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
@@ -102,10 +129,11 @@ class RegisterBody(BaseModel):
     password: str
     phone: str
     cpf: str
+    username: Optional[str] = None
     ref_code: Optional[str] = None
 
 class LoginBody(BaseModel):
-    email: EmailStr
+    identifier: str  # e-mail, CPF ou username
     password: str
 
 class ForgotPasswordBody(BaseModel):
@@ -134,13 +162,25 @@ def register(body: RegisterBody, response: Response):
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="Email já cadastrado")
 
-        # Valida e verifica unicidade do CPF (obrigatório)
+        # Valida phone, CPF e username
         if not body.phone or len(body.phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')) < 10:
             raise HTTPException(status_code=400, detail="Telefone inválido. Informe o número com DDD.")
         cpf_digits = _validate_cpf(body.cpf)
         cur.execute("SELECT id FROM users WHERE cpf = %s", (cpf_digits,))
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="CPF já cadastrado. Cada CPF permite apenas 1 conta.")
+
+        # Resolve username (obrigatório — gerado automaticamente se não enviado)
+        raw_username = (body.username or "").strip().lstrip("@").lower()
+        if raw_username:
+            if not _USERNAME_RE.match(raw_username):
+                raise HTTPException(status_code=400, detail="Usuário inválido. Use 3–20 caracteres: letras minúsculas, números e _")
+            cur.execute("SELECT id FROM users WHERE username = %s", (raw_username,))
+            if cur.fetchone():
+                raise HTTPException(status_code=400, detail="Usuário já em uso. Escolha outro.")
+            final_username = raw_username
+        else:
+            final_username = _generate_username(body.name, cur)
 
         # Resolve referrer
         referrer_id: Optional[int] = None
@@ -161,8 +201,8 @@ def register(body: RegisterBody, response: Response):
 
         _validate_password(body.password)
         cur.execute(
-            "INSERT INTO users (name, email, password_hash, phone, cpf, referred_by, referral_code) VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id, name, email, phone, plan, active, expires_at",
-            (body.name, body.email, hash_password(body.password), body.phone, cpf_digits, referrer_id, new_ref_code),
+            "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
+            (body.name, body.email, hash_password(body.password), body.phone, cpf_digits, final_username, referrer_id, new_ref_code),
         )
         user = dict(cur.fetchone())
         # Trial gratuito de 2 dias — apenas para usuários que forneceram CPF no cadastro
@@ -200,19 +240,31 @@ def login(body: LoginBody, response: Response):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(
-            "SELECT id, name, email, password_hash, plan, active, expires_at FROM users WHERE email = %s",
-            (body.email,),
-        )
+        id_type, id_value = _resolve_identifier(body.identifier)
+        if id_type == "email":
+            cur.execute(
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE email = %s",
+                (id_value,),
+            )
+        elif id_type == "cpf":
+            cur.execute(
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE cpf = %s",
+                (id_value,),
+            )
+        else:
+            cur.execute(
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE username = %s",
+                (id_value,),
+            )
         row = cur.fetchone()
         if not row:
-            raise HTTPException(status_code=401, detail="Email ou senha inválidos")
+            raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
         user = dict(row)
         if not user["active"]:
             raise HTTPException(status_code=403, detail="Conta desativada")
         if not verify_password(body.password, user["password_hash"]):
-            raise HTTPException(status_code=401, detail="Email ou senha inválidos")
+            raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
         # Auto-expire VIP/trial expirado
         if user["plan"] in ("vip", "trial") and user.get("expires_at"):

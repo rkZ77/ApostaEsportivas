@@ -35,9 +35,11 @@ export default function Login() {
 
   const [mode, setMode]         = useState<'login' | 'register'>('login')
   const [name, setName]         = useState('')
+  const [username, setUsername] = useState('')
   const [cpf, setCpf]           = useState('')
   const [phone, setPhone]       = useState('')
   const [email, setEmail]       = useState('')
+  const [identifier, setIdentifier] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')
   const [error, setError]       = useState('')
@@ -62,7 +64,7 @@ export default function Login() {
     e.preventDefault()
     setError('')
 
-    if (!validateEmail(email)) {
+    if (mode === 'register' && !validateEmail(email)) {
       setError('Email inválido.')
       return
     }
@@ -94,9 +96,10 @@ export default function Login() {
     setLoading(true)
     try {
       if (mode === 'login') {
-        await login(email, password)
+        await login(identifier.trim(), password)
       } else {
-        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), refCode || undefined)
+        const cleanUsername = username.trim().replace(/^@/, '') || undefined
+        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), cleanUsername, refCode || undefined)
         localStorage.removeItem('ref_code')
       }
       navigate('/picks')
@@ -110,7 +113,7 @@ export default function Login() {
   const switchMode = () => {
     setMode(m => m === 'login' ? 'register' : 'login')
     setError('')
-    setName(''); setCpf(''); setPhone(''); setConfirm('')
+    setName(''); setUsername(''); setCpf(''); setPhone(''); setConfirm('')
   }
 
   return (
@@ -168,6 +171,19 @@ export default function Login() {
                     autoComplete="name" />
                 </div>
                 <div>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">
+                    Usuário <span className="text-zinc-600 font-normal">(opcional)</span>
+                  </label>
+                  <div className="relative">
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-500 text-sm select-none">@</span>
+                    <input type="text" value={username}
+                      onChange={e => setUsername(e.target.value.replace(/^@/, '').toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+                      className="input pl-7" placeholder="seu_usuario"
+                      autoComplete="username" maxLength={20} />
+                  </div>
+                  <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras, números e _. Gerado automaticamente se vazio.</p>
+                </div>
+                <div>
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
                   <input type="text" value={cpf}
                     onChange={e => handleCpf(e.target.value)}
@@ -186,11 +202,23 @@ export default function Login() {
             )}
 
             <div>
-              <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
-              <input type="email" value={email}
-                onChange={e => setEmail(e.target.value)}
-                required className="input" placeholder="seu@email.com"
-                autoComplete="email" />
+              {mode === 'register' ? (
+                <>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
+                  <input type="email" value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    required className="input" placeholder="seu@email.com"
+                    autoComplete="email" />
+                </>
+              ) : (
+                <>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">E-mail, usuário ou CPF</label>
+                  <input type="text" value={identifier}
+                    onChange={e => setIdentifier(e.target.value)}
+                    required className="input" placeholder="seu@email.com / @usuario / 000.000.000-00"
+                    autoComplete="username" />
+                </>
+              )}
             </div>
 
             <div>
