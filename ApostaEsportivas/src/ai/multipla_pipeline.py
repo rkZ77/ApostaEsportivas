@@ -194,7 +194,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
         lines.append(f"Data: {fx['match_datetime']}  Liga: {fx.get('league_name', fx['league_id'])}")
         lines.append("=" * 60)
 
-        # Perfis de seleção para jogos da Copa do Mundo
+        # Perfis de seleção para jogos da Copa do Mundo (versão compacta)
         if fx.get("league_id") == 1:
             try:
                 home_profile = national_team_svc.get_team_profile(
@@ -203,7 +203,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
                 away_profile = national_team_svc.get_team_profile(
                     fx["away_team_id"], fx["season"], fixture_id=fx["fixture_id"]
                 )
-                profiles_text = team_prompt_builder.get_world_cup_context(home_profile, away_profile)
+                profiles_text = team_prompt_builder.get_compact_wc_context(home_profile, away_profile)
                 if profiles_text:
                     lines.append(profiles_text)
             except Exception as e:
@@ -219,8 +219,13 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            lines.append("\nMERCADOS E ODDS:")
-            lines.append(_j(ctx["odds"]))
+            # Filtra odds válidas para múltiplas (faixa 1.35–1.95, max 60 por fixture)
+            odds_filtered = [
+                o for o in ctx["odds"]
+                if 1.35 <= float(o.get("odd", 0)) <= 1.95
+            ][:60]
+            lines.append(f"\nMERCADOS E ODDS (faixa 1.35-1.95, {len(odds_filtered)} entradas):")
+            lines.append(_j(odds_filtered))
 
         if ctx.get("home_stats"):
             lines.append(f"\nESTATÍSTICAS CASA ({fx['home_team']}):")

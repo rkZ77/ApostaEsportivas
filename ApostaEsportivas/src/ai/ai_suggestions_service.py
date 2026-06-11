@@ -373,6 +373,25 @@ HISTÓRICO FORA
                     c = float(s.get("confidence", 0))
                     print(f"  [NÃO SELECIONADO] {s.get('market')} | {s.get('line')} "
                           f"| EV {round((c*o-1)*100, 1)}% | conf {round(c*100)}%")
+
+            # Se a IA escolheu EV negativo, tenta alternativa com EV positivo
+            if ev <= 0:
+                alternatives = [
+                    (round((float(s.get("odd", 0)) * float(s.get("confidence", 0))) - 1, 4),
+                     float(s.get("confidence", 0)), s)
+                    for s in suggestions if s is not ai_pick
+                ]
+                positive = sorted(
+                    [(e, c, s) for e, c, s in alternatives if e > 0],
+                    key=lambda x: (x[0], x[1]), reverse=True
+                )
+                if positive:
+                    best_ev, best_conf, best = positive[0]
+                    best["ev"] = best_ev
+                    print(f"[PICK] EV negativo no is_best_pick — alternativa EV>0: "
+                          f"{best.get('market')} | {best.get('line')} | EV {round(best_ev*100,1)}%")
+                    return best
+
             return ai_pick
 
         # Fallback: campo ausente → Python escolhe por maior EV
