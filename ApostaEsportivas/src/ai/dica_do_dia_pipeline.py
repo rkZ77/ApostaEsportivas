@@ -195,7 +195,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
                 away_profile = national_team_svc.get_team_profile(
                     fx["away_team_id"], fx["season"], fixture_id=fx["fixture_id"]
                 )
-                profiles_text = team_prompt_builder.get_world_cup_context(home_profile, away_profile)
+                profiles_text = team_prompt_builder.get_compact_wc_context(home_profile, away_profile)
                 if profiles_text:
                     lines.append(profiles_text)
             except Exception as e:

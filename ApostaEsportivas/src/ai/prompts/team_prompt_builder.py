@@ -68,6 +68,102 @@ class TeamPromptBuilder:
         )
         return f"{teams_section}\n\n{h2h_section}"
 
+    def get_compact_wc_context(self, home_profile: dict, away_profile: dict) -> str:
+        """
+        Versão compacta (~50% menos tokens) para pipelines que não precisam
+        de detalhes táticos (alavancagem, dica_do_dia).
+        Mantém forma, gols, disciplina, cantos e Copa stats.
+        """
+        home_text = self._format_compact_team(home_profile)
+        away_text = self._format_compact_team(away_profile)
+        h2h_section = self._format_compact_h2h(
+            home_profile["team_id"],
+            away_profile["team_id"],
+            home_profile["team_name"],
+            away_profile["team_name"],
+        )
+        return (
+            f"PERFIS Copa do Mundo\n"
+            f"{'─'*60}\n"
+            f"{home_text}\n"
+            f"{'─'*60}\n"
+            f"{away_text}\n"
+            f"{'─'*60}\n"
+            f"{h2h_section}"
+        )
+
+    def _format_compact_team(self, profile: dict) -> str:
+        name = profile["team_name"].upper()
+        matches = profile["matches_analyzed"]
+
+        form = profile.get("form", {})
+        sequence = form.get("sequence", "N/A")
+        win_rate = int(form.get("win_rate", 0) * 100)
+        draw_rate = int(form.get("draw_rate", 0) * 100)
+        loss_rate = int(form.get("loss_rate", 0) * 100)
+
+        off = profile.get("offensive_stats", {})
+        goals_pg = off.get("goals_per_game", 0)
+
+        defs = profile.get("defensive_stats", {})
+        goals_ag = defs.get("goals_against_per_game", 0)
+        cs_pct = int(defs.get("clean_sheets_pct", 0) * 100)
+
+        disc = profile.get("discipline", {})
+        yellows_pg = disc.get("yellow_cards_per_game", 0)
+
+        sp = profile.get("set_pieces", {})
+        corners_pg = sp.get("corners_per_game", 0)
+
+        copa_stats = profile.get("copa_stats") or {}
+        if copa_stats:
+            copa_line = (
+                f"Copa: {copa_stats['jogos']}j "
+                f"{copa_stats['gols_marcados']}-{copa_stats['gols_sofridos']} gols "
+                f"| Cantos:{copa_stats['media_cantos']}/j "
+                f"| Amarelos:{copa_stats['media_amarelos']}/j"
+            )
+        else:
+            copa_line = "Copa: sem jogos nesta edição ainda"
+
+        return (
+            f"{name} ({matches}j analisados)\n"
+            f"  Forma: {sequence} V{win_rate}%/E{draw_rate}%/D{loss_rate}%\n"
+            f"  Ataque:{goals_pg}gols/j | Defesa:{goals_ag}sofridos/j CS{cs_pct}%\n"
+            f"  Disciplina:{yellows_pg}amarelos/j | Cantos:{corners_pg}/j\n"
+            f"  {copa_line}"
+        )
+
+    def _format_compact_h2h(
+        self,
+        team1_id: int,
+        team2_id: int,
+        team1_name: str,
+        team2_name: str,
+    ) -> str:
+        matches = self._fetch_head_to_head(team1_id, team2_id)
+        if not matches:
+            return f"H2H: sem histórico recente entre {team1_name} e {team2_name}"
+
+        total = len(matches)
+        total_goals = sum(m["home_goals"] + m["away_goals"] for m in matches)
+        btts = sum(1 for m in matches if m["home_goals"] > 0 and m["away_goals"] > 0)
+        avg_goals = round(total_goals / total, 1)
+        btts_pct = int(btts / total * 100)
+
+        games = []
+        for m in matches:
+            dt = m["match_date"].strftime("%Y-%m-%d") if m["match_date"] else "N/A"
+            if m["home_team_id"] == team1_id:
+                games.append(f"{dt}: {team1_name} {m['home_goals']}-{m['away_goals']} {team2_name}")
+            else:
+                games.append(f"{dt}: {team2_name} {m['home_goals']}-{m['away_goals']} {team1_name}")
+
+        return (
+            f"H2H últimos {total}j: média {avg_goals}gols/j BTTS{btts_pct}%\n"
+            + "\n".join(f"  {g}" for g in games)
+        )
+
     # ========================================================================
     def _format_teams_section(self, home: dict, away: dict) -> str:
         """Formata seção completa com análise das duas seleções"""

@@ -279,14 +279,20 @@ def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dic
     return ctx
 
 
+# Faixa de odds com buffer para filtro antes de enviar à IA
+_ODDS_FILTER_MIN = 1.25
+_ODDS_FILTER_MAX = 1.75
+_ODDS_MAX_ITEMS = 60
+
+
 # ============================================================
-# PERFIL DE SELEÇÕES (Copa)
+# PERFIL DE SELEÇÕES (Copa) — versão compacta para alavancagem
 # ============================================================
 def _get_copa_profiles_text(fixture_id: int, home_team_id: int, away_team_id: int, season: int) -> str:
     try:
         home_profile = national_team_svc.get_team_profile(home_team_id, season, fixture_id=fixture_id)
         away_profile = national_team_svc.get_team_profile(away_team_id, season, fixture_id=fixture_id)
-        return team_prompt_builder.get_world_cup_context(home_profile, away_profile)
+        return team_prompt_builder.get_compact_wc_context(home_profile, away_profile)
     except Exception as e:
         print(f"[ALAVANCAGEM] Erro ao buscar perfis de seleção: {e}")
         return ""
@@ -304,7 +310,18 @@ def _format_fixtures(fixtures: list[dict]) -> str:
         profiles_text = _get_copa_profiles_text(
             f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"]
         )
-        ctx_trimmed = {k: (v[:8] if isinstance(v, list) else v) for k, v in ctx.items()}
+
+        # Odds: filtrar pela faixa-alvo (com buffer) para reduzir tokens
+        all_odds = ctx.pop("odds", [])
+        filtered_odds = [
+            o for o in all_odds
+            if _ODDS_FILTER_MIN <= o.get("odd", 0) <= _ODDS_FILTER_MAX
+        ][:_ODDS_MAX_ITEMS]
+
+        # Outras listas: limitar a 5 itens
+        ctx_trimmed = {k: (v[:5] if isinstance(v, list) else v) for k, v in ctx.items()}
+        ctx_trimmed["odds"] = filtered_odds
+
         fixture_block = json.dumps(_clean({
             "fixture_id":     f["fixture_id"],
             "home_team":      f["home_team"],

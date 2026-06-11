@@ -6,6 +6,7 @@ Uso: python gerar_alavancagem.py
 import sys
 import os
 
+sys.stdout.reconfigure(encoding="utf-8")
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from dotenv import load_dotenv, find_dotenv
