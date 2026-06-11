@@ -18,6 +18,7 @@ export default function Profile() {
   const navigate = useNavigate()
 
   const [name, setName]             = useState(user?.name ?? '')
+  const [username, setUsername]     = useState('')
   const [phone, setPhone]           = useState(user?.phone ?? '')
   const [cpf, setCpf]               = useState('')
   const [currentPwd, setCurrentPwd] = useState('')
@@ -37,7 +38,7 @@ export default function Profile() {
 
   useEffect(() => {
     api.get('/auth/referral').then(r => setReferral(r.data)).catch(() => {})
-    api.get('/auth/me').then(r => setMeData(r.data)).catch(() => {})
+    api.get('/auth/me').then(r => { setMeData(r.data); setUsername(r.data.username ?? '') }).catch(() => {})
   }, [])
 
   const copyReferralLink = () => {
@@ -88,9 +89,10 @@ export default function Profile() {
     }
 
     const body: Record<string, string> = {}
-    if (name !== user?.name)               body.name = name
-    if (phone !== (user?.phone ?? ''))     body.phone = phone
-    if (cpf.trim())                        body.cpf = cpf.trim()
+    if (name !== user?.name)                         body.name = name
+    if (username !== (meData?.username ?? ''))       body.username = username
+    if (phone !== (user?.phone ?? ''))               body.phone = phone
+    if (cpf.trim())                                  body.cpf = cpf.trim()
     if (newPwd) { body.current_password = currentPwd; body.new_password = newPwd }
 
     if (!Object.keys(body).length) { setError('Nenhuma alteração detectada'); return }
@@ -160,11 +162,12 @@ export default function Profile() {
 
           <div className="flex-1 min-w-0">
             <p className="text-white font-bold truncate">{user?.name}</p>
+            {meData?.username && <p className="text-green-500 text-xs font-semibold">@{meData.username}</p>}
             <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
             <p className="text-zinc-600 text-xs mt-1">Clique na foto para alterar</p>
           </div>
-          <span className={planBadge[user?.plan ?? 'free']}>
-            {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : 'FREE'}
+          <span className={planBadge[user?.plan ?? 'free'] ?? 'badge-free'}>
+            {user?.plan === 'vip' ? 'VIP' : user?.plan === 'trial' ? 'TESTE' : user?.plan === 'admin' ? 'ADMIN' : 'FREE'}
           </span>
         </div>
 
@@ -173,6 +176,14 @@ export default function Profile() {
           <div>
             <label className="text-xs text-zinc-500 block mb-1.5">Nome</label>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} required />
+          </div>
+
+          <div>
+            <label className="text-xs text-zinc-500 block mb-1.5">Usuário</label>
+            <input className="input w-full" value={username}
+              onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
+              placeholder="seu_usuario" maxLength={20} />
+            <p className="text-xs text-zinc-600 mt-1">Usado para login. 3–20 caracteres, letras minúsculas, números e _.</p>
           </div>
 
           <div>

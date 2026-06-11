@@ -147,6 +147,7 @@ class UpdateProfileBody(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
     cpf: Optional[str] = None
+    username: Optional[str] = None
     current_password: Optional[str] = None
     new_password: Optional[str] = None
 
@@ -387,7 +388,7 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, (cpf IS NOT NULL) AS has_cpf FROM users WHERE id = %s",
+            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, (cpf IS NOT NULL) AS has_cpf FROM users WHERE id = %s",
             (current_user["sub"],),
         )
         row = cur.fetchone()
@@ -462,6 +463,15 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
 
         if body.name:
             fields.append("name = %s"); values.append(body.name)
+
+        if body.username is not None and body.username.strip():
+            raw = body.username.strip().lstrip("@").lower()
+            if not _USERNAME_RE.match(raw):
+                raise HTTPException(400, "Usuário inválido. Use 3–20 caracteres: letras minúsculas, números e _")
+            cur.execute("SELECT id FROM users WHERE username = %s AND id != %s", (raw, current_user["sub"]))
+            if cur.fetchone():
+                raise HTTPException(400, "Usuário já em uso. Escolha outro.")
+            fields.append("username = %s"); values.append(raw)
 
         if body.phone is not None:
             fields.append("phone = %s"); values.append(body.phone or None)
