@@ -181,7 +181,7 @@ export default function Checkout() {
         <div className="card p-5 space-y-3">
           <h2 className="text-white font-bold">Resumo do pedido</h2>
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">HPS Picks VIP {selected.label}</span>
+            <span className="text-zinc-400">Plano Picks — {selected.label}</span>
             <span className="text-white font-semibold">
               R$ {selected.price.toFixed(2).replace('.', ',')}
             </span>

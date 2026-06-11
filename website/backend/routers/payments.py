@@ -12,7 +12,7 @@ from database import get_connection
 logger = logging.getLogger(__name__)
 
 
-def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, secret: str) -> bool:
+def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, data_id: str, secret: str) -> bool:
     """Verifica assinatura HMAC-SHA256 do MercadoPago conforme documentação oficial."""
     try:
         # O MercadoPago envia: x-signature = ts=<timestamp>,v1=<hash>
@@ -21,8 +21,8 @@ def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, secre
         v1 = parts.get("v1", "")
         if not ts or not v1:
             return False
-        # Template de assinatura: id:<data.id>;request-id:<x-request-id>;ts:<ts>
-        signed_template = f"id:{x_request_id};request-id:{x_request_id};ts:{ts}"
+        # Template: id:<data.id>;request-id:<x-request-id>;ts:<ts>
+        signed_template = f"id:{data_id};request-id:{x_request_id};ts:{ts}"
         expected = hmac.new(secret.encode(), signed_template.encode(), hashlib.sha256).hexdigest()
         return hmac.compare_digest(expected, v1)
     except Exception:
@@ -31,10 +31,10 @@ def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, secre
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 PLANS = {
-    "mensal":     {"price": 29.90,  "title": "HPS Picks VIP — Mensal",     "days": 30},
-    "trimestral": {"price": 79.90,  "title": "HPS Picks VIP — Trimestral", "days": 90},
-    "semestral":  {"price": 149.90, "title": "HPS Picks VIP — Semestral",  "days": 180},
-    "anual":      {"price": 269.90, "title": "HPS Picks VIP — Anual",      "days": 365},
+    "mensal":     {"price": 29.90,  "title": "Plano Picks — Mensal",     "days": 30},
+    "trimestral": {"price": 79.90,  "title": "Plano Picks — Trimestral", "days": 90},
+    "semestral":  {"price": 149.90, "title": "Plano Picks — Semestral",  "days": 180},
+    "anual":      {"price": 269.90, "title": "Plano Picks — Anual",      "days": 365},
 }
 
 
@@ -93,19 +93,20 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
 async def webhook(request: Request):
     body = await request.body()
 
-    # Verificação de assinatura HMAC do MercadoPago
-    webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
-    if webhook_secret:
-        x_signature  = request.headers.get("x-signature", "")
-        x_request_id = request.headers.get("x-request-id", "")
-        if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, webhook_secret):
-            logger.warning("Webhook recebido com assinatura inválida de %s", request.client.host if request.client else "unknown")
-            raise HTTPException(403, "Assinatura inválida")
-
     try:
         data = __import__("json").loads(body)
     except Exception:
         raise HTTPException(400, "Payload inválido")
+
+    # Verificação de assinatura HMAC do MercadoPago (após parsear body para obter data.id)
+    webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
+    if webhook_secret:
+        x_signature  = request.headers.get("x-signature", "")
+        x_request_id = request.headers.get("x-request-id", "")
+        data_id      = str(data.get("data", {}).get("id", ""))
+        if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
+            logger.warning("Webhook recebido com assinatura inválida de %s", request.client.host if request.client else "unknown")
+            raise HTTPException(403, "Assinatura inválida")
 
     if data.get("type") != "payment":
         return {"status": "ignored"}
