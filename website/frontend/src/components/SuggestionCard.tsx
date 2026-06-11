@@ -77,7 +77,7 @@ export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; o
       await api.post('/banca/follow', {
         pick_id: s.id,
         pick_type: s.pick_type ?? 'vip',
-        stake_units: s.stake || 1,
+        stake_units: stakeSuggestion?.units ?? s.stake ?? 1,
       })
       setFollowed(true)
     } catch {
@@ -131,10 +131,10 @@ export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; o
         </div>
         <div className="bg-zinc-800 rounded-lg p-2 text-center">
           <div className="text-xs text-zinc-500 mb-0.5">Stake</div>
-          <div className="text-sm font-bold text-white">{s.stake ?? 1}u</div>
-          {banca && (
+          <div className="text-sm font-bold text-white">{stakeSuggestion?.units ?? s.stake ?? 1}u</div>
+          {banca && stakeSuggestion && (
             <div className="text-[10px] text-zinc-500 mt-0.5">
-              R${((s.stake ?? 1) * banca.unit_value).toFixed(0)}
+              R${stakeSuggestion.amountR.toFixed(0)}
             </div>
           )}
         </div>
@@ -166,17 +166,6 @@ export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; o
         <p className="mt-3 text-xs text-zinc-500 leading-relaxed line-clamp-2">{s.reasoning}</p>
       )}
 
-      {stakeSuggestion && !s.result && (
-        <div className="mt-3 flex items-center gap-2 bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-1.5">
-          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-xs text-zinc-500">Apostar:</span>
-          <span className="text-xs font-black text-green-400">{stakeSuggestion.units}u</span>
-          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
-          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
-        </div>
-      )}
 
       <div className="mt-3 flex items-center justify-between">
         {!s.result && (

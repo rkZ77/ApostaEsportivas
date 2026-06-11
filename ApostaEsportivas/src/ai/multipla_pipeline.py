@@ -375,15 +375,8 @@ def create_multipla_table():
 # STAKE PARA MÚLTIPLAS (conservador)
 # ============================================================
 def calculate_multipla_stake(total_odd: float):
-    # Odd ≥3.00 → 1u | Odd ≥2.50 → 2u | Odd <2.50 → 3u
-    o = float(total_odd)
-    if o >= 3.00:
-        units = 1.0
-    elif o >= 2.50:
-        units = 2.0
-    else:
-        units = 3.0
-    return units, 0.0
+    # Stake calculado no frontend com banca real do usuário (½ Kelly personalizado)
+    return None, None
 
 
 # ============================================================

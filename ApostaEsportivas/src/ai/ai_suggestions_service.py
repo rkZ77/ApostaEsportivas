@@ -408,21 +408,8 @@ HISTÓRICO FORA
     # Faixa: 2% mínimo, 5% máximo do bankroll
     # --------------------------------------------------------
     def calculate_stake(self, confidence, odd):
-        p = float(confidence)
-        o = float(odd)
-
-        ev = (p * o) - 1
-        if ev <= 0:
-            return 0.5, 0.0
-
-        kelly = ev / (o - 1)
-        half_kelly = kelly / 2
-        # 1u = 1% da banca; resultado arredondado para 0.5u mais próximo, entre 0.5u e 5u
-        units = half_kelly * 100
-        units = max(0.5, min(5.0, units))
-        units = round(units * 2) / 2
-
-        return units, round(half_kelly, 4)
+        # Stake calculado no frontend com banca real do usuário (½ Kelly personalizado)
+        return None, None
 
     # --------------------------------------------------------
     # GERAR E SALVAR NO BANCO (com ON CONFLICT para evitar duplicatas)
@@ -501,7 +488,7 @@ HISTÓRICO FORA
             f"{chosen['market']} {chosen['line']} | odd {odd} | "
             f"edge {round(float(chosen.get('edge', 0)) * 100, 1)}% | "
             f"conf {round(conf * 100)}% | EV {ev} | "
-            f"stake {stake}u (½ Kelly {round(stake_pct * 100, 1)}%)"
+            f"stake calculado no frontend"
         )
 
         # 3. Salva no banco — ON CONFLICT ignora duplicata do mesmo fixture
