@@ -138,12 +138,25 @@ async def webhook(request: Request):
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=plan_info["days"])
 
+    amount        = float(payment.get("transaction_amount") or plan_info["price"])
+    payment_method = payment.get("payment_type_id") or payment.get("payment_method_id") or "unknown"
+
     conn = get_connection()
     cur = conn.cursor()
     try:
         cur.execute(
             "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s",
             (expires_at, plan_key, int(user_id)),
+        )
+
+        # Registra pagamento (ignora se já existe — idempotente)
+        cur.execute(
+            """
+            INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
+            VALUES (%s, %s, %s, %s, 'approved', %s, %s)
+            ON CONFLICT (mp_payment_id) DO NOTHING
+            """,
+            (int(user_id), str(payment_id), plan_key, amount, expires_at, payment_method),
         )
 
         # Crédito de indicação: +1 dia VIP para o referrer na primeira compra
@@ -170,3 +183,36 @@ async def webhook(request: Request):
         conn.close()
 
     return {"status": "ok"}
+
+
+@router.get("/history")
+def payment_history(current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            """
+            SELECT mp_payment_id, plan_key, amount, status, payment_method, expires_at, created_at
+            FROM payments
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT 20
+            """,
+            (current_user["sub"],),
+        )
+        rows = cur.fetchall()
+        return [
+            {
+                "id":             r["mp_payment_id"],
+                "plan":           r["plan_key"],
+                "amount":         float(r["amount"]),
+                "status":         r["status"],
+                "payment_method": r["payment_method"],
+                "expires_at":     r["expires_at"].isoformat() if r["expires_at"] else None,
+                "created_at":     r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
+    finally:
+        cur.close()
+        conn.close()

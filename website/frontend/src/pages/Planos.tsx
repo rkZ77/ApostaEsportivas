@@ -8,10 +8,11 @@ export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, login: _login, updateUser } = useAuth()
 
-  const [trialUsed, setTrialUsed]       = useState<boolean | null>(null)
-  const [activating, setActivating]     = useState(false)
+  const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
+  const [activating, setActivating]       = useState(false)
   const [activateError, setActivateError] = useState('')
-  const [activated, setActivated]       = useState(false)
+  const [activated, setActivated]         = useState(false)
+  const [payments, setPayments]           = useState<any[]>([])
 
   const isTrial = user?.plan === 'trial'
 
@@ -19,7 +20,10 @@ export default function Planos() {
     if (!user) return
     api.get('/auth/me')
       .then(r => setTrialUsed(r.data.trial_used ?? false))
-      .catch(() => setTrialUsed(true)) // fallback seguro: assume usado
+      .catch(() => setTrialUsed(true))
+    api.get('/payments/history')
+      .then(r => setPayments(r.data))
+      .catch(() => {})
   }, [user])
 
   const handleActivateTrial = async () => {
@@ -217,6 +221,47 @@ export default function Planos() {
                   ) : 'Ativar 2 dias VIP gratuito'}
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* ── HISTÓRICO DE PAGAMENTOS ──────────────────────────────────────── */}
+        {payments.length > 0 && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+            <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4">Histórico de pagamentos</h3>
+            <div className="space-y-2">
+              {payments.map(p => {
+                const PLAN_LABEL: Record<string, string> = {
+                  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
+                }
+                const METHOD_LABEL: Record<string, string> = {
+                  credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito',
+                  pix: 'Pix', ticket: 'Boleto', account_money: 'Saldo MP',
+                }
+                const date = p.created_at
+                  ? new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
+                  : '—'
+                return (
+                  <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-zinc-800 last:border-0">
+                    <div>
+                      <p className="text-white text-sm font-semibold">
+                        Plano Picks — {PLAN_LABEL[p.plan] ?? p.plan}
+                      </p>
+                      <p className="text-zinc-500 text-xs mt-0.5">
+                        {date} · {METHOD_LABEL[p.payment_method] ?? p.payment_method}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-green-400 font-black text-sm">
+                        R$ {Number(p.amount).toFixed(2).replace('.', ',')}
+                      </p>
+                      <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold uppercase">
+                        {p.status === 'approved' ? 'Aprovado' : p.status}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </div>
         )}

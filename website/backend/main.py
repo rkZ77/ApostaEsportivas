@@ -138,6 +138,19 @@ def run_migrations():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP;")
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS payments (
+                id                SERIAL PRIMARY KEY,
+                user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                mp_payment_id     VARCHAR(50) UNIQUE NOT NULL,
+                plan_key          VARCHAR(20) NOT NULL,
+                amount            NUMERIC(10,2) NOT NULL,
+                status            VARCHAR(20) NOT NULL DEFAULT 'approved',
+                expires_at        TIMESTAMP NOT NULL,
+                payment_method    VARCHAR(50),
+                created_at        TIMESTAMP DEFAULT NOW()
+            )
+        """)
 
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_banca (
