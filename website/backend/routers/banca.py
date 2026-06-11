@@ -295,6 +295,50 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
         conn.close()
 
 
+@router.get("/summary")
+def get_banca_summary(current_user: dict = Depends(get_current_user)):
+    """Retorna dados mínimos da banca para sugestão de stake nos picks."""
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        if not row:
+            return {"has_banca": False, "bankroll_current": 0.0, "unit_value": 1.0}
+
+        bankroll_start = float(row["bankroll_start"])
+        unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
+
+        # P&L acumulado de picks seguidos com resultado
+        cur.execute("""
+            SELECT COALESCE(SUM(
+                CASE uf.pick_type
+                    WHEN 'vip'      THEN COALESCE(pv.profit, 0) * %s
+                    WHEN 'free'     THEN COALESCE(pf.profit, 0) * %s
+                    WHEN 'multipla' THEN COALESCE(pm.profit, 0) * %s
+                    ELSE 0
+                END
+            ), 0) AS total_pnl
+            FROM user_followed_picks uf
+            LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id AND pv.result IS NOT NULL
+            LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id AND pf.result IS NOT NULL
+            LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id AND pm.result IS NOT NULL
+            WHERE uf.user_id = %s
+        """, (unit_value, unit_value, unit_value, user_id))
+        pnl_row = cur.fetchone()
+        pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
+
+        return {
+            "has_banca": True,
+            "bankroll_current": round(bankroll_start + pnl, 2),
+            "unit_value": unit_value,
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.delete("/follow/{pick_id}/{pick_type}")
 def unfollow_pick(pick_id: int, pick_type: str, current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import api from '../services/api'
+import { suggestStake } from '../utils/stakeUtils'
 
 const TEAM_LOGO   = (id?: number) => id ? `https://media.api-sports.io/football/teams/${id}.png` : null
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
@@ -57,11 +58,16 @@ function LeagueLogo({ id, name }: { id?: number; name?: string }) {
   )
 }
 
-export default function SuggestionCard({ s, onClick }: { s: Suggestion; onClick?: () => void }) {
+interface BancaSummary { bankroll_current: number; unit_value: number }
+
+export default function SuggestionCard({ s, onClick, banca }: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null }) {
   const pct = Math.round((s.confidence ?? 0) * 100)
   const res = s.result ? resultMap[s.result] : null
   const [followed, setFollowed] = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
+  const stakeSuggestion = banca
+    ? suggestStake(s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value)
+    : null
 
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -153,6 +159,18 @@ export default function SuggestionCard({ s, onClick }: { s: Suggestion; onClick?
 
       {s.reasoning && (
         <p className="mt-3 text-xs text-zinc-500 leading-relaxed line-clamp-2">{s.reasoning}</p>
+      )}
+
+      {stakeSuggestion && !s.result && (
+        <div className="mt-3 flex items-center gap-2 bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-1.5">
+          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-zinc-500">Apostar:</span>
+          <span className="text-xs font-black text-green-400">{stakeSuggestion.units}u</span>
+          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
+          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
+        </div>
       )}
 
       <div className="mt-3 flex items-center justify-between">

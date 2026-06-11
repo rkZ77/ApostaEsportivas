@@ -9,6 +9,7 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import CommunityChat from '../components/CommunityChat'
 import { UserCircle, Crown, Rocket } from 'lucide-react'
+import { suggestStake } from '../utils/stakeUtils'
 
 // ─── Helpers de logo ──────────────────────────────────────────────────────────
 const TEAM_LOGO   = (id?: number) => id ? `https://media.api-sports.io/football/teams/${id}.png` : null
@@ -266,10 +267,13 @@ function QuickStats({ stats }: { stats: any }) {
 }
 
 // ─── Pick do Dia card ─────────────────────────────────────────────────────────
-function PickSeguroCard({ dica, compact = false, onClick }: { dica: any; compact?: boolean; onClick?: () => void }) {
+function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
+  const stakeSuggestion = banca
+    ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value)
+    : null
 
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -351,6 +355,19 @@ function PickSeguroCard({ dica, compact = false, onClick }: { dica: any; compact
         <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2 mb-3">{dica.reasoning}</p>
       )}
 
+      {/* Sugestão de stake */}
+      {stakeSuggestion && !dica.result && (
+        <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-1.5 mb-3">
+          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-zinc-500">Apostar:</span>
+          <span className="text-xs font-black text-green-400">{stakeSuggestion.units}u</span>
+          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
+          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
+        </div>
+      )}
+
       {/* Footer: Apostei + Ver detalhes */}
       <div className="flex items-center justify-between">
         {!dica.result && (
@@ -394,13 +411,16 @@ function PickSeguroEmpty() {
 }
 
 // ─── Múltipla card ────────────────────────────────────────────────────────────
-function MultiplaCard({ m, onClick }: { m: any; onClick?: () => void }) {
+function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
 
   const pct = Math.round((m.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
+  const stakeSuggestion = banca
+    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value)
+    : null
 
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -498,6 +518,18 @@ function MultiplaCard({ m, onClick }: { m: any; onClick?: () => void }) {
 
       {m.reasoning && (
         <p className="mb-3 text-xs text-zinc-500 leading-relaxed line-clamp-2">{m.reasoning}</p>
+      )}
+
+      {stakeSuggestion && !m.result && (
+        <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/15 rounded-lg px-3 py-1.5 mb-3">
+          <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span className="text-xs text-zinc-500">Apostar:</span>
+          <span className="text-xs font-black text-blue-400">{stakeSuggestion.units}u</span>
+          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
+          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
+        </div>
       )}
 
       {/* Footer actions */}
@@ -920,6 +952,7 @@ export default function Dashboard() {
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
   const [userAlavSerie, setUserAlavSerie] = useState<{ has_banca: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
+  const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
@@ -945,6 +978,7 @@ export default function Dashboard() {
     if (!canSeeVip) return
     api.get('/suggestions/vip/meta').then(r => setMeta(r.data)).catch(() => {})
     api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
+    api.get('/banca/summary').then(r => setBancaSummary(r.data)).catch(() => {})
   }, [canSeeVip])
 
   useEffect(() => {
@@ -1080,7 +1114,7 @@ export default function Dashboard() {
               <section>
                 <SectionHeader color="bg-green-500" label="Pick do Dia" />
                 {today?.dica_do_dia
-                  ? <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} />
+                  ? <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                   : <PickSeguroEmpty />
                 }
               </section>
@@ -1100,7 +1134,7 @@ export default function Dashboard() {
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
                           {pending.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} />
+                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                           ))}
                         </div>
                         {pending.length > 4 && (
@@ -1131,7 +1165,7 @@ export default function Dashboard() {
                 <section>
                   <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                   <div className="grid gap-4 md:grid-cols-2">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} />)}
+                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
                   </div>
                 </section>
               )}
@@ -1219,7 +1253,7 @@ export default function Dashboard() {
             {todayLoading ? <Spinner /> : (
               <div>
                 <SectionHeader color="bg-green-500" label={`Pick do Dia · ${todayDateStr}`} />
-                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} onClick={() => openDetail(today.dica_do_dia.id, 'free')} /> : <PickSeguroEmpty />}
+                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} /> : <PickSeguroEmpty />}
               </div>
             )}
 
@@ -1289,7 +1323,7 @@ export default function Dashboard() {
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
                           {pending.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} />
+                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                           ))}
                         </div>
                         {pending.length > 4 && (
@@ -1369,7 +1403,7 @@ export default function Dashboard() {
               {!canSeeVip ? <VipLockOverlay color="blue" /> : todayLoading ? <Spinner /> : (
                 today?.multiplas?.length > 0 ? (
                   <div className="space-y-4">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} />)}
+                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
                   </div>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
