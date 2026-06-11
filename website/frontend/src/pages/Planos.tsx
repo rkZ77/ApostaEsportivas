@@ -119,45 +119,94 @@ export default function Planos() {
         {/* ── STATUS DO PLANO ATUAL ─────────────────────────────────────────── */}
         {user && !activated && (
           <>
-            {isTrial && (
-              <div className="bg-green-500/10 border border-green-500/30 rounded-2xl p-5 flex items-center gap-4">
-                <div className="w-10 h-10 bg-green-500/20 rounded-full flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
+            {(isTrial || (isVip && !isTrial)) && (() => {
+              const totalDays = isTrial ? 2 : 30
+              const remaining = daysUntilExpiry ?? 0
+              const pct = Math.max(0, Math.min(100, (remaining / totalDays) * 100))
+              const expiryDate = user.expires_at
+                ? new Date(user.expires_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+                : null
+              const urgent = remaining <= (isTrial ? 1 : 5)
+              const color = isTrial ? 'green' : 'yellow'
+
+              return (
+                <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-2xl p-6 overflow-hidden`}>
+                  <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
+
+                  <div className="flex items-start justify-between gap-4 mb-5">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-green-400' : 'text-yellow-400'}`}>
+                          {isTrial ? 'Teste VIP' : 'Plano VIP'}
+                        </span>
+                        {urgent && (
+                          <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
+                            Expirando
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-white font-black text-2xl">
+                        {remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
+                        {remaining > 0 && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
+                      </p>
+                      {expiryDate && (
+                        <p className="text-zinc-500 text-xs mt-1">
+                          {remaining <= 0 ? 'Expirou em' : 'Expira em'} {expiryDate}
+                        </p>
+                      )}
+                    </div>
+                    <button onClick={() => navigate('/checkout')}
+                      className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors">
+                      {isTrial ? 'Assinar VIP' : 'Renovar'}
+                    </button>
+                  </div>
+
+                  {/* Barra de progresso */}
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between text-[10px] text-zinc-500">
+                      <span>Progresso do plano</span>
+                      <span>{remaining} / {totalDays} dias</span>
+                    </div>
+                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Features resumidas */}
+                  <div className="grid grid-cols-2 gap-2 mt-5">
+                    {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem Copa 2026', 'Agente IA'].map(f => (
+                      <div key={f} className="flex items-center gap-1.5 text-xs text-zinc-400">
+                        <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                        </svg>
+                        {f}
+                      </div>
+                    ))}
+                  </div>
                 </div>
+              )
+            })()}
+
+            {!isVip && !isAdmin && user.plan === 'free' && (
+              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+                <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
                 <div className="flex-1">
-                  <p className="text-white font-bold text-sm">Você está no Teste VIP gratuito</p>
-                  <p className="text-zinc-400 text-xs mt-0.5">
-                    {daysUntilExpiry !== null && daysUntilExpiry > 0
-                      ? `${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'} restante${daysUntilExpiry === 1 ? '' : 's'}. Assine para manter o acesso.`
-                      : 'Seu teste expirou. Assine VIP para continuar.'}
-                  </p>
+                  <p className="text-white font-bold text-sm">Plano Free</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
                 </div>
                 <button onClick={() => navigate('/checkout')}
-                  className="bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors shrink-0">
-                  Assinar VIP
+                  className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors">
+                  Upgrade VIP
                 </button>
-              </div>
-            )}
-
-            {isVip && !isTrial && (
-              <div className="bg-yellow-400/10 border border-yellow-400/20 rounded-2xl p-5 flex items-center gap-4">
-                <span className="text-2xl">⭐</span>
-                <div>
-                  <p className="text-yellow-400 font-black text-sm">Você é VIP!</p>
-                  <p className="text-zinc-400 text-xs mt-0.5">
-                    {daysUntilExpiry !== null
-                      ? `${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'} restante${daysUntilExpiry === 1 ? '' : 's'}.`
-                      : 'Acesso completo ativo.'}
-                  </p>
-                </div>
               </div>
             )}
 
             {isAdmin && (
               <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
-                <p className="text-purple-400 font-black text-sm">Conta Admin: acesso irrestrito.</p>
+                <p className="text-purple-400 font-black text-sm">Conta Admin — acesso irrestrito e permanente.</p>
               </div>
             )}
           </>
