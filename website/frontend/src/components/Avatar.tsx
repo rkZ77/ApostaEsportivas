@@ -1,4 +1,4 @@
-const API_BASE = (import.meta as any).env?.VITE_API_URL ?? 'http://localhost:8000'
+import { useState } from 'react'
 
 function nameColor(name: string): string {
   const colors = [
@@ -24,14 +24,17 @@ const SIZE = {
 }
 
 export default function Avatar({ name, imageUrl, size = 'md', className = '' }: AvatarProps) {
+  const [imgError, setImgError] = useState(false)
+
   const initials = name
     .split(' ')
     .slice(0, 2)
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('')
 
-  const src = imageUrl
-    ? imageUrl.startsWith('http') ? imageUrl : `${API_BASE}${imageUrl}`
+  // URL relativa funciona tanto em dev (proxy Vite /static → 8000) quanto em prod (mesmo domínio)
+  const src = imageUrl && !imgError
+    ? (imageUrl.startsWith('http') ? imageUrl : imageUrl)
     : null
 
   if (src) {
@@ -40,7 +43,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
         src={src}
         alt={name}
         className={`${SIZE[size]} rounded-full object-cover shrink-0 ${className}`}
-        onError={e => { (e.currentTarget as HTMLImageElement).style.display = 'none' }}
+        onError={() => setImgError(true)}
       />
     )
   }
