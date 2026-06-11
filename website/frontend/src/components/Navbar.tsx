@@ -86,7 +86,7 @@ export default function Navbar() {
             <div className="flex flex-col items-end">
               <span className="text-white text-sm font-semibold leading-none">{user?.name}</span>
               <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
-                {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TRIAL' : 'FREE'}
+                {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
               </span>
             </div>
           </Link>

@@ -183,7 +183,7 @@ export default function Profile() {
           {!meData?.has_cpf && (
             <div>
               <label className="text-xs text-zinc-500 block mb-1.5">
-                CPF <span className="text-zinc-600">(necessário para ativar o trial gratuito)</span>
+                CPF <span className="text-zinc-600">(necessário para ativar o teste gratuito)</span>
               </label>
               <input className="input w-full" value={cpf} onChange={e => setCpf(e.target.value)}
                 placeholder="000.000.000-00" />

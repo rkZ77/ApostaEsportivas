@@ -154,7 +154,7 @@ export default function Login() {
             {mode === 'login' ? 'Bem-vindo de volta' : 'Criar conta'}
           </h2>
           <p className="text-zinc-500 mb-6 text-sm">
-            {mode === 'login' ? 'Entre para acessar suas tips' : '2 dias de VIP grátis com CPF válido'}
+            {mode === 'login' ? 'Entre para acessar suas tips' : '2 dias de teste VIP grátis com CPF válido'}
           </p>
 
           <form onSubmit={submit} className="space-y-4">
@@ -173,7 +173,7 @@ export default function Login() {
                     onChange={e => handleCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
                     inputMode="numeric" autoComplete="off" />
-                  <p className="text-xs text-zinc-600 mt-1">1 conta por CPF. Necessário para o trial grátis.</p>
+                  <p className="text-xs text-zinc-600 mt-1">1 conta por CPF. Necessário para o teste grátis.</p>
                 </div>
                 <div>
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp / Telefone</label>

@@ -10,7 +10,7 @@ const PLAN_BADGE: Record<string, string> = {
   free:  'text-zinc-500 bg-zinc-800/50 border-zinc-700',
 }
 const PLAN_LABEL: Record<string, string> = {
-  vip: 'VIP', trial: 'TRIAL', admin: 'ADMIN', free: 'FREE',
+  vip: 'VIP', trial: 'TESTE', admin: 'ADMIN', free: 'FREE',
 }
 
 interface ChatMsg {
