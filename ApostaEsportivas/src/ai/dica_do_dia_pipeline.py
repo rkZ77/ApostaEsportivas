@@ -80,58 +80,27 @@ Sua resposta deve comecar com {{ e terminar com }}. Nada antes, nada depois.\
 
 
 USER_PROMPT_TEMPLATE = """\
-Selecione EXATAMENTE 1 pick para a DICA DO DIA — o mais seguro e consistente.
+Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
+Prioridade: Copa do Mundo (league_id=1) se amostra>=5 e padrao>=65%.
 
-Criterios (descarte se qualquer um falhar):
-1. Odd entre {odd_min} e {odd_max} — copiada dos dados de odds
-2. Amostra minima: 5 jogos no venue correto
-3. Consistencia: padrao em >=65% dos jogos da amostra
-4. Confirmadores: >=2 fontes independentes (historico + media, ou media + standings)
-5. Confidence >= {conf_min}
-6. EV = (prob_real x odd) - 1 > 0
+Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0
 
-Prioridade: Copa do Mundo (league_id=1) primeiro, mas somente se amostra>=5 e padrao>=65%.
-
---- FIXTURES COM ODDS {odd_min}-{odd_max} + DADOS BRUTOS ---
-
+--- FIXTURES + DADOS ---
 {fixtures_formatados}
 
---- ETAPA 1: FILTRAR ---
-Para cada fixture: identifique mercados com odd entre {odd_min}-{odd_max}. Amostra <5 jogos no venue → descarte o fixture.
+CALCULO:
+A) Taxa=confirmados/total_venue (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte
+B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
+C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
+   Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5
 
---- ETAPA 2: CALCULAR CONSISTENCIA ---
-
-A) Taxa = jogos_confirmados / total_amostra_venue. Obrigatorio >=0.65.
-   Amostra: RICO(10+)=1.0 | MODERADO(5-9)=0.7 | <5=descartado
-
-B) prob_real: base na taxa, ponderacao temporal (recente=1.0, 0.9, 0.8...), validar com home_stats/away_stats e standings
-
-C) CONFIDENCE = (Consistencia×0.40) + (Amostra×0.25) + (Confirmadores×0.20) + (Estabilidade×0.15)
-   Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6
-   Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3
-   Estabilidade: padrao nos ultimos 3 jogos→1.0 | so na media→0.5
-   Obrigatorio >=  {conf_min}.
-
---- ETAPA 3: SELECAO ---
-Ordene por confidence. Empate: maior taxa → maior amostra. Nao priorize odd alta. Sem candidato valido → no_bet.
+Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_bet.
 
 Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? EV>0?
 
---- SAIDA JSON ---
-
-Pick valido:
-{{
-  "pick": {{
-    "fixture_id": 0, "home_team": "nome", "away_team": "nome",
-    "league_id": 0, "league_name": "nome",
-    "market": "nome exato das odds", "line": "linha exata",
-    "odd": 0.00, "bet_house": "casa",
-    "prob_real": 0.00, "edge": 0.00, "confidence": 0.00,
-    "reasoning": "FATO: X/Y jogos confirmaram (taxa Z%). CONFIRMADORES: [fonte1] + [fonte2]. CONCLUSAO: padrao solido, odd subestima prob real."
-  }}
-}}
-
-Sem pick: {{"no_bet": true, "motivo": "criterio que falhou"}}
+SAIDA JSON:
+Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"edge":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: odd subestima prob real."}}}}
+Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 
 

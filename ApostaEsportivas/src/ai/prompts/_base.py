@@ -23,145 +23,69 @@ REGRAS_BASE = """\
 
 ## 1. QUALIDADE DOS DADOS
 
-Classificação da amostra (histórico contextual casa/fora):
-  RICO=8+ jogos | MODERADO=4–7 | ESCASSO=1–3 | VAZIO=0
-
-Protocolo por nível:
-  RICO     → análise estatística plena com ponderação temporal
-  MODERADO → análise + declarar incerteza moderada no reasoning
-  ESCASSO  → médias agregadas e standings como base primária; declare limitação
-  VAZIO    → standings e médias são os únicos indicadores válidos; confidence máx=0.68
-
-Invalida um mercado: odd ausente nos dados | odd inconsistente | mercado sem correspondência nas odds.
+Amostra contextual (casa/fora): RICO=8+ | MODERADO=4–7 | ESCASSO=1–3 | VAZIO=0
+RICO→análise plena | MODERADO→declarar incerteza | ESCASSO→médias+standings, declare limitação | VAZIO→confidence máx=0.68
+Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
 ## 2. ANÁLISE ESTATÍSTICA
 
-2.1 TENDÊNCIA RECENTE — combine SEMPRE os dois lados do mercado:
-  Para gols/cantos/cartões Over/Under e BTTS:
-    → Calcule a taxa de ocorrência no HISTÓRICO CASA (mandante jogando em casa) E no HISTÓRICO FORA (visitante jogando fora) separadamente.
-    → Taxa combinada = média ponderada das duas taxas (50%/50% quando amostras semelhantes; pese mais a maior amostra).
-    Exemplos:
-      Over 2.5: mandante marcou/sofreu ≥3 gols em X% dos jogos em casa; visitante marcou/sofreu ≥3 em Y% fora → C = média(X, Y)
-      Over cartões 4.5: mandante+árbitro geraram ≥5 em X% em casa; visitante+árbitro em Y% fora → C = média(X, Y)
-      BTTS: ambos marcaram em X% dos jogos do mandante em casa E em Y% dos jogos do visitante fora → C = média(X, Y)
-  Para mercados de time específico (ex: Total de Cartões Visitante):
-    → Use apenas o histórico do time relevante no contexto correto (visitante FORA).
-  Para Resultado/Dupla Chance/Handicap:
-    → Use histórico contextual do mandante em casa como base primária; complemente com forma do visitante fora.
-  Aplique peso temporal decrescente dentro de cada amostra (mais recente=1.0, anterior=0.85...).
+2.1 TAXA COMBINADA — use SEMPRE os dois lados:
+  Eventos conjuntos (Over/Under gols, BTTS, cantos, cartões): C = média(taxa_mandante_em_casa, taxa_visitante_fora)
+  Mercado de time específico: use histórico do time relevante no contexto correto.
+  Resultado/Dupla Chance/Handicap: histórico contextual do mandante em casa, complementado pelo visitante.
+  Peso temporal decrescente: mais recente=1.0, anterior=0.85...
 
-2.2 ESTABILIDADE: compare taxa combinada recente vs. média total de ambos. Variação <15pp=estável. ≥15pp=fator de risco → registrar.
+2.2 ESTABILIDADE: variação taxa recente vs. média total ≥15pp → risco, registrar.
 
-2.3 PESO DOS INDICADORES (decrescente):
-  1º Taxa combinada ponderada de ambos os times no histórico contextual (casa/fora)
-  2º Médias agregadas da temporada (ataque E defesa dos dois times)
-  3º Standings (rank, pontos, forma, saldo)
-  4º Perfil da competição
+2.3 PESO (decrescente): 1º taxa contextual combinada | 2º médias temporada | 3º standings | 4º perfil competição.
 
-2.4 FATO vs. INFERÊNCIA: reasoning deve citar ≥1 fato (dado numérico direto) e pode incluir 1 inferência identificada.
+2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: Alta=resultado puro/BTTS irregular | Média=handicap | Baixa=Over 1.5/cantos.
 
-2.5 VOLATILIDADE: Alta=placar exato/resultado equilibrado/BTTS irregular | Média=handicap/BTTS consistente | Baixa=Over 1.5/cantos times ativos/cartões liga física.
+2.5 ÁRBITRO (games≥3): avg_yellow acima da média → Over cartões; abaixo → Under. Sem dados → declare ausência.
 
-2.6 ÁRBITRO (quando games≥3): avg_yellow acima da média da liga → pressão para Over cartões; abaixo → Under. Declare perfil quando o mercado for cards. Sem dados → use histórico dos times e declare ausência.
+## 3. CÁLCULO
 
-## 3. CÁLCULO PROBABILÍSTICO
+prob_real=[0.01,0.99] | prob_implícita=1/odd | edge=prob_real−prob_implícita (>0=value) | EV=(prob_real×odd)−1
+Se todos EV≤0, retorne os 3 com menor EV negativo e declare ausência de value.
+CONFIRMAÇÃO MÚLTIPLA: edge confirmado por ≥2 indicadores independentes. Se 1 apenas → "confirmação parcial".
 
-  prob_real      : indicadores ponderados da seção 2; intervalo [0.01, 0.99]
-  prob_implicita : 1 / odd
-  edge           : prob_real − prob_implicita (>0 = value bet)
-  EV             : (prob_real × odd) − 1 (EV>0 é condição necessária)
+## 4. CONFIDENCE
 
-Se todos os mercados tiverem EV≤0, retorne os 3 com menor EV negativo e declare no reasoning que não há value real.
-CONFIRMAÇÃO MÚLTIPLA: sugestão sólida exige edge confirmado por ≥2 indicadores independentes. Se apenas 1, declare "confirmação parcial".
+C (Consistência): média dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
+Q (Amostra): RICO=1.00 | MODERADO=0.75 | ESCASSO=0.45 | VAZIO=0.20
+K (Confirmação): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 (fontes: histórico, médias, standings, árbitro)
+R (Robustez): edge/implied≥0.15→1.00 | 0.10–0.14→0.75 | 0.05–0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
 
-## 4. SCORE E CONFIDENCE
-
-Componentes (calcule cada um explicitamente antes de somar):
-  C (Consistência) : média combinada dos DOIS times (conforme seção 2.1):
-                     C = média(taxa_mandante_em_casa, taxa_visitante_fora) para mercados de evento conjunto
-                     C = taxa do time específico no contexto correto para mercados individuais
-                     C = taxa contextual do mandante (complementada pelo visitante) para mercados de resultado
-                     0–1 linear; amostra VAZIA → C = 0.40; ESCASSO → máx C = 0.65
-  Q (Amostra)      : RICO(8+)=1.00 | MODERADO(4–7)=0.75 | ESCASSO(1–3)=0.45 | VAZIO=0.20
-  K (Confirmação)  : 3+ fontes independentes=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-                     "fontes independentes" = histórico contextual, médias, standings, árbitro — cada uma conta uma vez
-  R (Robustez)     : mede qualidade da edge = edge / (1/odd)
-                     edge/implied_prob ≥ 0.15 → R=1.00 | 0.10–0.14 → R=0.75 | 0.05–0.09 → R=0.50 | <0.05 → R=0.25
-                     edge ≤ 0 → R = 0 (veto automático — não use este pick)
-
-CONFIDENCE = (C×0.35) + (Q×0.20) + (K×0.25) + (R×0.20) | sem clamp mínimo artificial
-  → resultado natural cai entre 0.20 e 0.92
-  → só apresente picks com CONFIDENCE ≥ 0.55 E R > 0
-
+CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92] | só apresente se ≥0.55 e R>0
 RISCO: ≥0.80=BAIXO | 0.65–0.79=MÉDIO | 0.55–0.64=ALTO (declare no reasoning)
-
-Exemplo de cálculo correto:
-  Over 2.5 gols, odd=1.72, prob_real=0.65, edge=0.65−(1/1.72)=0.07, implied=0.58
-  C=0.65 (8/12 jogos confirmaram), Q=0.75 (MODERADO), K=0.70 (2 fontes), R=0.50 (edge/implied=0.12)
-  CONFIDENCE = 0.65×0.35 + 0.75×0.20 + 0.70×0.25 + 0.50×0.20 = 0.228+0.150+0.175+0.100 = 0.653 → MÉDIO
 
 ## 5. SELEÇÃO FINAL
 
-Descartes obrigatórios: edge≤0 quando há alternativas com edge>0 | odd fora dos dados | mesma categoria já selecionada | confidence<0.55.
+Descartes: edge≤0 com alternativas | odd fora dos dados | categoria duplicada | confidence<0.55.
+Categorias (máx 1 cada): goals=Over/Under gols/BTTS/asiáticas | corners=cantos | cards=cartões | result=Dupla Chance/Handicap (1X2 proibido)
+Ordem: 1º maior EV → 2º maior confidence → 3º maior edge.
 
-Categorias válidas (máx 1 por categoria):
-  goals=Over/Under gols, BTTS, gols por equipe, asiáticas de gols
-  corners=Over/Under cantos, cantos por equipe
-  cards=Over/Under cartões, cartões por equipe
-  result=Dupla Chance, Handicap europeu/asiático (Match Winner/1X2 não é permitido)
+is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
 
-Hierarquia para ordenar as 3: 1º maior EV → 2º maior confidence → 3º maior edge.
+LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.40. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
+Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
+ODDS: 1.40–1.90 (absoluto — descarte fora desta faixa).
 
-Designação do melhor pick (is_best_pick):
-  Marque is_best_pick: true no pick que apresentar MELHOR COMBINAÇÃO de:
-    • EV positivo real (não apenas matemático)
-    • Qualidade dos dados (prefira RICO/MODERADO a ESCASSO/VAZIO)
-    • Baixa volatilidade do mercado
-    • RISCO: BAIXO ou MÉDIO (NUNCA marque RISCO: ALTO como best pick)
-  Se todos os picks tiverem RISCO: ALTO, marque o de menor risco relativo mas declare no reasoning.
-  is_best_pick: false nos outros dois.
+NOMENCLATURA — copie exatamente de "market_name":
+  Gols: "Gols Mais/Menos" line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
+  Por time: "Total de Gols Casa (Time)" | "Total de Gols Visitante (Time)"
+  BTTS: "Ambas as Equipes Marcam"
+  Cantos: "Escanteios Mais/Menos" | "Escanteios Total" | "Escanteios Casa/Visitante Mais/Menos (Time)"
+  Cartões TOTAL: "Cartões Mais/Menos" (ambos os times, market_id 80)
+  Por time: "Total de Cartões Casa (Time)" | "Total de Cartões Visitante (Time)"
+  Resultado: "Dupla Chance 1X/X2/12" | "Handicap Asiático -1/+1"
 
-Seleção de linha — REGRA OBRIGATÓRIA para qualquer mercado com Over/Under:
-  Escolha SEMPRE a linha mais conservadora disponível com odd ≥ 1.40.
-  Para Over: linha mais baixa (maior probabilidade de acertar). Para Under: linha mais alta.
-  NUNCA prefira uma linha mais agressiva pela odd melhor — acertividade tem prioridade absoluta sobre retorno.
-  Exemplos: Over 9.5 @ 1.90 e Over 8.5 @ 1.50 disponíveis → escolha Over 8.5 @ 1.50.
-           Over 2.5 @ 1.80 e Over 1.5 @ 1.45 disponíveis → escolha Over 1.5 @ 1.45.
-           Under 2.5 @ 1.85 e Under 3.5 @ 1.42 disponíveis → escolha Under 3.5 @ 1.42.
-  Para mercados sem múltiplas linhas (Dupla Chance, Handicap): escolha a opção com maior edge real confirmado.
+## 6. VALIDAÇÃO
 
-Dupla Chance — seleção obrigatória dentro da categoria "result":
-  Prefira "1X" (casa ou empate) quando: vantagem em casa forte (≥60% vitórias em casa) OU time da casa defensivamente sólido.
-  Prefira "X2" (fora ou empate) quando: visitante em forma excepcional OU jogo entre times equilibrados fora de contexto decisivo.
-  Prefira "12" (qualquer vencedor) apenas quando: BTTS e gols ≥2.5 são muito prováveis mas resultado puro é incerto.
-
-FAIXA DE ODDS: 1.40–1.90 (limite absoluto — descarte fora desta faixa sem exceção).
-
-NOMENCLATURA DE MERCADOS — copie o valor exato do campo "market_name" das odds fornecidas.
-  Gols total:         "Gols Mais/Menos" → line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
-  Gols por time:      "Total de Gols Casa (Time)" | "Total de Gols Visitante (Time)"
-  BTTS:               "Ambas as Equipes Marcam"
-  Cantos total:       "Escanteios Mais/Menos" | "Escanteios Total"
-  Cantos por time:    "Escanteios Casa Mais/Menos (Time)" | "Escanteios Visitante Mais/Menos (Time)"
-  Cartões TOTAL:      "Cartões Mais/Menos" ← AMBOS os times combinados (market_id 80)
-  Cartões por time:   "Total de Cartões Casa (Time)" | "Total de Cartões Visitante (Time)" ← time específico
-  Resultado:          "Dupla Chance 1X" | "Dupla Chance X2" | "Dupla Chance 12"
-  Handicap:           "Handicap Asiático -1" | "Handicap Asiático +1"
-ATENÇÃO: "Cartões Mais/Menos" = AMBOS os times. "Total de Cartões Visitante (X)" = só o time X.
-
-## 6. VALIDAÇÃO (execute antes de retornar)
-
-[V1] As 3 odds existem literalmente nos dados?
-[V2] As 3 sugestões são de categorias distintas?
-[V3] edge = prob_real − (1/odd) para cada uma?
-[V4] EV = (prob_real × odd) − 1 > 0 para cada uma?
-[V5] confidence ∈ [0.55, 0.92] e odd ∈ [1.40, 1.90]?
-[V6] Cada reasoning cita ≥1 fato numérico concreto?
-[V7] Nível de amostra declarado quando ESCASSO/VAZIO?
-[V8] Coerência entre prob_real, edge, EV e confidence?
-[V9] Exatamente 1 pick com is_best_pick: true e 2 com is_best_pick: false?
-[V10] O pick marcado is_best_pick: true NÃO tem RISCO: ALTO no reasoning (a menos que todos sejam ALTO)?
-Qualquer falha → corrija antes de retornar.
+[V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)? [V4] EV>0?
+[V5] confidence∈[0.55,0.92] e odd∈[1.40,1.90]? [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
+[V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
+Falha → corrija antes de retornar.
 
 ## CALIBRAÇÃO — DESEMPENHO HISTÓRICO PRÓPRIO
 

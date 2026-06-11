@@ -81,66 +81,26 @@ SAIDA: apenas JSON valido. Sua resposta comeca com {{ e termina com }}. Nenhum t
 
 
 USER_PROMPT_TEMPLATE = """\
-Selecione o pick mais seguro do dia para a ALAVANCAGEM (Copa do Mundo).
-Odd alvo: ~{odd_target} | Faixa: {odd_min}-{odd_max}
+ALAVANCAGEM Copa do Mundo — pick mais seguro do dia. Odd alvo: ~{odd_target} | Faixa: {odd_min}-{odd_max}
 
-Opcao A: 1 pick isolado com odd {odd_min}-{odd_max}
-Opcao B: 2 picks de jogos DIFERENTES com odd_1 x odd_2 em {odd_min}-{odd_max}
+Opcao A: 1 pick isolado odd {odd_min}-{odd_max}
+Opcao B: 2 picks de jogos DIFERENTES com odd combinada {odd_min}-{odd_max}
+Criterios: league_id=1 | amostra>=5 no venue | taxa>=65% | confidence>={conf_min} | EV>0 | combinacao: mercados independentes
 
-Criterios por pick: league_id=1 | amostra>=5 jogos no venue | consistencia>=65% | confidence>={conf_min} | EV>0 | na combinacao: mercados independentes.
-
---- FIXTURES DA COPA + DADOS BRUTOS ---
-
+--- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
 
---- ETAPA 1: FILTRAR ---
-Mercados odd {odd_min}-{odd_max} → candidatos isolados. Mercados odd 1.10-{odd_max} → candidatos combinacao.
-Amostra <5 no venue → descarte.
+FILTRAR: odd {odd_min}-{odd_max}→candidatos A. odd 1.10-{odd_max}→candidatos B. Amostra<5→descarte.
+AVALIAR: taxa=confirmados/total (>=0.65) | prob_real=taxa ponderada temporal (1.0,0.85,0.70...) | EV=(prob_real×odd)-1>0
+CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
+  Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7 | Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos3→1.0|media→0.5
+MONTAR: Prefira A. B somente sem A valido ou confidence media significativamente maior. Empate→maior consistencia. Sem valido→no_bet.
+Verificacao: league_id=1? amostra>=5? taxa>=65%? confidence>={conf_min}? odd {odd_min}-{odd_max}? EV>0?
 
---- ETAPA 2: AVALIAR ---
-
-A) Taxa = jogos_confirmados/total_amostra. Obrigatorio >=0.65.
-B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.85, 0.70...). Validar com home/away_stats.
-C) CONFIDENCE = (Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
-   Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6
-   Amostra: 10+→1.0 | 5-9→0.7
-   Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3
-   Estabilidade: padrao nos ultimos 3→1.0 | so na media→0.5
-   Obrigatorio >={conf_min}.
-D) EV = (prob_real x odd) - 1 > 0.
-
---- ETAPA 3: MONTAR ---
-Opcao A: candidato com maior confidence, odd {odd_min}-{odd_max}.
-Opcao B: somente se sem Opcao A valida (ou B tem confidence media significativamente maior). Picks de jogos diferentes, mercados independentes, odd_combined={odd_min}-{odd_max}.
-Prefira maior confidence media. Empate: maior consistencia. Sem opcao valida → no_bet.
-
-Verificacao: league_id=1? amostra>=5 por pick? taxa>=65%? confidence>={conf_min}? odd_combined {odd_min}-{odd_max}? combinacao de jogos diferentes? EV>0?
-
---- SAIDA JSON ---
-
-Pick isolado:
-{{
-  "tipo": "simples",
-  "pick_1": {{"fixture_id": 0, "home_team": "nome", "away_team": "nome", "league_id": 1,
-    "market": "nome exato", "line": "linha", "odd": 0.00, "bet_house": "nome",
-    "prob_real": 0.00, "confidence": 0.00,
-    "reasoning": "FATO: X/Y jogos confirmaram (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: padrao solido."}},
-  "pick_2": null, "odd_combined": 0.00, "confidence_media": 0.00
-}}
-
-Combinacao:
-{{
-  "tipo": "combinacao",
-  "pick_1": {{"fixture_id": 0, "home_team": "nome", "away_team": "nome", "league_id": 1,
-    "market": "nome", "line": "linha", "odd": 0.00, "bet_house": "nome",
-    "prob_real": 0.00, "confidence": 0.00, "reasoning": "FATO: X/Y (taxa Z%)."}},
-  "pick_2": {{"fixture_id": 0, "home_team": "nome", "away_team": "nome", "league_id": 1,
-    "market": "nome", "line": "linha", "odd": 0.00, "bet_house": "nome",
-    "prob_real": 0.00, "confidence": 0.00, "reasoning": "FATO: X/Y (taxa Z%)."}},
-  "odd_combined": 0.00, "confidence_media": 0.00
-}}
-
-Sem pick: {{"no_bet": true, "motivo": "criterio que falhou"}}
+SAIDA JSON:
+Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
+Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
+Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 
 

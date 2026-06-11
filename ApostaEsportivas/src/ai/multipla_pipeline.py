@@ -75,71 +75,33 @@ SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum 
 # USER PROMPT
 # ============================================================
 USER_PROMPT_TEMPLATE = """
---- CALIBRAÇÃO: DESEMPENHO HISTÓRICO PRÓPRIO ---
-{desempenho}
-gap>+0.10 com n≥10 → superconfiante → reduza score_base | hit<0.50 com n≥15 → edge negativo → score_base máx 0.60 | n<10 → ignore | multiplas.hit<0.35 → exija score_combo≥0.70
+CALIBRACAO: {desempenho}
+gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<10→ignore | multiplas.hit<0.35→score_combo>=0.70
 
---- JOGOS DO DIA + DADOS BRUTOS ---
-
+--- JOGOS DO DIA + DADOS ---
 {fixtures_formatados}
 
---- ETAPA 1: MELHOR MERCADO POR JOGO ---
+ETAPA 1 — MELHOR MERCADO POR JOGO:
+score_base=(coerencia×0.45)+(estabilidade×0.30)+(reasoning×0.15)+(odds×0.10)
+Coerencia: 1.0=confirma|0.7=parcial|0.4=inconsistente|0.0=sem evidencia
+Estabilidade: 1.0=8+/10|0.7=6-7/10|0.4=4-5/10|0.0=sem padrao
+Reasoning: 1.0=dado numerico|0.7=logica com base|0.3=superficial|0.0=generico
+Odds: 1.0=1.40-1.90|0.0=fora→DESCARTE
+Linha: mais conservadora em 1.40-1.90. Descarte jogo se score_base<0.55 ou sem linha valida.
 
-Para cada jogo: identifique o mercado com maior edge real (edge = prob_real − 1/odd > 0).
-Calcule score_base = (coerencia×0.45) + (estabilidade×0.30) + (reasoning×0.15) + (odds×0.10)
+ETAPA 2 — CORRELACAO:
+Proibido: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.
+Ideal: market_types diferentes + jogos sem relacao entre si.
 
-Coerência:   1.0=dados confirmam | 0.7=parcialmente | 0.4=inconsistência | 0.0=sem evidência
-Estabilidade: 1.0=8+/10 confirmam | 0.7=6-7/10 | 0.4=4-5/10 | 0.0=sem padrão
-Reasoning:   1.0=dado numérico dos dados | 0.7=lógica com base | 0.3=superficial | 0.0=genérico
-Odds:        1.0=odd 1.40–1.90 | 0.0=fora desta faixa → DESCARTAR imediatamente
+ETAPA 3 — MONTAGEM:
+score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
+multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
+Verificacao: odd individual 1.40-1.90? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
 
-Linha: escolha a mais conservadora dentro de 1.40–1.90 (odd mais próxima de 1.40).
-Descarte o jogo se nenhum mercado atingir score_base≥0.55 ou nenhuma linha válida em 1.40–1.90.
-
---- ETAPA 2: CORRELAÇÃO ---
-
-Proibido combinar: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.
-Ideal: market_types DIFERENTES + jogos sem relação entre si.
-
---- ETAPA 3: MONTAGEM ---
-
-1. Ordene picks aprovados por score_base
-2. Para cada par: score_combo = (A+B)/2, penalizar -0.10 se perfis parecidos ou alta variância
-   odd_total = odd_A × odd_B — descarte se <2.00 ou >3.00
-3. multipla_1 = maior score_combo válido | multipla_2 = segundo melhor (só se score_combo≥0.60)
-   Sem par válido → no_bet
-
-Verificação: odd individual 1.40–1.90? odd_total 2.00–3.00? market_types diferentes? sem mesmo fixture? score_base≥0.55? odds copiadas dos dados?
-
---- SAÍDA JSON ---
-
-Sem múltipla: {{"no_bet": true, "motivo": "motivo em uma frase"}}
-
-Com múltiplas:
-{{
-  "multipla_1": {{
-    "name": "MULTIPLA_1",
-    "games": [
-      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}},
-      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}}
-    ],
-    "odd_final": 0.00,
-    "score_combo": 0.00,
-    "reason": "Cite dados brutos que validam cada pick e por que têm baixa correlação."
-  }},
-  "multipla_2": {{
-    "name": "MULTIPLA_2",
-    "games": [
-      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}},
-      {{"fixture_id": 0, "market": "nome", "line": "linha", "odd": 0.00}}
-    ],
-    "odd_final": 0.00,
-    "score_combo": 0.00,
-    "reason": "Segunda melhor — justifique com dados brutos."
-  }}
-}}
-
-multipla_2 é OPCIONAL — inclua só se score_combo≥0.60.
+SAIDA JSON:
+Sem multipla: {{"no_bet":true,"motivo":"motivo"}}
+Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
+multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
 """
 
 
