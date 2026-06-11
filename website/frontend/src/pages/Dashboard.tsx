@@ -90,43 +90,47 @@ function TabBar({ tab, setTab, canSeeVip, counts }: {
   ]
 
   return (
-    <div className="flex border-b border-zinc-800 mb-6 -mx-4 px-4 overflow-x-auto">
-      {tabs.map(t => {
-        const count = counts?.[t.key]
-        return (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`px-4 py-3 text-sm font-semibold border-b-2 transition-colors mr-1 whitespace-nowrap ${
-              tab === t.key
-                ? 'border-green-500 text-white'
-                : 'border-transparent text-zinc-500 hover:text-zinc-300'
-            }`}
-          >
-            {t.label}
-            {t.badge && (
-              <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
-                {t.badge}
-              </span>
-            )}
-            {t.premiumOnly && canSeeVip && (
-              <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
-                VIP
-              </span>
-            )}
-            {t.premiumOnly && !canSeeVip && (
-              <svg className="ml-1 w-3 h-3 text-yellow-400 inline-block align-middle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            )}
-            {count != null && count > 0 && (
-              <span className="ml-1 text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded font-black">
-                {count}
-              </span>
-            )}
-          </button>
-        )
-      })}
+    <div className="relative mb-6 -mx-4">
+      {/* fade direita indicando scroll */}
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
+      <div className="flex border-b border-zinc-800 px-4 overflow-x-auto scrollbar-none">
+        {tabs.map(t => {
+          const count = counts?.[t.key]
+          return (
+            <button
+              key={t.key}
+              onClick={() => setTab(t.key)}
+              className={`px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors mr-1 whitespace-nowrap flex-shrink-0 ${
+                tab === t.key
+                  ? 'border-green-500 text-white'
+                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              }`}
+            >
+              {t.label}
+              {t.badge && (
+                <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
+                  {t.badge}
+                </span>
+              )}
+              {t.premiumOnly && canSeeVip && (
+                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                  VIP
+                </span>
+              )}
+              {t.premiumOnly && !canSeeVip && (
+                <svg className="ml-1 w-3 h-3 text-yellow-400 inline-block align-middle" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              )}
+              {count != null && count > 0 && (
+                <span className="ml-1 text-[10px] bg-green-500/15 text-green-400 border border-green-500/30 px-1.5 py-0.5 rounded font-black">
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
     </div>
   )
 }
