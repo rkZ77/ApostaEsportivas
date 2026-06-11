@@ -4,63 +4,115 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 
+const PLAN_DAYS: Record<string, number> = {
+  trial: 2, mensal: 30, trimestral: 90, semestral: 180, anual: 365,
+}
+const PLAN_LABEL: Record<string, string> = {
+  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
+}
+const PLAN_PRICE: Record<string, number> = {
+  mensal: 39.90, trimestral: 99.90, semestral: 199.90, anual: 359.90,
+}
+const METHOD_LABEL: Record<string, string> = {
+  credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito',
+  pix: 'Pix', ticket: 'Boleto', account_money: 'Saldo MP',
+}
+
+interface ReferralData {
+  referral_code: string; referral_link: string
+  total_indicated: number; total_converted: number; days_earned: number
+}
+
 export default function Planos() {
   const navigate = useNavigate()
-  const { user, isVip, isAdmin, daysUntilExpiry, login: _login, updateUser } = useAuth()
+  const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
 
+  const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
   const [activating, setActivating]       = useState(false)
   const [activateError, setActivateError] = useState('')
   const [activated, setActivated]         = useState(false)
   const [payments, setPayments]           = useState<any[]>([])
+  const [referral, setReferral]           = useState<ReferralData | null>(null)
+  const [referralCopied, setReferralCopied] = useState(false)
 
   const isTrial = user?.plan === 'trial'
 
   useEffect(() => {
     if (!user) return
-    api.get('/auth/me')
-      .then(r => setTrialUsed(r.data.trial_used ?? false))
-      .catch(() => setTrialUsed(true))
-    api.get('/payments/history')
-      .then(r => setPayments(r.data))
-      .catch(() => {})
+    api.get('/auth/me').then(r => {
+      setMeData(r.data)
+      setTrialUsed(r.data.trial_used ?? false)
+    }).catch(() => setTrialUsed(true))
+    api.get('/payments/history').then(r => setPayments(r.data)).catch(() => {})
+    api.get('/auth/referral').then(r => setReferral(r.data)).catch(() => {})
   }, [user])
 
   const handleActivateTrial = async () => {
-    setActivating(true)
-    setActivateError('')
+    setActivating(true); setActivateError('')
     try {
       const { data } = await api.post('/auth/activate-trial')
-      // Token vai para cookie httpOnly via Set-Cookie — não armazenamos no localStorage
       updateUser({ plan: 'trial', expires_at: data.expires_at })
-      setActivated(true)
-      setTrialUsed(true)
+      setActivated(true); setTrialUsed(true)
     } catch (e: any) {
-      setActivateError(e?.response?.data?.detail ?? 'Erro ao ativar trial. Tente novamente.')
-    } finally {
-      setActivating(false)
-    }
+      setActivateError(e?.response?.data?.detail ?? 'Erro ao ativar trial.')
+    } finally { setActivating(false) }
+  }
+
+  const copyReferral = () => {
+    if (!referral) return
+    navigator.clipboard.writeText(referral.referral_link).then(() => {
+      setReferralCopied(true)
+      setTimeout(() => setReferralCopied(false), 2000)
+    })
   }
 
   const isEligibleForTrial = user && user.plan === 'free' && trialUsed === false
+
+  // Cálculos do plano atual
+  const subType      = meData?.subscription_type as string | null
+  const totalDays    = isTrial ? 2 : (subType ? (PLAN_DAYS[subType] ?? 30) : 30)
+  const remaining    = daysUntilExpiry ?? 0
+  const pct          = Math.max(0, Math.min(100, daysUntilExpiry !== null ? (remaining / totalDays) * 100 : 100))
+  const urgent       = remaining <= (isTrial ? 1 : 5)
+  const expiryDate   = user?.expires_at
+    ? new Date(user.expires_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null
+  const startDate    = user?.expires_at && daysUntilExpiry !== null
+    ? new Date(Date.now() - (totalDays - remaining) * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null
+  const memberSince  = meData?.created_at
+    ? new Date(meData.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+    : null
+
+  // Total gasto em pagamentos aprovados
+  const totalSpent = payments.reduce((acc, p) => acc + Number(p.amount), 0)
+
+  // Sugestão de upgrade (só para mensal)
+  const upgradeOptions = subType === 'mensal' ? [
+    { key: 'trimestral', label: 'Trimestral', price: 99.90, perMonth: 33.30, savePct: 17, saveAmt: (39.90 * 3 - 99.90).toFixed(2) },
+    { key: 'anual',      label: 'Anual',      price: 359.90, perMonth: 29.99, savePct: 25, saveAmt: (39.90 * 12 - 359.90).toFixed(2) },
+  ] : []
+
+  const color = isTrial ? 'green' : 'yellow'
 
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
 
       <div className="bg-zinc-950 border-b border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
+        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
           <div>
             <h1 className="text-base font-black text-white">Meu Plano</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Status e detalhes do seu acesso atual</p>
+            <p className="text-zinc-500 text-xs mt-0.5">Status e detalhes do seu acesso</p>
           </div>
         </div>
       </div>
 
-      <main className="max-w-4xl mx-auto px-4 py-10 space-y-8">
+      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
 
-        {/* ── TRIAL ATIVADO (sucesso) ───────────────────────────────────────── */}
+        {/* ── TRIAL ATIVADO ─────────────────────────────────────────────────── */}
         {activated && (
           <div className="bg-green-500/10 border border-green-500/40 rounded-2xl p-6 text-center">
             <div className="w-14 h-14 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -77,110 +129,123 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── STATUS DO PLANO ATUAL ─────────────────────────────────────────── */}
-        {user && !activated && (
-          <>
-            {(isTrial || (isVip && !isTrial)) && (() => {
-              const totalDays = isTrial ? 2 : 30
-              const remaining = daysUntilExpiry ?? 0
-              const pct = Math.max(0, Math.min(100, (remaining / totalDays) * 100))
-              const expiryDate = user.expires_at
-                ? new Date(user.expires_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
-                : null
-              const urgent = remaining <= (isTrial ? 1 : 5)
-              const color = isTrial ? 'green' : 'yellow'
+        {/* ── STATUS PLANO ATUAL ────────────────────────────────────────────── */}
+        {user && !activated && (isVip || isTrial) && (
+          <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-2xl p-6 overflow-hidden`}>
+            <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
 
-              return (
-                <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-2xl p-6 overflow-hidden`}>
-                  <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
-
-                  <div className="flex items-start justify-between gap-4 mb-5">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-green-400' : 'text-yellow-400'}`}>
-                          {isTrial ? 'Teste VIP' : 'Plano VIP'}
-                        </span>
-                        {urgent && (
-                          <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase">
-                            Expirando
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-white font-black text-2xl">
-                        {remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
-                        {remaining > 0 && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
-                      </p>
-                      {expiryDate && (
-                        <p className="text-zinc-500 text-xs mt-1">
-                          {remaining <= 0 ? 'Expirou em' : 'Expira em'} {expiryDate}
-                        </p>
-                      )}
-                    </div>
-                    <button onClick={() => navigate('/checkout')}
-                      className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors">
-                      {isTrial ? 'Assinar VIP' : 'Renovar'}
-                    </button>
-                  </div>
-
-                  {/* Barra de progresso */}
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between text-[10px] text-zinc-500">
-                      <span>Progresso do plano</span>
-                      <span>{remaining} / {totalDays} dias</span>
-                    </div>
-                    <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Features resumidas */}
-                  <div className="grid grid-cols-2 gap-2 mt-5">
-                    {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem Copa 2026', 'Agente IA'].map(f => (
-                      <div key={f} className="flex items-center gap-1.5 text-xs text-zinc-400">
-                        <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                        {f}
-                      </div>
-                    ))}
-                  </div>
+            {/* Cabeçalho */}
+            <div className="flex items-start justify-between gap-4 mb-5">
+              <div>
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-green-400' : 'text-yellow-400'}`}>
+                    {isTrial ? 'Teste VIP' : `VIP ${subType ? PLAN_LABEL[subType] : ''}`}
+                  </span>
+                  {urgent && (
+                    <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase animate-pulse">
+                      Expirando
+                    </span>
+                  )}
                 </div>
-              )
-            })()}
+                <p className={`font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
+                  {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
+                  {remaining > 0 && daysUntilExpiry !== null && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
+                </p>
+              </div>
+              <button onClick={() => navigate('/checkout')}
+                className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors">
+                {isTrial ? 'Assinar VIP' : 'Renovar'}
+              </button>
+            </div>
 
-            {!isVip && !isAdmin && user.plan === 'free' && (
-              <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
-                <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
-                <div className="flex-1">
-                  <p className="text-white font-bold text-sm">Plano Free</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
+            {/* Barra de progresso */}
+            {daysUntilExpiry !== null && (
+              <div className="space-y-1.5 mb-5">
+                <div className="flex justify-between text-[10px] text-zinc-500">
+                  <span>Progresso do plano</span>
+                  <span>{remaining} / {totalDays} dias</span>
                 </div>
-                <button onClick={() => navigate('/checkout')}
-                  className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors">
-                  Upgrade VIP
-                </button>
+                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
               </div>
             )}
 
-            {isAdmin && (
-              <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
-                <p className="text-purple-400 font-black text-sm">Conta Admin — acesso irrestrito e permanente.</p>
-              </div>
-            )}
-          </>
+            {/* Datas */}
+            <div className="grid grid-cols-2 gap-3 mb-5">
+              {startDate && (
+                <div className="bg-zinc-800/60 rounded-xl p-3">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início</p>
+                  <p className="text-white text-xs font-semibold">{startDate}</p>
+                </div>
+              )}
+              {expiryDate && (
+                <div className="bg-zinc-800/60 rounded-xl p-3">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
+                  <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-white'}`}>{expiryDate}</p>
+                </div>
+              )}
+              {memberSince && (
+                <div className="bg-zinc-800/60 rounded-xl p-3">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Membro desde</p>
+                  <p className="text-white text-xs font-semibold">{memberSince}</p>
+                </div>
+              )}
+              {totalSpent > 0 && (
+                <div className="bg-zinc-800/60 rounded-xl p-3">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total investido</p>
+                  <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
+                </div>
+              )}
+            </div>
+
+            {/* Features incluídas */}
+            <div className="grid grid-cols-2 gap-2">
+              {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem Copa 2026', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
+                <div key={f} className="flex items-center gap-1.5 text-xs text-zinc-400">
+                  <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                  </svg>
+                  {f}
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* ── CARD TRIAL — só para free elegível ───────────────────────────── */}
+        {/* ── PLANO FREE ────────────────────────────────────────────────────── */}
+        {user && !activated && !isVip && !isAdmin && !isTrial && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+            <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
+            <div className="flex-1">
+              <p className="text-white font-bold text-sm">Plano Free</p>
+              <p className="text-zinc-500 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
+              {memberSince && <p className="text-zinc-700 text-xs mt-0.5">Membro desde {memberSince}</p>}
+            </div>
+            <button onClick={() => navigate('/checkout')}
+              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors">
+              Upgrade VIP
+            </button>
+          </div>
+        )}
+
+        {/* ── ADMIN ─────────────────────────────────────────────────────────── */}
+        {isAdmin && (
+          <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
+            <p className="text-purple-400 font-black text-sm">Conta Admin — acesso irrestrito e permanente.</p>
+            {memberSince && <p className="text-purple-400/50 text-xs mt-1">Membro desde {memberSince}</p>}
+          </div>
+        )}
+
+        {/* ── TRIAL — só para free elegível ─────────────────────────────────── */}
         {isEligibleForTrial && !activated && (
-          <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-7 overflow-hidden">
+          <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
-                Sem cartão
-              </span>
+              <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Sem cartão</span>
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
@@ -191,10 +256,7 @@ export default function Planos() {
               <div className="flex-1">
                 <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-1">Disponível para você</p>
                 <h2 className="text-xl font-black text-white mb-1">2 dias de VIP grátis</h2>
-                <p className="text-zinc-400 text-sm mb-4">
-                  Acesse todos os picks VIP, Múltiplas, Alavancagem Copa e o Agente IA por 2 dias completos.
-                  Sem cartão de crédito, sem compromisso. Expira e volta para Free automaticamente.
-                </p>
+                <p className="text-zinc-400 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem Copa 2026', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm text-zinc-300">
@@ -205,44 +267,112 @@ export default function Planos() {
                     </li>
                   ))}
                 </ul>
-                {activateError && (
-                  <p className="text-red-400 text-xs mb-3">{activateError}</p>
-                )}
+                {activateError && <p className="text-red-400 text-xs mb-3">{activateError}</p>}
                 <button onClick={handleActivateTrial} disabled={activating}
                   className="bg-green-500 hover:bg-green-400 disabled:opacity-60 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors flex items-center gap-2">
-                  {activating ? (
-                    <>
-                      <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                      </svg>
-                      Ativando...
-                    </>
-                  ) : 'Ativar 2 dias VIP gratuito'}
+                  {activating
+                    ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Ativando...</>
+                    : 'Ativar 2 dias VIP gratuito'}
                 </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── HISTÓRICO DE PAGAMENTOS ──────────────────────────────────────── */}
+        {/* ── UPGRADE INTELIGENTE (só mensal) ───────────────────────────────── */}
+        {upgradeOptions.length > 0 && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+            <p className="text-xs text-zinc-500 font-black uppercase tracking-wider mb-1">💡 Você pode economizar</p>
+            <p className="text-white text-sm mb-4">
+              No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
+              Veja quanto economizaria mudando:
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              {upgradeOptions.map(opt => (
+                <button key={opt.key} onClick={() => navigate('/checkout')}
+                  className="relative p-4 rounded-xl border border-zinc-700 hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
+                  <p className="text-white font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">R$ {opt.perMonth.toFixed(2).replace('.', ',')}/mês</p>
+                  <p className="text-green-400 text-xs font-bold mt-2">Economize R$ {opt.saveAmt.replace('.', ',')} ↓{opt.savePct}%</p>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* ── PROGRAMA DE INDICAÇÕES ────────────────────────────────────────── */}
+        {referral && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
+            <div>
+              <h3 className="text-sm font-black text-white">Indicações</h3>
+              <p className="text-zinc-500 text-xs mt-0.5">Indique amigos e ganhe +1 dia VIP por cada assinatura</p>
+            </div>
+
+            {/* Progresso */}
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                { label: 'Indicados',   value: referral.total_indicated, color: 'text-white' },
+                { label: 'Convertidos', value: referral.total_converted,  color: 'text-green-400' },
+                { label: 'Dias ganhos', value: referral.days_earned,      color: 'text-yellow-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="bg-zinc-800/60 rounded-xl p-3 text-center">
+                  <p className={`text-2xl font-black ${color}`}>{value}</p>
+                  <p className="text-zinc-500 text-xs mt-0.5">{label}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Barra de progresso para próximo dia */}
+            {(() => {
+              const next = referral.total_indicated % 1 === 0 ? 1 : 1
+              const progress = (referral.total_converted % next) / next * 100
+              return referral.total_indicated > 0 ? (
+                <div>
+                  <div className="flex justify-between text-[10px] text-zinc-600 mb-1">
+                    <span>Próximo dia VIP grátis</span>
+                    <span>{referral.total_converted % 1 === 0 ? 1 : 0} / 1 conversão</span>
+                  </div>
+                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                    <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${progress}%` }} />
+                  </div>
+                </div>
+              ) : null
+            })()}
+
+            {/* Link */}
+            <div>
+              <p className="text-xs text-zinc-500 mb-1.5">Seu link de indicação</p>
+              <div className="flex items-center gap-2">
+                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono truncate select-all">
+                  {referral.referral_link}
+                </div>
+                <button onClick={copyReferral}
+                  className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
+                    referralCopied ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                  }`}>
+                  {referralCopied ? 'Copiado!' : 'Copiar'}
+                </button>
+              </div>
+              <p className="text-zinc-600 text-xs mt-1">Código: <span className="text-zinc-400 font-mono font-bold">{referral.referral_code}</span></p>
+            </div>
+
+            {referral.total_indicated === 0 && (
+              <p className="text-zinc-600 text-xs text-center">Compartilhe seu link — cada amigo que assinar VIP te dá +1 dia grátis!</p>
+            )}
+          </div>
+        )}
+
+        {/* ── HISTÓRICO DE PAGAMENTOS ───────────────────────────────────────── */}
         {payments.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
             <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4">Histórico de pagamentos</h3>
-            <div className="space-y-2">
+            <div className="space-y-0">
               {payments.map(p => {
-                const PLAN_LABEL: Record<string, string> = {
-                  mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
-                }
-                const METHOD_LABEL: Record<string, string> = {
-                  credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito',
-                  pix: 'Pix', ticket: 'Boleto', account_money: 'Saldo MP',
-                }
                 const date = p.created_at
                   ? new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
                   : '—'
                 return (
-                  <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-zinc-800 last:border-0">
+                  <div key={p.id} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
                     <div>
                       <p className="text-white text-sm font-semibold">
                         Plano Picks — {PLAN_LABEL[p.plan] ?? p.plan}
@@ -256,22 +386,28 @@ export default function Planos() {
                         R$ {Number(p.amount).toFixed(2).replace('.', ',')}
                       </p>
                       <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold uppercase">
-                        {p.status === 'approved' ? 'Aprovado' : p.status}
+                        Aprovado
                       </span>
                     </div>
                   </div>
                 )
               })}
+              {totalSpent > 0 && (
+                <div className="flex items-center justify-between pt-3">
+                  <span className="text-zinc-500 text-xs font-semibold">Total investido</span>
+                  <span className="text-white font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
             </div>
           </div>
         )}
 
-        {/* ── CTA UPGRADE (free sem trial) ─────────────────────────────────── */}
+        {/* ── CTA UPGRADE (free sem trial usado) ───────────────────────────── */}
         {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
           <div className="bg-zinc-900 border border-yellow-400/20 rounded-2xl p-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-white font-black text-sm">Quer acesso VIP completo?</p>
-              <p className="text-zinc-500 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA a partir de R$ 29,90/mês</p>
+              <p className="text-zinc-500 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de R$ 39,90/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-xl transition-colors">

@@ -15,10 +15,10 @@ interface Plan {
 }
 
 const PLANS: Plan[] = [
-  { id: 'mensal',     label: 'Mensal',     price: 29.90,  period: '1 mês',     pricePerMonth: 29.90 },
-  { id: 'trimestral', label: 'Trimestral', price: 79.90,  period: '3 meses',   pricePerMonth: 26.63, savings: 'Economize 11%', popular: true },
-  { id: 'semestral',  label: 'Semestral',  price: 149.90, period: '6 meses',   pricePerMonth: 24.98, savings: 'Economize 17%' },
-  { id: 'anual',      label: 'Anual',      price: 269.90, period: '12 meses',  pricePerMonth: 22.49, savings: 'Economize 25%' },
+  { id: 'mensal',     label: 'Mensal',     price: 39.90,  period: '1 mês',    pricePerMonth: 39.90 },
+  { id: 'trimestral', label: 'Trimestral', price: 99.90,  period: '3 meses',  pricePerMonth: 33.30, savings: 'Economize 17%', popular: true },
+  { id: 'semestral',  label: 'Semestral',  price: 199.90, period: '6 meses',  pricePerMonth: 33.32, savings: 'Economize 17%' },
+  { id: 'anual',      label: 'Anual',      price: 359.90, period: '12 meses', pricePerMonth: 29.99, savings: 'Economize 25%' },
 ]
 
 function SuccessPage() {
