@@ -711,9 +711,16 @@ export default function Landing() {
           <p className="text-xs text-zinc-600 text-center">
             Picks gerados por inteligência artificial. Aposte com responsabilidade. +18.
           </p>
-          <Link to="/login" className="text-xs text-zinc-500 hover:text-green-400 transition-colors font-semibold">
-            Entrar na plataforma →
-          </Link>
+          <div className="flex items-center gap-4">
+            <a href="https://www.instagram.com/hpstips/" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors">
+              <img src="/instagram.jpg" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
+              @hpstips
+            </a>
+            <Link to="/login" className="text-xs text-zinc-500 hover:text-green-400 transition-colors font-semibold">
+              Entrar na plataforma →
+            </Link>
+          </div>
         </div>
       </footer>
 
