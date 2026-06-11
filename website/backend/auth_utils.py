@@ -14,8 +14,8 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     warnings.warn("⚠️  JWT_SECRET não configurado! Use apenas em desenvolvimento.", stacklevel=1)
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 8   # sessão dura 8h; depois precisa logar novamente
-REFRESH_TOKEN_EXPIRE_DAYS = 30  # mantido para compatibilidade, mas não é mais usado no /refresh
+ACCESS_TOKEN_EXPIRE_HOURS = 2
+REFRESH_TOKEN_EXPIRE_DAYS = 7   # expira 7 dias após o login; sem renovação automática
 
 COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
