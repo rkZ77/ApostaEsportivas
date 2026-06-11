@@ -2,7 +2,9 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import { useState } from 'react'
-
+import {
+  Zap, Trophy, BarChart2, Bot, Wallet, Medal, ShieldCheck, Crown, LogOut,
+} from 'lucide-react'
 import Avatar from './Avatar'
 
 const planBadge: Record<string, string> = {
@@ -45,40 +47,49 @@ export default function Navbar() {
           <Link
             to="/picks"
             onClick={markSeen}
-            className={`relative px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/picks')}`}
+            className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/picks')}`}
           >
+            <Zap className="w-3.5 h-3.5" />
             Picks
             {hasNew && (
               <span className="absolute top-1 right-0.5 w-2 h-2 bg-green-500 rounded-full border border-zinc-950 animate-pulse" />
             )}
           </Link>
-          <Link to="/fixtures" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/fixtures')}`}>
+          <Link to="/fixtures" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/fixtures')}`}>
+            <Trophy className="w-3.5 h-3.5" />
             Jogos
           </Link>
-          <Link to="/results" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/results')}`}>
+          <Link to="/results" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/results')}`}>
+            <BarChart2 className="w-3.5 h-3.5" />
             Resultados
           </Link>
-          <Link to="/agente" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/agente')}`}>
+          <Link to="/agente" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/agente')}`}>
+            <Bot className="w-3.5 h-3.5" />
             Agente
           </Link>
-          <Link to="/banca" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/banca')}`}>
+          <Link to="/banca" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/banca')}`}>
+            <Wallet className="w-3.5 h-3.5" />
             Banca
           </Link>
-          <Link to="/leaderboard" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/leaderboard')}`}>
+          <Link to="/leaderboard" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/leaderboard')}`}>
+            <Medal className="w-3.5 h-3.5" />
             Ranking
           </Link>
           {!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial') && (
-            <Link to="/planos" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${pathname === '/planos' ? 'text-green-500 font-semibold' : 'text-yellow-400 hover:text-yellow-300'}`}>
+            <Link to="/planos" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${pathname === '/planos' ? 'text-green-500 font-semibold' : 'text-yellow-400 hover:text-yellow-300'}`}>
+              <Crown className="w-3.5 h-3.5" />
               Meu Plano
             </Link>
           )}
           {!isAdmin && user?.plan !== 'vip' && user?.plan !== 'trial' && (
-            <Link to="/planos" className={`px-3 py-1.5 rounded-lg text-sm transition-colors text-yellow-400 hover:text-yellow-300 ${isActive('/planos')}`}>
+            <Link to="/planos" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors text-yellow-400 hover:text-yellow-300 ${isActive('/planos')}`}>
+              <Crown className="w-3.5 h-3.5" />
               VIP
             </Link>
           )}
           {isAdmin && (
-            <Link to="/admin" className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/admin')}`}>
+            <Link to="/admin" className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${isActive('/admin')}`}>
+              <ShieldCheck className="w-3.5 h-3.5" />
               Admin
             </Link>
           )}
@@ -97,10 +108,10 @@ export default function Navbar() {
           </Link>
           <button
             onClick={() => { logout(); navigate('/login') }}
-            className="text-zinc-500 hover:text-red-400 transition-colors text-sm p-2"
+            className="text-zinc-500 hover:text-red-400 transition-colors p-2"
             title="Sair"
           >
-            ↩
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>

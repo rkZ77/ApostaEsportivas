@@ -8,6 +8,7 @@ import SuggestionDetail from '../components/SuggestionDetail'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import CommunityChat from '../components/CommunityChat'
+import { UserCircle, Crown, Rocket } from 'lucide-react'
 
 // ─── Helpers de logo ──────────────────────────────────────────────────────────
 const TEAM_LOGO   = (id?: number) => id ? `https://media.api-sports.io/football/teams/${id}.png` : null
@@ -167,16 +168,19 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
         )}
       </div>
       <div className="shrink-0 hidden sm:flex flex-col gap-1.5">
-        <Link to="/profile" className="text-blue-400 hover:text-blue-300 transition-colors text-xs border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg text-center font-semibold">
+        <Link to="/profile" className="flex items-center justify-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors text-xs border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg font-semibold">
+          <UserCircle className="w-3.5 h-3.5" />
           Editar perfil
         </Link>
         {!isAdmin && (isVip || user?.plan === 'trial') && (
-          <Link to="/planos" className="text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg text-center font-semibold">
+          <Link to="/planos" className="flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg font-semibold">
+            <Crown className="w-3.5 h-3.5" />
             Meu Plano
           </Link>
         )}
         {!isAdmin && !isVip && user?.plan !== 'trial' && (
-          <Link to="/checkout" className="text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg text-center font-semibold">
+          <Link to="/checkout" className="flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg font-semibold">
+            <Rocket className="w-3.5 h-3.5" />
             Upgrade VIP
           </Link>
         )}
