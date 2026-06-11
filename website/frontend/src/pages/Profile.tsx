@@ -215,23 +215,6 @@ export default function Profile() {
             </button>
           </div>
 
-          <hr className="border-zinc-800" />
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Instagram</p>
-              <p className="text-xs text-zinc-600 mt-0.5">Nos siga para novidades e análises</p>
-            </div>
-            <a
-              href="https://www.instagram.com/hpstips/"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs text-pink-400 hover:text-pink-300 transition-colors font-semibold border border-pink-400/20 hover:border-pink-400/40 bg-pink-400/5 px-3 py-2 rounded-lg"
-            >
-              <img src="/instagram.jpg" alt="Instagram" className="w-3.5 h-3.5 rounded-sm object-cover" />
-              @hpstips
-            </a>
-          </div>
-
           {error      && <p className="text-red-400 text-xs">{error}</p>}
           {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
 

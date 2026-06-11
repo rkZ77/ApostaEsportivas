@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import Footer from '../components/Footer'
 
 const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
 const TEAM_LOGO = (id?: number | null) =>
@@ -700,29 +701,7 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── FOOTER ─────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-zinc-800 py-8 bg-zinc-950">
-        <div className="max-w-6xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-between gap-4">
-          <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="PickIA" className="w-7 h-7 rounded-full object-cover" />
-            <span className="text-sm font-black text-zinc-300">Pick<span className="text-green-500">IA</span></span>
-            <span className="text-xs text-zinc-600">· Copa do Mundo 2026</span>
-          </div>
-          <p className="text-xs text-zinc-600 text-center">
-            Picks gerados por inteligência artificial. Aposte com responsabilidade. +18.
-          </p>
-          <div className="flex items-center gap-4">
-            <a href="https://www.instagram.com/hpstips/" target="_blank" rel="noopener noreferrer"
-              className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors">
-              <img src="/instagram.jpg" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
-              @hpstips
-            </a>
-            <Link to="/login" className="text-xs text-zinc-500 hover:text-green-400 transition-colors font-semibold">
-              Entrar na plataforma →
-            </Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
 
     </div>
   )

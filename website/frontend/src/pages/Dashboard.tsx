@@ -8,6 +8,7 @@ import SuggestionDetail from '../components/SuggestionDetail'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import CommunityChat from '../components/CommunityChat'
+import Footer from '../components/Footer'
 import { UserCircle, Crown, Rocket } from 'lucide-react'
 import { suggestStake } from '../utils/stakeUtils'
 
@@ -1603,6 +1604,7 @@ export default function Dashboard() {
         )}
 
       </main>
+      <Footer />
     </div>
   )
 }
