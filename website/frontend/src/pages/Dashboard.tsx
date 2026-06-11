@@ -167,7 +167,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
         )}
       </div>
       <div className="shrink-0 hidden sm:flex flex-col gap-1.5">
-        <Link to="/profile" className="text-zinc-600 hover:text-zinc-400 transition-colors text-xs border border-zinc-800 hover:border-zinc-700 px-3 py-2 rounded-lg text-center">
+        <Link to="/profile" className="text-blue-400 hover:text-blue-300 transition-colors text-xs border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg text-center font-semibold">
           Editar perfil
         </Link>
         {!isAdmin && (isVip || user?.plan === 'trial') && (
