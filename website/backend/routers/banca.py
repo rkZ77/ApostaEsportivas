@@ -235,8 +235,11 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
     conn = get_connection()
     cur = conn.cursor()
     try:
-        if not _resolve_pick(cur, body.pick_id, body.pick_type):
+        pick = _resolve_pick(cur, body.pick_id, body.pick_type)
+        if not pick:
             raise HTTPException(404, "Pick não encontrado.")
+        if pick.get("result"):
+            raise HTTPException(400, "Não é possível registrar aposta após o resultado.")
         cur.execute(
             "SELECT id FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (user_id, body.pick_id, body.pick_type),
