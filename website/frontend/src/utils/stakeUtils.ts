@@ -31,8 +31,8 @@ export function suggestStake(
   const stakeR    = bankroll * halfKelly
 
   let units = stakeR / unitValue
-  units = Math.max(0.5, Math.min(5, units))
-  units = Math.round(units * 2) / 2   // arredonda para 0,5 mais próximo
+  units = Math.max(5, Math.min(20, units))
+  units = Math.round(units)   // arredonda para 1u mais próximo
 
   return {
     units,
