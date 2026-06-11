@@ -439,21 +439,33 @@ function MultiplaCard({ m, onClick }: { m: any; onClick?: () => void }) {
 
       {/* Legs */}
       {legs.length > 0 && (
-        <div className="space-y-1.5 mb-4">
+        <div className="space-y-2 mb-4">
           {legs.map((leg: any, i: number) => (
-            <div key={i} className="flex items-center gap-2 bg-zinc-800/50 rounded-lg px-3 py-2 text-xs">
-              <span className="w-5 h-5 flex items-center justify-center bg-zinc-700 rounded-full text-zinc-400 font-bold shrink-0">
-                {i + 1}
-              </span>
-              <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={18} />
-              <div className="flex-1 min-w-0">
-                <span className="text-zinc-300 font-medium truncate block">
-                  {leg.home ?? leg.home_team} vs {leg.away ?? leg.away_team}
+            <div key={i} className="bg-zinc-800/50 rounded-xl p-3">
+              {/* Times */}
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-5 h-5 flex items-center justify-center bg-zinc-700/80 rounded-full text-[10px] text-zinc-500 font-black shrink-0">
+                  {i + 1}
                 </span>
-                <span className="text-zinc-500">{leg.market}{leg.line ? <> · <span className="text-zinc-400">{leg.line}</span></> : ''}</span>
+                <div className="flex items-center flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
+                    <span className="text-zinc-200 text-xs font-semibold truncate text-right">{leg.home ?? leg.home_team}</span>
+                    <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={24} />
+                  </div>
+                  <span className="text-zinc-600 text-[10px] font-bold shrink-0 mx-2">VS</span>
+                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                    <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={24} />
+                    <span className="text-zinc-200 text-xs font-semibold truncate">{leg.away ?? leg.away_team}</span>
+                  </div>
+                </div>
+                <span className="text-green-400 font-black shrink-0 text-sm ml-1">{Number(leg.odd).toFixed(2)}</span>
               </div>
-              <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={18} />
-              <span className="text-green-400 font-black shrink-0 ml-1">{Number(leg.odd).toFixed(2)}</span>
+              {/* Mercado */}
+              <div className="pl-7">
+                <span className="text-[11px] text-zinc-500 bg-zinc-900/80 px-2 py-0.5 rounded-md inline-block">
+                  {leg.market}{leg.line ? ` · ${leg.line}` : ''}
+                </span>
+              </div>
             </div>
           ))}
         </div>

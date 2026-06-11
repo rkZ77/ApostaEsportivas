@@ -21,9 +21,6 @@ export default function Profile() {
   const [username, setUsername]     = useState('')
   const [phone, setPhone]           = useState(user?.phone ?? '')
   const [cpf, setCpf]               = useState('')
-  const [currentPwd, setCurrentPwd] = useState('')
-  const [newPwd, setNewPwd]         = useState('')
-  const [confirmPwd, setConfirmPwd] = useState('')
   const [loading, setLoading]       = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [error, setError]           = useState('')
@@ -81,19 +78,11 @@ export default function Profile() {
     e.preventDefault()
     setError(''); setSuccessMsg('')
 
-    if (newPwd && newPwd !== confirmPwd) {
-      setError('As novas senhas não coincidem'); return
-    }
-    if (newPwd) {
-      if (newPwd.length < 8) { setError('Senha deve ter pelo menos 8 caracteres'); return }
-    }
-
     const body: Record<string, string> = {}
     if (name !== user?.name)                         body.name = name
     if (username !== (meData?.username ?? ''))       body.username = username
     if (phone !== (user?.phone ?? ''))               body.phone = phone
     if (cpf.trim())                                  body.cpf = cpf.trim()
-    if (newPwd) { body.current_password = currentPwd; body.new_password = newPwd }
 
     if (!Object.keys(body).length) { setError('Nenhuma alteração detectada'); return }
 
@@ -108,7 +97,6 @@ export default function Profile() {
         setSuccessMsg('Perfil atualizado!')
       }
       setCpf('')
-      setCurrentPwd(''); setNewPwd(''); setConfirmPwd('')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erro ao atualizar')
     } finally {
@@ -213,24 +201,18 @@ export default function Profile() {
           )}
 
           <hr className="border-zinc-800" />
-          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Alterar senha</p>
-
-          <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">Senha atual</label>
-            <input type="password" className="input w-full" placeholder="Preencha apenas se quiser trocar"
-              value={currentPwd} onChange={e => setCurrentPwd(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Nova senha</label>
-              <input type="password" className="input w-full" placeholder="Mínimo 8 caracteres"
-                value={newPwd} onChange={e => setNewPwd(e.target.value)} />
+              <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Senha</p>
+              <p className="text-xs text-zinc-600 mt-0.5">Para alterar, use o link enviado por email</p>
             </div>
-            <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Confirmar</label>
-              <input type="password" className="input w-full" placeholder="Repita a nova senha"
-                value={confirmPwd} onChange={e => setConfirmPwd(e.target.value)} />
-            </div>
+            <button
+              type="button"
+              onClick={() => navigate('/forgot-password')}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-semibold border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg"
+            >
+              Alterar senha →
+            </button>
           </div>
 
           {error      && <p className="text-red-400 text-xs">{error}</p>}
