@@ -1038,13 +1038,16 @@ export default function Dashboard() {
             <div className="space-y-8">
 
               {/* Barra de status do plano */}
-              {!isAdmin && daysUntilExpiry !== null && (isVip || user?.plan === 'trial') && (() => {
+              {!isAdmin && (isVip || user?.plan === 'trial') && (() => {
                 const isTrial = user?.plan === 'trial'
+                const days = daysUntilExpiry
+                const hasDays = days !== null
                 const totalDays = isTrial ? 2 : 30
-                const pct = Math.max(0, Math.min(100, (daysUntilExpiry / totalDays) * 100))
-                const isExpiring = isTrial ? daysUntilExpiry <= 1 : daysUntilExpiry <= 5
-                const expiryDate = new Date(Date.now() + daysUntilExpiry * 24 * 3600000)
-                const expiryStr = expiryDate.toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+                const pct = hasDays ? Math.max(0, Math.min(100, (days! / totalDays) * 100)) : 100
+                const isExpiring = hasDays && (isTrial ? days! <= 1 : days! <= 5)
+                const expiryStr = hasDays
+                  ? new Date(Date.now() + days! * 24 * 3600000).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+                  : null
                 return (
                   <div className={`card p-4 ${isExpiring ? 'border-red-500/30 bg-red-500/5' : ''}`}>
                     <div className="flex items-center gap-3">
@@ -1054,9 +1057,15 @@ export default function Dashboard() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between mb-1.5">
                           <span className="text-xs text-zinc-500">
-                            <span className={`font-black text-base ${isExpiring ? 'text-red-400' : 'text-white'}`}>{daysUntilExpiry}</span>
-                            {' '}dia{daysUntilExpiry !== 1 ? 's' : ''} restante{daysUntilExpiry !== 1 ? 's' : ''}
-                            <span className="text-zinc-700 ml-1.5">· expira {expiryStr}</span>
+                            {hasDays ? (
+                              <>
+                                <span className={`font-black text-base ${isExpiring ? 'text-red-400' : 'text-white'}`}>{days}</span>
+                                {' '}dia{days !== 1 ? 's' : ''} restante{days !== 1 ? 's' : ''}
+                                {expiryStr && <span className="text-zinc-700 ml-1.5">· expira {expiryStr}</span>}
+                              </>
+                            ) : (
+                              <span className="text-white font-semibold">Plano {isTrial ? 'Teste' : 'VIP'} ativo</span>
+                            )}
                           </span>
                           <Link to="/planos" className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors shrink-0 ml-3">
                             Ver plano →
