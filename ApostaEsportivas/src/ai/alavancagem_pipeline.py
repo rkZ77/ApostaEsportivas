@@ -67,13 +67,14 @@ OBJETIVO: 1 pick (ou combinacao de 2 picks de jogos diferentes) com odd combinad
 
 LOGICA:
 - 1 pick isolado com odd 1.40-1.60 e consistencia alta → preferivel
-- Se nao houver → combine 2 picks de jogos DIFERENTES para compor odd 1.40-1.60
+- Se nao houver → combine 2 picks de jogos DIFERENTES com odd combinada 1.40-1.60
 - Combinacao: ambos com confidence>=0.70 individualmente — nao combine fraco com forte
 - Consistencia vale tudo: 9/10 confirmando@1.45 > 7/10 confirmando@1.58
 - Amostra minima: 5 jogos no venue correto | 2+ confirmadores independentes
-- Linha Over/Under: escolha SEMPRE a mais conservadora dentro da faixa (Over mais baixo, Under mais alto).
-  Exemplo: Over 1.5 @ 1.45 e Over 2.5 @ 1.58 disponíveis → escolha Over 1.5 @ 1.45.
-- Mercados proibidos: Match Winner (1X2) — use Dupla Chance se quiser resultado.
+- MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
+  Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados.
+- Linha Over/Under (qualquer mercado): sempre a mais conservadora na faixa. Over→linha mais baixa. Under→linha mais alta.
+- Mercados proibidos: Match Winner (1X2 direto).
 - Nenhum pick com confidence>={conf_min} → no_bet
 
 SAIDA: apenas JSON valido. Sua resposta comeca com {{ e termina com }}. Nenhum texto fora do JSON.\
@@ -90,7 +91,8 @@ Criterios: league_id=1 | amostra>=5 no venue | taxa>=65% | confidence>={conf_min
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
 
-FILTRAR: odd {odd_min}-{odd_max}→candidatos A. odd 1.10-{odd_max}→candidatos B. Amostra<5→descarte.
+FILTRAR: odd {odd_min}-{odd_max}→candidatos A (todos os mercados). odd 1.10-{odd_max}→candidatos B. Amostra<5→descarte.
+Avalie TODOS os tipos: gols, escanteios, cartoes, BTTS, Dupla Chance, Handicap. Escolha pelo maior confidence, nao pelo tipo.
 AVALIAR: taxa=confirmados/total (>=0.65) | prob_real=taxa ponderada temporal (1.0,0.85,0.70...) | EV=(prob_real×odd)-1>0
 CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
   Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7 | Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos3→1.0|media→0.5

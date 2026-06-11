@@ -64,9 +64,10 @@ PRINCÍPIOS:
 - Odd total: MÍNIMO 2.00, MÁXIMO 3.00 — fora dessa faixa a múltipla é inválida
 - Odd copiada literalmente dos dados fornecidos — nunca inventar
 - Qualidade acima de quantidade: prefira no_bet a uma múltipla fraca
-- Seleção de linha: para Over/Under escolha SEMPRE a linha mais conservadora com odd 1.40–1.90.
-  Para Over: linha mais baixa. Para Under: linha mais alta. Exemplo: Over 8.5 @ 1.50 > Over 9.5 @ 1.90.
-- Mercados proibidos: Match Winner (1X2), Resultado Final direto — use Dupla Chance ou Handicap se quiser resultado.
+- MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
+  Não existe mercado preferencial. Escolha por consistência estatística, independente do tipo.
+- Linha Over/Under (qualquer mercado): sempre a mais conservadora em 1.40–1.90. Over→linha mais baixa. Under→linha mais alta.
+- Mercados proibidos: Match Winner (1X2 direto).
 
 SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum texto fora do JSON."""
 
@@ -82,6 +83,8 @@ gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<1
 {fixtures_formatados}
 
 ETAPA 1 — MELHOR MERCADO POR JOGO:
+Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
+Nao filtre por tipo — o mercado vencedor e o que tiver maior score_base com dados estatisticos que o sustentem.
 score_base=(coerencia×0.45)+(estabilidade×0.30)+(reasoning×0.15)+(odds×0.10)
 Coerencia: 1.0=confirma|0.7=parcial|0.4=inconsistente|0.0=sem evidencia
 Estabilidade: 1.0=8+/10|0.7=6-7/10|0.4=4-5/10|0.0=sem padrao

@@ -67,9 +67,10 @@ REGRAS:
 - Confidence >= 0.72 — calculada com base nos dados, nao em suposicoes
 - Consistencia vale mais que EV: prefira 8/10 jogos confirmando a 1.3 de EV instavel
 - Amostra minima: 5 jogos no venue correto (casa para mandante, fora para visitante)
-- Selecao de linha Over/Under: escolha SEMPRE a linha mais conservadora com odd 1.40-1.70.
-  Para Over: linha mais baixa. Para Under: linha mais alta.
-- Mercados proibidos: Match Winner (1X2) — use Dupla Chance se quiser resultado.
+- MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
+  Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados fornecidos.
+- Linha Over/Under (qualquer mercado): sempre a mais conservadora com odd 1.40-1.70. Over→linha mais baixa. Under→linha mais alta.
+- Mercados proibidos: Match Winner (1X2 direto).
 - Se nenhum pick atender aos criterios → no_bet. Prefira no_bet a um pick fraco.
 
 FORMATO DE SAIDA — OBRIGATORIO:
@@ -83,6 +84,8 @@ USER_PROMPT_TEMPLATE = """\
 Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
 Prioridade: Copa do Mundo (league_id=1) se amostra>=5 e padrao>=65%.
 
+Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
+Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
 Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0
 
 --- FIXTURES + DADOS ---
