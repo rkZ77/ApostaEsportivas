@@ -36,6 +36,7 @@ function TeamLogo({ id, name, side }: { id?: number; name: string; side: 'left' 
   return (
     <img src={src} alt={name} width={32} height={32}
       className={`w-8 h-8 object-contain shrink-0 ${side === 'left' ? 'order-last' : 'order-first'}`}
+      referrerPolicy="no-referrer"
       onError={e => (e.currentTarget.style.display = 'none')}
       loading="lazy" />
   )
