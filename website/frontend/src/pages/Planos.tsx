@@ -107,7 +107,7 @@ export default function Planos() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-white font-black text-xl mb-1">Trial VIP ativado!</h2>
+            <h2 className="text-white font-black text-xl mb-1">Teste VIP ativado!</h2>
             <p className="text-zinc-400 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
             <button onClick={() => navigate('/picks')}
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-xl text-sm transition-colors">

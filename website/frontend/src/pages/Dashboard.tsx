@@ -140,7 +140,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
     : isTrial ? 'text-green-400 bg-green-500/10 border-green-500/20'
     : isVip ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
     : 'text-zinc-400 bg-zinc-800 border-zinc-700'
-  const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
+  const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TESTE' : isVip ? 'VIP' : 'FREE'
 
   return (
     <div className="card p-4 mb-5 flex items-center gap-4">

@@ -80,7 +80,7 @@ function VipLock() {
             Assinar VIP
           </Link>
           <p className="text-zinc-600 text-xs mt-3">
-            Ou ative seu <Link to="/planos" className="text-zinc-400 underline hover:text-white">trial gratuito de 2 dias</Link>
+            Ou ative seu <Link to="/planos" className="text-zinc-400 underline hover:text-white">teste gratuito de 2 dias</Link>
           </p>
         </div>
       </div>
