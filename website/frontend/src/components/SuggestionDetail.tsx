@@ -123,8 +123,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
               <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">
                 {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
               </span>
-              <button onClick={onClose} className="text-zinc-500 hover:text-white w-8 h-8 flex items-center justify-center rounded-lg hover:bg-zinc-800 transition-colors">
-                <X className="w-4 h-4" />
+              <button
+                onClick={onClose}
+                className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-white bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 hover:border-zinc-500 px-3 py-1.5 rounded-lg transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+                Fechar
               </button>
             </div>
 
