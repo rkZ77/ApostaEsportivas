@@ -552,29 +552,53 @@ export default function Banca() {
               ) : (
                 <div className="card overflow-hidden">
                   <div className="divide-y divide-zinc-800/60">
-                    {[...data.entries].reverse().map((e: any) => (
+                    {[...data.entries].reverse().map((e: any) => {
+                      const homeSrc = e.home_team_id ? `https://media.api-sports.io/football/teams/${e.home_team_id}.png` : null
+                      const awaySrc = e.away_team_id ? `https://media.api-sports.io/football/teams/${e.away_team_id}.png` : null
+                      return (
                       <div key={e.id} className="flex items-center gap-3 px-4 py-3 hover:bg-zinc-900/50 transition-colors">
-                        <div className="w-12 shrink-0 text-center">
+                        {/* Data */}
+                        <div className="w-10 shrink-0 text-center">
                           <span className="text-xs text-zinc-500">
                             {e.followed_at ? new Date(e.followed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '--'}
                           </span>
                         </div>
 
+                        {/* Info principal */}
                         <div className="flex-1 min-w-0">
+                          {/* Badge + Times */}
                           <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                             <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
                               {SOURCE_LBL[e.pick_type] ?? e.pick_type}
                             </span>
+                            {homeSrc && (
+                              <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                                onError={ev => (ev.currentTarget.style.display = 'none')} />
+                            )}
                             <span className="text-sm font-semibold text-white truncate">
                               {e.home_team_name ?? `Pick #${e.pick_id}`}
                             </span>
+                            {e.away_team_name && (
+                              <>
+                                <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                {awaySrc && (
+                                  <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                                    onError={ev => (ev.currentTarget.style.display = 'none')} />
+                                )}
+                                <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
+                              </>
+                            )}
                           </div>
-                          <p className="text-xs text-zinc-600">
-                            {e.market ? `${e.market} · ` : ''}Stake: {e.stake_units}u
+                          {/* Mercado + linha + odd */}
+                          <p className="text-xs text-zinc-600 truncate">
+                            {e.market ?? ''}
+                            {e.line  ? ` · ${e.line}` : ''}
+                            {e.odd   ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
                           </p>
                         </div>
 
-                        <div className="flex items-center gap-3 shrink-0">
+                        {/* Resultado + PNL + remover */}
+                        <div className="flex items-center gap-2 shrink-0">
                           {e.result ? (
                             <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
                               {RESULT_LBL[e.result] ?? e.result}
@@ -596,7 +620,8 @@ export default function Banca() {
                           </button>
                         </div>
                       </div>
-                    ))}
+                      )
+                    })}
                   </div>
                 </div>
               )}

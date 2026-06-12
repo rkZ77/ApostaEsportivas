@@ -21,17 +21,68 @@ class FollowPick(BaseModel):
 
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if pick_type == "vip":
-        cur.execute("SELECT result, profit, COALESCE(stake, 1) AS stake, home_team_name, market FROM picks_vip WHERE id = %s", (pick_id,))
+        cur.execute("""
+            SELECT pv.result, pv.profit, COALESCE(pv.stake, 1) AS stake,
+                   pv.home_team_name, pv.away_team_name,
+                   pv.home_team_id, pv.away_team_id,
+                   pv.market, pv.line, pv.odd
+            FROM picks_vip pv WHERE pv.id = %s
+        """, (pick_id,))
     elif pick_type == "free":
-        cur.execute("SELECT result, profit, 1 AS stake, home_team AS home_team_name, market FROM picks_free WHERE id = %s", (pick_id,))
+        cur.execute("""
+            SELECT pf.result, pf.profit, 1 AS stake,
+                   pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                   COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
+                   pf.market, pf.line, pf.odd
+            FROM picks_free pf
+            LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            WHERE pf.id = %s
+        """, (pick_id,))
     elif pick_type == "multipla":
-        cur.execute("SELECT result, profit, 1 AS stake, NULL AS home_team_name, NULL AS market FROM picks_multiplas WHERE id = %s", (pick_id,))
+        cur.execute("""
+            SELECT result, profit, 1 AS stake,
+                   NULL AS home_team_name, NULL AS away_team_name,
+                   NULL AS home_team_id, NULL AS away_team_id,
+                   NULL AS market, NULL AS line,
+                   total_odd AS odd,
+                   games AS legs_json,
+                   score_combo AS confidence
+            FROM picks_multiplas WHERE id = %s
+        """, (pick_id,))
     elif pick_type == "alavancagem":
-        cur.execute("SELECT result, profit, COALESCE(stake, 1) AS stake, home_team_1 AS home_team_name, market_1 AS market FROM picks_alavancagem WHERE id = %s", (pick_id,))
+        cur.execute("""
+            SELECT pa.result, pa.profit, COALESCE(pa.stake, 1) AS stake,
+                   pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
+                   f1.home_team_id, f1.away_team_id,
+                   pa.market_1 AS market, pa.line_1 AS line,
+                   pa.odd_combined AS odd
+            FROM picks_alavancagem pa
+            LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
+            WHERE pa.id = %s
+        """, (pick_id,))
     else:
         return None
     row = cur.fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    d = dict(row)
+    # Para múltipla: extrai primeiro time dos legs
+    if pick_type == "multipla" and d.get("legs_json"):
+        import json as _json
+        try:
+            legs = _json.loads(d["legs_json"]) if isinstance(d["legs_json"], str) else (d["legs_json"] or [])
+        except Exception:
+            legs = []
+        if legs:
+            first = legs[0]
+            d["home_team_name"] = first.get("home") or first.get("home_team")
+            d["away_team_name"] = first.get("away") or first.get("away_team")
+            d["home_team_id"]   = first.get("home_team_id")
+            d["away_team_id"]   = first.get("away_team_id")
+        d["market"] = f"Múltipla · {len(legs)} seleções"
+        del d["legs_json"]
+    return d
 
 
 def _compute_streak(resolved: list) -> dict:
@@ -113,7 +164,12 @@ def get_banca(
                 "stake_units":    float(f["stake_units"]),
                 "followed_at":    f["followed_at"].isoformat() if f["followed_at"] else None,
                 "home_team_name": pick.get("home_team_name"),
+                "away_team_name": pick.get("away_team_name"),
+                "home_team_id":   pick.get("home_team_id"),
+                "away_team_id":   pick.get("away_team_id"),
                 "market":         pick.get("market"),
+                "line":           pick.get("line"),
+                "odd":            float(pick["odd"]) if pick.get("odd") is not None else None,
                 "result":         result,
                 "profit_units":   profit_u,
                 "pnl":            round(pnl_r, 2) if pnl_r is not None else None,
