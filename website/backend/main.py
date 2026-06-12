@@ -8,7 +8,7 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
-from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard
+from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
 
 app = FastAPI(title="ApostaSmart API", version="1.0.0", docs_url=None, redoc_url=None)
 
@@ -148,6 +148,7 @@ app.include_router(payments.router)
 app.include_router(social.router)
 app.include_router(banca.router)
 app.include_router(leaderboard.router)
+app.include_router(live.router)
 
 
 @app.on_event("startup")

@@ -41,7 +41,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
 }
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'chat'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -88,6 +88,7 @@ function TabBar({ tab, setTab, canSeeVip, counts }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
+    { key: 'aovivo',       label: 'Ao Vivo',          badge: '🔴', badgeCls: 'bg-red-500/10 text-red-400 border-red-500/20' },
     { key: 'chat',         label: 'Comunidade'       },
   ]
 
@@ -1037,6 +1038,248 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
   )
 }
 
+// ─── Ao Vivo ─────────────────────────────────────────────────────────────────
+const LIVE_SET = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'])
+const STATUS_LABEL: Record<string, string> = {
+  NS: 'Não iniciado', '1H': '1º Tempo', HT: 'Intervalo',
+  '2H': '2º Tempo', ET: 'Prorrogação', FT: 'Encerrado',
+  AET: 'Encerrado', CANC: 'Cancelado', PST: 'Adiado', SUSP: 'Suspenso',
+}
+
+function StatBar({ currentVal, lineVal, direction }: {
+  currentVal: number; lineVal: number; direction: 'over' | 'under'
+}) {
+  const maxVal    = Math.max(lineVal * 1.7, currentVal * 1.1 + 1)
+  const linePos   = Math.min((lineVal / maxVal) * 100, 98)
+  const fillPos   = Math.min((currentVal / maxVal) * 100, 100)
+  const winning   = direction === 'over' ? currentVal > lineVal : currentVal < lineVal
+  const fillColor = winning ? '#22c55e' : '#ef4444'
+
+  return (
+    <div className="relative h-2 bg-zinc-700/60 rounded-full mt-3 mb-4">
+      <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
+        style={{ width: `${fillPos}%`, backgroundColor: fillColor }} />
+      <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-white/50 rounded"
+        style={{ left: `${linePos}%` }} />
+      <div className="absolute -top-5 text-[10px] font-black text-white/70"
+        style={{ left: `${linePos}%`, transform: 'translateX(-50%)' }}>
+        {lineVal}
+      </div>
+      <div className="absolute -bottom-5 text-[10px] font-black"
+        style={{ left: `${Math.min(fillPos, 95)}%`, transform: 'translateX(-50%)', color: fillColor }}>
+        {currentVal}
+      </div>
+    </div>
+  )
+}
+
+function LiveLeg({ leg }: { leg: any }) {
+  const isLive  = LIVE_SET.has(leg.status)
+  const hasBar  = leg.current_val != null && leg.line_val != null &&
+    (leg.line?.toLowerCase().startsWith('over') || leg.line?.toLowerCase().startsWith('mais') ||
+     leg.line?.toLowerCase().startsWith('under') || leg.line?.toLowerCase().startsWith('menos'))
+  const direction: 'over' | 'under' = (leg.line || '').toLowerCase().startsWith('under') ||
+    (leg.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
+  const stColor = leg.pick_status === 'winning' ? 'text-green-400'
+    : leg.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
+
+  return (
+    <div className="bg-zinc-800/60 rounded-lg p-3">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <TeamLogo id={leg.home_team_id} name={leg.home_team || ''} size={14} />
+          <span className="text-xs text-zinc-300 truncate">{leg.home_team}</span>
+          <span className="text-zinc-600 text-xs shrink-0">vs</span>
+          <span className="text-xs text-zinc-300 truncate">{leg.away_team}</span>
+          <TeamLogo id={leg.away_team_id} name={leg.away_team || ''} size={14} />
+        </div>
+        <div className="flex items-center gap-2 shrink-0 ml-2">
+          {isLive && leg.elapsed && (
+            <span className="text-[9px] font-black text-green-400 animate-pulse">{leg.elapsed}'</span>
+          )}
+          {leg.status !== 'NS' && (
+            <span className="text-sm font-black text-white tabular-nums">
+              {leg.home_goals} – {leg.away_goals}
+            </span>
+          )}
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-xs">
+        <span className="text-zinc-500 truncate">{leg.market} · {leg.line}</span>
+        {leg.current_val != null && (
+          <span className={`font-black shrink-0 ml-2 ${stColor}`}>
+            {leg.stat_label}: {leg.current_val}
+          </span>
+        )}
+      </div>
+      {hasBar && (
+        <StatBar currentVal={leg.current_val} lineVal={leg.line_val} direction={direction} />
+      )}
+    </div>
+  )
+}
+
+function LivePickCard({ pick }: { pick: any }) {
+  const isLive  = pick.is_live
+  const isMulti = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  const hasBar  = !isMulti && pick.current_val != null && pick.line_val != null &&
+    (pick.line?.toLowerCase().startsWith('over') || pick.line?.toLowerCase().startsWith('mais') ||
+     pick.line?.toLowerCase().startsWith('under') || pick.line?.toLowerCase().startsWith('menos'))
+  const direction: 'over' | 'under' = (pick.line || '').toLowerCase().startsWith('under') ||
+    (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
+  const stColor = pick.pick_status === 'winning' ? 'text-green-400'
+    : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
+  const typeCls: Record<string, string> = {
+    vip:        'text-yellow-400 bg-yellow-400/10',
+    free:       'text-green-400 bg-green-400/10',
+    multipla:   'text-blue-400 bg-blue-400/10',
+    alavancagem:'text-orange-400 bg-orange-400/10',
+  }
+  const typeLabel: Record<string, string> = {
+    vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
+  }
+
+  return (
+    <div className={`rounded-xl border p-4 transition-colors ${isLive ? 'border-green-500/25 bg-zinc-900' : 'border-zinc-800 bg-zinc-900/60'}`}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[pick.pick_type] ?? 'text-zinc-400 bg-zinc-700/50'}`}>
+            {typeLabel[pick.pick_type] ?? pick.pick_type}
+          </span>
+          <span className="text-xs text-zinc-500">Odd {Number(pick.odd).toFixed(2)}</span>
+          <span className="text-xs text-zinc-600">· {pick.stake_units}u</span>
+        </div>
+        {isLive ? (
+          <span className="text-[9px] font-black text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse tracking-wide">
+            🔴 AO VIVO
+          </span>
+        ) : (
+          <span className="text-[10px] text-zinc-600 uppercase tracking-wide">
+            {STATUS_LABEL[pick.status] ?? pick.status ?? 'Aguardando'}
+          </span>
+        )}
+      </div>
+
+      {isMulti ? (
+        <div className="space-y-2">
+          {(pick.legs ?? []).map((leg: any, i: number) => (
+            <LiveLeg key={i} leg={leg} />
+          ))}
+        </div>
+      ) : (
+        <>
+          <div className="flex items-center gap-2 flex-wrap mb-2">
+            <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={20} />
+            <span className="text-sm font-semibold text-white">{pick.home_team}</span>
+            {pick.status !== 'NS' && (
+              <span className="text-sm font-black text-white tabular-nums mx-1">
+                {pick.home_goals} – {pick.away_goals}
+              </span>
+            )}
+            <span className="text-sm font-semibold text-white">{pick.away_team}</span>
+            <TeamLogo id={pick.away_team_id} name={pick.away_team || ''} size={20} />
+            {isLive && pick.elapsed && (
+              <span className="text-[10px] font-black text-green-400 ml-auto animate-pulse">{pick.elapsed}'</span>
+            )}
+          </div>
+          <div className="flex items-center justify-between text-xs mb-1">
+            <span className="text-zinc-500">{pick.market} · {pick.line}</span>
+            {pick.current_val != null && (
+              <span className={`font-black ${stColor}`}>
+                {pick.stat_label}: {pick.current_val}
+              </span>
+            )}
+          </div>
+          {hasBar && (
+            <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
+          )}
+        </>
+      )}
+    </div>
+  )
+}
+
+function LivePicks() {
+  const [picks, setPicks]         = useState<any[]>([])
+  const [loading, setLoading]     = useState(true)
+  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+
+  const load = useCallback(() => {
+    api.get('/live/my-picks')
+      .then(r => { setPicks(r.data); setLastUpdate(new Date()) })
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  useEffect(() => {
+    load()
+    const id = setInterval(load, 60_000)
+    return () => clearInterval(id)
+  }, [load])
+
+  if (loading && picks.length === 0) {
+    return <div className="text-center py-16"><Spinner /></div>
+  }
+
+  const live    = picks.filter(p => p.is_live)
+  const pending = picks.filter(p => !p.is_live)
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <p className="text-xs text-zinc-500 leading-relaxed max-w-sm">
+          Picks que você apostou — acompanhe ao vivo. Atualiza automaticamente a cada 60s.
+        </p>
+        {lastUpdate && (
+          <button onClick={load}
+            className="text-xs text-green-500 hover:underline shrink-0 ml-4">
+            Atualizar
+          </button>
+        )}
+      </div>
+
+      {picks.length === 0 ? (
+        <div className="card p-10 text-center border-dashed">
+          <div className="text-3xl mb-3">📡</div>
+          <p className="font-semibold text-zinc-400">Nenhum pick ativo</p>
+          <p className="text-sm text-zinc-600 mt-1">Clique em "Apostei" em qualquer pick para acompanhar aqui.</p>
+        </div>
+      ) : (
+        <>
+          {live.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <span className="text-xs font-black text-red-400 uppercase tracking-widest">Ao Vivo</span>
+              </div>
+              <div className="space-y-3">
+                {live.map(p => <LivePickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} />)}
+              </div>
+            </div>
+          )}
+          {pending.length > 0 && (
+            <div>
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-2 h-2 bg-zinc-600 rounded-full" />
+                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Aguardando / Hoje</span>
+              </div>
+              <div className="space-y-3">
+                {pending.map(p => <LivePickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} />)}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+
+      {lastUpdate && (
+        <p className="text-center text-[10px] text-zinc-700">
+          Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+        </p>
+      )}
+    </div>
+  )
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Dashboard() {
   const navigate = useNavigate()
@@ -1813,6 +2056,9 @@ export default function Dashboard() {
             </button>
           </div>
         )}
+        {/* ── AO VIVO ──────────────────────────────────────────────────────── */}
+        {tab === 'aovivo' && <LivePicks />}
+
         {/* ── CHAT COMUNIDADE ──────────────────────────────────────────────── */}
         {tab === 'chat' && (
           <div className="max-w-2xl mx-auto">
