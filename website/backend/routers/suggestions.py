@@ -399,6 +399,11 @@ def get_suggestion_detail(
                 "legs": enriched_legs,
                 "pick_type": "multipla",
             }
+            ufp_m = _safe_query_one(cur, """
+                SELECT stake_units FROM user_followed_picks
+                WHERE user_id = %s AND pick_id = %s AND pick_type = 'multipla'
+            """, (current_user["id"], suggestion_id))
+            suggestion["user_stake_units"] = float(ufp_m["stake_units"]) if ufp_m else None
             return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
                     "home_recent": [], "away_recent": [], "odds": []}
 
@@ -516,6 +521,11 @@ def get_suggestion_detail(
                     result.append(rd)
                 return result
 
+            ufp_a = _safe_query_one(cur, """
+                SELECT stake_units FROM user_followed_picks
+                WHERE user_id = %s AND pick_id = %s AND pick_type = 'alavancagem'
+            """, (current_user["id"], suggestion_id))
+            alav_suggestion["user_stake_units"] = float(ufp_a["stake_units"]) if ufp_a else None
             return {
                 "suggestion":  alav_suggestion,
                 "home_stats":  get_alav_stats(alav_home_id),
@@ -643,6 +653,12 @@ def get_suggestion_detail(
             ORDER BY ov.market_type, ov.odd_value
             LIMIT 80
         """, (suggestion["fixture_id"],))
+
+        ufp_v = _safe_query_one(cur, """
+            SELECT stake_units FROM user_followed_picks
+            WHERE user_id = %s AND pick_id = %s AND pick_type = %s
+        """, (current_user["id"], suggestion_id, pick_type))
+        suggestion["user_stake_units"] = float(ufp_v["stake_units"]) if ufp_v else None
 
         return {
             "suggestion":  suggestion,

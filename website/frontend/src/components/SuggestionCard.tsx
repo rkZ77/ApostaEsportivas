@@ -98,20 +98,21 @@ export default function SuggestionCard({
     : s.result === 'HALF-LOSS' ? { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', label: '½ LOSS' }
     : null
 
-  const fato = shortReasoning(s.reasoning)
+  const fato   = shortReasoning(s.reasoning)
+  const isCopa = s.league_id === 1
 
   return (
     <div
-      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-green-500/30 rounded-2xl cursor-pointer transition-all duration-200 group"
+      className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer transition-all duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
       onClick={onClick}
     >
       {/* Accent top bar */}
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Pick VIP</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
           <span className="badge-vip">VIP</span>
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1">

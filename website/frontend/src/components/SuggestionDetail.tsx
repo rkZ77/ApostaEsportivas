@@ -267,7 +267,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
-                      <div className="text-2xl font-black text-white">{s.stake ?? 1}u</div>
+                      <div className="text-2xl font-black text-white">{s.user_stake_units ?? s.stake ?? 1}u</div>
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>

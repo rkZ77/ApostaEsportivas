@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
+import FixtureStatsModal from '../components/FixtureStatsModal'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -64,10 +65,11 @@ interface Fixture {
 }
 
 export default function Fixtures() {
-  const navigate                = useNavigate()
-  const [date, setDate]         = useState(TODAY)
-  const [fixtures, setFixtures] = useState<Fixture[]>([])
-  const [loading, setLoading]   = useState(true)
+  const navigate                   = useNavigate()
+  const [date, setDate]            = useState(TODAY)
+  const [fixtures, setFixtures]    = useState<Fixture[]>([])
+  const [loading, setLoading]      = useState(true)
+  const [statsFixture, setStatsFixture] = useState<Fixture | null>(null)
 
   function fetchFixtures(d: string) {
     setLoading(true)
@@ -182,20 +184,22 @@ export default function Fixtures() {
           </div>
         ) : (
           <div className="space-y-5">
-            {grouped.map(({ key: league, logo, flag, country, games }) => (
-              <div key={league} className="card overflow-hidden">
+            {grouped.map(({ key: league, league_id, logo, flag, country, games }) => {
+              const isCopa = league_id === 1
+              return (
+              <div key={league} className={`card overflow-hidden ${isCopa ? 'border border-yellow-500/20' : ''}`}>
 
                 {/* Cabeçalho da liga com logo + bandeira */}
-                <div className="px-4 py-3 bg-zinc-800/60 border-b border-zinc-800 flex items-center gap-2.5">
+                <div className={`px-4 py-3 border-b flex items-center gap-2.5 ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-zinc-800/60 border-zinc-800'}`}>
                   {logo && (
                     <img src={logo} alt={league} width={24} height={24}
                       className="w-6 h-6 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')}
                       loading="lazy" />
                   )}
-                  <span className="text-xs font-bold text-zinc-300">{league}</span>
+                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-zinc-300'}`}>{league}</span>
                   {country && (
-                    <span className="text-xs text-zinc-600 font-normal">{country}</span>
+                    <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{country}</span>
                   )}
                   {flag && (
                     <img src={flag} alt={country ?? ''} width={18} height={13}
@@ -203,7 +207,8 @@ export default function Fixtures() {
                       onError={e => (e.currentTarget.style.display = 'none')}
                       loading="lazy" />
                   )}
-                  <span className="text-xs text-zinc-600 ml-auto">{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
+                  {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase tracking-wider ml-1">Copa do Mundo</span>}
+                  <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
                 </div>
 
                 {/* Jogos */}
@@ -217,7 +222,11 @@ export default function Fixtures() {
                       : '--:--'
 
                     return (
-                      <div key={f.fixture_id} className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}>
+                      <div
+                        key={f.fixture_id}
+                        className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
+                        onClick={() => setStatsFixture(f)}
+                      >
 
                         {/* Hora / status */}
                         <div className="w-20 shrink-0 text-center">
@@ -292,10 +301,18 @@ export default function Fixtures() {
                   })}
                 </div>
               </div>
-            ))}
+            )
+            })}
           </div>
         )}
       </main>
+
+      {statsFixture && (
+        <FixtureStatsModal
+          fixture={statsFixture}
+          onClose={() => setStatsFixture(null)}
+        />
+      )}
     </div>
   )
 }

@@ -302,6 +302,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     }
   }
 
+  const isCopa = dica.league_id === 1
   const resultStyle =
     dica.result === 'GREEN' ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
     : dica.result === 'RED' ? { bg: 'bg-red-500/10',   border: 'border-red-500/30',   text: 'text-red-400',   label: 'RED ✗' }
@@ -309,15 +310,15 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 
   return (
     <div
-      className={`relative overflow-hidden bg-zinc-950 border border-green-500/20 rounded-2xl transition-all duration-200 group ${onClick ? 'hover:border-green-500/40 cursor-pointer' : ''}`}
+      className={`relative overflow-hidden bg-zinc-950 border rounded-2xl transition-all duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
     >
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
+      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
 
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Pick do Dia</span>
+          <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
           <span className="badge-free">FREE</span>
           {dica.league_name && (
             <div className="flex items-center gap-1">

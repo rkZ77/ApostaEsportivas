@@ -230,3 +230,80 @@ def get_today_fixtures(
 
     all_fixtures.sort(key=lambda x: x["match_datetime"] or "")
     return all_fixtures
+
+
+@router.get("/{fixture_id}/stats")
+def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_user)):
+    """Estatísticas do fixture: médias por time + últimas 5 partidas de cada time."""
+    conn = get_connection()
+    cur  = conn.cursor()
+
+    cur.execute("SELECT * FROM fixtures WHERE fixture_id = %s", (fixture_id,))
+    fix = cur.fetchone()
+    if not fix:
+        cur.close(); conn.close()
+        raise HTTPException(404, "Fixture não encontrado")
+
+    home_id  = fix["home_team_id"]
+    away_id  = fix["away_team_id"]
+    league   = fix["league_id"]
+
+    def get_team_stats(team_id, context):
+        cur.execute("""
+            SELECT games_count,
+                   avg_goals_for, avg_goals_against, avg_total_goals,
+                   avg_corners_for, avg_corners_against,
+                   avg_shots_on_for, avg_shots_on_against,
+                   avg_possession_for,
+                   avg_yellow_for, avg_red_for
+            FROM team_statistics
+            WHERE team_id = %s AND league_id = %s AND context_type = %s
+            ORDER BY season DESC LIMIT 1
+        """, (team_id, league, context))
+        row = cur.fetchone()
+        return dict(row) if row else {}
+
+    def get_recent(team_id):
+        cur.execute("""
+            SELECT ms.fixture_id, ms.match_date, ms.league_id,
+                   ms.home_team_id, ms.away_team_id,
+                   ms.home_goals, ms.away_goals, ms.status
+            FROM match_statistics ms
+            WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
+              AND ms.status IN ('FT','AET','PEN')
+              AND ms.fixture_id != %s
+            ORDER BY ms.match_date DESC
+            LIMIT 5
+        """, (team_id, team_id, fixture_id))
+        rows = [dict(r) for r in cur.fetchall()]
+
+        # Enrich with team names
+        all_ids = set()
+        for r in rows:
+            all_ids.add(r["home_team_id"])
+            all_ids.add(r["away_team_id"])
+        if all_ids:
+            cur.execute("""
+                SELECT DISTINCT ON (team_id) team_id, name
+                FROM teams WHERE team_id = ANY(%s)
+                ORDER BY team_id, season DESC
+            """, (list(all_ids),))
+            names = {r["team_id"]: r["name"] for r in cur.fetchall()}
+            for r in rows:
+                r["home_team_name"] = names.get(r["home_team_id"], "")
+                r["away_team_name"] = names.get(r["away_team_id"], "")
+        return rows
+
+    home_stats   = get_team_stats(home_id, "HOME")
+    away_stats   = get_team_stats(away_id, "AWAY")
+    home_recent  = get_recent(home_id)
+    away_recent  = get_recent(away_id)
+
+    cur.close(); conn.close()
+    return {
+        "fixture": dict(fix),
+        "home_stats":  home_stats,
+        "away_stats":  away_stats,
+        "home_recent": home_recent,
+        "away_recent": away_recent,
+    }
