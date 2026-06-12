@@ -24,7 +24,8 @@ OPCOES = {
     "4": ("Gerar pick Free (Dica do Dia)",    "gerar_free"),
     "5": ("Gerar múltipla",                   "gerar_multipla"),
     "6": ("Gerar alavancagem",                "gerar_alavancagem"),
-    "7": ("Tudo: jogos + odds + picks",       "tudo"),
+    "7": ("Atualizar resultados (VIP+Free+Mult+Alav)", "atualizar_resultados"),
+    "8": ("Tudo: jogos + odds + picks",       "tudo"),
 }
 
 
@@ -82,6 +83,10 @@ def run(script, args=None):
         result = run_alavancagem_pipeline()
         if result:
             print("✅ Pick de alavancagem gerado com sucesso.")
+
+    elif script == "atualizar_resultados":
+        from atualizar_resultados_sugestoes import AIUpdateResultsMain
+        AIUpdateResultsMain().update_all_results()
 
     elif script == "tudo":
         print("\n>>> Atualizando jogos...")
