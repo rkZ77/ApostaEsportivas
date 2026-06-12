@@ -1,7 +1,7 @@
 import axios from 'axios'
 
 // withCredentials envia/recebe cookies httpOnly automaticamente
-const api = axios.create({ baseURL: '/api', withCredentials: true })
+const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 15000 })
 
 let _refreshing: Promise<unknown> | null = null
 

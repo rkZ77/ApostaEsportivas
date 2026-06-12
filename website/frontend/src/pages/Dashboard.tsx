@@ -1014,6 +1014,7 @@ export default function Dashboard() {
   useEffect(() => {
     api.get('/suggestions/today')
       .then(r => setToday(r.data))
+      .catch(() => {})
       .finally(() => setTodayLoading(false))
     api.get('/suggestions/stats/quick')
       .then(r => setQuickStats(r.data))
