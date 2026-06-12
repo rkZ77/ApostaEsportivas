@@ -378,7 +378,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
       {/* Footer: Apostei + Ver detalhes */}
       <div className="flex items-center justify-between">
         {!dica.result && !banca && (
-          <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
+          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
         )}
         {!dica.result && banca && (
           <button
@@ -551,7 +551,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!m.result && !banca ? (
-          <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
+          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
         ) : !m.result && banca ? (
           <button
             onClick={handleFollow}
@@ -571,7 +571,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 }
 
 // ─── Alavancagem card ─────────────────────────────────────────────────────────
-function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?: () => void; userBankroll?: number }) {
+function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
   const isCombo     = pick.tipo === 'combinacao'
   const oddCombined = Number(pick.odd_combined ?? 0)
   const stake       = userBankroll != null ? userBankroll : Number(pick.stake ?? pick.bankroll_before ?? 50)
@@ -710,7 +710,7 @@ function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?:
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!pick.result && userBankroll == null ? (
-          <span className="text-[11px] text-zinc-600 italic">Configure sua banca de alavancagem para registrar</span>
+          <button onClick={e => { e.stopPropagation(); onConfigureBanca?.() }} className="text-[11px] text-orange-500/70 hover:text-orange-400 underline">Configurar banca alavancagem</button>
         ) : !pick.result ? (
           <button
             onClick={handleFollow}
@@ -1193,7 +1193,7 @@ export default function Dashboard() {
                         <div className="text-[11px] text-zinc-600 mt-0.5">{bancaSummary.unit_value ? `1u = R$${Number(bancaSummary.unit_value).toFixed(2)}` : '—'}</div>
                       </>
                     ) : (
-                      <p className="text-xs text-zinc-600 mt-1">Configure em <a href="/profile" className="text-green-400 underline">Perfil</a></p>
+                      <p className="text-xs text-zinc-600 mt-1"><a href="/banca" className="text-green-400 underline font-semibold">Configurar banca</a></p>
                     )}
                   </div>
                   {/* Banca Alavancagem */}
@@ -1301,6 +1301,7 @@ export default function Dashboard() {
                     pick={today.alavancagem}
                     onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                     userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
+                    onConfigureBanca={() => setTab('alavancagem')}
                   />
                   <button onClick={() => setTab('alavancagem')}
                     className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
@@ -1699,6 +1700,7 @@ export default function Dashboard() {
                       <AlavancagemCard
                         pick={today.alavancagem}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
+                        onConfigureBanca={() => setTab('alavancagem')}
                       />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
