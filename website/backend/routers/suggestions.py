@@ -1064,19 +1064,33 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                    NULL AS away_team_name, NULL AS home_team_id, NULL AS away_team_id,
                    CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS market,
                    NULL AS line, total_odd AS odd, NULL AS bet_house,
-                   result, profit, 1::numeric AS stake
+                   result,
+                   CASE result
+                       WHEN 'GREEN' THEN ROUND((total_odd - 1)::numeric, 4)
+                       WHEN 'RED'   THEN -1.0
+                       WHEN 'PUSH'  THEN 0.0
+                       ELSE NULL
+                   END AS profit,
+                   1::numeric AS stake
             FROM picks_multiplas
             WHERE result IS NOT NULL {date_cond}
         """
     if source == "alavancagem":
         return f"""
-            SELECT id, 'alavancagem' AS pick_type, match_date,
-                   home_team_1 AS home_team_name, away_team_1 AS away_team_name,
-                   NULL AS home_team_id, NULL AS away_team_id,
-                   market_1 AS market, line_1 AS line, odd_combined AS odd, bet_house_1 AS bet_house,
-                   result, profit, COALESCE(stake, 1) AS stake
-            FROM picks_alavancagem
-            WHERE result IS NOT NULL {date_cond}
+            SELECT pa.id, 'alavancagem' AS pick_type, pa.match_date,
+                   pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
+                   COALESCE(f1.home_team_id,
+                       (SELECT team_id FROM teams WHERE name = pa.home_team_1 LIMIT 1)
+                   ) AS home_team_id,
+                   COALESCE(f1.away_team_id,
+                       (SELECT team_id FROM teams WHERE name = pa.away_team_1 LIMIT 1)
+                   ) AS away_team_id,
+                   pa.market_1 AS market, pa.line_1 AS line,
+                   pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
+                   pa.result, pa.profit, COALESCE(pa.stake, 1) AS stake
+            FROM picks_alavancagem pa
+            LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
+            WHERE pa.result IS NOT NULL {date_cond}
         """
     # vip (default)
     return f"""
