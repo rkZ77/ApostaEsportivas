@@ -274,6 +274,13 @@ function QuickStats({ stats }: { stats: any }) {
 }
 
 // ─── Pick do Dia card ─────────────────────────────────────────────────────────
+function shortReasoning(text?: string): string {
+  if (!text) return ''
+  const fatoMatch = text.match(/FATO:\s*(.+?)(?=\s*ANÁLISE:|$)/i)
+  if (fatoMatch) return fatoMatch[1].trim()
+  return text.slice(0, 130)
+}
+
 function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
@@ -281,106 +288,137 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const stakeSuggestion = banca
     ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value)
     : null
+  const fato = shortReasoning(dica.reasoning)
 
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
     setFollowing(true)
     try {
-      await api.post('/banca/follow', {
-        pick_id: dica.id,
-        pick_type: 'free',
-        stake_units: 1,
-      })
+      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: 1 })
       setFollowed(true)
     } catch { /* ignora */ } finally {
       setFollowing(false)
     }
   }
 
+  const resultStyle =
+    dica.result === 'GREEN' ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
+    : dica.result === 'RED' ? { bg: 'bg-red-500/10',   border: 'border-red-500/30',   text: 'text-red-400',   label: 'RED ✗' }
+    : null
+
   return (
     <div
-      className={`relative overflow-hidden card p-5 border-green-500/20 transition-all duration-200 ${onClick ? 'hover:border-zinc-600 hover:bg-zinc-900/80 cursor-pointer group' : ''}`}
+      className={`relative overflow-hidden bg-zinc-950 border border-green-500/20 rounded-2xl transition-all duration-200 group ${onClick ? 'hover:border-green-500/40 cursor-pointer' : ''}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-3">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <LeagueLogo id={dica.league_id} name={dica.league_name} />
-          <span className="text-xs text-zinc-500">{dica.league_name}</span>
+          <span className="text-[10px] font-black text-green-400 uppercase tracking-widest">Pick do Dia</span>
+          <span className="badge-free">FREE</span>
+          {dica.league_name && (
+            <div className="flex items-center gap-1">
+              <LeagueLogo id={dica.league_id} name={dica.league_name} />
+              <span className="text-[10px] text-zinc-600 truncate max-w-[90px]">{dica.league_name}</span>
+            </div>
+          )}
         </div>
-        {dica.result
-          ? <span className={dica.result === 'GREEN' ? 'badge-green' : 'badge-red'}>{dica.result}</span>
-          : <span className="badge-free">FREE</span>
-        }
-      </div>
-
-      {/* Times com logos */}
-      <div className="flex items-center gap-2 mb-4">
-        <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={28} />
-        <span className="font-bold text-white text-sm truncate">{dica.home_team}</span>
-        <span className="text-zinc-600 text-xs shrink-0">vs</span>
-        <span className="font-bold text-white text-sm truncate">{dica.away_team}</span>
-        <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={28} />
-      </div>
-
-      {/* Stats grid */}
-      <div className="grid grid-cols-5 gap-2 mb-4">
-        <div className="bg-zinc-800 rounded-lg p-2 col-span-2">
-          <div className="text-xs text-zinc-500 mb-0.5">Tipo</div>
-          <div className="text-sm font-semibold text-white truncate">{dica.market}</div>
-        </div>
-        <div className="bg-zinc-800 rounded-lg p-2 text-center">
-          <div className="text-xs text-zinc-500 mb-0.5">Linha</div>
-          <div className="text-sm font-bold text-white truncate">{dica.line ?? '—'}</div>
-        </div>
-        <div className="bg-zinc-800 rounded-lg p-2 text-center">
-          <div className="text-xs text-zinc-500 mb-0.5">Odd</div>
-          <div className="text-base font-black text-green-500">{Number(dica.odd).toFixed(2)}</div>
-        </div>
-        <div className="bg-zinc-800 rounded-lg p-2 text-center">
-          <div className="text-xs text-zinc-500 mb-0.5">Stake</div>
-          <div className="text-sm font-bold text-white">1u</div>
-        </div>
-      </div>
-
-      {/* Confiança */}
-      <div className="flex justify-between text-xs mb-1">
-        <span className="text-zinc-500">Confiança</span>
-        <span className={pct >= 75 ? 'text-green-500 font-bold' : 'text-zinc-400'}>{pct}%</span>
-      </div>
-      <div className="bg-zinc-800 rounded-full h-1.5 overflow-hidden mb-3">
-        <div
-          className={`h-1.5 rounded-full transition-all ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-zinc-500'}`}
-          style={{ width: `${pct}%` }}
-        />
-      </div>
-
-      {!compact && dica.reasoning && (
-        <p className="text-xs text-zinc-500 leading-relaxed line-clamp-2 mb-3">{dica.reasoning}</p>
-      )}
-
-      {/* Sugestão de stake */}
-      {stakeSuggestion && !dica.result && (
-        <div className="flex items-center gap-2 bg-green-500/5 border border-green-500/15 rounded-lg px-3 py-1.5 mb-3">
-          <svg className="w-3.5 h-3.5 text-green-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-xs text-zinc-500">Apostar:</span>
-          <span className="text-xs font-black text-green-400">{stakeSuggestion.units}u</span>
-          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
-          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
-        </div>
-      )}
-
-      {/* Footer: Apostei + Ver detalhes */}
-      <div className="flex items-center justify-between">
-        {!dica.result && !banca && (
-          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
+        {resultStyle ? (
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+            {resultStyle.label}
+          </span>
+        ) : (
+          <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
         )}
-        {!dica.result && banca && (
+      </div>
+
+      {/* Hero: Odd | Stake | Retorno */}
+      <div className="flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+        <div className="flex-1 px-5 py-3 text-center">
+          <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
+          <div className="text-3xl font-black text-green-400">{Number(dica.odd).toFixed(2)}</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5">{dica.bet_house}</div>
+        </div>
+        {stakeSuggestion && !dica.result ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
+              <div className="text-xl font-black text-green-400">{stakeSuggestion.units}u</div>
+              <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
+              <div className="text-xl font-black text-white">
+                R${(stakeSuggestion.amountR * Number(dica.odd)).toFixed(0)}
+              </div>
+            </div>
+          </>
+        ) : dica.profit != null ? (
+          <div className="flex-1 px-5 py-3 text-center">
+            <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+            <div className={`text-2xl font-black ${dica.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {dica.profit >= 0 ? '+' : ''}{Number(dica.profit).toFixed(2)}u
+            </div>
+          </div>
+        ) : (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Stake</div>
+              <div className="text-xl font-black text-zinc-200">1u</div>
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
+              <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Times + mercado */}
+      <div className="px-5 py-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
+          <span className="text-sm font-bold text-white truncate">{dica.home_team}</span>
+          <span className="text-zinc-600 text-xs shrink-0">vs</span>
+          <span className="text-sm font-bold text-white truncate">{dica.away_team}</span>
+          <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
+        </div>
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
+          <span className="font-semibold text-zinc-300">{dica.market}</span>
+          {dica.line && <><span>·</span><span>{dica.line}</span></>}
+        </div>
+      </div>
+
+      {/* Confiança bar */}
+      <div className="px-5 pb-3">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="text-zinc-600">Confiança</span>
+          <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
+        </div>
+        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
+          <div
+            className={`h-1 rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-zinc-500'}`}
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+      </div>
+
+      {/* Reasoning snippet */}
+      {!compact && fato && (
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{fato}</span>
+        </div>
+      )}
+
+      {/* Footer */}
+      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
+        {!dica.result && !banca ? (
+          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
+        ) : !dica.result && banca ? (
           <button
             onClick={handleFollow}
             disabled={following || followed}
@@ -392,11 +430,11 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
           >
             {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
           </button>
-        )}
+        ) : <span />}
         {onClick && (
-          <p className="text-xs text-zinc-700 group-hover:text-zinc-500 transition-colors ml-auto">
+          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
             Ver detalhes →
-          </p>
+          </span>
         )}
       </div>
     </div>

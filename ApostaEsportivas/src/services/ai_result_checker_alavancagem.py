@@ -16,65 +16,21 @@ class AIResultCheckerAlavancagem:
     def __init__(self):
         self._checker = AIResultCheckerService()
 
-    def _check_pick(self, fixture_id, market, line, odd, cur) -> str | None:
+    def _check_pick(self, fixture_id, market, line, odd, cur,
+                    home_team=None, away_team=None) -> str | None:
         """
         Avalia um pick individual. Retorna 'GREEN', 'RED' ou None (sem dados ainda).
-        Para alavancagem, tratamos HALF-WIN/HALF-LOSS como RED (precisa acertar certo).
+        Para alavancagem, tratamos HALF-WIN/HALF-LOSS/PUSH como RED.
         """
         stats = self._checker.get_fixture_result(fixture_id, cur)
         if not stats:
             return None
 
-        op, val = self._checker.parse_line(line)
-        mt      = self._checker.detect_market_type(market)
-        side    = self._checker.detect_side(market)
+        result, _ = self._checker.evaluate_pick(
+            market, line, float(odd), stats, home_team, away_team
+        )
 
-        if mt == "goals":
-            stat_val = (
-                stats["home_goals"]  if side == "home" else
-                stats["away_goals"]  if side == "away" else
-                stats["total_goals"]
-            )
-            result, _ = self._checker.evaluate_asian(stat_val, val, op)
-
-        elif mt == "corners":
-            stat_val = (
-                stats["home_corners"]  if side == "home" else
-                stats["away_corners"]  if side == "away" else
-                stats["total_corners"]
-            )
-            result, _ = self._checker.evaluate_asian(stat_val, val, op)
-
-        elif mt == "cards":
-            if "amarelo" in market.lower() or "yellow" in market.lower():
-                stat_val = (
-                    stats["home_yellow"] if side == "home" else
-                    stats["away_yellow"] if side == "away" else
-                    stats["total_yellow"]
-                )
-            else:
-                stat_val = (
-                    stats["home_cards"] if side == "home" else
-                    stats["away_cards"] if side == "away" else
-                    stats["total_cards"]
-                )
-            result, _ = self._checker.evaluate_asian(stat_val, val, op)
-
-        elif mt == "btts":
-            if op == "yes":
-                result = (
-                    "GREEN" if stats["home_goals"] > 0 and stats["away_goals"] > 0
-                    else "RED"
-                )
-            else:
-                result = (
-                    "GREEN" if stats["home_goals"] == 0 or stats["away_goals"] == 0
-                    else "RED"
-                )
-        else:
-            result = "RED"
-
-        # Normaliza HALF-WIN / HALF-LOSS / PUSH → RED (alavancagem precisa de acerto pleno)
+        # Alavancagem precisa de acerto pleno
         if result not in ("GREEN", "RED"):
             result = "RED"
 
@@ -89,7 +45,9 @@ class AIResultCheckerAlavancagem:
         cur.execute("""
             SELECT id, tipo,
                    fixture_id_1, market_1, line_1, odd_1,
+                   home_team_1, away_team_1,
                    fixture_id_2, market_2, line_2, odd_2,
+                   home_team_2, away_team_2,
                    odd_combined, stake
             FROM picks_alavancagem
             WHERE result IS NULL
@@ -106,15 +64,15 @@ class AIResultCheckerAlavancagem:
 
         for row in rows:
             (pk_id, tipo,
-             fid1, mkt1, ln1, odd1,
-             fid2, mkt2, ln2, odd2,
+             fid1, mkt1, ln1, odd1, home1, away1,
+             fid2, mkt2, ln2, odd2, home2, away2,
              odd_combined, stake) = row
 
             stake        = Decimal(str(stake))
             odd_combined = Decimal(str(odd_combined))
 
             # --- Pick 1 ---
-            r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur)
+            r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur, home1, away1)
             if r1 is None:
                 print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_1={fid1} — aguardando.")
                 continue
@@ -122,7 +80,7 @@ class AIResultCheckerAlavancagem:
             # --- Pick 2 (somente combinação) ---
             r2 = None
             if tipo == "combinacao" and fid2 is not None:
-                r2 = self._check_pick(fid2, mkt2, ln2, float(odd2), cur)
+                r2 = self._check_pick(fid2, mkt2, ln2, float(odd2), cur, home2, away2)
                 if r2 is None:
                     print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_2={fid2} — aguardando.")
                     continue
@@ -135,11 +93,11 @@ class AIResultCheckerAlavancagem:
 
             # --- Profit e bankroll ---
             if final_result == "GREEN":
-                profit       = stake * (odd_combined - Decimal("1"))
+                profit         = stake * (odd_combined - Decimal("1"))
                 bankroll_after = stake + profit
             else:
-                profit        = -stake
-                bankroll_after = Decimal("0")  # serie zerada → próxima usa BANKROLL_INIT
+                profit         = -stake
+                bankroll_after = Decimal("0")  # série zerada
 
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
@@ -151,10 +109,10 @@ class AIResultCheckerAlavancagem:
 
             cur.execute("""
                 UPDATE picks_alavancagem
-                SET result        = %s,
-                    profit        = %s,
+                SET result         = %s,
+                    profit         = %s,
                     bankroll_after = %s,
-                    checked_at    = NOW()
+                    checked_at     = NOW()
                 WHERE id = %s
             """, (final_result, profit, bankroll_after, pk_id))
 

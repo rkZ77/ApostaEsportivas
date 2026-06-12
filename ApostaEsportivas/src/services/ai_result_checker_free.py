@@ -4,7 +4,7 @@ from services.ai_result_checker_service import AIResultCheckerService
 
 
 class AIResultCheckerFree:
-    """Checker para picks_free (Pick do Dia). Sem stake/stake_pct — profit em unidades."""
+    """Checker para picks_free (Pick do Dia). Profit em unidades (stake = 1u)."""
 
     def __init__(self):
         self._engine = AIResultCheckerService()
@@ -16,7 +16,7 @@ class AIResultCheckerFree:
         cur  = conn.cursor()
 
         cur.execute("""
-            SELECT id, fixture_id, market, line, odd
+            SELECT id, fixture_id, market, line, odd, home_team, away_team
             FROM picks_free
             WHERE result IS NULL
         """)
@@ -30,7 +30,7 @@ class AIResultCheckerFree:
 
         processed = 0
 
-        for (pk_id, fixture_id, market, line, odd) in rows:
+        for (pk_id, fixture_id, market, line, odd, home_team, away_team) in rows:
             odd = Decimal(str(odd))
 
             stats = self._engine.get_fixture_result(fixture_id, cur)
@@ -38,61 +38,16 @@ class AIResultCheckerFree:
                 print(f"[CHECKER-FREE] id={pk_id}: sem stats para fixture_id={fixture_id} — aguardando.")
                 continue
 
-            op, val = self._engine.parse_line(line)
-            mt       = self._engine.detect_market_type(market)
-            side     = self._engine.detect_side(market)
-
-            if mt == "goals":
-                stat_val = (
-                    stats["home_goals"]  if side == "home" else
-                    stats["away_goals"]  if side == "away" else
-                    stats["total_goals"]
-                )
-                result, factor = self._engine.evaluate_asian(stat_val, val, op)
-
-            elif mt == "corners":
-                stat_val = (
-                    stats["home_corners"]  if side == "home" else
-                    stats["away_corners"]  if side == "away" else
-                    stats["total_corners"]
-                )
-                result, factor = self._engine.evaluate_asian(stat_val, val, op)
-
-            elif mt == "cards":
-                if "amarelo" in market.lower() or "yellow" in market.lower():
-                    stat_val = (
-                        stats["home_yellow"] if side == "home" else
-                        stats["away_yellow"] if side == "away" else
-                        stats["total_yellow"]
-                    )
-                else:
-                    stat_val = (
-                        stats["home_cards"] if side == "home" else
-                        stats["away_cards"] if side == "away" else
-                        stats["total_cards"]
-                    )
-                result, factor = self._engine.evaluate_asian(stat_val, val, op)
-
-            elif mt == "btts":
-                if op == "yes":
-                    result, factor = (
-                        ("GREEN", Decimal("1"))
-                        if stats["home_goals"] > 0 and stats["away_goals"] > 0
-                        else ("RED", Decimal("-1"))
-                    )
-                else:
-                    result, factor = (
-                        ("GREEN", Decimal("1"))
-                        if stats["home_goals"] == 0 or stats["away_goals"] == 0
-                        else ("RED", Decimal("-1"))
-                    )
-            else:
-                result, factor = "RED", Decimal("-1")
+            result, factor = self._engine.evaluate_pick(
+                market, line, float(odd), stats, home_team, away_team
+            )
 
             # Profit em unidades (stake = 1u)
             profit, _ = self._engine.calculate_profit(factor, Decimal("1"), Decimal("1"), odd)
 
-            print(f"[CHECKER-FREE] id={pk_id} | {market} {line} | {result} | profit={float(profit):.2f}u")
+            mt   = self._engine.detect_market_type(market)
+            side = self._engine.detect_side(market, home_team, away_team)
+            print(f"[CHECKER-FREE] id={pk_id} | {market} | {mt} | {side} | {result} | profit={float(profit):.2f}u")
 
             cur.execute("""
                 UPDATE picks_free

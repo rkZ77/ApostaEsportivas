@@ -1,21 +1,40 @@
-﻿import os
+import os
 import psycopg2
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
 
-def get_connection():
-    DB_HOST = os.getenv("DB_HOST")
-    DB_PORT = os.getenv("DB_PORT")
-    DB_NAME = os.getenv("DB_NAME")
-    DB_USER = os.getenv("DB_USER")
-    DB_PASS = os.getenv("DB_PASS")
-    DB_SSLMODE = os.getenv("DB_SSLMODE")
+def get_connection(env: str = None):
+    """
+    env = 'prod' → usa DB_HOST_PROD, DB_PASS_PROD, etc.
+    env = 'dev'  → usa DB_HOST_DEV, DB_PASS_DEV, etc.
+    env = None   → usa DB_HOST (legado / Railway)
+    Também respeita a variável de ambiente DB_ENV se 'env' não for passado.
+    """
+    if env is None:
+        env = os.getenv("DB_ENV", "").lower()  # "prod", "dev" ou ""
+
+    if env == "prod":
+        suffix = "_PROD"
+    elif env == "dev":
+        suffix = "_DEV"
+    else:
+        suffix = ""  # compatibilidade com Railway (DB_HOST direto)
+
+    DB_HOST   = os.getenv(f"DB_HOST{suffix}")
+    DB_PORT   = os.getenv(f"DB_PORT{suffix}")
+    DB_NAME   = os.getenv(f"DB_NAME{suffix}")
+    DB_USER   = os.getenv(f"DB_USER{suffix}")
+    DB_PASS   = os.getenv(f"DB_PASS{suffix}")
+    DB_SSLMODE = os.getenv(f"DB_SSLMODE{suffix}", "require")
 
     if not all([DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASS]):
         raise RuntimeError(
-            "Variáveis de banco não definidas corretamente no .env")
+            f"Variáveis de banco não definidas para env='{env or 'default'}' no .env")
+
+    label = env.upper() if env else "RAILWAY"
+    print(f"[DB] Conectando ao banco {label}: {DB_HOST}")
 
     return psycopg2.connect(
         host=DB_HOST,
@@ -23,5 +42,5 @@ def get_connection():
         dbname=DB_NAME,
         user=DB_USER,
         password=DB_PASS,
-        sslmode=DB_SSLMODE  # necessário para Supabase
+        sslmode=DB_SSLMODE,
     )
