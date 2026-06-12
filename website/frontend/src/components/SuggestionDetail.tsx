@@ -322,13 +322,27 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         {s.legs.map((g: any, i: number) => {
                           const homeTeam = g.home_team || g.home || '—'
                           const awayTeam = g.away_team || g.away || '—'
+                          const homeLogo = g.home_team_id ? `https://media.api-sports.io/football/teams/${g.home_team_id}.png` : null
+                          const awayLogo = g.away_team_id ? `https://media.api-sports.io/football/teams/${g.away_team_id}.png` : null
                           return (
                             <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-semibold text-white truncate flex-1">{homeTeam} vs {awayTeam}</span>
-                                <span className="text-green-400 font-black ml-3 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : '—'}</span>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
+                                  {homeLogo && (
+                                    <img src={homeLogo} alt="" className="w-4 h-4 object-contain shrink-0"
+                                      onError={e => (e.currentTarget.style.display = 'none')} />
+                                  )}
+                                  <span className="text-sm font-semibold text-white truncate">{homeTeam}</span>
+                                  <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                  {awayLogo && (
+                                    <img src={awayLogo} alt="" className="w-4 h-4 object-contain shrink-0"
+                                      onError={e => (e.currentTarget.style.display = 'none')} />
+                                  )}
+                                  <span className="text-sm font-semibold text-white truncate">{awayTeam}</span>
+                                </div>
+                                <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : '—'}</span>
                               </div>
-                              <div className="text-xs text-zinc-500 mt-0.5">{g.market} {g.line ? `· ${g.line}` : ''}</div>
+                              <div className="text-xs text-zinc-500 mt-0.5">{g.market}{g.line ? ` · ${g.line}` : ''}</div>
                             </div>
                           )
                         })}
