@@ -479,7 +479,11 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     if (following) return
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: m.id, pick_type: 'multipla' })
+      await api.post('/banca/follow', {
+        pick_id: m.id,
+        pick_type: 'multipla',
+        stake_units: stakeSuggestion?.units ?? 1,
+      })
       setFollowed(true)
     } catch {
       setFollowed(false)
