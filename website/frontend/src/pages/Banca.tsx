@@ -643,11 +643,13 @@ export default function Banca() {
                                 <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
                                   {e.pnl != null ? fmtSigned(e.pnl) : '—'}
                                 </span>
-                                <button
-                                  onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
-                                  className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
-                                  title="Remover"
-                                >×</button>
+                                {!e.result && (
+                                  <button
+                                    onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
+                                    className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
+                                    title="Remover"
+                                  >×</button>
+                                )}
                               </div>
                             </button>
                           )
