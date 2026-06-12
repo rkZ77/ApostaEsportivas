@@ -826,12 +826,21 @@ def get_recent_results(
             first = legs[0] if legs else {}
             d["home_team_name"] = first.get("home") or first.get("home_team") or f"Múltipla · {n} seleções"
             d["away_team_name"] = first.get("away") or first.get("away_team") or ""
-            d["home_team_id"]   = None
-            d["away_team_id"]   = None
+            d["home_team_id"]   = first.get("home_team_id")
+            d["away_team_id"]   = first.get("away_team_id")
             d["market"]         = f"Múltipla · {n} seleções"
             d["line"]           = None
             d["bet_house"]      = None
             d["legs_count"]     = n
+            # recalcula profit por unidade igual banca.py (ignora valor armazenado)
+            result_val = d.get("result")
+            odd_val = float(d.get("odd") or 1)
+            if result_val == "GREEN":
+                d["profit"] = round(odd_val - 1, 4)
+            elif result_val == "RED":
+                d["profit"] = -1.0
+            elif result_val == "PUSH":
+                d["profit"] = 0.0
             del d["legs"]
             d["pick_type"] = "multipla"
             results.append(d)
@@ -841,10 +850,15 @@ def get_recent_results(
             SELECT pa.id, pa.match_date,
                    pa.home_team_1 AS home_team_name,
                    pa.away_team_1 AS away_team_name,
-                   f1.home_team_id, f1.away_team_id,
+                   COALESCE(f1.home_team_id,
+                       (SELECT team_id FROM teams WHERE name = pa.home_team_1 LIMIT 1)
+                   ) AS home_team_id,
+                   COALESCE(f1.away_team_id,
+                       (SELECT team_id FROM teams WHERE name = pa.away_team_1 LIMIT 1)
+                   ) AS away_team_id,
                    pa.market_1 AS market, pa.line_1 AS line,
                    pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
-                   pa.confidence_media AS confidence,
+                   pa.confidence AS confidence,
                    pa.result, pa.profit,
                    pa.bankroll_before
             FROM picks_alavancagem pa
