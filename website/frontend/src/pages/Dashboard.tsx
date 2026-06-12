@@ -586,6 +586,14 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         </div>
       </div>
 
+      {/* Fato da IA */}
+      {shortReasoning(m.reasoning) && (
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
+        </div>
+      )}
+
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!m.result && !banca ? (
@@ -744,6 +752,14 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
           <div className={`h-1 rounded-full ${confPct >= 70 ? 'bg-orange-500' : 'bg-zinc-600'}`} style={{ width: `${confPct}%` }} />
         </div>
       </div>
+
+      {/* Fato da IA */}
+      {shortReasoning(pick.reasoning_1) && (
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
