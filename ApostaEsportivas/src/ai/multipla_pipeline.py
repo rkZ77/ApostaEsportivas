@@ -399,9 +399,10 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
     cur.close()
     conn.close()
 
+    stake_pct_str = f"{round(stake_pct * 100)}%" if stake_pct is not None else "frontend"
     print(
         f"[SAVE] {name} | odd total {total_odd} | "
-        f"score {round(score_combo * 100)}% | stake R${stake} ({round(stake_pct * 100)}%)"
+        f"score {round(score_combo * 100)}% | stake R${stake} ({stake_pct_str})"
     )
 
     return total_odd, stake_pct

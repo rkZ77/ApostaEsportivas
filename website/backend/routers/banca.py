@@ -151,7 +151,13 @@ def get_banca(
             if not pick:
                 continue
             result   = pick.get("result")
-            profit_u = float(pick.get("profit") or 0) if result else None
+            # Para múltipla: profit salvo no DB usa stake interno (pode ser 0/None).
+            # Recalcula por unidade direto da odd, igual ao VIP/Free.
+            if f["pick_type"] == "multipla" and result in ("GREEN", "RED", "PUSH"):
+                _odd = float(pick.get("odd") or 1)
+                profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
+            else:
+                profit_u = float(pick.get("profit") or 0) if result else None
             # pnl em R$ = lucro_por_unidade × unidades_apostadas × valor_da_unidade
             pnl_r    = profit_u * float(f["stake_units"]) * unit_value if profit_u is not None else None
             if pnl_r is not None:
