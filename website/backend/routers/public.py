@@ -1,3 +1,4 @@
+import traceback
 from fastapi import APIRouter, Query
 from typing import Optional
 from database import get_connection
@@ -40,7 +41,9 @@ def _q(cur, sql, params=()):
     try:
         cur.execute(sql, params)
         return cur.fetchall()
-    except Exception:
+    except Exception as e:
+        print(f"[PUBLIC] _q error: {e}")
+        traceback.print_exc()
         cur.connection.rollback()
         return []
 
@@ -49,7 +52,9 @@ def _q1(cur, sql, params=()):
     try:
         cur.execute(sql, params)
         return cur.fetchone()
-    except Exception:
+    except Exception as e:
+        print(f"[PUBLIC] _q1 error: {e}")
+        traceback.print_exc()
         cur.connection.rollback()
         return None
 
