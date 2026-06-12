@@ -678,9 +678,6 @@ export default function Banca() {
           </div>
         )}
 
-        <div className="max-w-5xl mx-auto px-4 pb-8">
-          <RecentResultsSection />
-        </div>
       </main>
     </div>
   )
