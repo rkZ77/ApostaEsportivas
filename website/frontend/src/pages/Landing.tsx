@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react'
 import axios from 'axios'
 import Footer from '../components/Footer'
 
-const API_BASE = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+const API_BASE = ''
 const TEAM_LOGO = (id?: number | null) =>
   id ? `https://media.api-sports.io/football/teams/${id}.png` : null
 const LEAGUE_LOGO = (id: number) =>
