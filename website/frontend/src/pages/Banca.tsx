@@ -472,7 +472,14 @@ export default function Banca() {
                     <p className="text-xs text-green-500 font-black uppercase tracking-wider mb-2">Melhor pick apostado</p>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-white font-semibold">{data.best_pick.home_team_name ?? `Pick #${data.best_pick.pick_id}`}</p>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          {data.best_pick.home_team_id && (
+                            <img src={`https://media.api-sports.io/football/teams/${data.best_pick.home_team_id}.png`}
+                              alt="" className="w-4 h-4 object-contain shrink-0"
+                              onError={e => (e.currentTarget.style.display = 'none')} />
+                          )}
+                          <p className="text-sm text-white font-semibold">{data.best_pick.home_team_name ?? `Pick #${data.best_pick.pick_id}`}</p>
+                        </div>
                         <p className="text-xs text-zinc-500">{data.best_pick.market ?? ''}</p>
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border mt-1 inline-block ${SOURCE_CLS[data.best_pick.pick_type] ?? ''}`}>
                           {SOURCE_LBL[data.best_pick.pick_type] ?? data.best_pick.pick_type}
@@ -489,7 +496,14 @@ export default function Banca() {
                     <p className="text-xs text-red-400 font-black uppercase tracking-wider mb-2">Pior pick apostado</p>
                     <div className="flex items-center justify-between">
                       <div>
-                        <p className="text-sm text-white font-semibold">{data.worst_pick.home_team_name ?? `Pick #${data.worst_pick.pick_id}`}</p>
+                        <div className="flex items-center gap-1.5 mb-0.5">
+                          {data.worst_pick.home_team_id && (
+                            <img src={`https://media.api-sports.io/football/teams/${data.worst_pick.home_team_id}.png`}
+                              alt="" className="w-4 h-4 object-contain shrink-0"
+                              onError={e => (e.currentTarget.style.display = 'none')} />
+                          )}
+                          <p className="text-sm text-white font-semibold">{data.worst_pick.home_team_name ?? `Pick #${data.worst_pick.pick_id}`}</p>
+                        </div>
                         <p className="text-xs text-zinc-500">{data.worst_pick.market ?? ''}</p>
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border mt-1 inline-block ${SOURCE_CLS[data.worst_pick.pick_type] ?? ''}`}>
                           {SOURCE_LBL[data.worst_pick.pick_type] ?? data.worst_pick.pick_type}

@@ -210,6 +210,7 @@ function RecentResults() {
                       {tip.away_team_name && tip.away_team_name !== '--' && (
                         <>
                           <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+                          <TeamLogo id={tip.away_team_id} name={tip.away_team_name} />
                           <span className="text-xs sm:text-sm font-semibold text-white truncate">{tip.away_team_name}</span>
                         </>
                       )}

@@ -587,8 +587,20 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                             }`}>
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-xs font-bold text-white truncate">
-                                    {pick.home_team_1} vs {pick.away_team_1}
+                                  <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                                    {pick.home_team_id_1 && (
+                                      <img src={`https://media.api-sports.io/football/teams/${pick.home_team_id_1}.png`}
+                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        onError={e => (e.currentTarget.style.display = 'none')} />
+                                    )}
+                                    <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
+                                    <span className="text-zinc-600 text-[10px]">vs</span>
+                                    {pick.away_team_id_1 && (
+                                      <img src={`https://media.api-sports.io/football/teams/${pick.away_team_id_1}.png`}
+                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        onError={e => (e.currentTarget.style.display = 'none')} />
+                                    )}
+                                    <span className="text-xs font-bold text-white truncate">{pick.away_team_1}</span>
                                   </div>
                                   <div className="text-[10px] text-zinc-500 mt-0.5">
                                     {date} · {pick.market_1}{pick.odd_combined ? ` @ ${Number(pick.odd_combined).toFixed(2)}` : ''}

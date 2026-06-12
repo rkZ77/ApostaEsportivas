@@ -139,7 +139,7 @@ def get_banca(
         cur.execute(f"""
             SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at
             FROM user_followed_picks uf
-            WHERE uf.user_id = %s {date_cond}
+            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
             ORDER BY uf.followed_at ASC
         """, date_params)
         followed = [dict(r) for r in cur.fetchall()]
