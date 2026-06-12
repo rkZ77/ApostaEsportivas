@@ -295,7 +295,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     if (followed) return
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: 1 })
+      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1 })
       setFollowed(true)
     } catch { /* ignora */ } finally {
       setFollowing(false)
