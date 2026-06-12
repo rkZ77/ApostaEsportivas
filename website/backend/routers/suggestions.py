@@ -798,7 +798,8 @@ def get_recent_results(
                    pa.market_1 AS market, pa.line_1 AS line,
                    pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
                    pa.confidence_media AS confidence,
-                   pa.result, pa.profit
+                   pa.result, pa.profit,
+                   pa.bankroll_before
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result IS NOT NULL

@@ -48,7 +48,7 @@ class AIResultCheckerAlavancagem:
                    home_team_1, away_team_1,
                    fixture_id_2, market_2, line_2, odd_2,
                    home_team_2, away_team_2,
-                   odd_combined, stake
+                   odd_combined, stake, bankroll_before
             FROM picks_alavancagem
             WHERE result IS NULL
         """)
@@ -66,10 +66,12 @@ class AIResultCheckerAlavancagem:
             (pk_id, tipo,
              fid1, mkt1, ln1, odd1, home1, away1,
              fid2, mkt2, ln2, odd2, home2, away2,
-             odd_combined, stake) = row
+             odd_combined, stake, bankroll_before) = row
 
-            stake        = Decimal(str(stake))
-            odd_combined = Decimal(str(odd_combined))
+            odd_combined     = Decimal(str(odd_combined))
+            # Usa bankroll_before para cálculo monetário correto.
+            # stake pode ser em unidades (ex: 1u); bankroll_before é o valor real (ex: R$50).
+            effective_stake  = Decimal(str(bankroll_before)) if bankroll_before else Decimal(str(stake))
 
             # --- Pick 1 ---
             r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur, home1, away1)
@@ -91,18 +93,18 @@ class AIResultCheckerAlavancagem:
             else:
                 final_result = r1
 
-            # --- Profit e bankroll ---
+            # --- Profit e bankroll (monetário, baseado em bankroll_before) ---
             if final_result == "GREEN":
-                profit         = stake * (odd_combined - Decimal("1"))
-                bankroll_after = stake + profit
+                profit         = effective_stake * (odd_combined - Decimal("1"))
+                bankroll_after = effective_stake + profit
             else:
-                profit         = -stake
+                profit         = -effective_stake
                 bankroll_after = Decimal("0")  # série zerada
 
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
                 f"P1={r1} P2={r2} → {final_result} | "
-                f"Stake: R${float(stake):.2f} | "
+                f"Bankroll antes: R${float(effective_stake):.2f} | "
                 f"Profit: R${float(profit):.2f} | "
                 f"Bankroll após: R${float(bankroll_after):.2f}"
             )

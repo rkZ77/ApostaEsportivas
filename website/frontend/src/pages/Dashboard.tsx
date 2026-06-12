@@ -620,13 +620,15 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
   const isCombo     = pick.tipo === 'combinacao'
   const oddCombined = Number(pick.odd_combined ?? 0)
-  const stake       = userBankroll != null ? userBankroll : Number(pick.stake ?? pick.bankroll_before ?? 50)
+  // stake monetário: bankroll do usuário > bankroll_before salvo > fallback 50
+  const stake       = userBankroll != null ? userBankroll : Number(pick.bankroll_before ?? pick.stake ?? 50)
   const potReturn   = oddCombined > 0 ? stake * oddCombined : Number(pick.potential_return ?? 0)
   const confPct     = Math.round((pick.confidence_media ?? 0) * 100)
-  const profit = pick.profit != null
-    ? (userBankroll != null && Number(pick.stake ?? pick.bankroll_before ?? 50) > 0
-        ? Number(pick.profit) / Number(pick.stake ?? pick.bankroll_before ?? 50) * userBankroll
-        : Number(pick.profit))
+  // profit calculado do bankroll real × odd (não usa o campo profit do DB que pode estar em unidades)
+  const profit = pick.result === 'GREEN'
+    ? stake * (oddCombined - 1)
+    : pick.result === 'RED'
+    ? -stake
     : null
   const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
   const [following, setFollowing] = useState(false)
@@ -867,17 +869,25 @@ function normalizePickRow(row: any, pickType: string): NormalizedPick {
       profit: row.profit != null ? Number(row.profit) : undefined,
     }
   }
-  if (pickType === 'alavancagem') return { ...base,
-    // suporta tanto formato "today" (home_team_1) quanto "recent-results" (home_team_name aliasado)
-    homeName: row.home_team_1 ?? row.home_team_name ?? '',
-    awayName: row.away_team_1 ?? row.away_team_name ?? '',
-    homeId: row.home_team_id_1 ?? row.home_team_id,
-    awayId: row.away_team_id_1 ?? row.away_team_id,
-    market: row.market_1 ?? row.market,
-    line: row.line_1 ?? row.line,
-    odd: row.odd_combined ? Number(row.odd_combined) : row.odd ? Number(row.odd) : undefined,
-    betHouse: row.bet_house_1 ?? row.bet_house,
-    isMonetary: true, profit: row.profit != null ? Number(row.profit) : undefined,
+  if (pickType === 'alavancagem') {
+    const odd   = row.odd_combined ? Number(row.odd_combined) : row.odd ? Number(row.odd) : undefined
+    const bk    = Number(row.bankroll_before ?? row.stake ?? 50)
+    // Calcula profit monetário a partir do bankroll real (não do campo profit que pode estar em unidades)
+    const monetaryProfit = row.result === 'GREEN' && odd ? bk * (odd - 1)
+      : row.result === 'RED' ? -bk
+      : row.profit != null ? Number(row.profit)
+      : undefined
+    return { ...base,
+      homeName: row.home_team_1 ?? row.home_team_name ?? '',
+      awayName: row.away_team_1 ?? row.away_team_name ?? '',
+      homeId: row.home_team_id_1 ?? row.home_team_id,
+      awayId: row.away_team_id_1 ?? row.away_team_id,
+      market: row.market_1 ?? row.market,
+      line: row.line_1 ?? row.line,
+      odd,
+      betHouse: row.bet_house_1 ?? row.bet_house,
+      isMonetary: true, profit: monetaryProfit,
+    }
   }
   // já normalizado (recent-results / mixed)
   return { ...base,
