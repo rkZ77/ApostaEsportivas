@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import ProfitChart from '../components/ProfitChart'
+import SuggestionDetail from '../components/SuggestionDetail'
+import RecentResultsSection from '../components/RecentResultsSection'
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
 type View    = 'resumo' | 'por_jogo' | 'por_mes'
@@ -64,7 +66,8 @@ export default function Results() {
   const [gamesPage,   setGamesPage]   = useState(0)
   const [gamesFilter, setGamesFilter] = useState('all')
   const [gamesLoading,setGamesLoading]= useState(false)
-  const PAGE_SIZE = 50
+  const [detailPick,  setDetailPick]  = useState<{ id: number; pick_type: string } | null>(null)
+  const PAGE_SIZE = 10
 
   // Por mês
   const [monthly,    setMonthly]    = useState<any[]>([])
@@ -134,6 +137,15 @@ export default function Results() {
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
+
+      {/* Modal de detalhe do pick */}
+      {detailPick && (
+        <SuggestionDetail
+          id={detailPick.id}
+          pickType={detailPick.pick_type}
+          onClose={() => setDetailPick(null)}
+        />
+      )}
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
@@ -306,6 +318,7 @@ export default function Results() {
                   </div>
                 </div>
               )}
+              <RecentResultsSection title="Últimos Picks" limit={8} />
             </>
           )
         )}
@@ -340,7 +353,9 @@ export default function Results() {
                       const p     = Number(g.profit ?? 0)
                       const badge = RESULT_BADGE[g.result] ?? 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
                       return (
-                        <div key={g.id} className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-900/50 transition-colors">
+                        <div key={g.id}
+                          className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                          onClick={() => setDetailPick({ id: g.id, pick_type: g.pick_type })}>
                           {/* Data */}
                           <div className="w-14 shrink-0 text-center">
                             <span className="text-xs text-zinc-500">
@@ -397,20 +412,39 @@ export default function Results() {
                   </div>
                 </div>
 
-                {/* Paginação */}
-                {gamesTotal > PAGE_SIZE && (
-                  <div className="flex items-center justify-between mt-4">
-                    <button disabled={gamesPage === 0}
-                      onClick={() => { const p = gamesPage - 1; setGamesPage(p); fetchGames(period, p, gamesFilter, source, customFrom, customTo) }}
-                      className="btn-ghost text-sm px-4 py-2 disabled:opacity-30">← Anterior</button>
-                    <span className="text-zinc-500 text-xs">
-                      Página {gamesPage + 1} de {Math.ceil(gamesTotal / PAGE_SIZE)}
-                    </span>
-                    <button disabled={(gamesPage + 1) * PAGE_SIZE >= gamesTotal}
-                      onClick={() => { const p = gamesPage + 1; setGamesPage(p); fetchGames(period, p, gamesFilter, source, customFrom, customTo) }}
-                      className="btn-ghost text-sm px-4 py-2 disabled:opacity-30">Próxima →</button>
-                  </div>
-                )}
+                {/* Paginação numerada */}
+                {gamesTotal > PAGE_SIZE && (() => {
+                  const totalPages = Math.ceil(gamesTotal / PAGE_SIZE)
+                  const goTo = (p: number) => { setGamesPage(p); fetchGames(period, p, gamesFilter, source, customFrom, customTo) }
+                  const pages: (number | '...')[] = []
+                  if (totalPages <= 7) {
+                    for (let i = 0; i < totalPages; i++) pages.push(i)
+                  } else {
+                    pages.push(0)
+                    if (gamesPage > 2) pages.push('...')
+                    for (let i = Math.max(1, gamesPage - 1); i <= Math.min(totalPages - 2, gamesPage + 1); i++) pages.push(i)
+                    if (gamesPage < totalPages - 3) pages.push('...')
+                    pages.push(totalPages - 1)
+                  }
+                  return (
+                    <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
+                      <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">←</button>
+                      {pages.map((pg, i) =>
+                        pg === '...'
+                          ? <span key={`e${i}`} className="px-2 text-zinc-600 text-xs">…</span>
+                          : <button key={pg} onClick={() => goTo(pg as number)}
+                              className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                                gamesPage === pg
+                                  ? 'bg-green-500 border-green-500 text-black'
+                                  : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                              }`}>{(pg as number) + 1}</button>
+                      )}
+                      <button disabled={(gamesPage + 1) * PAGE_SIZE >= gamesTotal} onClick={() => goTo(gamesPage + 1)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">→</button>
+                    </div>
+                  )
+                })()}
               </>
             )}
           </div>

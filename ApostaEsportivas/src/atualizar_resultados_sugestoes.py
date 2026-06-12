@@ -1,13 +1,6 @@
 ﻿import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
-# Define o ambiente antes de qualquer import que use db_utils
-_args = [a.lower() for a in sys.argv[1:]]
-if "--prod" in _args:
-    os.environ["DB_ENV"] = "prod"
-elif "--dev" in _args:
-    os.environ["DB_ENV"] = "dev"
-
 from services.ai_result_checker_service import AIResultCheckerService
 from services.ai_result_checker_multiplas import AIMultiplasCheckerService
 from services.ai_result_checker_alavancagem import AIResultCheckerAlavancagem

@@ -352,7 +352,38 @@ def get_suggestion_detail(
                 legs = _json.loads(d["legs"]) if isinstance(d["legs"], str) else (d["legs"] or [])
             except Exception:
                 legs = []
-            n = len(legs)
+
+            # Enriquece cada leg com nomes e IDs dos times via fixtures
+            fixture_ids = [leg["fixture_id"] for leg in legs if leg.get("fixture_id")]
+            fixture_map: dict = {}
+            if fixture_ids:
+                frows = _safe_query(cur, """
+                    SELECT f.fixture_id,
+                           f.home_team_id, f.away_team_id,
+                           f.match_datetime,
+                           ht.name AS home_team, at.name AS away_team
+                    FROM fixtures f
+                    LEFT JOIN teams ht ON ht.team_id = f.home_team_id
+                    LEFT JOIN teams at ON at.team_id = f.away_team_id
+                    WHERE f.fixture_id = ANY(%s)
+                """, (fixture_ids,))
+                for fr in frows:
+                    fixture_map[fr["fixture_id"]] = fr
+
+            enriched_legs = []
+            for leg in legs:
+                fid = leg.get("fixture_id")
+                fi  = fixture_map.get(fid, {}) if fid else {}
+                enriched_legs.append({
+                    **leg,
+                    "home_team":    fi.get("home_team") or leg.get("home_team") or leg.get("home"),
+                    "away_team":    fi.get("away_team") or leg.get("away_team") or leg.get("away"),
+                    "home_team_id": fi.get("home_team_id") or leg.get("home_team_id"),
+                    "away_team_id": fi.get("away_team_id") or leg.get("away_team_id"),
+                    "match_datetime": str(fi["match_datetime"]) if fi.get("match_datetime") else None,
+                })
+
+            n = len(enriched_legs)
             suggestion = {
                 "id": d["id"],
                 "match_date": d["match_date"],
@@ -365,7 +396,7 @@ def get_suggestion_detail(
                 "reasoning": d["reasoning"],
                 "result": d["result"],
                 "profit": d["profit"],
-                "legs": legs,
+                "legs": enriched_legs,
                 "pick_type": "multipla",
             }
             return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},

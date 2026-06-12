@@ -54,9 +54,8 @@ def _q1(cur, sql, params=()):
         return None
 
 
-def _build_union(date_cond: str, source: Optional[str]) -> str:
-    """Monta UNION ALL das 4 tabelas de picks com colunas normalizadas."""
-    vip = f"""
+def _sub_vip(date_cond: str) -> str:
+    return f"""
         SELECT match_date,
                home_team_name, away_team_name,
                home_team_id,   away_team_id,
@@ -67,20 +66,27 @@ def _build_union(date_cond: str, source: Optional[str]) -> str:
         FROM picks_vip
         WHERE result IS NOT NULL {date_cond}
     """
-    free = f"""
-        SELECT match_date,
-               home_team AS home_team_name, away_team AS away_team_name,
-               home_team_id, away_team_id,
-               market, line, odd,
-               result, profit,
+
+def _sub_free(date_cond: str) -> str:
+    # JOIN fixtures para team IDs (picks_free pode não ter home_team_id em prod)
+    return f"""
+        SELECT pf.match_date,
+               pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+               f.home_team_id, f.away_team_id,
+               pf.market, pf.line, pf.odd,
+               pf.result, pf.profit,
                1 AS stake,
                'free' AS source
-        FROM picks_free
-        WHERE result IS NOT NULL {date_cond}
+        FROM picks_free pf
+        LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+        WHERE pf.result IS NOT NULL {date_cond}
     """
-    mult = f"""
+
+def _sub_mult(date_cond: str) -> str:
+    return f"""
         SELECT match_date,
-               multipla_name AS home_team_name, NULL AS away_team_name,
+               CONCAT('Múltipla · ', JSONB_ARRAY_LENGTH(games::jsonb), ' sel.') AS home_team_name,
+               NULL AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                'Múltipla' AS market, NULL AS line, total_odd AS odd,
                result, profit,
@@ -89,7 +95,9 @@ def _build_union(date_cond: str, source: Optional[str]) -> str:
         FROM picks_multiplas
         WHERE result IS NOT NULL {date_cond}
     """
-    alav = f"""
+
+def _sub_alav(date_cond: str) -> str:
+    return f"""
         SELECT match_date,
                home_team_1 AS home_team_name, away_team_1 AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
@@ -101,11 +109,30 @@ def _build_union(date_cond: str, source: Optional[str]) -> str:
         WHERE result IS NOT NULL {date_cond}
     """
 
-    parts = {"vip": vip, "free": free, "multiplas": mult, "alavancagem": alav}
+_SUB_BUILDERS = {
+    "vip":        _sub_vip,
+    "free":       _sub_free,
+    "multiplas":  _sub_mult,
+    "alavancagem":_sub_alav,
+}
 
-    if source and source in parts:
-        return parts[source]
-    return " UNION ALL ".join(parts.values())
+def _build_union(date_cond: str, source: Optional[str]) -> str:
+    """Monta UNION ALL das 4 tabelas de picks com colunas normalizadas."""
+    if source and source in _SUB_BUILDERS:
+        return _SUB_BUILDERS[source](date_cond)
+    return " UNION ALL ".join(fn(date_cond) for fn in _SUB_BUILDERS.values())
+
+
+def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[str], limit: int = 30) -> list:
+    """Corre cada sub-query separada, assim uma falha não apaga as outras."""
+    builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
+    rows: list = []
+    for fn in builders:
+        sub = fn(date_cond)
+        batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (limit,))
+        rows.extend(batch)
+    rows.sort(key=lambda r: (str(r["match_date"]), str(r.get("result",""))), reverse=True)
+    return rows[:limit]
 
 
 @router.get("/results")
@@ -183,15 +210,9 @@ def public_results(
             ORDER BY match_date
         """, p)
 
-        # ── Recentes ──────────────────────────────────────────────────────────
-        recent = _q(cur, f"""
-            SELECT match_date, home_team_name, away_team_name,
-                   home_team_id, away_team_id,
-                   market, line, odd, result, profit, source
-            FROM ({union_sql}) AS t
-            ORDER BY match_date DESC, result
-            LIMIT 30
-        """, p)
+        # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
+        single_source = source if source in _SUB_BUILDERS else None
+        recent = _collect_results(cur, date_cond, date_params, single_source, limit=30)
 
         return {
             "available_months": available_months,

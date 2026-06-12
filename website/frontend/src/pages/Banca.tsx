@@ -4,6 +4,7 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import ProfitChart from '../components/ProfitChart'
+import RecentResultsSection from '../components/RecentResultsSection'
 
 // ── formatação ────────────────────────────────────────────────────────────────
 const fmtBRL = (v: number) =>
@@ -629,6 +630,10 @@ export default function Banca() {
 
           </div>
         )}
+
+        <div className="max-w-5xl mx-auto px-4 pb-8">
+          <RecentResultsSection />
+        </div>
       </main>
     </div>
   )
