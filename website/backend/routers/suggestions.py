@@ -366,7 +366,12 @@ def get_suggestion_detail(
         # ── ALAVANCAGEM ──────────────────────────────────────────────────────
         if pick_type == "alavancagem":
             cur.execute("""
-                SELECT pa.*, f1.match_datetime AS match_datetime
+                SELECT pa.*,
+                       f1.match_datetime AS match_datetime,
+                       f1.home_team_id   AS home_team_id,
+                       f1.away_team_id   AS away_team_id,
+                       f1.league_id      AS fix_league_id,
+                       f1.season         AS fix_season
                 FROM picks_alavancagem pa
                 LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
                 WHERE pa.id = %s
@@ -392,15 +397,21 @@ def get_suggestion_detail(
                     "odd": d.get("odd_2"), "house": d.get("bet_house_2"),
                     "reasoning": d.get("reasoning_2"),
                 })
-            suggestion = {
+            alav_suggestion = {
                 "id": d["id"],
+                "fixture_id": d.get("fixture_id_1"),
                 "match_date": d["match_date"],
                 "match_datetime": d.get("match_datetime"),
                 "home_team_name": d.get("home_team_1", "Alavancagem"),
                 "away_team_name": d.get("away_team_1", ""),
+                "home_team_id": d.get("home_team_id"),
+                "away_team_id": d.get("away_team_id"),
+                "fix_league_id": d.get("fix_league_id"),
+                "fix_season": d.get("fix_season"),
                 "market": d.get("market_1", "Alavancagem"),
                 "line": d.get("line_1"),
                 "odd": d.get("odd_combined"),
+                "bet_house": d.get("bet_house_1"),
                 "confidence": d.get("confidence_media"),
                 "stake": d.get("stake"),
                 "potential_return": d.get("potential_return"),
@@ -413,8 +424,67 @@ def get_suggestion_detail(
                 "pick_type": "alavancagem",
                 "tipo": d.get("tipo"),
             }
-            return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
-                    "home_recent": [], "away_recent": [], "odds": []}
+            # Busca stats e forma do jogo principal (game 1)
+            alav_home_id   = alav_suggestion.get("home_team_id")
+            alav_away_id   = alav_suggestion.get("away_team_id")
+            alav_league_id = alav_suggestion.get("fix_league_id")
+            alav_season    = alav_suggestion.get("fix_season") or 2026
+
+            STATS_COLS_ALV = """
+                context_type,
+                avg_goals_for, avg_goals_against, avg_total_goals,
+                avg_corners_for, avg_corners_against, avg_total_corners,
+                avg_yellow_for, avg_yellow_against, avg_total_yellow,
+                avg_shots_on_for, avg_shots_on_against,
+                avg_possession_for, avg_passes_accuracy_for,
+                games_count
+            """
+
+            def get_alav_stats(team_id):
+                res = {}
+                if team_id and alav_league_id:
+                    for r in _safe_query(cur, f"SELECT {STATS_COLS_ALV} FROM team_statistics WHERE team_id=%s AND league_id=%s AND season=%s ORDER BY context_type", (team_id, alav_league_id, alav_season)):
+                        res[r["context_type"]] = dict(r)
+                if not res and team_id:
+                    for r in _safe_query(cur, f"SELECT {STATS_COLS_ALV} FROM team_statistics WHERE team_id=%s ORDER BY season DESC, context_type LIMIT 4", (team_id,)):
+                        k = r["context_type"]
+                        if k not in res:
+                            res[k] = dict(r)
+                return res
+
+            def get_alav_recent(team_id, limit=5):
+                if not team_id:
+                    return []
+                rows = _safe_query(cur, """
+                    SELECT match_date, home_team_id, away_team_id,
+                           home_goals, away_goals, total_goals,
+                           home_corners, away_corners, total_corners
+                    FROM match_statistics
+                    WHERE (home_team_id = %s OR away_team_id = %s)
+                      AND status IN ('FT', 'AET', 'PEN')
+                    ORDER BY match_date DESC LIMIT %s
+                """, (team_id, team_id, limit))
+                result = []
+                for r in rows:
+                    rd = dict(r)
+                    is_home = rd["home_team_id"] == team_id
+                    rd["is_home"]   = is_home
+                    rd["gf"]        = rd["home_goals"]   if is_home else rd["away_goals"]
+                    rd["ga"]        = rd["away_goals"]   if is_home else rd["home_goals"]
+                    rd["corners_f"] = rd["home_corners"] if is_home else rd["away_corners"]
+                    rd["corners_a"] = rd["away_corners"] if is_home else rd["home_corners"]
+                    rd["resultado"] = "W" if rd["gf"] > rd["ga"] else ("D" if rd["gf"] == rd["ga"] else "L")
+                    result.append(rd)
+                return result
+
+            return {
+                "suggestion":  alav_suggestion,
+                "home_stats":  get_alav_stats(alav_home_id),
+                "away_stats":  get_alav_stats(alav_away_id),
+                "home_recent": get_alav_recent(alav_home_id),
+                "away_recent": get_alav_recent(alav_away_id),
+                "odds":        [],
+            }
 
         # ── FREE (picks_free) ────────────────────────────────────────────────
         if pick_type == "free":

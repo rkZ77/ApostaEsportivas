@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { X, TrendingUp, BarChart2, Activity, List, MessageCircle } from 'lucide-react'
+import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from 'lucide-react'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 
@@ -77,9 +77,11 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
   const [tab, setTab] = useState<string>('ia')
   const [standings, setStandings] = useState<any>(null)
   const [standingsLoading, setStandingsLoading] = useState(false)
+  const [caminho, setCaminho] = useState<any[]>([])
+  const [caminhoLoading, setCaminhoLoading] = useState(false)
 
   useEffect(() => {
-    setLoading(true); setData(null); setTab('ia'); setStandings(null)
+    setLoading(true); setData(null); setTab('ia'); setStandings(null); setCaminho([])
     api.get(`/suggestions/${id}/detail`, { params: { pick_type: pickType } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
@@ -100,15 +102,28 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
       .finally(() => setStandingsLoading(false))
   }, [tab, data])
 
-  const hasFullDetail = pickType === 'vip' || pickType === 'free'
+  useEffect(() => {
+    if (tab !== 'caminho' || caminho.length > 0 || caminhoLoading) return
+    setCaminhoLoading(true)
+    api.get('/suggestions/alavancagem', { params: { limit: 50 } })
+      .then(r => setCaminho(Array.isArray(r.data) ? r.data : []))
+      .catch(() => setCaminho([]))
+      .finally(() => setCaminhoLoading(false))
+  }, [tab])
+
+  const isAlav = pickType === 'alavancagem'
+  const hasStats = pickType === 'vip' || pickType === 'free' || isAlav
   const tabs = [
-    { key: 'ia',        label: 'Pick',           Icon: TrendingUp   },
-    ...(hasFullDetail ? [
-      { key: 'stats',    label: 'Médias',         Icon: BarChart2    },
-      { key: 'form',     label: 'Forma',          Icon: Activity     },
-      { key: 'standings',label: 'Classificação',  Icon: List         },
+    { key: 'ia',         label: 'Pick',          Icon: TrendingUp    },
+    ...(hasStats ? [
+      { key: 'stats',    label: 'Médias',        Icon: BarChart2     },
+      { key: 'form',     label: 'Forma',         Icon: Activity      },
+      ...(isAlav
+        ? [{ key: 'caminho', label: 'Caminho', Icon: Route }]
+        : [{ key: 'standings', label: 'Classificação', Icon: List }]
+      ),
     ] : []),
-    { key: 'social',    label: 'Chat',            Icon: MessageCircle },
+    { key: 'social',     label: 'Chat',          Icon: MessageCircle },
   ]
 
   const s = data?.suggestion
@@ -480,6 +495,120 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+
+              {/* ── ABA CAMINHO (alavancagem) ────────────────────────── */}
+              {tab === 'caminho' && (
+                <div>
+                  {caminhoLoading ? (
+                    <div className="flex items-center justify-center h-40">
+                      <div className="w-7 h-7 border-2 border-zinc-700 border-t-orange-500 rounded-full animate-spin" />
+                    </div>
+                  ) : caminho.length === 0 ? (
+                    <p className="text-zinc-500 text-center py-10 text-sm">Nenhum histórico disponível.</p>
+                  ) : (
+                    <div className="space-y-0">
+                      {/* Banca inicial */}
+                      {(() => {
+                        const first = caminho[caminho.length - 1]
+                        const startBankroll = first?.bankroll_before
+                        const lastDone = [...caminho].reverse().find(p => p.result)
+                        const currentBankroll = lastDone?.bankroll_after ?? startBankroll
+                        return (
+                          <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 mb-4">
+                            <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
+                              <span className="text-orange-400 text-xs font-black">R$</span>
+                            </div>
+                            <div className="flex-1">
+                              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Banca atual da série</div>
+                              <div className="text-lg font-black text-orange-400">
+                                R${Number(currentBankroll ?? 0).toFixed(0)}
+                              </div>
+                            </div>
+                            {startBankroll && currentBankroll && (
+                              <div className={`text-sm font-black ${currentBankroll >= startBankroll ? 'text-green-400' : 'text-red-400'}`}>
+                                {currentBankroll >= startBankroll ? '+' : ''}
+                                {((currentBankroll / startBankroll - 1) * 100).toFixed(1)}%
+                              </div>
+                            )}
+                          </div>
+                        )
+                      })()}
+
+                      {/* Timeline de picks */}
+                      {[...caminho].reverse().map((pick: any, idx: number) => {
+                        const isThisPick = pick.id === id
+                        const res = pick.result
+                        const resColor = res === 'GREEN' ? 'text-green-400 bg-green-500/10 border-green-500/30'
+                          : res === 'RED' ? 'text-red-400 bg-red-500/10 border-red-500/30'
+                          : 'text-zinc-400 bg-zinc-800 border-zinc-700'
+                        const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '⏳'
+                        const date = pick.match_date
+                          ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                          : '—'
+                        const bankBefore = pick.bankroll_before
+                        const bankAfter = pick.bankroll_after
+                        return (
+                          <div key={pick.id} className="flex gap-3">
+                            {/* Linha vertical + círculo */}
+                            <div className="flex flex-col items-center w-8 shrink-0">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
+                                isThisPick
+                                  ? 'bg-orange-500 border-orange-400 text-black'
+                                  : res
+                                    ? (res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-red-500/20 border-red-500/40 text-red-400')
+                                    : 'bg-zinc-800 border-zinc-700 text-zinc-400'
+                              }`}>
+                                {resLabel}
+                              </div>
+                              {idx < caminho.length - 1 && (
+                                <div className={`w-0.5 flex-1 my-1 ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-zinc-800'}`} />
+                              )}
+                            </div>
+
+                            {/* Card do pick */}
+                            <div className={`flex-1 mb-2 rounded-xl border px-3 py-2.5 ${
+                              isThisPick ? 'border-orange-500/40 bg-orange-500/5' : 'border-zinc-800 bg-zinc-900'
+                            }`}>
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-xs font-bold text-white truncate">
+                                    {pick.home_team_1} vs {pick.away_team_1}
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500 mt-0.5">
+                                    {date} · {pick.market_1}{pick.odd_combined ? ` @ ${Number(pick.odd_combined).toFixed(2)}` : ''}
+                                  </div>
+                                </div>
+                                {res && (
+                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border shrink-0 ${resColor}`}>
+                                    {res === 'GREEN' ? 'GREEN' : res === 'RED' ? 'RED' : res}
+                                  </span>
+                                )}
+                              </div>
+                              {/* Progressão de banca */}
+                              {(bankBefore || bankAfter) && (
+                                <div className="flex items-center gap-1.5 mt-1.5">
+                                  {bankBefore && <span className="text-[10px] text-zinc-500">R${Number(bankBefore).toFixed(0)}</span>}
+                                  {bankBefore && bankAfter && <span className="text-[10px] text-zinc-600">→</span>}
+                                  {bankAfter && (
+                                    <span className={`text-[10px] font-bold ${bankAfter > bankBefore ? 'text-green-400' : bankAfter < bankBefore ? 'text-red-400' : 'text-zinc-400'}`}>
+                                      R${Number(bankAfter).toFixed(0)}
+                                    </span>
+                                  )}
+                                  {bankBefore && bankAfter && (
+                                    <span className={`text-[10px] ml-auto ${bankAfter >= bankBefore ? 'text-green-400' : 'text-red-400'}`}>
+                                      {bankAfter >= bankBefore ? '+' : ''}{Number(pick.profit ?? 0).toFixed(2)}u
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
