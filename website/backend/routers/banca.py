@@ -409,7 +409,13 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
                 CASE uf.pick_type
                     WHEN 'vip'      THEN COALESCE(pv.profit, 0) * %s
                     WHEN 'free'     THEN COALESCE(pf.profit, 0) * %s
-                    WHEN 'multipla' THEN COALESCE(pm.profit, 0) * %s
+                    WHEN 'multipla' THEN
+                        CASE pm.result
+                            WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %s
+                            WHEN 'RED'   THEN -1.0 * uf.stake_units * %s
+                            WHEN 'PUSH'  THEN 0.0
+                            ELSE 0.0
+                        END
                     ELSE 0
                 END
             ), 0) AS total_pnl
@@ -418,7 +424,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
             LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id AND pf.result IS NOT NULL
             LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id AND pm.result IS NOT NULL
             WHERE uf.user_id = %s
-        """, (unit_value, unit_value, unit_value, user_id))
+        """, (unit_value, unit_value, unit_value, unit_value, user_id))
         pnl_row = cur.fetchone()
         pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
 
