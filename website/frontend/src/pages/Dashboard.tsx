@@ -836,20 +836,31 @@ function normalizePickRow(row: any, pickType: string): NormalizedPick {
   if (pickType === 'multipla') {
     let legs: any[] = []
     try { legs = typeof row.legs === 'string' ? JSON.parse(row.legs) : (row.legs ?? []) } catch { legs = [] }
+    // legs_count vem do endpoint recent-results (backend apaga legs antes de retornar)
+    const legsCount = row.legs_count ?? legs.length
     const f = legs[0]
-    const label = f ? `${f.home ?? f.home_team}${legs.length > 1 ? ` +${legs.length - 1}` : ''}` : 'Múltipla'
+    // usa home_team_name pré-normalizado pelo backend quando legs não está disponível
+    const firstTeam = row.home_team_name || (f && (f.home ?? f.home_team)) || ''
+    const label = firstTeam
+      ? (legsCount > 1 ? `${firstTeam} +${legsCount - 1}` : firstTeam)
+      : 'Múltipla'
     return { ...base,
       homeName: label, homeId: f?.home_team_id,
-      odd: row.total_odd ? Number(row.total_odd) : undefined,
+      market: row.market ?? (legsCount > 0 ? `Múltipla · ${legsCount} seleções` : 'Múltipla'),
+      odd: row.total_odd ? Number(row.total_odd) : row.odd ? Number(row.odd) : undefined,
       profit: row.profit != null ? Number(row.profit) : undefined,
     }
   }
   if (pickType === 'alavancagem') return { ...base,
-    homeName: row.home_team_1 ?? '',
-    awayName: row.away_team_1 ?? '',
-    homeId: row.home_team_id_1, awayId: row.away_team_id_1,
-    market: row.market_1, line: row.line_1,
-    odd: row.odd_combined ? Number(row.odd_combined) : row.odd_1 ? Number(row.odd_1) : undefined,
+    // suporta tanto formato "today" (home_team_1) quanto "recent-results" (home_team_name aliasado)
+    homeName: row.home_team_1 ?? row.home_team_name ?? '',
+    awayName: row.away_team_1 ?? row.away_team_name ?? '',
+    homeId: row.home_team_id_1 ?? row.home_team_id,
+    awayId: row.away_team_id_1 ?? row.away_team_id,
+    market: row.market_1 ?? row.market,
+    line: row.line_1 ?? row.line,
+    odd: row.odd_combined ? Number(row.odd_combined) : row.odd ? Number(row.odd) : undefined,
+    betHouse: row.bet_house_1 ?? row.bet_house,
     isMonetary: true, profit: row.profit != null ? Number(row.profit) : undefined,
   }
   // já normalizado (recent-results / mixed)
@@ -902,7 +913,7 @@ function PicksTable({
                   )}
                   {homeSrc && <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display = 'none')} />}
                   <span className="text-sm font-semibold text-white truncate">{p.homeName}</span>
-                  {p.awayName && pt !== 'multipla' && (
+                  {p.awayName && (
                     <>
                       <span className="text-zinc-600 text-xs shrink-0">vs</span>
                       <span className="text-sm font-semibold text-white truncate">{p.awayName}</span>
