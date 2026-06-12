@@ -1075,9 +1075,10 @@ function StatBar({ currentVal, lineVal, direction }: {
 
 function LiveLeg({ leg }: { leg: any }) {
   const isLive  = LIVE_SET.has(leg.status)
+  const legLineLc = leg.line?.toLowerCase() ?? ''
   const hasBar  = leg.current_val != null && leg.line_val != null &&
-    (leg.line?.toLowerCase().startsWith('over') || leg.line?.toLowerCase().startsWith('mais') ||
-     leg.line?.toLowerCase().startsWith('under') || leg.line?.toLowerCase().startsWith('menos'))
+    (legLineLc.startsWith('over') || legLineLc.startsWith('mais') ||
+     legLineLc.startsWith('under') || legLineLc.startsWith('menos'))
   const direction: 'over' | 'under' = (leg.line || '').toLowerCase().startsWith('under') ||
     (leg.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = leg.pick_status === 'winning' ? 'text-green-400'
@@ -1122,9 +1123,10 @@ function LiveLeg({ leg }: { leg: any }) {
 function LivePickCard({ pick }: { pick: any }) {
   const isLive  = pick.is_live
   const isMulti = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  const lineLc  = pick.line?.toLowerCase() ?? ''
   const hasBar  = !isMulti && pick.current_val != null && pick.line_val != null &&
-    (pick.line?.toLowerCase().startsWith('over') || pick.line?.toLowerCase().startsWith('mais') ||
-     pick.line?.toLowerCase().startsWith('under') || pick.line?.toLowerCase().startsWith('menos'))
+    (lineLc.startsWith('over') || lineLc.startsWith('mais') ||
+     lineLc.startsWith('under') || lineLc.startsWith('menos'))
   const direction: 'over' | 'under' = (pick.line || '').toLowerCase().startsWith('under') ||
     (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = pick.pick_status === 'winning' ? 'text-green-400'

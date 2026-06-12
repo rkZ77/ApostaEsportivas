@@ -106,7 +106,7 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return float(hc + ac), "Escanteios", direction
 
     # ── Cards ──
-    if any(k in m for k in ["cartão", "cartao", "card"]):
+    if any(k in m for k in ["cart", "card"]):
         hy = home_stats.get("Yellow Cards", 0)
         hr = home_stats.get("Red Cards", 0)
         ay = away_stats.get("Yellow Cards", 0)
