@@ -63,46 +63,57 @@ def _clean(obj):
 SYSTEM_PROMPT = """\
 Voce e QUANTBET-ALAVANCAGEM, especializado em selecionar o pick mais seguro do dia em jogos da Copa do Mundo FIFA.
 
-OBJETIVO: 1 pick (ou combinacao de 2 picks de jogos diferentes) com odd combinada entre 1.40-1.60. Odd alvo ~1.50. Prioridade maxima: seguranca e consistencia.
+OBJETIVO: 1 pick (ou combinacao de 2 picks de jogos DIFERENTES) com odd COMBINADA entre {odd_min}-{odd_max}. Odd alvo ~{odd_target}. Prioridade maxima: seguranca e consistencia.
 
-LOGICA:
-- 1 pick isolado com odd 1.40-1.60 e consistencia alta → preferivel
-- Se nao houver → combine 2 picks de jogos DIFERENTES com odd combinada 1.40-1.60
-- Combinacao: ambos com confidence>=0.70 individualmente — nao combine fraco com forte
-- Consistencia vale tudo: 9/10 confirmando@1.45 > 7/10 confirmando@1.58
-- Amostra minima: 5 jogos no venue correto | 2+ confirmadores independentes
-- MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
+LOGICA DE ODD — REGRA CRITICA:
+- Opcao A (simples): 1 pick com odd individual entre {odd_min}-{odd_max}. PREFERIVEL.
+- Opcao B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 resulte em {odd_min}-{odd_max}.
+  ATENCAO: para o COMBINADO ficar em {odd_min}-{odd_max}, cada pick individual DEVE ter odd entre 1.10-1.27.
+  EXEMPLOS validos: 1.22×1.25=1.525 ✓ | 1.20×1.28=1.536 ✓
+  EXEMPLOS INVALIDOS: 1.40×1.50=2.10 ✗ | 1.35×1.45=1.96 ✗ — NUNCA combine picks com odd individual acima de 1.30.
+- Se nao houver pick isolado valido E nao houver dois picks com odd individual ≤1.27 → retorne no_bet.
+- Combinacao: ambos com confidence>=0.70 — nao combine fraco com forte.
+- Consistencia vale tudo: 9/10 confirmando@1.25 > 7/10 confirmando@1.45.
+- Amostra minima: 5 jogos no venue correto | 2+ confirmadores independentes.
+- MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiatico), escanteios, cartoes, Dupla Chance, Handicap Asiatico.
   Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados.
-- Linha Over/Under (qualquer mercado): sempre a mais conservadora na faixa. Over→linha mais baixa. Under→linha mais alta.
+- Linha Over/Under: sempre a mais conservadora. Over→linha mais baixa. Under→linha mais alta.
 - Mercados proibidos: Match Winner (1X2 direto).
-- Nenhum pick com confidence>={conf_min} → no_bet
+- Nenhum pick valido com confidence>={conf_min} → no_bet.
 
 SAIDA: apenas JSON valido. Sua resposta comeca com {{ e termina com }}. Nenhum texto fora do JSON.\
 """
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM Copa do Mundo — pick mais seguro do dia. Odd alvo: ~{odd_target} | Faixa: {odd_min}-{odd_max}
+ALAVANCAGEM Copa do Mundo — pick mais seguro do dia. Odd alvo: ~{odd_target} | Faixa ODD COMBINADA: {odd_min}-{odd_max}
 
-Opcao A: 1 pick isolado odd {odd_min}-{odd_max}
-Opcao B: 2 picks de jogos DIFERENTES com odd combinada {odd_min}-{odd_max}
-Criterios: league_id=1 | amostra>=5 no venue | taxa>=65% | confidence>={conf_min} | EV>0 | combinacao: mercados independentes
+OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}
+OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 = {odd_min}-{odd_max}
+  → Para combinar: cada pick individual DEVE ter odd ≤ 1.27 (ex: 1.22 × 1.25 = 1.525). Se odd_1×odd_2 > {odd_max} → INVALIDO.
+  → NUNCA combine picks com odd individual acima de 1.30 — o combinado sempre ultrapassaria {odd_max}.
+
+Criterios: league_id=1 | amostra>=5 no venue correto | taxa>=65% | confidence>={conf_min} | EV>0
 
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
 
-FILTRAR: odd {odd_min}-{odd_max}→candidatos A (todos os mercados). odd 1.10-{odd_max}→candidatos B. Amostra<5→descarte.
-Avalie TODOS os tipos: gols, escanteios, cartoes, BTTS, Dupla Chance, Handicap. Escolha pelo maior confidence, nao pelo tipo.
-AVALIAR: taxa=confirmados/total (>=0.65) | prob_real=taxa ponderada temporal (1.0,0.85,0.70...) | EV=(prob_real×odd)-1>0
+PASSO 1 — Candidatos A (simples): odd individual {odd_min}-{odd_max}. Avalie gols, escanteios, cartoes, BTTS, Dupla Chance, Handicap.
+PASSO 2 — Candidatos B (somente se A falhar): odd individual 1.10-1.27. Verifique se dois picks de jogos diferentes resultam em combinado {odd_min}-{odd_max}.
+PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=0.
+PASSO 4 — Selecionar: prefira A. B somente se confidence media de B superar A por >=0.05. Sem valido→no_bet.
+
+CALCULOS:
+taxa=confirmados/total | prob_real=media ponderada (1.0,0.85,0.70...) | EV=(prob_real×odd)-1
 CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
   Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7 | Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos3→1.0|media→0.5
-MONTAR: Prefira A. B somente sem A valido ou confidence media significativamente maior. Empate→maior consistencia. Sem valido→no_bet.
-Verificacao: league_id=1? amostra>=5? taxa>=65%? confidence>={conf_min}? odd {odd_min}-{odd_max}? EV>0?
+
+VERIFICACAO FINAL antes de retornar: odd_combined entre {odd_min} e {odd_max}? Se nao → no_bet.
 
 SAIDA JSON:
 Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
 Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
-Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
+Sem pick: {{"no_bet":true,"motivo":"criterio que falhou — ex: odd combinada fora da faixa"}}
 """
 
 
@@ -359,7 +370,12 @@ def run_alavancagem_llm(fixtures: list[dict]) -> dict:
             response = client.messages.create(
                 model=AI_MODEL_NAME,
                 max_tokens=8096,
-                system=SYSTEM_PROMPT.format(conf_min=CONFIDENCE_MIN),
+                system=SYSTEM_PROMPT.format(
+                    conf_min=CONFIDENCE_MIN,
+                    odd_min=ODD_MIN,
+                    odd_max=ODD_MAX,
+                    odd_target=ODD_TARGET,
+                ),
                 messages=[{"role": "user", "content": user_prompt}],
             )
             break
@@ -395,6 +411,11 @@ def save_pick(result: dict, bankroll: float):
     p2   = result.get("pick_2")
     tipo = result.get("tipo", "simples")
     odd_combined      = float(result["odd_combined"])
+
+    # Validação hard: rejeita se odd_combined fora da faixa permitida
+    if not (ODD_MIN <= odd_combined <= ODD_MAX):
+        print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_MIN}-{ODD_MAX}. Retornando no_bet.")
+        return
     confidence_media  = float(result.get("confidence_media", p1["confidence"]))
     stake             = 1.0  # 1 unidade = 100% da banca no sistema alavancagem
     potential_return  = round(odd_combined, 2)  # retorno em unidades
