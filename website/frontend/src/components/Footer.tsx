@@ -21,7 +21,7 @@ export default function Footer() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors font-semibold"
             >
-              <img src="/instagram.jpg" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
+              <img src="/instagram.png" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
               @hpstips
             </a>
             <Link to="/planos" className="text-xs text-zinc-500 hover:text-green-400 transition-colors">
