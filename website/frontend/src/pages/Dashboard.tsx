@@ -88,7 +88,7 @@ function TabBar({ tab, setTab, canSeeVip, counts }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    { key: 'aovivo',       label: 'Ao Vivo',          badge: '🔴', badgeCls: 'bg-red-500/10 text-red-400 border-red-500/20' },
+    { key: 'aovivo',       label: 'Ao Vivo',          badge: 'LIVE', badgeCls: 'bg-red-500/10 text-red-400 border-red-500/20' },
     { key: 'chat',         label: 'Comunidade'       },
   ]
 
@@ -1152,8 +1152,9 @@ function LivePickCard({ pick }: { pick: any }) {
           <span className="text-xs text-zinc-600">· {pick.stake_units}u</span>
         </div>
         {isLive ? (
-          <span className="text-[9px] font-black text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-0.5 rounded-full animate-pulse tracking-wide">
-            🔴 AO VIVO
+          <span className="flex items-center gap-1 text-[9px] font-black text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-0.5 rounded-full tracking-wide">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
+            AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-zinc-600 uppercase tracking-wide">
@@ -1242,7 +1243,11 @@ function LivePicks() {
 
       {picks.length === 0 ? (
         <div className="card p-10 text-center border-dashed">
-          <div className="text-3xl mb-3">📡</div>
+          <div className="flex justify-center mb-3">
+              <svg className="w-10 h-10 text-zinc-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8.288 15.038a5.25 5.25 0 017.424 0M5.106 11.856c3.807-3.808 9.98-3.808 13.788 0M1.924 8.674c5.565-5.565 14.587-5.565 20.152 0M12 20.25h.008v.008H12v-.008z" />
+              </svg>
+            </div>
           <p className="font-semibold text-zinc-400">Nenhum pick ativo</p>
           <p className="text-sm text-zinc-600 mt-1">Clique em "Apostei" em qualquer pick para acompanhar aqui.</p>
         </div>
