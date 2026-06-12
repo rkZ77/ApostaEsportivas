@@ -431,6 +431,9 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const stakeSuggestion = banca
     ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value)
     : null
+  const potReturn = stakeSuggestion
+    ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
+    : null
 
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -446,121 +449,122 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     }
   }
 
+  const resultStyle = m.result === 'GREEN'
+    ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
+    : m.result === 'RED'
+    ? { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'RED ✗' }
+    : null
+
   return (
-    <div className="card p-5 cursor-pointer" onClick={onClick}>
+    <div
+      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all duration-200 group"
+      onClick={onClick}
+    >
+      {/* Accent bar */}
+      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
+
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div>
-          <div className="flex items-center gap-2 mb-0.5">
-            <p className="text-xs font-black text-zinc-300 uppercase tracking-wider">Múltipla</p>
-            <span className="badge-vip">VIP</span>
-          </div>
-          <p className="text-xs text-zinc-600">
-            {new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long' })}
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Múltipla</span>
+          <span className="badge-vip">VIP</span>
+          <span className="text-[10px] text-zinc-600">
+            {new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {' · '}{legs.length} seleções
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {m.result && (
-            <span className={m.result === 'GREEN' ? 'badge-green' : 'badge-red'}>{m.result}</span>
-          )}
-          <div className="text-right">
-            <div className="text-green-400 font-black text-2xl">{Number(m.total_odd).toFixed(2)}</div>
-            <div className="text-xs text-zinc-600">odd total</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Legs */}
-      {legs.length > 0 && (
-        <div className="space-y-2 mb-4">
-          {legs.map((leg: any, i: number) => (
-            <div key={i} className="bg-zinc-800/50 rounded-xl p-3">
-              {/* Times */}
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-5 h-5 flex items-center justify-center bg-zinc-700/80 rounded-full text-[10px] text-zinc-500 font-black shrink-0">
-                  {i + 1}
-                </span>
-                <div className="flex items-center flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 flex-1 justify-end min-w-0">
-                    <span className="text-zinc-200 text-xs font-semibold truncate text-right">{leg.home ?? leg.home_team}</span>
-                    <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={24} />
-                  </div>
-                  <span className="text-zinc-600 text-[10px] font-bold shrink-0 mx-2">VS</span>
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={24} />
-                    <span className="text-zinc-200 text-xs font-semibold truncate">{leg.away ?? leg.away_team}</span>
-                  </div>
-                </div>
-                <span className="text-green-400 font-black shrink-0 text-sm ml-1">{Number(leg.odd).toFixed(2)}</span>
-              </div>
-              {/* Mercado */}
-              <div className="pl-7">
-                <span className="text-[11px] text-zinc-500 bg-zinc-900/80 px-2 py-0.5 rounded-md inline-block">
-                  {leg.market}{leg.line ? ` · ${leg.line}` : ''}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-
-      {/* Confidence + profit */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-zinc-500 mr-2">Confiança</span>
-            <span className={pct >= 70 ? 'text-green-500 font-bold' : 'text-zinc-400'}>{pct}%</span>
-          </div>
-          <div className="bg-zinc-800 rounded-full h-1.5 w-24">
-            <div
-              className={`h-1.5 rounded-full ${pct >= 70 ? 'bg-green-500' : 'bg-zinc-500'}`}
-              style={{ width: `${pct}%` }}
-            />
-          </div>
-        </div>
-        {m.profit != null && (
-          <span className={`text-lg font-black ${m.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-            {m.profit >= 0 ? '+' : ''}{Number(m.profit).toFixed(2)}u
           </span>
+        </div>
+        {resultStyle ? (
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+            {resultStyle.label}
+          </span>
+        ) : (
+          <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
         )}
       </div>
 
-      {m.reasoning && (
-        <p className="mb-3 text-xs text-zinc-500 leading-relaxed line-clamp-2">{m.reasoning}</p>
-      )}
-
-      {stakeSuggestion && !m.result && (
-        <div className="flex items-center gap-2 bg-blue-500/5 border border-blue-500/15 rounded-lg px-3 py-1.5 mb-3">
-          <svg className="w-3.5 h-3.5 text-blue-400 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-          </svg>
-          <span className="text-xs text-zinc-500">Apostar:</span>
-          <span className="text-xs font-black text-blue-400">{stakeSuggestion.units}u</span>
-          <span className="text-xs text-zinc-400">= R${stakeSuggestion.amountR.toFixed(2)}</span>
-          <span className="text-xs text-zinc-600 ml-auto">½ Kelly</span>
+      {/* Odd hero + retorno */}
+      <div className="flex items-center gap-0 divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+        <div className="flex-1 px-5 py-3 text-center">
+          <div className="text-[10px] text-zinc-500 mb-0.5">Odd combinada</div>
+          <div className="text-3xl font-black text-green-400">{Number(m.total_odd).toFixed(2)}</div>
         </div>
-      )}
+        {stakeSuggestion && !m.result ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
+              <div className="text-xl font-black text-blue-400">{stakeSuggestion.units}u</div>
+              <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
+              <div className="text-xl font-black text-white">R${potReturn}</div>
+            </div>
+          </>
+        ) : m.profit != null ? (
+          <div className="flex-1 px-5 py-3 text-center">
+            <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+            <div className={`text-2xl font-black ${m.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+              {m.profit >= 0 ? '+' : ''}{Number(m.profit).toFixed(2)}u
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 px-5 py-3 text-center">
+            <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
+            <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+          </div>
+        )}
+      </div>
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+      {/* Legs */}
+      <div className="px-5 py-3 space-y-2">
+        {legs.map((leg: any, i: number) => (
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-black shrink-0">
+              {i + 1}
+            </span>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={20} />
+              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home ?? leg.home_team}</span>
+              <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
+              <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
+            </div>
+            <div className="shrink-0 text-right">
+              <div className="text-green-400 font-black text-sm">{Number(leg.odd).toFixed(2)}</div>
+              <div className="text-[10px] text-zinc-600 truncate max-w-[72px]">{leg.market}{leg.line ? ` ${leg.line}` : ''}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Confiança bar */}
+      <div className="px-5 pb-3">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="text-zinc-600">Confiança combinada</span>
+          <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
+        </div>
+        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
+          <div className={`h-1 rounded-full ${pct >= 70 ? 'bg-blue-500' : 'bg-zinc-600'}`} style={{ width: `${pct}%` }} />
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!m.result && !banca ? (
           <span className="text-[11px] text-zinc-600 italic">Configure sua banca para registrar aposta</span>
         ) : !m.result && banca ? (
           <button
             onClick={handleFollow}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
+                : 'border-zinc-700 text-zinc-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5'
             }`}
           >
-            {followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-          Ver detalhes →
-        </span>
+        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
       </div>
     </div>
   )
@@ -568,13 +572,11 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 
 // ─── Alavancagem card ─────────────────────────────────────────────────────────
 function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?: () => void; userBankroll?: number }) {
-  const isCombo        = pick.tipo === 'combinacao'
-  const oddCombined    = Number(pick.odd_combined ?? 0)
-  // Usa banca pessoal do usuário se disponível, senão a da série global
-  const stake          = userBankroll != null ? userBankroll : Number(pick.stake ?? pick.bankroll_before ?? 50)
-  const potReturn      = oddCombined > 0 ? stake * oddCombined : Number(pick.potential_return ?? 0)
-  const confPct        = Math.round((pick.confidence_media ?? 0) * 100)
-  // Profit proporcional: se tiver banca pessoal, calcula sobre ela
+  const isCombo     = pick.tipo === 'combinacao'
+  const oddCombined = Number(pick.odd_combined ?? 0)
+  const stake       = userBankroll != null ? userBankroll : Number(pick.stake ?? pick.bankroll_before ?? 50)
+  const potReturn   = oddCombined > 0 ? stake * oddCombined : Number(pick.potential_return ?? 0)
+  const confPct     = Math.round((pick.confidence_media ?? 0) * 100)
   const profit = pick.profit != null
     ? (userBankroll != null && Number(pick.stake ?? pick.bankroll_before ?? 50) > 0
         ? Number(pick.profit) / Number(pick.stake ?? pick.bankroll_before ?? 50) * userBankroll
@@ -597,101 +599,131 @@ function AlavancagemCard({ pick, onClick, userBankroll }: { pick: any; onClick?:
     }
   }
 
-  const legs = []
-  if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1, reasoning: pick.reasoning_1 })
-  if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2, reasoning: pick.reasoning_2 })
+  const legs: any[] = []
+  if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1 })
+  if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2 })
+
+  const resultStyle = pick.result === 'GREEN'
+    ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
+    : pick.result === 'RED'
+    ? { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'RED ✗' }
+    : null
 
   return (
-    <div className="relative overflow-hidden card p-5 border-orange-500/20 cursor-pointer" onClick={onClick}>
+    <div
+      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-2xl cursor-pointer transition-all duration-200 group"
+      onClick={onClick}
+    >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-xs font-black text-orange-400 uppercase tracking-widest">Alavancagem</span>
+          <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Alavancagem</span>
           <span className="badge-vip">VIP</span>
-          {isCombo && <span className="text-xs text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md">Combinada</span>}
+          {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">Combinada</span>}
         </div>
-        {pick.result
-          ? <span className={pick.result === 'GREEN' ? 'badge-green' : 'badge-red'}>{pick.result}</span>
-          : <span className="text-xs text-yellow-400 border border-yellow-400/20 bg-yellow-400/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
-        }
+        {resultStyle ? (
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+            {resultStyle.label}
+          </span>
+        ) : (
+          <span className="text-[10px] text-yellow-500 border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
+        )}
       </div>
 
-      {/* Banca */}
-      <div className="bg-zinc-900 rounded-xl p-3 mb-4 grid grid-cols-3 gap-3 text-center">
-        <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Sua banca</div>
-          <div className="text-lg font-black text-orange-400">R${stake.toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Odd</div>
-          <div className="text-lg font-black text-green-400">{oddCombined.toFixed(2)}</div>
-        </div>
-        <div>
-          <div className="text-xs text-zinc-500 mb-0.5">Retorno pot.</div>
-          <div className="text-lg font-black text-white">R${potReturn.toFixed(2)}</div>
-        </div>
+      {/* Bankroll progression */}
+      <div className="px-5 py-3 border-b border-zinc-800/60">
+        {userBankroll != null ? (
+          <div className="flex items-center gap-3">
+            <div className="flex-1">
+              <div className="text-[10px] text-zinc-500 mb-1">Sua banca alavancagem</div>
+              <div className="flex items-center gap-2">
+                <span className="text-2xl font-black text-orange-400">R${stake.toFixed(2)}</span>
+                {!pick.result && (
+                  <>
+                    <span className="text-zinc-600 text-sm">→</span>
+                    <span className="text-lg font-black text-white">R${potReturn.toFixed(2)}</span>
+                    <span className="text-[10px] text-zinc-600">se green</span>
+                  </>
+                )}
+                {profit != null && (
+                  <span className={`text-lg font-black ml-1 ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    ({profit >= 0 ? '+' : ''}R${Math.abs(profit).toFixed(2)})
+                  </span>
+                )}
+              </div>
+            </div>
+            <div className="text-center shrink-0">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
+              <div className="text-2xl font-black text-green-400">{oddCombined.toFixed(2)}</div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-[10px] text-zinc-500 mb-0.5">Odd alvo</div>
+              <div className="text-2xl font-black text-green-400">{oddCombined.toFixed(2)}</div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
+              <div className="text-lg font-black text-white">R${potReturn.toFixed(2)}</div>
+              <div className="text-[10px] text-zinc-600">base R${stake.toFixed(0)}</div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Legs */}
-      <div className="space-y-2 mb-4">
+      <div className="px-5 py-3 space-y-2">
         {legs.map((leg, i) => (
-          <div key={i} className="bg-zinc-800/50 rounded-xl p-3">
-            <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2 flex-1 min-w-0">
-                <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
-                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home} vs {leg.away}</span>
-                <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
-              </div>
-              <span className="text-green-400 font-black shrink-0 ml-2">{Number(leg.odd).toFixed(2)}</span>
+          <div key={i} className="flex items-center gap-2">
+            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black shrink-0">
+              {i + 1}
+            </span>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+              <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
+              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home}</span>
+              <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
+              <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
             </div>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-white">{leg.market}{leg.line ? <> · <span className="text-zinc-400">{leg.line}</span></> : ''}</span>
-              {leg.house && <span className="text-xs text-zinc-600">· {leg.house}</span>}
+            <div className="shrink-0 text-right">
+              <div className="text-green-400 font-black text-sm">{Number(leg.odd).toFixed(2)}</div>
+              <div className="text-[10px] text-zinc-600 truncate max-w-[72px]">{leg.market}{leg.line ? ` ${leg.line}` : ''}</div>
             </div>
-            {leg.reasoning && <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{leg.reasoning}</p>}
           </div>
         ))}
       </div>
 
-      {/* Confiança + profit */}
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="flex justify-between text-xs mb-1">
-            <span className="text-zinc-500 mr-2">Confiança</span>
-            <span className={confPct >= 75 ? 'text-green-500 font-bold' : 'text-zinc-400'}>{confPct}%</span>
-          </div>
-          <div className="bg-zinc-800 rounded-full h-1.5 w-24">
-            <div className={`h-1.5 rounded-full ${confPct >= 75 ? 'bg-green-500' : 'bg-zinc-500'}`} style={{ width: `${confPct}%` }} />
-          </div>
+      {/* Confiança */}
+      <div className="px-5 pb-3">
+        <div className="flex justify-between text-[10px] mb-1">
+          <span className="text-zinc-600">Confiança</span>
+          <span className={confPct >= 70 ? 'text-orange-400 font-bold' : 'text-zinc-500'}>{confPct}%</span>
         </div>
-        {profit != null && (
-          <span className={`text-lg font-black ${profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-            {profit >= 0 ? '+' : ''}R${Math.abs(profit).toFixed(2)}
-          </span>
-        )}
+        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
+          <div className={`h-1 rounded-full ${confPct >= 70 ? 'bg-orange-500' : 'bg-zinc-600'}`} style={{ width: `${confPct}%` }} />
+        </div>
       </div>
 
-      {/* Footer actions */}
-      <div className="flex items-center justify-between pt-3 border-t border-zinc-800">
+      {/* Footer */}
+      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!pick.result && userBankroll == null ? (
           <span className="text-[11px] text-zinc-600 italic">Configure sua banca de alavancagem para registrar</span>
         ) : !pick.result ? (
           <button
             onClick={handleFollow}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg transition-colors ${
+            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
-                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-                : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
+                : 'border-zinc-700 text-zinc-400 hover:border-orange-500/40 hover:text-orange-400 hover:bg-orange-500/5'
             }`}
           >
-            {followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
-          Ver detalhes →
-        </span>
+        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
       </div>
     </div>
   )
