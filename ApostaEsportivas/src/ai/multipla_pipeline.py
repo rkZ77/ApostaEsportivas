@@ -534,7 +534,7 @@ def run_multipla_pipeline() -> dict | None:
         resultados[name] = {
             "odd":        total_odd,
             "score":      round(score * 100),
-            "gestao":     round(stake_pct * 100),
+            "gestao":     round((stake_pct or 0) * 100),
             "games_data": games_info,
         }
 
