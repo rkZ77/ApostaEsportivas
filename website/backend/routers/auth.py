@@ -30,6 +30,9 @@ def _logo_data_uri() -> str:
         return "data:image/png;base64," + base64.b64encode(data).decode()
     except Exception:
         return ""
+
+def _logo_url(site_url: str) -> str:
+    return f"{site_url}/static/logo.png"
 _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_SIZE = 3 * 1024 * 1024  # 3 MB
 
@@ -137,7 +140,8 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
         s.sendmail(from_addr, [to], msg.as_string())
 
 
-def _welcome_html(first_name: str, site_url: str, logo_b64: str = "") -> str:
+def _welcome_html(first_name: str, site_url: str, logo_b64: str = "", logo_url: str = "") -> str:
+    logo_src = logo_url or logo_b64
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -148,7 +152,7 @@ def _welcome_html(first_name: str, site_url: str, logo_b64: str = "") -> str:
 
         <!-- Header verde -->
         <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{logo_b64}" alt="Pick IA" width="80" height="80"
+          <img src="{logo_src}" alt="Pick IA" width="80" height="80"
                style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
           <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">
             Pick<span style="color:#bbf7d0;">IA</span>
@@ -222,7 +226,8 @@ def _welcome_html(first_name: str, site_url: str, logo_b64: str = "") -> str:
 </html>"""
 
 
-def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str = "") -> str:
+def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str = "", logo_url: str = "") -> str:
+    logo_src = logo_url or logo_b64
     verify_url = f"{site_url}/verify-email?token={token}"
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -232,7 +237,7 @@ def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
         <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{logo_b64}" alt="Pick IA" width="80" height="80"
+          <img src="{logo_src}" alt="Pick IA" width="80" height="80"
                style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
           <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">Pick<span style="color:#bbf7d0;">IA</span></h1>
           <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
@@ -275,7 +280,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
             f"O link expira em 24 horas.\n\n"
             f"— Equipe Pick IA"
         ),
-        html=_verification_html(first_name, site_url, token, _logo_data_uri()),
+        html=_verification_html(first_name, site_url, token, logo_url=_logo_url(site_url)),
     )
 
 
