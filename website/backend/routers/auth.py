@@ -109,7 +109,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     from_addr = os.getenv("SMTP_FROM", smtp_user)
 
     if not smtp_user or not smtp_pass:
-        raise HTTPException(500, "SMTP não configurado no servidor")
+        return  # SMTP não configurado — não bloqueia o fluxo
 
     if html:
         msg = MIMEMultipart("alternative")
@@ -122,7 +122,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     msg["From"]    = from_addr
     msg["To"]      = to
 
-    with smtplib.SMTP(smtp_host, smtp_port) as s:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
         s.starttls()
         s.login(smtp_user, smtp_pass)
         s.sendmail(from_addr, [to], msg.as_string())
