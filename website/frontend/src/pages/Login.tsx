@@ -113,11 +113,16 @@ export default function Login() {
         navigate('/verify-email')
       }
     } catch (err: any) {
-      const d = err.response?.data?.detail
-      if (Array.isArray(d)) {
-        setError(d[0]?.msg || 'Dados inválidos. Verifique os campos preenchidos.')
+      const detail = err.response?.data?.detail
+      if (Array.isArray(detail)) {
+        const msg = detail.map((e: any) => e.msg || e.message || String(e)).join('. ')
+        setError(msg || 'Dados inválidos. Verifique os campos preenchidos.')
+      } else if (detail) {
+        setError(String(detail))
+      } else if (!err.response) {
+        setError('Não foi possível conectar ao servidor. Verifique sua conexão.')
       } else {
-        setError(d || 'Erro ao autenticar. Tente novamente.')
+        setError(`Erro ao processar. Tente novamente. (${err.response?.status ?? 'desconhecido'})`)
       }
     } finally {
       setLoading(false)

@@ -377,10 +377,18 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             expires_final = trial_expires.isoformat()
             user["trial_used"] = True
 
-        # Token de verificação de e-mail
-        email_token = secrets.token_urlsafe(32)
-        cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (email_token, user["id"]))
+        # Commit do INSERT e trial ANTES do token — garante que o usuário existe no banco
         conn.commit()
+
+        # Token de verificação de e-mail (operação separada; não desfaz o cadastro se falhar)
+        email_token: Optional[str] = None
+        try:
+            email_token = secrets.token_urlsafe(32)
+            cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (email_token, user["id"]))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            email_token = None
 
         user["plan"] = plan_final
         user["expires_at"] = expires_final
@@ -397,7 +405,8 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
 
         # Envio de e-mail de verificação em background (não bloqueia a resposta)
         site_url = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
-        background_tasks.add_task(_send_verification_email, body.email, body.name, email_token, site_url)
+        if email_token:
+            background_tasks.add_task(_send_verification_email, body.email, body.name, email_token, site_url)
 
         return {"user": user}
     finally:
