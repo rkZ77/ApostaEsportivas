@@ -249,26 +249,9 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
         if m.role in ("user", "assistant") and m.content.strip()
     ][-6:]
 
-    # Injeta contexto completo do site (picks, banca, alavancagem, desempenho)
-    # apenas quando a pergunta parecer relacionada ao site ou picks
-    site_keywords = (
-        "pick", "tip", "dica", "sugestão", "hoje", "resultado", "green", "red",
-        "acerto", "win rate", "desempenho", "bater", "bateu", "perdeu", "ganhou",
-        "banca", "unidade", "stake", "alavancagem", "série", "reset", "lucro",
-        "roi", "taxa", "acertou", "multipla", "múltipla", "site", "plataforma",
-        "pick seguro", "vip", "free", "grátis", "copa", "jogos", "apostei",
-        "quanto", "rendeu", "retorno", "investimento", "percentual",
-    )
-    user_lower = user_text.lower()
-    include_context = any(kw in user_lower for kw in site_keywords)
-
-    site_context = ""
-    if include_context:
-        site_context = await asyncio.to_thread(_get_site_context, current_user["id"])
-
-    full_message = user_text
-    if site_context:
-        full_message = f"{site_context}\n\n---\n\n{user_text}"
+    # Sempre injeta contexto completo do site (picks, banca, alavancagem, desempenho)
+    site_context = await asyncio.to_thread(_get_site_context, current_user["id"])
+    full_message = f"{site_context}\n\n---\n\n{user_text}" if site_context else user_text
 
     async def generate():
         yield f"data: {json.dumps({'type': 'status', 'text': 'Buscando dados...'})}\n\n"
