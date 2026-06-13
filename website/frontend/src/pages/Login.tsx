@@ -92,6 +92,7 @@ export default function Login() {
         return
       }
       if (!validateEmail(email)) { setError('Email inválido.'); return }
+      if (!username.trim()) { setError('Escolha um nome de usuário.'); return }
       if (!validateCPF(cpf)) { setError('CPF inválido. Verifique os dígitos informados.'); return }
       if (phone.replace(/\D/g, '').length < 10) {
         setError('Informe um telefone ou WhatsApp válido com DDD.')
@@ -106,8 +107,7 @@ export default function Login() {
       if (mode === 'login') {
         await login(getIdentifier(), password)
       } else {
-        const cleanUsername = username.trim() || undefined
-        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), cleanUsername, refCode || undefined)
+        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined)
         localStorage.removeItem('ref_code')
       }
       navigate('/picks')
@@ -242,14 +242,12 @@ export default function Login() {
                     autoComplete="name" />
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">
-                    Usuário <span className="text-zinc-600 font-normal">(opcional)</span>
-                  </label>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Usuário</label>
                   <input type="text" value={username}
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
-                    className="input" placeholder="seu_usuario"
+                    required className="input" placeholder="seu_usuario"
                     autoComplete="username" maxLength={20} />
-                  <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras, números e _. Gerado automaticamente se vazio.</p>
+                  <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras minúsculas, números e _.</p>
                 </div>
                 <div>
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>

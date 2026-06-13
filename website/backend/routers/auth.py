@@ -273,17 +273,16 @@ def register(body: RegisterBody, response: Response):
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="CPF já cadastrado. Cada CPF permite apenas 1 conta.")
 
-        # Resolve username (obrigatório — gerado automaticamente se não enviado)
+        # Resolve username (obrigatório)
         raw_username = (body.username or "").strip().lstrip("@").lower()
-        if raw_username:
-            if not _USERNAME_RE.match(raw_username):
-                raise HTTPException(status_code=400, detail="Usuário inválido. Use 3–20 caracteres: letras minúsculas, números e _")
-            cur.execute("SELECT id FROM users WHERE username = %s", (raw_username,))
-            if cur.fetchone():
-                raise HTTPException(status_code=400, detail="Usuário já em uso. Escolha outro.")
-            final_username = raw_username
-        else:
-            final_username = _generate_username(body.name, cur)
+        if not raw_username:
+            raise HTTPException(status_code=400, detail="Escolha um nome de usuário.")
+        if not _USERNAME_RE.match(raw_username):
+            raise HTTPException(status_code=400, detail="Usuário inválido. Use 3–20 caracteres: letras minúsculas, números e _")
+        cur.execute("SELECT id FROM users WHERE username = %s", (raw_username,))
+        if cur.fetchone():
+            raise HTTPException(status_code=400, detail="Usuário já em uso. Escolha outro.")
+        final_username = raw_username
 
         # Resolve referrer
         referrer_id: Optional[int] = None
