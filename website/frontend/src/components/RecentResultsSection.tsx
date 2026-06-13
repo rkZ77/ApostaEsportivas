@@ -62,7 +62,8 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
             const market   = row.market ?? row.market_1 ?? ''
             const line     = row.line ?? row.line_1 ?? ''
             const odd      = Number(row.odd ?? row.total_odd ?? row.odd_combined ?? 0)
-            const profit   = row.profit != null ? Number(row.profit) : null
+            const stake    = Number(row.stake ?? 1)
+            const profit   = row.profit != null ? Number(row.profit) * stake : null
             const matchDate = row.match_date ?? ''
             const isMonetary = pt === 'alavancagem'
 

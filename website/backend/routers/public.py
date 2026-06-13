@@ -73,11 +73,17 @@ def _sub_vip(date_cond: str) -> str:
     """
 
 def _sub_free(date_cond: str) -> str:
-    # JOIN fixtures para team IDs (picks_free pode não ter home_team_id em prod)
     return f"""
         SELECT pf.match_date,
                pf.home_team AS home_team_name, pf.away_team AS away_team_name,
-               f.home_team_id, f.away_team_id,
+               COALESCE(pf.home_team_id, f.home_team_id,
+                   (SELECT fx.home_team_id FROM fixtures fx
+                    WHERE fx.home_team = pf.home_team AND fx.home_team_id IS NOT NULL LIMIT 1)
+               ) AS home_team_id,
+               COALESCE(pf.away_team_id, f.away_team_id,
+                   (SELECT fx.away_team_id FROM fixtures fx
+                    WHERE fx.away_team = pf.away_team AND fx.away_team_id IS NOT NULL LIMIT 1)
+               ) AS away_team_id,
                pf.market, pf.line, pf.odd,
                pf.result, pf.profit,
                1 AS stake,

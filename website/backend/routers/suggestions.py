@@ -773,7 +773,8 @@ def get_recent_results(
                    home_team_name, away_team_name,
                    home_team_id, away_team_id,
                    market, line, odd, bet_house,
-                   confidence, result, profit
+                   confidence, result, profit,
+                   COALESCE(stake, 1) AS stake
             FROM picks_vip
             WHERE result IS NOT NULL
             ORDER BY match_date DESC, id DESC
@@ -788,10 +789,17 @@ def get_recent_results(
         rows = _safe_query(cur, """
             SELECT pf.id, pf.match_date,
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
-                   COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
-                   COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
+                   COALESCE(pf.home_team_id, f.home_team_id,
+                       (SELECT fx.home_team_id FROM fixtures fx
+                        WHERE fx.home_team = pf.home_team AND fx.home_team_id IS NOT NULL LIMIT 1)
+                   ) AS home_team_id,
+                   COALESCE(pf.away_team_id, f.away_team_id,
+                       (SELECT fx.away_team_id FROM fixtures fx
+                        WHERE fx.away_team = pf.away_team AND fx.away_team_id IS NOT NULL LIMIT 1)
+                   ) AS away_team_id,
                    pf.market, pf.line, pf.odd, pf.bet_house,
-                   pf.confidence, pf.result, pf.profit
+                   pf.confidence, pf.result, pf.profit,
+                   1 AS stake
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.result IS NOT NULL

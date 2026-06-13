@@ -157,13 +157,13 @@ function RecentResults() {
           <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Transparência total</p>
           <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
           <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-            Todos os picks gerados pela IA ficam registrados. Win rate e lucro auditáveis por qualquer pessoa.
+            Todos os picks gerados pela IA ficam registrados. Win rate auditável por qualquer pessoa.
           </p>
         </div>
 
         {/* Stats */}
         {s && s.total > 0 && (
-          <div className="grid grid-cols-3 gap-3 mb-10 max-w-lg mx-auto">
+          <div className="grid grid-cols-2 gap-3 mb-10 max-w-xs mx-auto">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
               <div className="text-2xl sm:text-3xl font-black text-green-500">{winRate}%</div>
               <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
@@ -171,12 +171,6 @@ function RecentResults() {
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
               <div className="text-2xl sm:text-3xl font-black text-white">{s.total}</div>
               <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Picks</div>
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
-              <div className={`text-2xl sm:text-3xl font-black ${(s.profit ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                {(s.profit ?? 0) >= 0 ? '+' : ''}{Number(s.profit ?? 0).toFixed(1)}u
-              </div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Lucro</div>
             </div>
           </div>
         )}
@@ -224,9 +218,6 @@ function RecentResults() {
                   <div className="flex items-center gap-1.5 shrink-0">
                     <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${RESULT_CLS[tip.result] ?? 'text-zinc-500'}`}>
                       {RESULT_LBL[tip.result] ?? tip.result}
-                    </span>
-                    <span className={`text-xs sm:text-sm font-black w-10 sm:w-12 text-right ${tip.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      {tip.profit >= 0 ? '+' : ''}{Number(tip.profit).toFixed(1)}u
                     </span>
                   </div>
                 </div>
