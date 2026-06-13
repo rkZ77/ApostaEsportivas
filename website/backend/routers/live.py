@@ -407,14 +407,29 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 fid = leg_data.get("fixture_id")
                 if not fid:
                     continue
+                home = leg_data.get("home") or leg_data.get("home_team") or ""
+                away = leg_data.get("away") or leg_data.get("away_team") or ""
+                h_id = leg_data.get("home_team_id")
+                a_id = leg_data.get("away_team_id")
+                if not home or not away:
+                    cur.execute(
+                        "SELECT home_team, away_team, home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
+                        (fid,),
+                    )
+                    fx = cur.fetchone()
+                    if fx:
+                        home = home or fx["home_team"] or ""
+                        away = away or fx["away_team"] or ""
+                        h_id = h_id or fx["home_team_id"]
+                        a_id = a_id or fx["away_team_id"]
                 legs_out.append(_enrich_leg(
                     fid,
                     leg_data.get("market", ""),
                     leg_data.get("line", ""),
-                    leg_data.get("home", ""),
-                    leg_data.get("away", ""),
-                    leg_data.get("home_team_id"),
-                    leg_data.get("away_team_id"),
+                    home,
+                    away,
+                    h_id,
+                    a_id,
                     float(leg_data.get("odd", 1)),
                 ))
 

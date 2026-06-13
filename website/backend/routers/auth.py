@@ -140,7 +140,8 @@ class ForgotPasswordBody(BaseModel):
     email: EmailStr
 
 class ResetPasswordBody(BaseModel):
-    token: str
+    email: EmailStr
+    code: str
     new_password: str
 
 class UpdateProfileBody(BaseModel):
@@ -231,6 +232,26 @@ def register(body: RegisterBody, response: Response):
         access_token  = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
         set_auth_cookies(response, access_token, refresh_token)
+
+        # Welcome email (fail silently — não bloqueia o cadastro)
+        try:
+            first_name = body.name.strip().split()[0]
+            site_url   = os.getenv("SITE_URL", "https://pickia.com.br")
+            _send_email(
+                to      = body.email,
+                subject = "Bem-vindo ao HPS Picks!",
+                body    = (
+                    f"Olá {first_name},\n\n"
+                    f"Sua conta foi criada com sucesso!\n\n"
+                    f"Você tem 2 dias de acesso VIP gratuito para testar todos os picks.\n\n"
+                    f"Acesse: {site_url}/login\n\n"
+                    f"Qualquer dúvida, nos siga no Instagram: @hpstips\n\n"
+                    f"— Equipe HPS Picks"
+                ),
+            )
+        except Exception:
+            pass
+
         return {"user": user}
     finally:
         cur.close(); conn.close()
@@ -543,24 +564,23 @@ def forgot_password(body: ForgotPasswordBody):
         if not row:
             return {"ok": True}
 
-        token     = secrets.token_urlsafe(32)
-        expires   = datetime.now(timezone.utc) + timedelta(hours=1)
+        code    = str(secrets.randbelow(900000) + 100000)  # 100000–999999
+        expires = datetime.now(timezone.utc) + timedelta(minutes=15)
         cur.execute(
             "UPDATE users SET reset_token = %s, reset_token_expires_at = %s WHERE id = %s",
-            (token, expires, row["id"]),
+            (code, expires, row["id"]),
         )
         conn.commit()
 
-        site_url = os.getenv("SITE_URL", "http://localhost:5173")
-        link     = f"{site_url}/reset-password?token={token}"
-        nome     = row["name"]
+        nome = row["name"]
         _send_email(
             to      = body.email,
-            subject = "HPS Picks — Redefinição de senha",
+            subject = "HPS Picks — Código de redefinição de senha",
             body    = (
                 f"Olá {nome},\n\n"
-                f"Recebemos uma solicitação para redefinir sua senha.\n\n"
-                f"Clique no link abaixo (válido por 1 hora):\n{link}\n\n"
+                f"Seu código para redefinir a senha é:\n\n"
+                f"  {code}\n\n"
+                f"O código expira em 15 minutos.\n"
                 f"Se não foi você, ignore este email.\n\n"
                 f"— HPS Picks"
             ),
@@ -572,19 +592,19 @@ def forgot_password(body: ForgotPasswordBody):
 
 @router.post("/reset-password")
 def reset_password(body: ResetPasswordBody):
-    """Valida token e atualiza a senha."""
+    """Valida código de 6 dígitos e atualiza a senha."""
     _validate_password(body.new_password)
 
     conn = get_connection()
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id FROM users WHERE reset_token = %s AND reset_token_expires_at > NOW()",
-            (body.token,),
+            "SELECT id FROM users WHERE email = %s AND reset_token = %s AND reset_token_expires_at > NOW()",
+            (body.email, body.code),
         )
         row = cur.fetchone()
         if not row:
-            raise HTTPException(400, "Token inválido ou expirado")
+            raise HTTPException(400, "Código inválido ou expirado")
 
         cur.execute(
             "UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expires_at = NULL WHERE id = %s",
