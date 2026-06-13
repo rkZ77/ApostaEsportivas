@@ -322,8 +322,8 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         {s.legs.map((g: any, i: number) => {
                           const homeTeam = g.home_team || g.home || '—'
                           const awayTeam = g.away_team || g.away || '—'
-                          const homeLogo = g.home_team_id ? `https://media.api-sports.io/football/teams/${g.home_team_id}.png` : null
-                          const awayLogo = g.away_team_id ? `https://media.api-sports.io/football/teams/${g.away_team_id}.png` : null
+                          const homeLogo = g.home_team_id ? `/api/proxy/team/${g.home_team_id}.png` : null
+                          const awayLogo = g.away_team_id ? `/api/proxy/team/${g.away_team_id}.png` : null
                           return (
                             <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
                               <div className="flex items-center justify-between gap-2">
@@ -473,7 +473,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         {g.teams.map((t: any, i: number) => {
                           const isHome = t.team_id === standings.home_team_id
                           const isAway = t.team_id === standings.away_team_id
-                          const logo = t.team_id ? `https://media.api-sports.io/football/teams/${t.team_id}.png` : null
+                          const logo = t.team_id ? `/api/proxy/team/${t.team_id}.png` : null
                           return (
                             <div
                               key={i}
@@ -589,14 +589,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1 flex-wrap mb-0.5">
                                     {pick.home_team_id_1 && (
-                                      <img src={`https://media.api-sports.io/football/teams/${pick.home_team_id_1}.png`}
+                                      <img src={`/api/proxy/team/${pick.home_team_id_1}.png`}
                                         alt="" className="w-3.5 h-3.5 object-contain shrink-0"
                                         onError={e => (e.currentTarget.style.display = 'none')} />
                                     )}
                                     <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
                                     <span className="text-zinc-600 text-[10px]">vs</span>
                                     {pick.away_team_id_1 && (
-                                      <img src={`https://media.api-sports.io/football/teams/${pick.away_team_id_1}.png`}
+                                      <img src={`/api/proxy/team/${pick.away_team_id_1}.png`}
                                         alt="" className="w-3.5 h-3.5 object-contain shrink-0"
                                         onError={e => (e.currentTarget.style.display = 'none')} />
                                     )}

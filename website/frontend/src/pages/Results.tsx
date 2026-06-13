@@ -350,7 +350,7 @@ export default function Results() {
                 <div className="card overflow-hidden">
                   <div className="divide-y divide-zinc-800/60">
                     {games.map(g => {
-                      const p     = Number(g.profit ?? 0)
+                      const p     = Number(g.profit ?? 0) * Number(g.stake ?? 1)
                       const badge = RESULT_BADGE[g.result] ?? 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
                       return (
                         <div key={g.id}
@@ -372,7 +372,7 @@ export default function Results() {
                                 </span>
                               )}
                               {g.home_team_id && (
-                                <img src={`https://media.api-sports.io/football/teams/${g.home_team_id}.png`}
+                                <img src={`/api/proxy/team/${g.home_team_id}.png`}
                                   className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display='none')} />
                               )}
                               <span className="text-sm font-semibold text-white truncate">{g.home_team_name}</span>
@@ -381,7 +381,7 @@ export default function Results() {
                                   <span className="text-zinc-600 text-xs shrink-0">vs</span>
                                   <span className="text-sm font-semibold text-white truncate">{g.away_team_name}</span>
                                   {g.away_team_id && (
-                                    <img src={`https://media.api-sports.io/football/teams/${g.away_team_id}.png`}
+                                    <img src={`/api/proxy/team/${g.away_team_id}.png`}
                                       className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display='none')} />
                                   )}
                                 </>

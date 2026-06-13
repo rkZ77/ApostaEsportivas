@@ -5,7 +5,7 @@ import Footer from '../components/Footer'
 
 const API_BASE = ''
 const TEAM_LOGO = (id?: number | null) =>
-  id ? `https://media.api-sports.io/football/teams/${id}.png` : null
+  id ? `/api/proxy/team/${id}.png` : null
 const LEAGUE_LOGO = (id: number) =>
   id === 1 ? '/logo-copa-mundo.png' : `https://media.api-sports.io/football/leagues/${id}.png`
 

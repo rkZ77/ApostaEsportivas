@@ -922,8 +922,8 @@ function PicksTable({
         {rows.map(row => {
           const pt = showSource ? (row.pick_type ?? pickType) : pickType
           const p  = normalizePickRow(row, pt)
-          const homeSrc = p.homeId ? `https://media.api-sports.io/football/teams/${p.homeId}.png` : null
-          const awaySrc = p.awayId ? `https://media.api-sports.io/football/teams/${p.awayId}.png` : null
+          const homeSrc = p.homeId ? `/api/proxy/team/${p.homeId}.png` : null
+          const awaySrc = p.awayId ? `/api/proxy/team/${p.awayId}.png` : null
           return (
             <button
               key={`${pt}-${p.id}`}

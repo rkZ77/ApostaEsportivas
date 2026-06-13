@@ -474,7 +474,7 @@ export default function Banca() {
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {data.best_pick.home_team_id && (
-                            <img src={`https://media.api-sports.io/football/teams/${data.best_pick.home_team_id}.png`}
+                            <img src={`/api/proxy/team/${data.best_pick.home_team_id}.png`}
                               alt="" className="w-4 h-4 object-contain shrink-0"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
@@ -498,7 +498,7 @@ export default function Banca() {
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
                           {data.worst_pick.home_team_id && (
-                            <img src={`https://media.api-sports.io/football/teams/${data.worst_pick.home_team_id}.png`}
+                            <img src={`/api/proxy/team/${data.worst_pick.home_team_id}.png`}
                               alt="" className="w-4 h-4 object-contain shrink-0"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
@@ -586,8 +586,8 @@ export default function Banca() {
                     <div className="card overflow-hidden">
                       <div className="divide-y divide-zinc-800/60">
                         {pageItems.map((e: any) => {
-                          const homeSrc = e.home_team_id ? `https://media.api-sports.io/football/teams/${e.home_team_id}.png` : null
-                          const awaySrc = e.away_team_id ? `https://media.api-sports.io/football/teams/${e.away_team_id}.png` : null
+                          const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
+                          const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
                           return (
                             <button
                               key={e.id}

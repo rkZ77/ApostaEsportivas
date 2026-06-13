@@ -85,7 +85,7 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
                       {SOURCE_LBL[pt] ?? pt}
                     </span>
                     {homeId && (
-                      <img src={`https://media.api-sports.io/football/teams/${homeId}.png`}
+                      <img src={`/api/proxy/team/${homeId}.png`}
                         alt="" className="w-4 h-4 object-contain shrink-0"
                         onError={e => (e.currentTarget.style.display = 'none')} />
                     )}
@@ -95,7 +95,7 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
                         <span className="text-zinc-600 text-xs shrink-0">vs</span>
                         <span className="text-sm font-semibold text-white truncate">{awayName}</span>
                         {awayId && (
-                          <img src={`https://media.api-sports.io/football/teams/${awayId}.png`}
+                          <img src={`/api/proxy/team/${awayId}.png`}
                             alt="" className="w-4 h-4 object-contain shrink-0"
                             onError={e => (e.currentTarget.style.display = 'none')} />
                         )}
