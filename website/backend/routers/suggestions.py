@@ -769,17 +769,19 @@ def get_recent_results(
 
         # ── VIP (resultados visíveis para todos) ────────────────────────────
         rows = _safe_query(cur, """
-            SELECT id, match_date,
-                   home_team_name, away_team_name,
-                   home_team_id, away_team_id,
-                   market, line, odd, bet_house,
-                   confidence, result, profit,
-                   COALESCE(stake, 1) AS stake
-            FROM picks_vip
-            WHERE result IS NOT NULL
-            ORDER BY match_date DESC, id DESC
+            SELECT pv.id, pv.match_date,
+                   pv.home_team_name, pv.away_team_name,
+                   pv.home_team_id, pv.away_team_id,
+                   pv.market, pv.line, pv.odd, pv.bet_house,
+                   pv.confidence, pv.result, pv.profit,
+                   COALESCE(ufp.stake_units, 1) AS stake
+            FROM picks_vip pv
+            LEFT JOIN user_followed_picks ufp
+                ON ufp.pick_id = pv.id AND ufp.pick_type = 'vip' AND ufp.user_id = %s
+            WHERE pv.result IS NOT NULL
+            ORDER BY pv.match_date DESC, pv.id DESC
             LIMIT %s
-        """, (limit,))
+        """, (current_user["id"], limit))
         for r in rows:
             d = dict(r)
             d["pick_type"] = "vip"
@@ -1163,7 +1165,22 @@ def get_results_games(
             LIMIT %s OFFSET %s
         """, page_params)
 
-        return {"total": total, "items": [dict(r) for r in rows]}
+        items = [dict(r) for r in rows]
+
+        # Substitui stake VIP pelo stake pessoal do usuário (picks_vip.stake é NULL por design)
+        vip_ids = [x["id"] for x in items if x.get("pick_type") == "vip"]
+        if vip_ids:
+            stake_rows = _safe_query(cur, """
+                SELECT pick_id, stake_units
+                FROM user_followed_picks
+                WHERE pick_type = 'vip' AND user_id = %s AND pick_id = ANY(%s)
+            """, (current_user["id"], vip_ids))
+            stake_map = {r["pick_id"]: float(r["stake_units"]) for r in stake_rows}
+            for item in items:
+                if item.get("pick_type") == "vip" and item["id"] in stake_map:
+                    item["stake"] = stake_map[item["id"]]
+
+        return {"total": total, "items": items}
     finally:
         cur.close(); conn.close()
 
