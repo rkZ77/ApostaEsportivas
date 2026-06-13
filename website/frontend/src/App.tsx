@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import Login from './pages/Login'
-import Dashboard from './pages/Dashboard'
+import Picks from './pages/Picks'
 import Results from './pages/Results'
 import Admin from './pages/Admin'
 import Fixtures from './pages/Fixtures'
@@ -35,7 +35,7 @@ export default function App() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
-          <Route path="/picks" element={<PrivateRoute><Dashboard /></PrivateRoute>} />
+          <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
           <Route path="/results" element={<PrivateRoute><Results /></PrivateRoute>} />
           <Route path="/fixtures" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
           <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
