@@ -11,12 +11,13 @@ interface User {
   expires_at?: string | null
   avatar_url?: string | null
   trial_used?: boolean
+  email_verified?: boolean
 }
 
 interface AuthContextType {
   user: User | null
-  login: (identifier: string, password: string) => Promise<void>
-  register: (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string) => Promise<void>
+  login: (identifier: string, password: string) => Promise<User>
+  register: (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string) => Promise<User>
   logout: () => void
   updateUser: (patch: Partial<User>) => void
   isVip: boolean
@@ -36,14 +37,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
   }
 
-  const login = async (identifier: string, password: string) => {
+  const login = async (identifier: string, password: string): Promise<User> => {
     const { data } = await api.post('/auth/login', { identifier, password })
     _save(data.user)
+    return data.user
   }
 
-  const register = async (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string) => {
+  const register = async (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string): Promise<User> => {
     const { data } = await api.post('/auth/register', { name, email, password, phone, cpf, username, ref_code })
     _save(data.user)
+    return data.user
   }
 
   const logout = async () => {

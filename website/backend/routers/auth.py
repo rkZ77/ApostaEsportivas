@@ -8,7 +8,7 @@ import shutil
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
-from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, UploadFile, File, BackgroundTasks
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
@@ -131,7 +131,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     msg["From"]    = from_addr
     msg["To"]      = to
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as s:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=5) as s:
         s.starttls()
         s.login(smtp_user, smtp_pass)
         s.sendmail(from_addr, [to], msg.as_string())
@@ -222,6 +222,63 @@ def _welcome_html(first_name: str, site_url: str, logo_b64: str = "") -> str:
 </html>"""
 
 
+def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str = "") -> str:
+    verify_url = f"{site_url}/verify-email?token={token}"
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+          <img src="{logo_b64}" alt="Pick IA" width="80" height="80"
+               style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
+          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">Pick<span style="color:#bbf7d0;">IA</span></h1>
+          <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
+        </td></tr>
+        <tr><td style="padding:36px 40px;text-align:center;">
+          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
+          <h2 style="margin:0 0 16px;color:#fff;font-size:22px;font-weight:800;">{first_name}!</h2>
+          <p style="margin:0 0 8px;color:#a1a1aa;font-size:15px;line-height:1.6;">
+            Sua conta foi criada. Para ativar seu <strong style="color:#22c55e;">acesso VIP gratuito de 2 dias</strong>,<br>confirme seu e-mail clicando no botão abaixo.
+          </p>
+          <p style="margin:0 0 28px;color:#52525b;font-size:12px;">O link expira em 24 horas.</p>
+          <a href="{verify_url}"
+             style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:16px;padding:16px 48px;border-radius:12px;letter-spacing:0.3px;">
+            Confirmar e-mail
+          </a>
+        </td></tr>
+        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
+          <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
+            Siga no Instagram: <a href="https://www.instagram.com/hpstips/" style="color:#22c55e;text-decoration:none;">@hpstips</a>
+          </p>
+          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+
+
+def _send_verification_email(to: str, name: str, token: str, site_url: str) -> None:
+    first_name = name.strip().split()[0]
+    verify_url = f"{site_url}/verify-email?token={token}"
+    _send_email(
+        to=to,
+        subject=f"Confirme seu e-mail — Pick IA",
+        body=(
+            f"Olá {first_name},\n\n"
+            f"Confirme seu e-mail para ativar seu acesso VIP gratuito de 2 dias:\n\n"
+            f"{verify_url}\n\n"
+            f"O link expira em 24 horas.\n\n"
+            f"— Equipe Pick IA"
+        ),
+        html=_verification_html(first_name, site_url, token, _logo_data_uri()),
+    )
+
+
 # ── models ───────────────────────────────────────────────────────────────────
 
 class RegisterBody(BaseModel):
@@ -257,7 +314,7 @@ class UpdateProfileBody(BaseModel):
 # ── endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/register")
-def register(body: RegisterBody, response: Response):
+def register(body: RegisterBody, response: Response, background_tasks: BackgroundTasks):
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -316,13 +373,18 @@ def register(body: RegisterBody, response: Response):
                 "UPDATE users SET plan='trial', expires_at=%s, trial_used=TRUE WHERE id=%s",
                 (trial_expires, user["id"])
             )
-            conn.commit()
             plan_final = "trial"
             expires_final = trial_expires.isoformat()
             user["trial_used"] = True
+
+        # Token de verificação de e-mail
+        email_token = secrets.token_urlsafe(32)
+        cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (email_token, user["id"]))
         conn.commit()
+
         user["plan"] = plan_final
         user["expires_at"] = expires_final
+        user["email_verified"] = False
         token_data = {
             "sub": str(user["id"]), "id": user["id"],
             "name": user["name"], "email": user["email"],
@@ -333,25 +395,9 @@ def register(body: RegisterBody, response: Response):
         refresh_token = create_refresh_token(token_data)
         set_auth_cookies(response, access_token, refresh_token)
 
-        # Welcome email (fail silently — não bloqueia o cadastro)
-        try:
-            first_name = body.name.strip().split()[0]
-            site_url   = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
-            _send_email(
-                to      = body.email,
-                subject = f"Bem-vindo ao Pick IA, {first_name}!",
-                body    = (
-                    f"Olá {first_name},\n\n"
-                    f"Sua conta foi criada com sucesso!\n\n"
-                    f"Você tem 2 dias de acesso VIP gratuito.\n\n"
-                    f"Acesse: {site_url}/picks\n\n"
-                    f"Instagram: @hpstips\n\n"
-                    f"— Equipe Pick IA"
-                ),
-                html    = _welcome_html(first_name, site_url, _logo_data_uri()),
-            )
-        except Exception:
-            pass
+        # Envio de e-mail de verificação em background (não bloqueia a resposta)
+        site_url = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
+        background_tasks.add_task(_send_verification_email, body.email, body.name, email_token, site_url)
 
         return {"user": user}
     finally:
@@ -366,17 +412,17 @@ def login(body: LoginBody, response: Response):
         id_type, id_value = _resolve_identifier(body.identifier)
         if id_type == "email":
             cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE email = %s",
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE email = %s",
                 (id_value,),
             )
         elif id_type == "cpf":
             cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE cpf = %s",
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE cpf = %s",
                 (id_value,),
             )
         else:
             cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at FROM users WHERE username = %s",
+                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE username = %s",
                 (id_value,),
             )
         row = cur.fetchone()
@@ -421,6 +467,48 @@ def login(body: LoginBody, response: Response):
 def logout(response: Response):
     clear_auth_cookies(response)
     return {"status": "ok"}
+
+
+class VerifyEmailBody(BaseModel):
+    token: str
+
+
+@router.post("/verify-email")
+def verify_email_endpoint(body: VerifyEmailBody):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE email_verification_token = %s", (body.token,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(400, "Link inválido ou já utilizado.")
+        cur.execute(
+            "UPDATE users SET email_verified=true, email_verification_token=NULL WHERE id=%s",
+            (row["id"],),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/resend-verification")
+def resend_verification(background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT email, name, email_verified FROM users WHERE id=%s", (current_user["id"],))
+        row = cur.fetchone()
+        if not row or row["email_verified"]:
+            return {"ok": True}
+        token = secrets.token_urlsafe(32)
+        cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (token, current_user["id"]))
+        conn.commit()
+        site_url = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
+        background_tasks.add_task(_send_verification_email, row["email"], row["name"], token, site_url)
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
 
 
 @router.post("/refresh")
@@ -521,7 +609,7 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, (cpf IS NOT NULL) AS has_cpf FROM users WHERE id = %s",
+            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, (cpf IS NOT NULL) AS has_cpf FROM users WHERE id = %s",
             (current_user["sub"],),
         )
         row = cur.fetchone()

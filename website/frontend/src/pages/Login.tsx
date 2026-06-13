@@ -105,12 +105,13 @@ export default function Login() {
     setLoading(true)
     try {
       if (mode === 'login') {
-        await login(getIdentifier(), password)
+        const u = await login(getIdentifier(), password)
+        navigate(u.email_verified === false ? '/verify-email' : '/picks')
       } else {
         await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined)
         localStorage.removeItem('ref_code')
+        navigate('/verify-email')
       }
-      navigate('/picks')
     } catch (err: any) {
       const d = err.response?.data?.detail
       if (Array.isArray(d)) {

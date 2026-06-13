@@ -15,6 +15,7 @@ import Agente from './pages/Agente'
 import Checkout from './pages/Checkout'
 import Banca from './pages/Banca'
 import Leaderboard from './pages/Leaderboard'
+import VerifyEmail from './pages/VerifyEmail'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
@@ -47,6 +48,7 @@ export default function App() {
           <Route path="/leaderboard" element={<PrivateRoute><Leaderboard /></PrivateRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
         </NotificationProvider>
