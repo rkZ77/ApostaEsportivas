@@ -5,6 +5,7 @@ import smtplib
 import pathlib
 import shutil
 from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, UploadFile, File
 from fastapi.responses import JSONResponse
@@ -99,8 +100,8 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
-def _send_email(to: str, subject: str, body: str):
-    """Envia email via SMTP configurado nas vars de ambiente."""
+def _send_email(to: str, subject: str, body: str, html: str | None = None):
+    """Envia email via SMTP. Se html fornecido, envia multipart com fallback plain."""
     smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
     smtp_port = int(os.getenv("SMTP_PORT", "587"))
     smtp_user = os.getenv("SMTP_USER", "")
@@ -110,7 +111,13 @@ def _send_email(to: str, subject: str, body: str):
     if not smtp_user or not smtp_pass:
         raise HTTPException(500, "SMTP não configurado no servidor")
 
-    msg = MIMEText(body, "plain", "utf-8")
+    if html:
+        msg = MIMEMultipart("alternative")
+        msg.attach(MIMEText(body, "plain", "utf-8"))
+        msg.attach(MIMEText(html, "html", "utf-8"))
+    else:
+        msg = MIMEText(body, "plain", "utf-8")
+
     msg["Subject"] = subject
     msg["From"]    = from_addr
     msg["To"]      = to
@@ -119,6 +126,91 @@ def _send_email(to: str, subject: str, body: str):
         s.starttls()
         s.login(smtp_user, smtp_pass)
         s.sendmail(from_addr, [to], msg.as_string())
+
+
+def _welcome_html(first_name: str, site_url: str) -> str:
+    return f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
+
+        <!-- Header verde -->
+        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
+          <img src="{site_url}/logo.png" alt="Pick IA" width="80" height="80"
+               style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
+          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">
+            Pick<span style="color:#bbf7d0;">IA</span>
+          </h1>
+          <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
+        </td></tr>
+
+        <!-- Corpo -->
+        <tr><td style="padding:36px 40px;">
+          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
+          <h2 style="margin:0 0 20px;color:#fff;font-size:22px;font-weight:800;">{first_name}!</h2>
+          <p style="margin:0 0 28px;color:#a1a1aa;font-size:15px;line-height:1.6;">
+            Sua conta foi criada com sucesso. Você tem <strong style="color:#22c55e;">2 dias de acesso VIP gratuito</strong> para explorar todas as funcionalidades.
+          </p>
+
+          <!-- Features -->
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr>
+              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
+                <div style="color:#22c55e;font-size:20px;margin-bottom:8px;">&#9679;</div>
+                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Picks VIP com IA</div>
+                <div style="color:#71717a;font-size:12px;line-height:1.5;">Análises diárias geradas por IA com odds e mercados otimizados.</div>
+              </td>
+              <td width="4%"></td>
+              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
+                <div style="color:#3b82f6;font-size:20px;margin-bottom:8px;">&#9632;</div>
+                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Múltiplas e Alavancagem</div>
+                <div style="color:#71717a;font-size:12px;line-height:1.5;">Combinações inteligentes para maximizar o retorno da banca.</div>
+              </td>
+            </tr>
+            <tr><td colspan="3" style="padding-top:12px;"></td></tr>
+            <tr>
+              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
+                <div style="color:#ef4444;font-size:20px;margin-bottom:8px;">&#9679;</div>
+                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Ao Vivo</div>
+                <div style="color:#71717a;font-size:12px;line-height:1.5;">Acompanhe seus picks em tempo real com estatísticas da partida.</div>
+              </td>
+              <td width="4%"></td>
+              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
+                <div style="color:#f59e0b;font-size:20px;margin-bottom:8px;">&#9650;</div>
+                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Gestão de Banca</div>
+                <div style="color:#71717a;font-size:12px;line-height:1.5;">Controle de bankroll, metas e histórico completo de resultados.</div>
+              </td>
+            </tr>
+          </table>
+
+          <!-- CTA -->
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center">
+              <a href="{site_url}/picks"
+                 style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;letter-spacing:0.3px;">
+                Acessar meus picks
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+
+        <!-- Footer -->
+        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
+          <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
+            Siga no Instagram:
+            <a href="https://www.instagram.com/hpstips/" style="color:#22c55e;text-decoration:none;">@hpstips</a>
+          </p>
+          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
+        </td></tr>
+
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
 
 
 # ── models ───────────────────────────────────────────────────────────────────
@@ -236,18 +328,19 @@ def register(body: RegisterBody, response: Response):
         # Welcome email (fail silently — não bloqueia o cadastro)
         try:
             first_name = body.name.strip().split()[0]
-            site_url   = os.getenv("SITE_URL", "https://pickia.com.br")
+            site_url   = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
             _send_email(
                 to      = body.email,
-                subject = "Bem-vindo ao HPS Picks!",
+                subject = f"Bem-vindo ao Pick IA, {first_name}!",
                 body    = (
                     f"Olá {first_name},\n\n"
                     f"Sua conta foi criada com sucesso!\n\n"
-                    f"Você tem 2 dias de acesso VIP gratuito para testar todos os picks.\n\n"
-                    f"Acesse: {site_url}/login\n\n"
-                    f"Qualquer dúvida, nos siga no Instagram: @hpstips\n\n"
-                    f"— Equipe HPS Picks"
+                    f"Você tem 2 dias de acesso VIP gratuito.\n\n"
+                    f"Acesse: {site_url}/picks\n\n"
+                    f"Instagram: @hpstips\n\n"
+                    f"— Equipe Pick IA"
                 ),
+                html    = _welcome_html(first_name, site_url),
             )
         except Exception:
             pass
