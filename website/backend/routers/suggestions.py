@@ -801,13 +801,15 @@ def get_recent_results(
                    ) AS away_team_id,
                    pf.market, pf.line, pf.odd, pf.bet_house,
                    pf.confidence, pf.result, pf.profit,
-                   1 AS stake
+                   COALESCE(ufp.stake_units, 1) AS stake
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            LEFT JOIN user_followed_picks ufp
+                ON ufp.pick_id = pf.id AND ufp.pick_type = 'free' AND ufp.user_id = %s
             WHERE pf.result IS NOT NULL
             ORDER BY pf.match_date DESC, pf.id DESC
             LIMIT %s
-        """, (limit,))
+        """, (current_user["id"], limit,))
         for r in rows:
             d = dict(r)
             d["pick_type"] = "free"
@@ -815,16 +817,19 @@ def get_recent_results(
 
         # ── MÚLTIPLAS (resultados visíveis para todos) ───────────────────────
         rows = _safe_query(cur, """
-            SELECT id, match_date,
-                   total_odd AS odd,
-                   score_combo AS confidence,
-                   result, profit,
-                   games AS legs
-            FROM picks_multiplas
-            WHERE result IS NOT NULL
-            ORDER BY match_date DESC, id DESC
+            SELECT pm.id, pm.match_date,
+                   pm.total_odd AS odd,
+                   pm.score_combo AS confidence,
+                   pm.result, pm.profit,
+                   pm.games AS legs,
+                   COALESCE(ufp.stake_units, 1) AS stake
+            FROM picks_multiplas pm
+            LEFT JOIN user_followed_picks ufp
+                ON ufp.pick_id = pm.id AND ufp.pick_type = 'multipla' AND ufp.user_id = %s
+            WHERE pm.result IS NOT NULL
+            ORDER BY pm.match_date DESC, pm.id DESC
             LIMIT %s
-        """, (limit,))
+        """, (current_user["id"], limit,))
         import json as _json
         for r in rows:
             d = dict(r)
@@ -1167,18 +1172,29 @@ def get_results_games(
 
         items = [dict(r) for r in rows]
 
-        # Substitui stake VIP pelo stake pessoal do usuário (picks_vip.stake é NULL por design)
-        vip_ids = [x["id"] for x in items if x.get("pick_type") == "vip"]
-        if vip_ids:
-            stake_rows = _safe_query(cur, """
-                SELECT pick_id, stake_units
-                FROM user_followed_picks
-                WHERE pick_type = 'vip' AND user_id = %s AND pick_id = ANY(%s)
-            """, (current_user["id"], vip_ids))
-            stake_map = {r["pick_id"]: float(r["stake_units"]) for r in stake_rows}
-            for item in items:
-                if item.get("pick_type") == "vip" and item["id"] in stake_map:
-                    item["stake"] = stake_map[item["id"]]
+        # Substitui stake de VIP/Free/Múltipla pelo stake pessoal do usuário
+        personal_types = ("vip", "free", "multipla")
+        ids_by_type: dict[str, list] = {t: [] for t in personal_types}
+        for x in items:
+            pt = x.get("pick_type")
+            if pt in ids_by_type:
+                ids_by_type[pt].append(x["id"])
+
+        stake_map: dict[tuple, float] = {}
+        for pt, ids in ids_by_type.items():
+            if ids:
+                rows_s = _safe_query(cur, """
+                    SELECT pick_id, stake_units
+                    FROM user_followed_picks
+                    WHERE pick_type = %s AND user_id = %s AND pick_id = ANY(%s)
+                """, (pt, current_user["id"], ids))
+                for r in rows_s:
+                    stake_map[(pt, r["pick_id"])] = float(r["stake_units"])
+
+        for item in items:
+            key = (item.get("pick_type"), item["id"])
+            if key in stake_map:
+                item["stake"] = stake_map[key]
 
         return {"total": total, "items": items}
     finally:
