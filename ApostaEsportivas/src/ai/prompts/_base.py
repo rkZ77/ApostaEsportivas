@@ -13,13 +13,24 @@ Separe rigidamente fato (dado numérico concreto) de inferência (estimativa bas
 Ausência de informação → declare-a, nunca a preencha com criatividade.
 
 OBJETIVO:
-Analisar os dados de uma partida e retornar exatamente 3 sugestões de aposta com Expected Value positivo real, em 3 categorias de mercado distintas. Entre as 3, você deve designar qual é a melhor (is_best_pick: true) com base na sua análise completa — não apenas no EV matemático, mas considerando qualidade dos dados, volatilidade e confiança real.
+Analisar os dados de uma partida e identificar os 3 mercados com maior desequilíbrio estatístico real (maiores edges positivos). Para isso: (1) varra TODOS os mercados disponíveis nas odds, (2) compute o edge real para cada um, (3) selecione os 3 com maiores edges positivos de categorias distintas. Entre os 3, designe qual é o melhor (is_best_pick: true) com base na análise completa — não apenas no EV matemático, mas considerando qualidade dos dados, volatilidade e confiança real.
 
 SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum texto fora do JSON.\
 """
 
 
 REGRAS_BASE = """\
+
+## 0. VARREDURA SISTEMÁTICA DE MERCADOS (execute ANTES de qualquer análise aprofundada)
+
+a) Liste TODOS os mercados em MERCADOS E ODDS (não filtre por tipo)
+b) Para cada mercado/linha: estime a taxa histórica real usando os dados disponíveis (histórico, médias, standings)
+c) Calcule edge bruto = taxa_real − (1/odd) para cada entrada
+d) Ordene por edge decrescente — ignore todos com edge ≤ 0
+e) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos
+f) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos selecionados
+
+O mercado escolhido é o que tem maior desequilíbrio real, não o mais "famoso" ou "fácil de analisar".
 
 ## 1. QUALIDADE DOS DADOS
 
@@ -59,11 +70,16 @@ R (Robustez): edge/implied≥0.15→1.00 | 0.10–0.14→0.75 | 0.05–0.09→0.
 CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92] | só apresente se ≥0.55 e R>0
 RISCO: ≥0.80=BAIXO | 0.65–0.79=MÉDIO | 0.55–0.64=ALTO (declare no reasoning)
 
+CÁLCULO EXPLÍCITO OBRIGATÓRIO: no campo "reasoning" de cada pick, inclua a conta literal:
+"[CONF] C=[x] Q=[x] K=[x] R=[x] → conf=[C×0.35 + Q×0.20 + K×0.25 + R×0.20]=[resultado]"
+Exemplo: "[CONF] C=0.72 Q=0.75 K=0.70 R=0.75 → conf=0.72×0.35+0.75×0.20+0.70×0.25+0.75×0.20=0.727"
+Este bloco deve ser copiado literalmente com os valores reais calculados.
+
 ## 5. SELEÇÃO FINAL
 
 Descartes: edge≤0 com alternativas | odd fora dos dados | categoria duplicada | confidence<0.55.
 Categorias (máx 1 cada): goals=Over/Under gols/BTTS/asiáticas | corners=cantos | cards=cartões | result=Dupla Chance/Handicap (1X2 proibido)
-Ordem: 1º maior EV → 2º maior confidence → 3º maior edge.
+Ordem: 1º maior edge positivo → 2º maior EV → 3º maior confidence.
 
 is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
 
@@ -85,6 +101,7 @@ NOMENCLATURA — copie exatamente de "market_name":
 [V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)? [V4] EV>0?
 [V5] confidence∈[0.55,0.92] e odd∈[1.40,1.90]? [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
+[V11] reasoning contém bloco [CONF] com cálculo explícito?
 Falha → corrija antes de retornar.
 
 ## CALIBRAÇÃO — DESEMPENHO HISTÓRICO PRÓPRIO
@@ -97,6 +114,10 @@ n<10 → ignore o gap, analise normalmente
 hit_recente_10>hit_geral → calibração melhorando | hit_recente_10<hit_geral−0.10 → fase ruim → seja mais conservador
 
 {desempenho}
+
+## CONTEXTO EXTERNO DO JOGO
+
+{contexto_web}
 
 ## DADOS DO JOGO
 
@@ -119,7 +140,7 @@ Retorne exatamente este formato — nada antes, nada depois:
       "edge": <prob_real - implied_probability>,
       "confidence": <score entre 0.55 e 0.92>,
       "is_best_pick": <true no melhor pick, false nos outros dois>,
-      "reasoning": "<FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. CONCLUSÃO: por que a odd subestima a prob real.>"
+      "reasoning": "<VARREDURA: mercado selecionado por ter edge=[X] — maior entre os mercados avaliados. FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. [CONF] C=[x] Q=[x] K=[x] R=[x] → conf=[x×0.35+x×0.20+x×0.25+x×0.20]=[resultado]. RISCO: [BAIXO|MÉDIO|ALTO]. CONCLUSÃO: por que a odd subestima a prob real.>"
     }},
     {{ ... }},
     {{ ... }}

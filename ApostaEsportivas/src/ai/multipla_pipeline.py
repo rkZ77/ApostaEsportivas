@@ -82,15 +82,19 @@ gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<1
 --- JOGOS DO DIA + DADOS ---
 {fixtures_formatados}
 
-ETAPA 1 — MELHOR MERCADO POR JOGO:
-Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
-Nao filtre por tipo — o mercado vencedor e o que tiver maior score_base com dados estatisticos que o sustentem.
-score_base=(coerencia×0.45)+(estabilidade×0.30)+(reasoning×0.15)+(odds×0.10)
-Coerencia: 1.0=confirma|0.7=parcial|0.4=inconsistente|0.0=sem evidencia
-Estabilidade: 1.0=8+/10|0.7=6-7/10|0.4=4-5/10|0.0=sem padrao
-Reasoning: 1.0=dado numerico|0.7=logica com base|0.3=superficial|0.0=generico
-Odds: 1.0=1.40-1.90|0.0=fora→DESCARTE
-Linha: mais conservadora em 1.40-1.90. Descarte jogo se score_base<0.55 ou sem linha valida.
+ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
+Para cada jogo: liste TODOS os mercados das odds, calcule edge bruto = taxa_historica_real − (1/odd) para cada um.
+Ordene por edge decrescente. O mercado vencedor é o de MAIOR EDGE POSITIVO com dados estatísticos que o sustentem.
+Não filtre por tipo — escolha por consistência estatística independente do tipo de mercado.
+
+FORMULA SCORE_BASE (alinhada com VIP):
+C (Consistência): taxa histórica real dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
+Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
+R (Robustez): edge/implied≥0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
+score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
+Odds: se odd fora de 1.40-1.90 → DESCARTE. Linha: mais conservadora em 1.40-1.90.
+Descarte jogo se score_base<0.55 ou sem linha válida.
 
 ETAPA 2 — CORRELACAO:
 Proibido: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.

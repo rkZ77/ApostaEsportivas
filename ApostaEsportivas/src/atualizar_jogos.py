@@ -203,9 +203,9 @@ class DataCollectorMain:
 
         # ---------------------------------------------------------
         # Ligas de clube — escolhe um:
-        self.run_stage_4(mode="fast")                # padrão diário
+        #self.run_stage_4(mode="fast")                # padrão diário
         #self.run_stage_4(mode="full")               # liga nova (temporada inteira)
-        #self.run_stage_4(mode="custom", days=7)     # personalizado
+        self.run_stage_4(mode="custom", days=7)     # personalizado
 
         # Copa do Mundo — adiciona wc_mode:
         # wc_mode="fast"  → padrão (15 jogos/seleção)  ← default acima

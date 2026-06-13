@@ -2,6 +2,8 @@
 import re
 import json
 import time
+import urllib.request
+import urllib.error
 from datetime import datetime, date
 from decimal import Decimal
 from dotenv import load_dotenv, find_dotenv
@@ -12,6 +14,56 @@ from services.odds_service import OddsService
 from ai.prompts import get_prompt, SYSTEM_PROMPT
 
 load_dotenv(find_dotenv())
+
+
+# ============================================================
+# CONTEXTO WEB — busca informações sobre o jogo via Tavily
+# ============================================================
+def fetch_web_context(home_team: str, away_team: str, competition: str, match_date: str) -> str:
+    """Busca contexto externo sobre o jogo via Tavily API (opcional).
+    Retorna string vazia se TAVILY_API_KEY não estiver configurada.
+    """
+    api_key = os.getenv("TAVILY_API_KEY", "")
+    if not api_key:
+        return "Sem contexto web disponível (TAVILY_API_KEY não configurada)."
+
+    queries = [
+        f"{home_team} vs {away_team} {competition} {match_date} preview statistics",
+        f"{competition} {match_date} cards fouls referee history",
+    ]
+
+    results = []
+    for query in queries:
+        try:
+            payload = json.dumps({
+                "api_key": api_key,
+                "query": query,
+                "search_depth": "basic",
+                "max_results": 3,
+                "include_answer": True,
+            }).encode()
+            req = urllib.request.Request(
+                "https://api.tavily.com/search",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST",
+            )
+            with urllib.request.urlopen(req, timeout=8) as resp:
+                data = json.loads(resp.read())
+                if data.get("answer"):
+                    results.append(f"[{query}]\n{data['answer']}")
+                for r in data.get("results", [])[:2]:
+                    snippet = r.get("content", "")[:400]
+                    if snippet:
+                        results.append(f"Fonte: {r.get('url','')}\n{snippet}")
+        except (urllib.error.URLError, Exception) as e:
+            print(f"[WEB] Falha na busca '{query}': {e}")
+            continue
+
+    if not results:
+        return "Busca web sem resultados para este jogo."
+
+    return "\n\n".join(results[:5])
 
 # ============================================================
 # TRADUÇÃO DE MERCADOS (inglês → português)
@@ -270,6 +322,7 @@ HISTÓRICO FORA
         performance_str: str | None = None,
         custom_prompt: str | None = None,
         odds_preloaded: list | None = None,
+        web_context: str | None = None,
     ):
         odds_map = odds_preloaded if odds_preloaded is not None else self.odds_service.load_odds_by_fixture(fx["fixture_id"])
         if not odds_map:
@@ -315,15 +368,26 @@ HISTÓRICO FORA
             referee_stats,
         )
         
-        # NOVO: Usar prompt customizado se fornecido (Copa do Mundo)
+        # Busca contexto web se não fornecido externamente
+        if web_context is None:
+            match_date_str = fx.get("match_datetime", "")
+            if isinstance(match_date_str, datetime):
+                match_date_str = match_date_str.strftime("%Y-%m-%d")
+            web_context = fetch_web_context(
+                fx.get("home_team", ""),
+                fx.get("away_team", ""),
+                fx.get("league_name", f"league_{league_id}"),
+                str(match_date_str)[:10],
+            )
+
+        desempenho = performance_str or '{"status":"sem historico suficiente ainda"}'
+
         if custom_prompt:
-            desempenho = performance_str or '{"status":"sem historico suficiente ainda"}'
-            user_prompt = custom_prompt.format(dados=dados, desempenho=desempenho)
+            user_prompt = custom_prompt.format(dados=dados, desempenho=desempenho, contexto_web=web_context)
             print(f"[AI] Usando prompt PERSONALIZADO para fixture {fx['fixture_id']}")
         else:
             prompt_template = get_prompt(league_id)
-            desempenho = performance_str or '{"status":"sem historico suficiente ainda"}'
-            user_prompt = prompt_template.format(dados=dados, desempenho=desempenho)
+            user_prompt = prompt_template.format(dados=dados, desempenho=desempenho, contexto_web=web_context)
             print(f"[AI] Usando prompt liga {league_id} -> fixture {fx['fixture_id']}")
 
         data = self._call_api(user_prompt, fx["fixture_id"])
@@ -447,6 +511,7 @@ HISTÓRICO FORA
         league_id: int = 0,
         performance_str: str | None = None,
         custom_prompt: str | None = None,
+        web_context: str | None = None,
     ):
         # 1. Carrega odds uma única vez (usada pela IA e pelo lookup de market_id)
         odds_map_full = self.odds_service.load_odds_by_fixture(fx["fixture_id"])
@@ -462,6 +527,7 @@ HISTÓRICO FORA
             custom_prompt=custom_prompt,
             performance_str=performance_str,
             odds_preloaded=odds_map_full,
+            web_context=web_context,
         )
 
         if not suggestions:
