@@ -202,17 +202,16 @@ function PickCard({ pick }: { pick: any }) {
   )
 }
 
-const REFRESH_INTERVAL = 30_000
+const REFRESH_INTERVAL = 5_000
 
 export default function LivePicks() {
   const [picks, setPicks]           = useState<any[]>([])
   const [loading, setLoading]       = useState(true)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
-  const [countdown, setCountdown]   = useState(REFRESH_INTERVAL / 1000)
 
   const load = useCallback(() => {
     api.get('/live/my-picks')
-      .then(r => { setPicks(r.data); setLastUpdate(new Date()); setCountdown(REFRESH_INTERVAL / 1000) })
+      .then(r => { setPicks(r.data); setLastUpdate(new Date()) })
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -222,11 +221,6 @@ export default function LivePicks() {
     const id = setInterval(load, REFRESH_INTERVAL)
     return () => clearInterval(id)
   }, [load])
-
-  useEffect(() => {
-    const id = setInterval(() => setCountdown(c => Math.max(0, c - 1)), 1000)
-    return () => clearInterval(id)
-  }, [])
 
   if (loading && picks.length === 0) {
     return <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-zinc-700 border-t-red-500 rounded-full animate-spin" /></div>
@@ -252,12 +246,9 @@ export default function LivePicks() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
-          <span className="text-[10px] text-zinc-600 tabular-nums">
-            {countdown > 0 ? `↻ ${countdown}s` : '...'}
-          </span>
           <button onClick={load}
             className="text-xs text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 px-2 py-1 rounded-lg transition-colors">
-            Atualizar
+            ↻ Atualizar
           </button>
         </div>
       </div>
