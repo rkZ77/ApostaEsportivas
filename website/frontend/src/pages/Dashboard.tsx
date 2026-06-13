@@ -1107,13 +1107,25 @@ function LiveLeg({ leg }: { leg: any }) {
       </div>
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500 truncate">{leg.market} · {leg.line}</span>
-        {leg.current_val != null && (
-          <span className={`font-black shrink-0 ml-2 ${stColor}`}>
-            {leg.stat_label}: {leg.current_val}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0 ml-2">
+          {leg.current_val != null && (
+            <span className={`font-black ${stColor}`}>
+              {leg.stat_label}: {leg.current_val}
+            </span>
+          )}
+          {leg.is_locked && leg.pick_status === 'winning' && (
+            <span className="text-[9px] font-black text-green-400 bg-green-400/15 border border-green-500/30 px-1.5 py-0.5 rounded">
+              GARANTIDO
+            </span>
+          )}
+          {leg.is_locked && leg.pick_status === 'losing' && (
+            <span className="text-[9px] font-black text-red-400 bg-red-400/15 border border-red-500/30 px-1.5 py-0.5 rounded">
+              PERDIDO
+            </span>
+          )}
+        </div>
       </div>
-      {hasBar && (
+      {hasBar && !leg.is_locked && (
         <StatBar currentVal={leg.current_val} lineVal={leg.line_val} direction={direction} />
       )}
     </div>
@@ -1187,13 +1199,25 @@ function LivePickCard({ pick }: { pick: any }) {
           </div>
           <div className="flex items-center justify-between text-xs mb-1">
             <span className="text-zinc-500">{pick.market} · {pick.line}</span>
-            {pick.current_val != null && (
-              <span className={`font-black ${stColor}`}>
-                {pick.stat_label}: {pick.current_val}
-              </span>
-            )}
+            <div className="flex items-center gap-1.5 shrink-0 ml-2">
+              {pick.current_val != null && (
+                <span className={`font-black ${stColor}`}>
+                  {pick.stat_label}: {pick.current_val}
+                </span>
+              )}
+              {pick.is_locked && pick.pick_status === 'winning' && (
+                <span className="text-[9px] font-black text-green-400 bg-green-400/15 border border-green-500/30 px-1.5 py-0.5 rounded">
+                  GARANTIDO
+                </span>
+              )}
+              {pick.is_locked && pick.pick_status === 'losing' && (
+                <span className="text-[9px] font-black text-red-400 bg-red-400/15 border border-red-500/30 px-1.5 py-0.5 rounded">
+                  PERDIDO
+                </span>
+              )}
+            </div>
           </div>
-          {hasBar && (
+          {hasBar && !pick.is_locked && (
             <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
           )}
         </>

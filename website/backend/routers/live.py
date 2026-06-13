@@ -10,6 +10,7 @@ router = APIRouter(prefix="/api/live", tags=["live"])
 
 API_BASE      = "https://v3.football.api-sports.io"
 LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
+FT_STATUSES   = {"FT", "AET", "PEN"}
 CACHE_TTL     = 60  # seconds
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
@@ -184,6 +185,79 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
     return "neutral"
 
 
+def _calc_result(market: str, line: str, cur_val: float | None,
+                 home_goals: int, away_goals: int) -> str | None:
+    """Resultado definitivo de um pick com jogo encerrado."""
+    if cur_val is None:
+        return None
+    direction, line_val = _extract_line(line)
+    if direction == "over" and line_val is not None:
+        if cur_val > line_val:  return "GREEN"
+        if cur_val < line_val:  return "RED"
+        return "PUSH"
+    if direction == "under" and line_val is not None:
+        if cur_val < line_val:  return "GREEN"
+        if cur_val > line_val:  return "RED"
+        return "PUSH"
+    if direction == "result":
+        pst = _result_pick_status(line, home_goals, away_goals)
+        return "GREEN" if pst == "winning" else "RED"
+    return None
+
+
+def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn) -> None:
+    profit = round(float(odd) - 1, 4) if result == "GREEN" \
+             else (-1.0 if result == "RED" else 0.0)
+    tbl = "picks_vip" if pick_type == "vip" else "picks_free"
+    c = conn.cursor()
+    c.execute(f"UPDATE {tbl} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+              (result, profit, pick_id))
+    conn.commit()
+    c.close()
+    print(f"[AUTO-RESULT] {pick_type} #{pick_id} → {result} ({profit:+.2f}u)")
+
+
+def _save_multipla_result(pick_id: int, legs_results: list[str | None],
+                          total_odd: float, conn) -> None:
+    if any(r is None for r in legs_results):
+        return  # nem todas as pernas encerradas ainda
+    if any(r == "RED" for r in legs_results):
+        result = "RED"
+    elif all(r == "GREEN" for r in legs_results):
+        result = "GREEN"
+    else:
+        result = "PUSH"
+    profit = round(float(total_odd) - 1, 4) if result == "GREEN" \
+             else (-1.0 if result == "RED" else 0.0)
+    c = conn.cursor()
+    c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+              (result, profit, pick_id))
+    conn.commit()
+    c.close()
+    print(f"[AUTO-RESULT] multipla #{pick_id} → {result} ({profit:+.2f}u)")
+
+
+def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
+                             odd_combined: float, conn) -> None:
+    _save_multipla_result.__wrapped__ = True  # reuse same logic
+    if any(r is None for r in legs_results):
+        return
+    if any(r == "RED" for r in legs_results):
+        result = "RED"
+    elif all(r == "GREEN" for r in legs_results):
+        result = "GREEN"
+    else:
+        result = "PUSH"
+    profit = round(float(odd_combined) - 1, 4) if result == "GREEN" \
+             else (-1.0 if result == "RED" else 0.0)
+    c = conn.cursor()
+    c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+              (result, profit, pick_id))
+    conn.commit()
+    c.close()
+    print(f"[AUTO-RESULT] alavancagem #{pick_id} → {result} ({profit:+.2f}u)")
+
+
 def _enrich_leg(fid: int, market: str, line: str,
                 home_team: str, away_team: str,
                 home_team_id: int | None, away_team_id: int | None,
@@ -197,7 +271,7 @@ def _enrich_leg(fid: int, market: str, line: str,
     away_goals = int(goals.get("away") or 0)
 
     home_stats, away_stats = {}, {}
-    if status in LIVE_STATUSES:
+    if status in LIVE_STATUSES or status in FT_STATUSES:
         home_stats, away_stats = _parse_stats(_fetch_stats(fid))
 
     cur_val, stat_label, direction = _stat_for_market(
@@ -207,6 +281,13 @@ def _enrich_leg(fid: int, market: str, line: str,
     pst = _pick_status(cur_val, line, home_goals, away_goals) if cur_val is not None \
           else _result_pick_status(line, home_goals, away_goals) if direction == "result" \
           else "neutral"
+
+    # Locked: resultado já determinado e irreversível
+    is_ft     = status in FT_STATUSES
+    is_locked = is_ft
+    if not is_ft and cur_val is not None and line_val is not None:
+        if direction == "over"  and cur_val > line_val:  is_locked = True  # stats só sobem
+        if direction == "under" and cur_val >= line_val: is_locked = True  # já estourou o limite
 
     return {
         "fixture_id":   fid,
@@ -226,6 +307,8 @@ def _enrich_leg(fid: int, market: str, line: str,
         "line_val":     line_val,
         "pick_status":  pst,
         "is_live":      status in LIVE_STATUSES,
+        "is_ft":        is_ft,
+        "is_locked":    is_locked,
     }
 
 
@@ -268,17 +351,28 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             if not p or p["result"] is not None:
                 continue
 
+            odd = float(p["odd"] or 1)
             leg = _enrich_leg(
                 p["fixture_id"], p["market"], p["line"],
                 p["home_team"], p["away_team"],
                 p["home_team_id"], p["away_team_id"],
-                float(p["odd"] or 1),
+                odd,
             )
+            # Auto-save quando jogo encerrou
+            if leg["is_ft"]:
+                auto_res = _calc_result(
+                    p["market"], p["line"],
+                    leg["current_val"], leg["home_goals"], leg["away_goals"]
+                )
+                if auto_res:
+                    _save_single_result(pick_id, pick_type, auto_res, odd, conn)
+                    continue  # pick resolvido, sai da lista ao vivo
+
             result.append({
                 "pick_id":     pick_id,
                 "pick_type":   pick_type,
                 "match_date":  str(p["match_date"]),
-                "odd":         float(p["odd"] or 1),
+                "odd":         odd,
                 "stake_units": stake_u,
                 "is_live":     leg["is_live"],
                 **{k: leg[k] for k in (
@@ -286,7 +380,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "home_team_id", "away_team_id",
                     "market", "line", "status", "elapsed",
                     "home_goals", "away_goals",
-                    "stat_label", "current_val", "line_val", "pick_status",
+                    "stat_label", "current_val", "line_val",
+                    "pick_status", "is_locked",
                 )},
             })
 
@@ -324,11 +419,22 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 ))
 
             if legs_out:
+                total_odd = float(p["total_odd"] or 1)
+                # Auto-save quando todas as pernas encerraram
+                if all(l["is_ft"] for l in legs_out):
+                    leg_results = [
+                        _calc_result(l["market"], l["line"], l["current_val"],
+                                     l["home_goals"], l["away_goals"])
+                        for l in legs_out
+                    ]
+                    _save_multipla_result(pick_id, leg_results, total_odd, conn)
+                    continue
+
                 result.append({
                     "pick_id":     pick_id,
                     "pick_type":   "multipla",
                     "match_date":  str(p["match_date"]),
-                    "odd":         float(p["total_odd"] or 1),
+                    "odd":         total_odd,
                     "stake_units": stake_u,
                     "is_live":     any(l["is_live"] for l in legs_out),
                     "legs":        legs_out,
@@ -370,11 +476,21 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 ))
 
             if legs_out:
+                odd_combined = float(p["odd_combined"] or 1)
+                if all(l["is_ft"] for l in legs_out):
+                    leg_results = [
+                        _calc_result(l["market"], l["line"], l["current_val"],
+                                     l["home_goals"], l["away_goals"])
+                        for l in legs_out
+                    ]
+                    _save_alavancagem_result(pick_id, leg_results, odd_combined, conn)
+                    continue
+
                 result.append({
                     "pick_id":     pick_id,
                     "pick_type":   "alavancagem",
                     "match_date":  str(p["match_date"]),
-                    "odd":         float(p["odd_combined"] or 1),
+                    "odd":         odd_combined,
                     "stake_units": stake_u,
                     "is_live":     any(l["is_live"] for l in legs_out),
                     "legs":        legs_out,
