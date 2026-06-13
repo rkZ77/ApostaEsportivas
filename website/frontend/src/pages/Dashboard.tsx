@@ -2024,6 +2024,7 @@ export default function Dashboard() {
                     {today?.alavancagem ? (
                       <AlavancagemCard
                         pick={today.alavancagem}
+                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={() => setTab('alavancagem')}
                       />
