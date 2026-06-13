@@ -70,10 +70,16 @@ export default function Admin() {
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
 
-  const reload = () =>
-    Promise.all([api.get('/admin/users'), api.get('/admin/stats')])
-      .then(([u, s]) => { setUsers(u.data); setStats(s.data) })
+  const reload = () => {
+    setLoading(true)
+    api.get('/admin/users')
+      .then(u => setUsers(u.data))
+      .catch(() => setUsers([]))
       .finally(() => setLoading(false))
+    api.get('/admin/stats')
+      .then(s => setStats(s.data))
+      .catch(() => {})
+  }
 
   useEffect(() => {
     if (!isAdmin) { navigate('/picks'); return }

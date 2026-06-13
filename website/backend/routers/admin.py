@@ -169,8 +169,8 @@ def admin_stats(current_user: dict = Depends(require_admin)):
 
         cur.execute("""
             SELECT
-                (SELECT COUNT(*) FROM ai_suggestions
-                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS vip_picks,
+                (SELECT COUNT(*) FROM picks_vip
+                 WHERE match_date = CURRENT_DATE)                            AS vip_picks,
                 (SELECT COUNT(*) FROM picks_alavancagem
                  WHERE match_date = CURRENT_DATE)                            AS alavancagem,
                 (SELECT COUNT(*) FROM picks_free
