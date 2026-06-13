@@ -207,13 +207,15 @@ const REFRESH_INTERVAL = 5_000
 export default function LivePicks() {
   const [picks, setPicks]           = useState<any[]>([])
   const [loading, setLoading]       = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
   const load = useCallback(() => {
+    setRefreshing(true)
     api.get('/live/my-picks')
       .then(r => { setPicks(r.data); setLastUpdate(new Date()) })
       .catch(() => {})
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
 
   useEffect(() => {
@@ -246,9 +248,15 @@ export default function LivePicks() {
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {refreshing && (
+            <span className="flex items-center gap-1 text-[10px] text-green-500">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping shrink-0" />
+              Atualizando...
+            </span>
+          )}
           <button onClick={load}
             className="text-xs text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 px-2 py-1 rounded-lg transition-colors">
-            ↻ Atualizar
+            ↻
           </button>
         </div>
       </div>
@@ -310,7 +318,7 @@ export default function LivePicks() {
 
       {lastUpdate && (
         <p className="text-center text-[10px] text-zinc-700">
-          Última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+          Atualiza a cada 5s · última: {lastUpdate.toLocaleTimeString('pt-BR')}
         </p>
       )}
     </div>
