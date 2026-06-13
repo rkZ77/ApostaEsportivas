@@ -1965,6 +1965,26 @@ export default function Dashboard() {
                   )}
                 </div>
 
+                {/* Pick de hoje */}
+                {todayLoading ? <Spinner /> : (
+                  <div>
+                    <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
+                    {today?.alavancagem ? (
+                      <AlavancagemCard
+                        pick={today.alavancagem}
+                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
+                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
+                        onConfigureBanca={() => setTab('alavancagem')}
+                      />
+                    ) : (
+                      <div className="card p-8 text-center border-dashed border-orange-500/20">
+                        <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
+                        <p className="text-zinc-600 text-xs mt-1">Nenhum pick de alavancagem disponível para hoje.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Stats da série */}
                 {(() => {
                   const oldest = [...alavancagem].reverse()
@@ -2085,26 +2105,6 @@ export default function Dashboard() {
                         )
                       })}
                     </div>
-                  </div>
-                )}
-
-                {/* Pick de hoje */}
-                {todayLoading ? <Spinner /> : (
-                  <div>
-                    <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
-                    {today?.alavancagem ? (
-                      <AlavancagemCard
-                        pick={today.alavancagem}
-                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
-                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
-                        onConfigureBanca={() => setTab('alavancagem')}
-                      />
-                    ) : (
-                      <div className="card p-8 text-center border-dashed border-orange-500/20">
-                        <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Nenhum pick de alavancagem disponível para hoje.</p>
-                      </div>
-                    )}
                   </div>
                 )}
               </>
