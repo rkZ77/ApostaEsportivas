@@ -2017,6 +2017,77 @@ export default function Dashboard() {
                   )
                 })()}
 
+                {/* Caminho da série */}
+                {!alavLoading && alavancagem.length > 0 && (
+                  <div>
+                    <SectionHeader color="bg-orange-400" label="Caminho da Série" />
+                    <div className="space-y-0">
+                      {[...alavancagem].reverse().map((pick: any, idx: number, arr: any[]) => {
+                        const res = pick.result
+                        const date = pick.match_date
+                          ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                          : '—'
+                        const bankBefore = pick.bankroll_before
+                        const bankAfter  = pick.bankroll_after
+                        return (
+                          <div key={pick.id} className="flex gap-3">
+                            <div className="flex flex-col items-center w-8 shrink-0">
+                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
+                                !res
+                                  ? 'bg-orange-500 border-orange-400 text-black'
+                                  : res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400'
+                                  : 'bg-red-500/20 border-red-500/40 text-red-400'
+                              }`}>
+                                {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '⏳'}
+                              </div>
+                              {idx < arr.length - 1 && (
+                                <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-zinc-800'}`} />
+                              )}
+                            </div>
+                            <div
+                              onClick={() => openDetail(pick.id, 'alavancagem')}
+                              className={`flex-1 mb-2 rounded-xl border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
+                                !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-zinc-800 bg-zinc-900'
+                              }`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-center gap-1 flex-wrap mb-0.5">
+                                    {pick.home_team_id_1 && (
+                                      <img src={`/api/proxy/team/${pick.home_team_id_1}.png`}
+                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        onError={e => (e.currentTarget.style.display = 'none')} />
+                                    )}
+                                    <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
+                                    <span className="text-zinc-600 text-[10px]">vs</span>
+                                    {pick.away_team_id_1 && (
+                                      <img src={`/api/proxy/team/${pick.away_team_id_1}.png`}
+                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        onError={e => (e.currentTarget.style.display = 'none')} />
+                                    )}
+                                    <span className="text-xs font-bold text-white truncate">{pick.away_team_1}</span>
+                                  </div>
+                                  <div className="text-[10px] text-zinc-500">{date}</div>
+                                </div>
+                                <div className="text-right shrink-0">
+                                  {bankBefore != null && (
+                                    <div className="text-[10px] text-zinc-600">R${Number(bankBefore).toFixed(0)}</div>
+                                  )}
+                                  {bankAfter != null && (
+                                    <div className={`text-xs font-black ${res === 'GREEN' ? 'text-green-400' : 'text-red-400'}`}>
+                                      → R${Number(bankAfter).toFixed(0)}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
                 {/* Pick de hoje */}
                 {todayLoading ? <Spinner /> : (
                   <div>
