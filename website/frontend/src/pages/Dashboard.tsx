@@ -40,6 +40,28 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
   )
 }
 
+// ─── Tradução de mercados ─────────────────────────────────────────────────────
+const MARKET_PT: Record<string, string> = {
+  'Goals Over/Under': 'Gols ±',
+  'Over/Under': 'Gols ±',
+  'Both Teams Score': 'Ambas Marcam',
+  'Both Teams To Score': 'Ambas Marcam',
+  'Asian Handicap': 'Handicap Asiático',
+  'Double Chance': 'Dupla Chance',
+  'Corners Over/Under': 'Escanteios ±',
+  'Total Corners': 'Escanteios',
+  'Cards Over/Under': 'Cartões ±',
+  'Total Cards': 'Cartões',
+  'Match Winner': 'Resultado',
+  'Result': 'Resultado',
+  'Home/Away': '1X2',
+  'HT/FT': 'Inter./Final',
+  'Exact Score': 'Placar Exato',
+  'First Goal': 'Primeiro Gol',
+  'Anytime Score': 'Marcar a Qualquer Tempo',
+}
+const translateMarket = (m?: string) => (m ? (MARKET_PT[m] ?? m) : '')
+
 // ─── Tipos ────────────────────────────────────────────────────────────────────
 type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
 
@@ -562,20 +584,23 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg: any, i: number) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-black shrink-0">
-              {i + 1}
-            </span>
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={20} />
-              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home ?? leg.home_team}</span>
-              <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
-              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
-              <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-blue-500/10 text-blue-400 text-[10px] font-black shrink-0">
+                {i + 1}
+              </span>
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={20} />
+                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home ?? leg.home_team}</span>
+                <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
+                <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
+              </div>
+              <span className="text-green-400 font-black text-sm shrink-0">{Number(leg.odd).toFixed(2)}</span>
             </div>
-            <div className="shrink-0 text-right">
-              <div className="text-green-400 font-black text-sm">{Number(leg.odd).toFixed(2)}</div>
-              <div className="text-[10px] text-zinc-600 truncate max-w-[72px]">{leg.market}{leg.line ? ` ${leg.line}` : ''}</div>
+            <div className="flex items-center gap-1.5 ml-7 text-xs">
+              <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
+              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{leg.line}</span></>}
             </div>
           </div>
         ))}
@@ -731,20 +756,24 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg, i) => (
-          <div key={i} className="flex items-center gap-2">
-            <span className="w-5 h-5 flex items-center justify-center rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black shrink-0">
-              {i + 1}
-            </span>
-            <div className="flex items-center gap-1.5 flex-1 min-w-0">
-              <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
-              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home}</span>
-              <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
-              <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
-              <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
+          <div key={i} className="space-y-1">
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black shrink-0">
+                {i + 1}
+              </span>
+              <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
+                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home}</span>
+                <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
+                <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
+              </div>
+              <span className="text-green-400 font-black text-sm shrink-0">{Number(leg.odd).toFixed(2)}</span>
             </div>
-            <div className="shrink-0 text-right">
-              <div className="text-green-400 font-black text-sm">{Number(leg.odd).toFixed(2)}</div>
-              <div className="text-[10px] text-zinc-600 truncate max-w-[72px]">{leg.market}{leg.line ? ` ${leg.line}` : ''}</div>
+            <div className="flex items-center gap-1.5 ml-7 text-xs">
+              <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
+              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{leg.line}</span></>}
+              {leg.house && <><span className="text-zinc-600">·</span><span className="text-zinc-500">{leg.house}</span></>}
             </div>
           </div>
         ))}
