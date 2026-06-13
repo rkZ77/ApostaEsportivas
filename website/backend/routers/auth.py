@@ -1,5 +1,6 @@
 import os
 import re
+import base64
 import secrets
 import smtplib
 import pathlib
@@ -21,6 +22,14 @@ from auth_utils import (
 )
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
+_LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
+
+def _logo_data_uri() -> str:
+    try:
+        data = _LOGO_PATH.read_bytes()
+        return "data:image/png;base64," + base64.b64encode(data).decode()
+    except Exception:
+        return ""
 _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_SIZE = 3 * 1024 * 1024  # 3 MB
 
@@ -128,7 +137,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
         s.sendmail(from_addr, [to], msg.as_string())
 
 
-def _welcome_html(first_name: str, site_url: str) -> str:
+def _welcome_html(first_name: str, site_url: str, logo_b64: str = "") -> str:
     return f"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -139,7 +148,7 @@ def _welcome_html(first_name: str, site_url: str) -> str:
 
         <!-- Header verde -->
         <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{site_url}/static/logo.png" alt="Pick IA" width="80" height="80"
+          <img src="{logo_b64}" alt="Pick IA" width="80" height="80"
                style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
           <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">
             Pick<span style="color:#bbf7d0;">IA</span>
@@ -340,7 +349,7 @@ def register(body: RegisterBody, response: Response):
                     f"Instagram: @hpstips\n\n"
                     f"— Equipe Pick IA"
                 ),
-                html    = _welcome_html(first_name, site_url),
+                html    = _welcome_html(first_name, site_url, _logo_data_uri()),
             )
         except Exception:
             pass
