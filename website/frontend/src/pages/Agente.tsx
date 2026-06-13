@@ -11,12 +11,12 @@ interface Message {
 }
 
 const SUGGESTIONS = [
-  'Quais jogos estão ao vivo agora?',
-  'Jogos de hoje no Brasileirão',
-  'Analisa Flamengo x Palmeiras',
-  'Classificação do Brasileirão Série A',
-  'Forma recente do Corinthians',
-  'H2H Flamengo x Corinthians',
+  'Quais os picks do site pra hoje?',
+  'Como está minha banca de alavancagem?',
+  'Qual o desempenho dos picks este mês?',
+  'Como funciona a alavancagem?',
+  'Jogos ao vivo agora',
+  'Classificação da Copa do Mundo 2026',
 ]
 
 function TypingDots() {
@@ -173,7 +173,7 @@ export default function Agente() {
           </div>
           <div>
             <h1 className="text-base font-black text-white">Pick<span className="text-green-500">IA</span> Agent</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Análise ao vivo · Stats · Odds · Picks</p>
+            <p className="text-zinc-500 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
@@ -192,7 +192,7 @@ export default function Agente() {
             <div className="text-center">
               <h2 className="text-white font-bold text-lg">Olá, {user?.name?.split(' ')[0]}!</h2>
               <p className="text-zinc-500 text-sm mt-1 max-w-xs">
-                Pergunte sobre jogos ao vivo, análise de mercados, odds, H2H, classificações e muito mais.
+                Pergunte sobre os picks do dia, sua banca, alavancagem, desempenho do site, jogos ao vivo e muito mais.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">
@@ -252,7 +252,7 @@ export default function Agente() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Pergunte sobre jogos, odds, análises... (Enter para enviar)"
+            placeholder="Pergunte sobre picks, banca, alavancagem, jogos ao vivo... (Enter para enviar)"
             rows={1}
             className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
             style={{ minHeight: '48px', maxHeight: '120px' }}
