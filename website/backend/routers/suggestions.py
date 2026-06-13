@@ -64,7 +64,7 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
 @router.get("/today")
 def get_today_suggestions(current_user: dict = Depends(get_current_user)):
     plan = current_user.get("plan", "free")
-    is_vip = plan in ("vip", "admin")
+    is_vip = plan in ("vip", "admin", "trial")
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -332,7 +332,7 @@ def get_suggestion_detail(
     try:
         from fastapi import HTTPException
 
-        is_vip = current_user.get("plan") in ("vip", "admin")
+        is_vip = current_user.get("plan") in ("vip", "admin", "trial")
 
         # ── MÚLTIPLA ────────────────────────────────────────────────────────
         if pick_type == "multipla":
@@ -761,7 +761,7 @@ def get_recent_results(
     current_user: dict = Depends(get_current_user),
 ):
     """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem."""
-    is_vip = current_user.get("plan") in ("vip", "admin")
+    is_vip = current_user.get("plan") in ("vip", "admin", "trial")
     conn = get_connection()
     cur = conn.cursor()
     try:

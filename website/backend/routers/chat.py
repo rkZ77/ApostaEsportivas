@@ -48,7 +48,7 @@ def _get_picks_context(user_id: int) -> str:
             )
             plan_row = cur.fetchone()
             plan = (plan_row["plan"] if plan_row else "free")
-            is_vip = plan in ("vip", "admin")
+            is_vip = plan in ("vip", "admin", "trial")
 
             # Stats de desempenho do mês
             cur.execute("""
