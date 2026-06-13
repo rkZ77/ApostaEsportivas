@@ -86,7 +86,7 @@ Prioridade: Copa do Mundo (league_id=1) se amostra>=5 e padrao>=65%.
 
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
-Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0
+Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
 
 --- FIXTURES + DADOS ---
 {fixtures_formatados}
@@ -97,9 +97,15 @@ B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/awa
 C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
    Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5
 
+QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
+  NUNCA trate jogos vs tops e fracos com o mesmo peso:
+  rank 1-6 (top)→peso 2.0 | rank 7-12 (mid)→peso 1.0 | rank 13+ (fraco)→peso 0.5 | null→peso 1.0
+  Taxa ponderada = soma(taxa_jogo × peso) / soma(pesos). Declare: "taxa bruta X% → ponderada Y%".
+  Para Copa do Mundo: use "quality_breakdown" do perfil — "weighted_goals_against" em vez da media bruta.
+
 Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_bet.
 
-Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? EV>0?
+Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? EV>0 ou (EV>-0.05 e conf>=0.72)?
 
 SAIDA JSON:
 Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"edge":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: odd subestima prob real."}}}}

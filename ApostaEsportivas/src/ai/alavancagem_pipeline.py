@@ -93,14 +93,20 @@ OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 = {odd_min
   → Para combinar: cada pick individual DEVE ter odd ≤ 1.27 (ex: 1.22 × 1.25 = 1.525). Se odd_1×odd_2 > {odd_max} → INVALIDO.
   → NUNCA combine picks com odd individual acima de 1.30 — o combinado sempre ultrapassaria {odd_max}.
 
-Criterios: league_id=1 | amostra>=5 no venue correto | taxa>=65% | confidence>={conf_min} | EV>0
+Criterios: league_id=1 | amostra>=5 no venue correto | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.70)
 
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
 
+QUALIDADE DOS DADOS (Copa do Mundo):
+  Cada perfil de selecao inclui "quality_breakdown" com stats separados por tipo de competicao.
+  Use "weighted_goals_against" em vez da media bruta — Copa>Eliminatorias>Amistoso.
+  Declare: "bruto X gols/j → ponderado Y gols/j (Z jogos Copa, W Eliminatorias, V amistosos)".
+
 PASSO 1 — Candidatos A (simples): odd individual {odd_min}-{odd_max}. Avalie gols, escanteios, cartoes, BTTS, Dupla Chance, Handicap.
 PASSO 2 — Candidatos B (somente se A falhar): odd individual 1.10-1.27. Verifique se dois picks de jogos diferentes resultam em combinado {odd_min}-{odd_max}.
-PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=0.
+PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | (EV<=-0.05) | (EV<=0 e confidence<0.70).
+  Excecao stat_strong: EV>-0.05 com confidence>=0.70 e 3+ confirmadores → aceitar, indicar no reasoning.
 PASSO 4 — Selecionar: prefira A. B somente se confidence media de B superar A por >=0.05. Sem valido→no_bet.
 
 CALCULOS:

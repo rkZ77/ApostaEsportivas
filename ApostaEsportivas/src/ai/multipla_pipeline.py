@@ -96,6 +96,11 @@ score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
 Odds: se odd fora de 1.40-1.90 → DESCARTE. Linha: mais conservadora em 1.40-1.90.
 Descarte jogo se score_base<0.55 ou sem linha válida.
 
+QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
+rank 1-6 (top)→peso 2.0 | rank 7-12 (mid)→peso 1.0 | rank 13+ (fraco)→peso 0.5 | null→peso 1.0
+Taxa real = soma(stat × peso) / soma(pesos). Declare no reason: "taxa bruta X% → ponderada Y%".
+Para Copa do Mundo: use "weighted_goals_against" do campo quality_breakdown no perfil da selecao.
+
 ETAPA 2 — CORRELACAO:
 Proibido: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.
 Ideal: market_types diferentes + jogos sem relacao entre si.
