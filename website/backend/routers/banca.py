@@ -407,8 +407,8 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         cur.execute("""
             SELECT COALESCE(SUM(
                 CASE uf.pick_type
-                    WHEN 'vip'      THEN COALESCE(pv.profit, 0) * %s
-                    WHEN 'free'     THEN COALESCE(pf.profit, 0) * %s
+                    WHEN 'vip'      THEN COALESCE(pv.profit, 0) * uf.stake_units * %s
+                    WHEN 'free'     THEN COALESCE(pf.profit, 0) * uf.stake_units * %s
                     WHEN 'multipla' THEN
                         CASE pm.result
                             WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %s
