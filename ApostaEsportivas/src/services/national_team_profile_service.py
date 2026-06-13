@@ -93,6 +93,9 @@ class NationalTeamProfileService:
         # Calcula stats específicas desta Copa
         copa_stats = self._calculate_copa_stats(copa_matches, team_id)
 
+        # Calcula breakdown de qualidade por tipo de competição
+        quality_breakdown = self._calculate_quality_breakdown(matches, team_id)
+
         # Monta perfil completo
         profile = {
             "team_id": team_id,
@@ -105,6 +108,7 @@ class NationalTeamProfileService:
             "squad_info": squad_info,
             "injuries": injuries,
             "copa_stats": copa_stats,
+            "quality_breakdown": quality_breakdown,
             "form": form_metrics,
             "offensive_stats": offensive_stats,
             "defensive_stats": defensive_stats,
@@ -264,49 +268,60 @@ class NationalTeamProfileService:
         return unique_matches[:limit]
     
     def _fetch_from_database(self, team_id: int, limit: int) -> list:
-        """Busca jogos finalizados do banco"""
+        """Busca jogos finalizados do banco, incluindo nome do adversário e league_id."""
         conn = get_connection()
         cur = conn.cursor()
-        
+
         cur.execute("""
             SELECT
-                fixture_id,
-                match_date,
-                home_team_id,
-                away_team_id,
-                home_goals,
-                away_goals,
-                total_goals,
-                home_corners,
-                away_corners,
-                total_corners,
-                home_yellow_cards,
-                away_yellow_cards,
-                home_red_cards,
-                away_red_cards,
-                home_shots_on,
-                away_shots_on,
-                home_total_shots,
-                away_total_shots,
-                home_possession,
-                away_possession,
-                home_passes,
-                away_passes,
-                home_passes_accuracy,
-                away_passes_accuracy,
-                home_fouls,
-                away_fouls
-            FROM match_statistics
-            WHERE (home_team_id = %s OR away_team_id = %s)
-              AND status = 'FT'
-            ORDER BY match_date DESC
+                ms.fixture_id,
+                ms.match_date,
+                ms.home_team_id,
+                ms.away_team_id,
+                ms.home_goals,
+                ms.away_goals,
+                ms.total_goals,
+                ms.home_corners,
+                ms.away_corners,
+                ms.total_corners,
+                ms.home_yellow_cards,
+                ms.away_yellow_cards,
+                ms.home_red_cards,
+                ms.away_red_cards,
+                ms.home_shots_on,
+                ms.away_shots_on,
+                ms.home_total_shots,
+                ms.away_total_shots,
+                ms.home_possession,
+                ms.away_possession,
+                ms.home_passes,
+                ms.away_passes,
+                ms.home_passes_accuracy,
+                ms.away_passes_accuracy,
+                ms.home_fouls,
+                ms.away_fouls,
+                ms.league_id,
+                t_opp.name AS opponent_name
+            FROM match_statistics ms
+            LEFT JOIN (
+                SELECT DISTINCT ON (team_id) team_id, name
+                FROM teams
+                ORDER BY team_id, created_at DESC
+            ) t_opp
+                ON t_opp.team_id = CASE
+                    WHEN ms.home_team_id = %s THEN ms.away_team_id
+                    ELSE ms.home_team_id
+                END
+            WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
+              AND ms.status = 'FT'
+            ORDER BY ms.match_date DESC
             LIMIT %s
-        """, (team_id, team_id, limit))
-        
+        """, (team_id, team_id, team_id, limit))
+
         rows = cur.fetchall()
         cur.close()
         conn.close()
-        
+
         matches = []
         for r in rows:
             matches.append({
@@ -335,11 +350,78 @@ class NationalTeamProfileService:
                 "home_passes_accuracy": r[22] or 0,
                 "away_passes_accuracy": r[23] or 0,
                 "home_fouls": r[24] or 0,
-                "away_fouls": r[25] or 0
+                "away_fouls": r[25] or 0,
+                "league_id": r[26],
+                "opponent_name": r[27],
             })
-        
+
         return matches
     
+    def _classify_competition(self, league_id: int) -> str:
+        """Classifica o tipo de competição pelo league_id."""
+        if league_id == 1:
+            return "Copa do Mundo"
+        if league_id in (31, 32, 33, 34, 35, 36, 37, 38, 39, 882, 780):
+            return "Eliminatórias"
+        return "Amistoso/Outra"
+
+    def _calculate_quality_breakdown(self, matches: list, team_id: int) -> dict:
+        """
+        Agrupa partidas por tipo de competição e calcula stats por grupo.
+        Pesos: Copa do Mundo=3x | Eliminatórias=2x | Amistoso/Outra=0.5x
+        """
+        WEIGHTS = {
+            "Copa do Mundo": 3.0,
+            "Eliminatórias": 2.0,
+            "Amistoso/Outra": 0.5,
+        }
+
+        groups = {comp: [] for comp in WEIGHTS}
+
+        for m in matches:
+            league_id = m.get("league_id")
+            comp_type = self._classify_competition(league_id) if league_id is not None else "Amistoso/Outra"
+
+            is_home = m.get("home_team_id") == team_id
+            gf = m.get("home_goals", 0) if is_home else m.get("away_goals", 0)
+            ga = m.get("away_goals", 0) if is_home else m.get("home_goals", 0)
+            yellows = m.get("home_yellow_cards", 0) if is_home else m.get("away_yellow_cards", 0)
+            clean_sheet = 1 if (ga or 0) == 0 else 0
+
+            groups[comp_type].append({
+                "gf": gf or 0,
+                "ga": ga or 0,
+                "yellows": yellows or 0,
+                "clean_sheet": clean_sheet,
+            })
+
+        result = {}
+        total_weight = 0.0
+        weighted_ga  = 0.0
+
+        for comp_type, entries in groups.items():
+            n = len(entries)
+            if n == 0:
+                continue
+            result[comp_type] = {
+                "jogos":            n,
+                "gols_marcados":    round(sum(e["gf"] for e in entries) / n, 2),
+                "gols_sofridos":    round(sum(e["ga"] for e in entries) / n, 2),
+                "clean_sheet_pct":  round(sum(e["clean_sheet"] for e in entries) / n * 100, 1),
+                "amarelos":         round(sum(e["yellows"] for e in entries) / n, 2),
+            }
+            w = WEIGHTS[comp_type]
+            avg_ga = sum(e["ga"] for e in entries) / n
+            weighted_ga  += avg_ga * w * n
+            total_weight += w * n
+
+        if total_weight > 0:
+            result["weighted_goals_against"] = round(weighted_ga / total_weight, 2)
+        else:
+            result["weighted_goals_against"] = None
+
+        return result
+
     def _fetch_from_api(self, team_id: int, needed: int) -> list:
         """Busca jogos recentes via API"""
         try:

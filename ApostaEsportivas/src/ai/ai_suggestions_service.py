@@ -413,6 +413,19 @@ HISTÓRICO FORA
 
         return data
 
+    # Limiares para pick stat_strong (forte estatisticamente mas EV levemente negativo)
+    # Conf >= 72% + EV > -5% → pick válido, stake reduzido pelo frontend
+    _STAT_STRONG_CONF      = 0.72
+    _EV_STAT_STRONG_FLOOR  = -0.05   # pior EV aceito para stat_strong
+    _EV_VETO_HARD          = -0.05   # abaixo disso: descarte sempre
+
+    @staticmethod
+    def _is_stat_strong(ev: float, conf: float) -> bool:
+        """Pick sem EV mas com base estatística sólida — apostar menos."""
+        return (ev <= 0
+                and ev >= AISuggestionsService._EV_STAT_STRONG_FLOOR
+                and conf >= AISuggestionsService._STAT_STRONG_CONF)
+
     # --------------------------------------------------------
     # IA ESCOLHE 1 DAS 3 (via is_best_pick)
     # Fallback para maior EV se campo ausente
@@ -438,7 +451,7 @@ HISTÓRICO FORA
                     print(f"  [NÃO SELECIONADO] {s.get('market')} | {s.get('line')} "
                           f"| EV {round((c*o-1)*100, 1)}% | conf {round(c*100)}%")
 
-            # Se a IA escolheu EV negativo, tenta alternativa com EV positivo
+            # EV negativo: tenta alternativa com EV positivo primeiro
             if ev <= 0:
                 alternatives = [
                     (round((float(s.get("odd", 0)) * float(s.get("confidence", 0))) - 1, 4),
@@ -455,6 +468,12 @@ HISTÓRICO FORA
                     print(f"[PICK] EV negativo no is_best_pick — alternativa EV>0: "
                           f"{best.get('market')} | {best.get('line')} | EV {round(best_ev*100,1)}%")
                     return best
+
+                # Sem alternativa positiva: aceita se for stat_strong
+                if self._is_stat_strong(ev, conf):
+                    ai_pick["stat_strong"] = True
+                    print(f"[PICK] STAT-STRONG: EV {round(ev*100,1)}% negativo mas conf {round(conf*100)}% ≥ 72% — stake reduzido")
+                    return ai_pick
 
             return ai_pick
 
@@ -541,9 +560,15 @@ HISTÓRICO FORA
             print(f"[RESULT] Nenhuma sugestão válida após pick — {fx.get('home_team')} x {fx.get('away_team')}")
             return []
 
-        if float(chosen.get("ev", 0)) <= 0:
-            print(f"[RESULT] EV ≤ 0 ({round(float(chosen['ev'])*100,1)}%) — pick descartado para {fx.get('home_team')} x {fx.get('away_team')}")
+        ev_val   = float(chosen.get("ev", 0))
+        conf_val = float(chosen.get("confidence", 0))
+
+        if ev_val <= 0 and not self._is_stat_strong(ev_val, conf_val):
+            print(f"[RESULT] EV {round(ev_val*100,1)}% — sem base estatística suficiente para stat_strong (conf {round(conf_val*100)}%) — descartado para {fx.get('home_team')} x {fx.get('away_team')}")
             return []
+
+        if self._is_stat_strong(ev_val, conf_val):
+            print(f"[RESULT] STAT-STRONG aceito: EV {round(ev_val*100,1)}% conf {round(conf_val*100)}% — stake 50% recomendado")
 
         def _find_market_id(om_full: list, line: str, odd_val: float) -> int | None:
             line_n = str(line).strip().lower()
@@ -565,6 +590,13 @@ HISTÓRICO FORA
 
         # Garante que o mercado seja salvo em português
         chosen["market"] = translate_market(chosen["market"])
+
+        # Sinaliza stat_strong no reasoning para o frontend exibir aviso de stake reduzido
+        reasoning = chosen.get("reasoning", "")
+        if chosen.get("stat_strong") or self._is_stat_strong(ev, conf):
+            if "[STAT-STRONG]" not in reasoning:
+                reasoning = f"[STAT-STRONG] Base estatística sólida (conf {round(conf*100)}%) mas EV levemente negativo ({round(ev*100,1)}%) — aposta 50% do stake normal. " + reasoning
+            chosen["reasoning"] = reasoning
 
         stake, stake_pct = self.calculate_stake(conf, odd)
 

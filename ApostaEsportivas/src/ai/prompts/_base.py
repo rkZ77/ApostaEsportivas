@@ -54,6 +54,16 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
 2.5 ÁRBITRO (games≥3): avg_yellow acima da média → Over cartões; abaixo → Under. Sem dados → declare ausência.
 
+2.6 QUALIDADE DO ADVERSÁRIO (quando disponível):
+  Cada jogo no HISTÓRICO contém "opponent_rank" (posição na tabela do adversário; null = sem dado).
+  NUNCA trate jogos vs tops e jogos vs fracos com o mesmo peso:
+  rank 1–6  (top): peso 2.0 — estatística mais preditiva
+  rank 7–12 (mid): peso 1.0 — referência padrão
+  rank 13+  (fraco): peso 0.5 — descarte ou mencione limitação
+  null: peso 1.0
+  Taxa real = soma(stat_jogo × peso) / soma(pesos)
+  Declare no reasoning: "taxa bruta X% → taxa ponderada Y% (N jogos vs top, M vs mid, K vs fraco)"
+
 ## 3. CÁLCULO
 
 prob_real=[0.01,0.99] | prob_implícita=1/odd | edge=prob_real−prob_implícita (>0=value) | EV=(prob_real×odd)−1
@@ -96,10 +106,20 @@ NOMENCLATURA — copie exatamente de "market_name":
   Por time: "Total de Cartões Casa (Time)" | "Total de Cartões Visitante (Time)"
   Resultado: "Dupla Chance 1X/X2/12" | "Handicap Asiático -1/+1"
 
-## 6. VALIDAÇÃO
+## 6. EV E BASE ESTATÍSTICA
 
-[V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)? [V4] EV>0?
-[V5] confidence∈[0.55,0.92] e odd∈[1.40,1.90]? [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
+EV>0 é o critério ideal — a odd paga mais do que o risco. Mas EV levemente negativo NÃO invalida o pick se:
+  a) confidence ≥ 0.72 (base estatística sólida, ≥ 3 confirmadores independentes)
+  b) EV > −0.05 (não pior que −5%)
+  Nesse caso: is_best_pick pode ser true — o sistema reduzirá o stake automaticamente.
+  Picks com EV < −0.05: veto absoluto, independente de confidence.
+  Picks com EV < 0 e confidence < 0.72: veto — a odd está correta ou os dados são insuficientes.
+
+## 7. VALIDAÇÃO (execute antes de retornar)
+
+[V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)?
+[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e odd∈[1.40,1.90]?
+[V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
 [V11] reasoning contém bloco [CONF] com cálculo explícito?
 Falha → corrija antes de retornar.
@@ -123,7 +143,7 @@ hit_recente_10>hit_geral → calibração melhorando | hit_recente_10<hit_geral�
 
 {dados}
 
-## 7. SAÍDA JSON
+## 8. SAÍDA JSON
 
 Retorne exatamente este formato — nada antes, nada depois:
 

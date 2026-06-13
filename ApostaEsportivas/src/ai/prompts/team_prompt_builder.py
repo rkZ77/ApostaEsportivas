@@ -126,10 +126,14 @@ class TeamPromptBuilder:
         else:
             copa_line = "Copa: sem jogos nesta edição ainda"
 
+        quality = profile.get("quality_breakdown") or {}
+        weighted_ga = quality.get("weighted_goals_against", "N/A")
+
         return (
             f"{name} ({matches}j analisados)\n"
             f"  Forma: {sequence} V{win_rate}%/E{draw_rate}%/D{loss_rate}%\n"
             f"  Ataque:{goals_pg}gols/j | Defesa:{goals_ag}sofridos/j CS{cs_pct}%\n"
+            f"  Def.ponderada(Copa/Elim/Amist):{weighted_ga}gols sofridos/j\n"
             f"  Disciplina:{yellows_pg}amarelos/j | Cantos:{corners_pg}/j\n"
             f"  {copa_line}"
         )
@@ -265,6 +269,30 @@ ANÁLISE DETALHADA DAS SELEÇÕES
         strengths = profile.get("strengths", [])
         weaknesses = profile.get("weaknesses", [])
 
+        # Qualidade dos adversários
+        quality = profile.get("quality_breakdown") or {}
+        if quality:
+            q_lines = []
+            for comp_type in ["Copa do Mundo", "Eliminatórias", "Amistoso/Outra"]:
+                if comp_type in quality:
+                    q = quality[comp_type]
+                    q_lines.append(
+                        f"  {comp_type}: {q['jogos']}j | "
+                        f"Marcados:{q['gols_marcados']}/j "
+                        f"Sofridos:{q['gols_sofridos']}/j "
+                        f"CS:{q['clean_sheet_pct']}% "
+                        f"Amarelos:{q['amarelos']}/j"
+                    )
+            weighted_ga = quality.get("weighted_goals_against")
+            if weighted_ga is not None:
+                q_lines.append(
+                    f"  → Média defensiva PONDERADA (Copa>Elim>Amistoso): "
+                    f"{weighted_ga} gols sofridos/j"
+                )
+            quality_text = "\n".join(q_lines)
+        else:
+            quality_text = "  Dados insuficientes para breakdown por competição"
+
         return f"""{flag} {name}
 {'─'*68}
 TÉCNICO: {coach} | FORMAÇÃO: {formation}
@@ -277,6 +305,8 @@ FORMA RECENTE ({matches} jogos): {sequence} | V{win_rate}% E{draw_rate}% D{loss_
 
 ATAQUE: Gols/j={goals_pg} Chutes/j={shots_pg}({shots_on_pg} alvo) Conv={conversion}%
 DEFESA: Sofridos/j={goals_against} CS={clean_sheets}%
+QUALIDADE DOS ADVERSÁRIOS:
+{quality_text}
 DISCIPLINA: Faltas/j={fouls_pg} Amarelos/j={yellows_pg} Vermelhos/j={reds_pg}
 BOLAS PARADAS: Escanteios/j={corners_pg}
 TÁTICO: {style} | Posse={possession}% Passes/j={int(passes)}({pass_accuracy}%) Pressing={pressing}

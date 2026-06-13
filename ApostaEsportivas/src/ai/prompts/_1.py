@@ -6,6 +6,13 @@ CONTEXTO — COPA DO MUNDO FIFA 2026 (league_id=1)
 
 BASELINE: Gols/jogo: grupos=2.5–2.8 | mata-mata=2.0–2.3 | Over 1.5: grupos=82–88% | mata-mata=72–78% | Over 2.5: grupos=52–58% | mata-mata=38–45% | Under 3.5 mata-mata=85–90% | Cantos=9–10/jogo | Amarelos=2.5–3.0 (VAR conservador) | Vermelhos=raros (<0.12)
 
+PONDERAÇÃO POR COMPETIÇÃO (OBRIGATÓRIO para seleções nacionais):
+  Pesos: Copa do Mundo=3x | Eliminatórias Competitivas=2x | Amistoso/Outra=0.5x
+  O campo "quality_breakdown" no perfil de cada seleção já mostra stats por tipo de competição.
+  Use a média PONDERADA (weighted_goals_against, etc.) em vez da média bruta.
+  Declare no reasoning qual % dos dados veio de jogos Copa/Eliminatórias vs amistosos.
+  Ex: "Morocco: bruto 0.36 gols sofridos/j (15j) → ponderado 0.48 (8j Elim + 2j Copa + 5j amistosos)"
+
 RANKING FIFA (primário quando histórico<3 jogos):
   Diff>40: favorito domina → Handicap -1 ou Dupla Chance viáveis
   Diff 20-40: vantagem clara → Dupla Chance ou Over 1.5
