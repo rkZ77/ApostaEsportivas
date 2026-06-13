@@ -165,27 +165,24 @@ function PickCard({ pick }: { pick: any }) {
         </div>
       ) : (
         <>
-          {/* Times + Placar */}
-          <div className="flex items-center gap-2 mb-2">
-            <div className="flex items-center gap-1.5 min-w-0 flex-1">
-              <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={20} />
-              <span className="text-sm font-semibold text-white truncate">{pick.home_team}</span>
-            </div>
-            {pick.status !== 'NS' ? (
-              <div className={`shrink-0 px-3 py-1 rounded-lg font-black text-sm tabular-nums ${
-                isLive ? 'bg-green-500/10 border border-green-500/20 text-white' : 'bg-zinc-800 text-zinc-300'
-              }`}>
+          {/* Times + Placar — layout inline igual ao LiveLeg */}
+          <div className="flex items-center gap-1.5 min-w-0 mb-2 flex-wrap">
+            <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={16} />
+            <span className="text-xs font-bold text-white truncate">{pick.home_team}</span>
+            {pick.status !== 'NS' && (
+              <span className={`text-xs font-black tabular-nums mx-1 shrink-0 ${isLive ? 'text-green-400' : 'text-zinc-300'}`}>
                 {pick.home_goals} – {pick.away_goals}
-              </div>
-            ) : pick.match_time ? (
-              <div className="shrink-0 text-xs text-zinc-500 tabular-nums bg-zinc-800 px-2 py-1 rounded-lg">
-                {pick.match_time}
-              </div>
-            ) : null}
-            <div className="flex items-center gap-1.5 min-w-0 flex-1 justify-end">
-              <span className="text-sm font-semibold text-white truncate text-right">{pick.away_team}</span>
-              <TeamLogo id={pick.away_team_id} name={pick.away_team || ''} size={20} />
-            </div>
+              </span>
+            )}
+            <span className="text-zinc-600 text-xs shrink-0">vs</span>
+            <span className="text-xs font-bold text-white truncate">{pick.away_team}</span>
+            <TeamLogo id={pick.away_team_id} name={pick.away_team || ''} size={16} />
+            {isLive && pick.elapsed && (
+              <span className="text-[10px] font-black text-green-400 animate-pulse ml-1">{pick.elapsed}'</span>
+            )}
+            {pick.status === 'NS' && pick.match_time && (
+              <span className="text-[10px] text-zinc-500 ml-1">{pick.match_time}</span>
+            )}
           </div>
           {/* Mercado + stat */}
           <div className="flex items-center justify-between text-xs mb-1">
