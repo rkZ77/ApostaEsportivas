@@ -605,7 +605,7 @@ export default function Landing() {
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
               <p className="text-xs text-yellow-400 uppercase tracking-widest font-bold mb-2">VIP</p>
               <p className="text-3xl font-black text-white mb-0.5">A partir de</p>
-              <p className="text-zinc-400 text-xs mb-6">R$ 29,90/mês</p>
+              <p className="text-zinc-400 text-xs mb-6">R$ 39,90/mês</p>
               <div className="space-y-2.5 mb-8">
                 {[
                   'Tudo do Teste VIP',
