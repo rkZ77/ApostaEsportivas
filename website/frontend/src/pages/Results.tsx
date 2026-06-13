@@ -318,7 +318,6 @@ export default function Results() {
                   </div>
                 </div>
               )}
-              <RecentResultsSection title="Últimos Picks" limit={8} />
             </>
           )
         )}

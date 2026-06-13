@@ -1664,25 +1664,6 @@ export default function Dashboard() {
                 </section>
               )}
 
-              {/* ÚLTIMOS RESULTADOS — sempre no final */}
-              {(canSeeVip || recentResults.length > 0) && (
-                <section>
-                  <SectionHeader color="bg-zinc-400" label="Últimos Resultados" />
-                  {recentResults.length > 0 ? (
-                    <PicksTable
-                      rows={recentResults.slice(0, 6)}
-                      pickType="mixed"
-                      showSource
-                      onOpen={openDetail}
-                      footerAction={{ label: 'Ver histórico completo →', onClick: () => navigate('/results') }}
-                    />
-                  ) : (
-                    <div className="card p-8 text-center border-dashed">
-                      <p className="text-zinc-600 text-sm">Nenhum resultado disponível ainda.</p>
-                    </div>
-                  )}
-                </section>
-              )}
 
             </div>
           )
@@ -1726,19 +1707,6 @@ export default function Dashboard() {
               </div>
             )}
 
-            {/* Últimos 5 resultados */}
-            {(() => {
-              const last5 = recentResults.filter(r => r.pick_type === 'free').slice(0, 5)
-              return (
-                <div>
-                  <SectionHeader color="bg-zinc-400" label="Últimos 5 Resultados" />
-                  {last5.length > 0
-                    ? <PicksTable rows={last5} pickType="free" onOpen={openDetail} />
-                    : <div className="card p-8 text-center border-dashed"><p className="text-zinc-600 text-sm">Nenhum resultado disponível ainda.</p></div>
-                  }
-                </div>
-              )
-            })()}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
@@ -1815,19 +1783,6 @@ export default function Dashboard() {
               })()}
             </div>
 
-            {/* Últimos 5 resultados VIP */}
-            {(() => {
-              const last5 = recentResults.filter(r => r.pick_type === 'vip').slice(0, 5)
-              return (
-                <div>
-                  <SectionHeader color="bg-zinc-400" label="Últimos 5 Resultados" />
-                  {last5.length > 0
-                    ? <PicksTable rows={last5} pickType="vip" onOpen={openDetail} />
-                    : <div className="card p-8 text-center border-dashed"><p className="text-zinc-600 text-sm">Nenhum resultado disponível ainda.</p></div>
-                  }
-                </div>
-              )
-            })()}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
@@ -1883,19 +1838,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Últimos 5 resultados */}
-            {(() => {
-              const last5 = recentResults.filter(r => r.pick_type === 'multipla').slice(0, 5)
-              return (
-                <div>
-                  <SectionHeader color="bg-zinc-400" label="Últimos 5 Resultados" />
-                  {last5.length > 0
-                    ? <PicksTable rows={last5} pickType="multipla" onOpen={openDetail} />
-                    : <div className="card p-8 text-center border-dashed"><p className="text-zinc-600 text-sm">Nenhum resultado disponível ainda.</p></div>
-                  }
-                </div>
-              )
-            })()}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
@@ -2067,19 +2009,6 @@ export default function Dashboard() {
               </>
             )}
 
-            {/* Últimos 5 resultados */}
-            {(() => {
-              const last5 = recentResults.filter(r => r.pick_type === 'alavancagem').slice(0, 5)
-              return (
-                <div>
-                  <SectionHeader color="bg-zinc-400" label="Últimos 5 Resultados" />
-                  {last5.length > 0
-                    ? <PicksTable rows={last5} pickType="alavancagem" onOpen={openDetail} />
-                    : <div className="card p-8 text-center border-dashed"><p className="text-zinc-600 text-sm">Nenhum resultado disponível ainda.</p></div>
-                  }
-                </div>
-              )
-            })()}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">

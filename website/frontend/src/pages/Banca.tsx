@@ -411,7 +411,7 @@ export default function Banca() {
                     {fmtSigned(data?.total_pnl ?? 0)}
                   </span>
                 </div>
-                <ProfitChart data={chartData} />
+                <ProfitChart data={chartData} unit="R$" />
               </div>
             )}
 
