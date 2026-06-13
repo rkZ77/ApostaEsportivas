@@ -8,19 +8,49 @@ const POLL_INTERVAL = 30_000
 interface NotificationCtx {
   hasNew: boolean
   markSeen: () => void
+  liveCount: number
+  hasLive: boolean
+  clearLive: () => void
 }
 
 const NotificationContext = createContext<NotificationCtx>({
   hasNew: false,
   markSeen: () => {},
+  liveCount: 0,
+  hasLive: false,
+  clearLive: () => {},
 })
+
+function requestBrowserPermission() {
+  if ('Notification' in window && Notification.permission === 'default') {
+    Notification.requestPermission().catch(() => {})
+  }
+}
+
+function sendBrowserNotification(count: number, teams: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return
+  const notif = new Notification('⚽ Pick ao vivo!', {
+    body: teams
+      ? `${teams} está em andamento. Veja na aba Ao Vivo.`
+      : `${count} pick${count > 1 ? 's' : ''} em andamento. Acesse a aba Ao Vivo.`,
+    icon: '/logo.png',
+    tag: 'live-picks',
+    requireInteraction: false,
+  })
+  notif.onclick = () => { window.focus(); notif.close() }
+}
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [hasNew, setHasNew] = useState(false)
+  const [liveCount, setLiveCount] = useState(0)
+  const [hasLive, setHasLive] = useState(false)
   const latestIdRef = useRef(0)
+  // IDs dos picks ao vivo já notificados nesta sessão
+  const seenLiveIds = useRef<Set<string>>(new Set())
 
-  const check = () => {
+  // ── Picks novos ──────────────────────────────────────────────────────────────
+  const checkNew = () => {
     const lastSeen = parseInt(localStorage.getItem(LS_KEY) ?? '0', 10)
     api.get('/suggestions/latest-pick')
       .then(r => {
@@ -31,10 +61,44 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
   }
 
+  // ── Picks ao vivo ─────────────────────────────────────────────────────────────
+  const checkLive = () => {
+    api.get('/live/my-picks')
+      .then(r => {
+        const all: any[] = r.data ?? []
+        const live = all.filter(p => p.is_live)
+        setLiveCount(live.length)
+
+        // Detecta picks que ficaram ao vivo agora (que não estavam antes)
+        const newLive = live.filter(p => {
+          const key = `${p.pick_type}-${p.pick_id}`
+          return !seenLiveIds.current.has(key)
+        })
+
+        if (newLive.length > 0) {
+          newLive.forEach(p => seenLiveIds.current.add(`${p.pick_type}-${p.pick_id}`))
+          setHasLive(true)
+          const teams = newLive.length === 1
+            ? `${newLive[0].home_team} x ${newLive[0].away_team}`
+            : ''
+          sendBrowserNotification(newLive.length, teams)
+        }
+      })
+      .catch(() => {})
+  }
+
   useEffect(() => {
-    if (!user) { setHasNew(false); return }
-    check()
-    const timer = setInterval(check, POLL_INTERVAL)
+    if (!user) {
+      setHasNew(false)
+      setLiveCount(0)
+      setHasLive(false)
+      seenLiveIds.current = new Set()
+      return
+    }
+    requestBrowserPermission()
+    checkNew()
+    checkLive()
+    const timer = setInterval(() => { checkNew(); checkLive() }, POLL_INTERVAL)
     return () => clearInterval(timer)
   }, [user])
 
@@ -43,8 +107,10 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     setHasNew(false)
   }
 
+  const clearLive = () => setHasLive(false)
+
   return (
-    <NotificationContext.Provider value={{ hasNew, markSeen }}>
+    <NotificationContext.Provider value={{ hasNew, markSeen, liveCount, hasLive, clearLive }}>
       {children}
     </NotificationContext.Provider>
   )

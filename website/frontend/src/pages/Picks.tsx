@@ -101,9 +101,10 @@ const RESULT_LABELS: Record<string, string> = {
 }
 
 // ─── Tab bar ──────────────────────────────────────────────────────────────────
-function TabBar({ tab, setTab, canSeeVip, counts }: {
+function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   counts?: Partial<Record<Tab, number>>
+  liveCount?: number
 }) {
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
@@ -111,7 +112,13 @@ function TabBar({ tab, setTab, canSeeVip, counts }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    { key: 'aovivo',       label: 'Ao Vivo',          badge: 'LIVE', badgeCls: 'bg-red-500/10 text-red-400 border-red-500/20' },
+    {
+      key: 'aovivo', label: 'Ao Vivo',
+      badge: (liveCount ?? 0) > 0 ? String(liveCount) : 'LIVE',
+      badgeCls: (liveCount ?? 0) > 0
+        ? 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse'
+        : 'bg-red-500/10 text-red-400 border-red-500/20',
+    },
     { key: 'chat',         label: 'Comunidade'       },
   ]
 
@@ -1075,7 +1082,7 @@ export default function Picks() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
   const canSeeVip = isVip || isAdmin
-  const { hasNew, markSeen } = useNotifications()
+  const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
 
   const [tab, setTab]               = useState<Tab>('hoje')
   const [selectedId, setSelectedId] = useState<number | null>(null)
@@ -1270,13 +1277,35 @@ export default function Picks() {
             </button>
           </div>
         )}
+
+        {hasLive && tab !== 'aovivo' && (
+          <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
+              <span className="text-red-300 text-sm font-semibold">
+                {liveCount > 1 ? `${liveCount} jogos das suas apostas estão ao vivo!` : 'Um jogo da sua aposta está ao vivo!'}
+              </span>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { clearLive(); setTab('aovivo') }}
+                className="text-xs font-bold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-2.5 py-1 rounded-lg transition-colors"
+              >
+                Ver ao vivo →
+              </button>
+              <button onClick={clearLive} className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">✕</button>
+            </div>
+          </div>
+        )}
+
         {/* Greeting do usuário */}
         <UserGreeting user={user} isVip={isVip} isAdmin={isAdmin} daysUntilExpiry={daysUntilExpiry} />
 
         <TabBar
           tab={tab}
-          setTab={setTab}
+          setTab={(t) => { if (t === 'aovivo') clearLive(); setTab(t) }}
           canSeeVip={canSeeVip}
+          liveCount={liveCount}
           counts={{
             vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
