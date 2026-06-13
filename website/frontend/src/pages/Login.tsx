@@ -112,7 +112,12 @@ export default function Login() {
       }
       navigate('/picks')
     } catch (err: any) {
-      setError(err.response?.data?.detail || 'Erro ao autenticar')
+      const d = err.response?.data?.detail
+      if (Array.isArray(d)) {
+        setError(d[0]?.msg || 'Dados inválidos. Verifique os campos preenchidos.')
+      } else {
+        setError(d || 'Erro ao autenticar. Tente novamente.')
+      }
     } finally {
       setLoading(false)
     }

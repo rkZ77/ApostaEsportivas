@@ -139,7 +139,7 @@ def _welcome_html(first_name: str, site_url: str) -> str:
 
         <!-- Header verde -->
         <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{site_url}/logo.png" alt="Pick IA" width="80" height="80"
+          <img src="{site_url}/static/logo.png" alt="Pick IA" width="80" height="80"
                style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
           <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">
             Pick<span style="color:#bbf7d0;">IA</span>
