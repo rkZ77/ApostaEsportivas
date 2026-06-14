@@ -70,26 +70,31 @@ export default function Admin() {
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
   const [runningCmd, setRunningCmd] = useState<string | null>(null)
-  const [pipelineMsg, setPipelineMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null }>>({})
 
   const PIPELINE_ACTIONS = [
-    { command: 'atualizar_jogos',      label: 'Atualizar Jogos'   },
-    { command: 'capturar_odds',        label: 'Capturar Odds'     },
-    { command: 'gerar_vip',            label: 'Gerar VIP'         },
-    { command: 'gerar_free',           label: 'Gerar Free'        },
-    { command: 'gerar_multipla',       label: 'Gerar Múltipla'    },
-    { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem' },
+    { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
+    { command: 'capturar_odds',        label: 'Capturar Odds'        },
+    { command: 'gerar_vip',            label: 'Gerar VIP'            },
+    { command: 'gerar_free',           label: 'Gerar Free'           },
+    { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
+    { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
+  useEffect(() => {
+    const poll = () => api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
+    poll()
+    const id = setInterval(poll, 3000)
+    return () => clearInterval(id)
+  }, [])
+
   const runPipeline = async (command: string) => {
     setRunningCmd(command)
-    setPipelineMsg(null)
     try {
       await api.post('/admin/run-pipeline', { command })
-      setPipelineMsg({ ok: true, text: `✓ ${command} iniciado em background` })
     } catch (err: any) {
-      setPipelineMsg({ ok: false, text: err.response?.data?.detail || 'Erro no pipeline' })
+      alert(err.response?.data?.detail || 'Erro ao iniciar pipeline')
     } finally {
       setRunningCmd(null)
     }
@@ -192,29 +197,32 @@ export default function Admin() {
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Pipeline</h2>
           <div className="flex flex-wrap gap-2">
             {PIPELINE_ACTIONS.map(({ command, label }) => {
-              const running = runningCmd === command
+              const s = pipelineStatus[command]
+              const isRunning = runningCmd === command || s?.status === 'running'
+              const dot = !s ? null
+                : s.status === 'running' ? <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+                : s.status === 'ok'      ? <span className="w-2 h-2 rounded-full bg-green-500" />
+                :                          <span className="w-2 h-2 rounded-full bg-red-500" />
               return (
-                <button
-                  key={command}
-                  onClick={() => runPipeline(command)}
-                  disabled={runningCmd !== null}
-                  className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {running && <span className="w-3 h-3 border border-zinc-500 border-t-white rounded-full animate-spin" />}
-                  {label}
-                </button>
+                <div key={command} className="flex flex-col items-start gap-1">
+                  <button
+                    onClick={() => runPipeline(command)}
+                    disabled={runningCmd !== null || isRunning}
+                    className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {isRunning && <span className="w-3 h-3 border border-zinc-500 border-t-white rounded-full animate-spin" />}
+                    {dot && !isRunning && dot}
+                    {label}
+                  </button>
+                  {s && (
+                    <span className="text-zinc-600 text-[10px] pl-1">
+                      {s.status === 'running' ? `iniciado ${s.started_at}` : `${s.status} ${s.finished_at}`}
+                    </span>
+                  )}
+                </div>
               )
             })}
           </div>
-          {pipelineMsg && (
-            <div className={`mt-3 px-3 py-2 rounded-lg text-xs font-medium border ${
-              pipelineMsg.ok
-                ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                : 'bg-red-500/10 border-red-500/30 text-red-400'
-            }`}>
-              {pipelineMsg.text}
-            </div>
-          )}
         </div>
 
         {/* Stats — usuários */}

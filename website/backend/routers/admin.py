@@ -1,13 +1,15 @@
 import os
 import sys
 import asyncio
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
-from datetime import datetime
 from database import get_connection
 from auth_utils import require_admin, hash_password
+
+_pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
 
 def _find_pipeline_dir() -> str:
     if env := os.getenv("PIPELINE_SRC_PATH"):
@@ -203,6 +205,32 @@ class PipelineCommandBody(BaseModel):
     command: str
 
 
+async def _run_and_track(command: str, script: str):
+    now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+    _pipeline_status[command] = {"status": "running", "started_at": now(), "finished_at": None, "returncode": None}
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, script,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
+            cwd=_PIPELINE_DIR,
+        )
+        returncode = await proc.wait()
+        _pipeline_status[command] = {
+            "status": "ok" if returncode == 0 else "error",
+            "started_at": _pipeline_status[command]["started_at"],
+            "finished_at": now(),
+            "returncode": returncode,
+        }
+    except Exception as e:
+        _pipeline_status[command] = {"status": "error", "started_at": _pipeline_status[command].get("started_at"), "finished_at": now(), "returncode": -1}
+
+
+@router.get("/pipeline-status")
+def pipeline_status(current_user: dict = Depends(require_admin)):
+    return _pipeline_status
+
+
 @router.post("/run-pipeline")
 async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
     if body.command not in _PIPELINE_SCRIPTS:
@@ -212,16 +240,7 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
     if not os.path.exists(script):
         raise HTTPException(500, detail=f"Script não encontrado: {script}")
 
-    try:
-        await asyncio.create_subprocess_exec(
-            sys.executable, script,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
-            cwd=_PIPELINE_DIR,
-        )
-    except Exception as e:
-        raise HTTPException(500, detail=str(e))
-
+    asyncio.create_task(_run_and_track(body.command, script))
     return {"ok": True, "status": "iniciado"}
 
 
