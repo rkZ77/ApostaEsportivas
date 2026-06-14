@@ -210,11 +210,13 @@ async def _run_and_track(command: str, script: str):
     started = now()
     _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None}
     try:
+        env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=_PIPELINE_DIR,
+            env=env,
         )
         stdout, stderr = await proc.communicate()
         returncode = proc.returncode
