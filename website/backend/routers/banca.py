@@ -291,8 +291,8 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
     if body.pick_type not in ("vip", "free", "multipla", "alavancagem"):
         raise HTTPException(400, "Tipo inválido.")
-    if body.stake_units <= 0:
-        raise HTTPException(400, "Stake deve ser maior que zero.")
+    if not (1 <= body.stake_units <= 10):
+        raise HTTPException(400, "Stake deve ser entre 1 e 10 unidades.")
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()

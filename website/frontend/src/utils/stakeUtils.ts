@@ -8,7 +8,7 @@ export interface StakeSuggestion {
  * Calcula stake sugerido usando ½ Kelly Criterion.
  * Kelly = (b*p - q) / b  onde b = odd-1, p = confiança, q = 1-p
  * Usa metade do Kelly para reduzir risco de ruína.
- * Resultado arredondado para o 0,5u mais próximo, entre 0,5u e 5u.
+ * Resultado arredondado para o 1u mais próximo, entre 1u e 10u.
  */
 export function suggestStake(
   confidence: number,
@@ -31,8 +31,8 @@ export function suggestStake(
   const stakeR    = bankroll * halfKelly
 
   let units = stakeR / unitValue
-  units = Math.max(5, Math.min(20, units))
-  units = Math.round(units)   // arredonda para 1u mais próximo
+  units = Math.max(1, Math.min(10, units))
+  units = Math.round(units)
 
   return {
     units,
