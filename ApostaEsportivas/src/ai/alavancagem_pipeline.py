@@ -502,3 +502,7 @@ def run_alavancagem_pipeline() -> dict | None:
 
     save_pick(result, bankroll)
     return result
+
+
+if __name__ == "__main__":
+    run_alavancagem_pipeline()
