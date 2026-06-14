@@ -257,10 +257,7 @@ HISTÓRICO FORA
     # CHAMA A API (com retry em caso de JSON inválido)
     # --------------------------------------------------------
     def _call_api(self, user_prompt: str, fixture_id: int) -> list:
-        messages = [
-            {"role": "user",      "content": user_prompt},
-            {"role": "assistant", "content": "{"},  # força resposta JSON
-        ]
+        messages = [{"role": "user", "content": user_prompt}]
         RATE_LIMIT_WAIT = 65   # segundos de espera ao receber 429
         MAX_RATE_RETRIES = 3   # tentativas após rate limit
 
@@ -287,7 +284,7 @@ HISTÓRICO FORA
                     print(f"[AI API ERROR] tentativa {attempt}: {e}")
                     return []
 
-            raw = "{" + response.content[0].text.strip()
+            raw = response.content[0].text.strip()
 
             try:
                 data = _parse_suggestions(raw)
@@ -298,8 +295,7 @@ HISTÓRICO FORA
                 print(f"[AI JSON ERROR] tentativa {attempt}: {e}\nRAW:\n{raw[:300]}")
 
             if attempt == 1:
-                # substitui o prefill "{" pelo conteúdo real da resposta
-                messages[-1] = {"role": "assistant", "content": raw}
+                messages.append({"role": "assistant", "content": raw})
                 messages.append({
                     "role": "user",
                     "content": 'JSON inválido ou fora do formato esperado. Retorne APENAS {"suggestions": [...]} com exatamente 3 objetos, cada um contendo o campo "is_best_pick" (true em exatamente 1, false nos outros 2).',

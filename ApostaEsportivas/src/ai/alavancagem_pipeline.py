@@ -382,10 +382,7 @@ def run_alavancagem_llm(fixtures: list[dict]) -> dict:
                     odd_max=ODD_MAX,
                     odd_target=ODD_TARGET,
                 ),
-                messages=[
-                    {"role": "user",      "content": user_prompt},
-                    {"role": "assistant", "content": "{"},  # força resposta JSON
-                ],
+                messages=[{"role": "user", "content": user_prompt}],
             )
             break
         except RateLimitError:
@@ -396,11 +393,12 @@ def run_alavancagem_llm(fixtures: list[dict]) -> dict:
         except Exception as e:
             raise Exception(f"[ALAVANCAGEM] Erro na API Anthropic: {e}")
 
-    raw = "{" + response.content[0].text.strip()
-    end = raw.rfind("}") + 1
-    if end == 0:
+    raw = response.content[0].text.strip()
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start == -1 or end == 0:
         raise Exception(f"[ALAVANCAGEM] JSON não encontrado na resposta:\n{raw[:500]}")
-    raw = raw[:end]
+    raw = raw[start:end]
     try:
         return json.loads(raw)
     except Exception as e:

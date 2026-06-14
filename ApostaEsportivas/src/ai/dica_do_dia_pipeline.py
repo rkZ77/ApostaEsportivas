@@ -473,10 +473,7 @@ def run_dica_llm(fixtures_with_context: list) -> dict:
                 model=AI_MODEL_NAME,
                 max_tokens=8096,
                 system=SYSTEM_PROMPT,
-                messages=[
-                    {"role": "user",      "content": user_prompt},
-                    {"role": "assistant", "content": "{"},  # força resposta JSON
-                ],
+                messages=[{"role": "user", "content": user_prompt}],
             )
             break
         except RateLimitError:
@@ -487,11 +484,12 @@ def run_dica_llm(fixtures_with_context: list) -> dict:
         except Exception as e:
             raise Exception(f"[DICA] Erro na API Anthropic: {e}")
 
-    raw = "{" + response.content[0].text.strip()
-    end = raw.rfind("}") + 1
-    if end == 0:
+    raw = response.content[0].text.strip()
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start == -1 or end == 0:
         raise Exception(f"[DICA] JSON não encontrado na resposta:\n{raw[:500]}")
-    raw = raw[:end]
+    raw = raw[start:end]
 
     try:
         return json.loads(raw)
