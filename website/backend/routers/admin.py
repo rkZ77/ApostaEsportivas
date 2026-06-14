@@ -226,8 +226,10 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
         raise HTTPException(500, detail=str(e))
 
     if proc.returncode != 0:
+        out = stdout.decode(errors="replace")[-300:]
         err = stderr.decode(errors="replace")[-500:]
-        raise HTTPException(500, detail=err or "Erro desconhecido no pipeline")
+        detail = err or out or f"returncode={proc.returncode} (sem output)"
+        raise HTTPException(500, detail=detail)
 
     return {"ok": True, "log": stdout.decode(errors="replace")}
 
