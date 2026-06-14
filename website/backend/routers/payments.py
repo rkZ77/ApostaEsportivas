@@ -108,35 +108,49 @@ async def webhook(request: Request):
             logger.warning("Webhook recebido com assinatura inválida de %s", request.client.host if request.client else "unknown")
             raise HTTPException(403, "Assinatura inválida")
 
-    if data.get("type") != "payment":
+    event_type = data.get("type")
+    logger.info("[WEBHOOK] Evento recebido: type=%s data=%s", event_type, data.get("data"))
+
+    if event_type != "payment":
+        logger.info("[WEBHOOK] Ignorado (type=%s)", event_type)
         return {"status": "ignored"}
 
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
+        logger.error("[WEBHOOK] MERCADOPAGO_ACCESS_TOKEN não configurado")
         return {"status": "error", "detail": "token missing"}
 
     payment_id = data.get("data", {}).get("id")
     if not payment_id:
+        logger.warning("[WEBHOOK] payment_id ausente no payload")
         return {"status": "ignored"}
 
+    logger.info("[WEBHOOK] Consultando pagamento id=%s", payment_id)
     sdk = mercadopago.SDK(access_token)
     payment_info = sdk.payment().get(payment_id)
     payment = payment_info.get("response", {})
 
-    if payment.get("status") != "approved":
+    status = payment.get("status")
+    logger.info("[WEBHOOK] Pagamento id=%s status=%s external_ref=%s", payment_id, status, payment.get("external_reference"))
+
+    if status != "approved":
+        logger.info("[WEBHOOK] Pagamento não aprovado (status=%s), ignorando", status)
         return {"status": "pending"}
 
     external_ref = payment.get("external_reference", "")
     parts = external_ref.split(":", 1)
     if len(parts) != 2:
+        logger.error("[WEBHOOK] external_reference inválido: %s", external_ref)
         return {"status": "error", "detail": "external_reference inválido"}
 
     user_id, plan_key = parts
     plan_info = PLANS.get(plan_key)
     if not plan_info:
+        logger.error("[WEBHOOK] Plano inválido: %s", plan_key)
         return {"status": "error", "detail": "plano inválido"}
 
     expires_at = datetime.now(timezone.utc) + timedelta(days=plan_info["days"])
+    logger.info("[WEBHOOK] Ativando VIP para user_id=%s plano=%s expires=%s", user_id, plan_key, expires_at)
 
     amount        = float(payment.get("transaction_amount") or plan_info["price"])
     payment_method = payment.get("payment_type_id") or payment.get("payment_method_id") or "unknown"
@@ -178,6 +192,7 @@ async def webhook(request: Request):
             )
 
         conn.commit()
+        logger.info("[WEBHOOK] VIP ativado com sucesso para user_id=%s", user_id)
     finally:
         cur.close()
         conn.close()

@@ -250,6 +250,27 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
     return {"ok": True, "status": "iniciado"}
 
 
+@router.get("/payments")
+def admin_payments(current_user: dict = Depends(require_admin)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT p.mp_payment_id, p.plan_key, p.amount, p.status,
+                   p.payment_method, p.expires_at, p.created_at,
+                   u.name AS user_name, u.email AS user_email
+            FROM payments p
+            JOIN users u ON u.id = p.user_id
+            ORDER BY p.created_at DESC
+            LIMIT 100
+        """)
+        rows = cur.fetchall()
+        return [dict(r) for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stats")
 def admin_stats(current_user: dict = Depends(require_admin)):
     conn = get_connection()
