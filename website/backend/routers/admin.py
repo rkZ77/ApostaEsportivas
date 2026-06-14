@@ -207,23 +207,27 @@ class PipelineCommandBody(BaseModel):
 
 async def _run_and_track(command: str, script: str):
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
-    _pipeline_status[command] = {"status": "running", "started_at": now(), "finished_at": None, "returncode": None}
+    started = now()
+    _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None}
     try:
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script,
-            stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
             cwd=_PIPELINE_DIR,
         )
-        returncode = await proc.wait()
+        stdout, stderr = await proc.communicate()
+        returncode = proc.returncode
+        err_text = (stderr.decode(errors="replace") + stdout.decode(errors="replace"))[-800:]
         _pipeline_status[command] = {
             "status": "ok" if returncode == 0 else "error",
-            "started_at": _pipeline_status[command]["started_at"],
+            "started_at": started,
             "finished_at": now(),
             "returncode": returncode,
+            "error": err_text if returncode != 0 else None,
         }
     except Exception as e:
-        _pipeline_status[command] = {"status": "error", "started_at": _pipeline_status[command].get("started_at"), "finished_at": now(), "returncode": -1}
+        _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e)}
 
 
 @router.get("/pipeline-status")
