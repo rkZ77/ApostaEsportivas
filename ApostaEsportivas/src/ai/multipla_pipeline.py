@@ -303,17 +303,20 @@ def run_multipla_llm(fixtures: list) -> dict:
             model=AI_MODEL_NAME,
             max_tokens=8096,
             system=SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_prompt}],
+            messages=[
+                {"role": "user",      "content": user_prompt},
+                {"role": "assistant", "content": "{"},  # força resposta JSON
+            ],
         )
     except Exception as e:
         raise Exception(f"[MULTIPLA] Erro na API Anthropic: {e}")
 
-    raw = response.content[0].text.strip()
-    start = raw.find("{")
-    end   = raw.rfind("}") + 1
-    if start == -1 or end == 0:
+    # O prefill "{" não é incluído no texto retornado — recolocar
+    raw = "{" + response.content[0].text.strip()
+    end = raw.rfind("}") + 1
+    if end == 0:
         raise Exception(f"[MULTIPLA] JSON não encontrado na resposta:\n{raw[:500]}")
-    raw = raw[start:end]
+    raw = raw[:end]
 
     try:
         return json.loads(raw)
