@@ -298,35 +298,27 @@ def run_multipla_llm(fixtures: list) -> dict:
         desempenho=desempenho,
     )
 
-    messages = [{"role": "user", "content": user_prompt}]
-    for attempt in range(1, 3):
-        try:
-            response = client.messages.create(
-                model=AI_MODEL_NAME,
-                max_tokens=8096,
-                system=SYSTEM_PROMPT,
-                messages=messages,
-            )
-        except Exception as e:
-            raise Exception(f"[MULTIPLA] Erro na API Anthropic: {e}")
+    try:
+        response = client.messages.create(
+            model=AI_MODEL_NAME,
+            max_tokens=8096,
+            system=SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+    except Exception as e:
+        raise Exception(f"[MULTIPLA] Erro na API Anthropic: {e}")
 
-        raw = response.content[0].text.strip()
-        start = raw.find("{")
-        end   = raw.rfind("}") + 1
-        if start != -1 and end > 0:
-            try:
-                return json.loads(raw[start:end])
-            except Exception as e:
-                print(f"[MULTIPLA] JSON inválido (tentativa {attempt}): {e}")
+    raw = response.content[0].text.strip()
+    start = raw.find("{")
+    end   = raw.rfind("}") + 1
+    if start == -1 or end == 0:
+        raise Exception(f"[MULTIPLA] JSON não encontrado na resposta:\n{raw[:500]}")
+    raw = raw[start:end]
 
-        print(f"[MULTIPLA] Resposta sem JSON (tentativa {attempt}), retentando...")
-        messages = [
-            {"role": "user",      "content": user_prompt},
-            {"role": "assistant", "content": raw},
-            {"role": "user",      "content": "Retorne APENAS o JSON solicitado, começando com { e terminando com }. Nenhum texto adicional."},
-        ]
-
-    raise Exception(f"[MULTIPLA] JSON não encontrado após 2 tentativas. Última resposta:\n{raw[:400]}")
+    try:
+        return json.loads(raw)
+    except Exception as e:
+        raise Exception(f"[MULTIPLA] JSON inválido: {e}\nRAW:\n{raw[:500]}")
 
 
 # ============================================================
