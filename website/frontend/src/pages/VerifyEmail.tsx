@@ -21,7 +21,6 @@ export default function VerifyEmail() {
       .then(() => {
         updateUser({ email_verified: true })
         setState('success')
-        setTimeout(() => navigate('/picks'), 2500)
       })
       .catch((err) => {
         setErrMsg(err.response?.data?.detail || 'Link inválido ou expirado.')
@@ -62,8 +61,14 @@ export default function VerifyEmail() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">E-mail confirmado!</h1>
-            <p className="text-zinc-400 text-sm">Redirecionando para seus picks…</p>
+            <h1 className="text-2xl font-bold text-white mb-2">E-mail confirmado!</h1>
+            <p className="text-zinc-400 text-sm mb-6">Sua conta está ativa. Faça login para acessar seus picks.</p>
+            <button
+              onClick={() => navigate('/login')}
+              className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-colors"
+            >
+              Fazer login
+            </button>
           </>
         )}
 

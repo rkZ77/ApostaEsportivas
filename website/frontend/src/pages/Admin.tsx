@@ -296,9 +296,27 @@ export default function Admin() {
 
         {/* Pagamentos */}
         <div className="card overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Pagamentos</h2>
-            <span className="text-xs text-zinc-600">{payments.length} registro(s)</span>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-zinc-600">{payments.length} registro(s)</span>
+              <button
+                onClick={async () => {
+                  const id = prompt('ID do pagamento MercadoPago:')
+                  if (!id) return
+                  try {
+                    const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
+                    alert(`VIP ativado para ${r.data.user.name} (${r.data.user.email}) — plano ${r.data.plan}`)
+                    api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
+                  } catch (e: any) {
+                    alert('Erro: ' + (e.response?.data?.detail || e.message))
+                  }
+                }}
+                className="px-2 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-green-600 transition-colors"
+              >
+                + Reprocessar pagamento
+              </button>
+            </div>
           </div>
           {paymentsLoading ? (
             <div className="p-6 flex justify-center"><div className="w-5 h-5 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" /></div>

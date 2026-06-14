@@ -252,6 +252,66 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
     return {"ok": True, "status": "iniciado"}
 
 
+class SyncPaymentBody(BaseModel):
+    mp_payment_id: str
+
+
+@router.post("/sync-payment")
+async def sync_payment(body: SyncPaymentBody, current_user: dict = Depends(require_admin)):
+    """Reprocessa um pagamento do MercadoPago pelo ID — ativa VIP manualmente se aprovado."""
+    import mercadopago as _mp
+    from datetime import timedelta, timezone
+    access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
+    if not access_token:
+        raise HTTPException(500, "MERCADOPAGO_ACCESS_TOKEN não configurado")
+
+    sdk = _mp.SDK(access_token)
+    info = sdk.payment().get(body.mp_payment_id)
+    payment = info.get("response", {})
+
+    status = payment.get("status")
+    if status != "approved":
+        raise HTTPException(400, f"Pagamento não aprovado (status={status})")
+
+    external_ref = payment.get("external_reference", "")
+    parts = external_ref.split(":", 1)
+    if len(parts) != 2:
+        raise HTTPException(400, f"external_reference inválido: {external_ref}")
+
+    user_id, plan_key = parts
+    PLANS_DAYS = {"mensal": 30, "trimestral": 90, "semestral": 180, "anual": 365}
+    days = PLANS_DAYS.get(plan_key)
+    if not days:
+        raise HTTPException(400, f"Plano inválido: {plan_key}")
+
+    expires_at     = datetime.now(timezone.utc) + timedelta(days=days)
+    amount         = float(payment.get("transaction_amount") or 0)
+    payment_method = payment.get("payment_type_id") or "unknown"
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s RETURNING id, name, email",
+            (expires_at, plan_key, int(user_id)),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, f"Usuário {user_id} não encontrado")
+
+        cur.execute(
+            """INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
+               VALUES (%s, %s, %s, %s, 'approved', %s, %s)
+               ON CONFLICT (mp_payment_id) DO NOTHING""",
+            (int(user_id), str(body.mp_payment_id), plan_key, amount, expires_at, payment_method),
+        )
+        conn.commit()
+        return {"ok": True, "user": dict(row), "plan": plan_key, "expires_at": expires_at.isoformat()}
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/payments")
 def admin_payments(current_user: dict = Depends(require_admin)):
     conn = get_connection()

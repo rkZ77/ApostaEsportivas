@@ -409,7 +409,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         set_auth_cookies(response, access_token, refresh_token)
 
         # Envio de e-mail de verificação em background (não bloqueia a resposta)
-        site_url = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         if email_token:
             background_tasks.add_task(_send_verification_email, body.email, body.name, email_token, site_url)
 
@@ -518,7 +518,7 @@ def resend_verification(background_tasks: BackgroundTasks, current_user: dict = 
         token = secrets.token_urlsafe(32)
         cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (token, current_user["id"]))
         conn.commit()
-        site_url = os.getenv("SITE_URL", "https://pickia-production.up.railway.app")
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         background_tasks.add_task(_send_verification_email, row["email"], row["name"], token, site_url)
         return {"ok": True}
     finally:
