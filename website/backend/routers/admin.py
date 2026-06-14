@@ -9,10 +9,20 @@ from datetime import datetime
 from database import get_connection
 from auth_utils import require_admin, hash_password
 
-_PIPELINE_DIR = os.getenv(
-    "PIPELINE_SRC_PATH",
-    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src"))
-)
+def _find_pipeline_dir() -> str:
+    if env := os.getenv("PIPELINE_SRC_PATH"):
+        return env
+    # tenta relativo ao __file__ (3 níveis acima de routers/)
+    candidate = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src"))
+    if os.path.isdir(candidate):
+        return candidate
+    # tenta relativo ao cwd (raiz do repo no Railway costuma ser /app)
+    candidate2 = os.path.abspath(os.path.join(os.getcwd(), "ApostaEsportivas/src"))
+    if os.path.isdir(candidate2):
+        return candidate2
+    return candidate  # retorna mesmo sem existir; o endpoint vai dar erro claro
+
+_PIPELINE_DIR = _find_pipeline_dir()
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
