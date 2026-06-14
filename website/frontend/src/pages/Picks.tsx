@@ -1545,16 +1545,11 @@ export default function Picks() {
                 return (
                   <>
                     {pending.length > 0 ? (
-                      <>
-                        <div className="grid gap-4 md:grid-cols-2">
-                          {pending.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                          ))}
-                        </div>
-                        {pending.length > 4 && (
-                          <p className="text-xs text-zinc-600 text-center mt-2">+{pending.length - 4} picks disponíveis</p>
-                        )}
-                      </>
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {pending.map((s: any) => (
+                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                        ))}
+                      </div>
                     ) : today?.vip?.length > 0 ? (
                       <div className="card p-6 text-center border-dashed">
                         <p className="text-zinc-500 text-sm font-semibold">Todos os picks de hoje já foram resolvidos.</p>
