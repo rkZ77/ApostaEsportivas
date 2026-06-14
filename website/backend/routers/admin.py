@@ -1,9 +1,17 @@
+import os
+import sys
+import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from datetime import datetime
 from database import get_connection
 from auth_utils import require_admin, hash_password
+
+_PIPELINE_DIR = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src")
+)
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
@@ -145,6 +153,50 @@ def delete_user(user_id: int, current_user: dict = Depends(require_admin)):
     finally:
         cur.close()
         conn.close()
+
+
+_PIPELINE_SCRIPTS = {
+    "atualizar_jogos":      "atualizar_jogos.py",
+    "capturar_odds":        "capturar_odds.py",
+    "gerar_vip":            "gerar_sugestao_vip.py",
+    "gerar_free":           os.path.join("ai", "dica_do_dia_pipeline.py"),
+    "gerar_multipla":       "gerar_sugestao_multiplas.py",
+    "gerar_alavancagem":    os.path.join("ai", "alavancagem_pipeline.py"),
+    "atualizar_resultados": "atualizar_resultados_sugestoes.py",
+}
+
+
+class PipelineCommandBody(BaseModel):
+    command: str
+
+
+@router.post("/run-pipeline")
+async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
+    if body.command not in _PIPELINE_SCRIPTS:
+        raise HTTPException(400, detail=f"Comando inválido. Use: {list(_PIPELINE_SCRIPTS)}")
+
+    script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[body.command])
+    if not os.path.exists(script):
+        raise HTTPException(500, detail=f"Script não encontrado: {script}")
+
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            sys.executable, script,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            cwd=_PIPELINE_DIR,
+        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
+    except asyncio.TimeoutError:
+        raise HTTPException(504, detail="Timeout (>5min)")
+    except Exception as e:
+        raise HTTPException(500, detail=str(e))
+
+    if proc.returncode != 0:
+        err = stderr.decode(errors="replace")[-500:]
+        raise HTTPException(500, detail=err or "Erro desconhecido no pipeline")
+
+    return {"ok": True, "log": stdout.decode(errors="replace")}
 
 
 @router.get("/stats")

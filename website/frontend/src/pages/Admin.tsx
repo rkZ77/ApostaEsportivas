@@ -69,6 +69,31 @@ export default function Admin() {
   const [search, setSearch]   = useState('')
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
+  const [runningCmd, setRunningCmd] = useState<string | null>(null)
+  const [pipelineMsg, setPipelineMsg] = useState<{ ok: boolean; text: string } | null>(null)
+
+  const PIPELINE_ACTIONS = [
+    { command: 'atualizar_jogos',      label: 'Atualizar Jogos'   },
+    { command: 'capturar_odds',        label: 'Capturar Odds'     },
+    { command: 'gerar_vip',            label: 'Gerar VIP'         },
+    { command: 'gerar_free',           label: 'Gerar Free'        },
+    { command: 'gerar_multipla',       label: 'Gerar Múltipla'    },
+    { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem' },
+    { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
+  ] as const
+
+  const runPipeline = async (command: string) => {
+    setRunningCmd(command)
+    setPipelineMsg(null)
+    try {
+      await api.post('/admin/run-pipeline', { command })
+      setPipelineMsg({ ok: true, text: `✓ ${command} concluído` })
+    } catch (err: any) {
+      setPipelineMsg({ ok: false, text: err.response?.data?.detail || 'Erro no pipeline' })
+    } finally {
+      setRunningCmd(null)
+    }
+  }
 
   const reload = () => {
     setLoading(true)
@@ -161,6 +186,36 @@ export default function Admin() {
       </div>
 
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
+
+        {/* Pipeline */}
+        <div className="card p-4 mb-6">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Pipeline</h2>
+          <div className="flex flex-wrap gap-2">
+            {PIPELINE_ACTIONS.map(({ command, label }) => {
+              const running = runningCmd === command
+              return (
+                <button
+                  key={command}
+                  onClick={() => runPipeline(command)}
+                  disabled={runningCmd !== null}
+                  className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  {running && <span className="w-3 h-3 border border-zinc-500 border-t-white rounded-full animate-spin" />}
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          {pipelineMsg && (
+            <div className={`mt-3 px-3 py-2 rounded-lg text-xs font-medium border ${
+              pipelineMsg.ok
+                ? 'bg-green-500/10 border-green-500/30 text-green-400'
+                : 'bg-red-500/10 border-red-500/30 text-red-400'
+            }`}>
+              {pipelineMsg.text}
+            </div>
+          )}
+        </div>
 
         {/* Stats — usuários */}
         {stats && (
