@@ -213,25 +213,16 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
         raise HTTPException(500, detail=f"Script não encontrado: {script}")
 
     try:
-        proc = await asyncio.create_subprocess_exec(
+        await asyncio.create_subprocess_exec(
             sys.executable, script,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.DEVNULL,
             cwd=_PIPELINE_DIR,
         )
-        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300)
-    except asyncio.TimeoutError:
-        raise HTTPException(504, detail="Timeout (>5min)")
     except Exception as e:
         raise HTTPException(500, detail=str(e))
 
-    if proc.returncode != 0:
-        out = stdout.decode(errors="replace")[-300:]
-        err = stderr.decode(errors="replace")[-500:]
-        detail = err or out or f"returncode={proc.returncode} (sem output)"
-        raise HTTPException(500, detail=detail)
-
-    return {"ok": True, "log": stdout.decode(errors="replace")}
+    return {"ok": True, "status": "iniciado"}
 
 
 @router.get("/stats")

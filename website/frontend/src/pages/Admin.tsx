@@ -87,7 +87,7 @@ export default function Admin() {
     setPipelineMsg(null)
     try {
       await api.post('/admin/run-pipeline', { command })
-      setPipelineMsg({ ok: true, text: `✓ ${command} concluído` })
+      setPipelineMsg({ ok: true, text: `✓ ${command} iniciado em background` })
     } catch (err: any) {
       setPipelineMsg({ ok: false, text: err.response?.data?.detail || 'Erro no pipeline' })
     } finally {
