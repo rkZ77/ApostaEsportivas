@@ -9,8 +9,9 @@ from datetime import datetime
 from database import get_connection
 from auth_utils import require_admin, hash_password
 
-_PIPELINE_DIR = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src")
+_PIPELINE_DIR = os.getenv(
+    "PIPELINE_SRC_PATH",
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src"))
 )
 
 router = APIRouter(prefix="/api/admin", tags=["admin"])
