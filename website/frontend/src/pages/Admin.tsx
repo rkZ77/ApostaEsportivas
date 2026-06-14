@@ -70,7 +70,8 @@ export default function Admin() {
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
   const [runningCmd, setRunningCmd] = useState<string | null>(null)
-  const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null }>>({})
+  const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null; error: string | null }>>({})
+  const [expandedError, setExpandedError] = useState<string | null>(null)
 
   const PIPELINE_ACTIONS = [
     { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
@@ -215,9 +216,15 @@ export default function Admin() {
                     {label}
                   </button>
                   {s && (
-                    <span className="text-zinc-600 text-[10px] pl-1">
-                      {s.status === 'running' ? `iniciado ${s.started_at}` : `${s.status} ${s.finished_at}`}
+                    <span
+                      className={`text-[10px] pl-1 ${s.status === 'error' ? 'text-red-500 cursor-pointer underline' : 'text-zinc-600'}`}
+                      onClick={() => s.status === 'error' && setExpandedError(expandedError === command ? null : command)}
+                    >
+                      {s.status === 'running' ? `rodando desde ${s.started_at}` : `${s.status} ${s.finished_at}`}
                     </span>
+                  )}
+                  {expandedError === command && s?.error && (
+                    <pre className="text-[10px] text-red-400 bg-zinc-900 rounded p-2 max-w-xs whitespace-pre-wrap break-all mt-1">{s.error}</pre>
                   )}
                 </div>
               )
