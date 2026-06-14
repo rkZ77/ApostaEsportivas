@@ -305,46 +305,48 @@ export default function Admin() {
           ) : payments.length === 0 ? (
             <p className="text-center text-zinc-600 text-sm py-6">Nenhum pagamento registrado.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    {['Data', 'Usuário', 'Plano', 'Valor', 'Método', 'Status', 'Expira'].map(h => (
-                      <th key={h} className="text-left text-zinc-500 font-medium px-4 py-2 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {paymentsPage_.map((p, i) => (
-                    <tr key={i} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
-                      <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
-                      <td className="px-4 py-2">
-                        <div className="text-white font-medium">{p.user_name}</div>
-                        <div className="text-zinc-600">{p.user_email}</div>
-                      </td>
-                      <td className="px-4 py-2 capitalize text-zinc-300">{p.plan_key}</td>
-                      <td className="px-4 py-2 text-green-400 font-semibold">R${Number(p.amount).toFixed(2)}</td>
-                      <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? '—'}</td>
-                      <td className="px-4 py-2">
-                        <span className={`px-2 py-0.5 rounded font-medium ${p.status === 'approved' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                          {p.status}
-                        </span>
-                      </td>
-                      <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : '—'}</td>
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      {['Data', 'Usuário', 'Plano', 'Valor', 'Método', 'Status', 'Expira'].map(h => (
+                        <th key={h} className="text-left text-zinc-500 font-medium px-4 py-2 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                      ))}
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            {paymentsTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
-                <span className="text-xs text-zinc-600">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
-                <div className="flex gap-2">
-                  <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
-                  <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx →</button>
-                </div>
+                  </thead>
+                  <tbody>
+                    {paymentsPage_.map((p, i) => (
+                      <tr key={i} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
+                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
+                        <td className="px-4 py-2">
+                          <div className="text-white font-medium">{p.user_name}</div>
+                          <div className="text-zinc-600">{p.user_email}</div>
+                        </td>
+                        <td className="px-4 py-2 capitalize text-zinc-300">{p.plan_key}</td>
+                        <td className="px-4 py-2 text-green-400 font-semibold">R${Number(p.amount).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? '—'}</td>
+                        <td className="px-4 py-2">
+                          <span className={`px-2 py-0.5 rounded font-medium ${p.status === 'approved' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                            {p.status}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-            )}
+              {paymentsTotalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
+                  <span className="text-xs text-zinc-600">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
+                  <div className="flex gap-2">
+                    <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
+                    <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx →</button>
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </div>
 
