@@ -12,6 +12,8 @@ WORKDIR /app
 COPY website/backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY website/backend/ .
+COPY ApostaEsportivas/src/ ./pipeline/
 COPY --from=frontend /frontend/dist ./dist
+ENV PIPELINE_SRC_PATH=/app/pipeline
 EXPOSE 8000
 CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
