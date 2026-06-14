@@ -74,6 +74,10 @@ export default function Admin() {
   const [expandedError, setExpandedError] = useState<string | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [paymentsPage, setPaymentsPage] = useState(0)
+  const [usersPage, setUsersPage] = useState(0)
+  const USERS_PER_PAGE = 15
+  const PAYMENTS_PER_PAGE = 10
 
   const PIPELINE_ACTIONS = [
     { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
@@ -168,6 +172,13 @@ export default function Admin() {
     const matchPlan = planFilter === 'todos' || u.plan === planFilter
     return matchSearch && matchPlan
   })
+  const usersTotalPages = Math.ceil(filtered.length / USERS_PER_PAGE)
+  const usersPageSafe = Math.min(usersPage, Math.max(0, usersTotalPages - 1))
+  const filteredPage = filtered.slice(usersPageSafe * USERS_PER_PAGE, (usersPageSafe + 1) * USERS_PER_PAGE)
+
+  const paymentsTotalPages = Math.ceil(payments.length / PAYMENTS_PER_PAGE)
+  const paymentsPageSafe = Math.min(paymentsPage, Math.max(0, paymentsTotalPages - 1))
+  const paymentsPage_ = payments.slice(paymentsPageSafe * PAYMENTS_PER_PAGE, (paymentsPageSafe + 1) * PAYMENTS_PER_PAGE)
 
   if (loading) return (
     <><Navbar /><div className="min-h-screen flex items-center justify-center">
@@ -302,7 +313,7 @@ export default function Admin() {
                   </tr>
                 </thead>
                 <tbody>
-                  {payments.map((p, i) => (
+                  {paymentsPage_.map((p, i) => (
                     <tr key={i} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
                       <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
                       <td className="px-4 py-2">
@@ -323,6 +334,15 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+            {paymentsTotalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
+                <span className="text-xs text-zinc-600">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
+                  <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx →</button>
+                </div>
+              </div>
+            )}
           )}
         </div>
 
@@ -383,7 +403,7 @@ export default function Admin() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map(u => (
+                {filteredPage.map(u => (
                   <tr key={u.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
                     <td className="px-4 py-3">
                       <div className="font-semibold text-white">{u.name}</div>
@@ -462,7 +482,7 @@ export default function Admin() {
                     </td>
                   </tr>
                 ))}
-                {filtered.length === 0 && (
+                {filteredPage.length === 0 && (
                   <tr>
                     <td colSpan={7} className="px-4 py-8 text-center text-zinc-600 text-sm">
                       Nenhum usuário encontrado.
@@ -471,6 +491,15 @@ export default function Admin() {
                 )}
               </tbody>
             </table>
+            {usersTotalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
+                <span className="text-xs text-zinc-600">Página {usersPageSafe + 1} de {usersTotalPages} · {filtered.length} usuário(s)</span>
+                <div className="flex gap-2">
+                  <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
+                  <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPageSafe === usersTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx →</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -479,7 +508,7 @@ export default function Admin() {
           {filtered.length === 0 && (
             <p className="text-center text-zinc-600 text-sm py-8">Nenhum usuário encontrado.</p>
           )}
-          {filtered.map(u => (
+          {filteredPage.map(u => (
             <div key={u.id} className="card p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
