@@ -70,8 +70,8 @@ export default function Admin() {
   const [planFilter, setPlanFilter] = useState<PlanFilter>('todos')
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
   const [runningCmd, setRunningCmd] = useState<string | null>(null)
-  const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null; error: string | null }>>({})
-  const [expandedError, setExpandedError] = useState<string | null>(null)
+  const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null; error: string | null; log: string | null }>>({})
+  const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
   const [paymentsPage, setPaymentsPage] = useState(0)
@@ -232,14 +232,16 @@ export default function Admin() {
                   </button>
                   {s && (
                     <span
-                      className={`text-[10px] pl-1 ${s.status === 'error' ? 'text-red-500 cursor-pointer underline' : 'text-zinc-600'}`}
-                      onClick={() => s.status === 'error' && setExpandedError(expandedError === command ? null : command)}
+                      className={`text-[10px] pl-1 cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : s.status === 'ok' ? 'text-zinc-500' : 'text-zinc-600'}`}
+                      onClick={() => setExpandedLog(expandedLog === command ? null : command)}
                     >
                       {s.status === 'running' ? `rodando desde ${s.started_at}` : `${s.status} ${s.finished_at}`}
                     </span>
                   )}
-                  {expandedError === command && s?.error && (
-                    <pre className="text-[10px] text-red-400 bg-zinc-900 rounded p-2 max-w-xs whitespace-pre-wrap break-all mt-1">{s.error}</pre>
+                  {expandedLog === command && (s?.error || s?.log) && (
+                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-xs whitespace-pre-wrap break-all mt-1 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                      {s.error || s.log}
+                    </pre>
                   )}
                 </div>
               )

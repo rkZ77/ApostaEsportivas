@@ -220,13 +220,15 @@ async def _run_and_track(command: str, script: str):
         )
         stdout, stderr = await proc.communicate()
         returncode = proc.returncode
-        err_text = stderr.decode(errors="replace")[-1500:] or stdout.decode(errors="replace")[-1500:]
+        out = stdout.decode(errors="replace")[-1500:]
+        err = stderr.decode(errors="replace")[-1500:]
         _pipeline_status[command] = {
             "status": "ok" if returncode == 0 else "error",
             "started_at": started,
             "finished_at": now(),
             "returncode": returncode,
-            "error": err_text if returncode != 0 else None,
+            "log": out,
+            "error": err if returncode != 0 else (err or None),
         }
     except Exception as e:
         _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e)}
