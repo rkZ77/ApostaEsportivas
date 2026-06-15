@@ -18,6 +18,7 @@ import Leaderboard from './pages/Leaderboard'
 import VerifyEmail from './pages/VerifyEmail'
 import Privacidade from './pages/Privacidade'
 import Termos from './pages/Termos'
+import WhatsAppButton from './components/WhatsAppButton'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
@@ -34,6 +35,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
+        <WhatsAppButton />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />

@@ -36,6 +36,14 @@ export default function Footer() {
             <Link to="/privacidade" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Privacidade
             </Link>
+            <a
+              href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-zinc-500 hover:text-green-400 transition-colors font-semibold"
+            >
+              Suporte
+            </a>
           </div>
 
           {/* Disclaimer */}
