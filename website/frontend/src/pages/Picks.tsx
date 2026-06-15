@@ -1155,7 +1155,7 @@ export default function Picks() {
     api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
     api.get('/banca/summary').then(r => {
       setBancaSummary(r.data)
-      if (!r.data.has_banca && !localStorage.getItem('pickia_banca_modal_shown')) {
+      if (!r.data.has_banca && !sessionStorage.getItem('pickia_banca_modal_shown')) {
         setShowBancaModal(true)
       }
     }).catch(() => {})
@@ -1269,7 +1269,7 @@ export default function Picks() {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
-                  localStorage.setItem('pickia_banca_modal_shown', '1')
+                  sessionStorage.setItem('pickia_banca_modal_shown', '1')
                   setShowBancaModal(false)
                   navigate('/banca')
                 }}
@@ -1279,7 +1279,7 @@ export default function Picks() {
               </button>
               <button
                 onClick={() => {
-                  localStorage.setItem('pickia_banca_modal_shown', '1')
+                  sessionStorage.setItem('pickia_banca_modal_shown', '1')
                   setShowBancaModal(false)
                 }}
                 className="w-full text-zinc-500 hover:text-zinc-400 text-xs py-2 transition-colors"
