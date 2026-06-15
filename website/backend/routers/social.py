@@ -19,6 +19,10 @@ _comment_rate: dict[str, list[float]] = defaultdict(list)
 _COMMENT_LIMIT  = 5
 _COMMENT_WINDOW = 60
 
+# Online tracking: user_id -> last_seen (epoch seconds)
+_online: dict[int, float] = {}
+_ONLINE_TTL = 120  # 2 minutos sem atividade = offline
+
 
 def _check_comment_rate(user_id: int) -> None:
     uid = str(user_id)
@@ -53,8 +57,18 @@ class ChatBody(BaseModel):
 
 # ── chat ao vivo (deve vir antes das rotas dinâmicas /{pick_type}/{pick_id}) ──
 
+@router.get("/chat/online")
+def get_online(current_user: dict = Depends(get_current_user)):
+    """Registra o usuário como online e retorna contagem de ativos nos últimos 2 min."""
+    now = time.time()
+    _online[current_user["id"]] = now
+    count = sum(1 for t in _online.values() if now - t < _ONLINE_TTL)
+    return {"count": count}
+
+
 @router.get("/chat/messages")
 def get_chat(after_id: int = 0, limit: int = 60, current_user: dict = Depends(get_current_user)):
+    _online[current_user["id"]] = time.time()  # mantém usuário como online
     conn = _conn(); cur = _cur(conn)
     try:
         cur.execute("""

@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback } from 'react'
+﻿import { useEffect, useState, useCallback, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -1087,6 +1087,8 @@ export default function Picks() {
   const [tab, setTab]               = useState<Tab>('hoje')
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedPickType, setSelectedPickType] = useState<string>('vip')
+  const [chatUnread, setChatUnread] = useState(0)
+  const chatLastIdRef = useRef(0)
 
   const openDetail = (id: number, pickType = 'vip') => {
     setSelectedId(id)
@@ -1167,6 +1169,22 @@ export default function Picks() {
     if (tab === 'multiplas'    && canSeeVip && !mLoaded)    doFetchMultiplas(defaultMFilters)
     if (tab === 'alavancagem'  && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
   }, [tab, canSeeVip])
+
+  // Badge de não lidas na aba Comunidade
+  useEffect(() => {
+    if (tab === 'chat') { setChatUnread(0); return }
+    if (chatLastIdRef.current === 0) return
+    const interval = setInterval(() => {
+      api.get('/social/chat/messages', { params: { after_id: chatLastIdRef.current, limit: 30 } })
+        .then(r => {
+          if (r.data.length) {
+            chatLastIdRef.current = r.data[r.data.length - 1].id
+            setChatUnread(prev => prev + r.data.length)
+          }
+        }).catch(() => {})
+    }, 15_000)
+    return () => clearInterval(interval)
+  }, [tab])
 
   const fetchVip = useCallback((f: VipFilters) => {
     setVipLoading(true)
@@ -1355,13 +1373,14 @@ export default function Picks() {
 
         <TabBar
           tab={tab}
-          setTab={(t) => { if (t === 'aovivo') clearLive(); setTab(t) }}
+          setTab={(t) => { if (t === 'aovivo') clearLive(); if (t === 'chat') setChatUnread(0); setTab(t) }}
           canSeeVip={canSeeVip}
           liveCount={liveCount}
           counts={{
             vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
+            chat:        chatUnread || undefined,
           }}
         />
 
@@ -1948,7 +1967,7 @@ export default function Picks() {
                 Discuta picks, compartilhe análises e conecte-se com outros apostadores.
               </p>
             </div>
-            <CommunityChat />
+            <CommunityChat onLatestId={id => { chatLastIdRef.current = id }} />
           </div>
         )}
 
