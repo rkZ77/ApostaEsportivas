@@ -37,7 +37,7 @@ for _var, _desc in _OPTIONAL_VARS.items():
 
 from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
 
-app = FastAPI(title="ApostaSmart API", version="1.0.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Pick IA API", version="1.0.0", docs_url=None, redoc_url=None)
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 _origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")

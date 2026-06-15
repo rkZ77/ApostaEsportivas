@@ -786,14 +786,14 @@ def forgot_password(body: ForgotPasswordBody):
         nome = row["name"]
         _send_email(
             to      = body.email,
-            subject = "HPS Picks — Código de redefinição de senha",
+            subject = "Pick IA — Código de redefinição de senha",
             body    = (
                 f"Olá {nome},\n\n"
                 f"Seu código para redefinir a senha é:\n\n"
                 f"  {code}\n\n"
                 f"O código expira em 15 minutos.\n"
                 f"Se não foi você, ignore este email.\n\n"
-                f"— HPS Picks"
+                f"— Equipe Pick IA"
             ),
         )
         return {"ok": True}

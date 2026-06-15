@@ -161,7 +161,7 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
         "auto_return": "approved",
         "external_reference": f"{current_user['sub']}:{body.plan}",
         "notification_url": f"{backend_url}/api/payments/webhook",
-        "statement_descriptor": "HPS PICKS",
+        "statement_descriptor": "PICK IA",
     }
 
     result = sdk.preference().create(preference_data)
