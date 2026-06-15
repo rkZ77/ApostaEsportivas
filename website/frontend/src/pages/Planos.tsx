@@ -1,4 +1,5 @@
 import { useNavigate } from 'react-router-dom'
+import { Lightbulb } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
@@ -282,7 +283,7 @@ export default function Planos() {
         {/* ── UPGRADE INTELIGENTE (só mensal) ───────────────────────────────── */}
         {upgradeOptions.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-xs text-zinc-500 font-black uppercase tracking-wider mb-1">💡 Você pode economizar</p>
+            <p className="text-xs text-zinc-500 font-black uppercase tracking-wider mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
             <p className="text-white text-sm mb-4">
               No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
               Veja quanto economizaria mudando:

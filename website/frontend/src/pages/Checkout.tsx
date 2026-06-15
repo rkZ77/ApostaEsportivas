@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { CheckCircle, XCircle, Check } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
@@ -39,7 +40,7 @@ function SuccessPage() {
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto">
-          <span className="text-4xl">✅</span>
+          <CheckCircle className="w-10 h-10 text-green-400" />
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento aprovado!</h1>
         <p className="text-zinc-400">Seu plano VIP foi ativado. Bem-vindo!</p>
@@ -58,7 +59,7 @@ function FailurePage() {
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <div className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto">
-          <span className="text-4xl">❌</span>
+          <XCircle className="w-10 h-10 text-red-400" />
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento recusado</h1>
         <p className="text-zinc-400">Houve um problema com o pagamento. Tente novamente.</p>
@@ -145,7 +146,7 @@ export default function Checkout() {
               'Notificações de novos picks',
             ].map(benefit => (
               <div key={benefit} className="flex items-center gap-2 text-sm text-zinc-300">
-                <span className="text-green-500 font-bold">✓</span>
+                <Check className="w-4 h-4 text-green-500 shrink-0" />
                 {benefit}
               </div>
             ))}

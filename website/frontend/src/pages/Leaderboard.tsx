@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Flame } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
@@ -177,7 +178,7 @@ export default function Leaderboard() {
                     >
                       <div className="flex items-center gap-1">
                         <span className="text-lg">{rankMedal(e.rank)}</span>
-                        {e.is_hot && <span className="text-sm" title="Em alta!">🔥</span>}
+                        {e.is_hot && <Flame className="w-4 h-4 text-orange-400" />}
                       </div>
                       <Avatar name={e.name} imageUrl={e.avatar_url} size="md" />
                       <p className={`text-xs font-semibold text-center truncate w-full ${e.is_me ? 'text-green-400' : 'text-white'}`}>
@@ -241,7 +242,7 @@ export default function Leaderboard() {
                             </span>
                             {e.is_hot && (
                               <span className="ml-1.5 text-xs bg-orange-500/10 text-orange-400 border border-orange-500/20 px-1.5 py-0.5 rounded font-bold">
-                                🔥 Em Alta
+                                <Flame className="w-3 h-3 inline-block mr-0.5" /> Em Alta
                               </span>
                             )}
                           </div>

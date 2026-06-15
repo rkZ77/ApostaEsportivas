@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
+import { Zap } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
@@ -187,7 +188,7 @@ export default function Agente() {
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-6 py-8">
             <div className="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-              <span className="text-3xl">⚽</span>
+              <Zap className="w-8 h-8 text-green-400" />
             </div>
             <div className="text-center">
               <h2 className="text-white font-bold text-lg">Olá, {user?.name?.split(' ')[0]}!</h2>

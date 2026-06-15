@@ -1,4 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react'
+import { PartyPopper } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -302,7 +303,7 @@ export default function Login() {
 
             {mode === 'register' && refCode && (
               <div className="bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl px-4 py-3 text-xs flex items-center gap-2">
-                <span>🎉</span>
+                <PartyPopper className="w-4 h-4 shrink-0" />
                 <span>Código de indicação <strong>{refCode}</strong> aplicado!</span>
               </div>
             )}

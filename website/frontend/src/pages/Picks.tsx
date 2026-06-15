@@ -10,7 +10,7 @@ import Avatar from '../components/Avatar'
 import CommunityChat from '../components/CommunityChat'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
-import { UserCircle, Crown, Rocket } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock } from 'lucide-react'
 import { suggestStake } from '../utils/stakeUtils'
 
 // ─── Helpers de logo ──────────────────────────────────────────────────────────
@@ -1271,7 +1271,7 @@ export default function Picks() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
-                <span className="text-yellow-400 text-lg">💰</span>
+                <Wallet className="w-5 h-5 text-yellow-400" />
               </div>
               <div>
                 <h2 className="text-white font-black text-base">Configure sua banca</h2>
@@ -1896,7 +1896,7 @@ export default function Picks() {
                                   : res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400'
                                   : 'bg-red-500/20 border-red-500/40 text-red-400'
                               }`}>
-                                {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '⏳'}
+                                {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : <Clock className="w-3 h-3" />}
                               </div>
                               {idx < arr.length - 1 && (
                                 <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-zinc-800'}`} />

@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
+import { TrendingUp } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -548,7 +549,7 @@ export default function Banca() {
                 {data.yield_roi != null && data.ia_roi != null && (
                   <div className={`mt-4 text-center text-xs font-semibold ${data.yield_roi >= data.ia_roi ? 'text-green-400' : 'text-zinc-500'}`}>
                     {data.yield_roi >= data.ia_roi
-                      ? '🔥 Você está superando a IA neste período!'
+                      ? <span className="flex items-center justify-center gap-1"><TrendingUp className="w-3.5 h-3.5" /> Você está superando a IA neste período!</span>
                       : `Diferença de ${(data.ia_roi - data.yield_roi).toFixed(1)}% em relação à IA`}
                   </div>
                 )}
