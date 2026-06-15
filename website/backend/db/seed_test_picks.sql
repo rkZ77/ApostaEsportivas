@@ -1,8 +1,26 @@
 -- ============================================================
 -- SEED DE PICKS DE TESTE — rodar no banco DEV apenas
--- Cria 3 picks VIP de hoje: 1 pendente, 1 GREEN, 1 RED
+-- Cria usuário VIP de teste + 3 picks VIP de hoje
 -- ============================================================
 
+-- ─── USUÁRIO VIP DE TESTE ────────────────────────────────────
+-- Login: vip@teste.com / Teste@123
+INSERT INTO users (name, email, password_hash, plan, active, expires_at, email_verified)
+VALUES (
+    'Usuário VIP Teste',
+    'vip@teste.com',
+    '$2b$12$uyodIRXvADS3enpzhHyww.N95qiKfqbbB7d/JgXeqvd15ZaXIGTka',
+    'vip',
+    true,
+    NOW() + INTERVAL '30 days',
+    true
+)
+ON CONFLICT (email) DO UPDATE SET
+    plan        = 'vip',
+    active      = true,
+    expires_at  = NOW() + INTERVAL '30 days';
+
+-- ─── PICKS VIP DE TESTE ──────────────────────────────────────
 -- Limpa picks VIP de hoje (para não duplicar se rodar de novo)
 DELETE FROM picks_vip WHERE match_date = CURRENT_DATE;
 
