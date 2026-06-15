@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
@@ -22,7 +22,19 @@ const PLANS: Plan[] = [
 ]
 
 function SuccessPage() {
-  const navigate = useNavigate()
+  const navigate  = useNavigate()
+  const { refreshUser } = useAuth()
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    // Aguarda 2s para o webhook do MercadoPago ser processado, depois atualiza o plano
+    const t = setTimeout(async () => {
+      try { await refreshUser() } catch { /* ignora — usuário verá na próxima sessão */ }
+      setReady(true)
+    }, 2000)
+    return () => clearTimeout(t)
+  }, [])
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
@@ -31,9 +43,10 @@ function SuccessPage() {
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento aprovado!</h1>
         <p className="text-zinc-400">Seu plano VIP foi ativado. Bem-vindo!</p>
-        <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">
-          Ver Picks
-        </button>
+        {!ready
+          ? <p className="text-zinc-600 text-sm animate-pulse">Ativando seu acesso VIP…</p>
+          : <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
+        }
       </div>
     </div>
   )

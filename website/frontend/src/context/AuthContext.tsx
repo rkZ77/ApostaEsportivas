@@ -20,6 +20,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string) => Promise<User>
   logout: () => void
   updateUser: (patch: Partial<User>) => void
+  refreshUser: () => Promise<void>
   isVip: boolean
   isAdmin: boolean
   daysUntilExpiry: number | null
@@ -61,6 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     _save(updated)
   }
 
+  const refreshUser = async (): Promise<void> => {
+    const { data } = await api.get('/auth/me')
+    _save(data as User)
+  }
+
   const daysUntilExpiry: number | null = (() => {
     if (!user?.expires_at) return null
     const diff = new Date(user.expires_at).getTime() - Date.now()
@@ -74,7 +80,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       register,
       logout,
       updateUser,
-      isVip: user?.plan === 'vip' || user?.plan === 'trial' || user?.plan === 'admin',
+      refreshUser,
+      isVip: user?.plan === 'admin'
+        || ((user?.plan === 'vip' || user?.plan === 'trial')
+            && (!user.expires_at || new Date(user.expires_at) > new Date())),
       isAdmin: user?.plan === 'admin',
       daysUntilExpiry,
     }}>
