@@ -182,6 +182,113 @@ app.include_router(leaderboard.router)
 app.include_router(live.router)
 
 
+# ── Email de lembrete: configurar banca ──────────────────────────────────────
+import smtplib
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText as _MIMEText
+
+def _send_banca_reminder(to: str, first_name: str):
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER", "")
+    smtp_pass = os.getenv("SMTP_PASS", "")
+    from_addr = os.getenv("SMTP_FROM", smtp_user)
+    site_url  = os.getenv("SITE_URL", "https://pickia.com.br")
+    if not smtp_user or not smtp_pass:
+        return
+    html = f"""<!DOCTYPE html>
+<html lang="pt-BR">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
+<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
+    <tr><td align="center">
+      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
+        <tr><td style="background:linear-gradient(135deg,#ca8a04,#a16207);padding:36px 40px;text-align:center;">
+          <h1 style="margin:0;color:#fff;font-size:26px;font-weight:900;">💰 Falta só 1 passo!</h1>
+          <p style="margin:8px 0 0;color:#fef9c3;font-size:14px;">Configure sua banca e comece a lucrar</p>
+        </td></tr>
+        <tr><td style="padding:36px 40px;">
+          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Olá,</p>
+          <h2 style="margin:0 0 20px;color:#fff;font-size:20px;font-weight:800;">{first_name}!</h2>
+          <p style="margin:0 0 24px;color:#a1a1aa;font-size:15px;line-height:1.6;">
+            Você criou sua conta no <strong style="color:#fff;">Pick IA</strong> mas ainda não configurou sua banca.
+            Sem ela, você perde as melhores funcionalidades:
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
+            <tr>
+              <td style="background:#1a1a1a;border:1px solid #262626;border-radius:10px;padding:14px;vertical-align:top;width:48%;">
+                <div style="color:#22c55e;font-weight:900;font-size:18px;margin-bottom:6px;">✓</div>
+                <div style="color:#fff;font-size:13px;font-weight:700;">Sugestão de stake</div>
+                <div style="color:#71717a;font-size:12px;margin-top:3px;">Quanto apostar em cada pick, calculado pela sua banca.</div>
+              </td>
+              <td style="width:4%;"></td>
+              <td style="background:#1a1a1a;border:1px solid #262626;border-radius:10px;padding:14px;vertical-align:top;width:48%;">
+                <div style="color:#f59e0b;font-weight:900;font-size:18px;margin-bottom:6px;">📈</div>
+                <div style="color:#fff;font-size:13px;font-weight:700;">Lucro acumulado</div>
+                <div style="color:#71717a;font-size:12px;margin-top:3px;">Acompanhe seu ROI e evolução da banca em tempo real.</div>
+              </td>
+            </tr>
+          </table>
+          <p style="margin:0 0 24px;color:#a1a1aa;font-size:14px;line-height:1.6;">
+            Leva menos de <strong style="color:#fff;">30 segundos</strong>. É só informar quanto você tem disponível para apostar.
+          </p>
+          <table width="100%" cellpadding="0" cellspacing="0">
+            <tr><td align="center">
+              <a href="{site_url}/banca"
+                 style="display:inline-block;background:#ca8a04;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;">
+                Configurar minha banca agora →
+              </a>
+            </td></tr>
+          </table>
+        </td></tr>
+        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
+          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body>
+</html>"""
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = "💰 Configure sua banca no Pick IA — leva 30 segundos!"
+        msg["From"]    = from_addr
+        msg["To"]      = to
+        msg.attach(_MIMEText(f"Olá {first_name}, configure sua banca em {site_url}/banca", "plain", "utf-8"))
+        msg.attach(_MIMEText(html, "html", "utf-8"))
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(from_addr, [to], msg.as_string())
+        logger.info("[BANCA-REMINDER] Email enviado para %s", to)
+    except Exception as e:
+        logger.error("[BANCA-REMINDER] Falha ao enviar para %s: %s", to, e)
+
+
+def _job_banca_reminder():
+    """Roda de hora em hora: envia lembrete para quem cadastrou 24h atrás sem configurar banca."""
+    from database import get_connection
+    try:
+        conn = get_connection()
+        cur  = conn.cursor()
+        cur.execute("""
+            SELECT u.email, u.name
+            FROM users u
+            LEFT JOIN user_banca ub ON ub.user_id = u.id
+            WHERE ub.user_id IS NULL
+              AND u.active = TRUE
+              AND u.created_at BETWEEN NOW() - INTERVAL '25 hours' AND NOW() - INTERVAL '23 hours'
+        """)
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        for row in rows:
+            first_name = row["name"].split()[0]
+            _send_banca_reminder(row["email"], first_name)
+    except Exception as e:
+        logger.error("[BANCA-REMINDER] Erro ao buscar usuários: %s", e)
+
+
 @app.on_event("startup")
 def run_migrations():
     """Migrations não-destrutivas: ADD COLUMN IF NOT EXISTS."""
@@ -293,6 +400,16 @@ def run_migrations():
     finally:
         cur.close()
         conn.close()
+
+    # Inicia scheduler de lembretes
+    try:
+        from apscheduler.schedulers.background import BackgroundScheduler
+        _scheduler = BackgroundScheduler()
+        _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
+        _scheduler.start()
+        logger.info("[SCHEDULER] Iniciado — lembrete de banca a cada 1h")
+    except Exception as e:
+        logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
 
 
 @app.get("/api/health")

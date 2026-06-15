@@ -1126,6 +1126,7 @@ export default function Picks() {
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
+  const [showBancaModal, setShowBancaModal] = useState(false)
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
@@ -1152,7 +1153,12 @@ export default function Picks() {
     if (!canSeeVip) return
     api.get('/suggestions/vip/meta').then(r => setMeta(r.data)).catch(() => {})
     api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
-    api.get('/banca/summary').then(r => setBancaSummary(r.data)).catch(() => {})
+    api.get('/banca/summary').then(r => {
+      setBancaSummary(r.data)
+      if (!r.data.has_banca && !localStorage.getItem('pickia_banca_modal_shown')) {
+        setShowBancaModal(true)
+      }
+    }).catch(() => {})
   }, [canSeeVip])
 
   useEffect(() => {
@@ -1240,6 +1246,51 @@ export default function Picks() {
   return (
     <div className="min-h-screen bg-black">
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} />}
+
+      {/* Modal de boas-vindas — configura banca */}
+      {showBancaModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
+                <span className="text-yellow-400 text-lg">💰</span>
+              </div>
+              <div>
+                <h2 className="text-white font-black text-base">Configure sua banca</h2>
+                <p className="text-zinc-500 text-xs">Último passo para começar a usar</p>
+              </div>
+            </div>
+            <p className="text-zinc-400 text-sm leading-relaxed mb-5">
+              Com a banca configurada você consegue <span className="text-white font-semibold">acompanhar seus picks</span>,
+              ver seu <span className="text-green-400 font-semibold">lucro acumulado</span>,
+              e receber <span className="text-yellow-400 font-semibold">sugestão de stake</span> em cada aposta.
+              Leva menos de 30 segundos!
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  localStorage.setItem('pickia_banca_modal_shown', '1')
+                  setShowBancaModal(false)
+                  navigate('/banca')
+                }}
+                className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-sm py-3 rounded-xl transition-colors"
+              >
+                Configurar banca agora →
+              </button>
+              <button
+                onClick={() => {
+                  localStorage.setItem('pickia_banca_modal_shown', '1')
+                  setShowBancaModal(false)
+                }}
+                className="w-full text-zinc-500 hover:text-zinc-400 text-xs py-2 transition-colors"
+              >
+                Fazer depois
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Navbar />
 
       {/* Cabeçalho */}
