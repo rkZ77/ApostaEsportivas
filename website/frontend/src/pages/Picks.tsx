@@ -1399,9 +1399,10 @@ export default function Picks() {
               </section>
 
 
-              {/* PICKS VIP DO DIA — apenas pendentes */}
+              {/* PICKS VIP DO DIA */}
               {canSeeVip && (() => {
-                const pending = (today?.vip ?? []).filter((s: any) => !s.result)
+                const vips = today?.vip ?? []
+                const pending = vips.filter((s: any) => !s.result)
                 return (
                   <section>
                     <SectionHeader
@@ -1409,27 +1410,22 @@ export default function Picks() {
                       label="Picks VIP do Dia"
                       badge={pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
-                    {pending.length > 0 ? (
+                    {vips.length > 0 ? (
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
-                          {pending.slice(0, 4).map((s: any) => (
+                          {vips.slice(0, 4).map((s: any) => (
                             <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                           ))}
                         </div>
-                        {pending.length > 4 && (
+                        {vips.length > 4 && (
                           <button
                             onClick={() => setTab('vip')}
                             className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700"
                           >
-                            Ver todos os {pending.length} picks pendentes →
+                            Ver todos os {vips.length} picks →
                           </button>
                         )}
                       </>
-                    ) : today?.vip?.length > 0 ? (
-                      <div className="card p-6 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">Todos os picks de hoje já foram resolvidos.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Confira os resultados abaixo.</p>
-                      </div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
                         <p className="text-zinc-600 text-sm">Nenhum pick VIP gerado para hoje ainda.</p>
@@ -1564,19 +1560,14 @@ export default function Picks() {
                 label={`Picks do Dia · ${todayDateStr}`}
               />
               {!canSeeVip ? <VipLockOverlay color="yellow" /> : todayLoading ? <Spinner /> : (() => {
-                const pending = (today?.vip ?? []).filter((s: any) => !s.result)
+                const vips = today?.vip ?? []
                 return (
                   <>
-                    {pending.length > 0 ? (
+                    {vips.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
-                        {pending.map((s: any) => (
+                        {vips.map((s: any) => (
                           <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                         ))}
-                      </div>
-                    ) : today?.vip?.length > 0 ? (
-                      <div className="card p-6 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">Todos os picks de hoje já foram resolvidos.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Confira os resultados abaixo.</p>
                       </div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
