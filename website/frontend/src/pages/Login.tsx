@@ -165,10 +165,10 @@ export default function Login() {
               </div>
             ))}
           </div>
-          <a href="https://www.instagram.com/hpstips/" target="_blank" rel="noopener noreferrer"
+          <a href="https://www.instagram.com/pickia_br/" target="_blank" rel="noopener noreferrer"
             className="mt-8 flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition-colors justify-center">
             <img src="/instagram.png" alt="Instagram" className="w-5 h-5 rounded-sm object-cover" />
-            <span className="text-sm font-semibold">@hpstips</span>
+            <span className="text-sm font-semibold">@pickia_br</span>
           </a>
         </div>
       </div>

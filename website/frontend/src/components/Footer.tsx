@@ -16,13 +16,13 @@ export default function Footer() {
           {/* Links */}
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <a
-              href="https://www.instagram.com/hpstips/"
+              href="https://www.instagram.com/pickia_br/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors font-semibold"
             >
               <img src="/instagram.png" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
-              @hpstips
+              @pickia_br
             </a>
             <Link to="/planos" className="text-xs text-zinc-500 hover:text-green-400 transition-colors">
               Planos
