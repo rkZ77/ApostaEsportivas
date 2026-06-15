@@ -147,10 +147,12 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
 
     preference_data = {
         "items": [{
-            "title":      plan_info["title"],
-            "quantity":   1,
-            "unit_price": plan_info["price"],
+            "title":       plan_info["title"],
+            "description": f"Acesso VIP ao Pick IA — picks esportivos por IA por {plan_info['days']} dias",
+            "quantity":    1,
+            "unit_price":  plan_info["price"],
             "currency_id": "BRL",
+            "category_id": "services",
         }],
         "payer": {"email": current_user.get("email", "")},
         "back_urls": {
