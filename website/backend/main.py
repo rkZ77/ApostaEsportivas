@@ -18,6 +18,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
+# ── Validação de variáveis obrigatórias no startup ───────────────────────────
+_REQUIRED_VARS = ["JWT_SECRET"]
+_OPTIONAL_VARS = {
+    "DATABASE_URL":               "banco de dados (Railway injeta automaticamente)",
+    "MERCADOPAGO_ACCESS_TOKEN":   "pagamentos",
+    "ANTHROPIC_API_KEY":          "IA / picks",
+    "SMTP_USER":                  "envio de emails",
+}
+
+_missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
+if _missing_required:
+    logger.critical("[STARTUP] Variáveis obrigatórias ausentes: %s — servidor não irá funcionar!", _missing_required)
+
+for _var, _desc in _OPTIONAL_VARS.items():
+    if not os.getenv(_var):
+        logger.warning("[STARTUP] %s não configurada — %s desabilitado", _var, _desc)
+
 from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
 
 app = FastAPI(title="ApostaSmart API", version="1.0.0", docs_url=None, redoc_url=None)
