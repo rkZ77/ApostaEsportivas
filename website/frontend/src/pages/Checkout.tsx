@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate, useLocation } from 'react-router-dom'
+import { useNavigate, useLocation, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
@@ -231,7 +231,10 @@ export default function Checkout() {
         </button>
 
         <p className="text-zinc-600 text-xs text-center">
-          Ao pagar, você concorda com os termos de uso. Cancele quando quiser.
+          Ao pagar, você concorda com os{' '}
+          <Link to="/termos" className="underline hover:text-zinc-400 transition-colors">termos de uso</Link>
+          {' '}e a{' '}
+          <Link to="/privacidade" className="underline hover:text-zinc-400 transition-colors">política de privacidade</Link>.
         </p>
       </main>
     </div>

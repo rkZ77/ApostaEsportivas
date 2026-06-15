@@ -30,6 +30,12 @@ export default function Footer() {
             <Link to="/results" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Resultados
             </Link>
+            <Link to="/termos" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+              Termos de Uso
+            </Link>
+            <Link to="/privacidade" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+              Privacidade
+            </Link>
           </div>
 
           {/* Disclaimer */}
