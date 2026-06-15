@@ -1276,8 +1276,22 @@ def get_alavancagem(
                    pa.odd_combined, pa.confidence_media,
                    pa.stake, pa.potential_return, pa.bankroll_before,
                    pa.result, pa.profit, pa.bankroll_after, pa.created_at,
-                   f1.home_team_id AS home_team_id_1, f1.away_team_id AS away_team_id_1,
-                   f2.home_team_id AS home_team_id_2, f2.away_team_id AS away_team_id_2
+                   COALESCE(
+                       f1.home_team_id,
+                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
+                   ) AS home_team_id_1,
+                   COALESCE(
+                       f1.away_team_id,
+                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_1 AND fx.away_team_id IS NOT NULL LIMIT 1)
+                   ) AS away_team_id_1,
+                   COALESCE(
+                       f2.home_team_id,
+                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_2 AND fx.home_team_id IS NOT NULL LIMIT 1)
+                   ) AS home_team_id_2,
+                   COALESCE(
+                       f2.away_team_id,
+                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_2 AND fx.away_team_id IS NOT NULL LIMIT 1)
+                   ) AS away_team_id_2
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
@@ -1306,8 +1320,22 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
                    pa.odd_combined, pa.confidence_media,
                    pa.stake, pa.potential_return, pa.bankroll_before,
                    pa.result, pa.profit, pa.bankroll_after, pa.created_at,
-                   f1.home_team_id AS home_team_id_1, f1.away_team_id AS away_team_id_1,
-                   f2.home_team_id AS home_team_id_2, f2.away_team_id AS away_team_id_2
+                   COALESCE(
+                       f1.home_team_id,
+                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
+                   ) AS home_team_id_1,
+                   COALESCE(
+                       f1.away_team_id,
+                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_1 AND fx.away_team_id IS NOT NULL LIMIT 1)
+                   ) AS away_team_id_1,
+                   COALESCE(
+                       f2.home_team_id,
+                       (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_2 AND fx.home_team_id IS NOT NULL LIMIT 1)
+                   ) AS home_team_id_2,
+                   COALESCE(
+                       f2.away_team_id,
+                       (SELECT fx.away_team_id FROM fixtures fx WHERE fx.away_team = pa.away_team_2 AND fx.away_team_id IS NOT NULL LIMIT 1)
+                   ) AS away_team_id_2
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
