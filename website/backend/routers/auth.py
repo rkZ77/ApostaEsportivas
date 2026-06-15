@@ -507,12 +507,25 @@ class VerifyEmailBody(BaseModel):
     token: str
 
 
+def _send_welcome_email(to: str, name: str, site_url: str) -> None:
+    first_name = name.strip().split()[0]
+    _send_email(
+        to,
+        subject="Bem-vindo ao Pick IA! Seu acesso VIP está ativo",
+        body=f"Olá {first_name}, sua conta foi confirmada! Acesse: {site_url}/picks",
+        html=_welcome_html(first_name, site_url, logo_url=_logo_url(site_url)),
+    )
+
+
 @router.post("/verify-email")
-def verify_email_endpoint(body: VerifyEmailBody):
+def verify_email_endpoint(body: VerifyEmailBody, background_tasks: BackgroundTasks):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id FROM users WHERE email_verification_token = %s", (body.token,))
+        cur.execute(
+            "SELECT id, email, name FROM users WHERE email_verification_token = %s",
+            (body.token,),
+        )
         row = cur.fetchone()
         if not row:
             raise HTTPException(400, "Link inválido ou já utilizado.")
@@ -521,6 +534,8 @@ def verify_email_endpoint(body: VerifyEmailBody):
             (row["id"],),
         )
         conn.commit()
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
+        background_tasks.add_task(_send_welcome_email, row["email"], row["name"], site_url)
         return {"ok": True}
     finally:
         cur.close(); conn.close()
