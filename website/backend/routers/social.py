@@ -58,12 +58,15 @@ def get_chat(after_id: int = 0, limit: int = 60, current_user: dict = Depends(ge
     conn = _conn(); cur = _cur(conn)
     try:
         cur.execute("""
-            SELECT id, user_id, user_name, user_plan, user_avatar_url, content, created_at
-            FROM chat_messages
-            WHERE id > %s
-              AND deleted_at IS NULL
-              AND created_at >= NOW() - INTERVAL '48 hours'
-            ORDER BY id ASC
+            SELECT m.id, m.user_id,
+                   COALESCE('@' || u.username, m.user_name) AS user_name,
+                   m.user_plan, m.user_avatar_url, m.content, m.created_at
+            FROM chat_messages m
+            LEFT JOIN users u ON u.id = m.user_id
+            WHERE m.id > %s
+              AND m.deleted_at IS NULL
+              AND m.created_at >= NOW() - INTERVAL '48 hours'
+            ORDER BY m.id ASC
             LIMIT %s
         """, (after_id, min(limit, 100)))
         messages = [dict(m) for m in cur.fetchall()]
@@ -83,14 +86,20 @@ def post_chat(body: ChatBody, current_user: dict = Depends(get_current_user)):
 
     conn = _conn(); cur = _cur(conn)
     try:
+        cur.execute("SELECT username, plan, avatar_url FROM users WHERE id = %s", (current_user["id"],))
+        u = cur.fetchone()
+        display_name = f"@{u['username']}" if u and u.get("username") else current_user.get("name", "")
+        user_plan    = u["plan"] if u else current_user.get("plan", "free")
+        user_avatar  = u["avatar_url"] if u else current_user.get("avatar_url")
+
         cur.execute("""
             INSERT INTO chat_messages
               (user_id, user_name, user_plan, user_avatar_url, content)
             VALUES (%s, %s, %s, %s, %s)
             RETURNING id, user_id, user_name, user_plan, user_avatar_url, content, created_at
         """, (
-            current_user["id"], current_user.get("name", ""),
-            current_user.get("plan", "free"), current_user.get("avatar_url"),
+            current_user["id"], display_name,
+            user_plan, user_avatar,
             content,
         ))
         msg = dict(cur.fetchone())
