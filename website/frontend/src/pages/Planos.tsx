@@ -306,14 +306,34 @@ export default function Planos() {
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
             <div>
               <h3 className="text-sm font-black text-white">Indicações</h3>
-              <p className="text-zinc-500 text-xs mt-0.5">Indique amigos e ganhe +1 dia VIP por cada assinatura</p>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                +1 dia VIP por cadastro · +2 dias VIP se assinar o plano
+              </p>
             </div>
 
-            {/* Progresso */}
+            {/* Recompensas */}
+            <div className="grid grid-cols-2 gap-2 text-[11px]">
+              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-3 flex items-center gap-2">
+                <span className="text-lg">👤</span>
+                <div>
+                  <p className="text-white font-black">+1 dia</p>
+                  <p className="text-zinc-500">por cadastro</p>
+                </div>
+              </div>
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-center gap-2">
+                <span className="text-lg">👑</span>
+                <div>
+                  <p className="text-yellow-400 font-black">+2 dias</p>
+                  <p className="text-zinc-500">se assinar VIP</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Indicados',   value: referral.total_indicated, color: 'text-white' },
-                { label: 'Convertidos', value: referral.total_converted,  color: 'text-green-400' },
+                { label: 'Cadastros',   value: referral.total_indicated, color: 'text-white' },
+                { label: 'Assinantes',  value: referral.total_converted,  color: 'text-green-400' },
                 { label: 'Dias ganhos', value: referral.days_earned,      color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-zinc-800/60 rounded-xl p-3 text-center">
@@ -323,22 +343,23 @@ export default function Planos() {
               ))}
             </div>
 
-            {/* Barra de progresso para próximo dia */}
-            {(() => {
-              const next = referral.total_indicated % 1 === 0 ? 1 : 1
-              const progress = (referral.total_converted % next) / next * 100
-              return referral.total_indicated > 0 ? (
-                <div>
-                  <div className="flex justify-between text-[10px] text-zinc-600 mb-1">
-                    <span>Próximo dia VIP grátis</span>
-                    <span>{referral.total_converted % 1 === 0 ? 1 : 0} / 1 conversão</span>
-                  </div>
-                  <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                    <div className="h-full bg-yellow-400 rounded-full transition-all" style={{ width: `${progress}%` }} />
-                  </div>
+            {/* Breakdown */}
+            {referral.total_indicated > 0 && (
+              <div className="bg-zinc-800/40 rounded-xl px-4 py-3 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{referral.total_indicated} cadastro{referral.total_indicated !== 1 ? 's' : ''} × 1 dia</span>
+                  <span className="text-white font-bold">+{referral.total_indicated} dia{referral.total_indicated !== 1 ? 's' : ''}</span>
                 </div>
-              ) : null
-            })()}
+                <div className="flex justify-between">
+                  <span className="text-zinc-500">{referral.total_converted} assinante{referral.total_converted !== 1 ? 's' : ''} × 2 dias</span>
+                  <span className="text-yellow-400 font-bold">+{referral.total_converted * 2} dia{referral.total_converted * 2 !== 1 ? 's' : ''}</span>
+                </div>
+                <div className="flex justify-between border-t border-zinc-700 pt-1.5 mt-1">
+                  <span className="text-zinc-400 font-semibold">Total</span>
+                  <span className="text-yellow-400 font-black">{referral.days_earned} dias VIP</span>
+                </div>
+              </div>
+            )}
 
             {/* Link */}
             <div>
@@ -358,7 +379,9 @@ export default function Planos() {
             </div>
 
             {referral.total_indicated === 0 && (
-              <p className="text-zinc-600 text-xs text-center">Compartilhe seu link — cada amigo que assinar VIP te dá +1 dia grátis!</p>
+              <p className="text-zinc-600 text-xs text-center">
+                Compartilhe seu link — cada amigo que se cadastrar te dá +1 dia, e +2 se assinar o VIP!
+              </p>
             )}
           </div>
         )}

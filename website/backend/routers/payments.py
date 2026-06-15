@@ -272,7 +272,7 @@ async def webhook(request: Request):
             (int(user_id), str(payment_id), plan_key, amount, expires_at, payment_method),
         )
 
-        # Crédito de indicação: +1 dia VIP para o referrer na primeira compra
+        # Crédito de indicação: +2 dias VIP para o referrer quando indicado assina VIP
         cur.execute(
             "SELECT referred_by FROM users WHERE id = %s AND referred_by IS NOT NULL",
             (int(user_id),),
@@ -283,9 +283,9 @@ async def webhook(request: Request):
             cur.execute(
                 """
                 UPDATE users
-                SET plan = 'vip',
-                    expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '1 day'
-                WHERE id = %s AND plan IN ('free', 'trial', 'vip', 'admin')
+                SET plan       = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
+                    expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '2 days'
+                WHERE id = %s
                 """,
                 (referrer_id,),
             )

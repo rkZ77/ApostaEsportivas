@@ -390,7 +390,19 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             expires_final = trial_expires.isoformat()
             user["trial_used"] = True
 
-        # Commit do INSERT e trial ANTES do token — garante que o usuário existe no banco
+        # Crédito de indicação por registro: +1 dia VIP para o referrer
+        if referrer_id:
+            cur.execute(
+                """
+                UPDATE users
+                SET plan      = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
+                    expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '1 day'
+                WHERE id = %s
+                """,
+                (referrer_id,),
+            )
+
+        # Commit do INSERT, trial e crédito de indicação ANTES do token
         conn.commit()
 
         # Token de verificação de e-mail (operação separada; não desfaz o cadastro se falhar)
@@ -878,7 +890,8 @@ def get_referral(current_user: dict = Depends(get_current_user)):
         )
         total_converted = cur.fetchone()["total"]
 
-        days_earned = total_converted * 7
+        # 1 dia por registro + 2 dias adicionais por conversão VIP
+        days_earned = int(total_indicated) * 1 + int(total_converted) * 2
 
         site_url = os.getenv("SITE_URL", "http://localhost:5173")
 
