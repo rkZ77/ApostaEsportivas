@@ -1,4 +1,4 @@
-﻿from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
 import psycopg2.extras
 from database import get_connection

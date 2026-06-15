@@ -1,4 +1,4 @@
-﻿import json
+import json
 import asyncio
 import logging
 import time
