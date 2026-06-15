@@ -254,9 +254,11 @@ async def webhook(request: Request):
             (expires_at, plan_key, int(user_id)),
         )
         row = cur.fetchone()
-        if row:
-            user_name  = row["name"]
-            user_email = row["email"]
+        if not row:
+            logger.error("[WEBHOOK] user_id=%s não encontrado no banco — pagamento %s ignorado", user_id, payment_id)
+            return {"status": "error", "detail": "user not found"}
+        user_name  = row["name"]
+        user_email = row["email"]
 
         # Registra pagamento (ignora se já existe — idempotente)
         cur.execute(
