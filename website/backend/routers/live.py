@@ -207,69 +207,120 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
 
 def _calc_result(market: str, line: str, cur_val: float | None,
                  home_goals: int, away_goals: int) -> str | None:
-    """Resultado definitivo de um pick com jogo encerrado."""
+    """Resultado definitivo de um pick com jogo encerrado.
+
+    Suporta handicap asiático quarter-ball (.25 / .75):
+      Over X.25: GREEN se cur>X, HALF-LOSS se cur==X, RED se cur<X
+      Over X.75: GREEN se cur>X+1, HALF-WIN se cur==X+1, RED se cur<=X
+      Under X.25: GREEN se cur<X, HALF-WIN se cur==X, RED se cur>X
+      Under X.75: GREEN se cur<=X, HALF-LOSS se cur==X+1, RED se cur>X+1
+    Linhas inteiras (.0): PUSH quando cur==line.
+    Linhas em .5: nunca PUSH (stats são inteiros).
+    """
     if cur_val is None:
         return None
     direction, line_val = _extract_line(line)
-    if direction == "over" and line_val is not None:
-        if cur_val > line_val:  return "GREEN"
-        if cur_val < line_val:  return "RED"
-        return "PUSH"
-    if direction == "under" and line_val is not None:
-        if cur_val < line_val:  return "GREEN"
-        if cur_val > line_val:  return "RED"
-        return "PUSH"
+
+    if direction in ("over", "under") and line_val is not None:
+        frac = round(line_val % 1, 2)  # 0.0 | 0.25 | 0.5 | 0.75
+        v    = int(cur_val)             # stats são sempre inteiros
+
+        if direction == "over":
+            if frac == 0.25:
+                # split: Over floor e Over floor+0.5
+                # floor = int(line_val)  ex: 2.25 → 2
+                f = int(line_val)
+                if v > f:   return "GREEN"
+                if v == f:  return "HALF-LOSS"
+                return "RED"
+            elif frac == 0.75:
+                # split: Over floor+0.5 e Over ceil
+                # ceil = int(line_val) + 1  ex: 2.75 → ceil = 3
+                c = int(line_val) + 1
+                if v > c:   return "GREEN"
+                if v == c:  return "HALF-WIN"
+                return "RED"
+            else:
+                # .0 ou .5
+                if v > line_val:   return "GREEN"
+                if v < line_val:   return "RED"
+                return "PUSH"   # só possível em linhas .0
+
+        else:  # under
+            if frac == 0.25:
+                f = int(line_val)
+                if v < f:   return "GREEN"
+                if v == f:  return "HALF-WIN"
+                return "RED"
+            elif frac == 0.75:
+                c = int(line_val) + 1
+                if v < c:   return "GREEN"
+                if v == c:  return "HALF-LOSS"
+                return "RED"
+            else:
+                if v < line_val:   return "GREEN"
+                if v > line_val:   return "RED"
+                return "PUSH"
+
     if direction == "result":
         pst = _result_pick_status(line, home_goals, away_goals)
         return "GREEN" if pst == "winning" else "RED"
     return None
 
 
+def _profit_for_result(result: str, odd: float) -> float:
+    """Lucro por unidade apostada para cada tipo de resultado."""
+    o = float(odd)
+    if result == "GREEN":      return round(o - 1, 4)
+    if result == "HALF-WIN":   return round((o - 1) / 2, 4)
+    if result == "PUSH":       return 0.0
+    if result == "HALF-LOSS":  return -0.5
+    return -1.0  # RED
+
+
 def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn) -> None:
-    profit = round(float(odd) - 1, 4) if result == "GREEN" \
-             else (-1.0 if result == "RED" else 0.0)
+    profit = _profit_for_result(result, odd)
     tbl = "picks_vip" if pick_type == "vip" else "picks_free"
     c = conn.cursor()
     c.execute(f"UPDATE {tbl} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
     conn.commit()
     c.close()
-    logger.info("[AUTO-RESULT] %s #%s → %s (%+.2fu)", pick_type, pick_id, result, profit)
+    logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
+
+
+def _multipla_combined_result(legs_results: list[str | None]) -> str | None:
+    """Resultado combinado de uma múltipla: qualquer RED → RED, qualquer HALF → propaga."""
+    if any(r is None for r in legs_results):
+        return None  # nem todas as pernas encerradas
+    if any(r == "RED" for r in legs_results):
+        return "RED"
+    if all(r == "GREEN" for r in legs_results):
+        return "GREEN"
+    # mix de GREEN, PUSH, HALF-WIN, HALF-LOSS → PUSH
+    return "PUSH"
 
 
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
                           total_odd: float, conn) -> None:
-    if any(r is None for r in legs_results):
-        return  # nem todas as pernas encerradas ainda
-    if any(r == "RED" for r in legs_results):
-        result = "RED"
-    elif all(r == "GREEN" for r in legs_results):
-        result = "GREEN"
-    else:
-        result = "PUSH"
-    profit = round(float(total_odd) - 1, 4) if result == "GREEN" \
-             else (-1.0 if result == "RED" else 0.0)
+    result = _multipla_combined_result(legs_results)
+    if result is None:
+        return
+    profit = _profit_for_result(result, total_odd)
     c = conn.cursor()
     c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
     conn.commit()
     c.close()
-    logger.info("[AUTO-RESULT] multipla #%s → %s (%+.2fu)", pick_id, result, profit)
+    logger.info("[AUTO-RESULT] multipla #%s → %s (%+.4fu)", pick_id, result, profit)
 
 
 def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
                              odd_combined: float, conn) -> None:
-    _save_multipla_result.__wrapped__ = True  # reuse same logic
-    if any(r is None for r in legs_results):
+    result = _multipla_combined_result(legs_results)
+    if result is None:
         return
-    if any(r == "RED" for r in legs_results):
-        result = "RED"
-    elif all(r == "GREEN" for r in legs_results):
-        result = "GREEN"
-    else:
-        result = "PUSH"
-    profit = round(float(odd_combined) - 1, 4) if result == "GREEN" \
-             else (-1.0 if result == "RED" else 0.0)
+    profit = _profit_for_result(result, odd_combined)
     c = conn.cursor()
     c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
