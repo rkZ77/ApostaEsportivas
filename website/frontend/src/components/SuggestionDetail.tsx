@@ -165,7 +165,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 {/* Casa */}
                 <div className="flex-1 flex items-center gap-2 min-w-0">
                   {homeLogo && (
-                    <img src={homeLogo} alt="" className="w-8 h-8 object-contain shrink-0" referrerPolicy="no-referrer"
+                    <img src={homeLogo} alt="" className="w-8 h-8 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   )}
                   <span className="font-black text-white text-sm leading-tight truncate">{s.home_team_name}</span>
@@ -191,7 +191,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
                   <span className="font-black text-white text-sm leading-tight truncate text-right">{s.away_team_name}</span>
                   {awayLogo && (
-                    <img src={awayLogo} alt="" className="w-8 h-8 object-contain shrink-0" referrerPolicy="no-referrer"
+                    <img src={awayLogo} alt="" className="w-8 h-8 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   )}
                 </div>
@@ -408,7 +408,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         {/* Time + forma */}
                         <div className="flex items-center gap-2 mb-2">
                           {logo && (
-                            <img src={logo} alt="" className="w-5 h-5 object-contain" referrerPolicy="no-referrer"
+                            <img src={logo} alt="" className="w-5 h-5 object-contain"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
                           <span className="text-xs font-bold text-white truncate">{name}</span>
@@ -485,7 +485,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                               <span className={`text-xs font-black ${isHome || isAway ? 'text-white' : 'text-zinc-500'}`}>{t.pos}</span>
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {logo && (
-                                  <img src={logo} alt="" className="w-4 h-4 object-contain shrink-0" referrerPolicy="no-referrer"
+                                  <img src={logo} alt="" className="w-4 h-4 object-contain shrink-0"
                                     onError={e => (e.currentTarget.style.display = 'none')} />
                                 )}
                                 <span className={`text-xs truncate ${isHome ? 'text-green-400 font-bold' : isAway ? 'text-blue-400 font-bold' : 'text-zinc-300'}`}>

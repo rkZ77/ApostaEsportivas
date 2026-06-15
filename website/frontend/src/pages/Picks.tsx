@@ -25,8 +25,7 @@ function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: n
   return (
     <img src={src} alt={name} width={size} height={size}
       className="object-contain shrink-0" style={{ width: size, height: size }}
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
@@ -36,8 +35,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
   return (
     <img src={src} alt={name ?? ''} width={size} height={size}
       className="object-contain shrink-0 opacity-80" style={{ width: size, height: size }}
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
@@ -1885,8 +1883,9 @@ export default function Picks() {
                         const date = pick.match_date
                           ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                           : '—'
-                        const bankBefore = pick.bankroll_before
-                        const bankAfter  = pick.bankroll_after
+                        const bankBefore = pick.bankroll_before != null ? Number(pick.bankroll_before) : null
+                        const bankAfter  = pick.bankroll_after  != null ? Number(pick.bankroll_after)  : null
+                        const profit     = bankBefore != null && bankAfter != null ? bankAfter - bankBefore : null
                         return (
                           <div key={pick.id} className="flex gap-3">
                             <div className="flex flex-col items-center w-8 shrink-0">
@@ -1911,30 +1910,28 @@ export default function Picks() {
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1 flex-wrap mb-0.5">
-                                    {pick.home_team_id_1 && (
-                                      <img src={`/api/proxy/team/${pick.home_team_id_1}.png`}
-                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
-                                        onError={e => (e.currentTarget.style.display = 'none')} />
-                                    )}
+                                    <TeamLogo id={pick.home_team_id_1} name={pick.home_team_1 ?? ''} size={14} />
                                     <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
                                     <span className="text-zinc-600 text-[10px]">vs</span>
-                                    {pick.away_team_id_1 && (
-                                      <img src={`/api/proxy/team/${pick.away_team_id_1}.png`}
-                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
-                                        onError={e => (e.currentTarget.style.display = 'none')} />
-                                    )}
+                                    <TeamLogo id={pick.away_team_id_1} name={pick.away_team_1 ?? ''} size={14} />
                                     <span className="text-xs font-bold text-white truncate">{pick.away_team_1}</span>
                                   </div>
                                   <div className="text-[10px] text-zinc-500">{date}</div>
                                 </div>
-                                <div className="text-right shrink-0">
+                                <div className="text-right shrink-0 space-y-0.5">
                                   {bankBefore != null && (
-                                    <div className="text-[10px] text-zinc-600">R${Number(bankBefore).toFixed(0)}</div>
+                                    <div className="text-[10px] text-zinc-600">R${bankBefore.toFixed(2)}</div>
+                                  )}
+                                  {profit != null && (
+                                    <div className={`text-xs font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                                      {profit >= 0 ? '+' : ''}R${profit.toFixed(2)}
+                                    </div>
                                   )}
                                   {bankAfter != null && (
-                                    <div className={`text-xs font-black ${res === 'GREEN' ? 'text-green-400' : 'text-red-400'}`}>
-                                      → R${Number(bankAfter).toFixed(0)}
-                                    </div>
+                                    <div className="text-[10px] text-zinc-500">→ R${bankAfter.toFixed(2)}</div>
+                                  )}
+                                  {!res && bankBefore != null && (
+                                    <div className="text-[10px] text-orange-400 font-semibold">Em aberto</div>
                                   )}
                                 </div>
                               </div>

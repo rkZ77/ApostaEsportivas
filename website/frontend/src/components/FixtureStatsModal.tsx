@@ -10,8 +10,7 @@ function TeamLogo({ id, name, size = 40 }: { id?: number; name: string; size?: n
   return (
     <img src={src} alt={name} width={size} height={size}
       className="object-contain shrink-0" style={{ width: size, height: size }}
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 

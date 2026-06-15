@@ -130,7 +130,7 @@ function TeamLogo({ id, name }: { id?: number | null; name: string }) {
   return (
     <img src={src} alt={name} width={18} height={18}
       className="w-4.5 h-4.5 object-contain shrink-0"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 

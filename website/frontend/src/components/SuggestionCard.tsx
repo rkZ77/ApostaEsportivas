@@ -36,8 +36,7 @@ function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: n
   return (
     <img src={src} alt={name} width={size} height={size}
       className="object-contain shrink-0" style={{ width: size, height: size }}
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
@@ -47,8 +46,7 @@ function LeagueLogo({ id, name }: { id?: number; name?: string }) {
   return (
     <img src={src} alt={name ?? ''} width={16} height={16}
       className="w-4 h-4 object-contain shrink-0 opacity-70"
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')} loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 

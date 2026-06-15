@@ -37,9 +37,7 @@ function TeamLogo({ id, name, side }: { id?: number; name: string; side: 'left' 
   return (
     <img src={src} alt={name} width={32} height={32}
       className={`w-8 h-8 object-contain shrink-0 ${side === 'left' ? 'order-last' : 'order-first'}`}
-      referrerPolicy="no-referrer"
-      onError={e => (e.currentTarget.style.display = 'none')}
-      loading="lazy" />
+      onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
@@ -195,7 +193,7 @@ export default function Fixtures() {
                     <img src={logo} alt={league} width={24} height={24}
                       className="w-6 h-6 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')}
-                      loading="lazy" />
+                      />
                   )}
                   <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-zinc-300'}`}>{league}</span>
                   {country && (
@@ -205,7 +203,7 @@ export default function Fixtures() {
                     <img src={flag} alt={country ?? ''} width={18} height={13}
                       className="h-3.5 object-contain shrink-0 rounded-sm"
                       onError={e => (e.currentTarget.style.display = 'none')}
-                      loading="lazy" />
+                      />
                   )}
                   {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase tracking-wider ml-1">Copa do Mundo</span>}
                   <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
