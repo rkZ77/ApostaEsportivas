@@ -21,15 +21,19 @@ logger = logging.getLogger("main")
 # ── Validação de variáveis obrigatórias no startup ───────────────────────────
 _REQUIRED_VARS = ["JWT_SECRET"]
 _OPTIONAL_VARS = {
-    "DATABASE_URL":               "banco de dados (Railway injeta automaticamente)",
-    "MERCADOPAGO_ACCESS_TOKEN":   "pagamentos",
-    "ANTHROPIC_API_KEY":          "IA / picks",
-    "SMTP_USER":                  "envio de emails",
+    "MERCADOPAGO_ACCESS_TOKEN": "pagamentos",
+    "ANTHROPIC_API_KEY":        "IA / picks",
+    "SMTP_USER":                "envio de emails",
 }
 
 _missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
 if _missing_required:
     logger.critical("[STARTUP] Variáveis obrigatórias ausentes: %s — servidor não irá funcionar!", _missing_required)
+
+# Banco: aceita DATABASE_URL ou variáveis individuais DB_HOST / DB_HOST_PROD
+_has_db = os.getenv("DATABASE_URL") or os.getenv("DB_HOST") or os.getenv("DB_HOST_PROD")
+if not _has_db:
+    logger.warning("[STARTUP] Nenhuma variável de banco configurada (DATABASE_URL, DB_HOST ou DB_HOST_PROD)")
 
 for _var, _desc in _OPTIONAL_VARS.items():
     if not os.getenv(_var):

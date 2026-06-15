@@ -7,6 +7,15 @@ from dotenv import load_dotenv, find_dotenv
 load_dotenv(find_dotenv())
 
 
+def _env(*keys: str, default: str = "") -> str:
+    """Retorna o primeiro valor não-vazio dentre as chaves fornecidas."""
+    for k in keys:
+        v = os.getenv(k, "")
+        if v:
+            return v
+    return default
+
+
 def get_connection():
     database_url = os.getenv("DATABASE_URL")
     if database_url:
@@ -17,15 +26,15 @@ def get_connection():
             dbname=parsed.path.lstrip("/"),
             user=parsed.username,
             password=parsed.password,
-            sslmode=os.getenv("DB_SSLMODE", "require"),
+            sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
             cursor_factory=psycopg2.extras.RealDictCursor,
         )
     return psycopg2.connect(
-        host=os.getenv("DB_HOST"),
-        port=os.getenv("DB_PORT"),
-        dbname=os.getenv("DB_NAME"),
-        user=os.getenv("DB_USER"),
-        password=os.getenv("DB_PASS"),
-        sslmode=os.getenv("DB_SSLMODE", "require"),
+        host=_env("DB_HOST", "DB_HOST_PROD"),
+        port=_env("DB_PORT", "DB_PORT_PROD", default="5432"),
+        dbname=_env("DB_NAME", "DB_NAME_PROD", default="postgres"),
+        user=_env("DB_USER", "DB_USER_PROD", default="postgres"),
+        password=_env("DB_PASS", "DB_PASS_PROD"),
+        sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
         cursor_factory=psycopg2.extras.RealDictCursor,
     )
