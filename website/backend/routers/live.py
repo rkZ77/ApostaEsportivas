@@ -16,7 +16,7 @@ LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
 FT_STATUSES   = {"FT", "AET", "PEN"}
 
 # TTL adaptativo: jogos ao vivo → curto; não iniciados → médio; encerrados → longo
-_TTL_LIVE = 20   # segundos — atualiza depressa durante o jogo
+_TTL_LIVE = 10   # segundos — atualiza depressa durante o jogo
 _TTL_NS   = 60   # segundos — jogo ainda não começou
 _TTL_FT   = 300  # segundos — encerrado, dados não mudam
 
