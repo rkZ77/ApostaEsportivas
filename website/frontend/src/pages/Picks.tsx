@@ -1096,6 +1096,7 @@ export default function Picks() {
   // Dados de hoje (free + VIP rápido)
   const [today, setToday]         = useState<any>(null)
   const [todayLoading, setTodayLoading] = useState(true)
+  const [todayError, setTodayError]     = useState(false)
 
   // Tips VIP com filtros
   const [vipFilters, setVipFilters] = useState<VipFilters>(defaultVipFilters)
@@ -1134,7 +1135,7 @@ export default function Picks() {
   useEffect(() => {
     api.get('/suggestions/today')
       .then(r => setToday(r.data))
-      .catch(() => {})
+      .catch(() => setTodayError(true))
       .finally(() => setTodayLoading(false))
     api.get('/suggestions/stats/quick')
       .then(r => setQuickStats(r.data))
@@ -1315,7 +1316,18 @@ export default function Picks() {
 
         {/* ── HOJE ─────────────────────────────────────────────────────────── */}
         {tab === 'hoje' && (
-          todayLoading ? <Spinner /> : (
+          todayLoading ? <Spinner /> : todayError ? (
+            <div className="card p-10 text-center">
+              <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar picks</p>
+              <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+              <button
+                onClick={() => { setTodayError(false); setTodayLoading(true); api.get('/suggestions/today').then(r => setToday(r.data)).catch(() => setTodayError(true)).finally(() => setTodayLoading(false)) }}
+                className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors"
+              >
+                Tentar novamente
+              </button>
+            </div>
+          ) : (
             <div className="space-y-8">
 
               {/* Resumo das bancas — visível para VIPs */}
