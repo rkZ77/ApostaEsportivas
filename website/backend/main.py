@@ -251,7 +251,7 @@ def _send_banca_reminder(to: str, first_name: str):
 </html>"""
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Configure sua banca no Pick IA — leva 30 segundos!"
+        msg["Subject"] = "Como acompanhar seus picks no Pick IA"
         msg["From"]    = from_addr
         msg["To"]      = to
         msg.attach(_MIMEText(f"Olá {first_name}, configure sua banca em {site_url}/banca", "plain", "utf-8"))

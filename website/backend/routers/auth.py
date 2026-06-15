@@ -280,7 +280,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
     verify_url = f"{site_url}/verify-email?token={token}"
     _send_email(
         to=to,
-        subject=f"Confirme seu e-mail — Pick IA",
+        subject="Seu cadastro no Pick IA está quase pronto",
         body=(
             f"Olá {first_name},\n\n"
             f"Confirme seu e-mail para ativar seu acesso VIP gratuito de 2 dias:\n\n"
@@ -511,7 +511,7 @@ def _send_welcome_email(to: str, name: str, site_url: str) -> None:
     first_name = name.strip().split()[0]
     _send_email(
         to,
-        subject="Bem-vindo ao Pick IA! Seu acesso VIP está ativo",
+        subject="Conta confirmada — Pick IA",
         body=f"Olá {first_name}, sua conta foi confirmada! Acesse: {site_url}/picks",
         html=_welcome_html(first_name, site_url, logo_url=_logo_url(site_url)),
     )
@@ -828,7 +828,7 @@ def forgot_password(body: ForgotPasswordBody):
         nome = row["name"]
         _send_email(
             to      = body.email,
-            subject = "Pick IA — Código de redefinição de senha",
+            subject = "Redefinição de senha — Pick IA",
             body    = (
                 f"Olá {nome},\n\n"
                 f"Seu código para redefinir a senha é:\n\n"

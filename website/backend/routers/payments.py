@@ -87,7 +87,7 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
 
     try:
         msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Seu VIP foi ativado — Pick IA"
+        msg["Subject"] = "Acesso ativado — Pick IA"
         msg["From"]    = from_addr
         msg["To"]      = to
         msg.attach(MIMEText(f"Olá {first_name}, seu VIP foi ativado! Plano {plan_label} válido até {expires_str}. Acesse: {site_url}/picks", "plain", "utf-8"))
