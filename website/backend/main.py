@@ -68,10 +68,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     response.headers["Content-Security-Policy"]   = (
         "default-src 'self'; "
-        "script-src 'self'; "
+        "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; "
         "style-src 'self' 'unsafe-inline'; "
         "img-src 'self' data: https:; "
-        "connect-src 'self'; "
+        "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; "
         "font-src 'self' data:; "
         "frame-ancestors 'none'"
     )
