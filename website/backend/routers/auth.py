@@ -417,7 +417,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
 
         user["plan"] = plan_final
         user["expires_at"] = expires_final
-        user["email_verified"] = False
+        user["email_verified"] = True
         token_data = {
             "sub": str(user["id"]), "id": user["id"],
             "name": user["name"], "email": user["email"],
