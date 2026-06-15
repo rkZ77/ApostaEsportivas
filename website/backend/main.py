@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 from collections import defaultdict
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,15 @@ from fastapi.responses import JSONResponse, FileResponse
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
+
+# ── Logging centralizado ──────────────────────────────────────────────────────
+_log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
+logging.basicConfig(
+    level=_log_level,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+)
+logger = logging.getLogger("main")
 
 from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
 
@@ -255,7 +265,7 @@ def run_migrations():
         """)
         conn.commit()
     except Exception as e:
-        print(f"[MIGRATION] Erro: {e}")
+        logger.error("[MIGRATION] Erro: %s", e)
         conn.rollback()
     finally:
         cur.close()

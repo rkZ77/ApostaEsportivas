@@ -1,7 +1,10 @@
+import logging
 import traceback
 from fastapi import APIRouter, Query
 from typing import Optional
 from database import get_connection
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/public", tags=["public"])
 
@@ -42,7 +45,7 @@ def _q(cur, sql, params=()):
         cur.execute(sql, params)
         return cur.fetchall()
     except Exception as e:
-        print(f"[PUBLIC] _q error: {e}")
+        logger.error("[PUBLIC] _q error: %s", e)
         traceback.print_exc()
         cur.connection.rollback()
         return []
@@ -53,7 +56,7 @@ def _q1(cur, sql, params=()):
         cur.execute(sql, params)
         return cur.fetchone()
     except Exception as e:
-        print(f"[PUBLIC] _q1 error: {e}")
+        logger.error("[PUBLIC] _q1 error: %s", e)
         traceback.print_exc()
         cur.connection.rollback()
         return None

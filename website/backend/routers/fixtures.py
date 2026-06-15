@@ -1,11 +1,14 @@
 import os
 import time
+import logging
 import requests
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
 from database import get_connection
 from auth_utils import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/fixtures", tags=["fixtures"])
 
@@ -50,7 +53,7 @@ def _fetch_by_utc_date(league_id: int, season: int, utc_date: str) -> list:
         _cache[cache_key] = (time.time(), result)
         return result
     except Exception as e:
-        print(f"[FIXTURES API] Erro liga {league_id} / {utc_date}: {e}")
+        logger.error("[FIXTURES API] Erro liga %s / %s: %s", league_id, utc_date, e)
         return []
 
 

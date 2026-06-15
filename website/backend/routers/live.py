@@ -1,10 +1,13 @@
 import os
 import json
 import time
+import logging
 import requests
 from fastapi import APIRouter, Depends
 from database import get_connection
 from auth_utils import get_current_user
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/live", tags=["live"])
 
@@ -31,7 +34,7 @@ def _fetch_fixture(fid: int) -> dict:
         items = r.json().get("response", [])
         data  = items[0] if items else {}
     except Exception as e:
-        print(f"[LIVE] fixture {fid}: {e}")
+        logger.error("[LIVE] fixture %s: %s", fid, e)
         data = {}
     _fix_cache[fid] = (now, data)
     return data
@@ -46,7 +49,7 @@ def _fetch_stats(fid: int) -> list:
                          params={"fixture": fid}, timeout=10)
         data = r.json().get("response", [])
     except Exception as e:
-        print(f"[LIVE STATS] fixture {fid}: {e}")
+        logger.error("[LIVE STATS] fixture %s: %s", fid, e)
         data = []
     _stats_cache[fid] = (now, data)
     return data
@@ -214,7 +217,7 @@ def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, c
               (result, profit, pick_id))
     conn.commit()
     c.close()
-    print(f"[AUTO-RESULT] {pick_type} #{pick_id} → {result} ({profit:+.2f}u)")
+    logger.info("[AUTO-RESULT] %s #%s → %s (%+.2fu)", pick_type, pick_id, result, profit)
 
 
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
@@ -234,7 +237,7 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
               (result, profit, pick_id))
     conn.commit()
     c.close()
-    print(f"[AUTO-RESULT] multipla #{pick_id} → {result} ({profit:+.2f}u)")
+    logger.info("[AUTO-RESULT] multipla #%s → %s (%+.2fu)", pick_id, result, profit)
 
 
 def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
@@ -255,7 +258,7 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
               (result, profit, pick_id))
     conn.commit()
     c.close()
-    print(f"[AUTO-RESULT] alavancagem #{pick_id} → {result} ({profit:+.2f}u)")
+    logger.info("[AUTO-RESULT] alavancagem #%s → %s (%+.2fu)", pick_id, result, profit)
 
 
 def _enrich_leg(fid: int, market: str, line: str,
