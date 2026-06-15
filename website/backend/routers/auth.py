@@ -1,10 +1,13 @@
 import os
 import re
 import base64
+import logging
 import secrets
 import smtplib
 import pathlib
 import shutil
+
+logger = logging.getLogger(__name__)
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
@@ -121,7 +124,8 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     from_addr = os.getenv("SMTP_FROM", smtp_user)
 
     if not smtp_user or not smtp_pass:
-        return  # SMTP não configurado — não bloqueia o fluxo
+        logger.warning("[EMAIL] SMTP não configurado — email para %s ignorado", to)
+        return
 
     if html:
         msg = MIMEMultipart("alternative")
@@ -134,10 +138,14 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     msg["From"]    = from_addr
     msg["To"]      = to
 
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=5) as s:
-        s.starttls()
-        s.login(smtp_user, smtp_pass)
-        s.sendmail(from_addr, [to], msg.as_string())
+    try:
+        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
+            s.starttls()
+            s.login(smtp_user, smtp_pass)
+            s.sendmail(from_addr, [to], msg.as_string())
+        logger.info("[EMAIL] Enviado para %s — assunto: %s", to, subject)
+    except Exception as e:
+        logger.error("[EMAIL] Falha ao enviar para %s: %s", to, e)
 
 
 def _welcome_html(first_name: str, site_url: str, logo_b64: str = "", logo_url: str = "") -> str:
