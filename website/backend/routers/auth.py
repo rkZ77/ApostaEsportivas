@@ -745,6 +745,21 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
             values,
         )
         updated = dict(cur.fetchone())
+
+        # Sincroniza @username nas mensagens do chat se o nome mudou
+        if body.name:
+            cur.execute("SELECT username FROM users WHERE id = %s", (current_user["sub"],))
+            u_row = cur.fetchone()
+            display_name = f"@{u_row['username']}" if u_row and u_row.get("username") else body.name
+            cur.execute(
+                "UPDATE chat_messages SET user_name = %s WHERE user_id = %s",
+                (display_name, current_user["sub"]),
+            )
+            cur.execute(
+                "UPDATE pick_comments SET user_name = %s WHERE user_id = %s",
+                (display_name, current_user["sub"]),
+            )
+
         conn.commit()
 
         # Se CPF foi adicionado agora e usuário ainda não usou trial, ativar automaticamente

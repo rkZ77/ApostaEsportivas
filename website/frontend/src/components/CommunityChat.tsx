@@ -23,18 +23,34 @@ interface ChatMsg {
   created_at: string
 }
 
-export default function CommunityChat() {
+function formatTime(iso: string) {
+  return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+function formatDateLabel(iso: string) {
+  const d = new Date(iso)
+  const today = new Date()
+  const yesterday = new Date(today); yesterday.setDate(today.getDate() - 1)
+  const isSameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate()
+  if (isSameDay(d, today)) return 'Hoje'
+  if (isSameDay(d, yesterday)) return 'Ontem'
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+}
+
+export default function CommunityChat({ onLatestId }: { onLatestId?: (id: number) => void }) {
   const { user } = useAuth()
-  const [messages, setMessages]     = useState<ChatMsg[]>([])
-  const [input, setInput]           = useState('')
-  const [sending, setSending]       = useState(false)
-  const [sendError, setSendError]   = useState('')
-  const [connected, setConnected]   = useState(false)
-  const [onlineHint, setOnlineHint] = useState(0)
+  const [messages, setMessages]   = useState<ChatMsg[]>([])
+  const [input, setInput]         = useState('')
+  const [sending, setSending]     = useState(false)
+  const [sendError, setSendError] = useState('')
+  const [connected, setConnected] = useState(false)
+  const [online, setOnline]       = useState(0)
   const lastIdRef  = useRef(0)
   const bottomRef  = useRef<HTMLDivElement>(null)
   const inputRef   = useRef<HTMLTextAreaElement>(null)
   const pollRef    = useRef<ReturnType<typeof setInterval> | null>(null)
+  const onlinePoll = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const scrollBottom = (force = false) => {
     if (!bottomRef.current) return
@@ -43,6 +59,13 @@ export default function CommunityChat() {
     if (force || nearBottom) bottomRef.current.scrollIntoView({ behavior: 'smooth' })
   }
 
+  const fetchOnline = useCallback(async () => {
+    try {
+      const r = await api.get('/social/chat/online')
+      setOnline(r.data.count)
+    } catch {}
+  }, [])
+
   const fetchMessages = useCallback(async (initial = false) => {
     try {
       const r = await api.get('/social/chat/messages', {
@@ -50,7 +73,9 @@ export default function CommunityChat() {
       })
       const newMsgs: ChatMsg[] = r.data
       if (newMsgs.length) {
-        lastIdRef.current = newMsgs[newMsgs.length - 1].id
+        const latestId = newMsgs[newMsgs.length - 1].id
+        lastIdRef.current = latestId
+        onLatestId?.(latestId)
         setMessages(prev => {
           if (initial) return newMsgs
           const ids = new Set(prev.map(m => m.id))
@@ -63,15 +88,18 @@ export default function CommunityChat() {
     } catch {
       setConnected(false)
     }
-  }, [])
+  }, [onLatestId])
 
   useEffect(() => {
     fetchMessages(true).then(() => setTimeout(() => scrollBottom(true), 100))
-    pollRef.current = setInterval(() => fetchMessages(), 5000)
-    // Online hint: simulate 3–12 people online
-    setOnlineHint(Math.floor(Math.random() * 10) + 3)
-    return () => { if (pollRef.current) clearInterval(pollRef.current) }
-  }, [fetchMessages])
+    fetchOnline()
+    pollRef.current    = setInterval(() => fetchMessages(), 5000)
+    onlinePoll.current = setInterval(() => fetchOnline(), 30_000)
+    return () => {
+      if (pollRef.current)    clearInterval(pollRef.current)
+      if (onlinePoll.current) clearInterval(onlinePoll.current)
+    }
+  }, [fetchMessages, fetchOnline])
 
   const sendMessage = async () => {
     const content = input.trim()
@@ -82,6 +110,7 @@ export default function CommunityChat() {
       const r = await api.post('/social/chat/messages', { content })
       setMessages(prev => [...prev, r.data])
       lastIdRef.current = r.data.id
+      onLatestId?.(r.data.id)
       setInput('')
       setTimeout(() => scrollBottom(true), 60)
     } catch (e: any) {
@@ -107,6 +136,18 @@ export default function CommunityChat() {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
   }
 
+  // Agrupa mensagens com separadores de data
+  const items: ({ type: 'date'; label: string } | { type: 'msg'; msg: ChatMsg; index: number })[] = []
+  let lastDate = ''
+  messages.forEach((msg, i) => {
+    const dateLabel = formatDateLabel(msg.created_at)
+    if (dateLabel !== lastDate) {
+      items.push({ type: 'date', label: dateLabel })
+      lastDate = dateLabel
+    }
+    items.push({ type: 'msg', msg, index: i })
+  })
+
   return (
     <div className="flex flex-col h-[600px] bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden">
 
@@ -118,7 +159,9 @@ export default function CommunityChat() {
         </div>
         <div className="flex items-center gap-1.5">
           <span className={`w-2 h-2 rounded-full ${connected ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-          <span className="text-xs text-zinc-500">{onlineHint} online</span>
+          <span className="text-xs text-zinc-500">
+            {online > 0 ? `${online} online` : 'conectando...'}
+          </span>
         </div>
       </div>
 
@@ -140,16 +183,29 @@ export default function CommunityChat() {
           </div>
         )}
 
-        {messages.map((m, i) => {
-          const isMe   = user?.id === m.user_id
+        {items.map((item, idx) => {
+          if (item.type === 'date') {
+            return (
+              <div key={`date-${idx}`} className="flex items-center gap-3 py-1">
+                <div className="flex-1 h-px bg-zinc-800" />
+                <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-widest shrink-0">
+                  {item.label}
+                </span>
+                <div className="flex-1 h-px bg-zinc-800" />
+              </div>
+            )
+          }
+
+          const { msg: m, index: i } = item
+          const isMe    = user?.id === m.user_id
           const isAdmin = m.user_plan === 'admin'
-          const prev   = messages[i - 1]
+          const prev    = messages[i - 1]
           const samePrev = prev && prev.user_id === m.user_id &&
-            (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime()) < 90_000
+            (new Date(m.created_at).getTime() - new Date(prev.created_at).getTime()) < 90_000 &&
+            formatDateLabel(m.created_at) === formatDateLabel(prev.created_at)
 
           return (
             <div key={m.id} className={`flex gap-2.5 group ${isMe ? 'flex-row-reverse' : ''}`}>
-              {/* Avatar — hide if same user within 90s */}
               {!samePrev ? (
                 <Avatar name={m.user_name} imageUrl={m.user_avatar_url} size="sm" className="shrink-0 mt-0.5" />
               ) : (
@@ -157,7 +213,6 @@ export default function CommunityChat() {
               )}
 
               <div className={`max-w-[75%] ${isMe ? 'items-end' : 'items-start'} flex flex-col gap-0.5`}>
-                {/* Name + plan — hide if same user within 90s */}
                 {!samePrev && (
                   <div className={`flex items-center gap-1.5 ${isMe ? 'flex-row-reverse' : ''}`}>
                     <span className={`text-xs font-bold ${isAdmin ? 'text-purple-400' : isMe ? 'text-green-400' : 'text-zinc-300'}`}>
@@ -169,7 +224,6 @@ export default function CommunityChat() {
                   </div>
                 )}
 
-                {/* Bubble */}
                 <div className="relative">
                   <div className={`px-3 py-2 rounded-2xl text-sm leading-relaxed ${
                     isMe
@@ -181,15 +235,15 @@ export default function CommunityChat() {
                     {m.content}
                   </div>
 
-                  {/* Timestamp + delete (hover) */}
-                  <div className={`flex items-center gap-1 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity ${isMe ? 'flex-row-reverse' : ''}`}>
+                  {/* Timestamp sempre visível + delete no hover */}
+                  <div className={`flex items-center gap-1 mt-0.5 ${isMe ? 'flex-row-reverse' : ''}`}>
                     <span className="text-[10px] text-zinc-600">
-                      {new Date(m.created_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                      {formatTime(m.created_at)}
                     </span>
                     {(isMe || user?.plan === 'admin') && (
                       <button
                         onClick={() => deleteMsg(m.id)}
-                        className="text-zinc-700 hover:text-red-400 transition-colors text-xs leading-none px-1"
+                        className="text-zinc-700 hover:text-red-400 transition-colors text-xs leading-none px-1 opacity-0 group-hover:opacity-100"
                         title={isMe ? 'Apagar minha mensagem' : 'Deletar mensagem'}
                       >
                         ×
