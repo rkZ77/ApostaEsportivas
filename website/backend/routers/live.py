@@ -14,10 +14,22 @@ router = APIRouter(prefix="/api/live", tags=["live"])
 API_BASE      = "https://v3.football.api-sports.io"
 LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
 FT_STATUSES   = {"FT", "AET", "PEN"}
-CACHE_TTL     = 60  # seconds
+
+# TTL adaptativo: jogos ao vivo → curto; não iniciados → médio; encerrados → longo
+_TTL_LIVE = 20   # segundos — atualiza depressa durante o jogo
+_TTL_NS   = 60   # segundos — jogo ainda não começou
+_TTL_FT   = 300  # segundos — encerrado, dados não mudam
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
+
+
+def _cache_ttl(status: str) -> int:
+    if status in LIVE_STATUSES:
+        return _TTL_LIVE
+    if status in FT_STATUSES:
+        return _TTL_FT
+    return _TTL_NS
 
 
 def _headers():
@@ -26,8 +38,11 @@ def _headers():
 
 def _fetch_fixture(fid: int) -> dict:
     now = time.time()
-    if fid in _fix_cache and now - _fix_cache[fid][0] < CACHE_TTL:
-        return _fix_cache[fid][1]
+    if fid in _fix_cache:
+        ts, cached = _fix_cache[fid]
+        status = cached.get("fixture", {}).get("status", {}).get("short", "NS")
+        if now - ts < _cache_ttl(status):
+            return cached
     try:
         r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
                          params={"id": fid, "timezone": "America/Sao_Paulo"}, timeout=10)
@@ -35,22 +50,24 @@ def _fetch_fixture(fid: int) -> dict:
         data  = items[0] if items else {}
     except Exception as e:
         logger.error("[LIVE] fixture %s: %s", fid, e)
-        data = {}
+        data = _fix_cache.get(fid, (0, {}))[1]  # mantém cache antigo em caso de erro
     _fix_cache[fid] = (now, data)
     return data
 
 
-def _fetch_stats(fid: int) -> list:
+def _fetch_stats(fid: int, status: str) -> list:
     now = time.time()
-    if fid in _stats_cache and now - _stats_cache[fid][0] < CACHE_TTL:
-        return _stats_cache[fid][1]
+    if fid in _stats_cache:
+        ts, cached = _stats_cache[fid]
+        if now - ts < _cache_ttl(status):
+            return cached
     try:
         r = requests.get(f"{API_BASE}/fixtures/statistics", headers=_headers(),
                          params={"fixture": fid}, timeout=10)
         data = r.json().get("response", [])
     except Exception as e:
         logger.error("[LIVE STATS] fixture %s: %s", fid, e)
-        data = []
+        data = _stats_cache.get(fid, (0, []))[1]  # mantém cache antigo em caso de erro
     _stats_cache[fid] = (now, data)
     return data
 
@@ -275,7 +292,7 @@ def _enrich_leg(fid: int, market: str, line: str,
 
     home_stats, away_stats = {}, {}
     if status in LIVE_STATUSES or status in FT_STATUSES:
-        home_stats, away_stats = _parse_stats(_fetch_stats(fid))
+        home_stats, away_stats = _parse_stats(_fetch_stats(fid, status))
 
     cur_val, stat_label, direction = _stat_for_market(
         market, line, home_stats, away_stats, home_goals, away_goals
