@@ -402,6 +402,26 @@ export default function Planos() {
           </div>
         )}
 
+        {/* ── CANCELAMENTO / REEMBOLSO ─────────────────────────────────────── */}
+        {(isVip || isTrial) && !isAdmin && (
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+            <div className="flex-1">
+              <p className="text-white font-bold text-sm">Solicitar cancelamento ou reembolso</p>
+              <p className="text-zinc-500 text-xs mt-0.5">
+                Pelo CDC você tem 7 dias de arrependimento em compras digitais — reembolso integral garantido
+              </p>
+            </div>
+            <a
+              href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20cancelamento%2Freembolso%20do%20meu%20plano%20Pick%20IA."
+              target="_blank"
+              rel="noopener noreferrer"
+              className="shrink-0 border border-zinc-700 hover:border-red-500/50 hover:text-red-400 text-zinc-400 font-bold text-xs px-4 py-2.5 rounded-xl transition-colors"
+            >
+              Solicitar
+            </a>
+          </div>
+        )}
+
         {/* ── SUPORTE ──────────────────────────────────────────────────────── */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#25D366]/10 border border-[#25D366]/20 rounded-full flex items-center justify-center shrink-0">

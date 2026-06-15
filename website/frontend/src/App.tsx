@@ -18,7 +18,9 @@ import Leaderboard from './pages/Leaderboard'
 import VerifyEmail from './pages/VerifyEmail'
 import Privacidade from './pages/Privacidade'
 import Termos from './pages/Termos'
+import NotFound from './pages/NotFound'
 import WhatsAppButton from './components/WhatsAppButton'
+import CookieBanner from './components/CookieBanner'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
@@ -36,6 +38,7 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
         <WhatsAppButton />
+        <CookieBanner />
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
@@ -55,7 +58,7 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/termos" element={<Termos />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
+          <Route path="*" element={<NotFound />} />
         </Routes>
         </NotificationProvider>
       </AuthProvider>

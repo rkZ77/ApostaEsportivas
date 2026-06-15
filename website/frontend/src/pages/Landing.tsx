@@ -661,6 +661,58 @@ export default function Landing() {
         </div>
       </section>
 
+      {/* ── FAQ ────────────────────────────────────────────────────────────── */}
+      <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Dúvidas frequentes</p>
+            <h2 className="text-3xl font-black">Perguntas frequentes</h2>
+          </div>
+          <div className="space-y-3">
+            {[
+              {
+                q: 'Quando os picks do dia ficam disponíveis?',
+                a: 'Os picks são gerados automaticamente toda manhã. Acesse /picks após as 9h e eles já estarão lá. Em dias de muitos jogos pode levar alguns minutos a mais.',
+              },
+              {
+                q: 'Posso cancelar quando quiser?',
+                a: 'Sim. Você pode solicitar o cancelamento a qualquer momento via WhatsApp. Pelo Código de Defesa do Consumidor, compras digitais têm 7 dias de direito de arrependimento com reembolso total.',
+              },
+              {
+                q: 'O que é o trial gratuito de 2 dias?',
+                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo — sem cartão de crédito e sem compromisso. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
+              },
+              {
+                q: 'Os picks são garantidos?',
+                a: 'Não. Nenhum pick em apostas esportivas é garantido. A IA analisa dados estatísticos e encontra apostas com valor esperado positivo (EV+), mas resultados passados não garantem resultados futuros. Aposte com responsabilidade.',
+              },
+              {
+                q: 'O que é a Alavancagem Copa?',
+                a: 'Uma estratégia que começa com um valor fixo (ex: R$50) e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 acertos pode multiplicar o valor várias vezes. Em caso de RED, recomeça do início.',
+              },
+              {
+                q: 'Funciona no celular (iPhone e Android)?',
+                a: 'Sim, o site foi desenvolvido para funcionar perfeitamente em todos os dispositivos. Você pode inclusive salvar na tela inicial do seu celular para acesso rápido como um app.',
+              },
+              {
+                q: 'Quais ligas são cobertas?',
+                a: 'Focamos na Copa do Mundo 2026 com cobertura dos 64 jogos. Após a Copa, as principais ligas europeias (Champions, Premier League, La Liga, Serie A, Bundesliga) entram no sistema.',
+              },
+            ].map(({ q, a }, i) => (
+              <details key={i} className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+                <summary className="flex items-center justify-between gap-4 px-6 py-4 cursor-pointer list-none font-semibold text-white text-sm select-none">
+                  {q}
+                  <svg className="w-4 h-4 text-zinc-500 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
+                </summary>
+                <p className="px-6 pb-5 text-zinc-400 text-sm leading-relaxed border-t border-zinc-800/60 pt-4">{a}</p>
+              </details>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* ── CTA FINAL ──────────────────────────────────────────────────────── */}
       <section className="py-24 border-t border-zinc-800/60 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-yellow-400/5" />

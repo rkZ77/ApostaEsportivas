@@ -1378,6 +1378,17 @@ export default function Picks() {
               {/* Stats rápidas do mês — para todos */}
               <QuickStats stats={quickStats} />
 
+              {/* Horário de geração dos picks */}
+              {(today?.vip?.[0]?.created_at || today?.dica_do_dia?.created_at) && (() => {
+                const ts = today?.vip?.[0]?.created_at ?? today?.dica_do_dia?.created_at
+                const hora = new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
+                return (
+                  <p className="text-[11px] text-zinc-600 text-right -mt-4 mb-2">
+                    Picks gerados hoje às {hora}
+                  </p>
+                )
+              })()}
+
               {/* Pick do Dia — visível para todos */}
               <section>
                 <SectionHeader color="bg-green-500" label="Pick do Dia" />
