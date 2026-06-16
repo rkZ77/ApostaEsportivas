@@ -165,7 +165,7 @@ export default function SuggestionCard({
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-zinc-500 mb-0.5">EV</div>
               <div className={`text-xl font-black ${s.ev != null && s.ev > 0 ? 'text-green-400' : 'text-zinc-500'}`}>
-                {s.ev != null ? `${Number(s.ev).toFixed(1)}%` : '—'}
+                {s.ev != null ? `${Number(s.ev).toFixed(1)}%` : ''}
               </div>
             </div>
           </>

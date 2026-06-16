@@ -680,7 +680,7 @@ export default function Landing() {
               },
               {
                 q: 'O que é o trial gratuito de 2 dias?',
-                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo — sem cartão de crédito e sem compromisso. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
+                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo, sem cartão de crédito e sem compromisso. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
               },
               {
                 q: 'Os picks são garantidos?',

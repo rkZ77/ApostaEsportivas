@@ -97,7 +97,7 @@ export default function HowItWorks() {
             {
               Icon: ShieldCheck,
               title: 'Árbitro escalado',
-              desc: 'A IA verifica o histórico do árbitro — média de cartões amarelos por jogo, tendência de marcar muitos ou poucos cartões — e usa isso para calibrar picks de cartões.',
+              desc: 'A IA verifica o histórico do árbitro: média de cartões amarelos por jogo, tendência de marcar muitos ou poucos cartões, e usa isso para calibrar picks de cartões.',
             },
             {
               Icon: LineChart,
@@ -107,7 +107,7 @@ export default function HowItWorks() {
             {
               Icon: TrendingUp,
               title: 'Calibração contínua',
-              desc: 'O sistema acompanha o desempenho histórico dos próprios picks e ajusta o nível de confiança baseado em acertos reais — evitando excesso ou falta de confiança ao longo do tempo.',
+              desc: 'O sistema acompanha o desempenho histórico dos próprios picks e ajusta o nível de confiança baseado em acertos reais, evitando excesso ou falta de confiança ao longo do tempo.',
             },
           ].map(({ Icon, title, desc }) => (
             <div key={title} className="flex gap-3">
@@ -124,7 +124,7 @@ export default function HowItWorks() {
         <div className="mt-4 flex items-start gap-2 bg-green-500/5 border border-green-500/15 rounded-xl px-3 py-2.5">
           <Info className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
           <p className="text-zinc-400 text-xs leading-relaxed">
-            O resultado de cada pick exibe o <span className="text-white font-semibold">reasoning completo da IA</span> — você vê exatamente quais dados embasaram a sugestão, incluindo taxas históricas, peso da amostra e cálculo de confiança.
+            O resultado de cada pick exibe o <span className="text-white font-semibold">reasoning completo da IA</span>: você vê exatamente quais dados embasaram a sugestão, incluindo taxas históricas, peso da amostra e cálculo de confiança.
           </p>
         </div>
       </div>
@@ -148,7 +148,7 @@ export default function HowItWorks() {
 
           <Step n={2} title="Explore os picks gerados pela IA">
             <p>Na aba <span className="text-white font-semibold">Hoje</span> estão os destaques do dia selecionados pela IA. Cada card mostra o mercado, a odd, o percentual de confiança e o reasoning completo com os dados que embasaram a análise.</p>
-            <p className="mt-1">Na aba <span className="text-white font-semibold">Picks Free</span> está a Dica do Dia — o pick com maior edge identificado pela IA naquele dia, disponível gratuitamente.</p>
+            <p className="mt-1">Na aba <span className="text-white font-semibold">Picks Free</span> está a Dica do Dia: o pick com maior edge identificado pela IA naquele dia, disponível gratuitamente.</p>
             <p className="mt-1">Com plano VIP, acesse todos os picks nas abas <span className="text-yellow-400 font-semibold">Picks VIP</span>, <span className="text-yellow-400 font-semibold">Múltiplas</span> e <span className="text-yellow-400 font-semibold">Alavancagem</span>.</p>
           </Step>
 
@@ -192,7 +192,7 @@ export default function HowItWorks() {
             badge="VIP"
             badgeCls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20"
             description="10–20 picks/dia com análise estatística completa da IA"
-            detail="A IA analisa gols, escanteios, cartões e resultado de cada jogo, calcula EV e confiança para cada mercado, e entrega os picks com maior edge — incluindo o reasoning completo com os dados usados."
+            detail="A IA analisa gols, escanteios, cartões e resultado de cada jogo, calcula EV e confiança para cada mercado, e entrega os picks com maior edge, incluindo o reasoning completo com os dados usados."
           />
           <PickTypeCard
             icon={Layers}
@@ -271,7 +271,7 @@ export default function HowItWorks() {
               <span className="text-zinc-400 text-xs">{feat}</span>
               <div className="flex items-center gap-4">
                 <span className={`text-[11px] font-semibold w-14 text-center ${free === true ? 'text-green-400' : free === 'limitado' ? 'text-zinc-500' : 'text-zinc-700'}`}>
-                  {free === true ? 'Grátis' : free === 'limitado' ? 'Limitado' : '—'}
+                  {free === true ? 'Grátis' : free === 'limitado' ? 'Limitado' : ''}
                 </span>
                 <span className="text-[11px] font-semibold text-yellow-400 w-10 text-center">VIP</span>
               </div>

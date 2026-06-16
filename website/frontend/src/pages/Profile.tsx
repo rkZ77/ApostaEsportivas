@@ -194,7 +194,7 @@ export default function Profile() {
                 placeholder="000.000.000-00" />
               {user?.plan === 'free' && !meData?.trial_used && (
                 <p className="text-xs text-green-500 mt-1">
-                  Adicione seu CPF e salve — você receberá 2 dias de VIP grátis.
+                  Adicione seu CPF e salve para receber 2 dias de VIP grátis.
                 </p>
               )}
             </div>
@@ -274,7 +274,7 @@ export default function Profile() {
 
               {referral.total_indicated === 0 && (
                 <p className="text-zinc-600 text-xs text-center">
-                  Compartilhe seu link — cada amigo que assinar VIP te dá +1 dia grátis!
+                  Compartilhe seu link: cada amigo que assinar VIP te dá +1 dia grátis!
                 </p>
               )}
             </>

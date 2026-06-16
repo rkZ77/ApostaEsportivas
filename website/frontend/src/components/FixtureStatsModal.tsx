@@ -120,7 +120,7 @@ function StatRow({ label, home, away, higherIsBetter = true }: {
       <div className="text-[10px] text-zinc-600 text-center mb-1.5 uppercase tracking-wider font-semibold">{label}</div>
       <div className="flex items-center gap-2">
         <span className={`text-sm font-bold tabular-nums w-10 text-right ${homeWins ? 'text-blue-400' : 'text-zinc-400'}`}>
-          {home != null ? Number(home).toFixed(1) : '—'}
+          {home != null ? Number(home).toFixed(1) : ''}
         </span>
         <div className="flex-1 flex gap-0.5 items-center">
           <div className="flex-1 flex justify-end">
@@ -134,7 +134,7 @@ function StatRow({ label, home, away, higherIsBetter = true }: {
           </div>
         </div>
         <span className={`text-sm font-bold tabular-nums w-10 text-left ${awayWins ? 'text-rose-400' : 'text-zinc-400'}`}>
-          {away != null ? Number(away).toFixed(1) : '—'}
+          {away != null ? Number(away).toFixed(1) : ''}
         </span>
       </div>
     </div>

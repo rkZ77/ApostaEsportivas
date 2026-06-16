@@ -49,7 +49,7 @@ function RankMedal({ rank }: { rank: number }) {
 }
 
 function StreakBadge({ streak, type }: { streak: number; type: 'green' | 'red' | null }) {
-  if (!streak || !type) return <span className="text-zinc-600 text-xs">—</span>
+  if (!streak || !type) return null
   return (
     <span className={`text-xs font-black px-1.5 py-0.5 rounded ${
       type === 'green' ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'
@@ -166,7 +166,7 @@ export default function Leaderboard() {
                     : sort === 'roi'      ? `${e.roi >= 0 ? '+' : ''}${e.roi}%`
                     : sort === 'win_rate' ? `${e.win_rate}%`
                     : sort === 'picks'    ? `${e.total_resolved}`
-                    : e.streak_type === 'green' ? `+${e.streak}` : e.streak > 0 ? `-${e.streak}` : '—'
+                    : e.streak_type === 'green' ? `+${e.streak}` : e.streak > 0 ? `-${e.streak}` : ''
                   const metricColor = sort === 'streak'
                     ? (e.streak_type === 'green' ? 'text-green-400' : 'text-red-400')
                     : (parseFloat(metricVal) >= 0 ? 'text-green-400' : 'text-red-400')

@@ -400,7 +400,7 @@ export default function Results() {
                               <span className="text-zinc-600 text-xs">Pendente</span>
                             )}
                             <span className={`text-sm font-black w-16 text-right ${p > 0 ? 'text-green-500' : p < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
-                              {p !== 0 ? `${p > 0 ? '+' : ''}${p.toFixed(2)}u` : '—'}
+                              {p !== 0 ? `${p > 0 ? '+' : ''}${p.toFixed(2)}u` : ''}
                             </span>
                           </div>
                         </div>
@@ -508,7 +508,7 @@ export default function Results() {
                           <td className="px-5 py-3 text-white font-black">{totT}</td>
                           <td className="px-5 py-3 text-green-500 font-black">{totG}</td>
                           <td className="px-5 py-3 text-zinc-300 font-bold text-xs">{avgWR}%</td>
-                          <td className="px-5 py-3 text-zinc-500 text-xs">—</td>
+                          <td className="px-5 py-3 text-zinc-500 text-xs"></td>
                           <td className={`px-5 py-3 font-black ${totP >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                             {totP >= 0 ? '+' : ''}{totP.toFixed(2)}u
                           </td>

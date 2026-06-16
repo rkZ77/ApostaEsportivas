@@ -281,7 +281,7 @@ function QuickStats({ stats }: { stats: any }) {
         </svg>
       ),
       label: 'Sequência',
-      value: streak > 0 ? (streakType === 'green' ? `+${streak}` : `-${streak}`) : '—',
+      value: streak > 0 ? (streakType === 'green' ? `+${streak}` : `-${streak}`) : '',
       color: streakType === 'green' ? 'text-green-500' : streakType === 'red' ? 'text-red-400' : 'text-zinc-500',
       iconColor: streakType === 'green' ? 'text-orange-400' : 'text-zinc-600',
       sub: streakType === 'green' ? 'Greens seguidos' : streakType === 'red' ? 'Reds seguidos' : 'Sem sequência',
@@ -1012,7 +1012,7 @@ function PicksTable({
                     {p.profit >= 0 ? '+' : ''}{p.isMonetary ? 'R$' : ''}{Math.abs(p.profit).toFixed(2)}{!p.isMonetary ? 'u' : ''}
                   </span>
                 ) : (
-                  <span className="text-sm font-black w-14 text-right text-zinc-700">—</span>
+                  <span className="text-sm font-black w-14 text-right text-zinc-700"></span>
                 )}
               </div>
             </button>
@@ -1413,7 +1413,7 @@ export default function Picks() {
                     {bancaSummary?.has_banca ? (
                       <>
                         <div className="text-xl font-black text-white">R${Number(bancaSummary.bankroll_current).toFixed(2)}</div>
-                        <div className="text-[11px] text-zinc-600 mt-0.5">{bancaSummary.unit_value ? `1u = R$${Number(bancaSummary.unit_value).toFixed(2)}` : '—'}</div>
+                        <div className="text-[11px] text-zinc-600 mt-0.5">{bancaSummary.unit_value ? `1u = R$${Number(bancaSummary.unit_value).toFixed(2)}` : ''}</div>
                       </>
                     ) : (
                       <p className="text-xs text-zinc-600 mt-1"><a href="/banca" className="text-green-400 underline font-semibold">Configurar banca</a></p>
@@ -1717,7 +1717,7 @@ export default function Picks() {
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   A banca começa em <span className="text-white font-bold">R$50</span> e o lucro de cada GREEN é
-                  reinvestido integralmente na próxima aposta — sem retirar nada.
+                  reinvestido integralmente na próxima aposta, sem retirar nada.
                 </p>
                 <p>
                   A cada <span className="text-red-400 font-bold">RED</span>, a banca reseta para R$50 e uma nova
@@ -1757,7 +1757,7 @@ export default function Picks() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="text-xs font-black text-orange-400 uppercase tracking-widest">Banca Copa Alavancagem</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal — reinveste a cada GREEN, reseta no RED</p>
+                      <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
                     </div>
                     {userAlavSerie?.configured && (
                       <div className="text-right">
@@ -1850,13 +1850,13 @@ export default function Picks() {
                           {[
                             {
                               label: 'Sua banca atual',
-                              value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '—',
+                              value: userBankroll != null ? `R$${userBankroll.toFixed(2)}` : '',
                               color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
                               sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
                             },
                             { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-zinc-500', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
-                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '—', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
-                            { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '—', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
+                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
+                            { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
                           ].map(({ label, value, color, sub }) => (
                             <div key={label} className="card p-4 text-center">
                               <div className={`text-xl font-black ${color}`}>{value}</div>
@@ -1879,7 +1879,7 @@ export default function Picks() {
                         const res = pick.result
                         const date = pick.match_date
                           ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                          : '—'
+                          : ''
                         const bankBefore = pick.bankroll_before != null ? Number(pick.bankroll_before) : null
                         const bankAfter  = pick.bankroll_after  != null ? Number(pick.bankroll_after)  : null
                         const profit     = bankBefore != null && bankAfter != null ? bankAfter - bankBefore : null

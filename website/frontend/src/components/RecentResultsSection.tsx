@@ -75,7 +75,7 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
               >
                 <div className="w-12 shrink-0 text-center">
                   <span className="text-xs text-zinc-500">
-                    {matchDate ? new Date(matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '—'}
+                    {matchDate ? new Date(matchDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : ''}
                   </span>
                 </div>
 
@@ -119,7 +119,7 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
                       {profit >= 0 ? '+' : ''}{isMonetary ? 'R$' : ''}{Math.abs(profit).toFixed(2)}{!isMonetary ? 'u' : ''}
                     </span>
                   ) : (
-                    <span className="text-sm font-black w-14 text-right text-zinc-700">—</span>
+                    <span className="text-sm font-black w-14 text-right text-zinc-700"></span>
                   )}
                 </div>
               </button>

@@ -232,7 +232,7 @@ export default function Planos() {
 
         {isAdmin && (
           <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
-            <p className="text-purple-400 font-black text-sm">Conta Admin — acesso irrestrito e permanente.</p>
+            <p className="text-purple-400 font-black text-sm">Conta Admin. Acesso irrestrito e permanente.</p>
             {memberSince && <p className="text-purple-400/50 text-xs mt-1">Membro desde {memberSince}</p>}
           </div>
         )}
@@ -373,7 +373,7 @@ export default function Planos() {
 
             {referral.total_indicated === 0 && (
               <p className="text-zinc-600 text-xs text-center">
-                Compartilhe seu link — cada amigo que se cadastrar te dá +1 dia, e +2 se assinar o VIP!
+                Compartilhe seu link: cada amigo que se cadastrar te dá +1 dia, e +2 se assinar o VIP!
               </p>
             )}
           </div>
@@ -386,12 +386,12 @@ export default function Planos() {
               {payments.map(p => {
                 const date = p.created_at
                   ? new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
-                  : '—'
+                  : ''
                 return (
                   <div key={p.id} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
                     <div>
                       <p className="text-white text-sm font-semibold">
-                        Plano Picks — {PLAN_LABEL[p.plan] ?? p.plan}
+                        Plano Picks: {PLAN_LABEL[p.plan] ?? p.plan}
                       </p>
                       <p className="text-zinc-500 text-xs mt-0.5">
                         {date} · {METHOD_LABEL[p.payment_method] ?? p.payment_method}
@@ -423,7 +423,7 @@ export default function Planos() {
             <div className="flex-1">
               <p className="text-white font-bold text-sm">Solicitar cancelamento ou reembolso</p>
               <p className="text-zinc-500 text-xs mt-0.5">
-                Pelo CDC você tem 7 dias de arrependimento em compras digitais — reembolso integral garantido
+                Pelo CDC você tem 7 dias de arrependimento em compras digitais. Reembolso integral garantido
               </p>
             </div>
             <a
@@ -446,7 +446,7 @@ export default function Planos() {
           </div>
           <div className="flex-1">
             <p className="text-white font-bold text-sm">Precisa de ajuda?</p>
-            <p className="text-zinc-500 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas — fale direto conosco</p>
+            <p className="text-zinc-500 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas? Fale direto conosco</p>
           </div>
           <a
             href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA."

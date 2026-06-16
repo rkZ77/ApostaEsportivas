@@ -207,7 +207,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
             <div className="flex items-center gap-0 border-t border-zinc-800/60 text-center divide-x divide-zinc-800/60">
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-zinc-500 mb-0.5">Mercado</div>
-                <div className="text-xs font-bold text-white truncate">{s.market ?? '—'}</div>
+                <div className="text-xs font-bold text-white truncate">{s.market ?? ''}</div>
               </div>
               {s.line && (
                 <div className="flex-1 py-2.5 px-3">
@@ -268,7 +268,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>
                       <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : '—'}
+                        {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : ''}
                       </div>
                     </div>
                   </div>
@@ -316,8 +316,8 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                       <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Jogos</p>
                       <div className="space-y-2">
                         {s.legs.map((g: any, i: number) => {
-                          const homeTeam = g.home_team || g.home || '—'
-                          const awayTeam = g.away_team || g.away || '—'
+                          const homeTeam = g.home_team || g.home || ''
+                          const awayTeam = g.away_team || g.away || ''
                           const homeLogo = g.home_team_id ? `/api/proxy/team/${g.home_team_id}.png` : null
                           const awayLogo = g.away_team_id ? `/api/proxy/team/${g.away_team_id}.png` : null
                           return (
@@ -336,7 +336,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                                   )}
                                   <span className="text-sm font-semibold text-white truncate">{awayTeam}</span>
                                 </div>
-                                <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : '—'}</span>
+                                <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                               </div>
                               <div className="text-xs text-zinc-500 mt-0.5">{g.market}{g.line ? ` · ${g.line}` : ''}</div>
                             </div>
@@ -554,7 +554,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '·'
                         const date = pick.match_date
                           ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                          : '—'
+                          : ''
                         const bankBefore = pick.bankroll_before
                         const bankAfter = pick.bankroll_after
                         return (

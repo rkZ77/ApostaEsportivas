@@ -34,7 +34,7 @@ interface Stats {
 }
 
 const SUBSCRIPTION_TYPES = [
-  { value: '',           label: '—'          },
+  { value: '',           label: ''          },
   { value: 'mensal',     label: 'Mensal'     },
   { value: 'trimestral', label: 'Trimestral' },
   { value: 'semestral',  label: 'Semestral'  },
@@ -273,12 +273,12 @@ export default function Admin() {
               <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Picks de hoje</h2>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
-                  { label: 'VIP',         value: stats.picks_hoje.vip_picks,   target: '—' },
+                  { label: 'VIP',         value: stats.picks_hoje.vip_picks,   target: '' },
                   { label: 'Alavancagem', value: stats.picks_hoje.alavancagem, target: 1   },
                   { label: 'Dica do Dia', value: stats.picks_hoje.dica,        target: 1   },
                   { label: 'Múltiplas',   value: stats.picks_hoje.multiplas,   target: 1   },
                 ].map(({ label, value, target }) => {
-                  const ok = target === '—' ? value > 0 : value >= (target as number)
+                  const ok = target === '' ? value > 0 : value >= (target as number)
                   return (
                     <div key={label} className="flex items-center gap-3 bg-zinc-900 rounded-xl px-4 py-3">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? 'bg-green-500' : 'bg-zinc-700'}`} />
@@ -306,7 +306,7 @@ export default function Admin() {
                   if (!id) return
                   try {
                     const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
-                    alert(`VIP ativado para ${r.data.user.name} (${r.data.user.email}) — plano ${r.data.plan}`)
+                    alert(`VIP ativado para ${r.data.user.name} (${r.data.user.email}), plano ${r.data.plan}`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                   } catch (e: any) {
                     alert('Erro: ' + (e.response?.data?.detail || e.message))
@@ -343,13 +343,13 @@ export default function Admin() {
                         </td>
                         <td className="px-4 py-2 capitalize text-zinc-300">{p.plan_key}</td>
                         <td className="px-4 py-2 text-green-400 font-semibold">R${Number(p.amount).toFixed(2)}</td>
-                        <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? '—'}</td>
+                        <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? ''}</td>
                         <td className="px-4 py-2">
                           <span className={`px-2 py-0.5 rounded font-medium ${p.status === 'approved' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>
                             {p.status}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : '—'}</td>
+                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : ''}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -461,7 +461,7 @@ export default function Admin() {
                     <td className="px-4 py-3 text-xs text-zinc-400">
                       {u.bankroll_current != null
                         ? <><div className="text-white font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-zinc-600">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
-                        : <span className="text-zinc-700">—</span>}
+                        : null}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-lg font-medium ${u.active ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
@@ -548,12 +548,12 @@ export default function Admin() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 mb-3">
-                <div>Tipo: <span className="text-zinc-300">{u.subscription_type ?? '—'}</span></div>
+                <div>Tipo: <span className="text-zinc-300">{u.subscription_type ?? ''}</span></div>
                 <div className="flex items-center gap-1">
-                  Expira: <span className="text-zinc-300">{u.expires_at ? u.expires_at.slice(0, 10) : '—'}</span>
+                  Expira: <span className="text-zinc-300">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}
                 </div>
-                <div>Banca: <span className="text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : '—'}</span></div>
+                <div>Banca: <span className="text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
                 <div>Cadastro: <span className="text-zinc-300">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
               </div>
 

@@ -104,7 +104,7 @@ function SetupModal({ current, onSave, onClose }: {
   const [loading,   setLoading]   = useState(false)
 
   const startNum    = parseFloat(start.replace(',', '.')) || 0
-  const suggested   = startNum > 0 ? (startNum / 100).toFixed(2) : '—'
+  const suggested   = startNum > 0 ? (startNum / 100).toFixed(2) : ''
 
   const handleSave = async () => {
     setErr('')
@@ -129,7 +129,7 @@ function SetupModal({ current, onSave, onClose }: {
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
       <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm">
         <h2 className="text-white font-black text-lg mb-1">Configurar banca</h2>
-        <p className="text-zinc-500 text-xs mb-5">Define banca, unidade e meta — como um tipster profissional.</p>
+        <p className="text-zinc-500 text-xs mb-5">Define banca, unidade e meta como um tipster profissional.</p>
 
         <div className="space-y-4">
           <div>
@@ -141,7 +141,7 @@ function SetupModal({ current, onSave, onClose }: {
           <div>
             <label className="text-xs text-zinc-500 block mb-1.5">
               Valor de 1 unidade (R$)
-              <span className="text-zinc-600 ml-1">— quanto você aposta por unidade</span>
+              <span className="text-zinc-600 ml-1">quanto você aposta por unidade</span>
             </label>
             <input type="number" min="0.01" step="0.01" value={unitValue}
               onChange={e => setUnitValue(e.target.value)} className="input w-full" placeholder="Ex: 5" />
@@ -151,7 +151,7 @@ function SetupModal({ current, onSave, onClose }: {
                   className="text-green-500 underline hover:text-green-400">
                   {fmtBRL(parseFloat(suggested) || 0)}
                 </button>
-                {' '}(1% da banca — gestão conservadora)
+                {' '}(1% da banca, gestão conservadora)
               </p>
             )}
           </div>
@@ -352,7 +352,7 @@ export default function Banca() {
                   label: 'Streak atual',
                   value: data?.streak > 0
                     ? `${data.streak_type === 'green' ? '+' : '-'}${data.streak}`
-                    : '—',
+                    : '',
                   color: data?.streak_type === 'green' ? 'text-green-500'
                        : data?.streak_type === 'red'   ? 'text-red-400'
                        : 'text-zinc-500',
@@ -425,7 +425,7 @@ export default function Banca() {
                 <div className="flex items-center justify-around">
                   <div className="text-center">
                     <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-green-500' : data?.streak_type === 'red' ? 'text-red-400' : 'text-zinc-600'}`}>
-                      {data?.streak > 0 ? data.streak : '—'}
+                      {data?.streak > 0 ? data.streak : ''}
                     </div>
                     <div className="text-xs text-zinc-500 mt-1">
                       {data?.streak_type === 'green' ? 'Greens seguidos' : data?.streak_type === 'red' ? 'Reds seguidos' : 'Sequencia atual'}
@@ -434,7 +434,7 @@ export default function Banca() {
                   <div className="w-px h-12 bg-zinc-800" />
                   <div className="text-center">
                     <div className="text-4xl font-black text-yellow-400">
-                      {data?.best_streak > 0 ? data.best_streak : '—'}
+                      {data?.best_streak > 0 ? data.best_streak : ''}
                     </div>
                     <div className="text-xs text-zinc-500 mt-1">Melhor sequencia</div>
                   </div>
@@ -642,7 +642,7 @@ export default function Banca() {
                                   </span>
                                 )}
                                 <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
-                                  {e.pnl != null ? fmtSigned(e.pnl) : '—'}
+                                  {e.pnl != null ? fmtSigned(e.pnl) : ''}
                                 </span>
                                 {!e.result && (
                                   <button

@@ -72,7 +72,7 @@ export default function Termos() {
             <h2 className="text-white font-bold text-base mb-3">6. Conta do usuário</h2>
             <ul className="list-disc list-inside space-y-2 text-zinc-400">
               <li>Você é responsável pela confidencialidade da sua senha</li>
-              <li>Uma conta por CPF — contas duplicadas podem ser suspensas</li>
+              <li>Uma conta por CPF. Contas duplicadas podem ser suspensas</li>
               <li>É proibido compartilhar credenciais de acesso</li>
               <li>Uso indevido ou fraude resulta em cancelamento imediato sem reembolso</li>
             </ul>
