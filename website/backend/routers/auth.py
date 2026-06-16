@@ -799,6 +799,35 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
         cur.close(); conn.close()
 
 
+class ChangeEmailBody(BaseModel):
+    new_email: str
+
+@router.post("/change-email")
+def change_email(body: ChangeEmailBody, background_tasks: BackgroundTasks, request: Request, current_user: dict = Depends(get_current_user)):
+    """Troca o e-mail do usuário e envia novo link de verificação."""
+    new_email = body.new_email.strip().lower()
+    if not new_email or "@" not in new_email:
+        raise HTTPException(400, "E-mail inválido")
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id FROM users WHERE email = %s AND id != %s", (new_email, current_user["sub"]))
+        if cur.fetchone():
+            raise HTTPException(400, "E-mail já cadastrado em outra conta")
+        token = secrets.token_urlsafe(32)
+        cur.execute(
+            "UPDATE users SET email=%s, email_verified=FALSE, email_verification_token=%s, updated_at=NOW() WHERE id=%s RETURNING name",
+            (new_email, token, current_user["sub"]),
+        )
+        row = cur.fetchone()
+        conn.commit()
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
+        background_tasks.add_task(_send_verification_email, new_email, row["name"], token, site_url)
+        return {"ok": True, "email": new_email}
+    finally:
+        cur.close(); conn.close()
+
+
 @router.post("/forgot-password")
 def forgot_password(body: ForgotPasswordBody):
     """Gera token de reset e envia email."""

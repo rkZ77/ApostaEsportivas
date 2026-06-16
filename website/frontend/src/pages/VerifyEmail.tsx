@@ -9,10 +9,17 @@ export default function VerifyEmail() {
   const { user, updateUser } = useAuth()
   const token = params.get('token')
 
-  const [state, setState]     = useState<'pending' | 'loading' | 'success' | 'error'>('pending')
+  const [state, setState]         = useState<'pending' | 'loading' | 'success' | 'error'>('pending')
   const [resending, setResending] = useState(false)
-  const [resent, setResent]   = useState(false)
-  const [errMsg, setErrMsg]   = useState('')
+  const [resent, setResent]       = useState(false)
+  const [errMsg, setErrMsg]       = useState('')
+
+  // Troca de e-mail
+  const [showChangeEmail, setShowChangeEmail] = useState(false)
+  const [newEmail, setNewEmail]               = useState('')
+  const [changingEmail, setChangingEmail]     = useState(false)
+  const [changeEmailErr, setChangeEmailErr]   = useState('')
+  const [emailChanged, setEmailChanged]       = useState('')
 
   useEffect(() => {
     if (!token) return
@@ -38,6 +45,23 @@ export default function VerifyEmail() {
       /* silent */
     } finally {
       setResending(false)
+    }
+  }
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setChangeEmailErr('')
+    setChangingEmail(true)
+    try {
+      const { data } = await api.post('/auth/change-email', { new_email: newEmail })
+      updateUser({ email: data.email, email_verified: false })
+      setEmailChanged(data.email)
+      setShowChangeEmail(false)
+      setResent(false)
+    } catch (err: any) {
+      setChangeEmailErr(err.response?.data?.detail || 'Erro ao alterar e-mail')
+    } finally {
+      setChangingEmail(false)
     }
   }
 
@@ -103,13 +127,16 @@ export default function VerifyEmail() {
             </div>
             <h1 className="text-xl font-bold text-white mb-2">Verifique seu e-mail</h1>
             <p className="text-zinc-400 text-sm mb-1">
-              Enviamos um link de confirmação para <span className="text-white font-medium">{user?.email ?? 'seu e-mail'}</span>.
+              Enviamos um link de confirmação para{' '}
+              <span className="text-white font-medium">{emailChanged || user?.email || 'seu e-mail'}</span>.
             </p>
-            <p className="text-zinc-600 text-xs mb-7">Clique no link do e-mail para ativar sua conta e acessar seus picks.</p>
+            <p className="text-zinc-600 text-xs mb-6">Clique no link para ativar sua conta e acessar seus picks.</p>
 
-            {resent ? (
+            {resent && (
               <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique sua caixa de entrada.</p>
-            ) : (
+            )}
+
+            {!resent && (
               <button
                 onClick={handleResend}
                 disabled={resending}
@@ -117,6 +144,39 @@ export default function VerifyEmail() {
               >
                 {resending ? 'Enviando…' : 'Reenviar e-mail'}
               </button>
+            )}
+
+            {/* Trocar e-mail */}
+            {!showChangeEmail ? (
+              <button
+                onClick={() => setShowChangeEmail(true)}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-4 block w-full"
+              >
+                E-mail errado? Alterar e-mail
+              </button>
+            ) : (
+              <form onSubmit={handleChangeEmail} className="mt-2 mb-4 text-left space-y-2">
+                <p className="text-zinc-400 text-xs font-semibold">Novo e-mail:</p>
+                <input
+                  type="email"
+                  value={newEmail}
+                  onChange={e => setNewEmail(e.target.value)}
+                  placeholder="novo@email.com"
+                  required
+                  className="input w-full text-sm"
+                />
+                {changeEmailErr && <p className="text-red-400 text-xs">{changeEmailErr}</p>}
+                <div className="flex gap-2">
+                  <button type="submit" disabled={changingEmail}
+                    className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                    {changingEmail ? 'Salvando…' : 'Salvar e reenviar'}
+                  </button>
+                  <button type="button" onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}
+                    className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                    Cancelar
+                  </button>
+                </div>
+              </form>
             )}
 
             <button
