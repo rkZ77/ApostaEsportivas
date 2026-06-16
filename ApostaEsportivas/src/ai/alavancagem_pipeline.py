@@ -166,6 +166,20 @@ def create_table():
             created_at      TIMESTAMP DEFAULT NOW()
         )
     """)
+    # Garante colunas adicionadas após criação inicial da tabela
+    for col_def in [
+        "bankroll_after  NUMERIC",
+        "bankroll_before NUMERIC",
+        "potential_return NUMERIC",
+        "checked_at      TIMESTAMP",
+        "prob_real_1     NUMERIC",
+        "prob_real_2     NUMERIC",
+    ]:
+        col_name = col_def.split()[0]
+        try:
+            cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS {col_def}")
+        except Exception:
+            conn.rollback()
     conn.commit()
     cur.close()
     conn.close()
