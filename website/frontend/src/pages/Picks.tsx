@@ -1319,7 +1319,7 @@ export default function Picks() {
           <div className="flex items-center gap-4">
             {quickStats && (
               <div className="hidden sm:flex items-center gap-3 text-xs">
-                <span className="text-zinc-600">Win rate mensal</span>
+                <span className="text-zinc-600">Win rate geral</span>
                 <span className={`font-black text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>

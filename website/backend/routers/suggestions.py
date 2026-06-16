@@ -986,7 +986,7 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Stats do mês corrente — todos os picks (VIP + Free + Múltiplas + Alavancagem)
+        # Stats gerais — todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem)
         month_row = _safe_query_one(cur, """
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
@@ -994,15 +994,15 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 COUNT(*) FILTER (WHERE result = 'RED')       AS reds,
                 COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM (
-                SELECT result, profit, match_date FROM picks_vip
+                SELECT result, profit FROM picks_vip
                 UNION ALL
-                SELECT result, profit, match_date FROM picks_free
+                SELECT result, profit FROM picks_free
                 UNION ALL
-                SELECT result, profit, match_date FROM picks_multiplas
+                SELECT result, profit FROM picks_multiplas
                 UNION ALL
-                SELECT result, profit, match_date FROM picks_alavancagem
+                SELECT result, profit FROM picks_alavancagem
             ) AS all_picks
-            WHERE DATE_TRUNC('month', match_date) = DATE_TRUNC('month', CURRENT_DATE)
+            WHERE result IS NOT NULL
         """)
         stats = dict(month_row) if month_row else {"total": 0, "greens": 0, "reds": 0, "profit": 0}
         total  = stats["total"] or 0
