@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -523,6 +523,15 @@ def run_multipla_pipeline() -> dict | None:
         reasoning  = group.get("reason", "")
         score      = float(group.get("score_combo", 0))
         games_info = group.get("games", [])
+
+        # Filtra jogos com reasoning incoerente com o mercado
+        games_info = [
+            g for g in games_info
+            if is_market_reasoning_coherent(g.get("market", ""), g.get("reasoning", ""))
+        ]
+        removed = len(group.get("games", [])) - len(games_info)
+        if removed:
+            print(f"[MULTIPLA] {name} — {removed} jogo(s) removido(s) por incoerência mercado↔reasoning")
 
         valid_fids = [g["fixture_id"] for g in games_info if g.get("fixture_id") in fx_map]
         if len(valid_fids) < 2:

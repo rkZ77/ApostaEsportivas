@@ -120,6 +120,36 @@ def translate_market(market: str) -> str:
             return re.sub(pattern, replacement, market.strip(), flags=re.IGNORECASE)
     return market  # já em português ou desconhecido
 
+
+_COHERENCE_KEYWORDS: dict[str, list[str]] = {
+    "cards":   ["cartão", "cartões", "card", "amarelo", "yellow", "vermelho", "red card", "disciplin"],
+    "corners": ["escanteio", "canto", "corner"],
+    "goals":   ["gol", "goal", "marcar", "score", "btts", "over", "under"],
+}
+
+def _market_type_from_name(market: str) -> str:
+    m = market.lower()
+    if "corner" in m or "escanteio" in m:
+        return "corners"
+    if "card" in m or "cartão" in m or "cartões" in m:
+        return "cards"
+    if "goal" in m or "gol" in m:
+        return "goals"
+    return "result"
+
+def is_market_reasoning_coherent(market: str, reasoning: str) -> bool:
+    """Retorna False se o reasoning fala exclusivamente de outro tipo de mercado."""
+    mtype = _market_type_from_name(market)
+    if mtype not in _COHERENCE_KEYWORDS:
+        return True
+    r = reasoning.lower()
+    own_kws   = _COHERENCE_KEYWORDS[mtype]
+    other_kws = [kw for t, kws in _COHERENCE_KEYWORDS.items() if t != mtype for kw in kws]
+    if any(kw in r for kw in other_kws) and not any(kw in r for kw in own_kws):
+        return False
+    return True
+
+
 MODEL    = os.getenv("AI_MODEL_NAME")
 BANKROLL = float(os.getenv("BANKROLL", "1000"))
 

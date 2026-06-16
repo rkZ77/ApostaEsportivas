@@ -19,7 +19,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -421,6 +421,19 @@ def save_pick(result: dict, bankroll: float):
     p1   = result["pick_1"]
     p2   = result.get("pick_2")
     tipo = result.get("tipo", "simples")
+
+    # Valida coerência mercado↔reasoning
+    if not is_market_reasoning_coherent(p1.get("market", ""), p1.get("reasoning", "")):
+        print(f"[ALAVANCAGEM] REJEITADO pick_1 — reasoning incoerente com mercado '{p1.get('market')}'")
+        return
+    if p2 and not is_market_reasoning_coherent(p2.get("market", ""), p2.get("reasoning", "")):
+        print(f"[ALAVANCAGEM] pick_2 removido — reasoning incoerente com mercado '{p2.get('market')}'. Downgrade para simples.")
+        p2 = None
+        tipo = "simples"
+        result["pick_2"] = None
+        result["tipo"] = "simples"
+        result["odd_combined"] = p1.get("odd", result["odd_combined"])
+
     odd_combined      = float(result["odd_combined"])
 
     # Validação hard: rejeita se odd_combined fora da faixa permitida
