@@ -29,7 +29,7 @@ function requestBrowserPermission() {
 
 function sendBrowserNotification(count: number, teams: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return
-  const notif = new Notification('⚽ Pick ao vivo!', {
+  const notif = new Notification('Pick ao vivo!', {
     body: teams
       ? `${teams} está em andamento. Veja na aba Ao Vivo.`
       : `${count} pick${count > 1 ? 's' : ''} em andamento. Acesse a aba Ao Vivo.`,

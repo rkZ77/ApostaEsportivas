@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { Radio } from 'lucide-react'
 import api from '../services/api'
 
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
@@ -263,8 +264,8 @@ export default function LivePicks() {
       {picks.length === 0 ? (
         <div className="card p-10 text-center border-dashed">
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center text-2xl">
-              📡
+            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
+              <Radio className="w-6 h-6 text-red-400" />
             </div>
           </div>
           <p className="font-semibold text-zinc-300">Nenhum pick sendo acompanhado</p>

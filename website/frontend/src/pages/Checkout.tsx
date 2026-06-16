@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { CheckCircle, XCircle, Check } from 'lucide-react'
+import { CheckCircle, XCircle, Check, Clock } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import { useAuth } from '../context/AuthContext'
@@ -77,7 +77,7 @@ function PendingPage() {
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <div className="w-20 h-20 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center mx-auto">
-          <span className="text-4xl">⏳</span>
+          <Clock className="w-9 h-9 text-yellow-400" />
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
         <p className="text-zinc-400">Seu pagamento está sendo processado. Você receberá uma confirmação em breve.</p>

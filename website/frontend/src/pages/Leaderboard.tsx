@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Flame } from 'lucide-react'
+import { Flame, Medal } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
@@ -41,11 +41,11 @@ const PERIODS: { key: Period; label: string }[] = [
   { key: 30, label: '30 dias' },
 ]
 
-const rankMedal = (rank: number) => {
-  if (rank === 1) return '🥇'
-  if (rank === 2) return '🥈'
-  if (rank === 3) return '🥉'
-  return `#${rank}`
+function RankMedal({ rank }: { rank: number }) {
+  if (rank === 1) return <Medal className="w-5 h-5 text-yellow-400" />
+  if (rank === 2) return <Medal className="w-5 h-5 text-zinc-400" />
+  if (rank === 3) return <Medal className="w-5 h-5 text-orange-500" />
+  return <span className="text-zinc-500 text-xs font-mono">#{rank}</span>
 }
 
 function StreakBadge({ streak, type }: { streak: number; type: 'green' | 'red' | null }) {
@@ -177,7 +177,7 @@ export default function Leaderboard() {
                       className={`${heights[i]} card ${bgColors[i]} border ${ringColors[i]} p-3 flex flex-col items-center gap-1.5 ${e.is_me ? 'ring-1 ring-green-500/60' : ''}`}
                     >
                       <div className="flex items-center gap-1">
-                        <span className="text-lg">{rankMedal(e.rank)}</span>
+                        <RankMedal rank={e.rank} />
                         {e.is_hot && <Flame className="w-4 h-4 text-orange-400" />}
                       </div>
                       <Avatar name={e.name} imageUrl={e.avatar_url} size="md" />
@@ -230,7 +230,7 @@ export default function Leaderboard() {
                       }`}
                     >
                       <td className="px-4 py-3 text-zinc-400 font-mono text-xs">
-                        {e.rank <= 3 ? rankMedal(e.rank) : `#${e.rank}`}
+                        <RankMedal rank={e.rank} />
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">

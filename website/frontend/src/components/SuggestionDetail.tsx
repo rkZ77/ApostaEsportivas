@@ -559,7 +559,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         const resColor = res === 'GREEN' ? 'text-green-400 bg-green-500/10 border-green-500/30'
                           : res === 'RED' ? 'text-red-400 bg-red-500/10 border-red-500/30'
                           : 'text-zinc-400 bg-zinc-800 border-zinc-700'
-                        const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '⏳'
+                        const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '·'
                         const date = pick.match_date
                           ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                           : '—'

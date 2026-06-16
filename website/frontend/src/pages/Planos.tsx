@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Lightbulb } from 'lucide-react'
+import { Lightbulb, Crown, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
@@ -314,14 +314,14 @@ export default function Planos() {
             {/* Recompensas */}
             <div className="grid grid-cols-2 gap-2 text-[11px]">
               <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-3 flex items-center gap-2">
-                <span className="text-lg">👤</span>
+                <User className="w-5 h-5 text-zinc-400 shrink-0" />
                 <div>
                   <p className="text-white font-black">+1 dia</p>
                   <p className="text-zinc-500">por cadastro</p>
                 </div>
               </div>
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-center gap-2">
-                <span className="text-lg">👑</span>
+                <Crown className="w-5 h-5 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-yellow-400 font-black">+2 dias</p>
                   <p className="text-zinc-500">se assinar VIP</p>
