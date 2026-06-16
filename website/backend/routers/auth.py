@@ -501,7 +501,7 @@ def _send_welcome_email(to: str, name: str, site_url: str) -> None:
     first_name = name.strip().split()[0]
     _send_email(
         to,
-        subject="Conta confirmada — Pick IA",
+        subject=f"{first_name}, seus picks estão te esperando",
         body=f"Olá {first_name}, sua conta foi confirmada! Acesse: {site_url}/picks",
         html=_welcome_html(first_name, site_url, logo_b64=_logo_data_uri()),
     )
