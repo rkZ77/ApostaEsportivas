@@ -24,7 +24,9 @@ import CookieBanner from './components/CookieBanner'
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
-  return user ? children : <Navigate to="/login" replace />
+  if (!user) return <Navigate to="/login" replace />
+  if (user.email_verified === false) return <Navigate to="/verify-email" replace />
+  return children
 }
 
 function PublicRoute({ children }: { children: JSX.Element }) {
