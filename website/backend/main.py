@@ -187,7 +187,7 @@ import resend as _resend
 
 def _send_banca_reminder(to: str, first_name: str):
     api_key   = os.getenv("RESEND_API_KEY", "")
-    from_addr = os.getenv("SMTP_FROM", "noreply@pickia.com.br")
+    from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
     site_url  = os.getenv("SITE_URL", "https://pickia.com.br")
     if not api_key:
         return

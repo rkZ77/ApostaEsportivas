@@ -115,7 +115,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 def _send_email(to: str, subject: str, body: str, html: str | None = None):
     api_key  = os.getenv("RESEND_API_KEY", "")
-    from_addr = os.getenv("SMTP_FROM", "noreply@pickia.com.br")
+    from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
 
     if not api_key:
         logger.warning("[EMAIL] RESEND_API_KEY não configurado — email para %s ignorado", to)
