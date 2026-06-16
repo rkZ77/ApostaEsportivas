@@ -4,6 +4,7 @@ from jose import JWTError, jwt
 from passlib.context import CryptContext
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
+from database import get_connection
 
 SECRET_KEY = os.getenv("JWT_SECRET", "")
 if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
@@ -96,12 +97,25 @@ def decode_token(token: str) -> dict:
 
 
 def get_current_user(request: Request, bearer: str | None = Depends(oauth2_scheme)) -> dict:
-    # Cookie httpOnly tem prioridade; cai para Bearer como fallback (mobilel/API)
+    # Cookie httpOnly tem prioridade; cai para Bearer como fallback (mobile/API)
     token = request.cookies.get(COOKIE_NAME) or bearer
     if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
     payload = decode_token(token)
-    # Lazy expiry: se o plano VIP/trial já passou, trata como free sem DB call
+
+    # Verifica se o usuário ainda existe e está ativo no banco
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT id, active FROM users WHERE id = %s", (payload.get("sub"),))
+        row = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+
+    if not row or not row["active"]:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
+
+    # Lazy expiry: se o plano VIP/trial já passou, trata como free
     if payload.get("plan") in ("vip", "trial") and payload.get("plan_expires_at"):
         try:
             exp_dt = datetime.fromisoformat(payload["plan_expires_at"])
