@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import {
   Zap, TrendingUp, Wallet, Radio, BarChart2, Bot, Medal,
   ChevronRight, CheckCircle, Info, Lock, Layers, Target, Users,
+  Brain, Database, LineChart, ShieldCheck, Eye,
 } from 'lucide-react'
 
 // Bloco de passo numerado
@@ -59,21 +60,73 @@ export default function HowItWorks() {
   return (
     <div className="space-y-8 pb-8">
 
-      {/* Cabeçalho */}
+      {/* Cabeçalho hero */}
       <div className="bg-gradient-to-br from-green-500/10 to-zinc-900 border border-green-500/20 rounded-2xl p-5">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 rounded-xl bg-green-500 flex items-center justify-center shrink-0">
-            <Zap className="w-5 h-5 text-black" />
+            <Brain className="w-5 h-5 text-black" />
           </div>
           <div>
             <h2 className="font-black text-white text-base">Como funciona o PickIA</h2>
-            <p className="text-zinc-500 text-xs">Tudo que você precisa saber para começar</p>
+            <p className="text-green-400 text-xs font-semibold">Análise por Inteligência Artificial</p>
           </div>
         </div>
-        <p className="text-zinc-400 text-sm leading-relaxed">
-          O PickIA analisa estatísticas de jogos em tempo real e gera sugestões de apostas com edge real.
-          Você acompanha, marca o que apostou e vê seu desempenho crescer.
+        <p className="text-zinc-300 text-sm leading-relaxed">
+          Cada pick é gerado por uma <span className="text-white font-bold">IA especializada em apostas esportivas</span> que varre centenas de jogos, processa estatísticas reais e identifica desequilíbrios entre a probabilidade real de um evento e a odd oferecida pelas casas.
         </p>
+      </div>
+
+      {/* Como a IA analisa */}
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+        <div className="flex items-center gap-2 mb-4">
+          <Brain className="w-4 h-4 text-green-400" />
+          <h3 className="text-white font-black text-sm">O que a IA analisa em cada jogo</h3>
+        </div>
+        <div className="grid grid-cols-1 gap-3">
+          {[
+            {
+              Icon: Database,
+              title: 'Estatísticas do histórico',
+              desc: 'Média de gols, escanteios e cartões feitos e cedidos por cada time nos últimos jogos, separados por contexto (casa ou fora). Quanto mais recente o jogo, maior o peso na análise.',
+            },
+            {
+              Icon: Eye,
+              title: 'Contexto da partida',
+              desc: 'Liga, fase da competição, importância do jogo, motivação dos times (luta por título, rebaixamento, classificação) e histórico de confronto direto.',
+            },
+            {
+              Icon: ShieldCheck,
+              title: 'Árbitro escalado',
+              desc: 'A IA verifica o histórico do árbitro — média de cartões amarelos por jogo, tendência de marcar muitos ou poucos cartões — e usa isso para calibrar picks de cartões.',
+            },
+            {
+              Icon: LineChart,
+              title: 'Edge real vs odd oferecida',
+              desc: 'Para cada mercado (gols, escanteios, cartões, resultado), a IA calcula a probabilidade real com os dados e compara com a odd da casa. Só sugere o pick se existir desequilíbrio favorável (EV positivo).',
+            },
+            {
+              Icon: TrendingUp,
+              title: 'Calibração contínua',
+              desc: 'O sistema acompanha o desempenho histórico dos próprios picks e ajusta o nível de confiança baseado em acertos reais — evitando excesso ou falta de confiança ao longo do tempo.',
+            },
+          ].map(({ Icon, title, desc }) => (
+            <div key={title} className="flex gap-3">
+              <div className="w-8 h-8 rounded-lg bg-green-500/10 border border-green-500/20 flex items-center justify-center shrink-0 mt-0.5">
+                <Icon className="w-4 h-4 text-green-400" />
+              </div>
+              <div>
+                <p className="text-white text-xs font-bold mb-0.5">{title}</p>
+                <p className="text-zinc-500 text-xs leading-relaxed">{desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="mt-4 flex items-start gap-2 bg-green-500/5 border border-green-500/15 rounded-xl px-3 py-2.5">
+          <Info className="w-3.5 h-3.5 text-green-500 shrink-0 mt-0.5" />
+          <p className="text-zinc-400 text-xs leading-relaxed">
+            O resultado de cada pick exibe o <span className="text-white font-semibold">reasoning completo da IA</span> — você vê exatamente quais dados embasaram a sugestão, incluindo taxas históricas, peso da amostra e cálculo de confiança.
+          </p>
+        </div>
       </div>
 
       {/* Como começar */}
@@ -93,10 +146,10 @@ export default function HowItWorks() {
             </div>
           </Step>
 
-          <Step n={2} title="Explore os picks do dia">
-            <p>Na aba <span className="text-white font-semibold">Hoje</span> você encontra os picks mais importantes do dia.
-               Na aba <span className="text-white font-semibold">Picks Free</span> está a Dica do Dia — sugestão gratuita publicada diariamente.</p>
-            <p className="mt-1">Com plano VIP, acesse todos os picks gerados pela IA nas abas <span className="text-yellow-400 font-semibold">Picks VIP</span>, <span className="text-yellow-400 font-semibold">Múltiplas</span> e <span className="text-yellow-400 font-semibold">Alavancagem</span>.</p>
+          <Step n={2} title="Explore os picks gerados pela IA">
+            <p>Na aba <span className="text-white font-semibold">Hoje</span> estão os destaques do dia selecionados pela IA. Cada card mostra o mercado, a odd, o percentual de confiança e o reasoning completo com os dados que embasaram a análise.</p>
+            <p className="mt-1">Na aba <span className="text-white font-semibold">Picks Free</span> está a Dica do Dia — o pick com maior edge identificado pela IA naquele dia, disponível gratuitamente.</p>
+            <p className="mt-1">Com plano VIP, acesse todos os picks nas abas <span className="text-yellow-400 font-semibold">Picks VIP</span>, <span className="text-yellow-400 font-semibold">Múltiplas</span> e <span className="text-yellow-400 font-semibold">Alavancagem</span>.</p>
           </Step>
 
           <Step n={3} title='Marque o que apostou com "+ Apostei"'>
@@ -130,32 +183,32 @@ export default function HowItWorks() {
             badge="FREE"
             badgeCls="bg-green-500/10 text-green-400 border-green-500/20"
             free
-            description="Uma sugestão publicada por dia, disponível para todos"
-            detail="Publicada automaticamente após análise dos jogos do dia. Ideal para quem está começando ou quer testar a plataforma sem assinar."
+            description="O pick com maior edge identificado pela IA no dia"
+            detail="A IA varre todos os jogos do dia, calcula o edge de cada mercado e seleciona automaticamente o pick com maior desequilíbrio estatístico. Publicado gratuitamente uma vez por dia."
           />
           <PickTypeCard
             icon={TrendingUp}
             title="Picks VIP"
             badge="VIP"
             badgeCls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20"
-            description="10–20 sugestões por dia com análise estatística completa"
-            detail="Cada pick traz mercado, odd, casa de apostas, % de confiança da IA, EV (Edge Value) e reasoning detalhado com os dados que embasaram a sugestão."
+            description="10–20 picks/dia com análise estatística completa da IA"
+            detail="A IA analisa gols, escanteios, cartões e resultado de cada jogo, calcula EV e confiança para cada mercado, e entrega os picks com maior edge — incluindo o reasoning completo com os dados usados."
           />
           <PickTypeCard
             icon={Layers}
             title="Múltiplas"
             badge="VIP"
             badgeCls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20"
-            description="Combinações de 2+ seleções para odd mais alta"
-            detail="A IA monta combinações coerentes de picks do dia. Maior retorno, maior risco — ideal para apostadores que buscam odds acima de 3.0."
+            description="Combinações montadas pela IA com seleções correlacionadas"
+            detail="A IA seleciona e combina picks com alta confiança e baixa correlação de risco, gerando múltiplas coerentes. Maior odd combinada, com base estatística em cada seleção."
           />
           <PickTypeCard
             icon={Target}
             title="Alavancagem"
             badge="VIP"
             badgeCls="bg-yellow-400/10 text-yellow-400 border-yellow-400/20"
-            description="Série progressiva para multiplicar a banca"
-            detail="Método de reinvestimento: cada GREEN dobra o retorno no próximo pick. Estratégia agressiva com acompanhamento visual do caminho percorrido."
+            description="Série progressiva gerada pela IA para multiplicar a banca"
+            detail="A IA seleciona 1 pick por dia com alta confiança para a série de alavancagem. O retorno de cada GREEN é reinvestido no próximo pick, com progressão acompanhada visualmente."
           />
         </div>
       </div>
