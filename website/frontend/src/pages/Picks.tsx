@@ -1075,6 +1075,99 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
 
 
 
+// ─── Copa do Mundo tendências ─────────────────────────────────────────────────
+interface CopaGame {
+  fixture_id: number; match_date: string
+  home_team: string; away_team: string
+  home_goals: number; away_goals: number; total_goals: number
+  total_corners: number; total_yellow_cards: number; total_red_cards: number
+  home_team_id?: number; away_team_id?: number
+}
+interface CopaData {
+  games: CopaGame[]
+  summary: { total_games: number; avg_goals: number; avg_corners: number; avg_yellow_cards: number; avg_red_cards: number } | null
+}
+
+function CopaPanel({ data }: { data: CopaData }) {
+  const [open, setOpen] = useState(true)
+  const { summary, games } = data
+  if (!games.length || !summary) return null
+
+  const goalsColor   = summary.avg_goals >= 2.5 ? 'text-green-400' : 'text-zinc-300'
+  const cardsColor   = summary.avg_yellow_cards >= 3.5 ? 'text-yellow-400' : 'text-zinc-300'
+  const cornersColor = summary.avg_corners >= 10 ? 'text-blue-400' : 'text-zinc-300'
+  const goalsTrend   = summary.avg_goals >= 2.5 ? 'Alto' : summary.avg_goals >= 1.5 ? 'Médio' : 'Baixo'
+  const cardsTrend   = summary.avg_yellow_cards >= 3.5 ? 'Alto' : summary.avg_yellow_cards >= 2 ? 'Médio' : 'Baixo'
+  const cornersTrend = summary.avg_corners >= 10 ? 'Alto' : summary.avg_corners >= 7 ? 'Médio' : 'Baixo'
+
+  return (
+    <div className="card overflow-hidden mb-6">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 hover:bg-zinc-900/50 transition-colors"
+      >
+        <div className="flex items-center gap-2.5">
+          <img src="/logo-copa-mundo.png" alt="Copa" className="w-5 h-5 object-contain" onError={e => (e.currentTarget.style.display = 'none')} />
+          <span className="text-sm font-black text-white">Copa do Mundo</span>
+          <span className="text-[10px] text-zinc-500 font-semibold">Últimos {summary.total_games} jogos</span>
+        </div>
+        <div className="flex items-center gap-3">
+          <div className="hidden sm:flex items-center gap-1.5 text-xs">
+            <span className={`font-bold ${goalsColor}`}>⚽ {summary.avg_goals}</span>
+            <span className="text-zinc-700">·</span>
+            <span className={`font-bold ${cardsColor}`}>🟨 {summary.avg_yellow_cards}</span>
+            <span className="text-zinc-700">·</span>
+            <span className={`font-bold ${cornersColor}`}>⛳ {summary.avg_corners}</span>
+          </div>
+          <svg className={`w-4 h-4 text-zinc-500 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+          </svg>
+        </div>
+      </button>
+
+      {open && (
+        <div className="border-t border-zinc-800">
+          <div className="grid grid-cols-3 border-b border-zinc-800">
+            {[
+              { emoji: '⚽', label: 'Gols/jogo',      value: summary.avg_goals,         trend: goalsTrend,   color: goalsColor   },
+              { emoji: '🟨', label: 'Cartões/jogo',   value: summary.avg_yellow_cards,  trend: cardsTrend,   color: cardsColor   },
+              { emoji: '⛳', label: 'Escanteios/jogo',value: summary.avg_corners,        trend: cornersTrend, color: cornersColor },
+            ].map(({ emoji, label, value, trend, color }, i) => (
+              <div key={i} className={`px-3 py-3 text-center ${i < 2 ? 'border-r border-zinc-800' : ''}`}>
+                <div className="text-base mb-0.5">{emoji}</div>
+                <div className={`text-xl font-black ${color}`}>{value}</div>
+                <div className="text-[10px] text-zinc-600 font-semibold leading-tight">{label}</div>
+                <div className={`text-[10px] font-bold mt-0.5 ${color}`}>{trend}</div>
+              </div>
+            ))}
+          </div>
+          <div className="overflow-x-auto scrollbar-none">
+            <div className="flex gap-2 px-4 py-3" style={{ minWidth: 'max-content' }}>
+              {games.map(g => (
+                <div key={g.fixture_id} className="shrink-0 bg-zinc-900 rounded-xl px-3 py-2.5 w-28 border border-zinc-800">
+                  <div className="text-[10px] text-zinc-600 mb-1.5 font-semibold">
+                    {new Date(g.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                  </div>
+                  <div className="text-[10px] text-zinc-400 truncate">{g.home_team}</div>
+                  <div className="text-base font-black text-white text-center py-0.5">{g.home_goals} – {g.away_goals}</div>
+                  <div className="text-[10px] text-zinc-400 truncate mb-2">{g.away_team}</div>
+                  <div className="flex flex-wrap gap-1">
+                    <span className="text-[9px] px-1 py-0.5 bg-zinc-800 rounded text-zinc-500">⛳{g.total_corners ?? '?'}</span>
+                    <span className="text-[9px] px-1 py-0.5 bg-yellow-500/10 rounded text-yellow-500">🟨{g.total_yellow_cards ?? '?'}</span>
+                    {(g.total_red_cards ?? 0) > 0 && (
+                      <span className="text-[9px] px-1 py-0.5 bg-red-500/10 rounded text-red-400">🟥{g.total_red_cards}</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 export default function Picks() {
   const navigate = useNavigate()
@@ -1130,6 +1223,7 @@ export default function Picks() {
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
+  const [copaData, setCopaData] = useState<CopaData | null>(null)
   const todayLabel   = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
   const todayDateStr = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' })
 
@@ -1140,6 +1234,9 @@ export default function Picks() {
       .finally(() => setTodayLoading(false))
     api.get('/suggestions/stats/quick')
       .then(r => setQuickStats(r.data))
+      .catch(() => {})
+    api.get('/suggestions/copa/tendencias')
+      .then(r => setCopaData(r.data))
       .catch(() => {})
   }, [])
 
@@ -1445,6 +1542,9 @@ export default function Picks() {
 
               {/* Stats rápidas do mês — para todos */}
               <QuickStats stats={quickStats} />
+
+              {/* Copa do Mundo — tendências */}
+              {copaData && copaData.games.length > 0 && <CopaPanel data={copaData} />}
 
               {/* Horário de geração dos picks */}
               {(today?.vip?.[0]?.created_at || today?.dica_do_dia?.created_at) && (() => {
