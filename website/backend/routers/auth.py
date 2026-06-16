@@ -292,6 +292,7 @@ class RegisterBody(BaseModel):
     cpf: str
     username: Optional[str] = None
     ref_code: Optional[str] = None
+    accepted_terms: bool = False
 
 class LoginBody(BaseModel):
     identifier: str  # e-mail, CPF ou username
@@ -317,7 +318,9 @@ class UpdateProfileBody(BaseModel):
 # ── endpoints ────────────────────────────────────────────────────────────────
 
 @router.post("/register")
-def register(body: RegisterBody, response: Response, background_tasks: BackgroundTasks):
+def register(body: RegisterBody, response: Response, background_tasks: BackgroundTasks, request: Request):
+    if not body.accepted_terms:
+        raise HTTPException(status_code=400, detail="Você precisa aceitar os Termos de Uso e a Política de Privacidade.")
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -362,9 +365,10 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
                 break
 
         _validate_password(body.password)
+        client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
         cur.execute(
-            "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code) VALUES (%s, %s, %s, %s, %s, %s, %s, %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
-            (body.name, body.email, hash_password(body.password), body.phone, cpf_digits, final_username, referrer_id, new_ref_code),
+            "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code, terms_accepted_at, terms_ip) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
+            (body.name, body.email, hash_password(body.password), body.phone, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
         )
         user = dict(cur.fetchone())
         # Trial gratuito de 2 dias — apenas para usuários que forneceram CPF no cadastro

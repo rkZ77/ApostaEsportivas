@@ -54,6 +54,8 @@ export default function Login() {
   const [confirm, setConfirm]   = useState('')
   const [refCode, setRefCode]   = useState('')
 
+  const [acceptedTerms, setAcceptedTerms] = useState(false)
+
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -101,6 +103,7 @@ export default function Login() {
       }
       if (password.length < 8) { setError('A senha deve ter pelo menos 8 caracteres.'); return }
       if (password !== confirm) { setError('As senhas não coincidem.'); return }
+      if (!acceptedTerms) { setError('Você precisa aceitar os Termos de Uso e a Política de Privacidade.'); return }
     }
 
     setLoading(true)
@@ -109,7 +112,7 @@ export default function Login() {
         const u = await login(getIdentifier(), password)
         navigate(u.email_verified === false ? '/verify-email' : '/picks')
       } else {
-        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined)
+        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms)
         localStorage.removeItem('ref_code')
         navigate('/verify-email')
       }
@@ -306,6 +309,24 @@ export default function Login() {
                 <PartyPopper className="w-4 h-4 shrink-0" />
                 <span>Código de indicação <strong>{refCode}</strong> aplicado!</span>
               </div>
+            )}
+
+            {mode === 'register' && (
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={acceptedTerms}
+                  onChange={e => setAcceptedTerms(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 shrink-0 accent-green-500 cursor-pointer"
+                />
+                <span className="text-xs text-zinc-400 leading-relaxed">
+                  Li e concordo com os{' '}
+                  <Link to="/termos" target="_blank" className="text-green-500 hover:underline font-semibold">Termos de Uso</Link>
+                  {' '}e a{' '}
+                  <Link to="/privacidade" target="_blank" className="text-green-500 hover:underline font-semibold">Política de Privacidade</Link>
+                  , incluindo o tratamento dos meus dados conforme a LGPD.
+                </span>
+              </label>
             )}
 
             {error && (
