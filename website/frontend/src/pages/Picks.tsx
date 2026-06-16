@@ -10,6 +10,7 @@ import Avatar from '../components/Avatar'
 import CommunityChat from '../components/CommunityChat'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
+import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock } from 'lucide-react'
 import { suggestStake } from '../utils/stakeUtils'
 
@@ -62,7 +63,7 @@ const MARKET_PT: Record<string, string> = {
 const translateMarket = (m?: string) => (m ? (MARKET_PT[m] ?? m) : '')
 
 // ─── Tipos ────────────────────────────────────────────────────────────────────
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat' | 'guia'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -106,6 +107,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
 }) {
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
+    { key: 'guia',         label: 'Como Funciona'   },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
@@ -1965,6 +1967,12 @@ export default function Picks() {
               </p>
             </div>
             <CommunityChat onLatestId={id => { chatLastIdRef.current = id }} />
+          </div>
+        )}
+
+        {tab === 'guia' && (
+          <div className="max-w-2xl mx-auto">
+            <HowItWorks />
           </div>
         )}
 
