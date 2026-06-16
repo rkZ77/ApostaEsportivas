@@ -56,6 +56,12 @@ function overPct(matches: Match[], teamId: number, homeKey: keyof Match, awayKey
   return Math.round((count / matches.length) * 100)
 }
 
+function avgStat(matches: Match[], teamId: number, homeKey: keyof Match, awayKey: keyof Match): number {
+  if (!matches.length) return 0
+  const sum = matches.reduce((acc, m) => acc + getTeamStat(m, teamId, homeKey, awayKey), 0)
+  return Math.round((sum / matches.length) * 10) / 10
+}
+
 function totalOverPct(matches: Match[], field: keyof Match, threshold: number): number {
   if (!matches.length) return 0
   const count = matches.filter(m => ((m[field] ?? 0) as number) > threshold).length
@@ -150,14 +156,24 @@ function TeamDonutRow({ matches, teamId, name, logoSrc, circles }: {
   logoSrc: string
   circles: CircleDef[]
 }) {
+  const feitos  = avgStat(matches, teamId, circles[0].homeKey, circles[0].awayKey)
+  const cedidos = avgStat(matches, teamId, circles[0].awayKey, circles[0].homeKey)
+
   return (
     <div className="py-3 border-b border-zinc-800/50">
-      <div className="flex items-center gap-2 mb-3">
+      <div className="flex items-center gap-2 mb-1.5">
         <img src={logoSrc} alt={name} className="w-5 h-5 object-contain shrink-0"
           onError={e => (e.currentTarget.style.display = 'none')} />
         <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{name}</span>
         <span className="text-[10px] text-zinc-600 shrink-0">{matches.length}J</span>
       </div>
+      {matches.length > 0 && (
+        <p className="text-[11px] text-zinc-500 mb-3">
+          Média: <span className="text-blue-400 font-bold">{feitos.toFixed(1)}</span> feitos
+          {' · '}
+          <span className="text-rose-400 font-bold">{cedidos.toFixed(1)}</span> cedidos
+        </p>
+      )}
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${circles.length}, 1fr)` }}>
         {circles.map(c => (
           <Donut key={c.label}
