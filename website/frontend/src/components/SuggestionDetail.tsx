@@ -376,14 +376,16 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                         <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
                           {hStats || aStats ? (
                             <>
-                              <StatBar label="Gols marcados"   home={hStats?.avg_goals_for ?? 0}      away={aStats?.avg_goals_for ?? 0} />
-                              <StatBar label="Gols sofridos"   home={hStats?.avg_goals_against ?? 0}  away={aStats?.avg_goals_against ?? 0} higherIsBetter={false} />
-                              <StatBar label="Total de gols"   home={hStats?.avg_total_goals ?? 0}    away={aStats?.avg_total_goals ?? 0} />
-                              <StatBar label="Escanteios pró"  home={hStats?.avg_corners_for ?? 0}    away={aStats?.avg_corners_for ?? 0} />
-                              <StatBar label="Escanteios tot"  home={hStats?.avg_total_corners ?? 0}  away={aStats?.avg_total_corners ?? 0} />
-                              <StatBar label="Cartões amarelos" home={hStats?.avg_yellow_for ?? 0}   away={aStats?.avg_yellow_for ?? 0} higherIsBetter={false} />
-                              <StatBar label="Chutes a gol"    home={hStats?.avg_shots_on_for ?? 0}   away={aStats?.avg_shots_on_for ?? 0} />
-                              <StatBar label="Posse de bola"   home={hStats?.avg_possession_for ?? 0} away={aStats?.avg_possession_for ?? 0} />
+                              <StatBar label="Gols feitos"      home={hStats?.avg_goals_for ?? 0}       away={aStats?.avg_goals_for ?? 0} />
+                              <StatBar label="Gols cedidos"     home={hStats?.avg_goals_against ?? 0}   away={aStats?.avg_goals_against ?? 0} higherIsBetter={false} />
+                              <StatBar label="Total de gols"    home={hStats?.avg_total_goals ?? 0}     away={aStats?.avg_total_goals ?? 0} />
+                              <StatBar label="Escanteios feitos"  home={hStats?.avg_corners_for ?? 0}   away={aStats?.avg_corners_for ?? 0} />
+                              <StatBar label="Escanteios cedidos" home={hStats?.avg_corners_against ?? 0} away={aStats?.avg_corners_against ?? 0} higherIsBetter={false} />
+                              <StatBar label="Escanteios tot"   home={hStats?.avg_total_corners ?? 0}   away={aStats?.avg_total_corners ?? 0} />
+                              <StatBar label="Amarelos feitos"  home={hStats?.avg_yellow_for ?? 0}      away={aStats?.avg_yellow_for ?? 0} higherIsBetter={false} />
+                              <StatBar label="Amarelos cedidos" home={hStats?.avg_yellow_against ?? 0}  away={aStats?.avg_yellow_against ?? 0} higherIsBetter={false} />
+                              <StatBar label="Chutes a gol"     home={hStats?.avg_shots_on_for ?? 0}    away={aStats?.avg_shots_on_for ?? 0} />
+                              <StatBar label="Posse de bola"    home={hStats?.avg_possession_for ?? 0}  away={aStats?.avg_possession_for ?? 0} />
                             </>
                           ) : (
                             <p className="text-xs text-zinc-600 text-center py-4">Sem médias para este contexto</p>
