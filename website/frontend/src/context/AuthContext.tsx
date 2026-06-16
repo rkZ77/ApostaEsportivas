@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, ReactNode } from 'react'
+import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import api from '../services/api'
 
 interface User {
@@ -66,6 +66,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await api.get('/auth/me')
     _save(data as User)
   }
+
+  // Atualiza plano do servidor ao montar e ao voltar para a aba
+  useEffect(() => {
+    if (!localStorage.getItem('user')) return
+    refreshUser().catch(() => {})
+    const onVisible = () => { if (!document.hidden) refreshUser().catch(() => {}) }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [])
 
   const daysUntilExpiry: number | null = (() => {
     if (!user?.expires_at) return null
