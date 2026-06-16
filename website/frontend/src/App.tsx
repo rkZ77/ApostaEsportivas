@@ -18,6 +18,7 @@ import Leaderboard from './pages/Leaderboard'
 import VerifyEmail from './pages/VerifyEmail'
 import Privacidade from './pages/Privacidade'
 import Termos from './pages/Termos'
+import Estatisticas from './pages/Estatisticas'
 import NotFound from './pages/NotFound'
 import WhatsAppButton from './components/WhatsAppButton'
 import CookieBanner from './components/CookieBanner'
@@ -60,6 +61,7 @@ export default function App() {
           <Route path="/verify-email" element={<VerifyEmail />} />
           <Route path="/privacidade" element={<Privacidade />} />
           <Route path="/termos" element={<Termos />} />
+          <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />
           <Route path="*" element={<NotFound />} />
         </Routes>
         </NotificationProvider>

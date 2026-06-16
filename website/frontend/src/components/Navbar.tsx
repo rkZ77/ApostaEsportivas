@@ -4,7 +4,7 @@ import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, Medal, ShieldCheck, Crown,
-  LogOut, Menu, X,
+  LogOut, Menu, X, TrendingUp,
 } from 'lucide-react'
 import Avatar from './Avatar'
 
@@ -42,10 +42,11 @@ export default function Navbar() {
     pathname === path ? 'text-green-500 font-semibold' : 'text-zinc-400 hover:text-white'
 
   const navLinks = [
-    { to: '/picks',       label: 'Picks',      Icon: Zap,        badge: hasNew, onClick: markSeen },
-    { to: '/fixtures',    label: 'Jogos',      Icon: Trophy },
-    { to: '/results',     label: 'Resultados', Icon: BarChart2 },
-    { to: '/agente',      label: 'Agente',     Icon: Bot },
+    { to: '/picks',        label: 'Picks',        Icon: Zap,         badge: hasNew, onClick: markSeen },
+    { to: '/fixtures',     label: 'Jogos',        Icon: Trophy },
+    { to: '/results',      label: 'Resultados',   Icon: BarChart2 },
+    { to: '/estatisticas', label: 'Estatísticas', Icon: TrendingUp },
+    { to: '/agente',       label: 'Agente',       Icon: Bot },
     { to: '/banca',       label: 'Banca',      Icon: Wallet },
     { to: '/leaderboard', label: 'Ranking',    Icon: Medal },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')

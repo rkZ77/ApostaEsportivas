@@ -1406,9 +1406,13 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
         conn.close()
 
 
-@router.get("/copa/tendencias")
-def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
-    """Últimos 15 jogos da Copa do Mundo com tendências (gols, cartões, escanteios)."""
+@router.get("/liga/tendencias")
+def get_liga_tendencias(
+    league_id: int = Query(1, ge=1),
+    limit: int = Query(15, ge=5, le=50),
+    current_user: dict = Depends(get_current_user),
+):
+    """Últimos N jogos de uma liga com tendências (gols, cartões, escanteios)."""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1416,6 +1420,7 @@ def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
             SELECT ms.fixture_id, ms.match_date,
                    ms.home_goals, ms.away_goals, ms.total_goals,
                    ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
+                   ms.home_shots_on, ms.away_shots_on,
                    ms.home_team_id, ms.away_team_id,
                    COALESCE(f.home_team, ht.name) AS home_team,
                    COALESCE(f.away_team, t_away.name) AS away_team
@@ -1423,28 +1428,38 @@ def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
             LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
             LEFT JOIN teams ht ON ht.team_id = ms.home_team_id
             LEFT JOIN teams t_away ON t_away.team_id = ms.away_team_id
-            WHERE ms.league_id = 1
+            WHERE ms.league_id = %s
               AND ms.status IN ('FT', 'AET', 'PEN')
             ORDER BY ms.match_date DESC
-            LIMIT 15
-        """)
+            LIMIT %s
+        """, (league_id, limit))
         games = [dict(r) for r in rows]
 
         if not games:
             return {"games": [], "summary": None}
 
         n = len(games)
+        btts  = sum(1 for g in games if (g["home_goals"] or 0) > 0 and (g["away_goals"] or 0) > 0)
+        over25 = sum(1 for g in games if (g["total_goals"] or 0) >= 3)
         summary = {
-            "total_games": n,
+            "total_games":       n,
             "avg_goals":         round(sum(float(g["total_goals"] or 0) for g in games) / n, 2),
             "avg_corners":       round(sum(float(g["total_corners"] or 0) for g in games) / n, 2),
             "avg_yellow_cards":  round(sum(float(g["total_yellow_cards"] or 0) for g in games) / n, 2),
             "avg_red_cards":     round(sum(float(g["total_red_cards"] or 0) for g in games) / n, 2),
+            "btts_pct":          round(btts / n * 100, 1),
+            "over25_pct":        round(over25 / n * 100, 1),
         }
         return {"games": games, "summary": summary}
     finally:
         cur.close()
         conn.close()
+
+
+@router.get("/copa/tendencias")
+def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
+    """Alias para /liga/tendencias?league_id=1 — mantido por compatibilidade."""
+    return get_liga_tendencias(league_id=1, limit=15, current_user=current_user)
 
 
 @router.get("/results")
