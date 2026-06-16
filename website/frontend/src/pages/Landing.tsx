@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { Menu, X } from 'lucide-react'
 import axios from 'axios'
 import Footer from '../components/Footer'
 
@@ -248,6 +249,8 @@ function RecentResults() {
 
 // Landing
 export default function Landing() {
+  const [menuOpen, setMenuOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
   const [chatDemo, setChatDemo] = useState(0)
   useEffect(() => {
     const t = setInterval(() => setChatDemo(n => (n + 1) % 3), 3000)
@@ -263,7 +266,7 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
 
-      <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md">
+      <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md" ref={menuRef}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
@@ -276,12 +279,47 @@ export default function Landing() {
             <a href="#resultados" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Resultados</a>
             <a href="#como-funciona" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
             <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
-            <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2">Entrar</Link>
-            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors">
+            <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
+            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors hidden sm:block">
               Teste grátis 2 dias
             </Link>
+            {/* Mobile: CTA + hambúrguer */}
+            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors sm:hidden">
+              Grátis 2 dias
+            </Link>
+            <button
+              onClick={() => setMenuOpen(o => !o)}
+              className="sm:hidden p-2 text-zinc-400 hover:text-white transition-colors"
+              aria-label="Menu"
+            >
+              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            </button>
           </div>
         </div>
+
+        {/* Mobile dropdown */}
+        {menuOpen && (
+          <div className="sm:hidden border-t border-zinc-800 bg-black/98 px-4 py-3 space-y-1">
+            <a href="#resultados" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              Resultados
+            </a>
+            <a href="#como-funciona" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              Como funciona
+            </a>
+            <a href="#planos" onClick={() => setMenuOpen(false)}
+              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              Planos
+            </a>
+            <div className="border-t border-zinc-800 pt-2 mt-1">
+              <Link to="/login" onClick={() => setMenuOpen(false)}
+                className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+                Entrar na conta
+              </Link>
+            </div>
+          </div>
+        )}
       </nav>
 
       <section className="relative overflow-hidden">
