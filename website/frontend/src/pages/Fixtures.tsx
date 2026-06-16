@@ -8,6 +8,17 @@ import { EstatisticasContent } from './Estatisticas'
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
+function shiftDate(dateStr: string, days: number): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  const dt = new Date(y, m - 1, d + days)
+  return dt.toLocaleDateString('en-CA')
+}
+
+function formatDateLabel(dateStr: string): string {
+  const [y, m, d] = dateStr.split('-').map(Number)
+  return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+}
+
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
   NS:   { label: 'Agendado',    color: 'text-zinc-400' },
   '1H': { label: 'AO VIVO 1T', color: 'text-green-400' },
@@ -101,7 +112,7 @@ export default function Fixtures() {
     grouped.find(g => g.key === f.league_name)!.games.push(f)
   }
 
-  const todayLabel = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+  const dateLabel  = formatDateLabel(date)
   const liveCount  = fixtures.filter(f => isLive(f.status)).length
   const pickCount  = fixtures.filter(f => f.has_pick).length
 
@@ -116,12 +127,36 @@ export default function Fixtures() {
               <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
               <div>
                 <h1 className="text-base font-black text-white">Jogos</h1>
-                <p className="text-zinc-500 text-xs mt-0.5 capitalize">{todayLabel}</p>
+                <p className="text-zinc-500 text-xs mt-0.5 capitalize">{dateLabel}</p>
               </div>
             </div>
+
+            {/* Navegação de data — visível só na aba Jogos */}
+            {pageTab === 'jogos' && (
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => { const s = shiftDate(date, -1); setDate(s); fetchFixtures(s) }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors text-sm"
+                >←</button>
+                <input type="date" value={date}
+                  onChange={e => { setDate(e.target.value); fetchFixtures(e.target.value) }}
+                  className="input text-xs py-1.5 px-2 w-[130px]" />
+                <button
+                  onClick={() => { const s = shiftDate(date, 1); setDate(s); fetchFixtures(s) }}
+                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors text-sm"
+                >→</button>
+                {date !== TODAY && (
+                  <button
+                    onClick={() => { setDate(TODAY); fetchFixtures(TODAY) }}
+                    className="text-xs px-2.5 py-1.5 rounded-lg border border-green-500/50 text-green-500 hover:bg-green-500/10 transition-colors"
+                  >Hoje</button>
+                )}
+              </div>
+            )}
+
             <div className="flex items-center gap-3">
               {pageTab === 'jogos' && pickCount > 0 && (
-                <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
+                <div className="hidden sm:flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
                   <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
                     <path d="M9 12l-2-2-1.5 1.5L9 15l5.5-5.5L13 8l-4 4z" />
                     <circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
@@ -140,7 +175,7 @@ export default function Fixtures() {
           {/* Page tabs */}
           <div className="flex border-b border-zinc-800">
             {([
-              { key: 'jogos',      label: 'Jogos do Dia' },
+              { key: 'jogos',       label: 'Jogos' },
               { key: 'estatistica', label: 'Estatísticas' },
             ] as { key: PageTab; label: string }[]).map(t => (
               <button
@@ -178,28 +213,6 @@ export default function Fixtures() {
               Os picks são gerados automaticamente antes de cada rodada e aparecem com o badge <span className="text-green-400 font-semibold">Pick IA</span> no jogo correspondente.
             </p>
           </div>
-        </div>
-
-        {/* Navegação de data */}
-        <div className="flex items-center gap-3 mb-6">
-          <button
-            onClick={() => { const d = new Date(date); d.setDate(d.getDate() - 1); const s = d.toISOString().slice(0, 10); setDate(s); fetchFixtures(s) }}
-            className="btn-ghost text-sm px-3 py-2"
-          >←</button>
-          <input type="date" value={date}
-            onChange={e => { setDate(e.target.value); fetchFixtures(e.target.value) }}
-            className="input text-sm py-2 max-w-[160px]" />
-          <button
-            onClick={() => { const d = new Date(date); d.setDate(d.getDate() + 1); const s = d.toISOString().slice(0, 10); setDate(s); fetchFixtures(s) }}
-            className="btn-ghost text-sm px-3 py-2"
-          >→</button>
-          <button
-            onClick={() => { setDate(TODAY); fetchFixtures(TODAY) }}
-            className={`text-xs px-3 py-2 rounded-lg border transition-colors ${date === TODAY ? 'border-green-500 text-green-500' : 'border-zinc-700 text-zinc-500 hover:border-zinc-500'}`}
-          >
-            Hoje
-          </button>
-          <span className="text-zinc-600 text-xs ml-auto">{fixtures.length} jogos</span>
         </div>
 
         {loading ? (
