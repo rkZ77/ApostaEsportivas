@@ -161,21 +161,18 @@ def create_table():
             bankroll_before NUMERIC,
             result          TEXT,
             profit          NUMERIC,
-            bankroll_after  NUMERIC,
             checked_at      TIMESTAMP,
             created_at      TIMESTAMP DEFAULT NOW()
         )
     """)
-    # Garante colunas adicionadas após criação inicial da tabela
+    # Garante colunas opcionais que podem não existir em instalações antigas
     for col_def in [
-        "bankroll_after  NUMERIC",
-        "bankroll_before NUMERIC",
+        "bankroll_before  NUMERIC",
         "potential_return NUMERIC",
-        "checked_at      TIMESTAMP",
-        "prob_real_1     NUMERIC",
-        "prob_real_2     NUMERIC",
+        "checked_at       TIMESTAMP",
+        "prob_real_1      NUMERIC",
+        "prob_real_2      NUMERIC",
     ]:
-        col_name = col_def.split()[0]
         try:
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS {col_def}")
         except Exception:
@@ -192,7 +189,7 @@ def get_current_bankroll() -> float:
     conn = get_connection()
     cur  = conn.cursor()
     cur.execute("""
-        SELECT bankroll_after, result
+        SELECT bankroll_before, odd_combined, result
         FROM picks_alavancagem
         WHERE match_date < CURRENT_DATE
         ORDER BY match_date DESC
@@ -205,26 +202,20 @@ def get_current_bankroll() -> float:
     if not row:
         return BANKROLL_INIT
 
-    bankroll_after, result = row[0], row[1]
+    bankroll_before, odd_combined, result = row[0], row[1], row[2]
 
-    # Se o ultimo resultado foi RED (perdeu), reinicia a serie
     if result == "RED":
         print(f"[ALAVANCAGEM] Serie reiniciada apos RED. Voltando para R${BANKROLL_INIT:.2f}")
         return BANKROLL_INIT
 
-    # Se ainda nao tem resultado (pendente), usa o bankroll_before + ganho potencial (nao reinveste ate confirmar)
-    if result is None and bankroll_after is None:
-        cur2 = get_connection().cursor()
-        cur2.execute("""
-            SELECT bankroll_before FROM picks_alavancagem
-            WHERE match_date < CURRENT_DATE
-            ORDER BY match_date DESC LIMIT 1
-        """)
-        r = cur2.fetchone()
-        cur2.close()
-        return float(r[0]) if r else BANKROLL_INIT
+    if result is None:
+        # Pick ainda pendente — não reinveste até confirmar
+        return float(bankroll_before) if bankroll_before else BANKROLL_INIT
 
-    return float(bankroll_after) if bankroll_after else BANKROLL_INIT
+    # GREEN: reinveste (bankroll_before × odd_combined)
+    bk  = float(bankroll_before or BANKROLL_INIT)
+    odd = float(odd_combined or 1)
+    return round(bk * odd, 2)
 
 
 # ============================================================

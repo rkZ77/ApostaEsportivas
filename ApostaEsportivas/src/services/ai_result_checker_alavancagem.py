@@ -93,30 +93,28 @@ class AIResultCheckerAlavancagem:
             else:
                 final_result = r1
 
-            # --- Profit e bankroll (monetário, baseado em bankroll_before) ---
+            # --- Profit (monetário, baseado em bankroll_before) ---
             if final_result == "GREEN":
-                profit         = effective_stake * (odd_combined - Decimal("1"))
-                bankroll_after = effective_stake + profit
+                profit = effective_stake * (odd_combined - Decimal("1"))
             else:
-                profit         = -effective_stake
-                bankroll_after = Decimal("0")  # série zerada
+                profit = -effective_stake
 
+            bankroll_after_display = (effective_stake + profit) if final_result == "GREEN" else Decimal("0")
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
                 f"P1={r1} P2={r2} → {final_result} | "
                 f"Bankroll antes: R${float(effective_stake):.2f} | "
                 f"Profit: R${float(profit):.2f} | "
-                f"Bankroll após: R${float(bankroll_after):.2f}"
+                f"Bankroll após: R${float(bankroll_after_display):.2f}"
             )
 
             cur.execute("""
                 UPDATE picks_alavancagem
-                SET result         = %s,
-                    profit         = %s,
-                    bankroll_after = %s,
-                    checked_at     = NOW()
+                SET result     = %s,
+                    profit     = %s,
+                    checked_at = NOW()
                 WHERE id = %s
-            """, (final_result, profit, bankroll_after, pk_id))
+            """, (final_result, profit, pk_id))
 
             processed += 1
 
