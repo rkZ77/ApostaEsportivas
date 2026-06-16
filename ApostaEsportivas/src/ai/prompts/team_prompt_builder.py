@@ -24,12 +24,12 @@ class TeamPromptBuilder:
     ) -> str:
         """
         Constrói prompt personalizado para Copa do Mundo.
-        
+
         Injeta contexto das seleções no prompt base antes da seção "DADOS DO JOGO".
         """
         # Formata seção das seleções
         teams_section = self._format_teams_section(home_profile, away_profile)
-        
+
         # Formata confrontos diretos
         h2h_section = self._format_head_to_head(
             home_profile["team_id"],
@@ -37,18 +37,22 @@ class TeamPromptBuilder:
             home_profile["team_name"],
             away_profile["team_name"]
         )
-        
+
+        # Tendências gerais da Copa (últimos 15 jogos)
+        tendencias_section = self._format_league_tendencias(league_id=1, limit=15)
+
         # Injeta no prompt base antes de "DADOS DO JOGO"
+        context = f"{teams_section}\n\n{h2h_section}\n\n{tendencias_section}"
         if "DADOS DO JOGO" in base_prompt:
             return base_prompt.replace(
                 "DADOS DO JOGO",
-                f"{teams_section}\n\n{h2h_section}\n\n{'='*68}\nDADOS DO JOGO"
+                f"{context}\n\n{'='*68}\nDADOS DO JOGO"
             )
         else:
             # Fallback: adiciona no final antes das regras
             return base_prompt.replace(
                 "─────────────────────────────────────────────────",
-                f"{teams_section}\n\n{h2h_section}\n\n{'─'*68}\n"
+                f"{context}\n\n{'─'*68}\n"
             )
     
     # ========================================================================
@@ -389,6 +393,88 @@ ESTATÍSTICAS DO CONFRONTO:
   Cartões amarelos: {avg_yellows}/jogo (média)
   Padrão: {"Jogos equilibrados e táticos" if avg_goals < 2.5 else "Jogos abertos com gols"}"""
     
+    def _fetch_league_tendencias(self, league_id: int, limit: int = 15) -> list:
+        """Busca últimos N jogos da liga no banco com estatísticas."""
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT ms.match_date,
+                       ms.home_goals, ms.away_goals, ms.total_goals,
+                       ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
+                       COALESCE(f.home_team, '') AS home_team,
+                       COALESCE(f.away_team, '') AS away_team
+                FROM match_statistics ms
+                LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
+                WHERE ms.league_id = %s
+                  AND ms.status IN ('FT', 'AET', 'PEN')
+                ORDER BY ms.match_date DESC
+                LIMIT %s
+            """, (league_id, limit))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [
+                {
+                    "match_date":        r[0],
+                    "home_goals":        r[1] or 0,
+                    "away_goals":        r[2] or 0,
+                    "total_goals":       r[3] or 0,
+                    "total_corners":     r[4] or 0,
+                    "total_yellows":     r[5] or 0,
+                    "total_reds":        r[6] or 0,
+                    "home_team":         r[7],
+                    "away_team":         r[8],
+                }
+                for r in rows
+            ]
+        except Exception as e:
+            print(f"[PROMPT_BUILDER] Erro ao buscar tendências da liga {league_id}: {e}")
+            return []
+
+    def _format_league_tendencias(self, league_id: int, limit: int = 15) -> str:
+        """Formata bloco de tendências gerais da liga para o prompt."""
+        games = self._fetch_league_tendencias(league_id, limit)
+        if not games:
+            return ""
+
+        n = len(games)
+        avg_goals   = round(sum(g["total_goals"]   for g in games) / n, 2)
+        avg_corners = round(sum(g["total_corners"] for g in games) / n, 2)
+        avg_yellows = round(sum(g["total_yellows"] for g in games) / n, 2)
+        avg_reds    = round(sum(g["total_reds"]    for g in games) / n, 2)
+        btts        = sum(1 for g in games if g["home_goals"] > 0 and g["away_goals"] > 0)
+        btts_pct    = int(btts / n * 100)
+        over25      = sum(1 for g in games if g["total_goals"] >= 3)
+        over25_pct  = int(over25 / n * 100)
+
+        goals_label   = "ALTO"   if avg_goals   >= 2.5 else "MÉDIO" if avg_goals   >= 1.5 else "BAIXO"
+        corners_label = "ALTO"   if avg_corners >= 10  else "MÉDIO" if avg_corners >= 7   else "BAIXO"
+        yellows_label = "ALTO"   if avg_yellows >= 3.5 else "MÉDIO" if avg_yellows >= 2   else "BAIXO"
+
+        games_lines = []
+        for g in games[:10]:
+            dt = g["match_date"].strftime("%d/%m") if g["match_date"] else "N/A"
+            home = g["home_team"] or "?"
+            away = g["away_team"] or "?"
+            games_lines.append(
+                f"  {dt}: {home} {g['home_goals']}-{g['away_goals']} {away}"
+                f" | Escan:{g['total_corners']} Amar:{g['total_yellows']}"
+                + (f" Verm:{g['total_reds']}" if g["total_reds"] > 0 else "")
+            )
+
+        return (
+            f"{'='*68}\n"
+            f"TENDÊNCIAS GERAIS DA COPA DO MUNDO (Últimos {n} jogos)\n"
+            f"{'='*68}\n"
+            f"  Gols/jogo:           {avg_goals}  → {goals_label}  | BTTS: {btts_pct}%  | Over 2.5: {over25_pct}%\n"
+            f"  Escanteios/jogo:     {avg_corners} → {corners_label}\n"
+            f"  Amarelos/jogo:       {avg_yellows} → {yellows_label}\n"
+            f"  Vermelhos/jogo:      {avg_reds}\n"
+            f"\nÚLTIMOS JOGOS:\n"
+            + "\n".join(games_lines)
+        )
+
     def _fetch_head_to_head(self, team1_id: int, team2_id: int, limit: int = 5) -> list:
         """Busca confrontos diretos no banco"""
         try:
