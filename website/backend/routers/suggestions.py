@@ -1409,10 +1409,10 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
 @router.get("/liga/tendencias")
 def get_liga_tendencias(
     league_id: int = Query(1, ge=1),
-    limit: int = Query(15, ge=5, le=50),
-    current_user: dict = Depends(get_current_user),
+    limit: int = Query(500, ge=5, le=500),
+    current_user: dict = Depends(require_vip),
 ):
-    """Últimos N jogos de uma liga com tendências (gols, cartões, escanteios)."""
+    """Últimos N jogos de uma liga com tendências (gols, cartões, escanteios, faltas). VIP only."""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1421,6 +1421,7 @@ def get_liga_tendencias(
                    ms.home_goals, ms.away_goals, ms.total_goals,
                    ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
                    ms.home_shots_on, ms.away_shots_on,
+                   ms.home_fouls, ms.away_fouls,
                    ms.home_team_id, ms.away_team_id,
                    COALESCE(f.home_team, ht.name) AS home_team,
                    COALESCE(f.away_team, t_away.name) AS away_team
@@ -1433,24 +1434,116 @@ def get_liga_tendencias(
             ORDER BY ms.match_date DESC
             LIMIT %s
         """, (league_id, limit))
-        games = [dict(r) for r in rows]
+
+        games = []
+        for r in rows:
+            g = dict(r)
+            g["total_fouls"]    = (g.get("home_fouls") or 0) + (g.get("away_fouls") or 0)
+            g["total_shots_on"] = (g.get("home_shots_on") or 0) + (g.get("away_shots_on") or 0)
+            games.append(g)
 
         if not games:
             return {"games": [], "summary": None}
 
         n = len(games)
-        btts  = sum(1 for g in games if (g["home_goals"] or 0) > 0 and (g["away_goals"] or 0) > 0)
+        btts   = sum(1 for g in games if (g["home_goals"] or 0) > 0 and (g["away_goals"] or 0) > 0)
         over25 = sum(1 for g in games if (g["total_goals"] or 0) >= 3)
         summary = {
-            "total_games":       n,
-            "avg_goals":         round(sum(float(g["total_goals"] or 0) for g in games) / n, 2),
-            "avg_corners":       round(sum(float(g["total_corners"] or 0) for g in games) / n, 2),
-            "avg_yellow_cards":  round(sum(float(g["total_yellow_cards"] or 0) for g in games) / n, 2),
-            "avg_red_cards":     round(sum(float(g["total_red_cards"] or 0) for g in games) / n, 2),
-            "btts_pct":          round(btts / n * 100, 1),
-            "over25_pct":        round(over25 / n * 100, 1),
+            "total_games":      n,
+            "avg_goals":        round(sum(float(g["total_goals"] or 0)        for g in games) / n, 2),
+            "avg_corners":      round(sum(float(g["total_corners"] or 0)      for g in games) / n, 2),
+            "avg_yellow_cards": round(sum(float(g["total_yellow_cards"] or 0) for g in games) / n, 2),
+            "avg_red_cards":    round(sum(float(g["total_red_cards"] or 0)    for g in games) / n, 2),
+            "avg_fouls":        round(sum(float(g["total_fouls"])             for g in games) / n, 2),
+            "avg_shots_on":     round(sum(float(g["total_shots_on"])          for g in games) / n, 2),
+            "btts_pct":         round(btts  / n * 100, 1),
+            "over25_pct":       round(over25 / n * 100, 1),
         }
         return {"games": games, "summary": summary}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/liga/ranking")
+def get_liga_ranking(
+    league_id: int = Query(1, ge=1),
+    context: str = Query("all"),
+    current_user: dict = Depends(require_vip),
+):
+    """Rankings por time numa liga: gols, escanteios, cartões, faltas, finalizações. VIP only."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        _HOME = """
+            SELECT ms.home_team_id AS team_id,
+                   COALESCE(t.name, f.home_team) AS team_name,
+                   ms.home_goals          AS goals,
+                   ms.home_corners        AS corners,
+                   ms.home_yellow_cards   AS yellow_cards,
+                   ms.home_red_cards      AS red_cards,
+                   ms.home_fouls          AS fouls,
+                   ms.home_shots_on       AS shots_on
+            FROM match_statistics ms
+            LEFT JOIN teams t ON t.team_id = ms.home_team_id
+            LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
+            WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
+        """
+        _AWAY = """
+            SELECT ms.away_team_id AS team_id,
+                   COALESCE(t.name, f.away_team) AS team_name,
+                   ms.away_goals          AS goals,
+                   ms.away_corners        AS corners,
+                   ms.away_yellow_cards   AS yellow_cards,
+                   ms.away_red_cards      AS red_cards,
+                   ms.away_fouls          AS fouls,
+                   ms.away_shots_on       AS shots_on
+            FROM match_statistics ms
+            LEFT JOIN teams t ON t.team_id = ms.away_team_id
+            LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
+            WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
+        """
+        if context == "home":
+            raw = _safe_query(cur, _HOME, (league_id,))
+        elif context == "away":
+            raw = _safe_query(cur, _AWAY, (league_id,))
+        else:
+            raw = _safe_query(cur, f"{_HOME} UNION ALL {_AWAY}", (league_id, league_id))
+
+        from collections import defaultdict
+        acc: dict = defaultdict(lambda: {
+            "team_id": None, "team_name": "", "games": 0,
+            "goals": 0.0, "corners": 0.0, "yellow_cards": 0.0,
+            "red_cards": 0.0, "fouls": 0.0, "shots_on": 0.0,
+        })
+        for row in raw:
+            tid = row.get("team_id")
+            if tid is None:
+                continue
+            a = acc[tid]
+            a["team_id"]   = tid
+            a["team_name"] = row.get("team_name") or a["team_name"]
+            a["games"]    += 1
+            for col in ("goals", "corners", "yellow_cards", "red_cards", "fouls", "shots_on"):
+                a[col] += float(row.get(col) or 0)
+
+        result = []
+        for a in acc.values():
+            n = a["games"]
+            if n == 0:
+                continue
+            result.append({
+                "team_id":      a["team_id"],
+                "team_name":    a["team_name"],
+                "games":        n,
+                "avg_goals":    round(a["goals"]        / n, 2),
+                "avg_corners":  round(a["corners"]      / n, 2),
+                "avg_yellows":  round(a["yellow_cards"] / n, 2),
+                "avg_reds":     round(a["red_cards"]    / n, 2),
+                "avg_fouls":    round(a["fouls"]        / n, 2),
+                "avg_shots_on": round(a["shots_on"]     / n, 2),
+            })
+        return result
     finally:
         cur.close()
         conn.close()
@@ -1459,7 +1552,7 @@ def get_liga_tendencias(
 @router.get("/copa/tendencias")
 def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
     """Alias para /liga/tendencias?league_id=1 — mantido por compatibilidade."""
-    return get_liga_tendencias(league_id=1, limit=15, current_user=current_user)
+    return get_liga_tendencias(league_id=1, limit=500, current_user=current_user)
 
 
 @router.get("/results")
