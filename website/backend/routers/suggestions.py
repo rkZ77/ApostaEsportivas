@@ -132,8 +132,7 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
                        pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                        pa.confidence_2, pa.reasoning_2,
                        pa.odd_combined, pa.confidence_media,
-                       pa.stake, pa.potential_return, pa.bankroll_before,
-                       pa.result, pa.profit, pa.bankroll_after, pa.created_at,
+                       pa.stake, pa.result, pa.profit, pa.created_at,
                        f1.home_team_id AS home_team_id_1, f1.away_team_id AS away_team_id_1,
                        f2.home_team_id AS home_team_id_2, f2.away_team_id AS away_team_id_2
                 FROM picks_alavancagem pa
@@ -458,9 +457,6 @@ def get_suggestion_detail(
                 "bet_house": d.get("bet_house_1"),
                 "confidence": d.get("confidence_media"),
                 "stake": d.get("stake"),
-                "potential_return": d.get("potential_return"),
-                "bankroll_before": d.get("bankroll_before"),
-                "bankroll_after": d.get("bankroll_after"),
                 "reasoning": d.get("reasoning_1") or "",
                 "result": d["result"],
                 "profit": d["profit"],
@@ -874,8 +870,7 @@ def get_recent_results(
                    pa.market_1 AS market, pa.line_1 AS line,
                    pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
                    pa.confidence AS confidence,
-                   pa.result, pa.profit,
-                   pa.bankroll_before
+                   pa.result, pa.profit
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result IS NOT NULL
@@ -1274,8 +1269,7 @@ def get_alavancagem(
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
-                   pa.stake, pa.potential_return, pa.bankroll_before,
-                   pa.result, pa.profit, pa.bankroll_after, pa.created_at,
+                   pa.stake, pa.result, pa.profit, pa.created_at,
                    COALESCE(
                        f1.home_team_id,
                        (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
@@ -1299,7 +1293,37 @@ def get_alavancagem(
             ORDER BY pa.match_date DESC
             LIMIT %s
         """, params)
-        return [dict(r) for r in rows]
+
+        # Busca bankroll inicial do usuário (default 50)
+        user_id = current_user["id"]
+        init_row = _safe_query_one(cur, "SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+        initial = float(init_row["alav_bankroll_init"]) if init_row and init_row["alav_bankroll_init"] else 50.0
+
+        # Calcula bankroll em ordem cronológica (ASC) e depois retorna em DESC
+        picks = [dict(r) for r in rows]
+        picks_asc = sorted(picks, key=lambda p: p["match_date"])
+        bankroll = initial
+        bankroll_map: dict[int, dict] = {}
+        for p in picks_asc:
+            odd = float(p["odd_combined"] or 1)
+            bk_before = round(bankroll, 2)
+            result = p.get("result")
+            if result == "GREEN":
+                bankroll = round(bankroll * odd, 2)
+            elif result == "RED":
+                bankroll = initial
+            # PUSH / HALF-WIN / HALF-LOSS: mantém bankroll (simplificado)
+            bk_after = round(bankroll, 2) if result else None
+            bankroll_map[p["id"]] = {
+                "bankroll_before":  bk_before,
+                "bankroll_after":   bk_after,
+                "potential_return": round(bk_before * odd, 2),
+            }
+
+        for p in picks:
+            p.update(bankroll_map.get(p["id"], {}))
+
+        return picks
     finally:
         cur.close()
         conn.close()
@@ -1318,8 +1342,7 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
-                   pa.stake, pa.potential_return, pa.bankroll_before,
-                   pa.result, pa.profit, pa.bankroll_after, pa.created_at,
+                   pa.stake, pa.result, pa.profit, pa.created_at,
                    COALESCE(
                        f1.home_team_id,
                        (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
@@ -1342,7 +1365,34 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
             WHERE pa.match_date = CURRENT_DATE
             LIMIT 1
         """)
-        return dict(row) if row else None
+        if not row:
+            return None
+
+        pick = dict(row)
+
+        # Calcula bankroll atual percorrendo histórico anterior
+        user_id = current_user["id"]
+        init_row = _safe_query_one(cur, "SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+        initial = float(init_row["alav_bankroll_init"]) if init_row and init_row["alav_bankroll_init"] else 50.0
+
+        history = _safe_query(cur, """
+            SELECT result, odd_combined FROM picks_alavancagem
+            WHERE match_date < CURRENT_DATE AND result IS NOT NULL
+            ORDER BY match_date ASC
+        """)
+        bankroll = initial
+        for h in history:
+            if h["result"] == "GREEN":
+                bankroll = round(bankroll * float(h["odd_combined"] or 1), 2)
+            elif h["result"] == "RED":
+                bankroll = initial
+
+        odd = float(pick["odd_combined"] or 1)
+        pick["bankroll_before"]  = round(bankroll, 2)
+        pick["potential_return"] = round(bankroll * odd, 2)
+        pick["bankroll_after"]   = None  # ainda não tem resultado
+
+        return pick
     finally:
         cur.close()
         conn.close()

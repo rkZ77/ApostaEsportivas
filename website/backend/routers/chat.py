@@ -157,35 +157,27 @@ def _get_site_context(user_id: int) -> str:
                 cur.execute("""
                     SELECT home_team_1, away_team_1, market_1, line_1, odd_1,
                            home_team_2, away_team_2, market_2, line_2, odd_2,
-                           odd_combined, tipo, result, bankroll_before, bankroll_after
+                           odd_combined, tipo, result
                     FROM picks_alavancagem WHERE match_date = CURRENT_DATE ORDER BY created_at DESC LIMIT 1
                 """)
                 alav_pick = cur.fetchone()
                 if alav_pick:
                     alav_pick = dict(alav_pick)
-                    bk = f" | Banca: R${alav_pick['bankroll_before']:.0f}" if alav_pick.get('bankroll_before') else ""
-                    if alav_pick.get('bankroll_after'):
-                        bk += f" → R${alav_pick['bankroll_after']:.0f}"
-                    lines.append(f"\nPick Alavancagem{bk} | {alav_pick.get('result') or 'pendente'}:")
+                    lines.append(f"\nPick Alavancagem | {alav_pick.get('result') or 'pendente'}:")
                     lines.append(f"  • {alav_pick['home_team_1']} x {alav_pick['away_team_1']}: {alav_pick['market_1']}{' '+alav_pick['line_1'] if alav_pick.get('line_1') else ''} @ {alav_pick['odd_1']}")
                     if alav_pick.get('home_team_2'):
                         lines.append(f"  • {alav_pick['home_team_2']} x {alav_pick['away_team_2']}: {alav_pick['market_2']}{' '+alav_pick['line_2'] if alav_pick.get('line_2') else ''} @ {alav_pick['odd_2']}")
 
                 # Histórico alavancagem (últimas 10)
                 cur.execute("""
-                    SELECT home_team_1, away_team_1, match_date, result, bankroll_before, bankroll_after
+                    SELECT home_team_1, away_team_1, match_date, result
                     FROM picks_alavancagem ORDER BY match_date DESC LIMIT 10
                 """)
                 alav_hist = [dict(r) for r in cur.fetchall()]
                 if alav_hist:
                     lines.append(f"\n--- HISTÓRICO ALAVANCAGEM (últimas {len(alav_hist)} entradas) ---")
                     for a in alav_hist:
-                        bk = ""
-                        if a.get('bankroll_before'):
-                            bk = f" | R${a['bankroll_before']:.0f}"
-                            if a.get('bankroll_after'):
-                                bk += f" → R${a['bankroll_after']:.0f}"
-                        lines.append(f"  {a.get('match_date','?')}: {a['home_team_1']} x {a['away_team_1']} — {a.get('result') or 'pendente'}{bk}")
+                        lines.append(f"  {a.get('match_date','?')}: {a['home_team_1']} x {a['away_team_1']} — {a.get('result') or 'pendente'}")
 
             else:
                 # Preview free (top 3 sem detalhes)
