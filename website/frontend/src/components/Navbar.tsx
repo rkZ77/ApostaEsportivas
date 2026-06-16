@@ -20,7 +20,8 @@ export default function Navbar() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { hasNew, markSeen } = useNotifications()
-  const [expiryDismissed, setExpiryDismissed] = useState(false)
+  const [expiryDismissed, setExpiryDismissed]       = useState(false)
+  const [emailBannerDismissed, setEmailBannerDismissed] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
 
   // Fecha sidebar ao navegar
@@ -127,6 +128,17 @@ export default function Navbar() {
             </button>
           </div>
         </div>
+
+        {/* E-mail não verificado */}
+        {!emailBannerDismissed && user?.email_verified === false && (
+          <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-center justify-between">
+            <span className="text-blue-300 text-xs font-semibold">
+              Confirme seu e-mail para garantir acesso à recuperação de senha.{' '}
+              <Link to="/verify-email" className="underline hover:text-blue-200">Verificar agora</Link>
+            </span>
+            <button onClick={() => setEmailBannerDismissed(true)} className="text-blue-600 hover:text-blue-400 text-xs ml-4">×</button>
+          </div>
+        )}
 
         {/* VIP expiry warning */}
         {showExpiryWarning && (
