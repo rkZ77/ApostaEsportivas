@@ -24,29 +24,33 @@ const PLANS: Plan[] = [
 
 function SuccessPage() {
   const navigate = useNavigate()
-  const { refreshUser, user } = useAuth()
+  const { refreshUser } = useAuth()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
     let attempts = 0
     const MAX = 15
+    let cancelled = false
 
     const poll = async () => {
+      if (cancelled) return
       try {
+        // Busca o plano direto da API para evitar stale closure
+        const { data } = await api.get('/auth/me')
         await refreshUser()
+        if (data.plan === 'vip' || data.plan === 'admin') {
+          setReady(true)
+          return
+        }
       } catch { /* ignora */ }
       attempts++
-      // Para quando plano virou vip/admin ou esgotou tentativas (30s)
-      if (user?.plan === 'vip' || user?.plan === 'admin' || attempts >= MAX) {
-        setReady(true)
-      } else {
-        setTimeout(poll, 2000)
-      }
+      if (attempts >= MAX) { setReady(true); return }
+      setTimeout(poll, 2000)
     }
 
     // Primeira tentativa após 2s (tempo mínimo para webhook chegar)
     const t = setTimeout(poll, 2000)
-    return () => clearTimeout(t)
+    return () => { cancelled = true; clearTimeout(t) }
   }, [])
 
   return (
@@ -86,15 +90,16 @@ function FailurePage() {
 
 function PendingPage() {
   const navigate = useNavigate()
-  const { refreshUser, user } = useAuth()
+  const { refreshUser } = useAuth()
   const [checking, setChecking] = useState(false)
   const [activated, setActivated] = useState(false)
 
   const checkPayment = async () => {
     setChecking(true)
     try {
+      const { data } = await api.get('/auth/me')
       await refreshUser()
-      if (user?.plan === 'vip' || user?.plan === 'admin') setActivated(true)
+      if (data.plan === 'vip' || data.plan === 'admin') setActivated(true)
     } catch { /* ignora */ } finally {
       setChecking(false)
     }
