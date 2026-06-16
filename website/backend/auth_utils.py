@@ -14,8 +14,8 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     warnings.warn("⚠️  JWT_SECRET não configurado! Use apenas em desenvolvimento.", stacklevel=1)
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 2
-REFRESH_TOKEN_EXPIRE_DAYS = 7   # expira 7 dias após o login; sem renovação automática
+ACCESS_TOKEN_EXPIRE_HOURS = 4
+REFRESH_TOKEN_EXPIRE_DAYS = 0   # não usado — sessão expira junto com o access token
 
 COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
@@ -42,7 +42,7 @@ def create_access_token(data: dict) -> str:
 
 def create_refresh_token(data: dict) -> str:
     payload = {"sub": data["sub"], "type": "refresh"}
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -64,7 +64,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="strict",
-        max_age=REFRESH_TOKEN_EXPIRE_DAYS * 86400,
+        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
         path="/api/auth/refresh",
     )
 
