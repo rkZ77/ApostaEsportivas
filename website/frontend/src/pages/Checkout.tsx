@@ -23,16 +23,29 @@ const PLANS: Plan[] = [
 ]
 
 function SuccessPage() {
-  const navigate  = useNavigate()
-  const { refreshUser } = useAuth()
+  const navigate = useNavigate()
+  const { refreshUser, user } = useAuth()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
-    // Aguarda 2s para o webhook do MercadoPago ser processado, depois atualiza o plano
-    const t = setTimeout(async () => {
-      try { await refreshUser() } catch { /* ignora — usuário verá na próxima sessão */ }
-      setReady(true)
-    }, 2000)
+    let attempts = 0
+    const MAX = 15
+
+    const poll = async () => {
+      try {
+        await refreshUser()
+      } catch { /* ignora */ }
+      attempts++
+      // Para quando plano virou vip/admin ou esgotou tentativas (30s)
+      if (user?.plan === 'vip' || user?.plan === 'admin' || attempts >= MAX) {
+        setReady(true)
+      } else {
+        setTimeout(poll, 2000)
+      }
+    }
+
+    // Primeira tentativa após 2s (tempo mínimo para webhook chegar)
+    const t = setTimeout(poll, 2000)
     return () => clearTimeout(t)
   }, [])
 
@@ -73,6 +86,20 @@ function FailurePage() {
 
 function PendingPage() {
   const navigate = useNavigate()
+  const { refreshUser, user } = useAuth()
+  const [checking, setChecking] = useState(false)
+  const [activated, setActivated] = useState(false)
+
+  const checkPayment = async () => {
+    setChecking(true)
+    try {
+      await refreshUser()
+      if (user?.plan === 'vip' || user?.plan === 'admin') setActivated(true)
+    } catch { /* ignora */ } finally {
+      setChecking(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
@@ -81,9 +108,20 @@ function PendingPage() {
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
         <p className="text-zinc-400">Seu pagamento está sendo processado. Você receberá uma confirmação em breve.</p>
-        <button onClick={() => navigate('/picks')} className="btn-ghost px-8 py-3">
-          Voltar aos Picks
-        </button>
+        {activated
+          ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
+          : (
+            <div className="flex flex-col gap-2">
+              <button onClick={checkPayment} disabled={checking}
+                className="btn-primary px-8 py-3 disabled:opacity-60">
+                {checking ? 'Verificando…' : 'Verificar pagamento'}
+              </button>
+              <button onClick={() => navigate('/picks')} className="btn-ghost px-8 py-3">
+                Voltar aos Picks
+              </button>
+            </div>
+          )
+        }
       </div>
     </div>
   )
