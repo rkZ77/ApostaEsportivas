@@ -60,7 +60,7 @@ class TeamPromptBuilder:
     # ========================================================================
     def get_world_cup_context(self, home_profile: dict, away_profile: dict) -> str:
         """
-        Retorna o bloco completo de contexto Copa (perfis + H2H) pronto para injeção
+        Retorna o bloco completo de contexto Copa (perfis + H2H + tendências) pronto para injeção
         em qualquer pipeline que receba jogos da Copa do Mundo.
         """
         teams_section = self._format_teams_section(home_profile, away_profile)
@@ -70,13 +70,15 @@ class TeamPromptBuilder:
             home_profile["team_name"],
             away_profile["team_name"],
         )
-        return f"{teams_section}\n\n{h2h_section}"
+        tendencias = self._format_league_tendencias(league_id=1, limit=15)
+        base = f"{teams_section}\n\n{h2h_section}"
+        return f"{base}\n\n{tendencias}" if tendencias else base
 
     def get_compact_wc_context(self, home_profile: dict, away_profile: dict) -> str:
         """
         Versão compacta (~50% menos tokens) para pipelines que não precisam
-        de detalhes táticos (alavancagem, dica_do_dia).
-        Mantém forma, gols, disciplina, cantos e Copa stats.
+        de detalhes táticos (alavancagem, dica_do_dia, multiplas).
+        Mantém forma, gols, disciplina, cantos, Copa stats e tendências da liga.
         """
         home_text = self._format_compact_team(home_profile)
         away_text = self._format_compact_team(away_profile)
@@ -86,7 +88,8 @@ class TeamPromptBuilder:
             home_profile["team_name"],
             away_profile["team_name"],
         )
-        return (
+        tendencias = self._format_league_tendencias(league_id=1, limit=15)
+        base = (
             f"PERFIS Copa do Mundo\n"
             f"{'─'*60}\n"
             f"{home_text}\n"
@@ -95,6 +98,7 @@ class TeamPromptBuilder:
             f"{'─'*60}\n"
             f"{h2h_section}"
         )
+        return f"{base}\n\n{tendencias}" if tendencias else base
 
     def _format_compact_team(self, profile: dict) -> str:
         name = profile["team_name"].upper()
