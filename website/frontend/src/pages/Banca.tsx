@@ -8,13 +8,13 @@ import ProfitChart from '../components/ProfitChart'
 import RecentResultsSection from '../components/RecentResultsSection'
 import SuggestionDetail from '../components/SuggestionDetail'
 
-// ── formatação ────────────────────────────────────────────────────────────────
+// formatação
 const fmtBRL = (v: number) =>
   'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtSigned = (v: number) =>
   (v >= 0 ? '+' : '−') + fmtBRL(v)
 
-// ── constantes visuais ────────────────────────────────────────────────────────
+// constantes visuais
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
   RED:         'bg-red-500/10 text-red-400 border border-red-500/30',
@@ -35,7 +35,7 @@ const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
 }
 
-// ── lock overlay para free ────────────────────────────────────────────────────
+// lock overlay para free
 function VipLock() {
   return (
     <div className="relative rounded-2xl overflow-hidden min-h-[480px]">
@@ -91,7 +91,7 @@ function VipLock() {
   )
 }
 
-// ── modal de setup ────────────────────────────────────────────────────────────
+// modal de setup
 function SetupModal({ current, onSave, onClose }: {
   current: { start: number; goal: number | null; unitValue: number }
   onSave: (start: number, goal: number | null, unitValue: number) => void
@@ -184,7 +184,7 @@ function SetupModal({ current, onSave, onClose }: {
   )
 }
 
-// ── componente principal ──────────────────────────────────────────────────────
+// componente principal
 const PERIODS = [
   { key: 0,  label: 'Tudo' },
   { key: 7,  label: '7 dias' },
@@ -238,13 +238,13 @@ export default function Banca() {
       : p.bankroll - arr[i - 1].bankroll,
   }))
 
-  // ── meta progress ──────────────────────────────────────────────────────────
+  // meta progress
   const goal    = data?.bankroll_goal ?? null
   const current = data?.bankroll_current ?? data?.bankroll_start ?? 0
   const start   = data?.bankroll_start ?? 100
   const goalPct = goal ? Math.min(100, Math.round(((current - start) / (goal - start)) * 100)) : 0
 
-  // ── distribuição ──────────────────────────────────────────────────────────
+  // distribuição
   const distTotal = (data?.greens ?? 0) + (data?.reds ?? 0) + (data?.push ?? 0) + (data?.half_wins ?? 0) + (data?.half_loss ?? 0)
   const distItems = [
     { label: 'GREEN',   value: data?.greens    ?? 0, color: 'bg-green-500',  text: 'text-green-400'  },

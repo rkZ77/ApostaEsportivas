@@ -4,7 +4,7 @@ import {
   ChevronRight, CheckCircle, Info, Lock, Layers, Target, Users,
 } from 'lucide-react'
 
-// ─── Bloco de passo numerado ───────────────────────────────────────────────────
+// Bloco de passo numerado
 function Step({ n, title, children }: { n: number; title: string; children: React.ReactNode }) {
   return (
     <div className="flex gap-4">
@@ -19,7 +19,7 @@ function Step({ n, title, children }: { n: number; title: string; children: Reac
   )
 }
 
-// ─── Card de tipo de pick ──────────────────────────────────────────────────────
+// Card de tipo de pick
 function PickTypeCard({ icon: Icon, title, badge, badgeCls, description, detail, free }: {
   icon: React.ElementType; title: string; badge: string; badgeCls: string
   description: string; detail: string; free?: boolean
@@ -44,7 +44,7 @@ function PickTypeCard({ icon: Icon, title, badge, badgeCls, description, detail,
   )
 }
 
-// ─── Card de glossário ─────────────────────────────────────────────────────────
+// Card de glossário
 function GlossCard({ term, def }: { term: string; def: string }) {
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
@@ -54,7 +54,7 @@ function GlossCard({ term, def }: { term: string; def: string }) {
   )
 }
 
-// ─── Principal ─────────────────────────────────────────────────────────────────
+// Principal
 export default function HowItWorks() {
   return (
     <div className="space-y-8 pb-8">

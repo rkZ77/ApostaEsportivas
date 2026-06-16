@@ -143,7 +143,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
         className="w-full sm:max-w-lg bg-zinc-950 sm:border-l border-zinc-800 flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
-        {/* ── HEADER ─────────────────────────────────────────────── */}
         <div className="shrink-0 border-b border-zinc-800">
           {/* Times */}
           <div className="px-5 pt-4 pb-3">
@@ -228,7 +227,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
           )}
         </div>
 
-        {/* ── TABS ───────────────────────────────────────────────── */}
         <div className="flex border-b border-zinc-800 shrink-0">
           {tabs.map(({ key, label, Icon }) => (
             <button
@@ -244,7 +242,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
           ))}
         </div>
 
-        {/* ── BODY ───────────────────────────────────────────────── */}
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center justify-center h-40">
@@ -254,7 +251,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
             <p className="text-zinc-500 text-center py-10">Erro ao carregar dados.</p>
           ) : (
             <>
-              {/* ── ABA PICK ─────────────────────────────────────────── */}
               {tab === 'ia' && (
                 <div className="space-y-4">
                   {/* Métricas principais */}
@@ -352,7 +348,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA STATS ────────────────────────────────────────── */}
               {tab === 'stats' && (
                 <div className="space-y-6">
                   {(['HOME', 'AWAY'] as const).map(ctx => {
@@ -397,7 +392,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA FORMA ────────────────────────────────────────── */}
               {tab === 'form' && (
                 <div className="space-y-5">
                   {[
@@ -447,7 +441,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA CLASSIFICAÇÃO ────────────────────────────────── */}
               {tab === 'standings' && (
                 <div>
                   {standingsLoading ? (
@@ -514,7 +507,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA CAMINHO (alavancagem) ────────────────────────── */}
               {tab === 'caminho' && (
                 <div>
                   {caminhoLoading ? (
@@ -640,7 +632,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                 </div>
               )}
 
-              {/* ── ABA CHAT ─────────────────────────────────────────── */}
               {tab === 'social' && (
                 <PickSocial pickId={id} pickType={pickType} />
               )}

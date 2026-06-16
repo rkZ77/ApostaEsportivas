@@ -49,7 +49,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   // IDs dos picks ao vivo já notificados nesta sessão
   const seenLiveIds = useRef<Set<string>>(new Set())
 
-  // ── Picks novos ──────────────────────────────────────────────────────────────
+  // Picks novos
   const checkNew = () => {
     const lastSeen = parseInt(localStorage.getItem(LS_KEY) ?? '0', 10)
     api.get('/suggestions/latest-pick')
@@ -61,7 +61,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       .catch(() => {})
   }
 
-  // ── Picks ao vivo ─────────────────────────────────────────────────────────────
+  // Picks ao vivo
   const checkLive = () => {
     api.get('/live/my-picks')
       .then(r => {

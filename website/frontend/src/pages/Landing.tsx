@@ -20,7 +20,7 @@ function LeagueIcon({ className }: { className?: string }) {
   )
 }
 
-// ── Ícones ───────────────────────────────────────────────────────────────────
+// Ícones
 function Check() {
   return (
     <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
@@ -36,7 +36,7 @@ function X() {
   )
 }
 
-// ── Tipos ─────────────────────────────────────────────────────────────────────
+// Tipos
 interface RecentTip {
   match_date: string
   home_team_name: string
@@ -56,7 +56,7 @@ interface PublicData {
   counts?: { vip_total: number; free_total: number; multipla_total: number; alavancagem_total: number }
 }
 
-// ── Helpers ───────────────────────────────────────────────────────────────────
+// Helpers
 const RESULT_CLS: Record<string, string> = {
   GREEN:      'bg-green-500/10 text-green-400 border-green-500/30',
   RED:        'bg-red-500/10 text-red-400 border-red-500/30',
@@ -75,7 +75,7 @@ const SRC_CLS: Record<string, string> = {
 }
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
-// ── Ligas ativas (do banco) ───────────────────────────────────────────────────
+// Ligas ativas (do banco)
 interface League { league_id: number; name: string; season: number; logo_url: string }
 
 function ActiveLeagues() {
@@ -135,7 +135,7 @@ function TeamLogo({ id, name }: { id?: number | null; name: string }) {
   )
 }
 
-// ── Últimos 6 resultados ─────────────────────────────────────────────────────
+// Últimos 6 resultados
 function RecentResults() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -246,7 +246,7 @@ function RecentResults() {
   )
 }
 
-// ── Landing ───────────────────────────────────────────────────────────────────
+// Landing
 export default function Landing() {
   const [chatDemo, setChatDemo] = useState(0)
   useEffect(() => {
@@ -263,7 +263,6 @@ export default function Landing() {
   return (
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
 
-      {/* ── NAVBAR ──────────────────────────────────────────────────────────── */}
       <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -285,7 +284,6 @@ export default function Landing() {
         </div>
       </nav>
 
-      {/* ── HERO ────────────────────────────────────────────────────────────── */}
       <section className="relative overflow-hidden">
         {/* Troféu no fundo */}
         <img src="/trofeu.png" alt="" aria-hidden="true"
@@ -396,13 +394,10 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── LIGAS MONITORADAS — dinâmico do banco ──────────────────────────── */}
       <ActiveLeagues />
 
-      {/* ── RESULTADOS ─────────────────────────────────────────────────────── */}
       <RecentResults />
 
-      {/* ── AGENTE IA ──────────────────────────────────────────────────────── */}
       <section id="como-funciona" className="py-24">
         <div className="max-w-5xl mx-auto px-4">
           <div className="grid md:grid-cols-2 gap-16 items-center">
@@ -477,7 +472,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── COMO FUNCIONA ──────────────────────────────────────────────────── */}
       <section className="py-20 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-5xl mx-auto px-4">
           <div className="text-center mb-12">
@@ -528,7 +522,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── PLANOS ─────────────────────────────────────────────────────────── */}
       <section id="planos" className="py-24">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-12">
@@ -629,7 +622,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── COPA ROADMAP ────────────────────────────────────────────────────── */}
       <section className="py-20 bg-zinc-950 border-t border-zinc-800/60">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-12">
@@ -670,7 +662,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── FAQ ────────────────────────────────────────────────────────────── */}
       <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-12">
@@ -722,7 +713,6 @@ export default function Landing() {
         </div>
       </section>
 
-      {/* ── CTA FINAL ──────────────────────────────────────────────────────── */}
       <section className="py-24 border-t border-zinc-800/60 relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-yellow-400/5" />
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />

@@ -196,7 +196,6 @@ export default function Login() {
 
           <form onSubmit={submit} className="space-y-4">
 
-            {/* ── LOGIN ─────────────────────────────────────────────────────── */}
             {mode === 'login' && (
               <>
                 <div>
@@ -241,7 +240,6 @@ export default function Login() {
               </>
             )}
 
-            {/* ── REGISTER ──────────────────────────────────────────────────── */}
             {mode === 'register' && (
               <>
                 <div>

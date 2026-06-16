@@ -113,7 +113,6 @@ export default function Planos() {
 
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
 
-        {/* ── TRIAL ATIVADO ─────────────────────────────────────────────────── */}
         {activated && (
           <div className="bg-green-500/10 border border-green-500/40 rounded-2xl p-6 text-center">
             <div className="w-14 h-14 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
@@ -130,7 +129,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── STATUS PLANO ATUAL ────────────────────────────────────────────── */}
         {user && !activated && (isVip || isTrial) && (
           <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-2xl p-6 overflow-hidden`}>
             <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
@@ -217,7 +215,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── PLANO FREE ────────────────────────────────────────────────────── */}
         {user && !activated && !isVip && !isAdmin && !isTrial && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
             <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
@@ -233,7 +230,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── ADMIN ─────────────────────────────────────────────────────────── */}
         {isAdmin && (
           <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
             <p className="text-purple-400 font-black text-sm">Conta Admin — acesso irrestrito e permanente.</p>
@@ -241,7 +237,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── TRIAL — só para free elegível ─────────────────────────────────── */}
         {isEligibleForTrial && !activated && (
           <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
@@ -280,7 +275,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── UPGRADE INTELIGENTE (só mensal) ───────────────────────────────── */}
         {upgradeOptions.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
             <p className="text-xs text-zinc-500 font-black uppercase tracking-wider mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
@@ -301,7 +295,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── PROGRAMA DE INDICAÇÕES ────────────────────────────────────────── */}
         {referral && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
             <div>
@@ -386,7 +379,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── HISTÓRICO DE PAGAMENTOS ───────────────────────────────────────── */}
         {payments.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
             <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4">Histórico de pagamentos</h3>
@@ -426,7 +418,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── CANCELAMENTO / REEMBOLSO ─────────────────────────────────────── */}
         {(isVip || isTrial) && !isAdmin && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
             <div className="flex-1">
@@ -446,7 +437,6 @@ export default function Planos() {
           </div>
         )}
 
-        {/* ── SUPORTE ──────────────────────────────────────────────────────── */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#25D366]/10 border border-[#25D366]/20 rounded-full flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#25D366]">
@@ -468,7 +458,6 @@ export default function Planos() {
           </a>
         </div>
 
-        {/* ── CTA UPGRADE (free sem trial usado) ───────────────────────────── */}
         {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
           <div className="bg-zinc-900 border border-yellow-400/20 rounded-2xl p-6 flex items-center justify-between gap-4">
             <div>

@@ -73,7 +73,7 @@ export default function Results() {
   const [monthly,    setMonthly]    = useState<any[]>([])
   const [monthLoad,  setMonthLoad]  = useState(false)
 
-  // ── fetchers ────────────────────────────────────────────────────────────────
+  // fetchers
   const fetchSummary = useCallback((p: Period, src: Source, from?: string, to?: string) => {
     setLoading(true)
     api.get('/suggestions/results', { params: { ...buildParams(p, from, to), source: src } })
@@ -125,7 +125,7 @@ export default function Results() {
     if (view === 'por_jogo') fetchGames('custom', 0, gamesFilter, source, customFrom, customTo)
   }
 
-  // ── métricas ─────────────────────────────────────────────────────────────────
+  // métricas
   const total   = stats?.total ?? 0
   const greens  = stats?.greens ?? 0
   const profit  = Number(stats?.profit_total ?? 0)
@@ -133,7 +133,7 @@ export default function Results() {
   const winRate = total > 0 ? Math.round((greens / total) * 100) : 0
   const roi     = stake > 0 ? ((profit / stake) * 100).toFixed(1) : '0.0'
 
-  // ── render ───────────────────────────────────────────────────────────────────
+  // render
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
@@ -217,7 +217,6 @@ export default function Results() {
           )}
         </div>
 
-        {/* ── RESUMO ──────────────────────────────────────────────────────────── */}
         {view === 'resumo' && (
           loading ? (
             <div className="card p-16 flex items-center justify-center">
@@ -322,7 +321,6 @@ export default function Results() {
           )
         )}
 
-        {/* ── POR JOGO ────────────────────────────────────────────────────────── */}
         {view === 'por_jogo' && (
           <div>
             {/* Filtro resultado */}
@@ -449,7 +447,6 @@ export default function Results() {
           </div>
         )}
 
-        {/* ── POR MÊS ─────────────────────────────────────────────────────────── */}
         {view === 'por_mes' && (
           monthLoad ? (
             <div className="card p-16 flex items-center justify-center">

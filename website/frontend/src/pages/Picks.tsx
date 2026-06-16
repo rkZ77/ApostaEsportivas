@@ -14,7 +14,7 @@ import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock } from 'lucide-react'
 import { suggestStake } from '../utils/stakeUtils'
 
-// ─── Helpers de logo ──────────────────────────────────────────────────────────
+// Helpers de logo
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
 const LEAGUE_LOGO = (id?: number) =>
@@ -40,7 +40,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
   )
 }
 
-// ─── Tradução de mercados ─────────────────────────────────────────────────────
+// Tradução de mercados
 const MARKET_PT: Record<string, string> = {
   'Goals Over/Under': 'Gols ±',
   'Over/Under': 'Gols ±',
@@ -62,7 +62,7 @@ const MARKET_PT: Record<string, string> = {
 }
 const translateMarket = (m?: string) => (m ? (MARKET_PT[m] ?? m) : '')
 
-// ─── Tipos ────────────────────────────────────────────────────────────────────
+// Tipos
 type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat' | 'guia'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -99,7 +99,7 @@ const RESULT_LABELS: Record<string, string> = {
   RED: 'Red', PUSH: 'Push', 'HALF-WIN': '½ Win', 'HALF-LOSS': '½ Loss',
 }
 
-// ─── Tab bar ──────────────────────────────────────────────────────────────────
+// Tab bar
 function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   counts?: Partial<Record<Tab, number>>
@@ -168,7 +168,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
   )
 }
 
-// ─── User greeting ────────────────────────────────────────────────────────────
+// User greeting
 function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   user: any; isVip: boolean; isAdmin: boolean; daysUntilExpiry: number | null
 }) {
@@ -228,7 +228,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   )
 }
 
-// ─── Quick stats ──────────────────────────────────────────────────────────────
+// Quick stats
 function QuickStats({ stats }: { stats: any }) {
   if (!stats) return null
   const streak     = stats.streak ?? 0
@@ -304,7 +304,7 @@ function QuickStats({ stats }: { stats: any }) {
   )
 }
 
-// ─── Pick do Dia card ─────────────────────────────────────────────────────────
+// Pick do Dia card
 function shortReasoning(text?: string): string {
   if (!text) return ''
   const fatoMatch = text.match(/FATO:\s*(.+?)(?=\s*ANÁLISE:|$)/i)
@@ -473,7 +473,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   )
 }
 
-// ─── Vazio do Pick Seguro ─────────────────────────────────────────────────────
+// Vazio do Pick Seguro
 function PickSeguroEmpty() {
   const hour = new Date().getHours()
   const msg = hour < 8
@@ -490,7 +490,7 @@ function PickSeguroEmpty() {
   )
 }
 
-// ─── Múltipla card ────────────────────────────────────────────────────────────
+// Múltipla card
 function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
@@ -655,7 +655,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   )
 }
 
-// ─── Alavancagem card ─────────────────────────────────────────────────────────
+// Alavancagem card
 function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
   const isCombo     = pick.tipo === 'combinacao'
   const oddCombined = Number(pick.odd_combined ?? 0)
@@ -828,7 +828,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   )
 }
 
-// ─── Seção header ─────────────────────────────────────────────────────────────
+// Seção header
 function SectionHeader({ color, label, badge }: { color: string; label: string; badge?: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
@@ -839,7 +839,7 @@ function SectionHeader({ color, label, badge }: { color: string; label: string; 
   )
 }
 
-// ─── Spinner ──────────────────────────────────────────────────────────────────
+// Spinner
 function Spinner() {
   return (
     <div className="card p-16 flex items-center justify-center">
@@ -848,7 +848,7 @@ function Spinner() {
   )
 }
 
-// ─── Constantes resultado / fonte ─────────────────────────────────────────────
+// Constantes resultado / fonte
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
   RED:         'bg-red-500/10 text-red-400 border border-red-500/30',
@@ -944,7 +944,7 @@ function normalizePickRow(row: any, pickType: string): NormalizedPick {
   }
 }
 
-// ─── Tabela padronizada de picks ──────────────────────────────────────────────
+// Tabela padronizada de picks
 function PicksTable({
   rows, pickType, showSource = false, onOpen, footerAction,
 }: {
@@ -1031,7 +1031,7 @@ function PicksTable({
   )
 }
 
-// ─── VIP Lock Overlay ─────────────────────────────────────────────────────────
+// VIP Lock Overlay
 function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'orange' }) {
   const cls = color === 'blue'
     ? { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-white'    }
@@ -1077,7 +1077,7 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
 
 
 
-// ─── Dashboard ────────────────────────────────────────────────────────────────
+// Dashboard
 export default function Picks() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
@@ -1384,7 +1384,6 @@ export default function Picks() {
           }}
         />
 
-        {/* ── HOJE ─────────────────────────────────────────────────────────── */}
         {tab === 'hoje' && (
           todayLoading ? <Spinner /> : todayError ? (
             <div className="card p-10 text-center">
@@ -1546,7 +1545,6 @@ export default function Picks() {
           )
         )}
 
-        {/* ── PICKS FREE ───────────────────────────────────────────────────── */}
         {tab === 'pick_seguro' && (
           <div className="space-y-6">
             {/* O que é */}
@@ -1592,7 +1590,6 @@ export default function Picks() {
           </div>
         )}
 
-        {/* ── PICKS VIP ────────────────────────────────────────────────────── */}
         {tab === 'vip' && (
           <div className="space-y-6">
             {/* O que é */}
@@ -1658,7 +1655,6 @@ export default function Picks() {
           </div>
         )}
 
-        {/* ── MÚLTIPLAS ────────────────────────────────────────────────────── */}
         {tab === 'multiplas' && (
           <div className="space-y-6">
             {/* O que é */}
@@ -1713,7 +1709,6 @@ export default function Picks() {
           </div>
         )}
 
-        {/* ── PICKS COPA (ALAVANCAGEM) ─────────────────────────────────────── */}
         {tab === 'alavancagem' && (
           <div className="space-y-6">
             {/* Como funciona */}
@@ -1954,10 +1949,8 @@ export default function Picks() {
             </button>
           </div>
         )}
-        {/* ── AO VIVO ──────────────────────────────────────────────────────── */}
         {tab === 'aovivo' && <LivePicks />}
 
-        {/* ── CHAT COMUNIDADE ──────────────────────────────────────────────── */}
         {tab === 'chat' && (
           <div className="max-w-2xl mx-auto">
             <div className="mb-4">

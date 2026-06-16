@@ -124,7 +124,6 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
   return (
     <div className="space-y-6">
 
-      {/* ── Reactions ─────────────────────────────────────────────────────── */}
       <div>
         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">Reações</p>
         <div className="flex flex-wrap gap-2">
@@ -154,7 +153,6 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
         </div>
       </div>
 
-      {/* ── Comentários ───────────────────────────────────────────────────── */}
       <div>
         <p className="text-xs text-zinc-500 uppercase tracking-wider mb-3">
           Comentários{data?.comments.length ? ` (${data.comments.length})` : ''}
