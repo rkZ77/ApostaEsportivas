@@ -278,7 +278,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
             f"O link expira em 24 horas.\n\n"
             f"— Equipe Pick IA"
         ),
-        html=_verification_html(first_name, site_url, token, logo_b64=_logo_data_uri()),
+        html=_verification_html(first_name, site_url, token, logo_url=_logo_url(site_url)),
     )
 
 
@@ -507,7 +507,7 @@ def _send_welcome_email(to: str, name: str, site_url: str) -> None:
         to,
         subject=f"{first_name}, seus picks estão te esperando",
         body=f"Olá {first_name}, sua conta foi confirmada! Acesse: {site_url}/picks",
-        html=_welcome_html(first_name, site_url, logo_b64=_logo_data_uri()),
+        html=_welcome_html(first_name, site_url, logo_url=_logo_url(site_url)),
     )
 
 
