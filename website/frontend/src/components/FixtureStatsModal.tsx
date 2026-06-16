@@ -2,74 +2,234 @@ import { useEffect, useState } from 'react'
 import { X } from 'lucide-react'
 import api from '../services/api'
 
-const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
+type Tab = 'geral' | 'gols' | 'escanteios' | 'cartoes'
+type Ctx = 'all' | 'home' | 'away'
 
-function TeamLogo({ id, name, size = 40 }: { id?: number; name: string; size?: number }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
+interface Match {
+  fixture_id: number
+  match_date: string
+  home_team_id: number
+  away_team_id: number
+  home_team_name: string
+  away_team_name: string
+  home_goals: number | null
+  away_goals: number | null
+  total_goals: number | null
+  home_corners: number | null
+  away_corners: number | null
+  total_corners: number | null
+  home_yellow_cards: number | null
+  away_yellow_cards: number | null
+  total_yellow_cards: number | null
+  home_red_cards: number | null
+  away_red_cards: number | null
+  home_fouls: number | null
+  away_fouls: number | null
+  home_shots_on: number | null
+  away_shots_on: number | null
+  is_home: boolean
+  status: string
+}
+
+interface TeamStats {
+  games_count?: number
+  avg_goals_for?: number | null
+  avg_goals_against?: number | null
+  avg_total_goals?: number | null
+  avg_corners_for?: number | null
+  avg_corners_against?: number | null
+  avg_shots_on_for?: number | null
+  avg_shots_on_against?: number | null
+  avg_yellow_for?: number | null
+  avg_red_for?: number | null
+  avg_possession_for?: number | null
+}
+
+// --- Helpers ---
+function getTeamStat(m: Match, teamId: number, homeKey: keyof Match, awayKey: keyof Match): number {
+  return ((m.home_team_id === teamId ? m[homeKey] : m[awayKey]) ?? 0) as number
+}
+
+function overPct(matches: Match[], teamId: number, homeKey: keyof Match, awayKey: keyof Match, threshold: number): number {
+  if (!matches.length) return 0
+  const count = matches.filter(m => getTeamStat(m, teamId, homeKey, awayKey) > threshold).length
+  return Math.round((count / matches.length) * 100)
+}
+
+function totalOverPct(matches: Match[], field: keyof Match, threshold: number): number {
+  if (!matches.length) return 0
+  const count = matches.filter(m => ((m[field] ?? 0) as number) > threshold).length
+  return Math.round((count / matches.length) * 100)
+}
+
+function avgPct(a: number, b: number): number {
+  if (!a && !b) return 0
+  if (!a) return b
+  if (!b) return a
+  return Math.round((a + b) / 2)
+}
+
+// --- Donut chart ---
+function Donut({ pct, label, size = 56 }: { pct: number; label: string; size?: number }) {
+  const r = (size / 2) * 0.72
+  const circ = 2 * Math.PI * r
+  const dash = Math.min(pct / 100, 1) * circ
+  const color = pct >= 70 ? '#22c55e' : pct >= 40 ? '#f59e0b' : '#ef4444'
+  const cx = size / 2
+  const cy = size / 2
   return (
-    <img src={src} alt={name} width={size} height={size}
-      className="object-contain shrink-0" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
+    <div className="flex flex-col items-center gap-1.5 min-w-0">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+        <circle cx={cx} cy={cy} r={r} fill="none" stroke="#27272a" strokeWidth={5} />
+        {pct > 0 && (
+          <circle
+            cx={cx} cy={cy} r={r}
+            fill="none" stroke={color} strokeWidth={5}
+            strokeDasharray={`${dash} ${circ - dash}`}
+            strokeLinecap="round"
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        )}
+        <text x={cx} y={cy + 1} textAnchor="middle" dominantBaseline="central"
+          fill={color} fontSize={size * 0.21} fontWeight="700" fontFamily="system-ui,sans-serif">
+          {pct}%
+        </text>
+      </svg>
+      <span className="text-[10px] text-zinc-500 text-center whitespace-nowrap">{label}</span>
+    </div>
   )
 }
 
+// --- Comparison bar ---
 function StatRow({ label, home, away, higherIsBetter = true }: {
   label: string; home?: number | null; away?: number | null; higherIsBetter?: boolean
 }) {
   const h = home ?? 0
   const a = away ?? 0
+  const max = Math.max(h, a, 0.1)
   const homeWins = higherIsBetter ? h > a : h < a
   const awayWins = higherIsBetter ? a > h : a < h
   return (
-    <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-1">
-      <span className={`text-right text-xs font-semibold tabular-nums ${homeWins ? 'text-white' : 'text-zinc-500'}`}>
-        {home != null ? Number(home).toFixed(1) : '—'}
-      </span>
-      <span className="text-[10px] text-zinc-600 text-center min-w-[90px] truncate">{label}</span>
-      <span className={`text-left text-xs font-semibold tabular-nums ${awayWins ? 'text-white' : 'text-zinc-500'}`}>
-        {away != null ? Number(away).toFixed(1) : '—'}
-      </span>
-    </div>
-  )
-}
-
-function RecentList({ matches, teamId, label }: { matches: any[]; teamId?: number; label: string }) {
-  if (!matches.length) return (
-    <div className="text-center text-xs text-zinc-600 py-4">Sem dados recentes</div>
-  )
-  return (
-    <div className="space-y-1.5">
-      <p className="text-[10px] font-black text-zinc-600 uppercase tracking-wider mb-2">{label}</p>
-      {matches.map((m, i) => {
-        const isHome  = m.home_team_id === teamId
-        const scored  = isHome ? m.home_goals : m.away_goals
-        const conceded= isHome ? m.away_goals : m.home_goals
-        const won  = scored > conceded
-        const drew = scored === conceded
-        return (
-          <div key={i} className="flex items-center gap-2">
-            <span className={`w-5 h-5 flex items-center justify-center rounded text-[10px] font-black shrink-0 ${won ? 'bg-green-500/20 text-green-400' : drew ? 'bg-zinc-700 text-zinc-400' : 'bg-red-500/20 text-red-400'}`}>
-              {won ? 'V' : drew ? 'E' : 'D'}
-            </span>
-            <div className="flex items-center gap-1 flex-1 min-w-0">
-              <TeamLogo id={m.home_team_id} name={m.home_team_name ?? ''} size={16} />
-              <span className="text-[11px] text-zinc-400 truncate">{m.home_team_name ?? `#${m.home_team_id}`}</span>
-              <span className="text-[10px] text-zinc-600 font-bold shrink-0">{m.home_goals ?? 0}×{m.away_goals ?? 0}</span>
-              <span className="text-[11px] text-zinc-400 truncate">{m.away_team_name ?? `#${m.away_team_id}`}</span>
-              <TeamLogo id={m.away_team_id} name={m.away_team_name ?? ''} size={16} />
-            </div>
-            <span className="text-[10px] text-zinc-700 shrink-0">
-              {m.match_date ? new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }) : ''}
-            </span>
+    <div className="py-2">
+      <div className="text-[10px] text-zinc-600 text-center mb-1.5 uppercase tracking-wider font-semibold">{label}</div>
+      <div className="flex items-center gap-2">
+        <span className={`text-sm font-bold tabular-nums w-10 text-right ${homeWins ? 'text-blue-400' : 'text-zinc-400'}`}>
+          {home != null ? Number(home).toFixed(1) : '—'}
+        </span>
+        <div className="flex-1 flex gap-0.5 items-center">
+          <div className="flex-1 flex justify-end">
+            <div className={`h-2 rounded-l-full transition-all ${homeWins ? 'bg-blue-500' : 'bg-zinc-700'}`}
+              style={{ width: `${(h / max) * 100}%`, minWidth: h > 0 ? '4px' : '0' }} />
           </div>
-        )
-      })}
+          <div className="w-px h-3 bg-zinc-700 shrink-0" />
+          <div className="flex-1">
+            <div className={`h-2 rounded-r-full transition-all ${awayWins ? 'bg-rose-500' : 'bg-zinc-700'}`}
+              style={{ width: `${(a / max) * 100}%`, minWidth: a > 0 ? '4px' : '0' }} />
+          </div>
+        </div>
+        <span className={`text-sm font-bold tabular-nums w-10 text-left ${awayWins ? 'text-rose-400' : 'text-zinc-400'}`}>
+          {away != null ? Number(away).toFixed(1) : '—'}
+        </span>
+      </div>
     </div>
   )
 }
 
-interface FixtureStatsModalProps {
+// --- Team donut row ---
+interface CircleDef {
+  label: string
+  homeKey: keyof Match
+  awayKey: keyof Match
+  threshold: number
+}
+
+function TeamDonutRow({ matches, teamId, name, logoSrc, circles }: {
+  matches: Match[]
+  teamId: number
+  name: string
+  logoSrc: string
+  circles: CircleDef[]
+}) {
+  return (
+    <div className="py-3 border-b border-zinc-800/50">
+      <div className="flex items-center gap-2 mb-3">
+        <img src={logoSrc} alt={name} className="w-5 h-5 object-contain shrink-0"
+          onError={e => (e.currentTarget.style.display = 'none')} />
+        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{name}</span>
+        <span className="text-[10px] text-zinc-600 shrink-0">{matches.length}J</span>
+      </div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${circles.length}, 1fr)` }}>
+        {circles.map(c => (
+          <Donut key={c.label}
+            pct={overPct(matches, teamId, c.homeKey, c.awayKey, c.threshold)}
+            label={c.label} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// --- Total donut row ---
+interface TotalCircleDef {
+  label: string
+  field: keyof Match
+  threshold: number
+}
+
+function TotalDonutRow({ homeMatches, awayMatches, circles }: {
+  homeMatches: Match[]
+  awayMatches: Match[]
+  circles: TotalCircleDef[]
+}) {
+  return (
+    <div className="py-3">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="text-xs font-semibold text-zinc-400">Total no Jogo</span>
+      </div>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${circles.length}, 1fr)` }}>
+        {circles.map(c => (
+          <Donut key={c.label}
+            pct={avgPct(
+              totalOverPct(homeMatches, c.field, c.threshold),
+              totalOverPct(awayMatches, c.field, c.threshold)
+            )}
+            label={c.label} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// --- Recent form ---
+function FormRow({ matches, teamId, name }: { matches: Match[]; teamId: number; name: string }) {
+  if (!matches.length) return null
+  return (
+    <div>
+      <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2 truncate">{name}</p>
+      <div className="flex gap-1.5 flex-wrap">
+        {matches.slice(0, 8).map((m, i) => {
+          const scored   = m.home_team_id === teamId ? (m.home_goals ?? 0) : (m.away_goals ?? 0)
+          const conceded = m.home_team_id === teamId ? (m.away_goals ?? 0) : (m.home_goals ?? 0)
+          const won  = scored > conceded
+          const drew = scored === conceded
+          return (
+            <div key={i} className="flex flex-col items-center gap-0.5">
+              <span className={`w-6 h-6 flex items-center justify-center rounded text-[10px] font-black ${
+                won ? 'bg-green-500/20 text-green-400' : drew ? 'bg-zinc-700 text-zinc-300' : 'bg-red-500/20 text-red-400'
+              }`}>
+                {won ? 'V' : drew ? 'E' : 'D'}
+              </span>
+              <span className="text-[9px] text-zinc-700">{scored}-{conceded}</span>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+// --- Prop types ---
+export interface FixtureStatsModalProps {
   fixture: {
     fixture_id: number
     home_team: string
@@ -78,97 +238,257 @@ interface FixtureStatsModalProps {
     away_team_id?: number
     match_datetime: string
     league_name: string
+    league_flag?: string
+    league_id?: number
+    status?: string
+    home_goals?: number | null
+    away_goals?: number | null
+    elapsed?: number | null
   }
   onClose: () => void
 }
 
+// --- Threshold definitions ---
+const GOAL_CIRCLES: CircleDef[] = [
+  { label: '+0.5', homeKey: 'home_goals', awayKey: 'away_goals', threshold: 0.5 },
+  { label: '+1.5', homeKey: 'home_goals', awayKey: 'away_goals', threshold: 1.5 },
+  { label: '+2.5', homeKey: 'home_goals', awayKey: 'away_goals', threshold: 2.5 },
+  { label: '+3.5', homeKey: 'home_goals', awayKey: 'away_goals', threshold: 3.5 },
+]
+const TOTAL_GOAL_CIRCLES: TotalCircleDef[] = [
+  { label: '+1.5 JI', field: 'total_goals', threshold: 1.5 },
+  { label: '+2.5 JI', field: 'total_goals', threshold: 2.5 },
+  { label: '+3.5 JI', field: 'total_goals', threshold: 3.5 },
+  { label: '+4.5 JI', field: 'total_goals', threshold: 4.5 },
+]
+const CORNER_CIRCLES: CircleDef[] = [
+  { label: '+3.5', homeKey: 'home_corners', awayKey: 'away_corners', threshold: 3.5 },
+  { label: '+4.5', homeKey: 'home_corners', awayKey: 'away_corners', threshold: 4.5 },
+  { label: '+5.5', homeKey: 'home_corners', awayKey: 'away_corners', threshold: 5.5 },
+  { label: '+6.5', homeKey: 'home_corners', awayKey: 'away_corners', threshold: 6.5 },
+]
+const TOTAL_CORNER_CIRCLES: TotalCircleDef[] = [
+  { label: '+6.5 JI', field: 'total_corners', threshold: 6.5 },
+  { label: '+7.5 JI', field: 'total_corners', threshold: 7.5 },
+  { label: '+8.5 JI', field: 'total_corners', threshold: 8.5 },
+  { label: '+9.5 JI', field: 'total_corners', threshold: 9.5 },
+]
+const CARD_CIRCLES: CircleDef[] = [
+  { label: '+0.5', homeKey: 'home_yellow_cards', awayKey: 'away_yellow_cards', threshold: 0.5 },
+  { label: '+1.5', homeKey: 'home_yellow_cards', awayKey: 'away_yellow_cards', threshold: 1.5 },
+  { label: '+2.5', homeKey: 'home_yellow_cards', awayKey: 'away_yellow_cards', threshold: 2.5 },
+  { label: '+3.5', homeKey: 'home_yellow_cards', awayKey: 'away_yellow_cards', threshold: 3.5 },
+]
+const TOTAL_CARD_CIRCLES: TotalCircleDef[] = [
+  { label: '+1.5 JI', field: 'total_yellow_cards', threshold: 1.5 },
+  { label: '+2.5 JI', field: 'total_yellow_cards', threshold: 2.5 },
+  { label: '+3.5 JI', field: 'total_yellow_cards', threshold: 3.5 },
+  { label: '+4.5 JI', field: 'total_yellow_cards', threshold: 4.5 },
+]
+
 export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModalProps) {
   const [data, setData]     = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
+  const [tab, setTab]       = useState<Tab>('geral')
+  const [ctx, setCtx]       = useState<Ctx>('all')
+  const [n, setN]           = useState(10)
 
   useEffect(() => {
+    setLoading(true)
+    setData(null)
     api.get(`/fixtures/${fixture.fixture_id}/stats`)
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
   }, [fixture.fixture_id])
 
-  const time = fixture.match_datetime
-    ? new Date(fixture.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
-    : '--:--'
+  const homeId = fixture.home_team_id ?? 0
+  const awayId = fixture.away_team_id ?? 0
+
+  const filterMatches = (matches: Match[] | undefined, teamId: number): Match[] => {
+    let filtered = matches ?? []
+    if (ctx === 'home') filtered = filtered.filter(m => m.home_team_id === teamId)
+    if (ctx === 'away') filtered = filtered.filter(m => m.away_team_id === teamId)
+    return filtered.slice(0, n)
+  }
+
+  const homeMatches = filterMatches(data?.home_recent, homeId)
+  const awayMatches = filterMatches(data?.away_recent, awayId)
+  const homeStats: TeamStats = data?.home_stats ?? {}
+  const awayStats: TeamStats = data?.away_stats ?? {}
+
+  const homeLogo = `/api/proxy/team/${homeId}.png`
+  const awayLogo = `/api/proxy/team/${awayId}.png`
+
+  const status   = fixture.status ?? 'NS'
+  const live     = ['1H', 'HT', '2H', 'ET', 'BT', 'P'].includes(status)
+  const finished = ['FT', 'AET', 'PEN'].includes(status)
+  const scoreStr = (finished || live) && fixture.home_goals != null
+    ? `${fixture.home_goals} - ${fixture.away_goals ?? 0}`
+    : 'vs'
+
+  const TABS: { key: Tab; label: string }[] = [
+    { key: 'geral',      label: 'Geral' },
+    { key: 'gols',       label: 'Gols' },
+    { key: 'escanteios', label: 'Escanteios' },
+    { key: 'cartoes',    label: 'Cartões' },
+  ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative z-10 w-full sm:max-w-lg bg-zinc-900 border border-zinc-800 rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[90vh] flex flex-col">
-
-        {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-zinc-800 shrink-0">
-          <div>
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider">{fixture.league_name}</p>
-            <p className="text-xs text-zinc-400">{time}</p>
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/70" />
+      <div
+        className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[92vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Fixed header */}
+        <div className="bg-zinc-800 px-4 pt-4 pb-0 shrink-0">
+          {/* League + close */}
+          <div className="flex justify-between items-center mb-3">
+            <div className="flex items-center gap-2">
+              {fixture.league_flag && (
+                <img src={fixture.league_flag} alt="" className="w-4 h-3 object-cover rounded-sm"
+                  onError={e => (e.currentTarget.style.display = 'none')} />
+              )}
+              <span className="text-xs text-zinc-400 font-semibold">{fixture.league_name}</span>
+            </div>
+            <button onClick={onClose} className="text-zinc-500 hover:text-white transition-colors p-1">
+              <X size={16} />
+            </button>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-zinc-800 text-zinc-500 hover:text-zinc-300 transition-colors">
-            <X size={16} />
-          </button>
+
+          {/* Teams + score */}
+          <div className="flex items-center px-2 mb-4 gap-3">
+            <div className="flex flex-col items-center gap-1.5 flex-1">
+              <img src={homeLogo} alt={fixture.home_team} className="w-10 h-10 object-contain"
+                onError={e => (e.currentTarget.style.display = 'none')} />
+              <span className="text-[11px] text-white font-semibold text-center leading-tight line-clamp-2 max-w-[80px]">
+                {fixture.home_team}
+              </span>
+            </div>
+            <div className="flex flex-col items-center shrink-0 gap-0.5">
+              <span className={`text-2xl font-black tabular-nums ${live ? 'text-green-400' : 'text-white'}`}>
+                {scoreStr}
+              </span>
+              {live && fixture.elapsed != null && (
+                <span className="text-[10px] text-green-400 font-bold">{fixture.elapsed}′</span>
+              )}
+              {finished && (
+                <span className="text-[10px] text-zinc-500">Encerrado</span>
+              )}
+            </div>
+            <div className="flex flex-col items-center gap-1.5 flex-1">
+              <img src={awayLogo} alt={fixture.away_team} className="w-10 h-10 object-contain"
+                onError={e => (e.currentTarget.style.display = 'none')} />
+              <span className="text-[11px] text-white font-semibold text-center leading-tight line-clamp-2 max-w-[80px]">
+                {fixture.away_team}
+              </span>
+            </div>
+          </div>
+
+          {/* Tabs */}
+          <div className="flex border-b border-zinc-700">
+            {TABS.map(t => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={`flex-1 py-2.5 text-xs font-semibold transition-colors ${
+                  tab === t.key
+                    ? 'text-white border-b-2 border-blue-500'
+                    : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Teams */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-zinc-800/60 shrink-0">
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <TeamLogo id={fixture.home_team_id} name={fixture.home_team} size={48} />
-            <span className="text-sm font-bold text-white text-center leading-tight">{fixture.home_team}</span>
-            <span className="text-[10px] text-zinc-500">Casa</span>
+        {/* Filters */}
+        <div className="flex items-center gap-2 px-4 py-2.5 bg-zinc-900 border-b border-zinc-800 shrink-0">
+          <div className="flex gap-1">
+            {(['all', 'home', 'away'] as Ctx[]).map((c, i) => (
+              <button key={c} onClick={() => setCtx(c)}
+                className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                  ctx === c ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}>
+                {['Todos', 'Casa', 'Fora'][i]}
+              </button>
+            ))}
           </div>
-          <span className="text-zinc-600 font-bold text-lg px-4">vs</span>
-          <div className="flex flex-col items-center gap-2 flex-1">
-            <TeamLogo id={fixture.away_team_id} name={fixture.away_team} size={48} />
-            <span className="text-sm font-bold text-white text-center leading-tight">{fixture.away_team}</span>
-            <span className="text-[10px] text-zinc-500">Fora</span>
+          <div className="flex gap-1 ml-auto">
+            {[5, 10, 15].map(count => (
+              <button key={count} onClick={() => setN(count)}
+                className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
+                  n === count ? 'bg-blue-600 text-white' : 'bg-zinc-800 text-zinc-400 hover:text-zinc-200'
+                }`}>
+                {count}J
+              </button>
+            ))}
           </div>
         </div>
 
-        <div className="overflow-y-auto flex-1">
+        {/* Scrollable content */}
+        <div className="flex-1 overflow-y-auto">
           {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+            <div className="flex items-center justify-center py-16">
+              <div className="w-7 h-7 border-2 border-zinc-700 border-t-blue-500 rounded-full animate-spin" />
             </div>
           ) : !data ? (
-            <div className="text-center text-zinc-600 text-sm py-12">Estatísticas não disponíveis.</div>
+            <div className="text-center text-zinc-600 text-sm py-16">Estatísticas não disponíveis.</div>
           ) : (
-            <div className="px-5 py-4 space-y-6">
+            <div className="px-4 py-4">
 
-              {/* Médias */}
-              {(Object.keys(data.home_stats).length > 0 || Object.keys(data.away_stats).length > 0) && (
+              {tab === 'geral' && (
                 <div>
-                  <p className="text-[10px] font-black text-zinc-600 uppercase tracking-wider mb-3">
-                    Médias — Casa (últimos {data.home_stats.games_count ?? '?'} jg) · Fora ({data.away_stats.games_count ?? '?'} jg)
-                  </p>
-                  <div className="space-y-0.5">
-                    <StatRow label="Gols marcados" home={data.home_stats.avg_goals_for} away={data.away_stats.avg_goals_for} />
-                    <StatRow label="Gols sofridos" home={data.home_stats.avg_goals_against} away={data.away_stats.avg_goals_against} higherIsBetter={false} />
-                    <StatRow label="Total de gols" home={data.home_stats.avg_total_goals} away={data.away_stats.avg_total_goals} />
-                    <StatRow label="Escanteios marcados" home={data.home_stats.avg_corners_for} away={data.away_stats.avg_corners_for} />
-                    <StatRow label="Chutes no gol" home={data.home_stats.avg_shots_on_for} away={data.away_stats.avg_shots_on_for} />
-                    <StatRow label="Posse de bola %" home={data.home_stats.avg_possession_for} away={data.away_stats.avg_possession_for} />
-                    <StatRow label="Cartões amarelos" home={data.home_stats.avg_yellow_for} away={data.away_stats.avg_yellow_for} higherIsBetter={false} />
+                  <div className="mb-1">
+                    <div className="flex justify-between text-[10px] text-zinc-600 font-semibold px-10 mb-2">
+                      <span className="text-blue-500">{fixture.home_team.split(' ')[0]}</span>
+                      <span className="text-rose-500">{fixture.away_team.split(' ')[0]}</span>
+                    </div>
+                    <StatRow label="Gols marcados"   home={homeStats.avg_goals_for}     away={awayStats.avg_goals_for} />
+                    <StatRow label="Gols sofridos"   home={homeStats.avg_goals_against}  away={awayStats.avg_goals_against}  higherIsBetter={false} />
+                    <StatRow label="Escanteios"      home={homeStats.avg_corners_for}    away={awayStats.avg_corners_for} />
+                    <StatRow label="Chutes no gol"   home={homeStats.avg_shots_on_for}   away={awayStats.avg_shots_on_for} />
+                    <StatRow label="Cartões amarelos" home={homeStats.avg_yellow_for}     away={awayStats.avg_yellow_for}     higherIsBetter={false} />
+                    <StatRow label="Posse de bola %" home={homeStats.avg_possession_for} away={awayStats.avg_possession_for} />
+                  </div>
+                  <div className="pt-4 border-t border-zinc-800 grid grid-cols-2 gap-4">
+                    <FormRow matches={data.home_recent?.slice(0, 8) ?? []} teamId={homeId} name={fixture.home_team} />
+                    <FormRow matches={data.away_recent?.slice(0, 8) ?? []} teamId={awayId} name={fixture.away_team} />
                   </div>
                 </div>
               )}
 
-              {/* Forma recente */}
-              <div className="grid grid-cols-2 gap-4">
-                <RecentList
-                  matches={data.home_recent}
-                  teamId={fixture.home_team_id}
-                  label={`Forma — ${fixture.home_team}`}
-                />
-                <RecentList
-                  matches={data.away_recent}
-                  teamId={fixture.away_team_id}
-                  label={`Forma — ${fixture.away_team}`}
-                />
-              </div>
+              {tab === 'gols' && (
+                <div>
+                  <TeamDonutRow matches={homeMatches} teamId={homeId} name={fixture.home_team}
+                    logoSrc={homeLogo} circles={GOAL_CIRCLES} />
+                  <TeamDonutRow matches={awayMatches} teamId={awayId} name={fixture.away_team}
+                    logoSrc={awayLogo} circles={GOAL_CIRCLES} />
+                  <TotalDonutRow homeMatches={homeMatches} awayMatches={awayMatches} circles={TOTAL_GOAL_CIRCLES} />
+                </div>
+              )}
+
+              {tab === 'escanteios' && (
+                <div>
+                  <TeamDonutRow matches={homeMatches} teamId={homeId} name={fixture.home_team}
+                    logoSrc={homeLogo} circles={CORNER_CIRCLES} />
+                  <TeamDonutRow matches={awayMatches} teamId={awayId} name={fixture.away_team}
+                    logoSrc={awayLogo} circles={CORNER_CIRCLES} />
+                  <TotalDonutRow homeMatches={homeMatches} awayMatches={awayMatches} circles={TOTAL_CORNER_CIRCLES} />
+                </div>
+              )}
+
+              {tab === 'cartoes' && (
+                <div>
+                  <TeamDonutRow matches={homeMatches} teamId={homeId} name={fixture.home_team}
+                    logoSrc={homeLogo} circles={CARD_CIRCLES} />
+                  <TeamDonutRow matches={awayMatches} teamId={awayId} name={fixture.away_team}
+                    logoSrc={awayLogo} circles={CARD_CIRCLES} />
+                  <TotalDonutRow homeMatches={homeMatches} awayMatches={awayMatches} circles={TOTAL_CARD_CIRCLES} />
+                </div>
+              )}
 
             </div>
           )}

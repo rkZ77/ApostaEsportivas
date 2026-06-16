@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import FixtureStatsModal from '../components/FixtureStatsModal'
+import { EstatisticasContent } from './Estatisticas'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -62,8 +63,11 @@ interface Fixture {
   pick_type_flag?: 'vip' | 'free' | null
 }
 
+type PageTab = 'jogos' | 'estatistica'
+
 export default function Fixtures() {
   const navigate                   = useNavigate()
+  const [pageTab, setPageTab]      = useState<PageTab>('jogos')
   const [date, setDate]            = useState(TODAY)
   const [fixtures, setFixtures]    = useState<Fixture[]>([])
   const [loading, setLoading]      = useState(true)
@@ -106,35 +110,62 @@ export default function Fixtures() {
       <Navbar />
 
       <div className="bg-zinc-950 border-b border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
-            <div>
-              <h1 className="text-base font-black text-white">Jogos do Dia</h1>
-              <p className="text-zinc-500 text-xs mt-0.5 capitalize">{todayLabel}</p>
+        <div className="max-w-5xl mx-auto px-4 pt-4 pb-0">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-3">
+              <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
+              <div>
+                <h1 className="text-base font-black text-white">Jogos</h1>
+                <p className="text-zinc-500 text-xs mt-0.5 capitalize">{todayLabel}</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              {pageTab === 'jogos' && pickCount > 0 && (
+                <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
+                  <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M9 12l-2-2-1.5 1.5L9 15l5.5-5.5L13 8l-4 4z" />
+                    <circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
+                  </svg>
+                  <span className="text-green-400 text-xs font-bold">{pickCount} {pickCount === 1 ? 'pick' : 'picks'} IA</span>
+                </div>
+              )}
+              {pageTab === 'jogos' && liveCount > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+                  <span className="text-green-500 text-xs font-bold">{liveCount} ao vivo</span>
+                </div>
+              )}
             </div>
           </div>
-          <div className="flex items-center gap-3">
-            {pickCount > 0 && (
-              <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
-                <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                  <path d="M9 12l-2-2-1.5 1.5L9 15l5.5-5.5L13 8l-4 4z" />
-                  <circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                </svg>
-                <span className="text-green-400 text-xs font-bold">{pickCount} {pickCount === 1 ? 'pick' : 'picks'} IA</span>
-              </div>
-            )}
-            {liveCount > 0 && (
-              <div className="flex items-center gap-2">
-                <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-green-500 text-xs font-bold">{liveCount} ao vivo</span>
-              </div>
-            )}
+          {/* Page tabs */}
+          <div className="flex border-b border-zinc-800">
+            {([
+              { key: 'jogos',      label: 'Jogos do Dia' },
+              { key: 'estatistica', label: 'Estatísticas' },
+            ] as { key: PageTab; label: string }[]).map(t => (
+              <button
+                key={t.key}
+                onClick={() => setPageTab(t.key)}
+                className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
+                  pageTab === t.key
+                    ? 'text-white border-green-500'
+                    : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      <main className="max-w-5xl mx-auto px-4 py-6">
+      {pageTab === 'estatistica' && (
+        <main className="max-w-5xl mx-auto px-4 py-6">
+          <EstatisticasContent />
+        </main>
+      )}
+
+      {pageTab === 'jogos' && <main className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Banner informativo */}
         <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 mb-5">
@@ -303,7 +334,7 @@ export default function Fixtures() {
             })}
           </div>
         )}
-      </main>
+      </main>}
 
       {statsFixture && (
         <FixtureStatsModal

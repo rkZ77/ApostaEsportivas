@@ -162,7 +162,7 @@ export default function Agente() {
   const showLoading = loading && lastMsg?.role === 'assistant' && !lastMsg?.content
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="h-screen bg-black flex flex-col overflow-hidden">
       <Navbar />
 
       {/* Header */}
@@ -184,7 +184,7 @@ export default function Agente() {
       </div>
 
       {/* Chat area */}
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-6 flex flex-col gap-4 overflow-y-auto">
+      <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-4 flex flex-col gap-4 overflow-y-auto min-h-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-6 py-8">
             <div className="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
@@ -225,7 +225,7 @@ export default function Agente() {
                   AI
                 </div>
               )}
-              <div className={`max-w-[85%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+              <div className={`max-w-[80%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed
                 ${msg.role === 'user'
                   ? 'bg-green-600 text-white rounded-tr-sm'
                   : 'bg-zinc-900 border border-zinc-800 rounded-tl-sm'}`}>
@@ -253,7 +253,7 @@ export default function Agente() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Pergunte sobre picks, banca, alavancagem, jogos ao vivo... (Enter para enviar)"
+            placeholder="Pergunte sobre picks, banca, jogos ao vivo... (Enter para enviar)"
             rows={1}
             className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
             style={{ minHeight: '48px', maxHeight: '120px' }}

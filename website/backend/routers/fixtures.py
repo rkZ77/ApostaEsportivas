@@ -270,15 +270,23 @@ def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_
         cur.execute("""
             SELECT ms.fixture_id, ms.match_date, ms.league_id,
                    ms.home_team_id, ms.away_team_id,
-                   ms.home_goals, ms.away_goals, ms.status
+                   ms.home_goals, ms.away_goals, ms.total_goals,
+                   ms.home_corners, ms.away_corners, ms.total_corners,
+                   ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
+                   ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
+                   ms.home_fouls, ms.away_fouls,
+                   ms.home_shots_on, ms.away_shots_on,
+                   ms.status
             FROM match_statistics ms
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status IN ('FT','AET','PEN')
               AND ms.fixture_id != %s
             ORDER BY ms.match_date DESC
-            LIMIT 5
+            LIMIT 15
         """, (team_id, team_id, fixture_id))
         rows = [dict(r) for r in cur.fetchall()]
+        for r in rows:
+            r["is_home"] = (r["home_team_id"] == team_id)
 
         # Enrich with team names
         all_ids = set()

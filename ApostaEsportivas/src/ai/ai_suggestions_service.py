@@ -198,6 +198,44 @@ class AISuggestionsService:
         return "unknown"
 
     # --------------------------------------------------------
+    # MÉDIAS CALCULADAS A PARTIR DO HISTÓRICO RECENTE
+    # --------------------------------------------------------
+    @staticmethod
+    def _compute_avgs(matches: list, is_home_ctx: bool) -> dict:
+        """Computa médias de gols feitos/cedidos, escanteios e cartões do histórico recente."""
+        if not matches:
+            return {}
+        n = len(matches)
+        gf_k  = "home_goals"         if is_home_ctx else "away_goals"
+        ga_k  = "away_goals"         if is_home_ctx else "home_goals"
+        cf_k  = "home_corners"       if is_home_ctx else "away_corners"
+        ca_k  = "away_corners"       if is_home_ctx else "home_corners"
+        yf_k  = "home_yellow_cards"  if is_home_ctx else "away_yellow_cards"
+        rf_k  = "home_red_cards"     if is_home_ctx else "away_red_cards"
+
+        def avg(key):
+            return round(sum((m.get(key) or 0) for m in matches) / n, 2)
+
+        gf = [(m.get(gf_k) or 0) for m in matches]
+        ga = [(m.get(ga_k) or 0) for m in matches]
+        tg = [(m.get("total_goals") or 0) for m in matches]
+        tc = [(m.get("total_corners") or 0) for m in matches]
+
+        return {
+            "jogos": n,
+            "gols_feitos_media":       round(sum(gf) / n, 2),
+            "gols_cedidos_media":      round(sum(ga) / n, 2),
+            "total_gols_media":        round(sum(tg) / n, 2),
+            "escanteios_feitos_media": avg(cf_k),
+            "escanteios_cedidos_media": avg(ca_k),
+            "total_escanteios_media":  round(sum(tc) / n, 2),
+            "amarelos_media":          avg(yf_k),
+            "vermelhos_media":         avg(rf_k),
+            "btts_pct":                round(sum(1 for g, a in zip(gf, ga) if g > 0 and a > 0) / n * 100, 1),
+            "over_2_5_pct":            round(sum(1 for t in tg if t > 2.5) / n * 100, 1),
+        }
+
+    # --------------------------------------------------------
     # MONTA BLOCO DE DADOS
     # --------------------------------------------------------
     def _build_dados(
@@ -226,6 +264,11 @@ class AISuggestionsService:
         total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:8])}" if include_total_home else ""
         total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:8])}" if include_total_away else ""
 
+        home_avgs = self._compute_avgs(last10_home, is_home_ctx=True)
+        away_avgs = self._compute_avgs(last10_away, is_home_ctx=False)
+        avgs_home_block = f"\nMÉDIAS RECENTES CASA (feitas/cedidas)\n{to_json(home_avgs)}" if home_avgs else ""
+        avgs_away_block = f"\nMÉDIAS RECENTES FORA (feitas/cedidas)\n{to_json(away_avgs)}" if away_avgs else ""
+
         return f"""
 FIXTURE
 {to_json(fx)}
@@ -241,6 +284,8 @@ ESTATÍSTICAS CASA
 
 ESTATÍSTICAS FORA
 {to_json(away_stats)}
+{avgs_home_block}
+{avgs_away_block}
 
 HISTÓRICO CASA
 {format_last10(last10_home[:8])}

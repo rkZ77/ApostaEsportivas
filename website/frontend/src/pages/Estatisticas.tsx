@@ -101,7 +101,7 @@ function statValue(key: StatKey, s: Summary): number {
   return map[key]
 }
 
-export default function Estatisticas() {
+export function EstatisticasContent() {
   const { user } = useAuth()
   const isVip = user?.plan === 'vip' || user?.plan === 'admin' || user?.plan === 'trial'
 
@@ -162,35 +162,21 @@ export default function Estatisticas() {
   // VIP gate
   if (!isVip) {
     return (
-      <div className="min-h-screen bg-black">
-        <Navbar />
-        <div className="flex flex-col items-center justify-center py-32 gap-4">
-          <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center">
-            <Lock className="w-6 h-6 text-zinc-500" />
-          </div>
-          <h2 className="text-white font-black text-lg">Recurso VIP</h2>
-          <p className="text-zinc-500 text-sm text-center max-w-xs">
-            As estatísticas detalhadas são exclusivas para membros VIP.
-          </p>
-          <a href="/planos" className="btn-primary px-6 py-2 text-sm">Ver planos</a>
+      <div className="flex flex-col items-center justify-center py-24 gap-4">
+        <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-zinc-500" />
         </div>
-        <Footer />
+        <h2 className="text-white font-black text-lg">Recurso VIP</h2>
+        <p className="text-zinc-500 text-sm text-center max-w-xs">
+          As estatísticas detalhadas são exclusivas para membros VIP.
+        </p>
+        <a href="/planos" className="btn-primary px-6 py-2 text-sm">Ver planos</a>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black">
-      <Navbar />
-
-      <div className="bg-zinc-950 border-b border-zinc-800">
-        <div className="max-w-5xl mx-auto px-4 py-4">
-          <h1 className="text-base font-black text-white tracking-tight">Estatísticas</h1>
-          <p className="text-zinc-500 text-xs mt-0.5">Tendências por liga · clique em um card para ver o ranking por time</p>
-        </div>
-      </div>
-
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+    <div className="space-y-6">
 
         {/* Filtros */}
         <div className="card p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -443,8 +429,23 @@ export default function Estatisticas() {
             </div>
           </>
         )}
-      </main>
+    </div>
+  )
+}
 
+export default function Estatisticas() {
+  return (
+    <div className="min-h-screen bg-black">
+      <Navbar />
+      <div className="bg-zinc-950 border-b border-zinc-800">
+        <div className="max-w-5xl mx-auto px-4 py-4">
+          <h1 className="text-base font-black text-white tracking-tight">Estatísticas</h1>
+          <p className="text-zinc-500 text-xs mt-0.5">Tendências por liga · clique em um card para ver o ranking por time</p>
+        </div>
+      </div>
+      <main className="max-w-5xl mx-auto px-4 py-6">
+        <EstatisticasContent />
+      </main>
       <Footer />
     </div>
   )
