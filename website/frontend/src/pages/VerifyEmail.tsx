@@ -12,7 +12,14 @@ export default function VerifyEmail() {
   const [state, setState]         = useState<'pending' | 'loading' | 'success' | 'error'>('pending')
   const [resending, setResending] = useState(false)
   const [resent, setResent]       = useState(false)
+  const [cooldown, setCooldown]   = useState(0)
   const [errMsg, setErrMsg]       = useState('')
+
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
 
   // Troca de e-mail
   const [showChangeEmail, setShowChangeEmail] = useState(false)
@@ -41,6 +48,7 @@ export default function VerifyEmail() {
     try {
       await api.post('/auth/resend-verification')
       setResent(true)
+      setCooldown(60)
     } catch {
       /* silent */
     } finally {
@@ -132,8 +140,8 @@ export default function VerifyEmail() {
             </p>
             <p className="text-zinc-500 text-xs mb-6">Verifique também a pasta de spam.</p>
 
-            {resent && (
-              <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique sua caixa de entrada.</p>
+            {resent && cooldown > 0 && (
+              <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique também o spam.</p>
             )}
 
             {/* CTA principal — acessar o site sem verificar */}
@@ -145,15 +153,13 @@ export default function VerifyEmail() {
             </button>
 
             <div className="flex gap-2 mb-4">
-              {!resent && (
                 <button
                   onClick={handleResend}
-                  disabled={resending}
+                  disabled={resending || cooldown > 0}
                   className="flex-1 py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-xs transition-colors disabled:opacity-50"
                 >
-                  {resending ? 'Enviando…' : 'Reenviar e-mail'}
+                  {resending ? 'Enviando…' : cooldown > 0 ? `Reenviar em ${cooldown}s` : 'Reenviar e-mail'}
                 </button>
-              )}
               {!showChangeEmail && (
                 <button
                   onClick={() => setShowChangeEmail(true)}
