@@ -105,7 +105,6 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
   counts?: Partial<Record<Tab, number>>
   liveCount?: number
 }) {
-  const hasLiveMatches = (liveCount ?? 0) > 0
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'guia',         label: 'Como Funciona'   },
@@ -113,11 +112,13 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    ...(hasLiveMatches ? [{
+    {
       key: 'aovivo' as Tab, label: 'Ao Vivo',
-      badge: String(liveCount),
-      badgeCls: 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse',
-    }] : []),
+      badge: (liveCount ?? 0) > 0 ? String(liveCount) : 'LIVE',
+      badgeCls: (liveCount ?? 0) > 0
+        ? 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse'
+        : 'bg-red-500/10 text-red-400 border-red-500/20',
+    },
     { key: 'chat',         label: 'Comunidade'       },
   ]
 
