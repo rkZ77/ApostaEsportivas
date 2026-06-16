@@ -130,32 +130,43 @@ export default function VerifyEmail() {
               Enviamos um link de confirmação para{' '}
               <span className="text-white font-medium">{emailChanged || user?.email || 'seu e-mail'}</span>.
             </p>
-            <p className="text-zinc-600 text-xs mb-6">Clique no link para ativar sua conta e acessar seus picks.</p>
+            <p className="text-zinc-500 text-xs mb-6">Verifique também a pasta de spam.</p>
 
             {resent && (
               <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique sua caixa de entrada.</p>
             )}
 
-            {!resent && (
-              <button
-                onClick={handleResend}
-                disabled={resending}
-                className="w-full py-3 rounded-xl border border-zinc-700 hover:border-green-500/40 hover:text-green-400 text-zinc-400 font-semibold text-sm transition-colors disabled:opacity-50 mb-3"
-              >
-                {resending ? 'Enviando…' : 'Reenviar e-mail'}
-              </button>
-            )}
+            {/* CTA principal — acessar o site sem verificar */}
+            <button
+              onClick={() => navigate('/picks')}
+              className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors mb-3"
+            >
+              Acessar os Picks agora
+            </button>
 
-            {/* Trocar e-mail */}
-            {!showChangeEmail ? (
-              <button
-                onClick={() => setShowChangeEmail(true)}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors mb-4 block w-full"
-              >
-                E-mail errado? Alterar e-mail
-              </button>
-            ) : (
-              <form onSubmit={handleChangeEmail} className="mt-2 mb-4 text-left space-y-2">
+            <div className="flex gap-2 mb-4">
+              {!resent && (
+                <button
+                  onClick={handleResend}
+                  disabled={resending}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-xs transition-colors disabled:opacity-50"
+                >
+                  {resending ? 'Enviando…' : 'Reenviar e-mail'}
+                </button>
+              )}
+              {!showChangeEmail && (
+                <button
+                  onClick={() => setShowChangeEmail(true)}
+                  className="flex-1 py-2.5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 text-blue-400 hover:text-blue-300 font-semibold text-xs transition-colors"
+                >
+                  E-mail errado? Alterar
+                </button>
+              )}
+            </div>
+
+            {/* Formulário de troca de e-mail */}
+            {showChangeEmail && (
+              <form onSubmit={handleChangeEmail} className="mt-1 mb-4 text-left space-y-2">
                 <p className="text-zinc-400 text-xs font-semibold">Novo e-mail:</p>
                 <input
                   type="email"
@@ -168,7 +179,7 @@ export default function VerifyEmail() {
                 {changeEmailErr && <p className="text-red-400 text-xs">{changeEmailErr}</p>}
                 <div className="flex gap-2">
                   <button type="submit" disabled={changingEmail}
-                    className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                     {changingEmail ? 'Salvando…' : 'Salvar e reenviar'}
                   </button>
                   <button type="button" onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}
@@ -178,13 +189,6 @@ export default function VerifyEmail() {
                 </div>
               </form>
             )}
-
-            <button
-              onClick={() => navigate('/picks')}
-              className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors"
-            >
-              Já confirmei, ir para picks →
-            </button>
           </>
         )}
       </div>
