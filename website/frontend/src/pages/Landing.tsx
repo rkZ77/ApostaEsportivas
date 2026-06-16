@@ -53,6 +53,7 @@ interface RecentTip {
 interface PublicData {
   summary: { total: number; greens: number; profit: number; roi: number }
   recent: RecentTip[]
+  counts?: { vip_total: number; free_total: number; multipla_total: number; alavancagem_total: number }
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -163,14 +164,22 @@ function RecentResults() {
 
         {/* Stats */}
         {s && s.total > 0 && (
-          <div className="grid grid-cols-2 gap-3 mb-10 max-w-xs mx-auto">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10 max-w-2xl mx-auto">
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
               <div className="text-2xl sm:text-3xl font-black text-green-500">{winRate}%</div>
               <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
             </div>
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
               <div className="text-2xl sm:text-3xl font-black text-white">{s.total}</div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Picks</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Picks</div>
+            </div>
+            <div className="bg-zinc-900 border border-green-500/20 rounded-2xl p-4 sm:p-5 text-center">
+              <div className="text-2xl sm:text-3xl font-black text-green-400">{s.greens}</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Greens</div>
+            </div>
+            <div className="bg-zinc-900 border border-red-500/20 rounded-2xl p-4 sm:p-5 text-center">
+              <div className="text-2xl sm:text-3xl font-black text-red-400">{(s.total - s.greens)}</div>
+              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Reds</div>
             </div>
           </div>
         )}

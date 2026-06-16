@@ -228,11 +228,30 @@ def public_results(
         single_source = source if source in _SUB_BUILDERS else None
         recent = _collect_results(cur, date_cond, date_params, single_source, limit=30)
 
+        # ── Contagem por tipo ─────────────────────────────────────────────────
+        counts_row = _q1(cur, f"""
+            SELECT
+                COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
+                COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
+                COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
+                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total
+            FROM (
+                SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'free'       AS source FROM picks_free       WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
+            ) AS t
+        """)
+
         return {
             "available_months": available_months,
             "summary": dict(summary) if summary else {},
             "by_day":  [dict(r) for r in by_day],
             "recent":  [dict(r) for r in recent],
+            "counts":  dict(counts_row) if counts_row else {},
         }
     finally:
         cur.close()
