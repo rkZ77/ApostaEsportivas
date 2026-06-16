@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { Menu, X } from 'lucide-react'
+import { Menu, X as XIcon } from 'lucide-react'
 import axios from 'axios'
 import Footer from '../components/Footer'
 
@@ -292,7 +292,7 @@ export default function Landing() {
               className="sm:hidden p-2 text-zinc-400 hover:text-white transition-colors"
               aria-label="Menu"
             >
-              {menuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {menuOpen ? <XIcon className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
             </button>
           </div>
         </div>
