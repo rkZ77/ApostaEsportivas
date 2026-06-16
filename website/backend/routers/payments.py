@@ -2,6 +2,7 @@ import os
 import hmac
 import hashlib
 import logging
+import resend
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -20,18 +21,11 @@ PLAN_LABELS = {
 
 
 def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
-    import smtplib
-    from email.mime.text import MIMEText
-    from email.mime.multipart import MIMEMultipart
-
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
-    from_addr = os.getenv("SMTP_FROM", smtp_user)
+    api_key   = os.getenv("RESEND_API_KEY", "")
+    from_addr = os.getenv("SMTP_FROM", "noreply@pickia.com.br")
     site_url  = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
 
-    if not smtp_user or not smtp_pass:
+    if not api_key:
         return
 
     first_name  = name.strip().split()[0]
@@ -53,9 +47,9 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
           <div style="width:64px;height:64px;background:#16a34a22;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
             <span style="font-size:32px;">&#127942;</span>
           </div>
-          <h2 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">VIP Ativado, {first_name}!</h2>
+          <h2 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Acesso ativado, {first_name}!</h2>
           <p style="margin:0 0 24px;color:#a1a1aa;font-size:15px;line-height:1.6;">
-            Seu pagamento foi confirmado. Você agora tem acesso <strong style="color:#22c55e;">VIP completo</strong> ao Pick IA.
+            Seu pagamento foi confirmado. Você agora tem acesso completo ao Pick IA.
           </p>
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;margin-bottom:28px;">
             <tr>
@@ -73,7 +67,7 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
           </table>
           <a href="{site_url}/picks"
              style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;">
-            Acessar meus picks VIP
+            Acessar meus picks
           </a>
         </td></tr>
         <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
@@ -86,16 +80,14 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
 </html>"""
 
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Acesso ativado — Pick IA"
-        msg["From"]    = from_addr
-        msg["To"]      = to
-        msg.attach(MIMEText(f"Olá {first_name}, seu VIP foi ativado! Plano {plan_label} válido até {expires_str}. Acesse: {site_url}/picks", "plain", "utf-8"))
-        msg.attach(MIMEText(html, "html", "utf-8"))
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(from_addr, [to], msg.as_string())
+        resend.api_key = api_key
+        resend.Emails.send({
+            "from":    from_addr,
+            "to":      [to],
+            "subject": "Acesso ativado — Pick IA",
+            "text":    f"Olá {first_name}, seu acesso foi ativado! Plano {plan_label} válido até {expires_str}. Acesse: {site_url}/picks",
+            "html":    html,
+        })
         logger.info("[EMAIL] VIP email enviado para %s", to)
     except Exception as e:
         logger.warning("[EMAIL] Falha ao enviar VIP email para %s: %s", to, e)

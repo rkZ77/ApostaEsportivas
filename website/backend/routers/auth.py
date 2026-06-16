@@ -3,13 +3,11 @@ import re
 import base64
 import logging
 import secrets
-import smtplib
 import pathlib
 import shutil
 
+import resend
 logger = logging.getLogger(__name__)
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, HTTPException, Request, Response, status, Depends, UploadFile, File, BackgroundTasks
 from fastapi.responses import JSONResponse
@@ -116,33 +114,25 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 # ── helpers ─────────────────────────────────────────────────────────────────
 
 def _send_email(to: str, subject: str, body: str, html: str | None = None):
-    """Envia email via SMTP. Se html fornecido, envia multipart com fallback plain."""
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
-    from_addr = os.getenv("SMTP_FROM", smtp_user)
+    api_key  = os.getenv("RESEND_API_KEY", "")
+    from_addr = os.getenv("SMTP_FROM", "noreply@pickia.com.br")
 
-    if not smtp_user or not smtp_pass:
-        logger.warning("[EMAIL] SMTP não configurado — email para %s ignorado", to)
+    if not api_key:
+        logger.warning("[EMAIL] RESEND_API_KEY não configurado — email para %s ignorado", to)
         return
 
+    resend.api_key = api_key
+    params: resend.Emails.SendParams = {
+        "from": from_addr,
+        "to":   [to],
+        "subject": subject,
+        "text": body,
+    }
     if html:
-        msg = MIMEMultipart("alternative")
-        msg.attach(MIMEText(body, "plain", "utf-8"))
-        msg.attach(MIMEText(html, "html", "utf-8"))
-    else:
-        msg = MIMEText(body, "plain", "utf-8")
-
-    msg["Subject"] = subject
-    msg["From"]    = from_addr
-    msg["To"]      = to
+        params["html"] = html
 
     try:
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(from_addr, [to], msg.as_string())
+        resend.Emails.send(params)
         logger.info("[EMAIL] Enviado para %s — assunto: %s", to, subject)
     except Exception as e:
         logger.error("[EMAIL] Falha ao enviar para %s: %s", to, e)

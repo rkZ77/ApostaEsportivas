@@ -183,18 +183,13 @@ app.include_router(live.router)
 
 
 # ── Email de lembrete: configurar banca ──────────────────────────────────────
-import smtplib
-from email.mime.multipart import MIMEMultipart
-from email.mime.text import MIMEText as _MIMEText
+import resend as _resend
 
 def _send_banca_reminder(to: str, first_name: str):
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_pass = os.getenv("SMTP_PASS", "")
-    from_addr = os.getenv("SMTP_FROM", smtp_user)
+    api_key   = os.getenv("RESEND_API_KEY", "")
+    from_addr = os.getenv("SMTP_FROM", "noreply@pickia.com.br")
     site_url  = os.getenv("SITE_URL", "https://pickia.com.br")
-    if not smtp_user or not smtp_pass:
+    if not api_key:
         return
     html = f"""<!DOCTYPE html>
 <html lang="pt-BR">
@@ -250,16 +245,14 @@ def _send_banca_reminder(to: str, first_name: str):
 </body>
 </html>"""
     try:
-        msg = MIMEMultipart("alternative")
-        msg["Subject"] = "Como acompanhar seus picks no Pick IA"
-        msg["From"]    = from_addr
-        msg["To"]      = to
-        msg.attach(_MIMEText(f"Olá {first_name}, configure sua banca em {site_url}/banca", "plain", "utf-8"))
-        msg.attach(_MIMEText(html, "html", "utf-8"))
-        with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as s:
-            s.starttls()
-            s.login(smtp_user, smtp_pass)
-            s.sendmail(from_addr, [to], msg.as_string())
+        _resend.api_key = api_key
+        _resend.Emails.send({
+            "from":    from_addr,
+            "to":      [to],
+            "subject": "Como acompanhar seus picks no Pick IA",
+            "text":    f"Olá {first_name}, configure sua banca em {site_url}/banca",
+            "html":    html,
+        })
         logger.info("[BANCA-REMINDER] Email enviado para %s", to)
     except Exception as e:
         logger.error("[BANCA-REMINDER] Falha ao enviar para %s: %s", to, e)
