@@ -447,6 +447,12 @@ HISTÓRICO FORA
             print(f"[AI] Nenhuma sugestao com odd entre 1.40-1.90 para fixture {fx['fixture_id']}")
             return []
 
+        # Rejeita picks com reasoning inconsistente com o mercado (ex: cartões falando de gols)
+        before = len(data)
+        data = [s for s in data if self._check_market_reasoning_match(s)]
+        if len(data) < before:
+            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por incoerência mercado↔reasoning")
+
         print(f"\n[AI] {fx.get('home_team')} x {fx.get('away_team')} — {len(data)} sugestões geradas:")
         for i, p in enumerate(data, 1):
             print(
@@ -457,6 +463,35 @@ HISTÓRICO FORA
             )
 
         return data
+
+    # --------------------------------------------------------
+    # VALIDA COERÊNCIA MERCADO ↔ REASONING
+    # --------------------------------------------------------
+    _MARKET_KEYWORDS: dict[str, list[str]] = {
+        "cards":   ["cartão", "cartões", "card", "amarelo", "yellow", "vermelho", "red card", "disciplin"],
+        "corners": ["escanteio", "canto", "corner"],
+        "goals":   ["gol", "goal", "marcar", "score", "btts", "over", "under"],
+    }
+
+    def _check_market_reasoning_match(self, pick: dict) -> bool:
+        """Rejeita pick se o reasoning analisar tipo de evento diferente do mercado."""
+        market   = pick.get("market", "").lower()
+        reasoning = pick.get("reasoning", "").lower()
+        mtype = self.detect_market_type(market)
+
+        if mtype not in self._MARKET_KEYWORDS:
+            return True  # mercado desconhecido — não rejeita
+
+        own_kws   = self._MARKET_KEYWORDS[mtype]
+        other_kws = [kw for t, kws in self._MARKET_KEYWORDS.items() if t != mtype for kw in kws]
+
+        has_own   = any(kw in reasoning for kw in own_kws)
+        has_other = any(kw in reasoning for kw in other_kws)
+
+        if has_other and not has_own:
+            print(f"[AI VALIDATE] Rejeitando pick '{pick.get('market')}' — reasoning fala de outro mercado (mtype={mtype})")
+            return False
+        return True
 
     # Limiares para pick stat_strong (forte estatisticamente mas EV levemente negativo)
     # Conf >= 72% + EV > -5% → pick válido, stake reduzido pelo frontend

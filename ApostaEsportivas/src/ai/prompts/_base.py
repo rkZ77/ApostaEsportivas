@@ -122,6 +122,7 @@ EV>0 é o critério ideal — a odd paga mais do que o risco. Mas EV levemente n
 [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
 [V11] reasoning contém bloco [CONF] com cálculo explícito?
+[V12] COERÊNCIA MERCADO↔ANÁLISE: o campo "market" é de cartões? → reasoning deve analisar cartões (não gols/escanteios). Market de escanteios? → reasoning analisa escanteios. Market de gols? → reasoning analisa gols. NUNCA misture tipos: se o mercado é "Total de Cartões" não escreva análise de gols.
 Falha → corrija antes de retornar.
 
 ## CALIBRAÇÃO — DESEMPENHO HISTÓRICO PRÓPRIO
