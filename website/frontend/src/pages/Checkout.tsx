@@ -112,7 +112,12 @@ function PendingPage() {
           <Clock className="w-9 h-9 text-yellow-400" />
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
-        <p className="text-zinc-400">Seu pagamento está sendo processado. Você receberá uma confirmação em breve.</p>
+        <p className="text-zinc-400">Seu pagamento está sendo processado.</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
+          <p className="text-zinc-300 text-xs font-semibold">Previsão de ativação:</p>
+          <p className="text-zinc-500 text-xs">Pix: até 5 minutos</p>
+          <p className="text-zinc-500 text-xs">Boleto: até 3 dias úteis após compensação</p>
+        </div>
         {activated
           ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
           : (
@@ -252,6 +257,26 @@ export default function Checkout() {
           <p className="text-zinc-600 text-xs">
             Pagamento processado com segurança via MercadoPago. Aceita cartão, Pix e boleto.
           </p>
+        </div>
+
+        {/* Aviso sobre tempo de ativação por método */}
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+          <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1">Tempo de ativação por método</p>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span className="text-zinc-300 font-semibold">Cartão de crédito:</span>
+            <span className="text-zinc-400">ativação imediata após aprovação</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+            <span className="text-zinc-300 font-semibold">Pix:</span>
+            <span className="text-zinc-400">ativação em até 5 minutos após pagamento</span>
+          </div>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
+            <span className="text-zinc-300 font-semibold">Boleto:</span>
+            <span className="text-zinc-400">ativação em até 3 dias úteis após compensação</span>
+          </div>
         </div>
 
         {error && <p className="text-red-400 text-sm text-center">{error}</p>}
