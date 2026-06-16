@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo } from 'react'
 import {
   Target, Flag, AlertTriangle, AlertCircle,
   Shield, Crosshair, Repeat, TrendingUp, TrendingDown, Minus,
-  Home, Globe, Plane, X, ChevronDown, ChevronUp, Lock,
+  Home, Globe, Plane, X, Lock,
 } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -275,85 +275,90 @@ export function EstatisticasContent() {
                       {trendLbl(val, def.high, def.low)}
                     </div>
                     {hasRank && (
-                      <div className="mt-1 flex justify-center">
-                        {isActive
-                          ? <ChevronUp className="w-3 h-3 text-green-500" />
-                          : <ChevronDown className="w-3 h-3 text-zinc-700" />}
-                      </div>
+                      <div className="mt-1.5 text-[9px] text-zinc-600 font-semibold">Ranking →</div>
                     )}
                   </button>
                 )
               })}
             </div>
 
-            {/* Ranking panel */}
+            {/* Ranking modal */}
             {activeCard && STAT_DEFS[activeCard].rankField && (
-              <div className="card overflow-hidden p-0">
-                <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2">
-                    {(() => {
-                      const def = STAT_DEFS[activeCard]
-                      const Icon = def.Icon
-                      return <>
-                        <Icon className={`w-4 h-4 ${def.iconCls}`} />
-                        <h3 className="text-sm font-black text-white">Ranking — {def.rankLabel}</h3>
-                      </>
-                    })()}
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    {/* Context filter */}
-                    <div className="flex gap-0.5 bg-zinc-900 rounded-lg p-0.5">
-                      {([
-                        { key: 'all',  label: 'Todos', Icon: Globe  },
-                        { key: 'home', label: 'Casa',  Icon: Home   },
-                        { key: 'away', label: 'Fora',  Icon: Plane  },
-                      ] as const).map(({ key, label, Icon }) => (
-                        <button
-                          key={key}
-                          onClick={() => setContext(key)}
-                          className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-[10px] font-semibold transition-colors ${
-                            context === key
-                              ? 'bg-zinc-700 text-white'
-                              : 'text-zinc-500 hover:text-zinc-300'
-                          }`}
-                        >
-                          <Icon className="w-3 h-3" />
-                          {label}
-                        </button>
-                      ))}
+              <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setActiveCard(null)}>
+                <div className="absolute inset-0 bg-black/70" />
+                <div
+                  className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[80vh] flex flex-col"
+                  onClick={e => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="px-4 py-4 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0 bg-zinc-800">
+                    <div className="flex items-center gap-2">
+                      {(() => {
+                        const def = STAT_DEFS[activeCard!]
+                        const Icon = def.Icon
+                        return <>
+                          <Icon className={`w-5 h-5 ${def.iconCls}`} />
+                          <h3 className="text-base font-black text-white">Ranking — {def.rankLabel}</h3>
+                        </>
+                      })()}
                     </div>
-                    <button onClick={() => setActiveCard(null)} className="text-zinc-600 hover:text-zinc-300 p-1 transition-colors">
-                      <X className="w-4 h-4" />
+                    <button onClick={() => setActiveCard(null)} className="text-zinc-500 hover:text-white p-1 transition-colors">
+                      <X className="w-5 h-5" />
                     </button>
                   </div>
-                </div>
 
-                {sortedRanking.length === 0 ? (
-                  <div className="p-8 text-center text-zinc-500 text-sm">Sem dados de ranking ainda.</div>
-                ) : (
-                  <div className="divide-y divide-zinc-800/60">
-                    {sortedRanking.map((team, idx) => {
-                      const field = STAT_DEFS[activeCard!].rankField!
-                      const val = team[field] as number
-                      const isFirst = idx === 0
-                      const rankCls = idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-zinc-300' : idx === 2 ? 'text-zinc-500' : 'text-zinc-700'
-                      return (
-                        <div key={team.team_id}
-                          className={`flex items-center gap-3 px-4 py-2.5 hover:bg-zinc-900/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
-                          <span className={`text-xs font-black w-5 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
-                          <img src={`/api/proxy/team/${team.team_id}.png`} alt=""
-                            className="w-5 h-5 object-contain shrink-0"
-                            onError={e => (e.currentTarget.style.display = 'none')} />
-                          <span className="text-sm text-zinc-300 font-semibold flex-1 truncate">{team.team_name}</span>
-                          <span className="text-[10px] text-zinc-600 shrink-0">{team.games}j</span>
-                          <span className={`text-sm font-black shrink-0 tabular-nums ${isFirst ? 'text-green-400' : 'text-zinc-200'}`}>
-                            {val.toFixed(2)}
-                          </span>
-                        </div>
-                      )
-                    })}
+                  {/* Context filter */}
+                  <div className="flex gap-1.5 px-4 py-3 border-b border-zinc-800 shrink-0">
+                    {([
+                      { key: 'all',  label: 'Todos', Icon: Globe  },
+                      { key: 'home', label: 'Casa',  Icon: Home   },
+                      { key: 'away', label: 'Fora',  Icon: Plane  },
+                    ] as const).map(({ key, label, Icon }) => (
+                      <button
+                        key={key}
+                        onClick={() => setContext(key)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          context === key
+                            ? 'bg-zinc-700 text-white'
+                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        {label}
+                      </button>
+                    ))}
                   </div>
-                )}
+
+                  {/* List */}
+                  <div className="flex-1 overflow-y-auto">
+                    {sortedRanking.length === 0 ? (
+                      <div className="p-8 text-center text-zinc-500 text-sm">Sem dados de ranking ainda.</div>
+                    ) : (
+                      <div className="divide-y divide-zinc-800/60">
+                        {sortedRanking.map((team, idx) => {
+                          const field = STAT_DEFS[activeCard!].rankField!
+                          const val = team[field] as number
+                          const isFirst = idx === 0
+                          const rankCls = idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-zinc-400' : idx === 2 ? 'text-zinc-500' : 'text-zinc-700'
+                          return (
+                            <div key={team.team_id}
+                              className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
+                              <span className={`text-sm font-black w-6 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
+                              <img src={`/api/proxy/team/${team.team_id}.png`} alt=""
+                                className="w-6 h-6 object-contain shrink-0"
+                                onError={e => (e.currentTarget.style.display = 'none')} />
+                              <span className="text-sm text-zinc-200 font-semibold flex-1 truncate">{team.team_name}</span>
+                              <span className="text-[11px] text-zinc-600 shrink-0">{team.games}j</span>
+                              <span className={`text-base font-black shrink-0 tabular-nums w-14 text-right ${isFirst ? 'text-green-400' : 'text-zinc-200'}`}>
+                                {val.toFixed(2)}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
             )}
 
