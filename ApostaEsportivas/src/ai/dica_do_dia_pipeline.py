@@ -88,6 +88,8 @@ Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteio
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
 Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
 
+CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → prefira gols ou escanteios.
+
 --- FIXTURES + DADOS ---
 {fixtures_formatados}
 

@@ -66,6 +66,7 @@ PRINCÍPIOS:
 - Qualidade acima de quantidade: prefira no_bet a uma múltipla fraca
 - MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
   Não existe mercado preferencial. Escolha por consistência estatística, independente do tipo.
+- CARTÕES — volatilidade MÉDIA: só use pick de cartão se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60% no venue) confirmarem simultaneamente. Sem ambos os dados → prefira gols ou escanteios.
 - Linha Over/Under (qualquer mercado): sempre a mais conservadora em 1.40–1.90. Over→linha mais baixa. Under→linha mais alta.
 - Mercados proibidos: Match Winner (1X2 direto).
 
