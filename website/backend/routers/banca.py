@@ -138,7 +138,7 @@ def get_banca(
             date_params.append(days)
 
         cur.execute(f"""
-            SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at
+            SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at, uf.actual_odd
             FROM user_followed_picks uf
             WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
             ORDER BY uf.followed_at ASC
@@ -151,19 +151,20 @@ def get_banca(
             pick = _resolve_pick(cur, f["pick_id"], f["pick_type"])
             if not pick:
                 continue
-            result   = pick.get("result")
-            # Para múltipla: profit salvo no DB usa stake interno (pode ser 0/None).
-            # Recalcula por unidade direto da odd, igual ao VIP/Free.
-            if f["pick_type"] == "multipla" and result in ("GREEN", "RED", "PUSH"):
-                _odd = float(pick.get("odd") or 1)
+            result     = pick.get("result")
+            actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
+            # Usa actual_odd do usuário para profit quando disponível; caso contrário, usa a odd do pick
+            if result in ("GREEN", "RED", "PUSH"):
+                _odd = actual_odd or float(pick.get("odd") or 1)
                 profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
             else:
-                profit_u = float(pick.get("profit") or 0) if result else None
+                profit_u = None
             # pnl em R$ = lucro_por_unidade × unidades_apostadas × valor_da_unidade
             pnl_r    = profit_u * float(f["stake_units"]) * unit_value if profit_u is not None else None
             if pnl_r is not None:
                 running += pnl_r
 
+            pick_odd = actual_odd or (float(pick["odd"]) if pick.get("odd") is not None else None)
             entries.append({
                 "id":             f["id"],
                 "pick_id":        f["pick_id"],
@@ -176,7 +177,8 @@ def get_banca(
                 "away_team_id":   pick.get("away_team_id"),
                 "market":         pick.get("market"),
                 "line":           pick.get("line"),
-                "odd":            float(pick["odd"]) if pick.get("odd") is not None else None,
+                "odd":            pick_odd,
+                "actual_odd":     actual_odd,
                 "result":         result,
                 "profit_units":   profit_u,
                 "pnl":            round(pnl_r, 2) if pnl_r is not None else None,
