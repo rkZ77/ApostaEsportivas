@@ -490,7 +490,7 @@ export default function Banca() {
 
             {/* Lista de picks agrupada por data */}
             {(() => {
-              const allEntries: any[] = data?.entries ?? []
+              const allEntries: any[] = (data?.entries ?? []).slice(0, 6)
               const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
               const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
               const dayLabel = (key: string) =>
@@ -574,11 +574,11 @@ export default function Banca() {
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-                      Picks apostados ({allEntries.length})
+                      Últimos picks apostados
                     </p>
-                    <button onClick={() => navigate('/picks')} className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
-                      Adicionar picks →
-                    </button>
+                    <Link to="/meus-picks" className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
+                      Ver todos →
+                    </Link>
                   </div>
 
                   {!allEntries.length ? (

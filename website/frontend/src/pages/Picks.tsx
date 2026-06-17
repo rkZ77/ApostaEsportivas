@@ -1550,53 +1550,22 @@ export default function Picks() {
           ) : (
             <div className="space-y-8">
 
-              {/* Resumo das bancas — visível para VIPs */}
-              {canSeeVip && (bancaSummary || userAlavSerie) && (
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Banca Geral */}
-                  <div className={`rounded-xl border p-3.5 ${bancaSummary?.has_banca ? 'bg-zinc-900 border-zinc-800' : 'bg-zinc-900/50 border-dashed border-zinc-800'}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Banca Geral</span>
-                      {!bancaSummary?.has_banca && (
-                        <span className="text-[10px] text-yellow-500 font-bold">Não configurada</span>
-                      )}
+              {/* Stats rápidas do mês */}
+              {quickStats && (
+                <div className="grid grid-cols-4 gap-3">
+                  {[
+                    { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
+                    { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
+                    { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
+                    { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                      <div className={`text-xl font-black ${color}`}>{value}</div>
+                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
                     </div>
-                    {bancaSummary?.has_banca ? (
-                      <>
-                        <div className="text-xl font-black text-white">R${Number(bancaSummary.bankroll_current).toFixed(2)}</div>
-                        <div className="text-[11px] text-zinc-600 mt-0.5">{bancaSummary.unit_value ? `1u = R$${Number(bancaSummary.unit_value).toFixed(2)}` : ''}</div>
-                      </>
-                    ) : (
-                      <p className="text-xs text-zinc-600 mt-1"><a href="/banca" className="text-green-400 underline font-semibold">Configurar banca</a></p>
-                    )}
-                  </div>
-                  {/* Banca Alavancagem */}
-                  <div className={`rounded-xl border p-3.5 ${userAlavSerie?.configured ? 'bg-zinc-900 border-orange-500/20' : 'bg-zinc-900/50 border-dashed border-zinc-800'}`}>
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-widest font-semibold">Alavancagem</span>
-                      {!userAlavSerie?.configured && (
-                        <span className="text-[10px] text-yellow-500 font-bold">Não configurada</span>
-                      )}
-                    </div>
-                    {userAlavSerie?.configured ? (
-                      <>
-                        <div className="text-xl font-black text-orange-400">R${Number(userAlavSerie.current_bankroll).toFixed(2)}</div>
-                        <div className="text-[11px] text-zinc-600 mt-0.5">
-                          início R${Number(userAlavSerie.initial_bankroll).toFixed(2)}
-                          {userAlavSerie.current_bankroll > userAlavSerie.initial_bankroll && (
-                            <span className="text-green-400 ml-1">+R${(userAlavSerie.current_bankroll - userAlavSerie.initial_bankroll).toFixed(2)}</span>
-                          )}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="text-xs text-zinc-600 mt-1">Configure na aba <button onClick={() => setTab('alavancagem')} className="text-orange-400 underline">Alavancagem</button></p>
-                    )}
-                  </div>
+                  ))}
                 </div>
               )}
-
-              {/* Stats rápidas do mês — para todos */}
-              <QuickStats stats={quickStats} />
 
               {/* Horário de geração dos picks */}
               {(today?.vip?.[0]?.created_at || today?.dica_do_dia?.created_at) && (() => {
