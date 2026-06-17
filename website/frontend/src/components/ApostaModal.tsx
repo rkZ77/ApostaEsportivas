@@ -43,7 +43,7 @@ export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: P
           />
           {changed && (
             <p className="text-yellow-400 text-[11px] mt-1.5">
-              Odd diferente do pick — será registrada como apostada
+              Odd diferente do pick: será registrada como apostada
             </p>
           )}
         </div>
