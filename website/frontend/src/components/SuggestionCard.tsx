@@ -68,6 +68,8 @@ export default function SuggestionCard({
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [apiError, setApiError]   = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value)
     : null
@@ -80,6 +82,7 @@ export default function SuggestionCard({
 
   const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
+    setApiError(null)
     try {
       await api.post('/banca/follow', {
         pick_id: s.id,
@@ -90,8 +93,10 @@ export default function SuggestionCard({
       })
       setFollowed(true)
       setShowModal(false)
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
     } catch {
-      setFollowed(false)
+      setApiError('Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }
@@ -250,7 +255,13 @@ export default function SuggestionCard({
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
+        error={apiError}
       />
+    )}
+    {showSuccess && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+        Pick registrado na sua banca!
+      </div>
     )}
   </>
   )

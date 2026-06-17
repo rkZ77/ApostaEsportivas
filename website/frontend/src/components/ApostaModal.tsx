@@ -7,9 +7,10 @@ interface Props {
   onConfirm: (actualOdd: number, betHouse: string) => void
   onCancel: () => void
   loading?: boolean
+  error?: string | null
 }
 
-export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: Props) {
+export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading, error }: Props) {
   const [oddStr, setOddStr]     = useState(String(pickOdd))
   const [house, setHouse]       = useState('')
   const [customHouse, setCustomHouse] = useState('')
@@ -85,6 +86,10 @@ export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: P
             </p>
           )}
         </div>
+
+        {error && (
+          <p className="text-red-400 text-xs mb-3 text-center">{error}</p>
+        )}
 
         <div className="flex gap-2">
           <button

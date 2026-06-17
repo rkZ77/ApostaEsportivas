@@ -318,6 +318,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value)
     : null
@@ -331,11 +333,16 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 
   const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
+    setApiError(null)
     try {
       await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1, actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
-    } catch { /* ignora */ } finally {
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
+    } catch {
+      setApiError('Erro ao registrar aposta. Tente novamente.')
+    } finally {
       setFollowing(false)
     }
   }
@@ -484,7 +491,13 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
+        error={apiError}
       />
+    )}
+    {showSuccess && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+        Pick registrado na sua banca!
+      </div>
     )}
   </>
   )
@@ -516,6 +529,8 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 7)
     : null
@@ -531,6 +546,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 
   const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
+    setApiError(null)
     try {
       await api.post('/banca/follow', {
         pick_id: m.id,
@@ -541,8 +557,10 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       })
       setFollowed(true)
       setShowModal(false)
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
     } catch {
-      setFollowed(false)
+      setApiError('Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }
@@ -684,7 +702,13 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
+        error={apiError}
       />
+    )}
+    {showSuccess && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+        Pick registrado na sua banca!
+      </div>
     )}
   </>
   )
@@ -707,6 +731,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [apiError, setApiError] = useState<string | null>(null)
+  const [showSuccess, setShowSuccess] = useState(false)
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -716,12 +742,15 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
 
   const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
+    setApiError(null)
     try {
       await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
+      setShowSuccess(true)
+      setTimeout(() => setShowSuccess(false), 3000)
     } catch {
-      setFollowed(false)
+      setApiError('Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }
@@ -873,7 +902,13 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
+        error={apiError}
       />
+    )}
+    {showSuccess && (
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+        Pick registrado na sua banca!
+      </div>
     )}
   </>
   )
