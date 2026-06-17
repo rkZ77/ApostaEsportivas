@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import api from '../services/api'
 import { suggestStake } from '../utils/stakeUtils'
+import ApostaModal from './ApostaModal'
 
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
@@ -66,21 +67,28 @@ export default function SuggestionCard({
   const pct = Math.round((s.confidence ?? 0) * 100)
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
+  const [showModal, setShowModal] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value)
     : null
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
+    setShowModal(true)
+  }
+
+  const handleConfirm = async (actualOdd: number) => {
     setFollowing(true)
     try {
       await api.post('/banca/follow', {
         pick_id: s.id,
         pick_type: s.pick_type ?? 'vip',
         stake_units: stakeSuggestion?.units ?? s.stake ?? 1,
+        actual_odd: actualOdd,
       })
       setFollowed(true)
+      setShowModal(false)
     } catch {
       setFollowed(false)
     } finally {
@@ -100,6 +108,7 @@ export default function SuggestionCard({
   const isCopa = s.league_id === 1
 
   return (
+  <>
     <div
       className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer transition-all duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
       onClick={onClick}
@@ -233,5 +242,16 @@ export default function SuggestionCard({
         )}
       </div>
     </div>
+
+    {showModal && (
+      <ApostaModal
+        pickOdd={Number(s.odd)}
+        onConfirm={handleConfirm}
+        onCancel={() => setShowModal(false)}
+        loading={following}
+      />
+    )}
+  </>
   )
 }
+

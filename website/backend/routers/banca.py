@@ -17,6 +17,7 @@ class FollowPick(BaseModel):
     pick_id: int
     pick_type: str
     stake_units: float = 1.0
+    actual_odd: Optional[float] = None
 
 
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
@@ -309,10 +310,10 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
         if cur.fetchone():
             return {"ok": True, "already_followed": True}
         cur.execute("""
-            INSERT INTO user_followed_picks (user_id, pick_id, pick_type, stake_units)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO user_followed_picks (user_id, pick_id, pick_type, stake_units, actual_odd)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (user_id, pick_id, pick_type) DO NOTHING
-        """, (user_id, body.pick_id, body.pick_type, body.stake_units))
+        """, (user_id, body.pick_id, body.pick_type, body.stake_units, body.actual_odd))
         conn.commit()
         return {"ok": True, "already_followed": False}
     finally:

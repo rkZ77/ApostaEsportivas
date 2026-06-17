@@ -4,6 +4,7 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import SuggestionCard from '../components/SuggestionCard'
+import ApostaModal from '../components/ApostaModal'
 import SuggestionDetail from '../components/SuggestionDetail'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
@@ -316,18 +317,24 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
+  const [showModal, setShowModal] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value)
     : null
   const fato = shortReasoning(dica.reasoning)
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
+    setShowModal(true)
+  }
+
+  const handleConfirm = async (actualOdd: number) => {
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1 })
+      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1, actual_odd: actualOdd })
       setFollowed(true)
+      setShowModal(false)
     } catch { /* ignora */ } finally {
       setFollowing(false)
     }
@@ -340,6 +347,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     : null
 
   return (
+  <>
     <div
       className={`relative overflow-hidden bg-zinc-950 border rounded-2xl transition-all duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
@@ -470,6 +478,15 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         )}
       </div>
     </div>
+    {showModal && (
+      <ApostaModal
+        pickOdd={Number(dica.odd)}
+        onConfirm={handleConfirm}
+        onCancel={() => setShowModal(false)}
+        loading={following}
+      />
+    )}
+  </>
   )
 }
 
@@ -498,6 +515,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const pct = Math.round((m.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
+  const [showModal, setShowModal] = useState(false)
   const stakeSuggestion = banca
     ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 7)
     : null
@@ -505,17 +523,23 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
     : null
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (following) return
+    if (following || followed) return
+    setShowModal(true)
+  }
+
+  const handleConfirm = async (actualOdd: number) => {
     setFollowing(true)
     try {
       await api.post('/banca/follow', {
         pick_id: m.id,
         pick_type: 'multipla',
         stake_units: stakeSuggestion?.units ?? 1,
+        actual_odd: actualOdd,
       })
       setFollowed(true)
+      setShowModal(false)
     } catch {
       setFollowed(false)
     } finally {
@@ -530,6 +554,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     : null
 
   return (
+  <>
     <div
       className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all duration-200 group"
       onClick={onClick}
@@ -652,6 +677,15 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
       </div>
     </div>
+    {showModal && (
+      <ApostaModal
+        pickOdd={Number(m.total_odd)}
+        onConfirm={handleConfirm}
+        onCancel={() => setShowModal(false)}
+        loading={following}
+      />
+    )}
+  </>
   )
 }
 
@@ -671,14 +705,20 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     : null
   const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
   const [following, setFollowing] = useState(false)
+  const [showModal, setShowModal] = useState(false)
 
-  const handleFollow = async (e: React.MouseEvent) => {
+  const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
-    if (following) return
+    if (following || followed) return
+    setShowModal(true)
+  }
+
+  const handleConfirm = async (actualOdd: number) => {
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem' })
+      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', actual_odd: actualOdd })
       setFollowed(true)
+      setShowModal(false)
     } catch {
       setFollowed(false)
     } finally {
@@ -697,6 +737,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     : null
 
   return (
+  <>
     <div
       className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-2xl cursor-pointer transition-all duration-200 group"
       onClick={onClick}
@@ -825,6 +866,15 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
       </div>
     </div>
+    {showModal && (
+      <ApostaModal
+        pickOdd={Number(pick.odd_combined)}
+        onConfirm={handleConfirm}
+        onCancel={() => setShowModal(false)}
+        loading={following}
+      />
+    )}
+  </>
   )
 }
 
