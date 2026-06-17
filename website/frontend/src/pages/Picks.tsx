@@ -497,7 +497,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     )}
     {showSuccess && (
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
-        Pick registrado na sua banca!
+        Pick registrado com sucesso!
       </div>
     )}
   </>
@@ -710,7 +710,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     )}
     {showSuccess && (
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
-        Pick registrado na sua banca!
+        Pick registrado com sucesso!
       </div>
     )}
   </>
@@ -916,7 +916,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     )}
     {showSuccess && (
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
-        Pick registrado na sua banca!
+        Pick registrado com sucesso!
       </div>
     )}
   </>

@@ -262,7 +262,7 @@ export default function SuggestionCard({
     )}
     {showSuccess && (
       <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
-        Pick registrado na sua banca!
+        Pick registrado com sucesso!
       </div>
     )}
   </>

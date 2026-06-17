@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Trophy } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trophy, Trash2 } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
@@ -48,7 +48,8 @@ export default function MeusPicks() {
   const [period,     setPeriod]     = useState(0)
   const [tab,        setTab]        = useState<'pendentes' | 'resolvidos'>('pendentes')
   const [dayOffset,  setDayOffset]  = useState(0)
-  const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
+  const [detailPick,   setDetailPick]   = useState<{ id: number; pick_type: string } | null>(null)
+  const [showRemoved,  setShowRemoved]  = useState(false)
 
   const load = useCallback((days: number) => {
     setLoading(true)
@@ -65,6 +66,8 @@ export default function MeusPicks() {
   const handleUnfollow = async (pick_id: number, pick_type: string) => {
     await api.delete(`/banca/follow/${pick_id}/${pick_type}`).catch(() => {})
     load(period)
+    setShowRemoved(true)
+    setTimeout(() => setShowRemoved(false), 3000)
   }
 
   const changePeriod = (key: number) => {
@@ -296,9 +299,11 @@ export default function MeusPicks() {
                               {tab === 'pendentes' && (
                                 <button
                                   onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
-                                  className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
-                                  title="Remover"
-                                >×</button>
+                                  className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0"
+                                  title="Remover pick"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
                               )}
                             </div>
                           </button>
@@ -313,6 +318,12 @@ export default function MeusPicks() {
           </div>
         )}
       </main>
+
+      {showRemoved && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+          Pick removido da sua banca
+        </div>
+      )}
     </div>
   )
 }
