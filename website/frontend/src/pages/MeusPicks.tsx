@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { ChevronLeft, ChevronRight, Trophy, Trash2 } from 'lucide-react'
-import { Link, useNavigate } from 'react-router-dom'
+import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import SuggestionDetail from '../components/SuggestionDetail'
@@ -30,13 +30,6 @@ const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
 }
 
-const PERIODS = [
-  { key: 0,  label: 'Tudo' },
-  { key: 7,  label: '7d' },
-  { key: 30, label: '30d' },
-  { key: 90, label: '90d' },
-]
-
 const pnlColor = (v: number | null) =>
   v == null ? 'text-zinc-600' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-zinc-400'
 
@@ -45,34 +38,28 @@ export default function MeusPicks() {
 
   const [data,       setData]       = useState<any>(null)
   const [loading,    setLoading]    = useState(true)
-  const [period,     setPeriod]     = useState(0)
   const [tab,        setTab]        = useState<'pendentes' | 'resolvidos'>('pendentes')
   const [dayOffset,  setDayOffset]  = useState(0)
   const [detailPick,   setDetailPick]   = useState<{ id: number; pick_type: string } | null>(null)
   const [showRemoved,  setShowRemoved]  = useState(false)
 
-  const load = useCallback((days: number) => {
+  const load = useCallback(() => {
     setLoading(true)
-    api.get('/banca', { params: days > 0 ? { days } : {} })
+    api.get('/banca')
       .then(r => setData(r.data))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
 
   useEffect(() => {
-    load(period)
-  }, [period, load])
+    load()
+  }, [load])
 
   const handleUnfollow = async (pick_id: number, pick_type: string) => {
     await api.delete(`/banca/follow/${pick_id}/${pick_type}`).catch(() => {})
-    load(period)
+    load()
     setShowRemoved(true)
     setTimeout(() => setShowRemoved(false), 3000)
-  }
-
-  const changePeriod = (key: number) => {
-    setPeriod(key)
-    setDayOffset(0)
   }
 
   const changeTab = (t: 'pendentes' | 'resolvidos') => {
@@ -131,10 +118,6 @@ export default function MeusPicks() {
               <p className="text-zinc-500 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
             </div>
           </div>
-          <Link to="/leaderboard" className="flex items-center gap-1.5 btn-ghost text-xs px-3 py-2">
-            <Trophy className="w-3.5 h-3.5" />
-            Ver Top
-          </Link>
         </div>
       </div>
 
@@ -145,23 +128,6 @@ export default function MeusPicks() {
           </div>
         ) : (
           <div className="space-y-4">
-
-            {/* Filtro de período */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {PERIODS.map(p => (
-                <button
-                  key={p.key}
-                  onClick={() => changePeriod(p.key)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    period === p.key
-                      ? 'bg-green-500 border-green-500 text-black'
-                      : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                  }`}
-                >
-                  {p.label}
-                </button>
-              ))}
-            </div>
 
             {/* Tabs */}
             <div className="flex gap-2">

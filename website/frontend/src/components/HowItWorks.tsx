@@ -157,7 +157,7 @@ export default function HowItWorks() {
                Isso registra a aposta na sua banca e ativa o acompanhamento ao vivo.</p>
             <div className="flex items-start gap-2 bg-zinc-800/60 rounded-lg px-3 py-2 mt-2">
               <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
-              <span className="text-xs text-zinc-500">Apenas picks marcados como "Apostei" entram no seu Yield, ROI e Ranking.</span>
+              <span className="text-xs text-zinc-500">Apenas picks marcados como "Apostei" entram no seu Yield e ROI pessoal.</span>
             </div>
           </Step>
 
@@ -222,7 +222,7 @@ export default function HowItWorks() {
             { to: '/fixtures',    Icon: BarChart2, title: 'Jogos',       desc: 'Veja a agenda e estatísticas detalhadas de partidas' },
             { to: '/results',     Icon: TrendingUp, title: 'Resultados', desc: 'Histórico completo com Win Rate, ROI e lucro' },
             { to: '/agente',      Icon: Bot,       title: 'Agente IA',   desc: 'Pergunte sobre picks, banca e análises ao chat' },
-            { to: '/leaderboard', Icon: Medal,     title: 'Ranking',     desc: 'Compare seu Yield com outros apostadores' },
+            { to: '/meus-picks',  Icon: Medal,     title: 'Meus Picks',  desc: 'Acompanhe suas apostas pendentes e resolvidas' },
             { to: '/picks#aovivo', Icon: Radio,    title: 'Ao Vivo',     desc: 'Acompanhe seus picks em tempo real durante os jogos' },
           ].map(({ to, Icon, title, desc }) => (
             <Link key={to} to={to}
@@ -264,7 +264,7 @@ export default function HowItWorks() {
             ['Múltiplas da IA', false, true],
             ['Alavancagem', false, true],
             ['Gestão de Banca completa', false, true],
-            ['Ranking de apostadores', false, true],
+            ['Meus Picks (gestão de apostas)', true, true],
             ['Agente IA (chat)', 'limitado', true],
           ].map(([feat, free, vip]) => (
             <div key={String(feat)} className="flex items-center justify-between">

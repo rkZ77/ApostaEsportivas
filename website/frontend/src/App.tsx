@@ -14,7 +14,6 @@ import Planos from './pages/Planos'
 import Agente from './pages/Agente'
 import Checkout from './pages/Checkout'
 import Banca from './pages/Banca'
-import Leaderboard from './pages/Leaderboard'
 import MeusPicks from './pages/MeusPicks'
 import VerifyEmail from './pages/VerifyEmail'
 import Privacidade from './pages/Privacidade'
@@ -55,7 +54,6 @@ export default function App() {
           <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
           <Route path="/checkout/:status" element={<PrivateRoute><Checkout /></PrivateRoute>} />
           <Route path="/banca" element={<PrivateRoute><Banca /></PrivateRoute>} />
-          <Route path="/leaderboard" element={<PrivateRoute><Leaderboard /></PrivateRoute>} />
           <Route path="/meus-picks" element={<PrivateRoute><MeusPicks /></PrivateRoute>} />
           <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
           <Route path="/reset-password" element={<ResetPassword />} />
