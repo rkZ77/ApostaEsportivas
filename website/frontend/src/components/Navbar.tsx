@@ -3,7 +3,7 @@ import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
-  Zap, Trophy, BarChart2, Bot, Wallet, Medal, ShieldCheck, Crown,
+  Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
   LogOut, Menu, X,
 } from 'lucide-react'
 import Avatar from './Avatar'
@@ -48,7 +48,7 @@ export default function Navbar() {
     { to: '/results',  label: 'Resultados', Icon: BarChart2 },
     { to: '/agente',   label: 'Agente',     Icon: Bot },
     { to: '/banca',       label: 'Banca',      Icon: Wallet },
-    { to: '/leaderboard', label: 'Ranking',    Icon: Medal },
+    { to: '/meus-picks',  label: 'Meus Picks',  Icon: ListChecks },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]
       : []),

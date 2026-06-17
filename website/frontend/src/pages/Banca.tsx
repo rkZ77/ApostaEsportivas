@@ -5,7 +5,6 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import ProfitChart from '../components/ProfitChart'
-import RecentResultsSection from '../components/RecentResultsSection'
 import SuggestionDetail from '../components/SuggestionDetail'
 
 // formatação
@@ -185,13 +184,6 @@ function SetupModal({ current, onSave, onClose }: {
 }
 
 // componente principal
-const PERIODS = [
-  { key: 0,  label: 'Tudo' },
-  { key: 7,  label: '7 dias' },
-  { key: 30, label: '30 dias' },
-  { key: 90, label: '90 dias' },
-]
-
 export default function Banca() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin } = useAuth()
@@ -199,7 +191,6 @@ export default function Banca() {
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [period,  setPeriod]  = useState(0)
   const [showSetup, setShowSetup] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
   const [dayOffset,  setDayOffset]  = useState(0)
@@ -213,18 +204,13 @@ export default function Banca() {
   }, [])
 
   useEffect(() => {
-    if (canSee) load(period)
-  }, [canSee, period, load])
+    if (canSee) load(0)
+  }, [canSee, load])
 
   const handleSave = (start: number, goal: number | null, unitValue: number) => {
     setShowSetup(false)
     setData((d: any) => d ? { ...d, bankroll_start: start, bankroll_goal: goal, unit_value: unitValue } : d)
-    load(period)
-  }
-
-  const handleUnfollow = async (pick_id: number, pick_type: string) => {
-    await api.delete(`/banca/follow/${pick_id}/${pick_type}`).catch(() => {})
-    load(period)
+    load(0)
   }
 
   const pnlColor = (v: number | null) =>
@@ -291,8 +277,8 @@ export default function Banca() {
           </div>
           {canSee && (
             <div className="flex items-center gap-2">
-              <Link to="/leaderboard" className="btn-ghost text-xs px-3 py-2">
-                Ranking
+              <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2">
+                Meus Picks
               </Link>
               <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
                 Configurar
@@ -311,18 +297,6 @@ export default function Banca() {
           </div>
         ) : (
           <div className="space-y-6">
-
-            {/* Filtro de período */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {PERIODS.map(p => (
-                <button key={p.key} onClick={() => setPeriod(p.key)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    period === p.key
-                      ? 'bg-green-500 border-green-500 text-black'
-                      : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                  }`}>{p.label}</button>
-              ))}
-            </div>
 
             {/* Stats principais */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -703,13 +677,6 @@ export default function Banca() {
                                     <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
                                       {e.pnl != null ? fmtSigned(e.pnl) : ''}
                                     </span>
-                                    {!e.result && (
-                                      <button
-                                        onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
-                                        className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
-                                        title="Remover"
-                                      >×</button>
-                                    )}
                                   </div>
                                 </button>
                               )
