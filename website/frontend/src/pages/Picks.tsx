@@ -1338,7 +1338,36 @@ export default function Picks() {
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
             <h1 className="text-base font-black text-white tracking-tight">Picks</h1>
-            <p className="text-zinc-500 text-xs capitalize mt-0.5">{todayLabel}</p>
+            {tab === 'hoje' ? (
+              <div className="flex items-center gap-0.5 mt-0.5">
+                <button
+                  onClick={() => setSelectedOffset(o => o - 1)}
+                  className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 -ml-0.5"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                </button>
+                <span className="text-zinc-400 text-xs capitalize font-medium">
+                  {selectedOffset === 0 ? 'Hoje' : todayLabel}
+                </span>
+                <button
+                  onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
+                  disabled={selectedOffset >= 0}
+                  className="text-zinc-500 hover:text-zinc-300 disabled:opacity-20 transition-colors p-0.5"
+                >
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+                {selectedOffset < 0 && (
+                  <button
+                    onClick={() => setSelectedOffset(0)}
+                    className="ml-1 text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors"
+                  >
+                    · Hoje
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="text-zinc-500 text-xs capitalize mt-0.5">{todayLabel}</p>
+            )}
           </div>
           <div className="flex items-center gap-4">
             {quickStats && (
@@ -1409,35 +1438,6 @@ export default function Picks() {
 
         {tab === 'hoje' && (
           <>
-            {/* Navegação de data */}
-            <div className="flex items-center justify-center gap-2 py-3">
-              <button
-                onClick={() => setSelectedOffset(o => o - 1)}
-                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
-              >
-                <ChevronLeft className="w-4 h-4" />
-              </button>
-              <div className="flex items-center gap-2 min-w-[200px] justify-center">
-                <span className="text-sm font-semibold text-white capitalize">
-                  {selectedOffset === 0 ? 'Hoje' : todayLabel}
-                </span>
-                {selectedOffset < 0 && (
-                  <button
-                    onClick={() => setSelectedOffset(0)}
-                    className="text-[10px] text-green-400 hover:text-green-300 font-bold bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full transition-colors"
-                  >
-                    Hoje
-                  </button>
-                )}
-              </div>
-              <button
-                onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
-                disabled={selectedOffset >= 0}
-                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
-              >
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
             {todayLoading ? <Spinner /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar picks</p>
