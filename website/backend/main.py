@@ -182,6 +182,27 @@ app.include_router(leaderboard.router)
 app.include_router(live.router)
 
 
+# ── Migrações automáticas de schema ──────────────────────────────────────────
+@app.on_event("startup")
+def run_migrations():
+    try:
+        from database import get_connection
+        conn = get_connection()
+        cur = conn.cursor()
+        migrations = [
+            "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2)",
+            "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100)",
+        ]
+        for sql in migrations:
+            cur.execute(sql)
+        conn.commit()
+        cur.close()
+        conn.close()
+        logger.info("[STARTUP] Migrações aplicadas com sucesso.")
+    except Exception as e:
+        logger.warning("[STARTUP] Erro ao aplicar migrações: %s", e)
+
+
 # ── Email de lembrete: configurar banca ──────────────────────────────────────
 import resend as _resend
 
