@@ -202,8 +202,6 @@ export default function Banca() {
   const [period,  setPeriod]  = useState(0)
   const [showSetup, setShowSetup] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
-  const [picksPage,  setPicksPage]  = useState(0)
-  const PICKS_PER_PAGE = 10
 
   const load = useCallback((days: number) => {
     setLoading(true)
@@ -578,104 +576,110 @@ export default function Banca() {
                   </button>
                 </div>
               ) : (() => {
-                const sorted     = [...data.entries].reverse()
-                const totalPages = Math.ceil(sorted.length / PICKS_PER_PAGE)
-                const page       = Math.min(picksPage, totalPages - 1)
-                const pageItems  = sorted.slice(page * PICKS_PER_PAGE, (page + 1) * PICKS_PER_PAGE)
-                return (
-                  <>
-                    <div className="card overflow-hidden">
-                      <div className="divide-y divide-zinc-800/60">
-                        {pageItems.map((e: any) => {
-                          const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
-                          const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
-                          return (
-                            <button
-                              key={e.id}
-                              onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
-                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
-                            >
-                              <div className="w-10 shrink-0 text-center">
-                                <span className="text-xs text-zinc-500">
-                                  {e.followed_at ? new Date(e.followed_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }) : '--'}
-                                </span>
-                              </div>
+                const sorted = [...data.entries].reverse()
 
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
-                                    {SOURCE_LBL[e.pick_type] ?? e.pick_type}
-                                  </span>
-                                  {homeSrc && (
-                                    <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                      onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                  )}
-                                  <span className="text-sm font-semibold text-white truncate">
-                                    {e.home_team_name ?? `Pick #${e.pick_id}`}
-                                  </span>
-                                  {e.away_team_name && (
-                                    <>
-                                      <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                                      {awaySrc && (
-                                        <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+                const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+                const groups: { key: string; label: string; items: any[] }[] = []
+                const seen: Record<string, number> = {}
+                for (const e of sorted) {
+                  const key = e.followed_at
+                    ? new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+                    : 'sem-data'
+                  if (seen[key] === undefined) {
+                    const label = key === todayKey
+                      ? 'Hoje'
+                      : key === yesterdayKey
+                      ? 'Ontem'
+                      : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })
+                    seen[key] = groups.length
+                    groups.push({ key, label, items: [] })
+                  }
+                  groups[seen[key]].items.push(e)
+                }
+
+                return (
+                  <div className="space-y-4">
+                    {groups.map(({ key, label, items }) => (
+                      <div key={key}>
+                        <div className="flex items-center gap-2 mb-2 px-1">
+                          <span className="text-xs font-black text-zinc-400 uppercase tracking-wider">{label}</span>
+                          <div className="flex-1 h-px bg-zinc-800" />
+                          <span className="text-[10px] text-zinc-600">{items.length} pick{items.length !== 1 ? 's' : ''}</span>
+                        </div>
+                        <div className="card overflow-hidden">
+                          <div className="divide-y divide-zinc-800/60">
+                            {items.map((e: any) => {
+                              const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
+                              const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
+                              return (
+                                <button
+                                  key={e.id}
+                                  onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
+                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+                                >
+                                  <div className="flex-1 min-w-0">
+                                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
+                                        {SOURCE_LBL[e.pick_type] ?? e.pick_type}
+                                      </span>
+                                      {homeSrc && (
+                                        <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
                                           onError={ev => (ev.currentTarget.style.display = 'none')} />
                                       )}
-                                      <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
-                                    </>
-                                  )}
-                                </div>
-                                <p className="text-xs text-zinc-600 truncate">
-                                  {e.market ?? ''}
-                                  {e.line  ? ` · ${e.line}` : ''}
-                                  {e.actual_odd
-                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
-                                </p>
-                              </div>
+                                      <span className="text-sm font-semibold text-white truncate">
+                                        {e.home_team_name ?? `Pick #${e.pick_id}`}
+                                      </span>
+                                      {e.away_team_name && (
+                                        <>
+                                          <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                          {awaySrc && (
+                                            <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                                              onError={ev => (ev.currentTarget.style.display = 'none')} />
+                                          )}
+                                          <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
+                                        </>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-zinc-600 truncate">
+                                      {e.market ?? ''}
+                                      {e.line  ? ` · ${e.line}` : ''}
+                                      {e.actual_odd
+                                        ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                        : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                                    </p>
+                                  </div>
 
-                              <div className="flex items-center gap-2 shrink-0">
-                                {e.result ? (
-                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
-                                    {RESULT_LBL[e.result] ?? e.result}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
-                                    Pendente
-                                  </span>
-                                )}
-                                <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
-                                  {e.pnl != null ? fmtSigned(e.pnl) : ''}
-                                </span>
-                                {!e.result && (
-                                  <button
-                                    onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
-                                    className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
-                                    title="Remover"
-                                  >×</button>
-                                )}
-                              </div>
-                            </button>
-                          )
-                        })}
+                                  <div className="flex items-center gap-2 shrink-0">
+                                    {e.result ? (
+                                      <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
+                                        {RESULT_LBL[e.result] ?? e.result}
+                                      </span>
+                                    ) : (
+                                      <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
+                                        Pendente
+                                      </span>
+                                    )}
+                                    <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
+                                      {e.pnl != null ? fmtSigned(e.pnl) : ''}
+                                    </span>
+                                    {!e.result && (
+                                      <button
+                                        onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
+                                        className="text-zinc-700 hover:text-red-400 transition-colors text-sm p-1 shrink-0"
+                                        title="Remover"
+                                      >×</button>
+                                    )}
+                                  </div>
+                                </button>
+                              )
+                            })}
+                          </div>
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Paginação numerada */}
-                    {totalPages > 1 && (
-                      <div className="flex items-center justify-center gap-1 mt-3 flex-wrap">
-                        <button disabled={page === 0} onClick={() => setPicksPage(page - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">←</button>
-                        {Array.from({ length: totalPages }, (_, i) => (
-                          <button key={i} onClick={() => setPicksPage(i)}
-                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                              page === i ? 'bg-green-500 border-green-500 text-black' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                            }`}>{i + 1}</button>
-                        ))}
-                        <button disabled={page === totalPages - 1} onClick={() => setPicksPage(page + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">→</button>
-                      </div>
-                    )}
-                  </>
+                    ))}
+                  </div>
                 )
               })()}
             </div>
