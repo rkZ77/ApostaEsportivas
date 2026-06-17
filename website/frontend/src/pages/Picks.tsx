@@ -341,8 +341,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
-    } catch {
-      setApiError('Erro ao registrar aposta. Tente novamente.')
+    } catch (err: any) {
+      setApiError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }
@@ -561,8 +561,8 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
-    } catch {
-      setApiError('Erro ao registrar aposta. Tente novamente.')
+    } catch (err: any) {
+      setApiError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }
@@ -753,8 +753,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
-    } catch {
-      setApiError('Erro ao registrar aposta. Tente novamente.')
+    } catch (err: any) {
+      setApiError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
     } finally {
       setFollowing(false)
     }

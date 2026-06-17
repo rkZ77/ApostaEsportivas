@@ -129,6 +129,33 @@ export default function MeusPicks() {
         ) : (
           <div className="space-y-4">
 
+            {/* Resumo */}
+            {allEntries.length > 0 && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {[
+                  { label: 'Apostas',  value: String(allEntries.length), color: 'text-white' },
+                  {
+                    label: 'P&L total',
+                    value: (data?.total_pnl ?? 0) !== 0
+                      ? `${(data?.total_pnl ?? 0) > 0 ? '+' : ''}${Number(data?.total_pnl ?? 0).toFixed(2)}u`
+                      : '0u',
+                    color: (data?.total_pnl ?? 0) > 0 ? 'text-green-500' : (data?.total_pnl ?? 0) < 0 ? 'text-red-400' : 'text-zinc-400',
+                  },
+                  {
+                    label: 'Win rate',
+                    value: `${data?.win_rate ?? 0}%`,
+                    color: (data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400',
+                  },
+                  { label: 'Pendentes', value: String(pendentes.length), color: 'text-yellow-400' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="card p-3 text-center">
+                    <div className={`text-2xl font-black ${color}`}>{value}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Tabs */}
             <div className="flex gap-2">
               <button
@@ -227,7 +254,13 @@ export default function MeusPicks() {
                                     onError={ev => (ev.currentTarget.style.display = 'none')} />
                                 )}
                                 <span className="text-sm font-semibold text-white truncate">
-                                  {e.home_team_name ?? `Pick #${e.pick_id}`}
+                                  {e.home_team_name
+                                    ? e.home_team_name
+                                    : e.pick_type === 'multipla'
+                                    ? 'Múltipla'
+                                    : e.pick_type === 'alavancagem'
+                                    ? 'Alavancagem'
+                                    : e.market ?? `Pick #${e.pick_id}`}
                                 </span>
                                 {e.away_team_name && (
                                   <>

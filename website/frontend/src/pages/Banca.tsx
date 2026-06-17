@@ -488,9 +488,88 @@ export default function Banca() {
               </div>
             )}
 
-            {/* Lista de picks */}
+            {/* Lista de picks agrupada por data */}
             {(() => {
               const allEntries: any[] = data?.entries ?? []
+              const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+              const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+              const dayLabel = (key: string) =>
+                key === todayKey     ? 'Hoje'
+                : key === yesterdayKey ? 'Ontem'
+                : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+
+              const grouped = allEntries.reduce((acc: Record<string, any[]>, e: any) => {
+                const key = e.followed_at
+                  ? new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+                  : 'sem-data'
+                if (!acc[key]) acc[key] = []
+                acc[key].push(e)
+                return acc
+              }, {})
+              const sortedKeys = Object.keys(grouped).sort((a, b) => b.localeCompare(a))
+
+              const PickRow = ({ e }: { e: any }) => {
+                const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
+                const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
+                return (
+                  <button
+                    key={e.id}
+                    onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
+                    className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+                  >
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                        <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
+                          {SOURCE_LBL[e.pick_type] ?? e.pick_type}
+                        </span>
+                        {homeSrc && (
+                          <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                            onError={ev => (ev.currentTarget.style.display = 'none')} />
+                        )}
+                        <span className="text-sm font-semibold text-white truncate">
+                          {e.home_team_name
+                            ? e.home_team_name
+                            : e.pick_type === 'multipla' ? 'Múltipla'
+                            : e.pick_type === 'alavancagem' ? 'Alavancagem'
+                            : e.market ?? `Pick #${e.pick_id}`}
+                        </span>
+                        {e.away_team_name && (
+                          <>
+                            <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                            {awaySrc && (
+                              <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                                onError={ev => (ev.currentTarget.style.display = 'none')} />
+                            )}
+                            <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
+                          </>
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-600 truncate">
+                        {e.market ?? ''}
+                        {e.line ? ` · ${e.line}` : ''}
+                        {e.actual_odd
+                          ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                          : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {e.result ? (
+                        <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
+                          {RESULT_LBL[e.result] ?? e.result}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
+                          Pendente
+                        </span>
+                      )}
+                      <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
+                        {e.pnl != null ? fmtSigned(e.pnl) : ''}
+                      </span>
+                    </div>
+                  </button>
+                )
+              }
+
               return (
                 <div>
                   <div className="flex items-center justify-between mb-3">
@@ -514,66 +593,19 @@ export default function Banca() {
                     </div>
                   ) : (
                     <div className="card overflow-hidden">
-                      <div className="divide-y divide-zinc-800/60">
-                        {allEntries.map((e: any) => {
-                          const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
-                          const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
-                          return (
-                            <button
-                              key={e.id}
-                              onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
-                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
-                                    {SOURCE_LBL[e.pick_type] ?? e.pick_type}
-                                  </span>
-                                  {homeSrc && (
-                                    <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                      onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                  )}
-                                  <span className="text-sm font-semibold text-white truncate">
-                                    {e.home_team_name ?? `Pick #${e.pick_id}`}
-                                  </span>
-                                  {e.away_team_name && (
-                                    <>
-                                      <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                                      {awaySrc && (
-                                        <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                          onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                      )}
-                                      <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
-                                    </>
-                                  )}
-                                </div>
-                                <p className="text-xs text-zinc-600 truncate">
-                                  {e.market ?? ''}
-                                  {e.line  ? ` · ${e.line}` : ''}
-                                  {e.actual_odd
-                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
-                                </p>
-                              </div>
-
-                              <div className="flex items-center gap-2 shrink-0">
-                                {e.result ? (
-                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
-                                    {RESULT_LBL[e.result] ?? e.result}
-                                  </span>
-                                ) : (
-                                  <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
-                                    Pendente
-                                  </span>
-                                )}
-                                <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
-                                  {e.pnl != null ? fmtSigned(e.pnl) : ''}
-                                </span>
-                              </div>
-                            </button>
-                          )
-                        })}
-                      </div>
+                      {sortedKeys.map(dateKey => (
+                        <div key={dateKey}>
+                          <div className="flex items-center gap-2 px-4 py-2 bg-zinc-900/60 border-b border-zinc-800/60">
+                            <span className="text-[10px] font-black text-zinc-500 uppercase tracking-wider capitalize">
+                              {dayLabel(dateKey)}
+                            </span>
+                            <span className="text-[10px] text-zinc-700">{grouped[dateKey].length} pick{grouped[dateKey].length !== 1 ? 's' : ''}</span>
+                          </div>
+                          <div className="divide-y divide-zinc-800/60">
+                            {grouped[dateKey].map((e: any) => <PickRow key={e.id} e={e} />)}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
                 </div>
