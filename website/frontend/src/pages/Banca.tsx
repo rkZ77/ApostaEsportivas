@@ -202,6 +202,7 @@ export default function Banca() {
   const [period,  setPeriod]  = useState(0)
   const [showSetup, setShowSetup] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
+  const [dayOffset,  setDayOffset]  = useState(0)
 
   const load = useCallback((days: number) => {
     setLoading(true)
@@ -554,63 +555,99 @@ export default function Banca() {
               </div>
             )}
 
-            {/* Lista de picks */}
-            <div>
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
-                  Picks apostados ({data?.entries?.length ?? 0})
-                </p>
-                <button onClick={() => navigate('/picks')} className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
-                  Adicionar picks →
-                </button>
-              </div>
+            {/* Lista de picks por dia */}
+            {(() => {
+              const allEntries: any[] = data?.entries ?? []
 
-              {!data?.entries?.length ? (
-                <div className="card p-12 text-center border-dashed">
-                  <p className="text-zinc-500 text-sm font-semibold mb-2">Nenhum pick apostado ainda</p>
-                  <p className="text-zinc-600 text-xs mb-4">
-                    Clique em "Apostei" nos picks da página Picks para registrar suas apostas aqui.
-                  </p>
-                  <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
-                    Ver picks
-                  </button>
-                </div>
-              ) : (() => {
-                const sorted = [...data.entries].reverse()
-
-                const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-                const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-
-                const groups: { key: string; label: string; items: any[] }[] = []
-                const seen: Record<string, number> = {}
-                for (const e of sorted) {
-                  const key = e.followed_at
+              // Datas únicas que o usuário tem picks, em ordem decrescente
+              const uniqueDates = Array.from(new Set(
+                allEntries.map((e: any) =>
+                  e.followed_at
                     ? new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-                    : 'sem-data'
-                  if (seen[key] === undefined) {
-                    const label = key === todayKey
-                      ? 'Hoje'
-                      : key === yesterdayKey
-                      ? 'Ontem'
-                      : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })
-                    seen[key] = groups.length
-                    groups.push({ key, label, items: [] })
-                  }
-                  groups[seen[key]].items.push(e)
-                }
+                    : null
+                ).filter(Boolean)
+              )).sort((a, b) => (b as string).localeCompare(a as string)) as string[]
 
-                return (
-                  <div className="space-y-4">
-                    {groups.map(({ key, label, items }) => (
-                      <div key={key}>
-                        <div className="flex items-center gap-2 mb-2 px-1">
-                          <span className="text-xs font-black text-zinc-400 uppercase tracking-wider">{label}</span>
-                          <div className="flex-1 h-px bg-zinc-800" />
-                          <span className="text-[10px] text-zinc-600">{items.length} pick{items.length !== 1 ? 's' : ''}</span>
+              const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+              const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+              const dayLabel = (key: string) =>
+                key === todayKey     ? 'Hoje'
+                : key === yesterdayKey ? 'Ontem'
+                : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+
+              const clampedOffset = Math.min(dayOffset, uniqueDates.length - 1)
+              const selectedKey   = uniqueDates[clampedOffset] ?? todayKey
+              const pageItems     = allEntries.filter((e: any) =>
+                e.followed_at &&
+                new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === selectedKey
+              )
+              const hasPrev = clampedOffset < uniqueDates.length - 1
+              const hasNext = clampedOffset > 0
+
+              return (
+                <div>
+                  {/* Header navegação */}
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
+                      Picks apostados ({allEntries.length})
+                    </p>
+                    <button onClick={() => navigate('/picks')} className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
+                      Adicionar picks →
+                    </button>
+                  </div>
+
+                  {!allEntries.length ? (
+                    <div className="card p-12 text-center border-dashed">
+                      <p className="text-zinc-500 text-sm font-semibold mb-2">Nenhum pick apostado ainda</p>
+                      <p className="text-zinc-600 text-xs mb-4">
+                        Clique em "Apostei" nos picks da página Picks para registrar suas apostas aqui.
+                      </p>
+                      <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
+                        Ver picks
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Navegação de dia */}
+                      <div className="flex items-center justify-between mb-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5">
+                        <button
+                          onClick={() => setDayOffset(o => o + 1)}
+                          disabled={!hasPrev}
+                          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition-colors p-1"
+                        >
+                          ←
+                        </button>
+                        <div className="text-center">
+                          <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
+                          {selectedKey !== todayKey && (
+                            <button
+                              onClick={() => setDayOffset(0)}
+                              className="ml-2 text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors"
+                            >
+                              · Hoje
+                            </button>
+                          )}
+                          <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
                         </div>
+                        <button
+                          onClick={() => setDayOffset(o => o - 1)}
+                          disabled={!hasNext}
+                          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition-colors p-1"
+                        >
+                          →
+                        </button>
+                      </div>
+
+                      {/* Picks do dia selecionado */}
+                      {pageItems.length === 0 ? (
+                        <div className="card p-8 text-center border-dashed">
+                          <p className="text-zinc-600 text-sm">Nenhum pick apostado neste dia.</p>
+                        </div>
+                      ) : (
                         <div className="card overflow-hidden">
                           <div className="divide-y divide-zinc-800/60">
-                            {items.map((e: any) => {
+                            {pageItems.map((e: any) => {
                               const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
                               const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
                               return (
@@ -677,12 +714,12 @@ export default function Banca() {
                             })}
                           </div>
                         </div>
-                      </div>
-                    ))}
-                  </div>
-                )
-              })()}
-            </div>
+                      )}
+                    </>
+                  )}
+                </div>
+              )
+            })()}
 
           </div>
         )}
