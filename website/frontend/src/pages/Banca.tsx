@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -610,32 +610,34 @@ export default function Banca() {
                   ) : (
                     <>
                       {/* Navegação de dia */}
-                      <div className="flex items-center justify-between mb-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-2.5">
+                      <div className="flex items-center justify-between mb-3 bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
                         <button
                           onClick={() => setDayOffset(o => o + 1)}
                           disabled={!hasPrev}
-                          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition-colors p-1"
+                          className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
                         >
-                          ←
+                          <ChevronLeft className="w-5 h-5" />
                         </button>
                         <div className="text-center">
-                          <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
-                          {selectedKey !== todayKey && (
-                            <button
-                              onClick={() => setDayOffset(0)}
-                              className="ml-2 text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors"
-                            >
-                              · Hoje
-                            </button>
-                          )}
+                          <div className="flex items-center justify-center gap-1.5">
+                            <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
+                            {selectedKey !== todayKey && (
+                              <button
+                                onClick={() => setDayOffset(0)}
+                                className="text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors border border-green-500/30 px-1.5 py-0.5 rounded"
+                              >
+                                Hoje
+                              </button>
+                            )}
+                          </div>
                           <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
                         </div>
                         <button
                           onClick={() => setDayOffset(o => o - 1)}
                           disabled={!hasNext}
-                          className="text-zinc-500 hover:text-zinc-200 disabled:opacity-20 transition-colors p-1"
+                          className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
                         >
-                          →
+                          <ChevronRight className="w-5 h-5" />
                         </button>
                       </div>
 
