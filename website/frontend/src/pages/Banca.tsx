@@ -35,61 +35,6 @@ const SOURCE_LBL: Record<string, string> = {
 }
 
 // lock overlay para free
-function VipLock() {
-  return (
-    <div className="relative rounded-2xl overflow-hidden min-h-[480px]">
-      {/* Preview desfocado */}
-      <div className="select-none pointer-events-none space-y-4" style={{ filter: 'blur(6px)', opacity: 0.3 }}>
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[1,2,3,4].map(i => (
-            <div key={i} className="card p-4 space-y-2">
-              <div className="h-3 bg-zinc-700 rounded w-16" />
-              <div className="h-8 bg-zinc-600 rounded w-24" />
-              <div className="h-2 bg-zinc-800 rounded-full" />
-            </div>
-          ))}
-        </div>
-        <div className="card p-5 space-y-3">
-          <div className="h-3 bg-zinc-700 rounded w-32" />
-          <div className="h-32 bg-zinc-800 rounded-xl" />
-        </div>
-        <div className="grid grid-cols-2 gap-4">
-          <div className="card p-4 space-y-2">
-            <div className="h-3 bg-zinc-700 rounded w-20" />
-            <div className="h-6 bg-zinc-700 rounded w-12" />
-            <div className="h-2 bg-zinc-800 rounded-full" />
-          </div>
-          <div className="card p-4 space-y-2">
-            <div className="h-3 bg-zinc-700 rounded w-20" />
-            {[1,2,3].map(i => <div key={i} className="h-4 bg-zinc-800 rounded" />)}
-          </div>
-        </div>
-      </div>
-
-      {/* Overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/75 backdrop-blur-sm rounded-2xl">
-        <div className="text-center px-6 max-w-xs">
-          <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
-            <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <p className="text-white font-black text-lg mb-2">Exclusivo para VIP</p>
-          <p className="text-zinc-400 text-sm mb-5 leading-relaxed">
-            Acompanhe o crescimento da sua banca, ROI pessoal, sequências e compare seu desempenho com a IA.
-          </p>
-          <Link to="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-7 py-2.5 rounded-xl text-sm transition-colors">
-            Assinar VIP
-          </Link>
-          <p className="text-zinc-600 text-xs mt-3">
-            Ou ative seu <Link to="/planos" className="text-zinc-400 underline hover:text-white">teste gratuito de 2 dias</Link>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 // modal de setup
 function SetupModal({ current, onSave, onClose }: {
   current: { start: number; goal: number | null; unitValue: number }
@@ -186,8 +131,7 @@ function SetupModal({ current, onSave, onClose }: {
 // componente principal
 export default function Banca() {
   const navigate = useNavigate()
-  const { user, isVip, isAdmin } = useAuth()
-  const canSee = isVip || isAdmin
+  const { user } = useAuth()
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -204,8 +148,8 @@ export default function Banca() {
   }, [])
 
   useEffect(() => {
-    if (canSee) load(0)
-  }, [canSee, load])
+    load(0)
+  }, [load])
 
   const handleSave = (start: number, goal: number | null, unitValue: number) => {
     setShowSetup(false)
@@ -243,7 +187,7 @@ export default function Banca() {
     <div className="min-h-screen bg-black">
       <Navbar />
 
-      {showSetup && canSee && (
+      {showSetup && (
         <SetupModal
           current={{ start: data?.bankroll_start ?? 100, goal: data?.bankroll_goal ?? null, unitValue: data?.unit_value ?? 1 }}
           onSave={handleSave}
@@ -275,23 +219,19 @@ export default function Banca() {
               </div>
             </div>
           </div>
-          {canSee && (
-            <div className="flex items-center gap-2">
-              <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2">
-                Meus Picks
-              </Link>
-              <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
-                Configurar
-              </button>
-            </div>
-          )}
+          <div className="flex items-center gap-2">
+            <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2">
+              Meus Picks
+            </Link>
+            <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
+              Configurar
+            </button>
+          </div>
         </div>
       </div>
 
       <main className="max-w-5xl mx-auto px-4 py-6">
-        {!canSee ? (
-          <VipLock />
-        ) : loading ? (
+        {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
           </div>

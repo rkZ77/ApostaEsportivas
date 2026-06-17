@@ -1272,13 +1272,16 @@ export default function Picks() {
     if (!canSeeVip) return
     api.get('/suggestions/vip/meta').then(r => setMeta(r.data)).catch(() => {})
     api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
+  }, [canSeeVip])
+
+  useEffect(() => {
     api.get('/banca/summary').then(r => {
       setBancaSummary(r.data)
-      if (!r.data.has_banca && !sessionStorage.getItem('pickia_banca_modal_shown')) {
+      if (!r.data.has_banca && canSeeVip && !sessionStorage.getItem('pickia_banca_modal_shown')) {
         setShowBancaModal(true)
       }
     }).catch(() => {})
-  }, [canSeeVip])
+  }, [])
 
   useEffect(() => {
     if (tab === 'pick_seguro'  && !pfLoaded)                doFetchPickFree(defaultPickFreeFilters)
