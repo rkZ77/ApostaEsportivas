@@ -11,7 +11,7 @@ import CommunityChat from '../components/CommunityChat'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
-import { UserCircle, Crown, Rocket, Wallet, Clock } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { suggestStake } from '../utils/stakeUtils'
 
 // Helpers de logo
@@ -1132,14 +1132,36 @@ export default function Picks() {
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
-  const todayLabel   = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long', timeZone: 'America/Sao_Paulo' })
-  const todayDateStr = new Date().toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Sao_Paulo' })
+  const [selectedOffset, setSelectedOffset] = useState(0)
+
+  function getBrasiliaDate(offset: number): Date {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+    d.setDate(d.getDate() + offset)
+    return d
+  }
+
+  function getBrasiliaDateIso(offset: number): string {
+    const d = getBrasiliaDate(offset)
+    const y = d.getFullYear()
+    const m = String(d.getMonth() + 1).padStart(2, '0')
+    const day = String(d.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+  }
+
+  const todayLabel   = getBrasiliaDate(selectedOffset).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+  const todayDateStr = getBrasiliaDate(selectedOffset).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long', year: 'numeric' })
 
   useEffect(() => {
-    api.get('/suggestions/today')
+    setTodayLoading(true)
+    setTodayError(false)
+    const params = selectedOffset < 0 ? { date: getBrasiliaDateIso(selectedOffset) } : {}
+    api.get('/suggestions/today', { params })
       .then(r => setToday(r.data))
       .catch(() => setTodayError(true))
       .finally(() => setTodayLoading(false))
+  }, [selectedOffset])
+
+  useEffect(() => {
     api.get('/suggestions/stats/quick')
       .then(r => setQuickStats(r.data))
       .catch(() => {})
@@ -1386,12 +1408,42 @@ export default function Picks() {
         />
 
         {tab === 'hoje' && (
-          todayLoading ? <Spinner /> : todayError ? (
+          <>
+            {/* Navegação de data */}
+            <div className="flex items-center justify-center gap-2 py-3">
+              <button
+                onClick={() => setSelectedOffset(o => o - 1)}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <div className="flex items-center gap-2 min-w-[200px] justify-center">
+                <span className="text-sm font-semibold text-white capitalize">
+                  {selectedOffset === 0 ? 'Hoje' : todayLabel}
+                </span>
+                {selectedOffset < 0 && (
+                  <button
+                    onClick={() => setSelectedOffset(0)}
+                    className="text-[10px] text-green-400 hover:text-green-300 font-bold bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded-full transition-colors"
+                  >
+                    Hoje
+                  </button>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
+                disabled={selectedOffset >= 0}
+                className="p-2 rounded-lg text-zinc-400 hover:text-white hover:bg-zinc-800 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+            {todayLoading ? <Spinner /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar picks</p>
               <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
               <button
-                onClick={() => { setTodayError(false); setTodayLoading(true); api.get('/suggestions/today').then(r => setToday(r.data)).catch(() => setTodayError(true)).finally(() => setTodayLoading(false)) }}
+                onClick={() => { setTodayError(false); setTodayLoading(true); const p = selectedOffset < 0 ? { date: getBrasiliaDateIso(selectedOffset) } : {}; api.get('/suggestions/today', { params: p }).then(r => setToday(r.data)).catch(() => setTodayError(true)).finally(() => setTodayLoading(false)) }}
                 className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors"
               >
                 Tentar novamente
@@ -1544,6 +1596,8 @@ export default function Picks() {
 
             </div>
           )
+        }
+          </>
         )}
 
         {tab === 'pick_seguro' && (

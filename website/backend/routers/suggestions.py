@@ -62,7 +62,10 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
 
 
 @router.get("/today")
-def get_today_suggestions(current_user: dict = Depends(get_current_user)):
+def get_today_suggestions(
+    current_user: dict = Depends(get_current_user),
+    date: Optional[str] = Query(None, description="YYYY-MM-DD — deixar vazio para hoje"),
+):
     plan = current_user.get("plan", "free")
     is_vip = plan in ("vip", "admin", "trial")
     conn = get_connection()
@@ -70,10 +73,20 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
     try:
         result = {}
 
-        # Data de hoje no fuso de Brasília (UTC-3)
-        TODAY_BR = "(NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
+        if date:
+            _d = (date,)
+            _pf_where   = "pf.match_date = %s"
+            _vip_where  = "s.match_date = %s"
+            _m_where    = "match_date = %s"
+            _alav_where = "pa.match_date = %s"
+        else:
+            _d = ()
+            TODAY_BR    = "(NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
+            _pf_where   = f"pf.match_date = {TODAY_BR} OR (pf.result IS NULL AND pf.match_date >= {TODAY_BR} - INTERVAL '3 days')"
+            _vip_where  = f"s.match_date = {TODAY_BR} OR (s.result IS NULL AND s.match_date >= {TODAY_BR} - INTERVAL '3 days')"
+            _m_where    = f"match_date = {TODAY_BR} OR (result IS NULL AND match_date >= {TODAY_BR} - INTERVAL '3 days')"
+            _alav_where = f"pa.match_date = {TODAY_BR} OR (pa.result IS NULL AND pa.match_date >= {TODAY_BR} - INTERVAL '3 days')"
 
-        # Query reutilizável para picks_free — usa colunas diretas + fallback via JOIN
         _picks_free_sql = f"""
             SELECT pf.id, pf.fixture_id, pf.match_date, pf.home_team, pf.away_team,
                    pf.league_id, pf.league_name, pf.market, pf.line, pf.odd, pf.bet_house,
@@ -82,14 +95,13 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
-            WHERE pf.match_date = {TODAY_BR}
-               OR (pf.result IS NULL AND pf.match_date >= {TODAY_BR} - INTERVAL '3 days')
+            WHERE {_pf_where}
             ORDER BY pf.match_date DESC, pf.created_at DESC
             LIMIT 1
         """
 
         if is_vip:
-            row = _safe_query_one(cur, _picks_free_sql)
+            row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
 
             # VIP picks completos com league_id e league_name
@@ -105,10 +117,9 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
                 FROM picks_vip s
                 LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
                 LEFT JOIN leagues l ON l.league_id = f.league_id
-                WHERE s.match_date = {TODAY_BR}
-                   OR (s.result IS NULL AND s.match_date >= {TODAY_BR} - INTERVAL '3 days')
+                WHERE {_vip_where}
                 ORDER BY s.match_date DESC, s.confidence DESC
-            """)
+            """, _d)
             result["vip"] = [dict(r) for r in rows]
 
             rows_m = _safe_query(cur, f"""
@@ -117,14 +128,13 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
                        total_odd, score_combo AS confidence,
                        reasoning, result, profit, created_at
                 FROM picks_multiplas
-                WHERE match_date = {TODAY_BR}
-                   OR (result IS NULL AND match_date >= {TODAY_BR} - INTERVAL '3 days')
+                WHERE {_m_where}
                 ORDER BY match_date DESC, created_at DESC
                 LIMIT 3
-            """)
+            """, _d)
             result["multiplas"] = _enrich_multipla_legs(cur, rows_m)
 
-            # Alavancagem — Copa do Mundo com team IDs
+            # Alavancagem
             alav = _safe_query_one(cur, f"""
                 SELECT pa.id, pa.match_date, pa.tipo,
                        pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
@@ -138,14 +148,13 @@ def get_today_suggestions(current_user: dict = Depends(get_current_user)):
                 FROM picks_alavancagem pa
                 LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
                 LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
-                WHERE pa.match_date = {TODAY_BR}
-                   OR (pa.result IS NULL AND pa.match_date >= {TODAY_BR} - INTERVAL '3 days')
+                WHERE {_alav_where}
                 ORDER BY pa.match_date DESC
                 LIMIT 1
-            """)
+            """, _d)
             result["alavancagem"] = dict(alav) if alav else None
         else:
-            row = _safe_query_one(cur, _picks_free_sql)
+            row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
 
         # Adiciona is_followed para VIP picks e dica_do_dia
