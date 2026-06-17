@@ -78,7 +78,7 @@ export default function SuggestionCard({
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
     try {
       await api.post('/banca/follow', {
@@ -86,6 +86,7 @@ export default function SuggestionCard({
         pick_type: s.pick_type ?? 'vip',
         stake_units: stakeSuggestion?.units ?? s.stake ?? 1,
         actual_odd: actualOdd,
+        bet_house: betHouse,
       })
       setFollowed(true)
       setShowModal(false)

@@ -329,10 +329,10 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1, actual_odd: actualOdd })
+      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1, actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
     } catch { /* ignora */ } finally {
@@ -529,7 +529,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
     try {
       await api.post('/banca/follow', {
@@ -537,6 +537,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         pick_type: 'multipla',
         stake_units: stakeSuggestion?.units ?? 1,
         actual_odd: actualOdd,
+        bet_house: betHouse,
       })
       setFollowed(true)
       setShowModal(false)
@@ -713,10 +714,10 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string) => {
     setFollowing(true)
     try {
-      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', actual_odd: actualOdd })
+      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
     } catch {

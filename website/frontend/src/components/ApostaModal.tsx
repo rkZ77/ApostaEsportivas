@@ -1,17 +1,24 @@
 import { useState } from 'react'
 
+const HOUSES = ['Superbet', 'Bet365', 'Betano', 'Outra']
+
 interface Props {
   pickOdd: number
-  onConfirm: (actualOdd: number) => void
+  onConfirm: (actualOdd: number, betHouse: string) => void
   onCancel: () => void
   loading?: boolean
 }
 
 export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: Props) {
-  const [oddStr, setOddStr] = useState(String(pickOdd))
+  const [oddStr, setOddStr]     = useState(String(pickOdd))
+  const [house, setHouse]       = useState('')
+  const [customHouse, setCustomHouse] = useState('')
+
   const parsed = parseFloat(oddStr)
-  const valid = !isNaN(parsed) && parsed >= 1.01 && parsed <= 99
-  const changed = valid && Math.abs(parsed - pickOdd) > 0.001
+  const validOdd = !isNaN(parsed) && parsed >= 1.01 && parsed <= 99
+  const changed  = validOdd && Math.abs(parsed - pickOdd) > 0.001
+  const finalHouse = house === 'Outra' ? customHouse.trim() : house
+  const valid = validOdd && finalHouse.length > 0
 
   return (
     <div
@@ -24,9 +31,41 @@ export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: P
       >
         <h3 className="text-white font-black text-sm mb-1">Confirmar aposta</h3>
         <p className="text-zinc-500 text-xs mb-4">
-          Confirme a odd que você conseguiu na casa de apostas.
+          Informe onde e com qual odd você apostou.
         </p>
 
+        {/* Casa de aposta */}
+        <div className="mb-4">
+          <label className="text-zinc-400 text-xs font-semibold mb-1.5 block">Casa de aposta</label>
+          <div className="grid grid-cols-2 gap-1.5">
+            {HOUSES.map(h => (
+              <button
+                key={h}
+                type="button"
+                onClick={() => { setHouse(h); if (h !== 'Outra') setCustomHouse('') }}
+                className={`py-2 rounded-xl border text-xs font-bold transition-colors ${
+                  house === h
+                    ? 'border-green-500/60 bg-green-500/10 text-green-400'
+                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                }`}
+              >
+                {h}
+              </button>
+            ))}
+          </div>
+          {house === 'Outra' && (
+            <input
+              type="text"
+              placeholder="Nome da casa..."
+              value={customHouse}
+              onChange={e => setCustomHouse(e.target.value)}
+              className="input w-full text-sm mt-2"
+              autoFocus
+            />
+          )}
+        </div>
+
+        {/* Odd */}
         <div className="mb-4">
           <label className="text-zinc-400 text-xs font-semibold mb-1.5 block">
             Odd apostada
@@ -39,7 +78,6 @@ export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: P
             value={oddStr}
             onChange={e => setOddStr(e.target.value)}
             className="input w-full text-center text-xl font-black"
-            autoFocus
           />
           {changed && (
             <p className="text-yellow-400 text-[11px] mt-1.5">
@@ -56,7 +94,7 @@ export default function ApostaModal({ pickOdd, onConfirm, onCancel, loading }: P
             Cancelar
           </button>
           <button
-            onClick={() => valid && onConfirm(parsed)}
+            onClick={() => valid && onConfirm(parsed, finalHouse)}
             disabled={!valid || loading}
             className="flex-1 py-2.5 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
           >
