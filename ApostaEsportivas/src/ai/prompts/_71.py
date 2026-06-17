@@ -23,7 +23,7 @@ FATORES CONTEXTUAIS PERMANENTES:
   — Árbitros brasileiros são mais rigorosos com cartões do que a média europeia
 
 CONDIÇÕES DE CONFIABILIDADE POR MERCADO:
-  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.0 ou histórico dos dois times > 3.5 amarelos/jogo
+  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.0 E histórico dos dois times > 3.5 amarelos/jogo (ambas as condições — não apenas uma)
   RESULTADO → resultado home confiável quando time da casa está no G4 com forma positiva
   GOLS/OVER → use com soma de médias de gols > 2.7; Over 2.5 mais arriscado que na Europa
   BTTS      → exija evidência em ambos os times (> 55% dos jogos marcando gols)

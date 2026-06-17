@@ -50,7 +50,8 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
 2.3 PESO (decrescente): 1º taxa contextual combinada | 2º médias temporada | 3º standings | 4º perfil competição.
 
-2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: Alta=resultado puro/BTTS irregular | Média=handicap | Baixa=Over 1.5/cantos.
+2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: Alta=resultado puro/BTTS irregular | Média=handicap/cartões | Baixa=Over 1.5/cantos.
+  CARTÕES — volatilidade MÉDIA por padrão: a taxa de amarelos por jogo tem desvio-padrão alto mesmo em times disciplinados. Upgrade para BAIXO apenas se AMBAS as condições forem satisfeitas: (a) árbitro com ≥5 jogos e avg_yellow consistente (desvio ≤0.8) E (b) histórico dos dois times com ≥5 jogos e desvio ≤0.9 amarelos/jogo. Sem esses dados → declare volatilidade MÉDIA.
 
 2.5 ÁRBITRO (games≥3): avg_yellow acima da média → Over cartões; abaixo → Under. Sem dados → declare ausência.
 
@@ -92,6 +93,8 @@ Categorias (máx 1 cada): goals=Over/Under gols/BTTS/asiáticas | corners=cantos
 Ordem: 1º maior edge positivo → 2º maior EV → 3º maior confidence.
 
 is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
+DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
+CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
 
 LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.40. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.

@@ -23,7 +23,7 @@ FATORES CONTEXTUAIS PERMANENTES:
   — Viagens longas entre regiões afetam rendimento dos visitantes (fadiga cumulativa)
 
 CONDIÇÕES DE CONFIABILIDADE POR MERCADO:
-  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.5 ou histórico dos dois times > 4.0 amarelos/jogo
+  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.5 E histórico dos dois times > 4.0 amarelos/jogo (ambas as condições — não apenas uma)
   RESULTADO → resultado home confiável quando G4 joga em casa com forma positiva
   GOLS/OVER → use Over 2.5 apenas com médias combinadas > 2.8
   UNDER     → pode ter edge em duelos entre times intermediários defensivos (rank 8–14)

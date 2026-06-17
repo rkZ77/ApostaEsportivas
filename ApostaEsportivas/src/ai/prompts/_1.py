@@ -25,8 +25,9 @@ FASE:
 
 POR MERCADO:
   Over 1.5→baixo risco grupos | Over 2.5→grupos ofensivos, reduzir no mata-mata | Under 3.5→seguro mata-mata
-  BTTS Sim→ambas BTTS>50% grupos | BTTS Não→mata-mata com ataque fraco | Cartões→nunca vermelho | Handicap→diff FIFA>30
+  BTTS Sim→ambas BTTS>50% grupos | BTTS Não→mata-mata com ataque fraco | Handicap→diff FIFA>30
   Resultado→sólido top-10 vs #50+ r1-r2; EVITAR r3 e mata-mata equilibrado
+  Cartões→NUNCA vermelho | O baseline 2.5–3.0 amarelos/jogo é média da competição — variância jogo-a-jogo é ALTA. NÃO use o baseline como confirmador: exija histórico específico dos times E do árbitro. Sem ambos, cartões tem volatilidade MÉDIA e NÃO deve ser is_best_pick.
 
 DADOS ESCASSOS: Ranking FIFA + forma recente. Baseline 2.6 gols/jogo grupos. Não use dados de qualificatórias.
 """
