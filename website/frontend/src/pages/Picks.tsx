@@ -314,6 +314,7 @@ function shortReasoning(text?: string): string {
 }
 
 function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
+  const navigate = useNavigate()
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
@@ -463,19 +464,19 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
-        {!dica.result && !banca ? (
-          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
-        ) : !dica.result && banca ? (
+        {!dica.result ? (
           <button
-            onClick={handleFollow}
+            onClick={banca ? handleFollow : () => navigate('/banca')}
             disabled={following || followed}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : 'border-zinc-700 text-zinc-400 hover:border-green-500/50 hover:text-green-400 hover:bg-green-500/5'
+                : banca
+                ? 'border-zinc-700 text-zinc-400 hover:border-green-500/50 hover:text-green-400 hover:bg-green-500/5'
+                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
           </button>
         ) : <span />}
         {onClick && (
@@ -522,6 +523,7 @@ function PickSeguroEmpty() {
 
 // Múltipla card
 function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
+  const navigate = useNavigate()
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
 
@@ -679,18 +681,19 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
-        {!m.result && !banca ? (
-          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
-        ) : !m.result && banca ? (
+        {!m.result ? (
           <button
-            onClick={handleFollow}
+            onClick={banca ? handleFollow : () => navigate('/banca')}
+            disabled={following || followed}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : 'border-zinc-700 text-zinc-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5'
+                : banca
+                ? 'border-zinc-700 text-zinc-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5'
+                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
           </button>
         ) : <span />}
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
@@ -716,6 +719,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 
 // Alavancagem card
 function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
+  const navigate    = useNavigate()
   const isCombo     = pick.tipo === 'combinacao'
   const oddCombined = Number(pick.odd_combined ?? 0)
   // stake monetário: bankroll do usuário > bankroll_before salvo > fallback 50
@@ -879,18 +883,23 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
-        {!pick.result && userBankroll == null ? (
-          <button onClick={e => { e.stopPropagation(); onConfigureBanca?.() }} className="text-[11px] text-orange-500/70 hover:text-orange-400 underline">Configurar banca alavancagem</button>
-        ) : !pick.result ? (
+        {!pick.result ? (
           <button
-            onClick={handleFollow}
+            onClick={e => {
+              e.stopPropagation()
+              if (userBankroll == null) { onConfigureBanca?.() ?? navigate('/banca') }
+              else handleFollow(e as any)
+            }}
+            disabled={following || followed}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : 'border-zinc-700 text-zinc-400 hover:border-orange-500/40 hover:text-orange-400 hover:bg-orange-500/5'
+                : userBankroll != null
+                ? 'border-zinc-700 text-zinc-400 hover:border-orange-500/40 hover:text-orange-400 hover:bg-orange-500/5'
+                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : userBankroll != null ? '+ Apostei' : 'Configurar banca →'}
           </button>
         ) : <span />}
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>

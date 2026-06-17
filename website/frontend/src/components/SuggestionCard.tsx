@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { suggestStake } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
@@ -64,6 +65,7 @@ interface BancaSummary { bankroll_current: number; unit_value: number }
 export default function SuggestionCard({
   s, onClick, banca,
 }: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null }) {
+  const navigate = useNavigate()
   const pct = Math.round((s.confidence ?? 0) * 100)
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
@@ -226,19 +228,19 @@ export default function SuggestionCard({
 
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
-        {!s.result && !banca ? (
-          <a href="/banca" className="text-[11px] text-green-500/70 hover:text-green-400 underline">Configurar banca</a>
-        ) : !s.result && banca ? (
+        {!s.result ? (
           <button
-            onClick={handleFollow}
+            onClick={banca ? handleFollow : () => navigate('/banca')}
             disabled={following || followed}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : 'border-zinc-700 text-zinc-400 hover:border-green-500/40 hover:text-green-400 hover:bg-green-500/5'
+                : banca
+                ? 'border-zinc-700 text-zinc-400 hover:border-green-500/40 hover:text-green-400 hover:bg-green-500/5'
+                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : '+ Apostei'}
+            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
           </button>
         ) : <span />}
         {onClick && (
