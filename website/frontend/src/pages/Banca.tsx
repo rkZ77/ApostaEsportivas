@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp, ChevronLeft, ChevronRight } from 'lucide-react'
+import { TrendingUp } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -129,15 +129,22 @@ function SetupModal({ current, onSave, onClose }: {
 }
 
 // componente principal
+const PERIODS = [
+  { key: 0,  label: 'Tudo' },
+  { key: 7,  label: '7 dias' },
+  { key: 30, label: '30 dias' },
+  { key: 90, label: '90 dias' },
+]
+
 export default function Banca() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [period,  setPeriod]  = useState(0)
   const [showSetup, setShowSetup] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
-  const [dayOffset,  setDayOffset]  = useState(0)
 
   const load = useCallback((days: number) => {
     setLoading(true)
@@ -148,13 +155,13 @@ export default function Banca() {
   }, [])
 
   useEffect(() => {
-    load(0)
-  }, [load])
+    load(period)
+  }, [period, load])
 
   const handleSave = (start: number, goal: number | null, unitValue: number) => {
     setShowSetup(false)
     setData((d: any) => d ? { ...d, bankroll_start: start, bankroll_goal: goal, unit_value: unitValue } : d)
-    load(0)
+    load(period)
   }
 
   const pnlColor = (v: number | null) =>
@@ -237,6 +244,18 @@ export default function Banca() {
           </div>
         ) : (
           <div className="space-y-6">
+
+            {/* Filtro de período */}
+            <div className="flex items-center gap-2 flex-wrap">
+              {PERIODS.map(p => (
+                <button key={p.key} onClick={() => setPeriod(p.key)}
+                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                    period === p.key
+                      ? 'bg-green-500 border-green-500 text-black'
+                      : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                  }`}>{p.label}</button>
+              ))}
+            </div>
 
             {/* Stats principais */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -469,39 +488,11 @@ export default function Banca() {
               </div>
             )}
 
-            {/* Lista de picks por dia */}
+            {/* Lista de picks */}
             {(() => {
               const allEntries: any[] = data?.entries ?? []
-
-              // Datas únicas que o usuário tem picks, em ordem decrescente
-              const uniqueDates = Array.from(new Set(
-                allEntries.map((e: any) =>
-                  e.followed_at
-                    ? new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-                    : null
-                ).filter(Boolean)
-              )).sort((a, b) => (b as string).localeCompare(a as string)) as string[]
-
-              const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-              const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-
-              const dayLabel = (key: string) =>
-                key === todayKey     ? 'Hoje'
-                : key === yesterdayKey ? 'Ontem'
-                : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
-
-              const clampedOffset = Math.min(dayOffset, uniqueDates.length - 1)
-              const selectedKey   = uniqueDates[clampedOffset] ?? todayKey
-              const pageItems     = allEntries.filter((e: any) =>
-                e.followed_at &&
-                new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === selectedKey
-              )
-              const hasPrev = clampedOffset < uniqueDates.length - 1
-              const hasNext = clampedOffset > 0
-
               return (
                 <div>
-                  {/* Header navegação */}
                   <div className="flex items-center justify-between mb-3">
                     <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">
                       Picks apostados ({allEntries.length})
@@ -522,109 +513,68 @@ export default function Banca() {
                       </button>
                     </div>
                   ) : (
-                    <>
-                      {/* Navegação de dia */}
-                      <div className="flex items-center justify-between mb-3 bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
-                        <button
-                          onClick={() => setDayOffset(o => o + 1)}
-                          disabled={!hasPrev}
-                          className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
-                        >
-                          <ChevronLeft className="w-5 h-5" />
-                        </button>
-                        <div className="text-center">
-                          <div className="flex items-center justify-center gap-1.5">
-                            <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
-                            {selectedKey !== todayKey && (
-                              <button
-                                onClick={() => setDayOffset(0)}
-                                className="text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors border border-green-500/30 px-1.5 py-0.5 rounded"
-                              >
-                                Hoje
-                              </button>
-                            )}
-                          </div>
-                          <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
-                        </div>
-                        <button
-                          onClick={() => setDayOffset(o => o - 1)}
-                          disabled={!hasNext}
-                          className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
-                        >
-                          <ChevronRight className="w-5 h-5" />
-                        </button>
-                      </div>
-
-                      {/* Picks do dia selecionado */}
-                      {pageItems.length === 0 ? (
-                        <div className="card p-8 text-center border-dashed">
-                          <p className="text-zinc-600 text-sm">Nenhum pick apostado neste dia.</p>
-                        </div>
-                      ) : (
-                        <div className="card overflow-hidden">
-                          <div className="divide-y divide-zinc-800/60">
-                            {pageItems.map((e: any) => {
-                              const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
-                              const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
-                              return (
-                                <button
-                                  key={e.id}
-                                  onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
-                                  className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
-                                >
-                                  <div className="flex-1 min-w-0">
-                                    <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
-                                        {SOURCE_LBL[e.pick_type] ?? e.pick_type}
-                                      </span>
-                                      {homeSrc && (
-                                        <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                    <div className="card overflow-hidden">
+                      <div className="divide-y divide-zinc-800/60">
+                        {allEntries.map((e: any) => {
+                          const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
+                          const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
+                          return (
+                            <button
+                              key={e.id}
+                              onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
+                              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+                            >
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
+                                  <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
+                                    {SOURCE_LBL[e.pick_type] ?? e.pick_type}
+                                  </span>
+                                  {homeSrc && (
+                                    <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
+                                      onError={ev => (ev.currentTarget.style.display = 'none')} />
+                                  )}
+                                  <span className="text-sm font-semibold text-white truncate">
+                                    {e.home_team_name ?? `Pick #${e.pick_id}`}
+                                  </span>
+                                  {e.away_team_name && (
+                                    <>
+                                      <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                      {awaySrc && (
+                                        <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
                                           onError={ev => (ev.currentTarget.style.display = 'none')} />
                                       )}
-                                      <span className="text-sm font-semibold text-white truncate">
-                                        {e.home_team_name ?? `Pick #${e.pick_id}`}
-                                      </span>
-                                      {e.away_team_name && (
-                                        <>
-                                          <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                                          {awaySrc && (
-                                            <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                              onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                          )}
-                                          <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
-                                        </>
-                                      )}
-                                    </div>
-                                    <p className="text-xs text-zinc-600 truncate">
-                                      {e.market ?? ''}
-                                      {e.line  ? ` · ${e.line}` : ''}
-                                      {e.actual_odd
-                                        ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                                        : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
-                                    </p>
-                                  </div>
+                                      <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
+                                    </>
+                                  )}
+                                </div>
+                                <p className="text-xs text-zinc-600 truncate">
+                                  {e.market ?? ''}
+                                  {e.line  ? ` · ${e.line}` : ''}
+                                  {e.actual_odd
+                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                                </p>
+                              </div>
 
-                                  <div className="flex items-center gap-2 shrink-0">
-                                    {e.result ? (
-                                      <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
-                                        {RESULT_LBL[e.result] ?? e.result}
-                                      </span>
-                                    ) : (
-                                      <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
-                                        Pendente
-                                      </span>
-                                    )}
-                                    <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
-                                      {e.pnl != null ? fmtSigned(e.pnl) : ''}
-                                    </span>
-                                  </div>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        </div>
-                      )}
-                    </>
+                              <div className="flex items-center gap-2 shrink-0">
+                                {e.result ? (
+                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
+                                    {RESULT_LBL[e.result] ?? e.result}
+                                  </span>
+                                ) : (
+                                  <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
+                                    Pendente
+                                  </span>
+                                )}
+                                <span className={`text-sm font-black w-20 text-right ${pnlColor(e.pnl)}`}>
+                                  {e.pnl != null ? fmtSigned(e.pnl) : ''}
+                                </span>
+                              </div>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    </div>
                   )}
                 </div>
               )
