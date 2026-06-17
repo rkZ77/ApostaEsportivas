@@ -164,7 +164,7 @@ def get_banca(
             if pnl_r is not None:
                 running += pnl_r
 
-            pick_odd = actual_odd or (float(pick["odd"]) if pick.get("odd") is not None else None)
+            pick_odd_orig = float(pick["odd"]) if pick.get("odd") is not None else None
             entries.append({
                 "id":             f["id"],
                 "pick_id":        f["pick_id"],
@@ -177,7 +177,7 @@ def get_banca(
                 "away_team_id":   pick.get("away_team_id"),
                 "market":         pick.get("market"),
                 "line":           pick.get("line"),
-                "odd":            pick_odd,
+                "odd":            pick_odd_orig,
                 "actual_odd":     actual_odd,
                 "result":         result,
                 "profit_units":   profit_u,

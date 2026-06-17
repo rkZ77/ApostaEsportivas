@@ -627,7 +627,9 @@ export default function Banca() {
                                 <p className="text-xs text-zinc-600 truncate">
                                   {e.market ?? ''}
                                   {e.line  ? ` · ${e.line}` : ''}
-                                  {e.odd   ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                                  {e.actual_odd
+                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
                                 </p>
                               </div>
 
