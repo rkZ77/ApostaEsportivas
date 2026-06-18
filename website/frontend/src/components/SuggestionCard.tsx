@@ -169,9 +169,16 @@ export default function SuggestionCard({
         ) : s.profit != null ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-            <div className={`text-2xl font-black ${s.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {s.profit >= 0 ? '+' : ''}{Number(s.profit).toFixed(2)}u
-            </div>
+            {(() => {
+              const u = stakeSuggestion?.units ?? s.stake ?? 1
+              const p = Number(s.profit) * u
+              return (
+                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <>

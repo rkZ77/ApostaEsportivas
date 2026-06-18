@@ -407,9 +407,16 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         ) : dica.profit != null ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-            <div className={`text-2xl font-black ${dica.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {dica.profit >= 0 ? '+' : ''}{Number(dica.profit).toFixed(2)}u
-            </div>
+            {(() => {
+              const u = stakeSuggestion?.units ?? 1
+              const p = Number(dica.profit) * u
+              return (
+                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <>
@@ -623,9 +630,16 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         ) : m.profit != null ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-            <div className={`text-2xl font-black ${m.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-              {m.profit >= 0 ? '+' : ''}{Number(m.profit).toFixed(2)}u
-            </div>
+            {(() => {
+              const u = stakeSuggestion?.units ?? 1
+              const p = Number(m.profit) * u
+              return (
+                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                </div>
+              )
+            })()}
           </div>
         ) : (
           <div className="flex-1 px-5 py-3 text-center">
