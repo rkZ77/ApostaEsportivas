@@ -76,6 +76,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => document.removeEventListener('visibilitychange', onVisible)
   }, [])
 
+  // Agenda refreshUser() no exato momento de expiração do plano
+  // Garante que a badge e o plano atualizam sem o usuário precisar sair da conta
+  useEffect(() => {
+    if (!user?.expires_at || !['vip', 'trial'].includes(user.plan)) return
+    const diff = new Date(user.expires_at).getTime() - Date.now()
+    if (diff <= 0) {
+      // Já expirou: sincroniza imediatamente
+      refreshUser().catch(() => {})
+      return
+    }
+    // Dispara no momento exato da expiração (máx 24h para evitar bugs de timer longo)
+    const delay = Math.min(diff + 1000, 24 * 60 * 60 * 1000)
+    const expTimer = setTimeout(() => refreshUser().catch(() => {}), delay)
+    // Fallback: verifica a cada 5 min enquanto o plano está próximo de expirar (<1h)
+    const pollId = diff < 60 * 60 * 1000
+      ? setInterval(() => refreshUser().catch(() => {}), 5 * 60 * 1000)
+      : null
+    return () => {
+      clearTimeout(expTimer)
+      if (pollId) clearInterval(pollId)
+    }
+  }, [user?.expires_at, user?.plan])
+
   const daysUntilExpiry: number | null = (() => {
     if (!user?.expires_at) return null
     const diff = new Date(user.expires_at).getTime() - Date.now()

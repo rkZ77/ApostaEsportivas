@@ -233,6 +233,32 @@ async def start_rate_store_cleanup():
     _asyncio.create_task(_cleanup_rate_stores())
 
 
+# ── Background: expira planos VIP/trial vencidos a cada hora ─────────────────
+async def _job_expire_plans():
+    while True:
+        await _asyncio.sleep(3600)
+        try:
+            from database import get_connection
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute(
+                "UPDATE users SET plan='free', expires_at=NULL "
+                "WHERE plan IN ('vip','trial') AND expires_at IS NOT NULL AND expires_at < NOW()"
+            )
+            affected = cur.rowcount
+            conn.commit()
+            cur.close(); conn.close()
+            if affected:
+                logger.info("[EXPIRE-PLANS] %d plano(s) expirado(s) → free", affected)
+        except Exception as e:
+            logger.error("[EXPIRE-PLANS] Erro: %s", e)
+
+
+@app.on_event("startup")
+async def start_expire_plans():
+    _asyncio.create_task(_job_expire_plans())
+
+
 # ── Migrações automáticas de schema ──────────────────────────────────────────
 @app.on_event("startup")
 def run_migrations():
