@@ -360,8 +360,8 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+            <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
               Copa 2026 · Ao Vivo
             </span>
           </div>
@@ -430,8 +430,8 @@ export default function Landing() {
               {/* Badge Copa AO VIVO */}
               <div className="inline-flex items-center gap-2 mb-6">
                 <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-8 h-8 object-contain" />
-                <span className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
                   Copa 2026 · Ao Vivo
                 </span>
               </div>
@@ -851,8 +851,8 @@ export default function Landing() {
           <div className="flex items-center justify-center gap-3 mb-6">
             <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
           </div>
-          <div className="inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-6">
-            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+          <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-6">
+            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
             Copa em andamento agora
           </div>
           <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
