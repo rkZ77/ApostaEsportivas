@@ -659,6 +659,16 @@ def me(current_user: dict = Depends(get_current_user)):
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         d = dict(row)
+        # Auto-expire: mesma lógica do login/refresh
+        if d.get("plan") in ("vip", "trial") and d.get("expires_at"):
+            exp = d["expires_at"]
+            if exp.tzinfo is None:
+                exp = exp.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp:
+                cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (d["id"],))
+                conn.commit()
+                d["plan"] = "free"
+                d["expires_at"] = None
         if d.get("expires_at"):
             d["expires_at"] = d["expires_at"].isoformat()
         return d

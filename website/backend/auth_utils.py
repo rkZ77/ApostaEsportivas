@@ -129,6 +129,26 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     return payload
 
 
+def is_vip_active(user: dict) -> bool:
+    """True se o usuário tem plano VIP/trial/admin ativo (não expirado)."""
+    plan = user.get("plan", "free")
+    if plan not in ("vip", "trial", "admin"):
+        return False
+    if plan == "admin":
+        return True
+    expires_at = user.get("plan_expires_at")
+    if expires_at:
+        try:
+            exp_dt = datetime.fromisoformat(expires_at)
+            if exp_dt.tzinfo is None:
+                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) > exp_dt:
+                return False
+        except (ValueError, TypeError):
+            pass
+    return True
+
+
 def require_vip(user: dict = Depends(get_current_user)) -> dict:
     if user.get("plan") not in ("vip", "trial", "admin"):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso VIP necessário")

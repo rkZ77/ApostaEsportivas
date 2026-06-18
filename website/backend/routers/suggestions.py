@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
 import psycopg2.extras
 from database import get_connection
-from auth_utils import get_current_user, require_vip
+from auth_utils import get_current_user, require_vip, is_vip_active
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
@@ -66,8 +66,7 @@ def get_today_suggestions(
     current_user: dict = Depends(get_current_user),
     date: Optional[str] = Query(None, description="YYYY-MM-DD — deixar vazio para hoje"),
 ):
-    plan = current_user.get("plan", "free")
-    is_vip = plan in ("vip", "admin", "trial")
+    is_vip = is_vip_active(current_user)
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -348,7 +347,7 @@ def get_suggestion_detail(
     try:
         from fastapi import HTTPException
 
-        is_vip = current_user.get("plan") in ("vip", "admin", "trial")
+        is_vip = is_vip_active(current_user)
 
         # ── MÚLTIPLA ────────────────────────────────────────────────────────
         if pick_type == "multipla":
