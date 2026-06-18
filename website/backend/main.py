@@ -141,33 +141,36 @@ _avatars_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(_pathlib.Path(__file__).parent / "static")), name="static")
 
 _LOGO_BASE = "https://media.api-sports.io/football"
-_LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=86400, stale-while-revalidate=3600"}
+_LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=86400"}
+_logo_disk_cache = _pathlib.Path("/tmp/pickia_logos")
+_logo_disk_cache.mkdir(parents=True, exist_ok=True)
+
+async def _serve_logo(kind: str, item_id: int) -> _Response:
+    cache_path = _logo_disk_cache / f"{kind}_{item_id}.png"
+    if cache_path.exists():
+        return _Response(cache_path.read_bytes(), media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+    url = f"{_LOGO_BASE}/{kind}s/{item_id}.png"
+    try:
+        async with _httpx.AsyncClient(timeout=8.0) as client:
+            r = await client.get(url)
+            if r.status_code == 200 and r.content:
+                cache_path.write_bytes(r.content)
+                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+    except Exception:
+        pass
+    return _Response(status_code=404)
 
 @app.get("/api/proxy/team/{team_id}.png", include_in_schema=False)
 async def proxy_team_logo(team_id: int):
     if not (1 <= team_id <= 999999):
         return _Response(status_code=400)
-    try:
-        async with _httpx.AsyncClient(timeout=6.0) as client:
-            r = await client.get(f"{_LOGO_BASE}/teams/{team_id}.png")
-            if r.status_code == 200:
-                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
-    except Exception:
-        pass
-    return _Response(status_code=404)
+    return await _serve_logo("team", team_id)
 
 @app.get("/api/proxy/league/{league_id}.png", include_in_schema=False)
 async def proxy_league_logo(league_id: int):
     if not (1 <= league_id <= 999999):
         return _Response(status_code=400)
-    try:
-        async with _httpx.AsyncClient(timeout=6.0) as client:
-            r = await client.get(f"{_LOGO_BASE}/leagues/{league_id}.png")
-            if r.status_code == 200:
-                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
-    except Exception:
-        pass
-    return _Response(status_code=404)
+    return await _serve_logo("league", league_id)
 
 app.include_router(auth.router)
 app.include_router(suggestions.router)
