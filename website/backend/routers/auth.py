@@ -89,6 +89,36 @@ def _validate_cpf(cpf: str) -> str:
 
 _USERNAME_RE = re.compile(r"^[a-z0-9_]{3,20}$")
 
+# DDDs válidos no Brasil (11-99, exceto blocos não atribuídos)
+_VALID_DDDS = {
+    11,12,13,14,15,16,17,18,19,
+    21,22,24,27,28,
+    31,32,33,34,35,37,38,
+    41,42,43,44,45,46,47,48,49,
+    51,53,54,55,
+    61,62,63,64,65,66,67,68,69,
+    71,73,74,75,77,79,
+    81,82,83,84,85,86,87,88,89,
+    91,92,93,94,95,96,97,98,99,
+}
+
+
+def _validate_phone_br(phone: str) -> str:
+    """Valida e normaliza telefone brasileiro para E.164 (+55XXXXXXXXXXX)."""
+    digits = re.sub(r"\D", "", phone)
+    # Remove prefixo +55 ou 55 se presente
+    if digits.startswith("55") and len(digits) in (12, 13):
+        digits = digits[2:]
+    if len(digits) not in (10, 11):
+        raise HTTPException(400, "Telefone inválido. Use o formato (DDD) 9XXXX-XXXX.")
+    ddd = int(digits[:2])
+    if ddd not in _VALID_DDDS:
+        raise HTTPException(400, f"DDD {ddd} inválido. Verifique o número informado.")
+    # Celular com 11 dígitos deve começar com 9
+    if len(digits) == 11 and digits[2] != "9":
+        raise HTTPException(400, "Celular deve começar com 9 após o DDD (ex: 11 9XXXX-XXXX).")
+    return f"+55{digits}"
+
 
 def _generate_username(name: str, cur) -> str:
     """Gera username único a partir do primeiro nome."""
@@ -335,8 +365,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             raise HTTPException(status_code=400, detail="Email já cadastrado")
 
         # Valida phone, CPF e username
-        if not body.phone or len(body.phone.replace('+', '').replace(' ', '').replace('-', '').replace('(', '').replace(')', '')) < 10:
-            raise HTTPException(status_code=400, detail="Telefone inválido. Informe o número com DDD.")
+        phone_e164 = _validate_phone_br(body.phone)
         cpf_digits = _validate_cpf(body.cpf)
         cur.execute("SELECT id FROM users WHERE cpf = %s", (cpf_digits,))
         if cur.fetchone():
@@ -374,7 +403,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
         cur.execute(
             "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code, terms_accepted_at, terms_ip) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
-            (body.name, body.email, hash_password(body.password), body.phone, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
+            (body.name, body.email, hash_password(body.password), phone_e164, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
         )
         user = dict(cur.fetchone())
         # Trial gratuito de 2 dias — apenas para usuários que forneceram CPF no cadastro
@@ -754,7 +783,8 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
             fields.append("username = %s"); values.append(raw)
 
         if body.phone is not None:
-            fields.append("phone = %s"); values.append(body.phone or None)
+            normalized = _validate_phone_br(body.phone) if body.phone.strip() else None
+            fields.append("phone = %s"); values.append(normalized)
 
         if body.cpf is not None and body.cpf.strip():
             cpf_digits = _validate_cpf(body.cpf)

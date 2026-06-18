@@ -29,6 +29,14 @@ function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
 }
 
+function maskPhone(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length <= 2)  return d.length ? `(${d}` : ''
+  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
+}
+
 type LoginMethod = 'username' | 'email' | 'cpf'
 
 export default function Login() {
@@ -97,8 +105,9 @@ export default function Login() {
       if (!validateEmail(email)) { setError('Email inválido.'); return }
       if (!username.trim()) { setError('Escolha um nome de usuário.'); return }
       if (!validateCPF(cpf)) { setError('CPF inválido. Verifique os dígitos informados.'); return }
-      if (phone.replace(/\D/g, '').length < 10) {
-        setError('Informe um telefone ou WhatsApp válido com DDD.')
+      const phoneDigits = phone.replace(/\D/g, '')
+      if (phoneDigits.length < 10 || phoneDigits.length > 11) {
+        setError('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX.')
         return
       }
       if (password.length < 8) { setError('A senha deve ter pelo menos 8 caracteres.'); return }
@@ -275,7 +284,7 @@ export default function Login() {
                 <div>
                   <label className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp / Telefone</label>
                   <input type="tel" value={phone}
-                    onChange={e => setPhone(e.target.value)}
+                    onChange={e => setPhone(maskPhone(e.target.value))}
                     required className="input" placeholder="(11) 99999-9999"
                     inputMode="numeric" autoComplete="tel" />
                 </div>

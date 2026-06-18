@@ -13,13 +13,27 @@ interface ReferralData {
   days_earned: number
 }
 
+function maskPhone(value: string): string {
+  const d = value.replace(/\D/g, '').slice(0, 11)
+  if (d.length <= 2)  return d.length ? `(${d}` : ''
+  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`
+  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
+  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
+}
+
+function displayPhone(raw: string): string {
+  if (!raw) return ''
+  const digits = raw.startsWith('+55') ? raw.slice(3) : raw.replace(/\D/g, '')
+  return maskPhone(digits)
+}
+
 export default function Profile() {
   const { user, updateUser } = useAuth()
   const navigate = useNavigate()
 
   const [name, setName]             = useState(user?.name ?? '')
   const [username, setUsername]     = useState('')
-  const [phone, setPhone]           = useState(user?.phone ?? '')
+  const [phone, setPhone]           = useState(displayPhone(user?.phone ?? ''))
   const [cpf, setCpf]               = useState('')
   const [loading, setLoading]       = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
@@ -226,7 +240,7 @@ export default function Profile() {
 
           <div>
             <label className="text-xs text-zinc-500 block mb-1.5">WhatsApp <span className="text-zinc-600 font-normal">(opcional)</span></label>
-            <input className="input w-full" value={phone} onChange={e => setPhone(e.target.value)} placeholder="(11) 99999-9999" type="tel" />
+            <input className="input w-full" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999" type="tel" inputMode="numeric" />
           </div>
 
           {!meData?.has_cpf && (

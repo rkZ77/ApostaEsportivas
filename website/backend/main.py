@@ -246,6 +246,8 @@ def run_migrations():
             # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
             "UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64",
             "UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64",
+            # Normaliza phones existentes para E.164 (+55XXXXXXXXXXX)
+            "UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11",
         ]
         for sql in migrations:
             cur.execute(sql)
