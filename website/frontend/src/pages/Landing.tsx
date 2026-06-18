@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
-import { Menu, X as XIcon } from 'lucide-react'
+import { Menu, X as XIcon, UserPlus, Zap, TrendingUp } from 'lucide-react'
 import axios from 'axios'
 import Footer from '../components/Footer'
 
@@ -121,12 +121,14 @@ function ThreeSteps() {
         </p>
         <div className="grid md:grid-cols-3 gap-5">
           {([
-            { n: '1', emoji: '🎯', title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Sem cartão de crédito. Ganhe 2 dias de acesso VIP completo.', color: 'text-green-500', border: 'border-green-500/20 bg-green-500/3' },
-            { n: '2', emoji: '⚡', title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20 bg-blue-400/3' },
-            { n: '3', emoji: '📈', title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20 bg-yellow-400/3' },
-          ] as const).map(({ n, emoji, title, desc, color, border }) => (
+            { n: '1', Icon: UserPlus, title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Sem cartão de crédito. Ganhe 2 dias de acesso VIP completo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
+            { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
+            { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
+          ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
             <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>
-              <div className="text-3xl mb-3">{emoji}</div>
+              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 ${iconBg}`}>
+                <Icon className={`w-6 h-6 ${color}`} />
+              </div>
               <div className={`text-[10px] font-black uppercase tracking-widest ${color} mb-2`}>Passo {n}</div>
               <h3 className="text-base font-black text-white mb-2">{title}</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
