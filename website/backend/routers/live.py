@@ -268,6 +268,28 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     return None
 
 
+def _locked_leg_result(leg: dict) -> str | None:
+    """
+    Retorna resultado definitivo de uma leg se já determinado, else None.
+    FT  → resultado completo via _calc_result.
+    Bloqueado antes do FT (over/under cujo valor já cruzou a linha) → RED ou GREEN antecipado.
+    """
+    if leg["is_ft"]:
+        return _calc_result(
+            leg["market"], leg["line"],
+            leg["current_val"], leg["home_goals"], leg["away_goals"],
+        )
+    if leg.get("is_locked"):
+        direction, line_val = _extract_line(leg["line"])
+        cur = leg.get("current_val")
+        if cur is not None and line_val is not None:
+            if direction == "under" and cur >= line_val:
+                return "RED"    # Under X com cur >= X: impossível de recuperar
+            if direction == "over" and cur > line_val:
+                return "GREEN"  # Over X com cur > X: nunca vai descer
+    return None
+
+
 def _profit_for_result(result: str, odd: float) -> float:
     """Lucro por unidade apostada para cada tipo de resultado."""
     o = float(odd)
@@ -505,14 +527,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 ))
 
             if legs_out:
-                total_odd = float(p["total_odd"] or 1)
-                # Auto-save quando todas as pernas encerraram
-                if all(l["is_ft"] for l in legs_out):
-                    leg_results = [
-                        _calc_result(l["market"], l["line"], l["current_val"],
-                                     l["home_goals"], l["away_goals"])
-                        for l in legs_out
-                    ]
+                total_odd   = float(p["total_odd"] or 1)
+                leg_results = [_locked_leg_result(l) for l in legs_out]
+                if any(r == "RED" for r in leg_results):
+                    # Early RED: uma perna já perdeu — não precisamos esperar as outras
+                    _save_multipla_result(pick_id, ["RED"] * len(legs_out), total_odd, conn)
+                    continue
+                if all(r is not None for r in leg_results):
+                    # Todas as pernas encerradas sem RED
                     _save_multipla_result(pick_id, leg_results, total_odd, conn)
                     continue
 
@@ -563,12 +585,11 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
             if legs_out:
                 odd_combined = float(p["odd_combined"] or 1)
-                if all(l["is_ft"] for l in legs_out):
-                    leg_results = [
-                        _calc_result(l["market"], l["line"], l["current_val"],
-                                     l["home_goals"], l["away_goals"])
-                        for l in legs_out
-                    ]
+                leg_results  = [_locked_leg_result(l) for l in legs_out]
+                if any(r == "RED" for r in leg_results):
+                    _save_alavancagem_result(pick_id, ["RED"] * len(legs_out), odd_combined, conn)
+                    continue
+                if all(r is not None for r in leg_results):
                     _save_alavancagem_result(pick_id, leg_results, odd_combined, conn)
                     continue
 
@@ -588,3 +609,145 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     # Live picks first, then by date
     result.sort(key=lambda x: (0 if x.get("is_live") else 1, x.get("match_date", "")))
     return result
+
+
+# ─── Job de background ───────────────────────────────────────────────────────
+
+def resolve_all_pending() -> dict:
+    """
+    Tenta resolver todos os picks pendentes usando dados ao vivo da API.
+    Chamado pelo APScheduler a cada 5 min. Retorna contagem de resolvidos por tipo.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0}
+
+    try:
+        # ── VIP ──────────────────────────────────────────────────────────────
+        cur.execute("""
+            SELECT id, fixture_id, market, line, odd,
+                   home_team_name AS home_team, away_team_name AS away_team,
+                   home_team_id, away_team_id
+            FROM picks_vip WHERE result IS NULL AND fixture_id IS NOT NULL
+        """)
+        for p in cur.fetchall():
+            odd = float(p["odd"] or 1)
+            leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
+                              p["home_team"], p["away_team"],
+                              p["home_team_id"], p["away_team_id"], odd)
+            if leg["is_ft"]:
+                res = _calc_result(p["market"], p["line"],
+                                   leg["current_val"], leg["home_goals"], leg["away_goals"])
+                if res:
+                    _save_single_result(p["id"], "vip", res, odd, conn)
+                    resolved["vip"] += 1
+
+        # ── FREE ─────────────────────────────────────────────────────────────
+        cur.execute("""
+            SELECT id, fixture_id, market, line, odd,
+                   home_team, away_team, home_team_id, away_team_id
+            FROM picks_free WHERE result IS NULL AND fixture_id IS NOT NULL
+        """)
+        for p in cur.fetchall():
+            odd = float(p["odd"] or 1)
+            leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
+                              p["home_team"], p["away_team"],
+                              p["home_team_id"], p["away_team_id"], odd)
+            if leg["is_ft"]:
+                res = _calc_result(p["market"], p["line"],
+                                   leg["current_val"], leg["home_goals"], leg["away_goals"])
+                if res:
+                    _save_single_result(p["id"], "free", res, odd, conn)
+                    resolved["free"] += 1
+
+        # ── MÚLTIPLA ─────────────────────────────────────────────────────────
+        cur.execute("SELECT id, games, total_odd FROM picks_multiplas WHERE result IS NULL")
+        for p in cur.fetchall():
+            games = p["games"]
+            if isinstance(games, str):
+                try:    games = json.loads(games)
+                except: continue
+            if not isinstance(games, list) or not games:
+                continue
+
+            legs_out = []
+            for leg_data in games:
+                fid = leg_data.get("fixture_id")
+                if not fid:
+                    continue
+                home = leg_data.get("home") or leg_data.get("home_team") or ""
+                away = leg_data.get("away") or leg_data.get("away_team") or ""
+                legs_out.append(_enrich_leg(
+                    fid,
+                    leg_data.get("market", ""),
+                    leg_data.get("line", ""),
+                    home, away,
+                    leg_data.get("home_team_id"),
+                    leg_data.get("away_team_id"),
+                    float(leg_data.get("odd", 1)),
+                ))
+
+            if not legs_out:
+                continue
+
+            total_odd   = float(p["total_odd"] or 1)
+            leg_results = [_locked_leg_result(l) for l in legs_out]
+            if any(r == "RED" for r in leg_results):
+                _save_multipla_result(p["id"], ["RED"] * len(legs_out), total_odd, conn)
+                resolved["multipla"] += 1
+            elif all(r is not None for r in leg_results):
+                _save_multipla_result(p["id"], leg_results, total_odd, conn)
+                resolved["multipla"] += 1
+
+        # ── ALAVANCAGEM ──────────────────────────────────────────────────────
+        cur.execute("""
+            SELECT id, fixture_id_1, fixture_id_2,
+                   market_1, line_1, odd_1, home_team_1, away_team_1,
+                   market_2, line_2, odd_2, home_team_2, away_team_2,
+                   odd_combined
+            FROM picks_alavancagem WHERE result IS NULL
+        """)
+        for p in cur.fetchall():
+            legs_out = []
+            for i in (1, 2):
+                fid = p.get(f"fixture_id_{i}")
+                if not fid:
+                    continue
+                c2 = conn.cursor()
+                try:
+                    c2.execute(
+                        "SELECT home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
+                        (fid,),
+                    )
+                    fx = c2.fetchone()
+                finally:
+                    c2.close()
+                legs_out.append(_enrich_leg(
+                    fid,
+                    p.get(f"market_{i}", ""),
+                    p.get(f"line_{i}", ""),
+                    p.get(f"home_team_{i}", "") or "",
+                    p.get(f"away_team_{i}", "") or "",
+                    fx["home_team_id"] if fx else None,
+                    fx["away_team_id"] if fx else None,
+                    float(p.get(f"odd_{i}") or 1),
+                ))
+
+            if not legs_out:
+                continue
+
+            odd_combined = float(p["odd_combined"] or 1)
+            leg_results  = [_locked_leg_result(l) for l in legs_out]
+            if any(r == "RED" for r in leg_results):
+                _save_alavancagem_result(p["id"], ["RED"] * len(legs_out), odd_combined, conn)
+                resolved["alavancagem"] += 1
+            elif all(r is not None for r in leg_results):
+                _save_alavancagem_result(p["id"], leg_results, odd_combined, conn)
+                resolved["alavancagem"] += 1
+
+    finally:
+        cur.close()
+        conn.close()
+
+    logger.info("[AUTO-RESULT] resolvidos: %s", resolved)
+    return resolved

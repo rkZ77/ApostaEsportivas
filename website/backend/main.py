@@ -421,13 +421,24 @@ def run_migrations():
         cur.close()
         conn.close()
 
-    # Inicia scheduler de lembretes
+    def _job_resolve_picks():
+        """Resolve picks pendentes automaticamente a cada 5 min via API ao vivo."""
+        try:
+            from routers.live import resolve_all_pending
+            resolved = resolve_all_pending()
+            if any(v > 0 for v in resolved.values()):
+                logger.info("[SCHEDULER] Picks resolvidos: %s", resolved)
+        except Exception as e:
+            logger.error("[SCHEDULER] Erro em resolve_picks: %s", e)
+
+    # Inicia scheduler de lembretes e resolução automática de picks
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         _scheduler = BackgroundScheduler()
         _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
+        _scheduler.add_job(_job_resolve_picks, "interval", minutes=5, id="resolve_picks")
         _scheduler.start()
-        logger.info("[SCHEDULER] Iniciado — lembrete de banca a cada 1h")
+        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min")
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
 

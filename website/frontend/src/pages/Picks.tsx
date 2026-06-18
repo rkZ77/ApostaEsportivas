@@ -419,16 +419,10 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
             })()}
           </div>
         ) : (
-          <>
-            <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Stake</div>
-              <div className="text-xl font-black text-zinc-200">1u</div>
-            </div>
-            <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
-              <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
-            </div>
-          </>
+          <div className="flex-1 px-4 py-3 text-center">
+            <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
+            <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+          </div>
         )}
       </div>
 
