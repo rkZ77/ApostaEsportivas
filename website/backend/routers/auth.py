@@ -1,6 +1,7 @@
 import os
 import re
 import base64
+import hashlib
 import logging
 import secrets
 import pathlib
@@ -24,6 +25,11 @@ from auth_utils import (
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
 _LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
+
+
+def _hash_token(token: str) -> str:
+    """SHA-256 hex digest de um token — nunca armazena plaintext no DB."""
+    return hashlib.sha256(token.encode()).hexdigest()
 
 def _logo_data_uri() -> str:
     try:
@@ -403,7 +409,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         email_token: Optional[str] = None
         try:
             email_token = secrets.token_urlsafe(32)
-            cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (email_token, user["id"]))
+            cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (_hash_token(email_token), user["id"]))
             conn.commit()
         except Exception:
             conn.rollback()
@@ -518,7 +524,7 @@ def verify_email_endpoint(body: VerifyEmailBody, background_tasks: BackgroundTas
     try:
         cur.execute(
             "SELECT id, email, name FROM users WHERE email_verification_token = %s",
-            (body.token,),
+            (_hash_token(body.token),),
         )
         row = cur.fetchone()
         if not row:
@@ -545,7 +551,7 @@ def resend_verification(background_tasks: BackgroundTasks, current_user: dict = 
         if not row or row["email_verified"]:
             return {"ok": True}
         token = secrets.token_urlsafe(32)
-        cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (token, current_user["id"]))
+        cur.execute("UPDATE users SET email_verification_token=%s WHERE id=%s", (_hash_token(token), current_user["id"]))
         conn.commit()
         site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         background_tasks.add_task(_send_verification_email, row["email"], row["name"], token, site_url)
@@ -827,7 +833,7 @@ def change_email(body: ChangeEmailBody, background_tasks: BackgroundTasks, reque
         token = secrets.token_urlsafe(32)
         cur.execute(
             "UPDATE users SET email=%s, email_verified=FALSE, email_verification_token=%s, updated_at=NOW() WHERE id=%s RETURNING name",
-            (new_email, token, current_user["sub"]),
+            (new_email, _hash_token(token), current_user["sub"]),
         )
         row = cur.fetchone()
         conn.commit()
@@ -854,7 +860,7 @@ def forgot_password(body: ForgotPasswordBody):
         expires = datetime.now(timezone.utc) + timedelta(minutes=15)
         cur.execute(
             "UPDATE users SET reset_token = %s, reset_token_expires_at = %s WHERE id = %s",
-            (code, expires, row["id"]),
+            (_hash_token(code), expires, row["id"]),
         )
         conn.commit()
 
@@ -886,7 +892,7 @@ def reset_password(body: ResetPasswordBody):
     try:
         cur.execute(
             "SELECT id FROM users WHERE email = %s AND reset_token = %s AND reset_token_expires_at > NOW()",
-            (body.email, body.code),
+            (body.email, _hash_token(body.code)),
         )
         row = cur.fetchone()
         if not row:

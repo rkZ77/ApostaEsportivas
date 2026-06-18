@@ -243,6 +243,9 @@ def run_migrations():
         migrations = [
             "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2)",
             "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100)",
+            # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
+            "UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64",
+            "UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64",
         ]
         for sql in migrations:
             cur.execute(sql)
