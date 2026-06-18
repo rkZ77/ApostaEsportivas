@@ -404,7 +404,7 @@ export default function Landing() {
             </a>
             <div className="border-t border-zinc-800 pt-2 mt-1">
               <Link to="/login" onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+                className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl bg-zinc-900 border border-zinc-700 text-white hover:border-zinc-500 transition-colors text-sm font-bold">
                 Entrar na conta
               </Link>
             </div>
