@@ -204,7 +204,33 @@ function PickCard({ pick }: { pick: any }) {
 
 const REFRESH_INTERVAL = 5_000
 
-export default function LivePicks() {
+function LiveSkeleton() {
+  return (
+    <div className="space-y-3 animate-pulse">
+      {[1, 2, 3].map(i => (
+        <div key={i} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="h-4 w-10 bg-zinc-800 rounded" />
+              <div className="h-4 w-16 bg-zinc-800 rounded" />
+            </div>
+            <div className="h-4 w-14 bg-zinc-800 rounded-full" />
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-4 h-4 bg-zinc-800 rounded-full" />
+            <div className="h-4 w-24 bg-zinc-800 rounded" />
+            <div className="h-4 w-8 bg-zinc-700 rounded" />
+            <div className="h-4 w-24 bg-zinc-800 rounded" />
+          </div>
+          <div className="h-3 w-32 bg-zinc-800 rounded" />
+          <div className="h-1.5 bg-zinc-800 rounded-full" />
+        </div>
+      ))}
+    </div>
+  )
+}
+
+export default function LivePicks({ isActive = true }: { isActive?: boolean }) {
   const [picks, setPicks]           = useState<any[]>([])
   const [loading, setLoading]       = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -218,14 +244,18 @@ export default function LivePicks() {
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
 
+  // Primeiro fetch sempre (ao montar, antes de clicar na aba)
+  useEffect(() => { load() }, [load])
+
+  // Polling só quando a aba está visível
   useEffect(() => {
-    load()
+    if (!isActive) return
     const id = setInterval(load, REFRESH_INTERVAL)
     return () => clearInterval(id)
-  }, [load])
+  }, [load, isActive])
 
   if (loading && picks.length === 0) {
-    return <div className="flex justify-center py-16"><div className="w-8 h-8 border-2 border-zinc-700 border-t-red-500 rounded-full animate-spin" /></div>
+    return <LiveSkeleton />
   }
 
   const live      = picks.filter(p => p.is_live)

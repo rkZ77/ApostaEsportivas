@@ -2106,7 +2106,9 @@ export default function Picks() {
             </button>
           </div>
         )}
-        {tab === 'aovivo' && <LivePicks />}
+        <div className={tab !== 'aovivo' ? 'hidden' : ''}>
+          <LivePicks isActive={tab === 'aovivo'} />
+        </div>
 
         {tab === 'chat' && (
           <div className="max-w-2xl mx-auto">
