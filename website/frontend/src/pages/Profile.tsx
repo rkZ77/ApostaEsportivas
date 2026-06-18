@@ -166,6 +166,35 @@ export default function Profile() {
     free: 'badge-free', vip: 'badge-vip', admin: 'badge-admin',
   }
 
+  // Countdown ao vivo para expiração do plano
+  const [countdown, setCountdown] = useState('')
+  useEffect(() => {
+    if (!user?.expires_at || user.plan === 'free' || user.plan === 'admin') {
+      setCountdown('')
+      return
+    }
+    const tick = () => {
+      const diff = new Date(user.expires_at!).getTime() - Date.now()
+      if (diff <= 0) { setCountdown('Expirado'); return }
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${d}d ${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [user?.expires_at, user?.plan])
+
+  const planMeta: Record<string, { label: string; color: string }> = {
+    free:  { label: 'FREE',  color: 'text-zinc-400' },
+    trial: { label: 'TRIAL', color: 'text-amber-400' },
+    vip:   { label: 'VIP',   color: 'text-yellow-400' },
+    admin: { label: 'ADMIN', color: 'text-purple-400' },
+  }
+  const pm = planMeta[user?.plan ?? 'free'] ?? planMeta.free
+
   const currentAvatar = avatarPreview ?? user?.avatar_url ?? null
 
   return (
@@ -220,6 +249,41 @@ export default function Profile() {
           <span className={planBadge[user?.plan ?? 'free'] ?? 'badge-free'}>
             {user?.plan === 'vip' ? 'VIP' : user?.plan === 'trial' ? 'TESTE' : user?.plan === 'admin' ? 'ADMIN' : 'FREE'}
           </span>
+        </div>
+
+        {/* Assinatura */}
+        <div className="card p-5">
+          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-4">Assinatura</p>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-zinc-400 text-sm">Status atual:</span>
+                <span className={`text-sm font-black ${pm.color}`}>{pm.label}</span>
+              </div>
+              {countdown && (
+                <p className="text-zinc-400 text-sm">
+                  Expira em <span className="font-bold text-white tabular-nums">{countdown}</span>
+                </p>
+              )}
+              {user?.plan === 'free' && (
+                <p className="text-zinc-500 text-xs">Faça upgrade para acessar picks VIP</p>
+              )}
+            </div>
+            {(user?.plan === 'free' || user?.plan === 'trial') && (
+              <button
+                type="button"
+                onClick={() => navigate('/planos')}
+                className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors"
+              >
+                Assinar
+              </button>
+            )}
+            {user?.plan === 'vip' && (
+              <span className="shrink-0 text-xs font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-3 py-1.5 rounded-lg">
+                Ativo ✓
+              </span>
+            )}
+          </div>
         </div>
 
         {/* Formulário */}
