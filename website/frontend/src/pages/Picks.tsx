@@ -175,13 +175,36 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
 }) {
   if (!user) return null
   const firstName = user.name.split(' ')[0]
-
   const isTrial = user.plan === 'trial'
-  const planColor = isAdmin ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
-    : isTrial ? 'text-green-400 bg-green-500/10 border-green-500/20'
+
+  const planBadgeColor = isAdmin ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
+    : isTrial ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
     : isVip ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
     : 'text-zinc-400 bg-zinc-800 border-zinc-700'
-  const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TESTE' : isVip ? 'VIP' : 'FREE'
+  const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
+
+  const planStatusColor = isAdmin ? 'text-purple-400'
+    : isTrial ? 'text-amber-400'
+    : isVip ? 'text-yellow-400'
+    : 'text-zinc-400'
+
+  // Countdown ao vivo
+  const [countdown, setCountdown] = useState('')
+  useEffect(() => {
+    if (!user?.expires_at || (!isVip && !isTrial)) { setCountdown(''); return }
+    const tick = () => {
+      const diff = new Date(user.expires_at).getTime() - Date.now()
+      if (diff <= 0) { setCountdown('Expirado'); return }
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${d}d ${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [user?.expires_at, isVip, isTrial])
 
   return (
     <div className="card p-4 mb-5 flex items-center gap-4">
@@ -189,36 +212,40 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-white font-black text-lg leading-tight">Olá, {firstName}!</h2>
-          <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${planColor}`}>{planLabel}</span>
+          <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${planBadgeColor}`}>{planLabel}</span>
         </div>
         <p className="text-zinc-500 text-xs mt-0.5 truncate">{user.email}</p>
-        {isVip && daysUntilExpiry !== null && (
-          <p className={`text-xs mt-1 font-semibold ${daysUntilExpiry <= 3 ? 'text-red-400' : daysUntilExpiry <= 7 ? 'text-yellow-400' : 'text-zinc-500'}`}>
-            {daysUntilExpiry <= 0
-              ? 'Plano expirado'
-              : isTrial
-                ? `Teste VIP · ${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'} restante${daysUntilExpiry === 1 ? '' : 's'}`
-                : `Plano VIP · ${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'} restante${daysUntilExpiry === 1 ? '' : 's'}`}
-          </p>
-        )}
-        {!isVip && !isAdmin && (
-          <Link to="/checkout" className="text-xs text-yellow-400 hover:text-yellow-300 transition-colors mt-1 inline-block font-semibold">
-            Fazer upgrade para VIP →
-          </Link>
-        )}
+
+        {/* Assinatura inline */}
+        <div className="mt-2 flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <span className="text-zinc-500 text-xs">Status atual:</span>
+            <span className={`text-xs font-black ${planStatusColor}`}>{planLabel}</span>
+          </div>
+          {countdown && (
+            <span className="text-zinc-400 text-xs">
+              Expira em <span className="font-bold text-white tabular-nums">{countdown}</span>
+            </span>
+          )}
+          {!isVip && !isAdmin && (
+            <Link to="/planos" className="text-xs font-bold text-green-400 bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-lg hover:bg-green-500/20 transition-colors">
+              Assinar
+            </Link>
+          )}
+        </div>
       </div>
       <div className="shrink-0 hidden sm:flex flex-col gap-1.5">
         <Link to="/profile" className="flex items-center justify-center gap-1.5 text-blue-400 hover:text-blue-300 transition-colors text-xs border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg font-semibold">
           <UserCircle className="w-3.5 h-3.5" />
           Editar perfil
         </Link>
-        {!isAdmin && (isVip || user?.plan === 'trial') && (
+        {!isAdmin && (isVip || isTrial) && (
           <Link to="/planos" className="flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg font-semibold">
             <Crown className="w-3.5 h-3.5" />
             Meu Plano
           </Link>
         )}
-        {!isAdmin && !isVip && user?.plan !== 'trial' && (
+        {!isAdmin && !isVip && !isTrial && (
           <Link to="/checkout" className="flex items-center justify-center gap-1.5 text-yellow-400 hover:text-yellow-300 transition-colors text-xs border border-yellow-400/20 hover:border-yellow-400/40 bg-yellow-400/5 px-3 py-2 rounded-lg font-semibold">
             <Rocket className="w-3.5 h-3.5" />
             Upgrade VIP
