@@ -33,10 +33,54 @@ export default function Profile() {
   const [referral, setReferral] = useState<ReferralData | null>(null)
   const [referralCopied, setReferralCopied] = useState(false)
 
+  const [emailResending, setEmailResending] = useState(false)
+  const [emailResent, setEmailResent]       = useState(false)
+  const [emailCooldown, setEmailCooldown]   = useState(0)
+  const [showEmailChange, setShowEmailChange] = useState(false)
+  const [newEmail, setNewEmail]             = useState('')
+  const [emailChanging, setEmailChanging]   = useState(false)
+  const [emailChangeErr, setEmailChangeErr] = useState('')
+  const [emailChanged, setEmailChanged]     = useState('')
+
+  useEffect(() => {
+    if (emailCooldown <= 0) return
+    const t = setTimeout(() => setEmailCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [emailCooldown])
+
   useEffect(() => {
     api.get('/auth/referral').then(r => setReferral(r.data)).catch(() => {})
     api.get('/auth/me').then(r => { setMeData(r.data); setUsername(r.data.username ?? '') }).catch(() => {})
   }, [])
+
+  const handleResendEmail = async () => {
+    setEmailResending(true)
+    try {
+      await api.post('/auth/resend-verification')
+      setEmailResent(true)
+      setEmailCooldown(60)
+    } catch { /* silent */ }
+    finally { setEmailResending(false) }
+  }
+
+  const handleChangeEmail = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setEmailChangeErr('')
+    setEmailChanging(true)
+    try {
+      const { data } = await api.post('/auth/change-email', { new_email: newEmail })
+      updateUser({ email: data.email, email_verified: false })
+      setEmailChanged(data.email)
+      setShowEmailChange(false)
+      setEmailResent(true)
+      setEmailCooldown(60)
+      setNewEmail('')
+    } catch (err: any) {
+      setEmailChangeErr(err?.response?.data?.detail || 'Erro ao alterar e-mail')
+    } finally {
+      setEmailChanging(false)
+    }
+  }
 
   const copyReferralLink = () => {
     if (!referral) return
@@ -227,6 +271,71 @@ export default function Profile() {
             </button>
           </div>
         </form>
+
+        {/* E-mail e verificação */}
+        <div className="card p-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-sm font-black text-white">E-mail</h2>
+              <p className="text-zinc-500 text-xs mt-0.5">Verificação e alteração</p>
+            </div>
+            {user?.email_verified
+              ? <span className="text-xs font-bold text-green-400 bg-green-400/10 border border-green-400/20 px-2.5 py-1 rounded-lg">Verificado ✓</span>
+              : <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-1 rounded-lg">Não verificado</span>
+            }
+          </div>
+
+          <p className="text-sm text-zinc-300 font-medium">{emailChanged || user?.email}</p>
+
+          {!user?.email_verified && (
+            <div className="space-y-3">
+              {emailResent && (
+                <p className="text-green-400 text-xs font-semibold">E-mail enviado! Verifique também a pasta de spam.</p>
+              )}
+              <div className="flex gap-2">
+                <button
+                  onClick={handleResendEmail}
+                  disabled={emailResending || emailCooldown > 0}
+                  className="flex-1 py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                >
+                  {emailResending ? 'Enviando…' : emailCooldown > 0 ? `Reenviar em ${emailCooldown}s` : 'Reenviar confirmação'}
+                </button>
+                {!showEmailChange && (
+                  <button
+                    onClick={() => setShowEmailChange(true)}
+                    className="flex-1 py-2.5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 text-blue-400 hover:text-blue-300 text-xs font-semibold transition-colors"
+                  >
+                    Alterar e-mail
+                  </button>
+                )}
+              </div>
+
+              {showEmailChange && (
+                <form onSubmit={handleChangeEmail} className="space-y-2">
+                  <input
+                    type="email"
+                    value={newEmail}
+                    onChange={e => setNewEmail(e.target.value)}
+                    placeholder="novo@email.com"
+                    required
+                    className="input w-full text-sm"
+                  />
+                  {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
+                  <div className="flex gap-2">
+                    <button type="submit" disabled={emailChanging}
+                      className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                      {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
+                    </button>
+                    <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr('') }}
+                      className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                      Cancelar
+                    </button>
+                  </div>
+                </form>
+              )}
+            </div>
+          )}
+        </div>
 
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">

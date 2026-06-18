@@ -9,7 +9,7 @@ export default function VerifyEmail() {
   const { user, updateUser } = useAuth()
   const token = params.get('token')
 
-  const [state, setState]         = useState<'pending' | 'loading' | 'success' | 'error'>('pending')
+  const [state, setState]         = useState<'redirect' | 'loading' | 'success' | 'error'>(token ? 'loading' : 'redirect')
   const [resending, setResending] = useState(false)
   const [resent, setResent]       = useState(false)
   const [cooldown, setCooldown]   = useState(0)
@@ -29,6 +29,7 @@ export default function VerifyEmail() {
   const [emailChanged, setEmailChanged]       = useState('')
 
   useEffect(() => {
+    if (state === 'redirect') { navigate('/picks', { replace: true }); return }
     if (!token) return
     setState('loading')
     api.post('/auth/verify-email', { token })
@@ -126,7 +127,7 @@ export default function VerifyEmail() {
           </>
         )}
 
-        {state === 'pending' && (
+        {state === 'redirect' && (
           <>
             <div className="w-14 h-14 rounded-full bg-blue-500/10 flex items-center justify-center mx-auto mb-5">
               <svg className="w-7 h-7 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
