@@ -10,7 +10,7 @@ import Avatar from './Avatar'
 
 const planBadge: Record<string, string> = {
   free:  'badge-free',
-  trial: 'badge-free',
+  trial: 'badge-trial',
   vip:   'badge-vip',
   admin: 'badge-admin',
 }
@@ -102,7 +102,7 @@ export default function Navbar() {
             <Link to="/profile" className="hidden sm:flex items-center gap-2.5 hover:opacity-80 transition-opacity">
               {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
               <div className="flex flex-col items-end">
-                <span className="text-white text-sm font-semibold leading-none">{user?.name}</span>
+                <span className="text-white text-sm font-semibold leading-none">{user?.name?.split(' ')[0]}</span>
                 <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
                   {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
                 </span>

@@ -473,21 +473,13 @@ def login(body: LoginBody, response: Response):
     cur = conn.cursor()
     try:
         id_type, id_value = _resolve_identifier(body.identifier)
+        _LOGIN_COLS = "id, name, email, phone, username, password_hash, plan, active, expires_at, email_verified, avatar_url"
         if id_type == "email":
-            cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE email = %s",
-                (id_value,),
-            )
+            cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE email = %s", (id_value,))
         elif id_type == "cpf":
-            cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE cpf = %s",
-                (id_value,),
-            )
+            cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE cpf = %s", (id_value,))
         else:
-            cur.execute(
-                "SELECT id, name, email, username, password_hash, plan, active, expires_at, email_verified FROM users WHERE username = %s",
-                (id_value,),
-            )
+            cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE username = %s", (id_value,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=401, detail="Credenciais inválidas")

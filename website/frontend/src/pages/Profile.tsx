@@ -34,6 +34,8 @@ export default function Profile() {
   const [name, setName]             = useState(user?.name ?? '')
   const [username, setUsername]     = useState('')
   const [phone, setPhone]           = useState(displayPhone(user?.phone ?? ''))
+  // Sincroniza phone quando refreshUser() completar (login não retornava phone antes)
+  useEffect(() => { if (user?.phone) setPhone(displayPhone(user.phone)) }, [user?.phone])
   const [cpf, setCpf]               = useState('')
   const [loading, setLoading]       = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
