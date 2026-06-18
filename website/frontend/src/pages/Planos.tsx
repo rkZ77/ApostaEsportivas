@@ -39,6 +39,24 @@ export default function Planos() {
 
   const isTrial = user?.plan === 'trial'
 
+  // Countdown ao vivo
+  const [countdown, setCountdown] = useState('')
+  useEffect(() => {
+    if (!user?.expires_at || (!isVip && !isTrial)) { setCountdown(''); return }
+    const tick = () => {
+      const diff = new Date(user.expires_at!).getTime() - Date.now()
+      if (diff <= 0) { setCountdown('Expirado'); return }
+      const d = Math.floor(diff / 86400000)
+      const h = Math.floor((diff % 86400000) / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setCountdown(`${d}d ${h}h ${m.toString().padStart(2,'0')}m ${s.toString().padStart(2,'0')}s`)
+    }
+    tick()
+    const id = setInterval(tick, 1000)
+    return () => clearInterval(id)
+  }, [user?.expires_at, isVip, isTrial])
+
   useEffect(() => {
     if (!user) return
     api.get('/auth/me').then(r => {
@@ -137,7 +155,7 @@ export default function Planos() {
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-green-400' : 'text-yellow-400'}`}>
+                  <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-amber-400' : 'text-yellow-400'}`}>
                     {isTrial ? 'Teste VIP' : `VIP ${subType ? PLAN_LABEL[subType] : ''}`}
                   </span>
                   {urgent && (
@@ -146,6 +164,22 @@ export default function Planos() {
                     </span>
                   )}
                 </div>
+
+                {/* Status + countdown */}
+                <div className="mb-2 space-y-0.5">
+                  <div className="flex items-center gap-2">
+                    <span className="text-zinc-500 text-xs">Status atual:</span>
+                    <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
+                      {isTrial ? 'TRIAL' : 'VIP'}
+                    </span>
+                  </div>
+                  {countdown && (
+                    <p className="text-zinc-400 text-xs">
+                      Expira em <span className={`font-bold tabular-nums ${urgent ? 'text-red-400' : 'text-white'}`}>{countdown}</span>
+                    </p>
+                  )}
+                </div>
+
                 <p className={`font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
                   {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
                   {remaining > 0 && daysUntilExpiry !== null && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
