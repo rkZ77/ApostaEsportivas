@@ -70,6 +70,27 @@ PRINCÍPIOS:
 - Linha Over/Under (qualquer mercado): sempre a mais conservadora em 1.40–1.90. Over→linha mais baixa. Under→linha mais alta.
 - Mercados proibidos: Match Winner (1X2 direto).
 
+REGRA DE OURO — INDEPENDÊNCIA TOTAL:
+Cada seleção da múltipla deve ser COMPLETAMENTE INDEPENDENTE da outra.
+Independente = o resultado de um jogo/mercado NÃO influencia a probabilidade do outro.
+Antes de finalizar, faça esta pergunta mental: "Se a seleção A ganhar, a seleção B fica mais fácil ou mais difícil?"
+→ Se a resposta for "mais difícil" ou "mais fácil" (qualquer influência): DESCARTE a combinação.
+→ Só aceite se a resposta for: "Não tem relação nenhuma".
+
+CONFLITOS PROIBIDOS (exemplos concretos — não são os únicos):
+✗ Dois picks do MESMO fixture_id (sempre proibido)
+✗ Over X.5 gols + Under X.5 gols no mesmo jogo (direções opostas)
+✗ BTTS Sim + Under 2.5 gols no mesmo jogo (BTTS já implica ≥2 gols, sabota o Under)
+✗ BTTS Sim + Under 1.5 gols (impossível se ambos marcam)
+✗ Resultado 1 ou X (Dupla Chance 1X) + Under 0.5 gols (praticamente impossível co-existir)
+✗ Over 2.5 gols de um jogo + Over 2.5 gols de outro jogo em que os dois times são de defesas sólidas — ok ter dois Over, mas verifique que não é o mesmo padrão estatístico forçado
+✗ Handicap Asiático a favor do mesmo time + Under gols desse jogo (vencer por diferença ampla é contrário a Under)
+
+COMBINAÇÕES IDEAIS:
+✓ Mercados de categorias DIFERENTES (ex: Escanteios Over num jogo + Cartões Over noutro)
+✓ Jogos de ligas diferentes, sem relação estatística
+✓ Um mercado de volume (gols/escanteios) + outro de disciplina (cartões) em jogos distintos
+
 SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum texto fora do JSON."""
 
 
@@ -102,9 +123,17 @@ rank 1-6 (top)→peso 2.0 | rank 7-12 (mid)→peso 1.0 | rank 13+ (fraco)→peso
 Taxa real = soma(stat × peso) / soma(pesos). Declare no reason: "taxa bruta X% → ponderada Y%".
 Para Copa do Mundo: use "weighted_goals_against" do campo quality_breakdown no perfil da selecao.
 
-ETAPA 2 — CORRELACAO:
-Proibido: mesmo fixture_id | Over+Under do mesmo market_type | ambos dependem do mesmo volume ofensivo.
-Ideal: market_types diferentes + jogos sem relacao entre si.
+ETAPA 2 — CORRELACAO ESTRITA:
+Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.
+PROIBIDO ABSOLUTO:
+  - Mesmo fixture_id em qualquer seleção
+  - Over + Under do MESMO market_type no MESMO jogo
+  - BTTS Sim + Under 2.5 (mesmo jogo): BTTS implica ≥2 gols, sabota Under
+  - BTTS Sim + Under 1.5 (mesmo jogo): impossível — 2 gols já supera 1.5
+  - Handicap/Resultado (vitória por margem) + Under gols (mesmo jogo): contradição
+  - Dois Over/Under de gols de jogos em que os argumentos estatísticos são o mesmo fenômeno
+IDEAL: categorias de mercado completamente diferentes (ex: escanteios + cartões) + jogos sem relação.
+Se restar dúvida sobre independência → NO BET.
 
 ETAPA 3 — MONTAGEM:
 score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
