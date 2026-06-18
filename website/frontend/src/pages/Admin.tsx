@@ -9,6 +9,7 @@ interface User {
   id: number
   name: string
   email: string
+  phone?: string | null
   plan: string
   subscription_type: string | null
   active: boolean
@@ -46,7 +47,7 @@ type PlanFilter = typeof PLAN_FILTER[number]
 
 const planBadge = (plan: string) => {
   if (plan === 'vip')   return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30'
-  if (plan === 'trial') return 'bg-blue-500/10 text-blue-400 border border-blue-500/30'
+  if (plan === 'trial') return 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
   if (plan === 'admin') return 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
   return 'bg-zinc-800 text-zinc-400 border border-zinc-700'
 }
@@ -76,8 +77,14 @@ export default function Admin() {
   const [paymentsLoading, setPaymentsLoading] = useState(false)
   const [paymentsPage, setPaymentsPage] = useState(0)
   const [usersPage, setUsersPage] = useState(0)
+  const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
+
+  const showToast = (msg: string, ok = true) => {
+    setToast({ msg, ok })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const PIPELINE_ACTIONS = [
     { command: 'atualizar_jogos',      label: 'Atualizar Jogos'      },
@@ -126,23 +133,35 @@ export default function Admin() {
   }, [isAdmin])
 
   const setPlan = async (id: number, plan: string) => {
-    await api.put(`/admin/users/${id}`, { plan })
-    setUsers(u => u.map(x => x.id === id ? { ...x, plan } : x))
+    try {
+      await api.put(`/admin/users/${id}`, { plan })
+      setUsers(u => u.map(x => x.id === id ? { ...x, plan } : x))
+      showToast('Plano atualizado')
+    } catch { showToast('Erro ao atualizar plano', false) }
   }
 
   const setSubscriptionType = async (id: number, subscription_type: string) => {
-    await api.put(`/admin/users/${id}`, { subscription_type: subscription_type || null })
-    setUsers(u => u.map(x => x.id === id ? { ...x, subscription_type: subscription_type || null } : x))
+    try {
+      await api.put(`/admin/users/${id}`, { subscription_type: subscription_type || null })
+      setUsers(u => u.map(x => x.id === id ? { ...x, subscription_type: subscription_type || null } : x))
+      showToast('Tipo salvo')
+    } catch { showToast('Erro ao salvar tipo', false) }
   }
 
   const setExpiresAt = async (id: number, expires_at: string) => {
-    await api.put(`/admin/users/${id}`, { expires_at: expires_at || null })
-    setUsers(u => u.map(x => x.id === id ? { ...x, expires_at: expires_at || null } : x))
+    try {
+      await api.put(`/admin/users/${id}`, { expires_at: expires_at || null })
+      setUsers(u => u.map(x => x.id === id ? { ...x, expires_at: expires_at || null } : x))
+      showToast(expires_at ? 'Validade salva' : 'Validade removida')
+    } catch { showToast('Erro ao salvar validade', false) }
   }
 
   const toggleActive = async (id: number, active: boolean) => {
-    await api.put(`/admin/users/${id}`, { active: !active })
-    setUsers(u => u.map(x => x.id === id ? { ...x, active: !active } : x))
+    try {
+      await api.put(`/admin/users/${id}`, { active: !active })
+      setUsers(u => u.map(x => x.id === id ? { ...x, active: !active } : x))
+      showToast(active ? 'Usuário desativado' : 'Usuário ativado')
+    } catch { showToast('Erro ao alterar status', false) }
   }
 
   const deleteUser = async (id: number, name: string) => {
@@ -150,8 +169,9 @@ export default function Admin() {
     try {
       await api.delete(`/admin/users/${id}`)
       setUsers(u => u.map(x => x.id === id ? { ...x, active: false } : x))
+      showToast('Usuário desativado')
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Erro ao desativar usuário')
+      showToast(err.response?.data?.detail || 'Erro ao desativar usuário', false)
     }
   }
 
@@ -162,8 +182,9 @@ export default function Admin() {
       setUsers(u => [data, ...u])
       setNewUser({ name: '', email: '', password: '', plan: 'free' })
       setCreating(false)
+      showToast('Usuário criado')
       reload()
-    } catch (err: any) { alert(err.response?.data?.detail || 'Erro') }
+    } catch (err: any) { showToast(err.response?.data?.detail || 'Erro ao criar usuário', false) }
   }
 
   const filtered = users.filter(u => {
@@ -188,6 +209,11 @@ export default function Admin() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
+      {toast && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+          {toast.msg}
+        </div>
+      )}
       <Navbar />
 
       {/* Header */}
@@ -306,10 +332,10 @@ export default function Admin() {
                   if (!id) return
                   try {
                     const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
-                    alert(`VIP ativado para ${r.data.user.name} (${r.data.user.email}), plano ${r.data.plan}`)
+                    showToast(`VIP ativado: ${r.data.user.name} · ${r.data.plan}`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                   } catch (e: any) {
-                    alert('Erro: ' + (e.response?.data?.detail || e.message))
+                    showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
                   }
                 }}
                 className="px-2 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-green-600 transition-colors"
@@ -419,7 +445,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  {['Usuário', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Ações'].map(h => (
+                  {['Usuário', 'WhatsApp', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Ações'].map(h => (
                     <th key={h} className="text-left text-zinc-500 font-medium px-4 py-3 uppercase text-xs tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -430,6 +456,11 @@ export default function Admin() {
                     <td className="px-4 py-3">
                       <div className="font-semibold text-white">{u.name}</div>
                       <div className="text-zinc-500 text-xs">{u.email}</div>
+                    </td>
+                    <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">
+                      {u.phone
+                        ? <span className="text-green-400">{u.phone}</span>
+                        : <span className="text-zinc-700">sem número</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${planBadge(u.plan)}`}>
@@ -506,7 +537,7 @@ export default function Admin() {
                 ))}
                 {filteredPage.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-center text-zinc-600 text-sm">
+                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-600 text-sm">
                       Nenhum usuário encontrado.
                     </td>
                   </tr>

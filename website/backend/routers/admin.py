@@ -73,9 +73,9 @@ def list_users(current_user: dict = Depends(require_admin)):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT u.id, u.name, u.email, u.plan, u.subscription_type,
+            SELECT u.id, u.name, u.email, u.phone, u.plan, u.subscription_type,
                    u.active, u.expires_at, u.created_at,
-                   ub.bankroll_start AS bankroll_current, ub.unit_value
+                   ub.bankroll_current, ub.unit_value
             FROM users u
             LEFT JOIN user_banca ub ON ub.user_id = u.id
             ORDER BY u.created_at DESC
@@ -121,13 +121,14 @@ def update_user(user_id: int, body: UpdateUserBody, current_user: dict = Depends
     cur = conn.cursor()
     try:
         fields, values = [], []
+        sent = body.model_fields_set
         if body.plan is not None:
             fields.append("plan = %s"); values.append(body.plan)
-        if body.subscription_type is not None:
+        if "subscription_type" in sent:
             fields.append("subscription_type = %s"); values.append(body.subscription_type or None)
         if body.active is not None:
             fields.append("active = %s"); values.append(body.active)
-        if body.expires_at is not None:
+        if "expires_at" in sent:
             fields.append("expires_at = %s"); values.append(body.expires_at)
 
         if not fields:
