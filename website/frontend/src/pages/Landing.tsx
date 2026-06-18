@@ -76,6 +76,93 @@ const SRC_CLS: Record<string, string> = {
 }
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
+// Social proof stats bar (picks totais + win rate, tempo real)
+function SocialProofStats() {
+  const [summary, setSummary] = useState<{ total: number; greens: number } | null>(null)
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/public/results`)
+      .then(r => setSummary(r.data?.summary ?? null))
+      .catch(() => {})
+  }, [])
+  const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
+  return (
+    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-5">
+      {summary && summary.total > 0 ? (
+        <>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+            <span><span className="text-white font-bold">{summary.total}</span> picks gerados</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />
+            <span><span className="text-white font-bold">{winRate}%</span> win rate</span>
+          </div>
+        </>
+      ) : null}
+      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
+        <span><span className="text-white font-bold">Auditável</span> publicamente</span>
+      </div>
+      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
+        <span>Sem cartão de crédito</span>
+      </div>
+    </div>
+  )
+}
+
+// 3 passos — jornada do usuário
+function ThreeSteps() {
+  return (
+    <section className="py-16 bg-black border-b border-zinc-800/60">
+      <div className="max-w-5xl mx-auto px-4">
+        <p className="text-center text-xs text-zinc-500 uppercase tracking-widest font-bold mb-10">
+          Simples assim
+        </p>
+        <div className="grid md:grid-cols-3 gap-5">
+          {([
+            { n: '1', emoji: '🎯', title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Sem cartão de crédito. Ganhe 2 dias de acesso VIP completo.', color: 'text-green-500', border: 'border-green-500/20 bg-green-500/3' },
+            { n: '2', emoji: '⚡', title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20 bg-blue-400/3' },
+            { n: '3', emoji: '📈', title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20 bg-yellow-400/3' },
+          ] as const).map(({ n, emoji, title, desc, color, border }) => (
+            <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>
+              <div className="text-3xl mb-3">{emoji}</div>
+              <div className={`text-[10px] font-black uppercase tracking-widest ${color} mb-2`}>Passo {n}</div>
+              <h3 className="text-base font-black text-white mb-2">{title}</h3>
+              <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
+            </div>
+          ))}
+        </div>
+        <div className="text-center mt-8">
+          <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+            Começar agora — É grátis
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// Sticky CTA mobile (fixo no rodapé, apenas mobile)
+function StickyMobileCTA() {
+  const [dismissed, setDismissed] = useState(false)
+  if (dismissed) return null
+  return (
+    <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-4 py-3 flex items-center gap-3">
+      <div className="flex-1 min-w-0">
+        <p className="text-white text-xs font-bold leading-none">2 dias VIP grátis</p>
+        <p className="text-zinc-500 text-[10px] mt-0.5">Copa ao vivo · Sem cartão</p>
+      </div>
+      <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap">
+        Criar conta →
+      </Link>
+      <button onClick={() => setDismissed(true)} className="text-zinc-600 hover:text-zinc-400 p-1 shrink-0" aria-label="Fechar">
+        <XIcon className="w-4 h-4" />
+      </button>
+    </div>
+  )
+}
+
 // Ligas ativas (do banco)
 interface League { league_id: number; name: string; season: number; logo_url: string }
 
@@ -271,8 +358,9 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
-            <span className="hidden sm:inline-flex items-center gap-1 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-              Copa 2026
+            <span className="hidden sm:inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+              <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+              Copa 2026 · Ao Vivo
             </span>
           </div>
           <div className="flex items-center gap-5">
@@ -337,11 +425,12 @@ export default function Landing() {
 
             {/* Texto */}
             <div>
-              {/* Badge Copa */}
+              {/* Badge Copa AO VIVO */}
               <div className="inline-flex items-center gap-2 mb-6">
                 <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-8 h-8 object-contain" />
-                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
-                  Copa do Mundo 2026
+                <span className="bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
+                  <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+                  Copa 2026 · Ao Vivo
                 </span>
               </div>
 
@@ -370,7 +459,7 @@ export default function Landing() {
                 </a>
               </div>
 
-              <p className="text-xs text-zinc-600">Sem cartão de crédito · 2 dias de VIP completo · Depois vira Free automaticamente</p>
+              <SocialProofStats />
             </div>
 
             {/* Card de destaque Copa */}
@@ -433,6 +522,8 @@ export default function Landing() {
       </section>
 
       <ActiveLeagues />
+
+      <ThreeSteps />
 
       <RecentResults />
 
@@ -758,10 +849,14 @@ export default function Landing() {
           <div className="flex items-center justify-center gap-3 mb-6">
             <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
           </div>
+          <div className="inline-flex items-center gap-1.5 bg-red-500/10 border border-red-500/30 text-red-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-6">
+            <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse" />
+            Copa em andamento agora
+          </div>
           <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
-            A Copa começa em breve.
+            A Copa está acontecendo.
             <br />
-            <span className="text-green-500">Comece agora.</span>
+            <span className="text-green-500">Não fique de fora.</span>
           </h2>
           <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
             Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span> Sem cartão de crédito.
@@ -782,6 +877,8 @@ export default function Landing() {
       </section>
 
       <Footer />
+
+      <StickyMobileCTA />
 
     </div>
   )
