@@ -322,7 +322,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value)
+    ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
     : null
   const fato = shortReasoning(dica.reasoning)
 
