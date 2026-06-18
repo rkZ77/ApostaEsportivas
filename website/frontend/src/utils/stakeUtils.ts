@@ -5,11 +5,10 @@ export interface StakeSuggestion {
 }
 
 /**
- * Calcula stake sugerido usando ½ Kelly Criterion.
+ * Calcula stake sugerido usando Kelly fracionado.
  * Kelly = (b*p - q) / b  onde b = odd-1, p = confiança, q = 1-p
- * Usa metade do Kelly para reduzir risco de ruína.
+ * kellyFraction: 0.5 para picks simples (½ Kelly), 0.25 para múltiplas (¼ Kelly).
  * Resultado arredondado para o 1u mais próximo, entre 1u e maxUnits.
- * Para múltiplas: maxUnits = 7. Para picks simples: maxUnits = 10.
  */
 export function suggestStake(
   confidence: number,
@@ -17,6 +16,7 @@ export function suggestStake(
   bankroll: number,
   unitValue: number,
   maxUnits: number = 10,
+  kellyFraction: number = 0.5,
 ): StakeSuggestion | null {
   if (!bankroll || !unitValue || unitValue <= 0) return null
 
@@ -29,8 +29,8 @@ export function suggestStake(
   const kelly = (b * p - q) / b
   if (kelly <= 0) return null
 
-  const halfKelly = kelly / 2
-  const stakeR    = bankroll * halfKelly
+  const fracKelly = kelly * kellyFraction
+  const stakeR    = bankroll * fracKelly
 
   let units = stakeR / unitValue
   units = Math.max(1, Math.min(maxUnits, units))
@@ -39,6 +39,6 @@ export function suggestStake(
   return {
     units,
     amountR:  Math.round(units * unitValue * 100) / 100,
-    kellyPct: Math.round(halfKelly * 100 * 10) / 10,
+    kellyPct: Math.round(fracKelly * 100 * 10) / 10,
   }
 }

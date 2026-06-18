@@ -534,7 +534,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 7)
+    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 3, 0.25)
     : null
   const potReturn = stakeSuggestion
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
