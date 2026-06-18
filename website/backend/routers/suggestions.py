@@ -157,52 +157,60 @@ def get_today_suggestions(
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
 
-        # Adiciona is_followed para VIP picks e dica_do_dia
+        # Adiciona is_followed + user_stake_units + user_actual_odd para todos os tipos
         user_id = current_user.get("id")
+
+        def _ufp_map(pick_type: str, ids: list) -> dict:
+            if not ids:
+                return {}
+            rows = _safe_query(cur, """
+                SELECT pick_id, stake_units, actual_odd FROM user_followed_picks
+                WHERE user_id = %s AND pick_type = %s AND pick_id = ANY(%s)
+            """, (user_id, pick_type, ids))
+            return {r["pick_id"]: r for r in rows}
+
         if user_id and result.get("vip"):
-            vip_ids = [p["id"] for p in result["vip"] if p.get("id")]
-            if vip_ids:
-                frows = _safe_query(cur, """
-                    SELECT pick_id FROM user_followed_picks
-                    WHERE user_id = %s AND pick_type = 'vip' AND pick_id = ANY(%s)
-                """, (user_id, vip_ids))
-                followed_set = {r["pick_id"] for r in frows}
-                for p in result["vip"]:
-                    p["is_followed"] = p.get("id") in followed_set
-                    p["pick_type"] = "vip"
+            fm = _ufp_map("vip", [p["id"] for p in result["vip"] if p.get("id")])
+            for p in result["vip"]:
+                fr = fm.get(p.get("id"))
+                p["is_followed"]      = fr is not None
+                p["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                p["pick_type"] = "vip"
 
         if user_id and result.get("dica_do_dia"):
             dica = result["dica_do_dia"]
             dica_id = dica.get("id")
             if dica_id:
-                frow = _safe_query_one(cur, """
-                    SELECT id FROM user_followed_picks
+                fr = _safe_query_one(cur, """
+                    SELECT stake_units, actual_odd FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'free' AND pick_id = %s
                 """, (user_id, dica_id))
-                dica["is_followed"] = frow is not None
+                dica["is_followed"]      = fr is not None
+                dica["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                dica["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
                 dica["pick_type"] = "free"
 
         if user_id and result.get("multiplas"):
-            m_ids = [m["id"] for m in result["multiplas"] if m.get("id")]
-            if m_ids:
-                frows = _safe_query(cur, """
-                    SELECT pick_id FROM user_followed_picks
-                    WHERE user_id = %s AND pick_type = 'multipla' AND pick_id = ANY(%s)
-                """, (user_id, m_ids))
-                followed_set = {r["pick_id"] for r in frows}
-                for m in result["multiplas"]:
-                    m["is_followed"] = m.get("id") in followed_set
-                    m["pick_type"] = "multipla"
+            fm = _ufp_map("multipla", [m["id"] for m in result["multiplas"] if m.get("id")])
+            for m in result["multiplas"]:
+                fr = fm.get(m.get("id"))
+                m["is_followed"]      = fr is not None
+                m["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                m["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                m["pick_type"] = "multipla"
 
         if user_id and result.get("alavancagem"):
             alav = result["alavancagem"]
             alav_id = alav.get("id")
             if alav_id:
-                frow = _safe_query_one(cur, """
-                    SELECT id FROM user_followed_picks
+                fr = _safe_query_one(cur, """
+                    SELECT stake_units, actual_odd FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'alavancagem' AND pick_id = %s
                 """, (user_id, alav_id))
-                alav["is_followed"] = frow is not None
+                alav["is_followed"]      = fr is not None
+                alav["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                alav["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
                 alav["pick_type"] = "alavancagem"
 
         return result

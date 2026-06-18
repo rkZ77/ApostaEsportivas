@@ -1,3 +1,25 @@
+/**
+ * Calcula lucro/prejuízo em unidades para um pick resolvido.
+ * Usa a odd real do usuário (user_actual_odd) se disponível, senão a odd do pick.
+ * Usa stake_units reais do usuário (userUnits) se disponível, senão Kelly/sugestão.
+ */
+export function calcProfitUnits(
+  result: string,
+  pickOdd: number,
+  units: number,
+  userActualOdd?: number | null,
+): number {
+  const odd = userActualOdd ?? pickOdd
+  switch (result) {
+    case 'GREEN':     return (odd - 1) * units
+    case 'RED':       return -units
+    case 'PUSH':      return 0
+    case 'HALF-WIN':  return ((odd - 1) * units) / 2
+    case 'HALF-LOSS': return -units / 2
+    default:          return 0
+  }
+}
+
 export interface StakeSuggestion {
   units: number
   amountR: number

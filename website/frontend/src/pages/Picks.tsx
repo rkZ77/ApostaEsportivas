@@ -13,7 +13,7 @@ import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
-import { suggestStake } from '../utils/stakeUtils'
+import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
 
 // Helpers de logo
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
@@ -404,12 +404,12 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
               </div>
             </div>
           </>
-        ) : dica.profit != null ? (
+        ) : dica.result ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
             {(() => {
-              const u = stakeSuggestion?.units ?? 1
-              const p = Number(dica.profit) * u
+              const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
+              const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
               return (
                 <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {p >= 0 ? '+' : ''}{p.toFixed(2)}u
@@ -627,12 +627,12 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
               <div className="text-xl font-black text-white">R${potReturn}</div>
             </div>
           </>
-        ) : m.profit != null ? (
+        ) : m.result ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
             {(() => {
-              const u = stakeSuggestion?.units ?? 1
-              const p = Number(m.profit) * u
+              const u = m.user_stake_units ?? stakeSuggestion?.units ?? 1
+              const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
               return (
                 <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {p >= 0 ? '+' : ''}{p.toFixed(2)}u

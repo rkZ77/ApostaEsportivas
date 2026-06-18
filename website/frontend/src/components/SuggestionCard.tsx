@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
-import { suggestStake } from '../utils/stakeUtils'
+import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
@@ -30,6 +30,8 @@ interface Suggestion {
   rank_position?: number
   pick_type?: string
   is_followed?: boolean
+  user_stake_units?: number | null
+  user_actual_odd?: number | null
 }
 
 function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
@@ -166,12 +168,12 @@ export default function SuggestionCard({
               </div>
             </div>
           </>
-        ) : s.profit != null ? (
+        ) : s.result ? (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
             {(() => {
-              const u = stakeSuggestion?.units ?? s.stake ?? 1
-              const p = Number(s.profit) * u
+              const u = s.user_stake_units ?? stakeSuggestion?.units ?? s.stake ?? 1
+              const p = calcProfitUnits(s.result, Number(s.odd), u, s.user_actual_odd)
               return (
                 <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {p >= 0 ? '+' : ''}{p.toFixed(2)}u
