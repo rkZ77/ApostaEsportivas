@@ -406,8 +406,6 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
             total_odd *= float(odd)
     total_odd = round(total_odd, 2)
 
-    stake, stake_pct = calculate_multipla_stake(total_odd)
-
     match_date = datetime.now().date()
     for g in games_info:
         fx = fx_map.get(g.get("fixture_id"))
@@ -421,14 +419,12 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
 
     cur.execute("""
         INSERT INTO picks_multiplas
-        (multipla_name, games, total_odd, stake, stake_pct, score_combo, match_date, reasoning)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (multipla_name, games, total_odd, score_combo, match_date, reasoning)
+        VALUES (%s, %s, %s, %s, %s, %s)
     """, (
         name,
         json.dumps(games_info, default=str),
         total_odd,
-        stake,
-        stake_pct,
         round(score_combo, 4),
         match_date,
         reasoning,
@@ -438,13 +434,9 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
     cur.close()
     conn.close()
 
-    stake_pct_str = f"{round(stake_pct * 100)}%" if stake_pct is not None else "frontend"
-    print(
-        f"[SAVE] {name} | odd total {total_odd} | "
-        f"score {round(score_combo * 100)}% | stake R${stake} ({stake_pct_str})"
-    )
+    print(f"[SAVE] {name} | odd total {total_odd} | score {round(score_combo * 100)}%")
 
-    return total_odd, stake_pct
+    return total_odd
 
 
 # ============================================================
@@ -568,12 +560,11 @@ def run_multipla_pipeline() -> dict | None:
             print(f"[MULTIPLA] {name} — fixture_ids invalidos retornados pela IA, pulando.")
             continue
 
-        total_odd, stake_pct = save_multipla(name, games_info, fx_map, reasoning, score)
+        total_odd = save_multipla(name, games_info, fx_map, reasoning, score)
 
         resultados[name] = {
-            "odd":        total_odd,
-            "score":      round(score * 100),
-            "gestao":     round((stake_pct or 0) * 100),
+            "odd":      total_odd,
+            "score":    round(score * 100),
             "games_data": games_info,
         }
 

@@ -156,9 +156,6 @@ def create_table():
             reasoning_2     TEXT,
             odd_combined    NUMERIC,
             confidence_media NUMERIC,
-            stake           NUMERIC,
-            potential_return NUMERIC,
-            bankroll_before NUMERIC,
             result          TEXT,
             profit          NUMERIC,
             checked_at      TIMESTAMP,
@@ -167,11 +164,9 @@ def create_table():
     """)
     # Garante colunas opcionais que podem não existir em instalações antigas
     for col_def in [
-        "bankroll_before  NUMERIC",
-        "potential_return NUMERIC",
-        "checked_at       TIMESTAMP",
-        "prob_real_1      NUMERIC",
-        "prob_real_2      NUMERIC",
+        "checked_at  TIMESTAMP",
+        "prob_real_1 NUMERIC",
+        "prob_real_2 NUMERIC",
     ]:
         try:
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS {col_def}")
@@ -180,42 +175,6 @@ def create_table():
     conn.commit()
     cur.close()
     conn.close()
-
-
-# ============================================================
-# BANKROLL — pega o ultimo valor da serie
-# ============================================================
-def get_current_bankroll() -> float:
-    conn = get_connection()
-    cur  = conn.cursor()
-    cur.execute("""
-        SELECT bankroll_before, odd_combined, result
-        FROM picks_alavancagem
-        WHERE match_date < CURRENT_DATE
-        ORDER BY match_date DESC
-        LIMIT 1
-    """)
-    row = cur.fetchone()
-    cur.close()
-    conn.close()
-
-    if not row:
-        return BANKROLL_INIT
-
-    bankroll_before, odd_combined, result = row[0], row[1], row[2]
-
-    if result == "RED":
-        print(f"[ALAVANCAGEM] Serie reiniciada apos RED. Voltando para R${BANKROLL_INIT:.2f}")
-        return BANKROLL_INIT
-
-    if result is None:
-        # Pick ainda pendente — não reinveste até confirmar
-        return float(bankroll_before) if bankroll_before else BANKROLL_INIT
-
-    # GREEN: reinveste (bankroll_before × odd_combined)
-    bk  = float(bankroll_before or BANKROLL_INIT)
-    odd = float(odd_combined or 1)
-    return round(bk * odd, 2)
 
 
 # ============================================================
@@ -413,7 +372,7 @@ def run_alavancagem_llm(fixtures: list[dict]) -> dict:
 # ============================================================
 # SALVA NO BANCO
 # ============================================================
-def save_pick(result: dict, bankroll: float):
+def save_pick(result: dict):
     if result.get("no_bet"):
         print(f"[ALAVANCAGEM] no_bet: {result.get('motivo')}")
         return
@@ -441,8 +400,6 @@ def save_pick(result: dict, bankroll: float):
         print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_MIN}-{ODD_MAX}. Retornando no_bet.")
         return
     confidence_media  = float(result.get("confidence_media", p1["confidence"]))
-    stake             = 1.0  # 1 unidade = 100% da banca no sistema alavancagem
-    potential_return  = round(odd_combined, 2)  # retorno em unidades
 
     # Traduz mercados
     p1["market"] = translate_market(p1["market"])
@@ -453,7 +410,7 @@ def save_pick(result: dict, bankroll: float):
     print(f"  {p1['home_team']} x {p1['away_team']} | {p1['market']} {p1.get('line','')} @ {p1['odd']}")
     if p2:
         print(f"  + {p2['home_team']} x {p2['away_team']} | {p2['market']} {p2.get('line','')} @ {p2['odd']}")
-    print(f"  Odd combinada: {odd_combined} | Stake: 1u (R${bankroll:.2f}) | Retorno potencial: {potential_return:.2f}u")
+    print(f"  Odd combinada: {odd_combined}")
 
     conn = get_connection()
     cur  = conn.cursor()
@@ -462,12 +419,12 @@ def save_pick(result: dict, bankroll: float):
             (match_date, tipo,
              fixture_id_1, home_team_1, away_team_1, market_1, line_1, odd_1, bet_house_1, confidence_1, prob_real_1, reasoning_1,
              fixture_id_2, home_team_2, away_team_2, market_2, line_2, odd_2, bet_house_2, confidence_2, prob_real_2, reasoning_2,
-             odd_combined, confidence_media, stake, potential_return, bankroll_before)
+             odd_combined, confidence_media)
         VALUES
             (CURRENT_DATE, %s,
              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
              %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-             %s, %s, %s, %s, %s)
+             %s, %s)
     """, (
         tipo,
         p1.get("fixture_id"), p1["home_team"], p1["away_team"],
@@ -479,7 +436,7 @@ def save_pick(result: dict, bankroll: float):
         p2["odd"] if p2 else None, p2.get("bet_house") if p2 else None,
         p2.get("confidence") if p2 else None, p2.get("prob_real") if p2 else None,
         p2.get("reasoning") if p2 else None,
-        odd_combined, confidence_media, stake, potential_return, bankroll,
+        odd_combined, confidence_media,
     ))
     conn.commit()
     cur.close()
@@ -499,9 +456,6 @@ def run_alavancagem_pipeline() -> dict | None:
         print("✅ Pick de alavancagem já existe para hoje.")
         return None
 
-    bankroll = get_current_bankroll()
-    print(f"💰 Bankroll atual: R${bankroll:.2f}")
-
     print(f"🔍 Buscando jogos da Copa do Mundo com odds {ODD_MIN}-{ODD_MAX}...")
     fixtures = get_wc_fixtures_with_odds()
 
@@ -518,7 +472,7 @@ def run_alavancagem_pipeline() -> dict | None:
         print(f"⚠️  no_bet: {result.get('motivo')}")
         return None
 
-    save_pick(result, bankroll)
+    save_pick(result)
     return result
 
 

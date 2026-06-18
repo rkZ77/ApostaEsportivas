@@ -51,7 +51,7 @@ class AIMultiplasCheckerService:
         cur  = conn.cursor()
 
         cur.execute(f"""
-            SELECT id, games, stake, stake_pct, total_odd
+            SELECT id, games, total_odd
             FROM {self.table}
             WHERE result IS NULL;
         """)
@@ -66,7 +66,7 @@ class AIMultiplasCheckerService:
 
         processed = 0
 
-        for mid, games_json, stake, stake_pct, total_odd in rows:
+        for mid, games_json, total_odd in rows:
 
             if isinstance(games_json, str):
                 games = json.loads(games_json)
@@ -90,14 +90,13 @@ class AIMultiplasCheckerService:
 
             final_result = "GREEN" if all(r == "GREEN" for r in leg_results) else "RED"
 
-            stake     = Decimal(str(stake))     if stake     is not None else Decimal("1")
-            stake_pct = Decimal(str(stake_pct)) if stake_pct is not None else Decimal("0")
             total_odd = Decimal(str(total_odd))
 
+            # Profit por 1 unidade
             if final_result == "RED":
-                profit = -stake
+                profit = Decimal("-1")
             else:
-                profit = stake * (total_odd - Decimal("1"))
+                profit = total_odd - Decimal("1")
 
             print(f"[CHECKER MULTIPLAS] id={mid} | {final_result} | legs={leg_results}")
 

@@ -69,7 +69,7 @@ def _sub_vip(date_cond: str) -> str:
                home_team_id,   away_team_id,
                market, line, odd,
                result, profit,
-               COALESCE(stake, 1) AS stake,
+               1::numeric AS stake,
                'vip' AS source
         FROM picks_vip
         WHERE result IS NOT NULL {date_cond}
@@ -104,7 +104,7 @@ def _sub_mult(date_cond: str) -> str:
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                'Múltipla' AS market, NULL AS line, total_odd AS odd,
                result, profit,
-               COALESCE(stake, 1) AS stake,
+               1::numeric AS stake,
                'multiplas' AS source
         FROM picks_multiplas
         WHERE result IS NOT NULL {date_cond}
@@ -117,7 +117,7 @@ def _sub_alav(date_cond: str) -> str:
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                market_1 AS market, line_1 AS line, odd_combined AS odd,
                result, profit,
-               COALESCE(stake, 0) AS stake,
+               1::numeric AS stake,
                'alavancagem' AS source
         FROM picks_alavancagem
         WHERE result IS NOT NULL {date_cond}

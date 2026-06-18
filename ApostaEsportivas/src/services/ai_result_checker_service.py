@@ -374,34 +374,14 @@ class AIResultCheckerService:
     ##########################################################################
     # CALCULA PROFIT
     ##########################################################################
-    def calculate_profit(self, factor, stake, stake_pct, odd):
-
-        stake     = Decimal(str(stake))
-        stake_pct = Decimal(str(stake_pct))
-        odd       = Decimal(str(odd))
-
-        if factor == Decimal("1"):
-            return (
-                stake * (odd - Decimal("1")),
-                stake_pct * (odd - Decimal("1"))
-            )
-
-        if factor == Decimal("0.5"):
-            return (
-                (stake * (odd - Decimal("1"))) / Decimal("2"),
-                (stake_pct * (odd - Decimal("1"))) / Decimal("2")
-            )
-
-        if factor == Decimal("0"):
-            return Decimal("0"), Decimal("0")
-
-        if factor == Decimal("-0.5"):
-            return (
-                -stake / Decimal("2"),
-                -stake_pct / Decimal("2")
-            )
-
-        return -stake, -stake_pct
+    def calculate_profit(self, factor, odd):
+        """Calcula lucro por 1 unidade apostada. Stake real é calculado por usuário via Kelly."""
+        odd = Decimal(str(odd))
+        if factor == Decimal("1"):    return odd - Decimal("1")
+        if factor == Decimal("0.5"):  return (odd - Decimal("1")) / Decimal("2")
+        if factor == Decimal("0"):    return Decimal("0")
+        if factor == Decimal("-0.5"): return Decimal("-0.5")
+        return Decimal("-1")
 
     ##########################################################################
     # EXECUÇÃO PRINCIPAL (picks_vip)
@@ -414,7 +394,7 @@ class AIResultCheckerService:
         cur  = conn.cursor()
 
         cur.execute(f"""
-            SELECT id, fixture_id, market, line, odd, stake, stake_pct,
+            SELECT id, fixture_id, market, line, odd,
                    home_team_name, away_team_name
             FROM {self.table}
             WHERE result IS NULL;
@@ -430,12 +410,10 @@ class AIResultCheckerService:
 
         processed = 0
 
-        for (sid, fixture_id, market, line, odd, stake, stake_pct,
+        for (sid, fixture_id, market, line, odd,
              home_team, away_team) in rows:
 
-            stake     = Decimal(str(stake))     if stake     is not None else Decimal("1")
-            stake_pct = Decimal(str(stake_pct)) if stake_pct is not None else Decimal("0")
-            odd       = Decimal(str(odd))
+            odd = Decimal(str(odd))
 
             stats = self.get_fixture_result(fixture_id, cur)
             if not stats:
@@ -445,7 +423,7 @@ class AIResultCheckerService:
             result, factor = self.evaluate_pick(market, line, float(odd), stats,
                                                 home_team, away_team)
 
-            profit, _ = self.calculate_profit(factor, stake, stake_pct, odd)
+            profit = self.calculate_profit(factor, odd)
 
             mt   = self.detect_market_type(market)
             side = self.detect_side(market, home_team, away_team)

@@ -24,7 +24,7 @@ class FollowPick(BaseModel):
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if pick_type == "vip":
         cur.execute("""
-            SELECT pv.result, pv.profit, COALESCE(pv.stake, 1) AS stake,
+            SELECT pv.result, pv.profit,
                    pv.home_team_name, pv.away_team_name,
                    pv.home_team_id, pv.away_team_id,
                    pv.market, pv.line, pv.odd
@@ -54,7 +54,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
         """, (pick_id,))
     elif pick_type == "alavancagem":
         cur.execute("""
-            SELECT pa.result, pa.profit, COALESCE(pa.stake, 1) AS stake,
+            SELECT pa.result, pa.profit,
                    pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
                    f1.home_team_id, f1.away_team_id,
                    pa.market_1 AS market, pa.line_1 AS line,
@@ -213,7 +213,7 @@ def get_banca(
         ia_roi = None
         try:
             cur.execute("""
-                SELECT COALESCE(SUM(profit), 0) AS p, COALESCE(SUM(COALESCE(stake,1)), 0) AS s
+                SELECT COALESCE(SUM(profit), 0) AS p, COUNT(*) AS s
                 FROM picks_vip WHERE result IS NOT NULL
             """)
             ia_row = cur.fetchone()

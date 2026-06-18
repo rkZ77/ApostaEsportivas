@@ -708,14 +708,11 @@ HISTÓRICO FORA
                 reasoning = f"[STAT-STRONG] Base estatística sólida (conf {round(conf*100)}%) mas EV levemente negativo ({round(ev*100,1)}%) — aposta 50% do stake normal. " + reasoning
             chosen["reasoning"] = reasoning
 
-        stake, stake_pct = self.calculate_stake(conf, odd)
-
         print(
             f"\n[SAVE] {fx['home_team']} x {fx['away_team']} | "
             f"{chosen['market']} {chosen['line']} | odd {odd} | "
             f"edge {round(float(chosen.get('edge', 0)) * 100, 1)}% | "
-            f"conf {round(conf * 100)}% | EV {ev} | "
-            f"stake calculado no frontend"
+            f"conf {round(conf * 100)}% | EV {ev}"
         )
 
         # 3. Salva no banco — ON CONFLICT ignora duplicata do mesmo fixture
@@ -734,10 +731,10 @@ HISTÓRICO FORA
                 home_team_name, away_team_name,
                 market, line, odd, bet_house,
                 market_type, market_id,
-                confidence, stake, stake_pct, ev, reasoning,
+                confidence, ev, reasoning,
                 created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (fixture_id) DO NOTHING
             """,
             (
@@ -754,8 +751,6 @@ HISTÓRICO FORA
                 self.detect_market_type(chosen["market"]),
                 chosen_market_id,
                 conf,
-                stake,
-                stake_pct,
                 ev,
                 chosen.get("reasoning", ""),
             ),

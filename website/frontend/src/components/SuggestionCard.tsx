@@ -22,7 +22,6 @@ interface Suggestion {
   odd: number
   bet_house: string
   confidence: number
-  stake?: number
   ev?: number
   reasoning?: string
   result?: string
@@ -91,7 +90,7 @@ export default function SuggestionCard({
       await api.post('/banca/follow', {
         pick_id: s.id,
         pick_type: s.pick_type ?? 'vip',
-        stake_units: stakeSuggestion?.units ?? s.stake ?? 1,
+        stake_units: stakeSuggestion?.units ?? 1,
         actual_odd: actualOdd,
         bet_house: betHouse,
       })
@@ -172,7 +171,7 @@ export default function SuggestionCard({
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
             {(() => {
-              const u = s.user_stake_units ?? stakeSuggestion?.units ?? s.stake ?? 1
+              const u = s.user_stake_units ?? stakeSuggestion?.units ?? 1
               const p = calcProfitUnits(s.result, Number(s.odd), u, s.user_actual_odd)
               return (
                 <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>

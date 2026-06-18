@@ -42,8 +42,7 @@ class AIResultCheckerFree:
                 market, line, float(odd), stats, home_team, away_team
             )
 
-            # Profit em unidades (stake = 1u)
-            profit, _ = self._engine.calculate_profit(factor, Decimal("1"), Decimal("1"), odd)
+            profit = self._engine.calculate_profit(factor, odd)
 
             mt   = self._engine.detect_market_type(market)
             side = self._engine.detect_side(market, home_team, away_team)

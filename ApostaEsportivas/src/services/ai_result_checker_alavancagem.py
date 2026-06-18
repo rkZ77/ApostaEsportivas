@@ -1,9 +1,8 @@
 """
 Verifica resultados da tabela picks_alavancagem.
-- Alavancagem pode ter 1 ou 2 picks (tipo 'simples' ou 'combinacao')
 - GREEN somente se TODOS os picks acertarem
 - RED se qualquer pick falhar
-- Atualiza: result, profit, bankroll_after
+- Profit em unidades (stake real calculado pelo frontend via Kelly/bankroll do usuário)
 """
 
 from utils.db_utils import get_connection
@@ -30,7 +29,6 @@ class AIResultCheckerAlavancagem:
             market, line, float(odd), stats, home_team, away_team
         )
 
-        # Alavancagem precisa de acerto pleno
         if result not in ("GREEN", "RED"):
             result = "RED"
 
@@ -48,7 +46,7 @@ class AIResultCheckerAlavancagem:
                    home_team_1, away_team_1,
                    fixture_id_2, market_2, line_2, odd_2,
                    home_team_2, away_team_2,
-                   odd_combined, stake, bankroll_before
+                   odd_combined
             FROM picks_alavancagem
             WHERE result IS NULL
         """)
@@ -66,20 +64,15 @@ class AIResultCheckerAlavancagem:
             (pk_id, tipo,
              fid1, mkt1, ln1, odd1, home1, away1,
              fid2, mkt2, ln2, odd2, home2, away2,
-             odd_combined, stake, bankroll_before) = row
+             odd_combined) = row
 
-            odd_combined     = Decimal(str(odd_combined))
-            # Usa bankroll_before para cálculo monetário correto.
-            # stake pode ser em unidades (ex: 1u); bankroll_before é o valor real (ex: R$50).
-            effective_stake  = Decimal(str(bankroll_before)) if bankroll_before else Decimal(str(stake))
+            odd_combined = Decimal(str(odd_combined))
 
-            # --- Pick 1 ---
             r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur, home1, away1)
             if r1 is None:
                 print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_1={fid1} — aguardando.")
                 continue
 
-            # --- Pick 2 (somente combinação) ---
             r2 = None
             if tipo == "combinacao" and fid2 is not None:
                 r2 = self._check_pick(fid2, mkt2, ln2, float(odd2), cur, home2, away2)
@@ -87,25 +80,21 @@ class AIResultCheckerAlavancagem:
                     print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_2={fid2} — aguardando.")
                     continue
 
-            # --- Resultado final ---
             if tipo == "combinacao":
                 final_result = "GREEN" if r1 == "GREEN" and r2 == "GREEN" else "RED"
             else:
                 final_result = r1
 
-            # --- Profit (monetário, baseado em bankroll_before) ---
+            # Profit por 1 unidade
             if final_result == "GREEN":
-                profit = effective_stake * (odd_combined - Decimal("1"))
+                profit = odd_combined - Decimal("1")
             else:
-                profit = -effective_stake
+                profit = Decimal("-1")
 
-            bankroll_after_display = (effective_stake + profit) if final_result == "GREEN" else Decimal("0")
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
                 f"P1={r1} P2={r2} → {final_result} | "
-                f"Bankroll antes: R${float(effective_stake):.2f} | "
-                f"Profit: R${float(profit):.2f} | "
-                f"Bankroll após: R${float(bankroll_after_display):.2f}"
+                f"profit={float(profit):.2f}u"
             )
 
             cur.execute("""

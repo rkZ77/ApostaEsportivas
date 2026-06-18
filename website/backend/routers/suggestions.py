@@ -109,7 +109,7 @@ def get_today_suggestions(
                        s.home_team_name, s.away_team_name,
                        s.home_team_id, s.away_team_id,
                        s.market, s.line, s.odd, s.bet_house,
-                       s.market_type, s.confidence, s.stake, s.ev,
+                       s.market_type, s.confidence, s.ev,
                        s.reasoning, s.result, s.profit,
                        f.league_id,
                        l.name AS league_name
@@ -141,7 +141,7 @@ def get_today_suggestions(
                        pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                        pa.confidence_2, pa.reasoning_2,
                        pa.odd_combined, pa.confidence_media,
-                       pa.stake, pa.result, pa.profit, pa.created_at,
+                       pa.result, pa.profit, pa.created_at,
                        f1.home_team_id AS home_team_id_1, f1.away_team_id AS away_team_id_1,
                        f2.home_team_id AS home_team_id_2, f2.away_team_id AS away_team_id_2
                 FROM picks_alavancagem pa
@@ -286,7 +286,7 @@ def get_vip_suggestions(
                 s.home_team_name, s.away_team_name,
                 s.home_team_id, s.away_team_id,
                 s.market, s.line, s.odd, s.bet_house,
-                s.market_type, s.confidence, s.stake, s.ev,
+                s.market_type, s.confidence, s.ev,
                 s.reasoning, s.result, s.profit,
                 s.created_at
             FROM picks_vip s
@@ -472,7 +472,6 @@ def get_suggestion_detail(
                 "odd": d.get("odd_combined"),
                 "bet_house": d.get("bet_house_1"),
                 "confidence": d.get("confidence_media"),
-                "stake": d.get("stake"),
                 "reasoning": d.get("reasoning_1") or "",
                 "result": d["result"],
                 "profit": d["profit"],
@@ -754,7 +753,7 @@ def get_history(days: int = 30, current_user: dict = Depends(require_vip)):
                    s.home_team_name, s.away_team_name,
                    s.home_team_id, s.away_team_id,
                    s.market, s.line, s.odd, s.bet_house,
-                   s.confidence, s.stake, s.ev,
+                   s.confidence, s.ev,
                    s.result, s.profit
             FROM picks_vip s
             WHERE s.match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')
@@ -1121,7 +1120,7 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                    ) AS away_team_id,
                    pa.market_1 AS market, pa.line_1 AS line,
                    pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
-                   pa.result, pa.profit, COALESCE(pa.stake, 1) AS stake
+                   pa.result, pa.profit, 1::numeric AS stake
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result IS NOT NULL {date_cond}
@@ -1131,7 +1130,7 @@ def _source_games_sql(source: str, date_cond: str) -> str:
         SELECT id, 'vip' AS pick_type, match_date,
                home_team_name, away_team_name, home_team_id, away_team_id,
                market, line, odd, bet_house,
-               result, profit, COALESCE(stake, 1) AS stake
+               result, profit, 1::numeric AS stake
         FROM picks_vip
         WHERE result IS NOT NULL {date_cond}
     """
@@ -1293,7 +1292,7 @@ def get_alavancagem(
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
-                   pa.stake, pa.result, pa.profit, pa.created_at,
+                   pa.result, pa.profit, pa.created_at,
                    COALESCE(
                        f1.home_team_id,
                        (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
@@ -1366,7 +1365,7 @@ def get_alavancagem_today(current_user: dict = Depends(require_vip)):
                    pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
                    pa.confidence_2, pa.reasoning_2,
                    pa.odd_combined, pa.confidence_media,
-                   pa.stake, pa.result, pa.profit, pa.created_at,
+                   pa.result, pa.profit, pa.created_at,
                    COALESCE(
                        f1.home_team_id,
                        (SELECT fx.home_team_id FROM fixtures fx WHERE fx.home_team = pa.home_team_1 AND fx.home_team_id IS NOT NULL LIMIT 1)
