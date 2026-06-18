@@ -137,7 +137,7 @@ function ThreeSteps() {
         </div>
         <div className="text-center mt-8">
           <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
-            Começar agora — É grátis
+            Começar agora · É grátis
           </Link>
         </div>
       </div>
