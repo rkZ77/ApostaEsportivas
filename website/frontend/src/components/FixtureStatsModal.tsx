@@ -462,16 +462,28 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
                       <span className="text-blue-500">{fixture.home_team.split(' ')[0]}</span>
                       <span className="text-rose-500">{fixture.away_team.split(' ')[0]}</span>
                     </div>
-                    <StatRow label="Gols marcados"   home={homeStats.avg_goals_for}     away={awayStats.avg_goals_for} />
-                    <StatRow label="Gols sofridos"   home={homeStats.avg_goals_against}  away={awayStats.avg_goals_against}  higherIsBetter={false} />
-                    <StatRow label="Escanteios"      home={homeStats.avg_corners_for}    away={awayStats.avg_corners_for} />
-                    <StatRow label="Chutes no gol"   home={homeStats.avg_shots_on_for}   away={awayStats.avg_shots_on_for} />
-                    <StatRow label="Cartões amarelos" home={homeStats.avg_yellow_for}     away={awayStats.avg_yellow_for}     higherIsBetter={false} />
-                    <StatRow label="Posse de bola %" home={homeStats.avg_possession_for} away={awayStats.avg_possession_for} />
+                    <StatRow label="Gols marcados"
+                      home={avgStat(homeMatches, homeId, 'home_goals', 'away_goals')}
+                      away={avgStat(awayMatches, awayId, 'home_goals', 'away_goals')} />
+                    <StatRow label="Gols sofridos"
+                      home={avgStat(homeMatches, homeId, 'away_goals', 'home_goals')}
+                      away={avgStat(awayMatches, awayId, 'away_goals', 'home_goals')} higherIsBetter={false} />
+                    <StatRow label="Escanteios"
+                      home={avgStat(homeMatches, homeId, 'home_corners', 'away_corners')}
+                      away={avgStat(awayMatches, awayId, 'home_corners', 'away_corners')} />
+                    <StatRow label="Chutes no gol"
+                      home={avgStat(homeMatches, homeId, 'home_shots_on', 'away_shots_on')}
+                      away={avgStat(awayMatches, awayId, 'home_shots_on', 'away_shots_on')} />
+                    <StatRow label="Cartões amarelos"
+                      home={avgStat(homeMatches, homeId, 'home_yellow_cards', 'away_yellow_cards')}
+                      away={avgStat(awayMatches, awayId, 'home_yellow_cards', 'away_yellow_cards')} higherIsBetter={false} />
+                    <StatRow label="Posse de bola %"
+                      home={homeStats.avg_possession_for}
+                      away={awayStats.avg_possession_for} />
                   </div>
                   <div className="pt-4 border-t border-zinc-800 grid grid-cols-2 gap-4">
-                    <FormRow matches={data.home_recent?.slice(0, 8) ?? []} teamId={homeId} name={fixture.home_team} />
-                    <FormRow matches={data.away_recent?.slice(0, 8) ?? []} teamId={awayId} name={fixture.away_team} />
+                    <FormRow matches={homeMatches} teamId={homeId} name={fixture.home_team} />
+                    <FormRow matches={awayMatches} teamId={awayId} name={fixture.away_team} />
                   </div>
                 </div>
               )}
