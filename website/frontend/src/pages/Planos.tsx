@@ -154,9 +154,11 @@ export default function Planos() {
             {/* Cabeçalho */}
             <div className="flex items-start justify-between gap-4 mb-5">
               <div>
+                {/* Status atual + badge urgente */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className={`text-xs font-black uppercase tracking-widest ${isTrial ? 'text-amber-400' : 'text-yellow-400'}`}>
-                    {isTrial ? 'Teste VIP' : `VIP ${subType ? PLAN_LABEL[subType] : ''}`}
+                  <span className="text-zinc-500 text-xs">Status atual:</span>
+                  <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
+                    {isTrial ? 'TRIAL' : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
                   </span>
                   {urgent && (
                     <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase animate-pulse">
@@ -165,20 +167,12 @@ export default function Planos() {
                   )}
                 </div>
 
-                {/* Status + countdown */}
-                <div className="mb-2 space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-500 text-xs">Status atual:</span>
-                    <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
-                      {isTrial ? 'TRIAL' : 'VIP'}
-                    </span>
-                  </div>
-                  {countdown && (
-                    <p className="text-zinc-400 text-xs">
-                      Expira em <span className={`font-bold tabular-nums ${urgent ? 'text-red-400' : 'text-white'}`}>{countdown}</span>
-                    </p>
-                  )}
-                </div>
+                {/* Countdown */}
+                {countdown && (
+                  <p className="text-zinc-400 text-xs mb-2">
+                    Expira em <span className={`font-bold tabular-nums ${urgent ? 'text-red-400' : 'text-white'}`}>{countdown}</span>
+                  </p>
+                )}
 
                 <p className={`font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
                   {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
