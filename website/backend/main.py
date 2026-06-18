@@ -93,9 +93,22 @@ _forgot_store: dict[str, list[float]] = defaultdict(list)
 FORGOT_LIMIT  = 3
 FORGOT_WINDOW = 900
 
+def _get_real_ip(request: Request) -> str:
+    forwarded = request.headers.get("X-Forwarded-For")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# Proteção contra brute-force no reset de senha: 5 tentativas / 15 min
+_reset_store: dict[str, list[float]] = defaultdict(list)
+RESET_LIMIT  = 5
+RESET_WINDOW = 900
+
+
 @app.middleware("http")
 async def rate_limiter(request: Request, call_next):
-    ip = request.client.host if request.client else "unknown"
+    ip = _get_real_ip(request)
     now = time.time()
 
     # Rate limit geral
@@ -124,6 +137,16 @@ async def rate_limiter(request: Request, call_next):
             )
         _forgot_store[ip].append(now)
 
+    # Proteção contra brute-force no reset de senha
+    if request.url.path == "/api/auth/reset-password":
+        _reset_store[ip] = [t for t in _reset_store[ip] if now - t < RESET_WINDOW]
+        if len(_reset_store[ip]) >= RESET_LIMIT:
+            return JSONResponse(
+                {"detail": "Muitas tentativas de reset. Aguarde 15 minutos."},
+                status_code=429,
+            )
+        _reset_store[ip].append(now)
+
     response = await call_next(request)
 
     # Conta falha de autenticação (401/403 em rotas de auth)
@@ -131,6 +154,25 @@ async def rate_limiter(request: Request, call_next):
         _login_failures[ip].append(now)
 
     return response
+
+
+import asyncio as _asyncio
+
+
+async def _cleanup_rate_stores():
+    """Remove IPs sem entradas recentes das stores em memória a cada 10 min."""
+    while True:
+        await _asyncio.sleep(600)
+        now = time.time()
+        for store, window in (
+            (_rate_store,     RATE_WINDOW),
+            (_login_failures, LOGIN_LOCKOUT_SECS),
+            (_forgot_store,   FORGOT_WINDOW),
+            (_reset_store,    RESET_WINDOW),
+        ):
+            stale = [ip for ip, ts in list(store.items()) if not any(now - t < window for t in ts)]
+            for ip in stale:
+                store.pop(ip, None)
 
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import Response as _Response
@@ -183,6 +225,12 @@ app.include_router(social.router)
 app.include_router(banca.router)
 app.include_router(leaderboard.router)
 app.include_router(live.router)
+
+
+# ── Background: limpa rate stores ────────────────────────────────────────────
+@app.on_event("startup")
+async def start_rate_store_cleanup():
+    _asyncio.create_task(_cleanup_rate_stores())
 
 
 # ── Migrações automáticas de schema ──────────────────────────────────────────

@@ -218,7 +218,12 @@ async def _run_and_track(command: str, script: str):
             cwd=_PIPELINE_DIR,
             env=env,
         )
-        stdout, stderr = await proc.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+        except asyncio.TimeoutError:
+            proc.kill()
+            await proc.communicate()
+            raise RuntimeError("Script excedeu o limite de 5 minutos e foi encerrado")
         returncode = proc.returncode
         out = stdout.decode(errors="replace")[-1500:]
         err = stderr.decode(errors="replace")[-1500:]

@@ -234,6 +234,9 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     user_text = last.content.strip()
     if not user_text:
         raise HTTPException(400, "Mensagem vazia")
+    _MAX_MSG_LEN = 2000
+    if len(user_text) > _MAX_MSG_LEN:
+        raise HTTPException(400, f"Mensagem muito longa (máx {_MAX_MSG_LEN} caracteres)")
 
     history = [
         {"role": m.role, "content": m.content}

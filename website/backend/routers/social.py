@@ -296,8 +296,6 @@ def delete_comment(comment_id: int, current_user: dict = Depends(get_current_use
         return {"ok": True}
     except HTTPException:
         raise
-    except HTTPException:
-        raise
     except Exception as e:
         conn.rollback()
         import logging; logging.getLogger(__name__).error("social error: %s", e, exc_info=True)
