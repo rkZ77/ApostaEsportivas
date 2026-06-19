@@ -418,29 +418,104 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     """, (user_id,))
     followed = cur.fetchall()
 
+    if not followed:
+        cur.close()
+        conn.close()
+        return []
+
+    # Group pick_ids by type for batch queries
+    vip_ids         = [r["pick_id"] for r in followed if r["pick_type"] == "vip"]
+    free_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "free"]
+    multipla_ids    = [r["pick_id"] for r in followed if r["pick_type"] == "multipla"]
+    alavancagem_ids = [r["pick_id"] for r in followed if r["pick_type"] == "alavancagem"]
+
+    # ── Batch fetch all pick data ────────────────────────────────────────────
+    vip_map: dict = {}
+    if vip_ids:
+        cur.execute("""
+            SELECT id, fixture_id, market, line, odd, result,
+                   home_team_name AS home_team, away_team_name AS away_team,
+                   home_team_id, away_team_id, match_date, NULL::integer AS league_id
+            FROM picks_vip WHERE id = ANY(%s)
+        """, (vip_ids,))
+        vip_map = {r["id"]: r for r in cur.fetchall()}
+
+    free_map: dict = {}
+    if free_ids:
+        cur.execute("""
+            SELECT id, fixture_id, market, line, odd, result,
+                   home_team, away_team, home_team_id, away_team_id, match_date, league_id
+            FROM picks_free WHERE id = ANY(%s)
+        """, (free_ids,))
+        free_map = {r["id"]: r for r in cur.fetchall()}
+
+    multipla_map: dict = {}
+    if multipla_ids:
+        cur.execute("""
+            SELECT id, games, total_odd, result, match_date
+            FROM picks_multiplas WHERE id = ANY(%s)
+        """, (multipla_ids,))
+        multipla_map = {r["id"]: r for r in cur.fetchall()}
+
+    alavancagem_map: dict = {}
+    if alavancagem_ids:
+        cur.execute("""
+            SELECT id, fixture_id_1, fixture_id_2,
+                   market_1, line_1, odd_1, home_team_1, away_team_1,
+                   market_2, line_2, odd_2, home_team_2, away_team_2,
+                   odd_combined, result, match_date
+            FROM picks_alavancagem WHERE id = ANY(%s)
+        """, (alavancagem_ids,))
+        alavancagem_map = {r["id"]: r for r in cur.fetchall()}
+
+    # Batch fixture lookups for alavancagem team_ids
+    alav_fixture_ids = set()
+    for p in alavancagem_map.values():
+        if p["fixture_id_1"]: alav_fixture_ids.add(p["fixture_id_1"])
+        if p["fixture_id_2"]: alav_fixture_ids.add(p["fixture_id_2"])
+
+    alav_fixture_map: dict = {}
+    if alav_fixture_ids:
+        cur.execute(
+            "SELECT fixture_id, home_team_id, away_team_id FROM fixtures WHERE fixture_id = ANY(%s)",
+            (list(alav_fixture_ids),),
+        )
+        alav_fixture_map = {r["fixture_id"]: r for r in cur.fetchall()}
+
+    # Batch fixture lookups for multipla legs with missing team names
+    multipla_fixture_ids: set = set()
+    for p in multipla_map.values():
+        legs_raw = p["games"]
+        if isinstance(legs_raw, str):
+            try: legs_raw = json.loads(legs_raw)
+            except Exception: legs_raw = []
+        for leg_data in (legs_raw if isinstance(legs_raw, list) else []):
+            fid = leg_data.get("fixture_id")
+            home = leg_data.get("home") or leg_data.get("home_team") or ""
+            away = leg_data.get("away") or leg_data.get("away_team") or ""
+            if fid and (not home or not away):
+                multipla_fixture_ids.add(fid)
+
+    multipla_fixture_map: dict = {}
+    if multipla_fixture_ids:
+        cur.execute(
+            "SELECT fixture_id, home_team, away_team, home_team_id, away_team_id FROM fixtures WHERE fixture_id = ANY(%s)",
+            (list(multipla_fixture_ids),),
+        )
+        multipla_fixture_map = {r["fixture_id"]: r for r in cur.fetchall()}
+
+    cur.close()
+
     result = []
 
     for row in followed:
-        pick_id    = row["pick_id"]
-        pick_type  = row["pick_type"]
-        stake_u    = float(row["stake_units"])
+        pick_id   = row["pick_id"]
+        pick_type = row["pick_type"]
+        stake_u   = float(row["stake_units"])
 
         # ── VIP / FREE ──────────────────────────────────────────────────────
         if pick_type in ("vip", "free"):
-            if pick_type == "vip":
-                cur.execute("""
-                    SELECT fixture_id, market, line, odd, result,
-                           home_team_name AS home_team, away_team_name AS away_team,
-                           home_team_id, away_team_id, match_date, NULL::integer AS league_id
-                    FROM picks_vip WHERE id = %s
-                """, (pick_id,))
-            else:
-                cur.execute("""
-                    SELECT fixture_id, market, line, odd, result,
-                           home_team, away_team, home_team_id, away_team_id, match_date, league_id
-                    FROM picks_free WHERE id = %s
-                """, (pick_id,))
-            p = cur.fetchone()
+            p = (vip_map if pick_type == "vip" else free_map).get(pick_id)
             if not p or p["result"] is not None:
                 continue
 
@@ -459,7 +534,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 )
                 if auto_res:
                     _save_single_result(pick_id, pick_type, auto_res, odd, conn)
-                    continue  # pick resolvido, sai da lista ao vivo
+                    continue
 
             result.append({
                 "pick_id":     pick_id,
@@ -481,20 +556,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
         # ── MÚLTIPLA ────────────────────────────────────────────────────────
         elif pick_type == "multipla":
-            cur.execute("""
-                SELECT id, games, total_odd, result, match_date
-                FROM picks_multiplas WHERE id = %s
-            """, (pick_id,))
-            p = cur.fetchone()
+            p = multipla_map.get(pick_id)
             if not p or p["result"] is not None:
                 continue
 
             legs_raw = p["games"]
             if isinstance(legs_raw, str):
-                try:
-                    legs_raw = json.loads(legs_raw)
-                except Exception:
-                    legs_raw = []
+                try: legs_raw = json.loads(legs_raw)
+                except Exception: legs_raw = []
 
             legs_out = []
             for leg_data in (legs_raw if isinstance(legs_raw, list) else []):
@@ -506,11 +575,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 h_id = leg_data.get("home_team_id")
                 a_id = leg_data.get("away_team_id")
                 if not home or not away:
-                    cur.execute(
-                        "SELECT home_team, away_team, home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
-                        (fid,),
-                    )
-                    fx = cur.fetchone()
+                    fx = multipla_fixture_map.get(fid)
                     if fx:
                         home = home or fx["home_team"] or ""
                         away = away or fx["away_team"] or ""
@@ -520,10 +585,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     fid,
                     leg_data.get("market", ""),
                     leg_data.get("line", ""),
-                    home,
-                    away,
-                    h_id,
-                    a_id,
+                    home, away, h_id, a_id,
                     float(leg_data.get("odd", 1)),
                 ))
 
@@ -531,11 +593,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 total_odd   = float(p["total_odd"] or 1)
                 leg_results = [_locked_leg_result(l) for l in legs_out]
                 if any(r == "RED" for r in leg_results):
-                    # Early RED: uma perna já perdeu — não precisamos esperar as outras
                     _save_multipla_result(pick_id, ["RED"] * len(legs_out), total_odd, conn)
                     continue
                 if all(r is not None for r in leg_results):
-                    # Todas as pernas encerradas sem RED
                     _save_multipla_result(pick_id, leg_results, total_odd, conn)
                     continue
 
@@ -551,14 +611,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
         # ── ALAVANCAGEM ─────────────────────────────────────────────────────
         elif pick_type == "alavancagem":
-            cur.execute("""
-                SELECT id, fixture_id_1, fixture_id_2,
-                       market_1, line_1, odd_1, home_team_1, away_team_1,
-                       market_2, line_2, odd_2, home_team_2, away_team_2,
-                       odd_combined, result, match_date
-                FROM picks_alavancagem WHERE id = %s
-            """, (pick_id,))
-            p = cur.fetchone()
+            p = alavancagem_map.get(pick_id)
             if not p or p["result"] is not None:
                 continue
 
@@ -567,12 +620,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 fid = p.get(f"fixture_id_{i}")
                 if not fid:
                     continue
-                # look up team_ids via fixtures table
-                cur.execute(
-                    "SELECT home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
-                    (fid,),
-                )
-                fx = cur.fetchone()
+                fx = alav_fixture_map.get(fid)
                 legs_out.append(_enrich_leg(
                     fid,
                     p.get(f"market_{i}", ""),
@@ -604,7 +652,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "legs":        legs_out,
                 })
 
-    cur.close()
     conn.close()
 
     # Live picks first, then by date
