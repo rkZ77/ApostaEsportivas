@@ -1,9 +1,12 @@
 ﻿import datetime
-from zoneinfo import ZoneInfo
 from utils.db_utils import get_connection
 import psycopg2.extras
 
-_TZ_BRT = ZoneInfo("America/Sao_Paulo")
+try:
+    from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+    _TZ_BRT = ZoneInfo("America/Sao_Paulo")
+except Exception:
+    _TZ_BRT = datetime.timezone(datetime.timedelta(hours=-3))
 
 
 class FixturesService:
@@ -33,7 +36,9 @@ class FixturesService:
     ##########################################################################
     def get_fixtures_today(self):
         today = datetime.datetime.now(_TZ_BRT).date()
+        tomorrow = today + datetime.timedelta(days=1)
 
+        # Inclui jogos de hoje BRT + jogos de 00:00-02:59 BRT do próximo dia
         rows = self._query("""
             SELECT
                 f.fixture_id,
@@ -48,10 +53,13 @@ class FixturesService:
                 f.status
             FROM fixtures f
             LEFT JOIN leagues l ON f.league_id = l.league_id
-            WHERE DATE(f.match_datetime) = %s
+            WHERE (
+                DATE(f.match_datetime) = %s
+                OR (DATE(f.match_datetime) = %s AND EXTRACT(HOUR FROM f.match_datetime) < 3)
+            )
               AND f.status IN ('NS','TBD','LIVE')
             ORDER BY f.match_datetime ASC;
-        """, (today,))
+        """, (today, tomorrow))
 
         return self._format_fixtures(rows)
 

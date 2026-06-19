@@ -472,7 +472,6 @@ def generate_multipla_message(resultados: dict, fx_map: dict) -> str:
 
         lines.append(f"  🎯 Odd total: *{info['odd']}*")
         lines.append(f"  📈 Score: *{info['score']}%*")
-        lines.append(f"  💵 Gestão: *{info['gestao']}%* do bankroll")
 
     lines.append("\n─" * 30)
     lines.append("🔒 Picks simples completos no VIP")
