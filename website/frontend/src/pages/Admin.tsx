@@ -437,27 +437,42 @@ export default function Admin() {
         {/* Corrigir resultado de pick */}
         <div className="card p-4 mb-6">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Corrigir Resultado de Pick</h2>
-          <div className="flex flex-wrap gap-2 mb-3">
-            <input
-              className="input flex-1 min-w-[160px] text-sm"
-              placeholder="Time (ex: Brasil)"
-              value={pickSearch}
-              onChange={e => setPickSearch(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && searchPicks()}
-            />
-            <input type="date" className="input text-sm w-36" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
-            <input type="date" className="input text-sm w-36" value={pickDateTo}   onChange={e => setPickDateTo(e.target.value)} />
-            <select className="input text-sm w-36" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
-              <option value="">Todos tipos</option>
-              <option value="vip">VIP</option>
-              <option value="free">Free</option>
-              <option value="multipla">Múltipla</option>
-              <option value="alavancagem">Alavancagem</option>
-            </select>
-            <button onClick={searchPicks} disabled={pickSearching}
-              className="btn-primary text-sm px-4 py-2 disabled:opacity-40">
-              {pickSearching ? '...' : 'Buscar'}
-            </button>
+          <div className="flex flex-wrap gap-3 mb-3">
+            <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Time</label>
+              <input
+                className="input text-sm"
+                placeholder="Ex: Brasil, Flamengo..."
+                value={pickSearch}
+                onChange={e => setPickSearch(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && searchPicks()}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data de</label>
+              <input type="date" className="input text-sm w-36" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data até</label>
+              <input type="date" className="input text-sm w-36" value={pickDateTo} onChange={e => setPickDateTo(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Tipo</label>
+              <select className="input text-sm w-36" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
+                <option value="">Todos</option>
+                <option value="vip">VIP</option>
+                <option value="free">Free</option>
+                <option value="multipla">Múltipla</option>
+                <option value="alavancagem">Alavancagem</option>
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 justify-end">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold opacity-0">.</label>
+              <button onClick={searchPicks} disabled={pickSearching}
+                className="btn-primary text-sm px-4 py-2.5 disabled:opacity-40">
+                {pickSearching ? '...' : 'Buscar'}
+              </button>
+            </div>
           </div>
 
           {pickResults.length > 0 && (
