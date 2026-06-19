@@ -431,7 +431,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 cur.execute("""
                     SELECT fixture_id, market, line, odd, result,
                            home_team_name AS home_team, away_team_name AS away_team,
-                           home_team_id, away_team_id, match_date, league_id
+                           home_team_id, away_team_id, match_date, NULL::integer AS league_id
                     FROM picks_vip WHERE id = %s
                 """, (pick_id,))
             else:
