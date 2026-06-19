@@ -129,7 +129,9 @@ class NationalTeamProfileService:
     # BUSCA DE DADOS
     # ========================================================================
     def _fetch_copa_matches(self, team_id: int, season: int) -> list:
-        """Busca jogos finalizados desta Copa no banco (JOIN com fixtures para filtrar liga)."""
+        """Busca jogos finalizados desta Copa no banco.
+        Usa ms.league_id diretamente — sem JOIN com fixtures, que só contém jogos NS/futuros.
+        """
         try:
             conn = get_connection()
             cur = conn.cursor()
@@ -144,10 +146,9 @@ class NationalTeamProfileService:
                     COALESCE(ms.home_yellow_cards, 0),
                     COALESCE(ms.away_yellow_cards, 0)
                 FROM match_statistics ms
-                JOIN fixtures f ON f.fixture_id = ms.fixture_id
                 WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
-                  AND f.league_id = 1
-                  AND f.season = %s
+                  AND ms.league_id = 1
+                  AND ms.season = %s
                   AND ms.status = 'FT'
                 ORDER BY ms.match_date DESC
             """, (team_id, team_id, season))
