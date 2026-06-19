@@ -276,7 +276,7 @@ export default function Admin() {
 
         {/* Pipeline */}
         <div className="card p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center justify-between mb-4">
             <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Pipeline</h2>
             {(() => {
               const s = pipelineStatus['tudo']
@@ -286,18 +286,18 @@ export default function Admin() {
                   <button
                     onClick={() => runPipeline('tudo')}
                     disabled={runningCmd !== null || isTudoRunning}
-                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-semibold"
+                    className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-green-500 text-black font-bold hover:bg-green-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {isTudoRunning
-                      ? <><span className="w-3 h-3 border border-green-500/50 border-t-green-400 rounded-full animate-spin" /> Rodando tudo...</>
-                      : '▶ Rodar Tudo (jogos → odds → picks)'}
+                      ? <><span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> Rodando tudo...</>
+                      : '▶ Rodar Tudo'}
                   </button>
                   {s && (
                     <span
-                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : s.status === 'ok' ? 'text-zinc-500' : 'text-zinc-600'}`}
+                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-zinc-600'}`}
                       onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
                     >
-                      {s.status === 'running' ? `rodando: ${(s as any).log || '...'}` : `${s.status} ${s.finished_at}`}
+                      {s.status === 'running' ? 'rodando...' : `último: ${s.finished_at ?? '—'}`}
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
@@ -309,35 +309,48 @@ export default function Admin() {
               )
             })()}
           </div>
-          <div className="flex flex-wrap gap-2">
-            {PIPELINE_ACTIONS.map(({ command, label }) => {
+
+          <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+            {PIPELINE_ACTIONS.map(({ command, label }, idx) => {
               const s = pipelineStatus[command]
               const isRunning = runningCmd === command || s?.status === 'running'
-              const dot = !s ? null
-                : s.status === 'running' ? <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
-                : s.status === 'ok'      ? <span className="w-2 h-2 rounded-full bg-green-500" />
-                :                          <span className="w-2 h-2 rounded-full bg-red-500" />
+              const borderCls = !s ? 'border-zinc-800'
+                : s.status === 'running' ? 'border-yellow-500/50'
+                : s.status === 'ok'      ? 'border-green-500/40'
+                : 'border-red-500/50'
+              const bgCls = !s ? ''
+                : s.status === 'running' ? 'bg-yellow-500/5'
+                : s.status === 'ok'      ? 'bg-green-500/5'
+                : 'bg-red-500/5'
               return (
-                <div key={command} className="flex flex-col items-start gap-1">
+                <div key={command} className={`rounded-xl border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-zinc-600 font-mono font-bold">{String(idx + 1).padStart(2, '0')}</span>
+                    {!s                    && <span className="w-2 h-2 rounded-full bg-zinc-700" />}
+                    {s?.status === 'running' && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
+                    {s?.status === 'ok'      && <span className="w-2 h-2 rounded-full bg-green-500" />}
+                    {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
+                  </div>
+                  <p className="text-xs font-semibold text-zinc-300 leading-tight">{label}</p>
+                  {s && !isRunning && (
+                    <p
+                      className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-zinc-600'}`}
+                      onClick={() => setExpandedLog(expandedLog === command ? null : command)}
+                    >
+                      {s.status === 'error' ? '⚠ ver log' : s.finished_at ?? ''}
+                    </p>
+                  )}
                   <button
                     onClick={() => runPipeline(command)}
                     disabled={runningCmd !== null || isRunning}
-                    className="flex items-center gap-1.5 text-xs px-3 py-2 rounded-lg border border-zinc-700 text-zinc-300 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="mt-auto text-[10px] px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                   >
-                    {isRunning && <span className="w-3 h-3 border border-zinc-500 border-t-white rounded-full animate-spin" />}
-                    {dot && !isRunning && dot}
-                    {label}
+                    {isRunning
+                      ? <><span className="w-2.5 h-2.5 border border-zinc-500 border-t-white rounded-full animate-spin" /> rodando</>
+                      : '▶ rodar'}
                   </button>
-                  {s && (
-                    <span
-                      className={`text-[10px] pl-1 cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : s.status === 'ok' ? 'text-zinc-500' : 'text-zinc-600'}`}
-                      onClick={() => setExpandedLog(expandedLog === command ? null : command)}
-                    >
-                      {s.status === 'running' ? `rodando desde ${s.started_at}` : `${s.status} ${s.finished_at}`}
-                    </span>
-                  )}
                   {expandedLog === command && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-xs whitespace-pre-wrap break-all mt-1 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    <pre className={`text-[10px] bg-zinc-950 rounded p-2 whitespace-pre-wrap break-all ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
                       {s.error || s.log}
                     </pre>
                   )}
