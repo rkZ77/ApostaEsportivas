@@ -69,10 +69,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Content-Security-Policy"]   = (
         "default-src 'self'; "
         "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; "
-        "style-src 'self' 'unsafe-inline'; "
+        "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: https:; "
         "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; "
-        "font-src 'self' data:; "
+        "font-src 'self' data: https://fonts.gstatic.com; "
         "frame-ancestors 'none'"
     )
     return response
