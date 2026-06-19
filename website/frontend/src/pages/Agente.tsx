@@ -52,7 +52,7 @@ function AgentMessage({ content, loading, statusText }: { content: string; loadi
 }
 
 export default function Agente() {
-  const { user } = useAuth()
+  const { user, isVip, isAdmin } = useAuth()
   const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
@@ -160,6 +160,30 @@ export default function Agente() {
 
   const lastMsg = messages[messages.length - 1]
   const showLoading = loading && lastMsg?.role === 'assistant' && !lastMsg?.content
+
+  if (!isVip && !isAdmin) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col">
+        <Navbar />
+        <div className="flex-1 flex items-center justify-center px-4 py-16">
+          <div className="text-center max-w-sm">
+            <div className="w-16 h-16 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-5">
+              <svg className="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-white font-black text-xl mb-2">Agente exclusivo VIP</h2>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP.
+            </p>
+            <a href="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-3 rounded-xl transition-colors text-sm">
+              Assinar VIP
+            </a>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="h-screen bg-black flex flex-col overflow-hidden">
