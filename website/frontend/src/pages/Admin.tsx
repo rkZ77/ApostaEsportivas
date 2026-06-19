@@ -465,7 +465,7 @@ export default function Admin() {
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-zinc-800">
-                    {['Data', 'Tipo', 'Jogo', 'Resultado atual', 'Alterar para'].map(h => (
+                    {['Data', 'Tipo', 'Times', 'Resultado atual', 'Alterar para'].map(h => (
                       <th key={h} className="text-left text-zinc-500 font-medium px-3 py-2 uppercase tracking-wider whitespace-nowrap">{h}</th>
                     ))}
                   </tr>
