@@ -1585,20 +1585,23 @@ export default function Picks() {
           ) : (
             <div className="space-y-8">
 
-              {/* Stats rápidas do mês */}
+              {/* Stats da IA este mês */}
               {quickStats && (
-                <div className="grid grid-cols-4 gap-3">
-                  {[
-                    { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
-                    { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
-                    { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
-                    { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                      <div className={`text-xl font-black ${color}`}>{value}</div>
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
-                    </div>
-                  ))}
+                <div>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2">Performance da IA · Este mês</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {[
+                      { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
+                      { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
+                      { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
+                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400' },
+                    ].map(({ label, value, color }) => (
+                      <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                        <div className={`text-xl font-black ${color}`}>{value}</div>
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
 

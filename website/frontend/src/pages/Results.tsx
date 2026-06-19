@@ -152,7 +152,7 @@ export default function Results() {
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
           <div>
             <h1 className="text-base font-black text-white">Resultados da IA</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Performance histórica dos picks gerados pela IA</p>
+            <p className="text-zinc-500 text-xs mt-0.5">Performance histórica da IA · não inclui resultados pessoais da sua banca</p>
           </div>
         </div>
       </div>
