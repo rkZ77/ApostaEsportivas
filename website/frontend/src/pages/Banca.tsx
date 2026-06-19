@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp } from 'lucide-react'
+import { TrendingUp, Info } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -299,6 +299,12 @@ export default function Banca() {
                   <div className="text-[10px] text-zinc-700 mt-0.5">{sub}</div>
                 </div>
               ))}
+            </div>
+
+            {/* Aviso alavancagem */}
+            <div className="flex items-center gap-1.5 -mt-2 text-[11px] text-zinc-600">
+              <Info className="w-3 h-3 shrink-0" />
+              <span>Picks de Alavancagem Copa não são contabilizados nesta banca</span>
             </div>
 
             {/* Meta de banca */}
