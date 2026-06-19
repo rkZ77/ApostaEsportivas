@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState, useRef } from 'react'
+import { useNavigate, Link } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
+import { useAuth } from '../context/AuthContext'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -17,6 +18,65 @@ function shiftDate(dateStr: string, days: number): string {
 function formatDateLabel(dateStr: string): string {
   const [y, m, d] = dateStr.split('-').map(Number)
   return new Date(y, m - 1, d).toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
+}
+
+const DAY_SHORT = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb']
+
+function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => void }) {
+  const stripRef = useRef<HTMLDivElement>(null)
+  // Pivot: semana começando 3 dias antes da data selecionada (7 dias visíveis)
+  const [anchor, setAnchor] = useState(() => shiftDate(date, -3))
+
+  const days = Array.from({ length: 7 }, (_, i) => shiftDate(anchor, i))
+
+  const prev = () => setAnchor(a => shiftDate(a, -7))
+  const next = () => setAnchor(a => shiftDate(a, 7))
+  const goToday = () => {
+    setAnchor(shiftDate(TODAY, -3))
+    onChange(TODAY)
+  }
+
+  return (
+    <div className="flex items-center gap-1">
+      <button onClick={prev}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
+        ‹
+      </button>
+      <div ref={stripRef} className="flex gap-1 overflow-hidden">
+        {days.map(d => {
+          const [y, mo, dy] = d.split('-').map(Number)
+          const dt = new Date(y, mo - 1, dy)
+          const isToday  = d === TODAY
+          const isActive = d === date
+          return (
+            <button key={d} onClick={() => onChange(d)}
+              className={`flex flex-col items-center justify-center w-10 h-12 rounded-xl transition-all shrink-0 ${
+                isActive
+                  ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
+                  : isToday
+                  ? 'bg-green-500/10 border border-green-500/30 text-green-400 font-semibold'
+                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+              }`}>
+              <span className="text-[9px] uppercase tracking-wider leading-none mb-0.5">
+                {DAY_SHORT[dt.getDay()]}
+              </span>
+              <span className="text-sm font-black leading-none">{dy}</span>
+            </button>
+          )
+        })}
+      </div>
+      <button onClick={next}
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
+        ›
+      </button>
+      {date !== TODAY && (
+        <button onClick={goToday}
+          className="text-[10px] font-bold px-2 py-1 rounded-lg border border-green-500/40 text-green-500 hover:bg-green-500/10 transition-colors shrink-0 ml-0.5">
+          Hoje
+        </button>
+      )}
+    </div>
+  )
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -78,11 +138,14 @@ type PageTab = 'jogos' | 'estatistica'
 
 export default function Fixtures() {
   const navigate                   = useNavigate()
+  const { isVip, isAdmin, user }   = useAuth()
+  const canSeeStats = isVip || isAdmin || user?.plan === 'trial'
   const [pageTab, setPageTab]      = useState<PageTab>('jogos')
   const [date, setDate]            = useState(TODAY)
   const [fixtures, setFixtures]    = useState<Fixture[]>([])
   const [loading, setLoading]      = useState(true)
   const [statsFixture, setStatsFixture] = useState<Fixture | null>(null)
+  const [lockPrompt, setLockPrompt]    = useState(false)
 
   function fetchFixtures(d: string) {
     setLoading(true)
@@ -90,6 +153,11 @@ export default function Fixtures() {
       .then(r => setFixtures(r.data))
       .catch(() => setFixtures([]))
       .finally(() => setLoading(false))
+  }
+
+  function handleDateChange(d: string) {
+    setDate(d)
+    fetchFixtures(d)
   }
 
   useEffect(() => { fetchFixtures(TODAY) }, [])
@@ -122,7 +190,8 @@ export default function Fixtures() {
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 pt-4 pb-0">
-          <div className="flex items-center justify-between mb-3">
+          {/* Título + badges */}
+          <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
               <div>
@@ -130,38 +199,10 @@ export default function Fixtures() {
                 <p className="text-zinc-500 text-xs mt-0.5 capitalize">{dateLabel}</p>
               </div>
             </div>
-
-            {/* Navegação de data — visível só na aba Jogos */}
-            {pageTab === 'jogos' && (
-              <div className="flex items-center gap-1.5">
-                <button
-                  onClick={() => { const s = shiftDate(date, -1); setDate(s); fetchFixtures(s) }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors text-sm"
-                >←</button>
-                <input type="date" value={date}
-                  onChange={e => { setDate(e.target.value); fetchFixtures(e.target.value) }}
-                  className="input text-xs py-1.5 px-2 w-[130px]" />
-                <button
-                  onClick={() => { const s = shiftDate(date, 1); setDate(s); fetchFixtures(s) }}
-                  className="w-8 h-8 flex items-center justify-center rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 hover:text-white transition-colors text-sm"
-                >→</button>
-                {date !== TODAY && (
-                  <button
-                    onClick={() => { setDate(TODAY); fetchFixtures(TODAY) }}
-                    className="text-xs px-2.5 py-1.5 rounded-lg border border-green-500/50 text-green-500 hover:bg-green-500/10 transition-colors"
-                  >Hoje</button>
-                )}
-              </div>
-            )}
-
             <div className="flex items-center gap-3">
               {pageTab === 'jogos' && pickCount > 0 && (
                 <div className="hidden sm:flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
-                  <svg className="w-3 h-3 text-green-500" fill="currentColor" viewBox="0 0 20 20">
-                    <path d="M9 12l-2-2-1.5 1.5L9 15l5.5-5.5L13 8l-4 4z" />
-                    <circle cx="10" cy="10" r="9" fill="none" stroke="currentColor" strokeWidth="1.5" />
-                  </svg>
-                  <span className="text-green-400 text-xs font-bold">{pickCount} {pickCount === 1 ? 'pick' : 'picks'} IA</span>
+                  <span className="text-green-400 text-xs font-bold">{pickCount} picks IA</span>
                 </div>
               )}
               {pageTab === 'jogos' && liveCount > 0 && (
@@ -172,6 +213,13 @@ export default function Fixtures() {
               )}
             </div>
           </div>
+
+          {/* Strip de dias */}
+          {pageTab === 'jogos' && (
+            <div className="mb-3">
+              <DateStrip date={date} onChange={handleDateChange} />
+            </div>
+          )}
           {/* Page tabs */}
           <div className="flex border-b border-zinc-800">
             {([
@@ -267,7 +315,7 @@ export default function Fixtures() {
                       <div
                         key={f.fixture_id}
                         className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
-                        onClick={() => setStatsFixture(f)}
+                        onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
                       >
 
                         {/* Hora / status */}
@@ -319,25 +367,30 @@ export default function Fixtures() {
                           </div>
                         </div>
 
-                        {/* Badge de pick IA */}
-                        {f.has_pick ? (
-                          <div className="shrink-0 flex flex-col items-end gap-0.5">
-                            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
-                              f.pick_type_flag === 'vip'
-                                ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
-                                : 'text-green-400 bg-green-500/10 border-green-500/20'
-                            }`}>
-                              Pick IA
-                            </span>
-                            {f.pick_market && (
-                              <span className="text-[10px] text-zinc-500 max-w-[72px] truncate text-right">
-                                {f.pick_market}
+                        {/* Badge de pick IA + lock hint */}
+                        <div className="shrink-0 flex flex-col items-end gap-0.5 w-[72px]">
+                          {f.has_pick && (
+                            <>
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
+                                f.pick_type_flag === 'vip'
+                                  ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
+                                  : 'text-green-400 bg-green-500/10 border-green-500/20'
+                              }`}>
+                                Pick IA
                               </span>
-                            )}
-                          </div>
-                        ) : (
-                          <div className="w-[72px] shrink-0" />
-                        )}
+                              {f.pick_market && (
+                                <span className="text-[10px] text-zinc-500 max-w-[72px] truncate text-right">
+                                  {f.pick_market}
+                                </span>
+                              )}
+                            </>
+                          )}
+                          {!canSeeStats && (
+                            <svg className="w-3 h-3 text-zinc-700 mt-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                            </svg>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
@@ -354,6 +407,33 @@ export default function Fixtures() {
           fixture={statsFixture}
           onClose={() => setStatsFixture(null)}
         />
+      )}
+
+      {/* Lock modal para usuários free */}
+      {lockPrompt && (
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+          onClick={() => setLockPrompt(false)}>
+          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h3 className="text-white font-black text-lg mb-2">Análise exclusiva VIP</h3>
+            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+              Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
+            </p>
+            <Link to="/checkout"
+              className="block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-6 py-3 rounded-xl transition-colors text-sm mb-3">
+              Assinar VIP
+            </Link>
+            <button onClick={() => setLockPrompt(false)}
+              className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+              Fechar
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
