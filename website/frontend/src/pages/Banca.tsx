@@ -217,17 +217,17 @@ export default function Banca() {
             <div>
               <h1 className="text-base font-black text-white">Minha Banca</h1>
               <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-zinc-500 text-xs">Acompanhe o crescimento dos picks que você apostou</p>
+                <p className="text-zinc-500 text-xs hidden sm:block">Acompanhe o crescimento dos picks que você apostou</p>
                 {data?.unit_value && (
-                  <span className="text-[10px] bg-zinc-800 border border-zinc-700 text-zinc-400 px-2 py-0.5 rounded font-mono">
-                    1u = {fmtBRL(Number(data.unit_value))}
+                  <span className="text-xs font-semibold text-zinc-400">
+                    1 unidade = <span className="text-white font-black">{fmtBRL(Number(data.unit_value))}</span>
                   </span>
                 )}
               </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2">
+            <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2 hidden sm:inline-flex">
               Meus Picks
             </Link>
             <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
