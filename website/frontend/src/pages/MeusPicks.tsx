@@ -183,11 +183,14 @@ export default function MeusPicks() {
 
   // daysBack: 0 = Hoje/Tudo (sem filtro), 1 = ontem, 3 = 3 dias, 7 = semana, 15 = 15 dias
   const [daysBack, setDaysBack] = useState(0)
+  const [todayPage, setTodayPage] = useState(0)
+  const PAGE_SIZE = 15
 
   const changeTab = (t: 'pendentes' | 'resolvidos') => {
     setTab(t)
     setDayOffset(0)
     setDaysBack(0)
+    setTodayPage(0)
   }
 
   function isoDateDaysAgo(n: number) {
@@ -242,6 +245,10 @@ export default function MeusPicks() {
   const hasPrev = clampedOffset < uniqueDatesFiltered.length - 1
   const hasNext = clampedOffset > 0
 
+  const displayItems = daysBack === 0
+    ? pageItems.slice(todayPage * PAGE_SIZE, (todayPage + 1) * PAGE_SIZE)
+    : pageItems
+
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
@@ -278,7 +285,7 @@ export default function MeusPicks() {
             {allEntries.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {[
-                  { label: 'Hoje', value: 0 },
+                  { label: 'Todos', value: 0 },
                   { label: 'Ontem', value: 1 },
                   { label: '3 dias', value: 3 },
                   { label: 'Semana', value: 7 },
@@ -286,7 +293,7 @@ export default function MeusPicks() {
                 ].map(({ label, value }) => (
                   <button
                     key={value}
-                    onClick={() => { setDaysBack(value); setDayOffset(0) }}
+                    onClick={() => { setDaysBack(value); setDayOffset(0); setTodayPage(0) }}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
                       daysBack === value
                         ? 'bg-green-500/15 border-green-500/50 text-green-400'
@@ -318,7 +325,7 @@ export default function MeusPicks() {
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Crescimento</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Crescimento {daysBack === 0 ? 'total' : `${daysBack}d`}</div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{wr}%</div>
@@ -420,7 +427,7 @@ export default function MeusPicks() {
                 ) : (
                   <div className="card overflow-hidden">
                     <div className="divide-y divide-zinc-800/60">
-                      {pageItems.map((e: any) => {
+                      {displayItems.map((e: any) => {
                         const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
                         const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
                         return (
@@ -494,6 +501,25 @@ export default function MeusPicks() {
                         )
                       })}
                     </div>
+                  </div>
+                )}
+
+                {/* Paginação — só no modo Todos (daysBack=0) */}
+                {daysBack === 0 && filteredTabEntries.length > PAGE_SIZE && (
+                  <div className="flex items-center justify-center gap-2 flex-wrap">
+                    <button
+                      disabled={todayPage === 0}
+                      onClick={() => setTodayPage(p => p - 1)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
+                    >←</button>
+                    <span className="text-xs text-zinc-500">
+                      {todayPage * PAGE_SIZE + 1}–{Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
+                    </span>
+                    <button
+                      disabled={(todayPage + 1) * PAGE_SIZE >= filteredTabEntries.length}
+                      onClick={() => setTodayPage(p => p + 1)}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
+                    >→</button>
                   </div>
                 )}
               </>

@@ -45,7 +45,7 @@ export default function Navbar() {
   const navLinks = [
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
-    { to: '/banca',      label: 'Banca',            Icon: Wallet },
+    { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
     { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
     { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
     { to: '/agente',     label: 'Agente',           Icon: Bot },
