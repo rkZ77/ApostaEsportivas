@@ -10,6 +10,98 @@ const fmtBRL = (v: number) =>
 const fmtSigned = (v: number) =>
   (v >= 0 ? '+' : '−') + fmtBRL(v)
 
+function PicksBarChart({ entries }: { entries: any[] }) {
+  const [hover, setHover] = useState<number | null>(null)
+
+  // Agrupa picks resolvidos por dia (últimos 21 dias com resultado)
+  const byDay: Record<string, { green: number; red: number; push: number }> = {}
+  for (const e of entries) {
+    if (!e.result || !e.followed_at) continue
+    const day = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+    if (!byDay[day]) byDay[day] = { green: 0, red: 0, push: 0 }
+    if (e.result === 'GREEN' || e.result === 'HALF-WIN') byDay[day].green++
+    else if (e.result === 'RED' || e.result === 'HALF-LOSS') byDay[day].red++
+    else byDay[day].push++
+  }
+
+  const days = Object.keys(byDay).sort().slice(-21)
+  if (days.length < 2) return null
+
+  const maxVal = Math.max(...days.map(d => byDay[d].green + byDay[d].red + byDay[d].push), 1)
+  const W = 600, H = 110, PAD_L = 24, PAD_B = 28, PAD_T = 10
+  const chartW = W - PAD_L - 8
+  const chartH = H - PAD_B - PAD_T
+  const barW   = Math.min(22, chartW / days.length - 4)
+  const gap    = (chartW - barW * days.length) / (days.length - 1)
+
+  const x = (i: number) => PAD_L + i * (barW + gap)
+  const yScale = (v: number) => chartH - (v / maxVal) * chartH
+
+  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+
+  return (
+    <div className="card p-4">
+      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Picks por dia</h3>
+      <div className="overflow-x-auto">
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }}>
+          {/* Grade horizontal */}
+          {[0.25, 0.5, 0.75, 1].map(f => (
+            <line key={f} x1={PAD_L} x2={W - 8} y1={PAD_T + yScale(maxVal * f)} y2={PAD_T + yScale(maxVal * f)}
+              stroke="#27272a" strokeWidth={1} />
+          ))}
+
+          {days.map((day, i) => {
+            const d = byDay[day]
+            const total = d.green + d.red + d.push
+            const gH = (d.green / maxVal) * chartH
+            const rH = (d.red   / maxVal) * chartH
+            const pH = (d.push  / maxVal) * chartH
+            const bx = x(i)
+            const isHov = hover === i
+            const isToday = day === todayKey
+            const [, mo, dy] = day.split('-')
+            return (
+              <g key={day} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+                {/* PUSH (cinza, base) */}
+                {pH > 0 && <rect x={bx} y={PAD_T + chartH - pH} width={barW} height={pH} rx={2} fill="#3f3f46" opacity={isHov ? 1 : 0.7} />}
+                {/* RED (em cima do push) */}
+                {rH > 0 && <rect x={bx} y={PAD_T + chartH - pH - rH} width={barW} height={rH} rx={2} fill="#ef4444" opacity={isHov ? 1 : 0.75} />}
+                {/* GREEN (no topo) */}
+                {gH > 0 && <rect x={bx} y={PAD_T + chartH - pH - rH - gH} width={barW} height={gH} rx={2} fill="#22c55e" opacity={isHov ? 1 : 0.75} />}
+
+                {/* Label dia */}
+                <text x={bx + barW / 2} y={H - 8} textAnchor="middle"
+                  fontSize={9} fill={isToday ? '#22c55e' : isHov ? '#d4d4d8' : '#52525b'} fontWeight={isToday ? 700 : 400}>
+                  {`${dy}/${mo}`}
+                </text>
+
+                {/* Tooltip no hover */}
+                {isHov && total > 0 && (
+                  <g>
+                    <rect x={Math.min(bx - 16, W - 80)} y={PAD_T + yScale(total) - 38} width={68} height={34} rx={6} fill="#18181b" stroke="#3f3f46" />
+                    <text x={Math.min(bx - 16, W - 80) + 34} y={PAD_T + yScale(total) - 22} textAnchor="middle" fontSize={9} fill="#22c55e" fontWeight={700}>
+                      {d.green > 0 ? `${d.green} GREEN` : ''}
+                    </text>
+                    <text x={Math.min(bx - 16, W - 80) + 34} y={PAD_T + yScale(total) - 10} textAnchor="middle" fontSize={9} fill="#ef4444" fontWeight={700}>
+                      {d.red > 0 ? `${d.red} RED` : (d.green === 0 ? `${d.push} PUSH` : '')}
+                    </text>
+                  </g>
+                )}
+              </g>
+            )
+          })}
+        </svg>
+      </div>
+      <div className="flex items-center gap-4 mt-1">
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-500" /><span className="text-[10px] text-zinc-500">GREEN</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-500" /><span className="text-[10px] text-zinc-500">RED</span></div>
+        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-zinc-600" /><span className="text-[10px] text-zinc-500">PUSH</span></div>
+        <span className="text-[10px] text-zinc-600 ml-auto">½ WIN conta como GREEN · ½ LOSS conta como RED</span>
+      </div>
+    </div>
+  )
+}
+
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
   RED:         'bg-red-500/10 text-red-400 border border-red-500/30',
@@ -169,6 +261,9 @@ export default function MeusPicks() {
                 </div>
               )
             })()}
+
+            {/* Gráfico GREEN/RED por dia */}
+            {resolvidos.length >= 2 && <PicksBarChart entries={allEntries} />}
 
             {/* Tabs */}
             <div className="flex gap-2">
