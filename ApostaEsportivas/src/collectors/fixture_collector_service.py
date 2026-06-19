@@ -179,31 +179,34 @@ class FixtureCollectorService:
         return fixtures
 
     # --------------------------------------------------------
-    # COLETA FIXTURES APENAS DO DIA DE HOJE (HORÁRIO BRASÍLIA)
+    # COLETA FIXTURES DO DIA DE HOJE (HORÁRIO BRASÍLIA)
     #
-    # Por que consultar duas datas UTC?
+    # Por que consultar três datas UTC?
     # Brasília é UTC-3. Jogos noturnos (ex: 21h BR = 00h UTC)
     # aparecem na API com a data UTC do dia SEGUINTE.
-    # Solução: buscar hoje e amanhã em UTC, depois filtrar
-    # pelo dia correto já convertido para o horário de Brasília.
+    # Adicionamos uma terceira data UTC para capturar jogos que
+    # começam às 00:00-02:59 BRT do PRÓXIMO dia, evitando que
+    # a pipeline de meia-noite perca esses jogos.
     # --------------------------------------------------------
     def collect_fixtures_today_br(self) -> list:
         now_br   = datetime.now(TZ_LOCAL)
         today_br = now_br.date()
+        next_br  = today_br + timedelta(days=1)
 
         utc_today    = now_br.astimezone(timezone.utc).date()
         utc_tomorrow = utc_today + timedelta(days=1)
+        utc_day3     = utc_today + timedelta(days=2)
 
         print("\n" + "=" * 50)
         print(f"🕒 Execução  : {now_br.strftime('%Y-%m-%d %H:%M:%S')} (horário Brasília)")
         print(f"📅 Dia alvo  : {today_br} (Brasília)")
-        print(f"🌐 Datas UTC consultadas: {utc_today} e {utc_tomorrow}")
+        print(f"🌐 Datas UTC consultadas: {utc_today}, {utc_tomorrow} e {utc_day3}")
 
         all_raw = []
-        for utc_date in [utc_today, utc_tomorrow]:
+        for utc_date in [utc_today, utc_tomorrow, utc_day3]:
             all_raw.extend(self.get_fixtures_by_date(utc_date))
 
-        # Remove duplicatas por fixture_id (pode aparecer nas duas consultas)
+        # Remove duplicatas por fixture_id (pode aparecer em mais de uma consulta)
         seen     = set()
         deduped  = []
         for f in all_raw:
@@ -211,14 +214,28 @@ class FixtureCollectorService:
                 seen.add(f["fixture_id"])
                 deduped.append(f)
 
-        # Filtra apenas os jogos cujo horário BR seja hoje
-        fixtures  = [f for f in deduped if f["match_datetime"].date() == today_br]
+        # Inclui:
+        # 1. Jogos de hoje (BRT)
+        # 2. Jogos de 00:00–02:59 BRT do próximo dia — captura virada da meia-noite
+        def is_target(f: dict) -> bool:
+            d = f["match_datetime"].date()
+            h = f["match_datetime"].hour
+            return d == today_br or (d == next_br and h < 3)
+
+        fixtures  = [f for f in deduped if is_target(f)]
         discarded = len(deduped) - len(fixtures)
+
+        today_fixtures    = [f for f in fixtures if f["match_datetime"].date() == today_br]
+        midnight_fixtures = [f for f in fixtures if f["match_datetime"].date() == next_br]
 
         if discarded:
             print(f"[INFO] {discarded} jogo(s) de outro dia descartados após conversão de timezone.")
+        if midnight_fixtures:
+            print(f"[INFO] {len(midnight_fixtures)} jogo(s) de 00:xx de {next_br} incluídos (virada da meia-noite).")
 
-        print(f"\n✅ Jogos de hoje ({today_br}) confirmados: {len(fixtures)}")
+        print(f"\n✅ Jogos de hoje ({today_br}): {len(today_fixtures)}")
+        if midnight_fixtures:
+            print(f"✅ Jogos de 00:xx amanhã ({next_br}): {len(midnight_fixtures)}")
         print("=" * 50)
         return fixtures
 
