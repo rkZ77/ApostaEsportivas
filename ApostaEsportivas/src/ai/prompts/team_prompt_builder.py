@@ -5,7 +5,26 @@ Recebe perfis de duas seleções e gera contexto rico para injetar no prompt bas
 Inclui análise tática, métricas, pontos fortes/fracos e confrontos diretos.
 """
 
+from datetime import date
 from utils.db_utils import get_connection
+
+
+# Fases da Copa do Mundo 2026 (datas BRT aproximadas)
+_WC2026_PHASES = [
+    (date(2026, 6, 11), date(2026, 7, 2),  "FASE DE GRUPOS"),
+    (date(2026, 7, 4),  date(2026, 7, 10), "ROUND OF 32 (Oitavas-de-final)"),
+    (date(2026, 7, 13), date(2026, 7, 17), "ROUND OF 16 (Quartas-de-final)"),
+    (date(2026, 7, 19), date(2026, 7, 22), "QUARTAS DE FINAL"),
+    (date(2026, 7, 25), date(2026, 7, 26), "SEMIFINAIS"),
+    (date(2026, 7, 29), date(2026, 8, 1),  "FINAL / TERCEIRO LUGAR"),
+]
+
+def _wc_phase(match_date=None) -> str:
+    d = match_date if isinstance(match_date, date) else date.today()
+    for start, end, label in _WC2026_PHASES:
+        if start <= d <= end:
+            return label
+    return "Copa do Mundo 2026"
 
 
 class TeamPromptBuilder:
@@ -58,11 +77,13 @@ class TeamPromptBuilder:
     # ========================================================================
     # FORMATAÇÃO DE SEÇÕES
     # ========================================================================
-    def get_world_cup_context(self, home_profile: dict, away_profile: dict) -> str:
+    def get_world_cup_context(self, home_profile: dict, away_profile: dict, match_date=None) -> str:
         """
         Retorna o bloco completo de contexto Copa (perfis + H2H + tendências) pronto para injeção
         em qualquer pipeline que receba jogos da Copa do Mundo.
         """
+        phase = _wc_phase(match_date)
+        phase_header = f"{'='*68}\nCOPA DO MUNDO 2026 — {phase}\n{'='*68}\n"
         teams_section = self._format_teams_section(home_profile, away_profile)
         h2h_section = self._format_head_to_head(
             home_profile["team_id"],
@@ -71,17 +92,28 @@ class TeamPromptBuilder:
             away_profile["team_name"],
         )
         tendencias = self._format_league_tendencias(league_id=1, limit=15)
-        base = f"{teams_section}\n\n{h2h_section}"
+        base = f"{phase_header}{teams_section}\n\n{h2h_section}"
         return f"{base}\n\n{tendencias}" if tendencias else base
 
-    def get_compact_wc_context(self, home_profile: dict, away_profile: dict) -> str:
+    def get_compact_wc_context(self, home_profile: dict, away_profile: dict, match_date=None) -> str:
         """
         Versão compacta (~50% menos tokens) para pipelines que não precisam
         de detalhes táticos (alavancagem, dica_do_dia, multiplas).
-        Mantém forma, gols, disciplina, cantos, Copa stats e tendências da liga.
+        Mantém forma, gols, disciplina, cantos, Copa stats, grupo e tendências.
         """
+        phase = _wc_phase(match_date)
         home_text = self._format_compact_team(home_profile)
         away_text = self._format_compact_team(away_profile)
+
+        # Tabela do grupo (usa o grupo do time da casa, geralmente o mesmo)
+        home_st = self._fetch_group_standing(home_profile["team_id"])
+        group_section = ""
+        if home_st:
+            group_section = (
+                f"\nCLASSIFICAÇÃO — {home_st['group']}:\n"
+                + self._format_group_table(home_st["group"], home_profile["team_name"])
+            )
+
         h2h_section = self._format_compact_h2h(
             home_profile["team_id"],
             away_profile["team_id"],
@@ -90,13 +122,14 @@ class TeamPromptBuilder:
         )
         tendencias = self._format_league_tendencias(league_id=1, limit=15)
         base = (
-            f"PERFIS Copa do Mundo\n"
+            f"COPA DO MUNDO 2026 — {phase}\n"
             f"{'─'*60}\n"
             f"{home_text}\n"
             f"{'─'*60}\n"
             f"{away_text}\n"
             f"{'─'*60}\n"
             f"{h2h_section}"
+            f"{group_section}"
         )
         return f"{base}\n\n{tendencias}" if tendencias else base
 
@@ -194,7 +227,8 @@ ANÁLISE DETALHADA DAS SELEÇÕES
 
 {'─'*68}
 
-{away_text}"""
+{away_text}
+"""
     
     def _format_single_team(self, profile: dict, flag: str) -> str:
         """Formata análise de uma seleção"""
@@ -260,6 +294,22 @@ ANÁLISE DETALHADA DAS SELEÇÕES
         else:
             injuries_text = "Nenhum reportado"
 
+        # Classificação no grupo
+        standing = self._fetch_group_standing(profile["team_id"])
+        if standing:
+            group_table = self._format_group_table(standing["group"], profile["team_name"])
+            standing_text = (
+                f"{standing['group']} — {standing['rank']}º lugar | "
+                f"{standing['points']}pts | "
+                f"{standing['played']}J {standing['win']}V {standing['draw']}E {standing['lose']}D | "
+                f"GF{standing['goals_for']} GA{standing['goals_against']} GD{standing['goals_diff']:+d} | "
+                f"Forma: {(standing['form'] or '')[-5:]}\n"
+                f"  Status: {standing['description'] or 'Em disputa'}\n"
+                + group_table
+            )
+        else:
+            standing_text = "Classificação não disponível (execute Stage 3)"
+
         # Copa desta edição
         copa_stats = profile.get("copa_stats") or {}
         if copa_stats:
@@ -305,6 +355,9 @@ ANÁLISE DETALHADA DAS SELEÇÕES
 {'─'*68}
 TÉCNICO: {coach} | FORMAÇÃO: {formation}
 LESIONADOS/SUSPENSOS: {injuries_text}
+
+CLASSIFICAÇÃO NO GRUPO:
+  {standing_text}
 
 DESEMPENHO NESTA COPA:
   {copa_text}
@@ -523,6 +576,83 @@ ESTATÍSTICAS DO CONFRONTO:
             print(f"[PROMPT_BUILDER] Erro ao buscar confrontos diretos: {e}")
             return []
     
+    # ========================================================================
+    # CLASSIFICAÇÃO DO GRUPO (Copa do Mundo)
+    # ========================================================================
+    def _fetch_group_standing(self, team_id: int, league_id: int = 1) -> dict | None:
+        """Retorna a linha de standing do time no grupo Copa."""
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT group_name, rank, points, played, win, draw, lose,
+                       goals_for, goals_against, goals_diff, form, description
+                FROM league_standings
+                WHERE team_id = %s AND league_id = %s
+                LIMIT 1
+            """, (team_id, league_id))
+            row = cur.fetchone()
+            cur.close()
+            conn.close()
+            if not row:
+                return None
+            return {
+                "group":       row[0],
+                "rank":        row[1],
+                "points":      row[2],
+                "played":      row[3],
+                "win":         row[4],
+                "draw":        row[5],
+                "lose":        row[6],
+                "goals_for":   row[7],
+                "goals_against": row[8],
+                "goals_diff":  row[9],
+                "form":        row[10],
+                "description": row[11],
+            }
+        except Exception as e:
+            print(f"[PROMPT_BUILDER] Erro ao buscar standing team {team_id}: {e}")
+            return None
+
+    def _fetch_full_group(self, group_name: str, league_id: int = 1) -> list:
+        """Retorna a tabela completa do grupo para exibir ao lado do time."""
+        try:
+            conn = get_connection()
+            cur = conn.cursor()
+            cur.execute("""
+                SELECT rank, team_name, played, win, draw, lose,
+                       goals_for, goals_against, goals_diff, points, form
+                FROM league_standings
+                WHERE group_name = %s AND league_id = %s
+                ORDER BY rank ASC
+            """, (group_name, league_id))
+            rows = cur.fetchall()
+            cur.close()
+            conn.close()
+            return [
+                {"rank": r[0], "team": r[1], "p": r[2], "w": r[3], "d": r[4],
+                 "l": r[5], "gf": r[6], "ga": r[7], "gd": r[8], "pts": r[9], "form": r[10]}
+                for r in rows
+            ]
+        except Exception:
+            return []
+
+    def _format_group_table(self, group_name: str, highlight_team: str) -> str:
+        """Formata tabela do grupo no estilo placar."""
+        rows = self._fetch_full_group(group_name)
+        if not rows:
+            return ""
+        lines = [f"  {group_name} │ PJ  V  E  D  GP GA GD Pts  Forma"]
+        for r in rows:
+            marker = "►" if r["team"].lower() == highlight_team.lower() else " "
+            form = (r["form"] or "")[-5:]
+            lines.append(
+                f"  {marker}{r['rank']}. {r['team']:<22} "
+                f"{r['p']:>2} {r['w']:>2} {r['d']:>2} {r['l']:>2} "
+                f"{r['gf']:>3}{r['ga']:>3}{r['gd']:>+4} {r['pts']:>3}  {form}"
+            )
+        return "\n".join(lines)
+
     # ========================================================================
     # UTILITÁRIOS
     # ========================================================================

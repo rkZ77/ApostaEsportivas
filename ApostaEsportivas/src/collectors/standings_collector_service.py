@@ -89,59 +89,52 @@ class StandingsCollectorService:
         country = league_data["country"]
         season = league_data["season"]
 
-        standings = league_data["standings"][0]
+        # standings é lista de grupos — Copa do Mundo tem 12 grupos (A-L),
+        # ligas comuns têm 1. Itera por todos os grupos.
+        all_groups = league_data["standings"]
 
         conn = get_connection()
         cur = conn.cursor()
 
         rows = []
 
-        for team in standings:
-
-            rows.append((
-
-                league_id,
-                league_name,
-                country,
-                season,
-                team["group"],
-
-                team["team"]["id"],
-                team["team"]["name"],
-                team["team"]["logo"],
-
-                team["rank"],
-                team["points"],
-                team["goalsDiff"],
-
-                team["form"],
-                team["status"],
-                team["description"],
-
-                team["all"]["played"],
-                team["all"]["win"],
-                team["all"]["draw"],
-                team["all"]["lose"],
-
-                team["all"]["goals"]["for"],
-                team["all"]["goals"]["against"],
-
-                team["home"]["played"],
-                team["home"]["win"],
-                team["home"]["draw"],
-                team["home"]["lose"],
-                team["home"]["goals"]["for"],
-                team["home"]["goals"]["against"],
-
-                team["away"]["played"],
-                team["away"]["win"],
-                team["away"]["draw"],
-                team["away"]["lose"],
-                team["away"]["goals"]["for"],
-                team["away"]["goals"]["against"],
-
-                team["update"]
-            ))
+        for group in all_groups:
+            for team in group:
+                rows.append((
+                    league_id,
+                    league_name,
+                    country,
+                    season,
+                    team["group"],
+                    team["team"]["id"],
+                    team["team"]["name"],
+                    team["team"]["logo"],
+                    team["rank"],
+                    team["points"],
+                    team["goalsDiff"],
+                    team["form"],
+                    team["status"],
+                    team["description"],
+                    team["all"]["played"],
+                    team["all"]["win"],
+                    team["all"]["draw"],
+                    team["all"]["lose"],
+                    team["all"]["goals"]["for"],
+                    team["all"]["goals"]["against"],
+                    team["home"]["played"],
+                    team["home"]["win"],
+                    team["home"]["draw"],
+                    team["home"]["lose"],
+                    team["home"]["goals"]["for"],
+                    team["home"]["goals"]["against"],
+                    team["away"]["played"],
+                    team["away"]["win"],
+                    team["away"]["draw"],
+                    team["away"]["lose"],
+                    team["away"]["goals"]["for"],
+                    team["away"]["goals"]["against"],
+                    team["update"]
+                ))
 
         execute_batch(cur, """
 
