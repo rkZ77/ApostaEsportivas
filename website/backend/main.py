@@ -23,7 +23,7 @@ _REQUIRED_VARS = ["JWT_SECRET"]
 _OPTIONAL_VARS = {
     "MERCADOPAGO_ACCESS_TOKEN": "pagamentos",
     "ANTHROPIC_API_KEY":        "IA / picks",
-    "SMTP_USER":                "envio de emails",
+    "RESEND_API_KEY":           "envio de emails",
 }
 
 _missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
