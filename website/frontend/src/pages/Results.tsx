@@ -151,8 +151,8 @@ export default function Results() {
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
           <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
           <div>
-            <h1 className="text-base font-black text-white">Resultados & Performance</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Histórico de todas as sugestões da IA</p>
+            <h1 className="text-base font-black text-white">Resultados da IA</h1>
+            <p className="text-zinc-500 text-xs mt-0.5">Performance histórica dos picks gerados pela IA</p>
           </div>
         </div>
       </div>
@@ -224,12 +224,13 @@ export default function Results() {
             </div>
           ) : (
             <>
+              {/* 4 métricas puras de performance da IA */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-5">
                 {[
-                  { label: 'Total picks', val: total,  color: 'text-white' },
+                  { label: 'Total picks', val: total,         color: 'text-white'     },
                   { label: 'Win rate',    val: `${winRate}%`, color: 'text-green-500' },
-                  { label: 'Lucro',       val: `${profit >= 0 ? '+' : ''}${profit.toFixed(1)}u`, color: profit >= 0 ? 'text-green-500' : 'text-red-400' },
-                  { label: 'ROI',         val: `${Number(roi) >= 0 ? '+' : ''}${roi}%`, color: Number(roi) >= 0 ? 'text-blue-400' : 'text-red-400' },
+                  { label: 'Greens',      val: greens,        color: 'text-green-400' },
+                  { label: 'Reds',        val: stats?.reds ?? 0, color: 'text-red-400' },
                 ].map(({ label, val, color }) => (
                   <div key={label} className="stat-card text-center">
                     <div className={`text-4xl font-black ${color}`}>{val}</div>
@@ -238,18 +239,21 @@ export default function Results() {
                 ))}
               </div>
 
+              {/* Curva de performance */}
               {stats?.by_day?.length >= 2 && (
                 <div className="card p-5 mb-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Lucro acumulado</p>
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Curva de Performance</p>
                     <span className={`text-sm font-black ${profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      {profit >= 0 ? '+' : ''}{profit.toFixed(2)}u
+                      {winRate}% win rate
                     </span>
                   </div>
+                  <p className="text-[10px] text-zinc-700 mb-4">Evolução cumulativa de picks (1u padrão por aposta)</p>
                   <ProfitChart data={stats.by_day} />
                 </div>
               )}
 
+              {/* Breakdown de resultados */}
               <div className="grid grid-cols-5 gap-3 mb-5">
                 {[
                   { label: 'Green',  value: stats?.greens ?? 0,      color: 'text-green-400',  bg: 'bg-green-500/10'  },
@@ -265,6 +269,7 @@ export default function Results() {
                 ))}
               </div>
 
+              {/* Por dia — sem colunas de lucro/banca */}
               {stats?.by_day?.length > 0 && (
                 <div className="card overflow-hidden">
                   <div className="px-5 py-4 border-b border-zinc-800 flex items-center gap-3">
@@ -275,43 +280,35 @@ export default function Results() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-zinc-800">
-                          {['Data','Picks','Greens','Win %','Lucro','Acumulado'].map(h => (
+                          {['Data','Picks','Greens','Reds','Win %'].map(h => (
                             <th key={h} className="text-left text-zinc-500 font-medium px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {(() => {
-                          let acc = 0
-                          return [...stats.by_day]
-                            .sort((a: any, b: any) => a.match_date.localeCompare(b.match_date))
-                            .map((d: any) => {
-                              acc += Number(d.profit)
-                              const wr = d.total > 0 ? Math.round((d.greens / d.total) * 100) : 0
-                              const p  = Number(d.profit)
-                              return (
-                                <tr key={d.match_date} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
-                                  <td className="px-5 py-3 text-white font-medium">{new Date(d.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                  <td className="px-5 py-3 text-zinc-300">{d.total}</td>
-                                  <td className="px-5 py-3 text-green-500 font-semibold">{d.greens}</td>
-                                  <td className="px-5 py-3">
-                                    <div className="flex items-center gap-2">
-                                      <div className="bg-zinc-800 rounded-full h-1.5 w-16">
-                                        <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
-                                      </div>
-                                      <span className="text-zinc-400 text-xs">{wr}%</span>
+                        {[...stats.by_day]
+                          .sort((a: any, b: any) => b.match_date.localeCompare(a.match_date))
+                          .map((d: any) => {
+                            const wr   = d.total > 0 ? Math.round((d.greens / d.total) * 100) : 0
+                            const reds = d.reds ?? (d.total - d.greens - (d.push ?? 0) - (d.half_wins ?? 0) - (d.half_losses ?? 0))
+                            return (
+                              <tr key={d.match_date} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
+                                <td className="px-5 py-3 text-white font-medium">{new Date(d.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                <td className="px-5 py-3 text-zinc-300">{d.total}</td>
+                                <td className="px-5 py-3 text-green-500 font-semibold">{d.greens}</td>
+                                <td className="px-5 py-3 text-red-400 font-semibold">{reds}</td>
+                                <td className="px-5 py-3">
+                                  <div className="flex items-center gap-2">
+                                    <div className="bg-zinc-800 rounded-full h-1.5 w-16">
+                                      <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
                                     </div>
-                                  </td>
-                                  <td className={`px-5 py-3 font-black ${p >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                                  </td>
-                                  <td className={`px-5 py-3 font-bold text-xs ${acc >= 0 ? 'text-zinc-300' : 'text-red-400'}`}>
-                                    {acc >= 0 ? '+' : ''}{acc.toFixed(2)}u
-                                  </td>
-                                </tr>
-                              )
-                            })
-                        })()}
+                                    <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>{wr}%</span>
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })
+                        }
                       </tbody>
                     </table>
                   </div>
@@ -347,7 +344,6 @@ export default function Results() {
                 <div className="card overflow-hidden">
                   <div className="divide-y divide-zinc-800/60">
                     {games.map(g => {
-                      const p     = Number(g.profit ?? 0) * Number(g.stake ?? 1)
                       const badge = RESULT_BADGE[g.result] ?? 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
                       return (
                         <div key={g.id}
@@ -390,8 +386,8 @@ export default function Results() {
                             </p>
                           </div>
 
-                          {/* Resultado + P&L */}
-                          <div className="flex items-center gap-3 shrink-0">
+                          {/* Resultado */}
+                          <div className="flex items-center shrink-0">
                             {g.result ? (
                               <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${badge}`}>
                                 {g.result === 'HALF-WIN' ? '½ WIN' : g.result === 'HALF-LOSS' ? '½ LOSS' : g.result}
@@ -399,9 +395,6 @@ export default function Results() {
                             ) : (
                               <span className="text-zinc-600 text-xs">Pendente</span>
                             )}
-                            <span className={`text-sm font-black w-16 text-right ${p > 0 ? 'text-green-500' : p < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
-                              {p !== 0 ? `${p > 0 ? '+' : ''}${p.toFixed(2)}u` : ''}
-                            </span>
                           </div>
                         </div>
                       )
@@ -462,16 +455,15 @@ export default function Results() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b border-zinc-800">
-                      {['Mês','Picks','Greens','Win %','ROI','Lucro'].map(h => (
+                      {['Mês','Picks','Greens','Reds','Win %'].map(h => (
                         <th key={h} className="text-left text-zinc-500 font-medium px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {monthly.map(m => {
-                      const p   = Number(m.profit ?? 0)
-                      const wr  = m.win_rate ?? 0
-                      const roi = m.roi ?? 0
+                      const wr   = m.win_rate ?? 0
+                      const reds = m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))
                       const [year, month] = (m.month ?? '').split('-')
                       const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                       return (
@@ -479,6 +471,7 @@ export default function Results() {
                           <td className="px-5 py-3 text-white font-semibold capitalize">{label}</td>
                           <td className="px-5 py-3 text-zinc-300">{m.total}</td>
                           <td className="px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
+                          <td className="px-5 py-3 text-red-400 font-semibold">{reds}</td>
                           <td className="px-5 py-3">
                             <div className="flex items-center gap-2">
                               <div className="bg-zinc-800 rounded-full h-1.5 w-16">
@@ -487,31 +480,22 @@ export default function Results() {
                               <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>{wr}%</span>
                             </div>
                           </td>
-                          <td className={`px-5 py-3 font-bold text-xs ${roi >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
-                            {roi >= 0 ? '+' : ''}{roi}%
-                          </td>
-                          <td className={`px-5 py-3 font-black ${p >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                            {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                          </td>
                         </tr>
                       )
                     })}
                     {/* Totais */}
                     {(() => {
-                      const totP = monthly.reduce((a, m) => a + Number(m.profit ?? 0), 0)
-                      const totT = monthly.reduce((a, m) => a + (m.total ?? 0), 0)
-                      const totG = monthly.reduce((a, m) => a + (m.greens ?? 0), 0)
+                      const totT  = monthly.reduce((a, m) => a + (m.total ?? 0), 0)
+                      const totG  = monthly.reduce((a, m) => a + (m.greens ?? 0), 0)
+                      const totR  = monthly.reduce((a, m) => a + (m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))), 0)
                       const avgWR = totT > 0 ? Math.round(totG / totT * 100) : 0
                       return (
                         <tr className="bg-zinc-900 border-t border-zinc-700">
                           <td className="px-5 py-3 text-zinc-400 font-bold text-xs uppercase">Total</td>
                           <td className="px-5 py-3 text-white font-black">{totT}</td>
                           <td className="px-5 py-3 text-green-500 font-black">{totG}</td>
+                          <td className="px-5 py-3 text-red-400 font-black">{totR}</td>
                           <td className="px-5 py-3 text-zinc-300 font-bold text-xs">{avgWR}%</td>
-                          <td className="px-5 py-3 text-zinc-500 text-xs"></td>
-                          <td className={`px-5 py-3 font-black ${totP >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                            {totP >= 0 ? '+' : ''}{totP.toFixed(2)}u
-                          </td>
                         </tr>
                       )
                     })()}

@@ -121,6 +121,7 @@ def get_banca(
     current_user: dict = Depends(get_current_user),
     days: int = Query(0, ge=0),  # 0 = tudo
 ):
+    import json as _json
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()
@@ -129,7 +130,6 @@ def get_banca(
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
         bankroll_goal  = float(row["bankroll_goal"]) if row and row["bankroll_goal"] else None
-        # unit_value: R$ por unidade. Default = 1 (pnl em unidades ≈ R$1/u)
         unit_value = float(row["unit_value"]) if row and row["unit_value"] else 1.0
 
         date_cond = ""
@@ -146,45 +146,99 @@ def get_banca(
         """, date_params)
         followed = [dict(r) for r in cur.fetchall()]
 
-        entries = []
         running = bankroll_start
-        for f in followed:
-            pick = _resolve_pick(cur, f["pick_id"], f["pick_type"])
-            if not pick:
-                continue
-            result     = pick.get("result")
-            actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
-            # Usa actual_odd do usuário para profit quando disponível; caso contrário, usa a odd do pick
-            if result in ("GREEN", "RED", "PUSH"):
-                _odd = actual_odd or float(pick.get("odd") or 1)
-                profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
-            else:
-                profit_u = None
-            # pnl em R$ = lucro_por_unidade × unidades_apostadas × valor_da_unidade
-            pnl_r    = profit_u * float(f["stake_units"]) * unit_value if profit_u is not None else None
-            if pnl_r is not None:
-                running += pnl_r
+        if not followed:
+            entries = []
+        else:
+            # Batch: separa ids por tipo para buscar tudo de uma vez
+            vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
+            free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
+            multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
 
-            pick_odd_orig = float(pick["odd"]) if pick.get("odd") is not None else None
-            entries.append({
-                "id":             f["id"],
-                "pick_id":        f["pick_id"],
-                "pick_type":      f["pick_type"],
-                "stake_units":    float(f["stake_units"]),
-                "followed_at":    f["followed_at"].isoformat() if f["followed_at"] else None,
-                "home_team_name": pick.get("home_team_name"),
-                "away_team_name": pick.get("away_team_name"),
-                "home_team_id":   pick.get("home_team_id"),
-                "away_team_id":   pick.get("away_team_id"),
-                "market":         pick.get("market"),
-                "line":           pick.get("line"),
-                "odd":            pick_odd_orig,
-                "actual_odd":     actual_odd,
-                "result":         result,
-                "profit_units":   profit_u,
-                "pnl":            round(pnl_r, 2) if pnl_r is not None else None,
-                "bankroll_after": round(running, 2) if pnl_r is not None else None,
-            })
+            vip_map: dict = {}
+            if vip_ids:
+                cur.execute("""
+                    SELECT id, result, profit, home_team_name, away_team_name,
+                           home_team_id, away_team_id, market, line, odd
+                    FROM picks_vip WHERE id = ANY(%s)
+                """, (vip_ids,))
+                for r in cur.fetchall():
+                    vip_map[r["id"]] = dict(r)
+
+            free_map: dict = {}
+            if free_ids:
+                cur.execute("""
+                    SELECT pf.id, pf.result, pf.profit,
+                           pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                           COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
+                           COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
+                           pf.market, pf.line, pf.odd
+                    FROM picks_free pf
+                    LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+                    WHERE pf.id = ANY(%s)
+                """, (free_ids,))
+                for r in cur.fetchall():
+                    free_map[r["id"]] = dict(r)
+
+            multipla_map: dict = {}
+            if multipla_ids:
+                cur.execute("""
+                    SELECT id, result, profit, total_odd AS odd, games AS legs_json
+                    FROM picks_multiplas WHERE id = ANY(%s)
+                """, (multipla_ids,))
+                for r in cur.fetchall():
+                    d = dict(r)
+                    legs = []
+                    try:
+                        legs = _json.loads(d["legs_json"]) if isinstance(d.get("legs_json"), str) else (d.get("legs_json") or [])
+                    except Exception:
+                        pass
+                    first = legs[0] if legs else {}
+                    d["home_team_name"] = first.get("home") or first.get("home_team")
+                    d["away_team_name"] = first.get("away") or first.get("away_team")
+                    d["home_team_id"]   = first.get("home_team_id")
+                    d["away_team_id"]   = first.get("away_team_id")
+                    d["market"]         = f"Múltipla · {len(legs)} seleções"
+                    del d["legs_json"]
+                    multipla_map[d["id"]] = d
+
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+
+            entries = []
+            for f in followed:
+                pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
+                if not pick:
+                    continue
+                result     = pick.get("result")
+                actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
+                if result in ("GREEN", "RED", "PUSH"):
+                    _odd = actual_odd or float(pick.get("odd") or 1)
+                    profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
+                else:
+                    profit_u = None
+                pnl_r = profit_u * float(f["stake_units"]) * unit_value if profit_u is not None else None
+                if pnl_r is not None:
+                    running += pnl_r
+
+                entries.append({
+                    "id":             f["id"],
+                    "pick_id":        f["pick_id"],
+                    "pick_type":      f["pick_type"],
+                    "stake_units":    float(f["stake_units"]),
+                    "followed_at":    f["followed_at"].isoformat() if f["followed_at"] else None,
+                    "home_team_name": pick.get("home_team_name"),
+                    "away_team_name": pick.get("away_team_name"),
+                    "home_team_id":   pick.get("home_team_id"),
+                    "away_team_id":   pick.get("away_team_id"),
+                    "market":         pick.get("market"),
+                    "line":           pick.get("line"),
+                    "odd":            float(pick["odd"]) if pick.get("odd") is not None else None,
+                    "actual_odd":     actual_odd,
+                    "result":         result,
+                    "profit_units":   profit_u,
+                    "pnl":            round(pnl_r, 2) if pnl_r is not None else None,
+                    "bankroll_after": round(running, 2) if pnl_r is not None else None,
+                })
 
         resolved  = [e for e in entries if e["result"]]
         greens    = sum(1 for e in resolved if e["result"] == "GREEN")
