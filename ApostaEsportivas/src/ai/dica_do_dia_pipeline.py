@@ -66,7 +66,7 @@ REGRAS:
 - Odd entre 1.40 e 1.70 — sem excecoes
 - Confidence >= 0.72 — calculada com base nos dados, nao em suposicoes
 - Consistencia vale mais que EV: prefira 8/10 jogos confirmando a 1.3 de EV instavel
-- Amostra minima: 5 jogos no venue correto (casa para mandante, fora para visitante)
+- Amostra minima: 5 jogos no venue correto (casa para mandante, fora para visitante). EXCECAO Copa do Mundo (league_id=1): jogos sao em sede neutra — venue NAO se aplica; use o historico dos ultimos 15 jogos (todos competicoes) + stats especificas da Copa fornecidas no perfil. Basta amostra>=5 no historico total.
 - MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
   Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados fornecidos.
 - Linha Over/Under (qualquer mercado): sempre a mais conservadora com odd 1.40-1.70. Over→linha mais baixa. Under→linha mais alta.
@@ -82,11 +82,11 @@ Sua resposta deve comecar com {{ e terminar com }}. Nada antes, nada depois.\
 
 USER_PROMPT_TEMPLATE = """\
 Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
-Prioridade: Copa do Mundo (league_id=1) se amostra>=5 e padrao>=65%.
+Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); use historico total (ultimos 15 jogos, todos competicoes) + stats especificas da Copa. Amostra>=5 no historico global.
 
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
-Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 no venue | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
+Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
 
 CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → prefira gols ou escanteios.
 
@@ -94,7 +94,7 @@ CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta vari
 {fixtures_formatados}
 
 CALCULO:
-A) Taxa=confirmados/total_venue (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte
+A) Taxa=confirmados/total_amostra (>=0.65). Copa do Mundo: total_amostra = historico total (nao por venue). Outros: total_venue. Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte
 B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
 C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
    Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5
