@@ -4,122 +4,13 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import SuggestionDetail from '../components/SuggestionDetail'
+import ProfitChart from '../components/ProfitChart'
 
 const fmtBRL = (v: number) =>
   'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 const fmtSigned = (v: number) =>
   (v >= 0 ? '+' : '−') + fmtBRL(v)
 
-function PicksBarChart({ entries }: { entries: any[] }) {
-  const [hover, setHover] = useState<number | null>(null)
-
-  const byDay: Record<string, { green: number; red: number; push: number }> = {}
-  for (const e of entries) {
-    if (!e.result || !e.followed_at) continue
-    const day = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-    if (!byDay[day]) byDay[day] = { green: 0, red: 0, push: 0 }
-    if (e.result === 'GREEN' || e.result === 'HALF-WIN') byDay[day].green++
-    else if (e.result === 'RED' || e.result === 'HALF-LOSS') byDay[day].red++
-    else byDay[day].push++
-  }
-
-  const days = Object.keys(byDay).sort().slice(-21)
-  if (days.length < 2) return null
-
-  const maxVal = Math.max(...days.map(d => byDay[d].green + byDay[d].red + byDay[d].push), 1)
-  const W = 600, H = 120, PAD_L = 24, PAD_B = 28, PAD_T = 48
-  const chartW = W - PAD_L - 8
-  const chartH = H - PAD_B - PAD_T
-  const barW   = Math.min(22, chartW / days.length - 4)
-  const gap    = (chartW - barW * days.length) / (days.length - 1)
-
-  const x = (i: number) => PAD_L + i * (barW + gap)
-  const yScale = (v: number) => chartH - (v / maxVal) * chartH
-
-  const todayKey = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-
-  return (
-    <div className="card p-4">
-      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Minha Banca</h3>
-      <div className="overflow-x-auto">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }} overflow="visible">
-          {/* Grade horizontal */}
-          {[0.25, 0.5, 0.75, 1].map(f => (
-            <line key={f} x1={PAD_L} x2={W - 8} y1={PAD_T + yScale(maxVal * f)} y2={PAD_T + yScale(maxVal * f)}
-              stroke="#27272a" strokeWidth={1} />
-          ))}
-
-          {days.map((day, i) => {
-            const d = byDay[day]
-            const total = d.green + d.red + d.push
-            const gH = (d.green / maxVal) * chartH
-            const rH = (d.red   / maxVal) * chartH
-            const pH = (d.push  / maxVal) * chartH
-            const bx = x(i)
-            const isHov = hover === i
-            const isToday = day === todayKey
-            const [, mo, dy] = day.split('-')
-
-            // Posiciona tooltip com margem segura: sempre acima da barra com espaço
-            const tipX = Math.max(4, Math.min(bx - 30, W - 76))
-            const tipY = PAD_T + yScale(total) - 44
-
-            return (
-              <g key={day} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: 'pointer' }}>
-                {/* Zona de hover maior */}
-                <rect x={bx - 4} y={PAD_T} width={barW + 8} height={chartH} fill="transparent" />
-
-                {/* PUSH (cinza, base) */}
-                {pH > 0 && <rect x={bx} y={PAD_T + chartH - pH} width={barW} height={pH} rx={2} fill="#3f3f46" opacity={isHov ? 1 : 0.7} />}
-                {/* RED (em cima do push) */}
-                {rH > 0 && <rect x={bx} y={PAD_T + chartH - pH - rH} width={barW} height={rH} rx={2} fill="#ef4444" opacity={isHov ? 1 : 0.75} />}
-                {/* GREEN (no topo) */}
-                {gH > 0 && <rect x={bx} y={PAD_T + chartH - pH - rH - gH} width={barW} height={gH} rx={2} fill="#22c55e" opacity={isHov ? 1 : 0.75} />}
-
-                {/* Label dia */}
-                <text x={bx + barW / 2} y={H - 8} textAnchor="middle"
-                  fontSize={9} fill={isToday ? '#22c55e' : isHov ? '#d4d4d8' : '#52525b'} fontWeight={isToday ? 700 : 400}>
-                  {`${dy}/${mo}`}
-                </text>
-
-                {/* Tooltip no hover — sempre visível (overflow="visible" no SVG) */}
-                {isHov && total > 0 && (
-                  <g>
-                    <rect x={tipX} y={tipY} width={76} height={40} rx={6} fill="#18181b" stroke="#3f3f46" strokeWidth={1} />
-                    {d.green > 0 && (
-                      <text x={tipX + 38} y={tipY + 14} textAnchor="middle" fontSize={10} fill="#22c55e" fontWeight={700}>
-                        {d.green} GREEN
-                      </text>
-                    )}
-                    {d.red > 0 && (
-                      <text x={tipX + 38} y={tipY + (d.green > 0 ? 28 : 14)} textAnchor="middle" fontSize={10} fill="#ef4444" fontWeight={700}>
-                        {d.red} RED
-                      </text>
-                    )}
-                    {d.push > 0 && d.green === 0 && d.red === 0 && (
-                      <text x={tipX + 38} y={tipY + 14} textAnchor="middle" fontSize={10} fill="#a1a1aa" fontWeight={700}>
-                        {d.push} PUSH
-                      </text>
-                    )}
-                    <text x={tipX + 38} y={tipY + (d.green > 0 && d.red > 0 ? 40 : 40)} textAnchor="middle" fontSize={9} fill="#71717a">
-                      {total} total
-                    </text>
-                  </g>
-                )}
-              </g>
-            )
-          })}
-        </svg>
-      </div>
-      <div className="flex items-center gap-4 mt-1">
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-green-500" /><span className="text-[10px] text-zinc-500">GREEN</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-red-500" /><span className="text-[10px] text-zinc-500">RED</span></div>
-        <div className="flex items-center gap-1.5"><span className="w-2.5 h-2.5 rounded-sm bg-zinc-600" /><span className="text-[10px] text-zinc-500">PUSH</span></div>
-        <span className="text-[10px] text-zinc-600 ml-auto">½ WIN conta como GREEN · ½ LOSS conta como RED</span>
-      </div>
-    </div>
-  )
-}
 
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
@@ -343,8 +234,31 @@ export default function MeusPicks() {
               )
             })()}
 
-            {/* Gráfico GREEN/RED por dia */}
-            {resolvidos.length >= 2 && <PicksBarChart entries={filteredByPeriod} />}
+            {/* Evolução da banca */}
+            {(data?.chart?.length ?? 0) >= 2 && (() => {
+              const allChart = (data.chart ?? []).map((p: any, i: number, arr: any[]) => ({
+                match_date: p.date,
+                profit: i === 0
+                  ? p.bankroll - (data?.bankroll_start ?? 100)
+                  : p.bankroll - arr[i - 1].bankroll,
+              }))
+              const chartFiltered = daysBack === 0
+                ? allChart
+                : allChart.filter((c: any) => c.match_date >= isoDateDaysAgo(daysBack))
+              if (chartFiltered.length < 2) return null
+              const pnl = data?.total_pnl ?? 0
+              return (
+                <div className="card p-4">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Evolução da Banca</h3>
+                    <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      {fmtSigned(pnl)}
+                    </span>
+                  </div>
+                  <ProfitChart data={chartFiltered} unit="R$" />
+                </div>
+              )
+            })()}
 
             {/* Tabs */}
             <div className="flex gap-2">
