@@ -43,18 +43,18 @@ export default function Navbar() {
     pathname === path ? 'text-green-500 font-semibold' : 'text-zinc-400 hover:text-white'
 
   const navLinks = [
-    { to: '/picks',    label: 'Picks',      Icon: Zap,      badge: hasNew, onClick: markSeen },
-    { to: '/fixtures', label: 'Jogos',      Icon: Trophy },
-    { to: '/results',  label: 'Resultados', Icon: BarChart2 },
-    { to: '/agente',   label: 'Agente',     Icon: Bot },
-    { to: '/banca',       label: 'Banca',      Icon: Wallet },
-    { to: '/meus-picks',  label: 'Meus Picks',  Icon: ListChecks },
+    { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
+    { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
+    { to: '/banca',      label: 'Banca',            Icon: Wallet },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]
       : []),
     ...(!isAdmin && user?.plan !== 'vip' && user?.plan !== 'trial'
       ? [{ to: '/planos', label: 'VIP', Icon: Crown, highlight: 'yellow' as const }]
       : []),
+    { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
+    { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
+    { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(isAdmin
       ? [{ to: '/admin', label: 'Admin', Icon: ShieldCheck }]
       : []),
