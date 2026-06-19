@@ -46,15 +46,15 @@ export default function Navbar() {
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Banca',            Icon: Wallet },
+    { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
+    { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
+    { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
       ? [{ to: '/planos', label: 'Meu Plano', Icon: Crown, highlight: 'yellow' as const }]
       : []),
     ...(!isAdmin && user?.plan !== 'vip' && user?.plan !== 'trial'
-      ? [{ to: '/planos', label: 'VIP', Icon: Crown, highlight: 'yellow' as const }]
+      ? [{ to: '/checkout', label: 'Assinar VIP', Icon: Crown, highlight: 'yellow' as const }]
       : []),
-    { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
-    { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
-    { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(isAdmin
       ? [{ to: '/admin', label: 'Admin', Icon: ShieldCheck }]
       : []),
