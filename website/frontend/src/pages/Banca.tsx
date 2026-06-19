@@ -455,23 +455,23 @@ export default function Banca() {
             {data?.ia_roi != null && (
               <div className="card p-5">
                 <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-4">Você vs IA</p>
-                <div className="grid grid-cols-3 gap-4">
+                <div className="grid grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
-                    <div className={`text-2xl font-black ${(data?.yield_roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <div className={`text-xl sm:text-2xl font-black ${(data?.yield_roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {(data?.yield_roi ?? 0) >= 0 ? '+' : ''}{data.yield_roi ?? 0}%
                     </div>
                     <div className="text-xs text-zinc-500 mt-1 font-semibold">Seu Yield</div>
                     <div className="text-[10px] text-zinc-600 mt-0.5">lucro / unidades</div>
                   </div>
                   <div className="text-center">
-                    <div className={`text-2xl font-black ${(data?.roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
+                    <div className={`text-xl sm:text-2xl font-black ${(data?.roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {(data?.roi ?? 0) >= 0 ? '+' : ''}{data.roi ?? 0}%
                     </div>
                     <div className="text-xs text-zinc-500 mt-1 font-semibold">ROI banca</div>
                     <div className="text-[10px] text-zinc-600 mt-0.5">{data.total_resolved} picks</div>
                   </div>
                   <div className="text-center">
-                    <div className={`text-2xl font-black ${data.ia_roi >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    <div className={`text-xl sm:text-2xl font-black ${data.ia_roi >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                       {data.ia_roi >= 0 ? '+' : ''}{data.ia_roi}%
                     </div>
                     <div className="text-xs text-zinc-500 mt-1 font-semibold">Yield da IA</div>

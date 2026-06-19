@@ -254,7 +254,7 @@ export default function Results() {
               )}
 
               {/* Breakdown de resultados */}
-              <div className="grid grid-cols-5 gap-3 mb-5">
+              <div className="grid grid-cols-3 sm:grid-cols-5 gap-3 mb-5">
                 {[
                   { label: 'Green',  value: stats?.greens ?? 0,      color: 'text-green-400',  bg: 'bg-green-500/10'  },
                   { label: 'Red',    value: stats?.reds ?? 0,        color: 'text-red-400',    bg: 'bg-red-500/10'    },
@@ -277,11 +277,11 @@ export default function Results() {
                     <h3 className="font-black text-white text-sm uppercase tracking-wider">Por dia</h3>
                   </div>
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-sm min-w-[460px]">
                       <thead>
                         <tr className="border-b border-zinc-800">
                           {['Data','Picks','Greens','Reds','Win %'].map(h => (
-                            <th key={h} className="text-left text-zinc-500 font-medium px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                            <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
                           ))}
                         </tr>
                       </thead>
@@ -293,11 +293,11 @@ export default function Results() {
                             const reds = d.reds ?? (d.total - d.greens - (d.push ?? 0) - (d.half_wins ?? 0) - (d.half_losses ?? 0))
                             return (
                               <tr key={d.match_date} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
-                                <td className="px-5 py-3 text-white font-medium">{new Date(d.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
-                                <td className="px-5 py-3 text-zinc-300">{d.total}</td>
-                                <td className="px-5 py-3 text-green-500 font-semibold">{d.greens}</td>
-                                <td className="px-5 py-3 text-red-400 font-semibold">{reds}</td>
-                                <td className="px-5 py-3">
+                                <td className="px-3 sm:px-5 py-3 text-white font-medium">{new Date(d.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
+                                <td className="px-3 sm:px-5 py-3 text-zinc-300">{d.total}</td>
+                                <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{d.greens}</td>
+                                <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
+                                <td className="px-3 sm:px-5 py-3">
                                   <div className="flex items-center gap-2">
                                     <div className="bg-zinc-800 rounded-full h-1.5 w-16">
                                       <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
@@ -347,7 +347,7 @@ export default function Results() {
                       const badge = RESULT_BADGE[g.result] ?? 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
                       return (
                         <div key={g.id}
-                          className="flex items-center gap-3 px-5 py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                          className="flex items-center gap-2 px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
                           onClick={() => setDetailPick({ id: g.id, pick_type: g.pick_type })}>
                           {/* Data */}
                           <div className="w-14 shrink-0 text-center">
@@ -452,11 +452,11 @@ export default function Results() {
           ) : (
             <div className="card overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+                <table className="w-full text-sm min-w-[460px]">
                   <thead>
                     <tr className="border-b border-zinc-800">
                       {['Mês','Picks','Greens','Reds','Win %'].map(h => (
-                        <th key={h} className="text-left text-zinc-500 font-medium px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                        <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -468,11 +468,11 @@ export default function Results() {
                       const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                       return (
                         <tr key={m.month} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
-                          <td className="px-5 py-3 text-white font-semibold capitalize">{label}</td>
-                          <td className="px-5 py-3 text-zinc-300">{m.total}</td>
-                          <td className="px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
-                          <td className="px-5 py-3 text-red-400 font-semibold">{reds}</td>
-                          <td className="px-5 py-3">
+                          <td className="px-3 sm:px-5 py-3 text-white font-semibold capitalize">{label}</td>
+                          <td className="px-3 sm:px-5 py-3 text-zinc-300">{m.total}</td>
+                          <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
+                          <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
+                          <td className="px-3 sm:px-5 py-3">
                             <div className="flex items-center gap-2">
                               <div className="bg-zinc-800 rounded-full h-1.5 w-16">
                                 <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
@@ -491,11 +491,11 @@ export default function Results() {
                       const avgWR = totT > 0 ? Math.round(totG / totT * 100) : 0
                       return (
                         <tr className="bg-zinc-900 border-t border-zinc-700">
-                          <td className="px-5 py-3 text-zinc-400 font-bold text-xs uppercase">Total</td>
-                          <td className="px-5 py-3 text-white font-black">{totT}</td>
-                          <td className="px-5 py-3 text-green-500 font-black">{totG}</td>
-                          <td className="px-5 py-3 text-red-400 font-black">{totR}</td>
-                          <td className="px-5 py-3 text-zinc-300 font-bold text-xs">{avgWR}%</td>
+                          <td className="px-3 sm:px-5 py-3 text-zinc-400 font-bold text-xs uppercase">Total</td>
+                          <td className="px-3 sm:px-5 py-3 text-white font-black">{totT}</td>
+                          <td className="px-3 sm:px-5 py-3 text-green-500 font-black">{totG}</td>
+                          <td className="px-3 sm:px-5 py-3 text-red-400 font-black">{totR}</td>
+                          <td className="px-3 sm:px-5 py-3 text-zinc-300 font-bold text-xs">{avgWR}%</td>
                         </tr>
                       )
                     })()}

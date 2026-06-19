@@ -307,9 +307,9 @@ export default function MeusPicks() {
               const redCount   = resolved.filter((e: any) => e.result === 'RED'   || e.result === 'HALF-LOSS').length
               const pnl = daysBack === 0
                 ? (data?.total_pnl ?? 0)
-                : resolved.reduce((acc: number, e: any) => acc + (Number(e.profit) || 0), 0)
+                : resolved.reduce((acc: number, e: any) => acc + (Number(e.pnl) || 0), 0)
               const wr = resolved.length > 0 ? Math.round(greenCount / resolved.length * 100) : 0
-              const pnlStr = pnl === 0 ? '0' : `${pnl > 0 ? '+' : ''}${Number(pnl).toFixed(2)}`
+              const pnlStr = pnl === 0 ? 'R$ 0' : fmtSigned(pnl)
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
@@ -317,8 +317,8 @@ export default function MeusPicks() {
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-2xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">P&L {daysBack === 0 ? 'total' : `${daysBack}d`}</div>
+                    <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Crescimento</div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{wr}%</div>
