@@ -469,8 +469,35 @@ export default function Admin() {
         {/* Corrigir resultado de pick */}
         <div className="card p-4 mb-6">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Corrigir Resultado de Pick</h2>
-          <div className="flex flex-wrap gap-3 mb-3">
-            <div className="flex flex-col gap-1 flex-1 min-w-[160px]">
+          {/* Atalhos rápidos de data */}
+          {(() => {
+            const brt = (daysAgo = 0) => {
+              const d = new Date(new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo' }))
+              d.setDate(d.getDate() - daysAgo)
+              return d.toISOString().slice(0, 10)
+            }
+            const shortcuts = [
+              { label: 'Hoje',          from: brt(0),  to: brt(0)  },
+              { label: 'Ontem',         from: brt(1),  to: brt(1)  },
+              { label: '3 dias',        from: brt(3),  to: brt(0)  },
+              { label: 'Semana passada',from: brt(7),  to: brt(0)  },
+              { label: '15 dias',       from: brt(15), to: brt(0)  },
+            ]
+            return (
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {shortcuts.map(s => (
+                  <button key={s.label}
+                    onClick={() => { setPickDateFrom(s.from); setPickDateTo(s.to) }}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors touch-manipulation ${pickDateFrom === s.from && pickDateTo === s.to ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'}`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
+            )
+          })()}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="flex flex-col gap-1">
               <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Time</label>
               <input
                 className="input text-sm"
@@ -481,16 +508,8 @@ export default function Admin() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data de</label>
-              <input type="date" className="input text-sm w-36" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data até</label>
-              <input type="date" className="input text-sm w-36" value={pickDateTo} onChange={e => setPickDateTo(e.target.value)} />
-            </div>
-            <div className="flex flex-col gap-1">
               <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Tipo</label>
-              <select className="input text-sm w-36" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
+              <select className="input text-sm" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
                 <option value="">Todos</option>
                 <option value="vip">VIP</option>
                 <option value="free">Free</option>
@@ -498,72 +517,66 @@ export default function Admin() {
                 <option value="alavancagem">Alavancagem</option>
               </select>
             </div>
-            <div className="flex flex-col gap-1 justify-end">
-              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold opacity-0">.</label>
-              <button onClick={searchPicks} disabled={pickSearching}
-                className="btn-primary text-sm px-4 py-2.5 disabled:opacity-40">
-                {pickSearching ? '...' : 'Buscar'}
-              </button>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data de</label>
+              <input type="date" className="input text-sm" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">Data até</label>
+              <input type="date" className="input text-sm" value={pickDateTo} onChange={e => setPickDateTo(e.target.value)} />
             </div>
           </div>
+          <button onClick={searchPicks} disabled={pickSearching}
+            className="w-full btn-primary text-sm py-3 disabled:opacity-40 touch-manipulation mb-3">
+            {pickSearching ? 'Buscando...' : 'Buscar Picks'}
+          </button>
 
           {pickResults.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs">
-                <thead>
-                  <tr className="border-b border-zinc-800">
-                    {['Data', 'Tipo', 'Times', 'Resultado atual', 'Alterar para'].map(h => (
-                      <th key={h} className="text-left text-zinc-500 font-medium px-3 py-2 uppercase tracking-wider whitespace-nowrap">{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {pickResults.map((p, i) => {
-                    const resultCls: Record<string, string> = {
-                      GREEN: 'text-green-400', RED: 'text-red-400',
-                      PUSH: 'text-zinc-400', 'HALF-WIN': 'text-teal-400', 'HALF-LOSS': 'text-orange-400',
-                    }
-                    const typeCls: Record<string, string> = {
-                      vip: 'text-yellow-400', free: 'text-green-400',
-                      multipla: 'text-blue-400', alavancagem: 'text-orange-400',
-                    }
-                    return (
-                      <tr key={`${p.pick_type}-${p.id}`} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
-                        <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">
-                          {p.match_date ? new Date(p.match_date).toLocaleDateString('pt-BR') : ''}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={`font-black uppercase text-[10px] ${typeCls[p.pick_type] ?? 'text-zinc-400'}`}>{p.pick_type}</span>
-                        </td>
-                        <td className="px-3 py-2 text-zinc-200">
-                          {p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className={`font-black ${p.result ? (resultCls[p.result] ?? 'text-zinc-400') : 'text-zinc-600'}`}>
-                            {p.result ?? 'Pendente'}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <select
-                            disabled={settingResult === p.id}
-                            defaultValue=""
-                            onChange={e => { if (e.target.value) setPickResult(p, e.target.value) }}
-                            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500 disabled:opacity-40"
-                          >
-                            <option value="">Selecionar...</option>
-                            <option value="GREEN">GREEN</option>
-                            <option value="RED">RED</option>
-                            <option value="PUSH">PUSH</option>
-                            <option value="HALF-WIN">HALF-WIN</option>
-                            <option value="HALF-LOSS">HALF-LOSS</option>
-                            <option value="pending">Pendente (limpar)</option>
-                          </select>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
+            <div className="space-y-2 mt-2">
+              {pickResults.map((p) => {
+                const resultCls: Record<string, string> = {
+                  GREEN: 'text-green-400 bg-green-400/10 border-green-500/30',
+                  RED: 'text-red-400 bg-red-400/10 border-red-500/30',
+                  PUSH: 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30',
+                  'HALF-WIN': 'text-teal-400 bg-teal-400/10 border-teal-500/30',
+                  'HALF-LOSS': 'text-orange-400 bg-orange-400/10 border-orange-500/30',
+                }
+                const typeCls: Record<string, string> = {
+                  vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
+                  multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
+                }
+                const resCls = p.result ? (resultCls[p.result] ?? 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30') : 'text-zinc-600 bg-zinc-900 border-zinc-800'
+                return (
+                  <div key={`${p.pick_type}-${p.id}`} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-zinc-400 bg-zinc-700/40'}`}>{p.pick_type}</span>
+                        <span className="text-xs font-semibold text-white truncate">{p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}</span>
+                      </div>
+                      <span className="text-[10px] text-zinc-500 shrink-0">{p.match_date ? new Date(p.match_date).toLocaleDateString('pt-BR') : ''}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[10px] font-black px-2 py-1 rounded border ${resCls}`}>{p.result ?? 'Pendente'}</span>
+                      <span className="text-zinc-600 text-xs">·</span>
+                      <span className="text-xs text-zinc-500 truncate">{p.market} {p.line}</span>
+                    </div>
+                    <select
+                      disabled={settingResult === p.id}
+                      value=""
+                      onChange={e => { if (e.target.value) setPickResult(p, e.target.value) }}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-300 focus:outline-none focus:border-green-500 disabled:opacity-40 touch-manipulation"
+                    >
+                      <option value="">Alterar resultado...</option>
+                      <option value="GREEN">GREEN</option>
+                      <option value="RED">RED</option>
+                      <option value="PUSH">PUSH</option>
+                      <option value="HALF-WIN">HALF-WIN</option>
+                      <option value="HALF-LOSS">HALF-LOSS</option>
+                      <option value="pending">Pendente (limpar)</option>
+                    </select>
+                  </div>
+                )
+              })}
             </div>
           )}
           {pickResults.length === 0 && !pickSearching && (pickSearch || pickDateFrom) && (

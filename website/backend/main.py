@@ -259,6 +259,33 @@ async def start_expire_plans():
     _asyncio.create_task(_job_expire_plans())
 
 
+# ── Scheduler: pipeline completo todo dia às 00:05 BRT ───────────────────────
+async def _job_midnight_pipeline():
+    from zoneinfo import ZoneInfo
+    from datetime import datetime as _dt, timedelta
+    tz = ZoneInfo("America/Sao_Paulo")
+    while True:
+        now = _dt.now(tz)
+        nxt = now.replace(hour=0, minute=5, second=0, microsecond=0)  # 00:05 BRT
+        if nxt <= now:
+            nxt += timedelta(days=1)
+        secs = (nxt - now).total_seconds()
+        logger.info("[MIDNIGHT] Próximo pipeline em %.0fs (%s BRT)", secs, nxt.strftime("%d/%m %H:%M"))
+        await _asyncio.sleep(secs)
+        logger.info("[MIDNIGHT] Iniciando pipeline automatico...")
+        try:
+            from routers.admin import _run_tudo
+            await _run_tudo()
+            logger.info("[MIDNIGHT] Pipeline concluido.")
+        except Exception as e:
+            logger.error("[MIDNIGHT] Erro: %s", e)
+
+
+@app.on_event("startup")
+async def start_midnight_pipeline():
+    _asyncio.create_task(_job_midnight_pipeline())
+
+
 # ── Migrações automáticas de schema ──────────────────────────────────────────
 @app.on_event("startup")
 def run_migrations():

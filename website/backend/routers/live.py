@@ -431,13 +431,13 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 cur.execute("""
                     SELECT fixture_id, market, line, odd, result,
                            home_team_name AS home_team, away_team_name AS away_team,
-                           home_team_id, away_team_id, match_date
+                           home_team_id, away_team_id, match_date, league_id
                     FROM picks_vip WHERE id = %s
                 """, (pick_id,))
             else:
                 cur.execute("""
                     SELECT fixture_id, market, line, odd, result,
-                           home_team, away_team, home_team_id, away_team_id, match_date
+                           home_team, away_team, home_team_id, away_team_id, match_date, league_id
                     FROM picks_free WHERE id = %s
                 """, (pick_id,))
             p = cur.fetchone()
@@ -468,6 +468,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 "odd":         odd,
                 "stake_units": stake_u,
                 "is_live":     leg["is_live"],
+                "league_id":   p.get("league_id"),
                 **{k: leg[k] for k in (
                     "fixture_id", "home_team", "away_team",
                     "home_team_id", "away_team_id",

@@ -190,6 +190,7 @@ function PickCard({ pick }: { pick: any }) {
     : liveProb >= 35
     ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
     : 'text-red-400 bg-red-400/10 border-red-500/25'
+  const isCopa = pick.league_id === 1
 
   const resultBadge = pick.is_locked
     ? pick.pick_status === 'winning'
@@ -198,17 +199,26 @@ function PickCard({ pick }: { pick: any }) {
     : null
 
   return (
-    <div className={`rounded-2xl border p-4 transition-colors ${
-      isLive    ? 'border-green-500/25 bg-zinc-900' :
-      isFinished ? 'border-zinc-800/50 bg-zinc-900/40' :
-                   'border-zinc-800 bg-zinc-900/60'
+    <div className={`relative rounded-2xl border p-4 transition-colors ${
+      isCopa && isLive ? 'border-yellow-500/30 bg-zinc-900' :
+      isCopa           ? 'border-yellow-500/20 bg-zinc-900/60' :
+      isLive           ? 'border-green-500/25 bg-zinc-900' :
+      isFinished       ? 'border-zinc-800/50 bg-zinc-900/40' :
+                         'border-zinc-800 bg-zinc-900/60'
     }`}>
+      {isCopa && <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent -mt-px rounded-t-2xl" />}
       {/* Header */}
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${TYPE_CLS[pick.pick_type] ?? 'text-zinc-400 bg-zinc-700/50'}`}>
             {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
           </span>
+          {isCopa && (
+            <span className="flex items-center gap-1 text-[9px] font-black text-yellow-400 bg-yellow-400/10 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">
+              <img src="/logo-copa-mundo.png" alt="Copa" width={10} height={10} className="object-contain opacity-90" onError={e => (e.currentTarget.style.display = 'none')} />
+              Copa do Mundo
+            </span>
+          )}
           <span className="text-xs text-zinc-500">Odd {Number(pick.odd).toFixed(2)}</span>
           <span className="text-xs text-zinc-700">· {pick.stake_units}u</span>
         </div>
