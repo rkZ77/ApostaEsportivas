@@ -19,6 +19,70 @@ const TYPE_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
 }
 
+// Poisson-based live win probability (same math bookmakers use)
+function poissonPmf(lambda: number, k: number): number {
+  if (k < 0) return 0
+  let p = Math.exp(-lambda)
+  for (let i = 0; i < k; i++) p *= lambda / (i + 1)
+  return p
+}
+function poissonGe(lambda: number, k: number): number {
+  if (k <= 0) return 1
+  let sum = 0
+  for (let i = 0; i < k; i++) sum += poissonPmf(lambda, i)
+  return Math.max(0, Math.min(1, 1 - sum))
+}
+function poissonLe(lambda: number, k: number): number {
+  if (k < 0) return 0
+  let sum = 0
+  for (let i = 0; i <= k; i++) sum += poissonPmf(lambda, i)
+  return Math.max(0, Math.min(1, sum))
+}
+// Bisection: find lambda such that P(X >= minGoals) = targetProb
+function findLambda(targetProb: number, minGoals: number): number {
+  if (targetProb <= 0) return 0
+  if (targetProb >= 1) return 20
+  let lo = 0.001, hi = 20
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2
+    if (poissonGe(mid, minGoals) < targetProb) hi = mid
+    else lo = mid
+  }
+  return (lo + hi) / 2
+}
+function calcLiveProb(pick: any): number | null {
+  const odd = Number(pick.odd)
+  if (!odd || odd <= 1 || pick.is_locked) return null
+  const baseProb = 1 / odd
+  const lineLc = (pick.line || '').toLowerCase()
+  const isOver  = lineLc.startsWith('over') || lineLc.startsWith('mais')
+  const isUnder = lineLc.startsWith('under') || lineLc.startsWith('menos')
+
+  if ((isOver || isUnder) && pick.current_val != null && pick.line_val != null && pick.elapsed) {
+    const totalMins   = pick.status === 'ET' ? 120 : 90
+    const elapsed     = Math.min(Number(pick.elapsed), totalMins)
+    const remaining   = Math.max(0, totalMins - elapsed)
+    const remainRatio = remaining / totalMins
+
+    if (isOver) {
+      const needed = Math.ceil(pick.line_val) - Math.floor(Number(pick.current_val))
+      if (needed <= 0) return 99
+      if (remaining === 0) return 1
+      const lambdaFull = findLambda(baseProb, Math.ceil(pick.line_val))
+      return Math.round(poissonGe(lambdaFull * remainRatio, needed) * 100)
+    }
+    if (isUnder) {
+      const maxMore = Math.floor(pick.line_val) - Math.ceil(Number(pick.current_val))
+      if (maxMore < 0) return 1
+      if (remaining === 0) return 99
+      const lambdaFull = findLambda(1 - baseProb, Math.ceil(pick.line_val))
+      return Math.round(poissonLe(lambdaFull * remainRatio, maxMore) * 100)
+    }
+  }
+  // Fallback: implied probability from odd
+  return Math.round(baseProb * 100)
+}
+
 function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
   const src = TEAM_LOGO(id)
   if (!src) return null
@@ -120,6 +184,12 @@ function PickCard({ pick }: { pick: any }) {
     (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = pick.pick_status === 'winning' ? 'text-green-400'
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
+  const liveProb = isLive && !pick.is_locked && pick.elapsed ? calcLiveProb(pick) : null
+  const probCls  = liveProb == null ? '' : liveProb >= 60
+    ? 'text-green-400 bg-green-400/10 border-green-500/25'
+    : liveProb >= 35
+    ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
+    : 'text-red-400 bg-red-400/10 border-red-500/25'
 
   const resultBadge = pick.is_locked
     ? pick.pick_status === 'winning'
@@ -148,6 +218,11 @@ function PickCard({ pick }: { pick: any }) {
             <span className="flex items-center gap-1 text-[9px] font-black text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
               AO VIVO{pick.elapsed ? ` ${pick.elapsed}'` : ''}
+            </span>
+          )}
+          {liveProb != null && (
+            <span className={`text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`} title="Probabilidade estimada via Poisson">
+              {liveProb}%
             </span>
           )}
           {!pick.is_locked && !isLive && (
