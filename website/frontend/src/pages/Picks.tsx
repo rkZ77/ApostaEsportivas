@@ -14,6 +14,7 @@ import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
+import Watermark from '../components/Watermark'
 
 // Helpers de logo
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
@@ -1463,6 +1464,8 @@ export default function Picks() {
           </div>
         </div>
       )}
+
+      {!isAdmin && user && <Watermark email={user.email} />}
 
       <Navbar />
 
