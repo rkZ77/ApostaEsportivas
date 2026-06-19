@@ -181,9 +181,19 @@ export default function MeusPicks() {
     setTimeout(() => setShowRemoved(false), 3000)
   }
 
+  // daysBack: 0 = Hoje/Tudo (sem filtro), 1 = ontem, 3 = 3 dias, 7 = semana, 15 = 15 dias
+  const [daysBack, setDaysBack] = useState(0)
+
   const changeTab = (t: 'pendentes' | 'resolvidos') => {
     setTab(t)
     setDayOffset(0)
+    setDaysBack(0)
+  }
+
+  function isoDateDaysAgo(n: number) {
+    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+    d.setDate(d.getDate() - n)
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   }
 
   const allEntries: any[] = data?.entries ?? []
@@ -199,21 +209,37 @@ export default function MeusPicks() {
     : key === yesterdayKey ? 'Ontem'
     : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
-  const uniqueDates = Array.from(new Set(
-    tabEntries.map((e: any) =>
+  // Entradas filtradas pelo período selecionado (para stats + lista)
+  const filteredByPeriod = daysBack === 0
+    ? allEntries
+    : allEntries.filter((e: any) => {
+        if (!e.followed_at) return false
+        const dayKey = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+        return dayKey >= isoDateDaysAgo(daysBack)
+      })
+
+  const filteredTabEntries = daysBack === 0 ? tabEntries : filteredByPeriod.filter((e: any) =>
+    tab === 'pendentes' ? !e.result : !!e.result
+  )
+
+  // Navegação por dia dentro do filtro
+  const uniqueDatesFiltered = Array.from(new Set(
+    filteredTabEntries.map((e: any) =>
       e.followed_at
         ? new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
         : null
     ).filter(Boolean)
   )).sort((a, b) => (b as string).localeCompare(a as string)) as string[]
 
-  const clampedOffset = Math.min(dayOffset, Math.max(0, uniqueDates.length - 1))
-  const selectedKey   = uniqueDates[clampedOffset] ?? todayKey
-  const pageItems     = tabEntries.filter((e: any) =>
-    e.followed_at &&
-    new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === selectedKey
-  )
-  const hasPrev = clampedOffset < uniqueDates.length - 1
+  const clampedOffset = Math.min(dayOffset, Math.max(0, uniqueDatesFiltered.length - 1))
+  const selectedKey   = uniqueDatesFiltered[clampedOffset] ?? todayKey
+  const pageItems     = daysBack === 0
+    ? filteredTabEntries  // Hoje: mostra tudo sem separar por dia
+    : filteredTabEntries.filter((e: any) =>
+        e.followed_at &&
+        new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }) === selectedKey
+      )
+  const hasPrev = clampedOffset < uniqueDatesFiltered.length - 1
   const hasNext = clampedOffset > 0
 
   return (
@@ -248,25 +274,54 @@ export default function MeusPicks() {
         ) : (
           <div className="space-y-4">
 
-            {/* Resumo */}
+            {/* Filtros de período — pills */}
+            {allEntries.length > 0 && (
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { label: 'Hoje', value: 0 },
+                  { label: 'Ontem', value: 1 },
+                  { label: '3 dias', value: 3 },
+                  { label: 'Semana', value: 7 },
+                  { label: '15 dias', value: 15 },
+                ].map(({ label, value }) => (
+                  <button
+                    key={value}
+                    onClick={() => { setDaysBack(value); setDayOffset(0) }}
+                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                      daysBack === value
+                        ? 'bg-green-500/15 border-green-500/50 text-green-400'
+                        : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Resumo — filtra pelo período selecionado */}
             {allEntries.length > 0 && (() => {
-              const resolved = allEntries.filter(e => e.result)
-              const greenCount = resolved.filter(e => e.result === 'GREEN' || e.result === 'HALF-WIN').length
-              const redCount   = resolved.filter(e => e.result === 'RED'   || e.result === 'HALF-LOSS').length
-              const pnl = data?.total_pnl ?? 0
+              const periodEntries = filteredByPeriod
+              const resolved = periodEntries.filter((e: any) => e.result)
+              const greenCount = resolved.filter((e: any) => e.result === 'GREEN' || e.result === 'HALF-WIN').length
+              const redCount   = resolved.filter((e: any) => e.result === 'RED'   || e.result === 'HALF-LOSS').length
+              const pnl = daysBack === 0
+                ? (data?.total_pnl ?? 0)
+                : resolved.reduce((acc: number, e: any) => acc + (Number(e.profit) || 0), 0)
+              const wr = resolved.length > 0 ? Math.round(greenCount / resolved.length * 100) : 0
               const pnlStr = pnl === 0 ? '0' : `${pnl > 0 ? '+' : ''}${Number(pnl).toFixed(2)}`
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
-                    <div className="text-2xl font-black text-white">{allEntries.length}</div>
+                    <div className="text-2xl font-black text-white">{periodEntries.length}</div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">P&L total</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">P&L {daysBack === 0 ? 'total' : `${daysBack}d`}</div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-2xl font-black ${(data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{data?.win_rate ?? 0}%</div>
+                    <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{wr}%</div>
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Win rate</div>
                   </div>
                   <div className="card p-3 text-center border-green-500/20">
@@ -282,7 +337,7 @@ export default function MeusPicks() {
             })()}
 
             {/* Gráfico GREEN/RED por dia */}
-            {resolvidos.length >= 2 && <PicksBarChart entries={allEntries} />}
+            {resolvidos.length >= 2 && <PicksBarChart entries={filteredByPeriod} />}
 
             {/* Tabs */}
             <div className="flex gap-2">
@@ -309,7 +364,7 @@ export default function MeusPicks() {
             </div>
 
             {/* Lista */}
-            {tabEntries.length === 0 ? (
+            {filteredTabEntries.length === 0 ? (
               <div className="card p-12 text-center border-dashed">
                 <p className="text-zinc-500 text-sm font-semibold mb-2">
                   {tab === 'pendentes' ? 'Nenhuma aposta pendente' : 'Nenhuma aposta resolvida ainda'}
@@ -323,37 +378,39 @@ export default function MeusPicks() {
               </div>
             ) : (
               <>
-                {/* Navegação de dia */}
-                <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
-                  <button
-                    onClick={() => setDayOffset(o => o + 1)}
-                    disabled={!hasPrev}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
-                  >
-                    <ChevronLeft className="w-5 h-5" />
-                  </button>
-                  <div className="text-center">
-                    <div className="flex items-center justify-center gap-1.5">
-                      <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
-                      {selectedKey !== todayKey && (
-                        <button
-                          onClick={() => setDayOffset(0)}
-                          className="text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors border border-green-500/30 px-1.5 py-0.5 rounded"
-                        >
-                          Hoje
-                        </button>
-                      )}
+                {/* Navegação de dia — só aparece quando um filtro de período está ativo */}
+                {daysBack > 0 && uniqueDatesFiltered.length > 1 && (
+                  <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
+                    <button
+                      onClick={() => setDayOffset(o => o + 1)}
+                      disabled={!hasPrev}
+                      className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
+                    >
+                      <ChevronLeft className="w-5 h-5" />
+                    </button>
+                    <div className="text-center">
+                      <div className="flex items-center justify-center gap-1.5">
+                        <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
+                        {clampedOffset > 0 && (
+                          <button
+                            onClick={() => setDayOffset(0)}
+                            className="text-[10px] text-green-400 hover:text-green-300 font-bold transition-colors border border-green-500/30 px-1.5 py-0.5 rounded"
+                          >
+                            Mais recente
+                          </button>
+                        )}
+                      </div>
+                      <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
                     </div>
-                    <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
+                    <button
+                      onClick={() => setDayOffset(o => o - 1)}
+                      disabled={!hasNext}
+                      className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
+                    >
+                      <ChevronRight className="w-5 h-5" />
+                    </button>
                   </div>
-                  <button
-                    onClick={() => setDayOffset(o => o - 1)}
-                    disabled={!hasNext}
-                    className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
+                )}
 
                 {/* Picks do dia */}
                 {pageItems.length === 0 ? (
