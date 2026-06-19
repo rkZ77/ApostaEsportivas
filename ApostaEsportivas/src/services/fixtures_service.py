@@ -1,6 +1,9 @@
 ﻿import datetime
+from zoneinfo import ZoneInfo
 from utils.db_utils import get_connection
 import psycopg2.extras
+
+_TZ_BRT = ZoneInfo("America/Sao_Paulo")
 
 
 class FixturesService:
@@ -29,7 +32,7 @@ class FixturesService:
     # 1. Fixtures de HOJE
     ##########################################################################
     def get_fixtures_today(self):
-        today = datetime.datetime.utcnow().date()
+        today = datetime.datetime.now(_TZ_BRT).date()
 
         rows = self._query("""
             SELECT

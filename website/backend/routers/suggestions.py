@@ -41,13 +41,13 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
         enriched = []
         for leg in (legs if isinstance(legs, list) else []):
             fid = leg.get("fixture_id") if isinstance(leg, dict) else None
+            leg = dict(leg) if isinstance(leg, dict) else leg
             if fid:
                 fx = _safe_query_one(cur, """
                     SELECT home_team, away_team, home_team_id, away_team_id, league_id
                     FROM fixtures WHERE fixture_id = %s
                 """, (fid,))
                 if fx:
-                    leg = dict(leg)
                     leg.update({
                         "home": fx["home_team"],
                         "away": fx["away_team"],
@@ -55,6 +55,10 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
                         "away_team_id": fx["away_team_id"],
                         "league_id":    fx["league_id"],
                     })
+                else:
+                    # fixture não existe mais na tabela — usa nomes salvos no JSON
+                    leg.setdefault("home", leg.get("home_team", ""))
+                    leg.setdefault("away", leg.get("away_team", ""))
             enriched.append(leg)
         m["legs"] = enriched
         result.append(m)
