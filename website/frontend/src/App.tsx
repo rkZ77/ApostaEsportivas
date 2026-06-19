@@ -1,6 +1,27 @@
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { Component, ReactNode } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
+
+class AdminErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+  state = { error: null }
+  static getDerivedStateFromError(error: Error) { return { error } }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
+          <p className="text-red-400 font-bold text-lg mb-3">Erro ao carregar página admin</p>
+          <pre className="text-zinc-400 text-xs bg-zinc-900 rounded-xl p-4 max-w-xl w-full text-left overflow-auto whitespace-pre-wrap">
+            {(this.state.error as Error).message}
+            {'\n\n'}
+            {(this.state.error as Error).stack}
+          </pre>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import Login from './pages/Login'
 import Picks from './pages/Picks'
 import Results from './pages/Results'
@@ -47,7 +68,7 @@ export default function App() {
           <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
           <Route path="/results" element={<PrivateRoute><Results /></PrivateRoute>} />
           <Route path="/fixtures" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
-          <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
+          <Route path="/admin" element={<PrivateRoute><AdminErrorBoundary><Admin /></AdminErrorBoundary></PrivateRoute>} />
           <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />
           <Route path="/planos" element={<Planos />} />
           <Route path="/agente" element={<PrivateRoute><Agente /></PrivateRoute>} />
