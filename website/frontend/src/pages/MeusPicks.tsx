@@ -42,6 +42,7 @@ export default function MeusPicks() {
   const [dayOffset,  setDayOffset]  = useState(0)
   const [detailPick,   setDetailPick]   = useState<{ id: number; pick_type: string } | null>(null)
   const [showRemoved,  setShowRemoved]  = useState(false)
+  const [autoSwitched, setAutoSwitched] = useState(false)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -51,9 +52,16 @@ export default function MeusPicks() {
       .finally(() => setLoading(false))
   }, [])
 
+  useEffect(() => { load() }, [load])
+
+  // Auto-muda para Resolvidos na 1ª carga se não houver pendentes
   useEffect(() => {
-    load()
-  }, [load])
+    if (data && !autoSwitched) {
+      setAutoSwitched(true)
+      const pend = (data.entries ?? []).filter((e: any) => !e.result)
+      if (pend.length === 0) setTab('resolvidos')
+    }
+  }, [data])
 
   const handleUnfollow = async (pick_id: number, pick_type: string) => {
     await api.delete(`/banca/follow/${pick_id}/${pick_type}`).catch(() => {})
@@ -130,31 +138,37 @@ export default function MeusPicks() {
           <div className="space-y-4">
 
             {/* Resumo */}
-            {allEntries.length > 0 && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {[
-                  { label: 'Apostas',  value: String(allEntries.length), color: 'text-white' },
-                  {
-                    label: 'P&L total',
-                    value: (data?.total_pnl ?? 0) !== 0
-                      ? `${(data?.total_pnl ?? 0) > 0 ? '+' : ''}${Number(data?.total_pnl ?? 0).toFixed(2)}u`
-                      : '0u',
-                    color: (data?.total_pnl ?? 0) > 0 ? 'text-green-500' : (data?.total_pnl ?? 0) < 0 ? 'text-red-400' : 'text-zinc-400',
-                  },
-                  {
-                    label: 'Win rate',
-                    value: `${data?.win_rate ?? 0}%`,
-                    color: (data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400',
-                  },
-                  { label: 'Pendentes', value: String(pendentes.length), color: 'text-yellow-400' },
-                ].map(({ label, value, color }) => (
-                  <div key={label} className="card p-3 text-center">
-                    <div className={`text-2xl font-black ${color}`}>{value}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+            {allEntries.length > 0 && (() => {
+              const resolved = allEntries.filter(e => e.result)
+              const greenCount = resolved.filter(e => e.result === 'GREEN' || e.result === 'HALF-WIN').length
+              const redCount   = resolved.filter(e => e.result === 'RED'   || e.result === 'HALF-LOSS').length
+              const pnl = data?.total_pnl ?? 0
+              const pnlStr = pnl === 0 ? '0' : `${pnl > 0 ? '+' : ''}${Number(pnl).toFixed(2)}`
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                  <div className="card p-3 text-center">
+                    <div className="text-2xl font-black text-white">{allEntries.length}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Apostas</div>
                   </div>
-                ))}
-              </div>
-            )}
+                  <div className="card p-3 text-center">
+                    <div className={`text-2xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">P&L total</div>
+                  </div>
+                  <div className="card p-3 text-center">
+                    <div className={`text-2xl font-black ${(data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{data?.win_rate ?? 0}%</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Win rate</div>
+                  </div>
+                  <div className="card p-3 text-center border-green-500/20">
+                    <div className="text-2xl font-black text-green-400">{greenCount}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">GREEN</div>
+                  </div>
+                  <div className="card p-3 text-center border-red-500/20">
+                    <div className="text-2xl font-black text-red-400">{redCount}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">RED</div>
+                  </div>
+                </div>
+              )
+            })()}
 
             {/* Tabs */}
             <div className="flex gap-2">
