@@ -472,9 +472,9 @@ export default function Admin() {
           {/* Atalhos rápidos de data */}
           {(() => {
             const brt = (daysAgo = 0) => {
-              const d = new Date(new Date().toLocaleString('en-CA', { timeZone: 'America/Sao_Paulo' }))
+              const d = new Date()
               d.setDate(d.getDate() - daysAgo)
-              return d.toISOString().slice(0, 10)
+              return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
             }
             const shortcuts = [
               { label: 'Hoje',          from: brt(0),  to: brt(0)  },
