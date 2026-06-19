@@ -339,6 +339,114 @@ def admin_payments(current_user: dict = Depends(require_admin)):
         conn.close()
 
 
+_PICK_TABLES = {
+    "vip":         ("picks_vip",        "home_team_name", "away_team_name"),
+    "free":        ("picks_free",        "home_team",      "away_team"),
+    "multipla":    ("picks_multiplas",   "home_team_name", "away_team_name"),
+    "alavancagem": ("picks_alavancagem", "home_team_1",    "away_team_1"),
+}
+_VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
+
+
+@router.get("/picks/search")
+def admin_search_picks(
+    q:          Optional[str] = None,
+    date_from:  Optional[str] = None,
+    date_to:    Optional[str] = None,
+    pick_type:  Optional[str] = None,
+    current_user: dict = Depends(require_admin),
+):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        results = []
+        types_to_search = [pick_type] if pick_type and pick_type in _PICK_TABLES else list(_PICK_TABLES.keys())
+        for pt in types_to_search:
+            table, home_col, away_col = _PICK_TABLES[pt]
+            conds, params = [], []
+            if q:
+                conds.append(f"(LOWER({home_col}) LIKE %s OR LOWER({away_col}) LIKE %s)")
+                params += [f"%{q.lower()}%", f"%{q.lower()}%"]
+            if date_from:
+                conds.append("match_date >= %s"); params.append(date_from)
+            if date_to:
+                conds.append("match_date <= %s"); params.append(date_to)
+            where = ("WHERE " + " AND ".join(conds)) if conds else ""
+            date_col = "match_date" if pt != "multipla" else "DATE(created_at AT TIME ZONE 'UTC')"
+            cur.execute(f"""
+                SELECT id, {home_col} AS home_team, {away_col} AS away_team,
+                       match_date, result
+                FROM {table}
+                {where}
+                ORDER BY match_date DESC, id DESC
+                LIMIT 50
+            """, params)
+            for r in cur.fetchall():
+                results.append({**dict(r), "pick_type": pt})
+        results.sort(key=lambda x: (str(x.get("match_date") or ""), x["id"]), reverse=True)
+        return results[:100]
+    finally:
+        cur.close()
+        conn.close()
+
+
+class SetResultBody(BaseModel):
+    pick_type: str
+    pick_id:   int
+    result:    Optional[str] = None  # None = limpar (voltar a pendente)
+
+    @field_validator("pick_type")
+    @classmethod
+    def validate_pick_type(cls, v):
+        if v not in _PICK_TABLES:
+            raise ValueError(f"pick_type inválido. Use: {list(_PICK_TABLES)}")
+        return v
+
+    @field_validator("result")
+    @classmethod
+    def validate_result(cls, v):
+        if v not in _VALID_RESULTS:
+            raise ValueError(f"Resultado inválido. Use: GREEN, RED, PUSH, HALF-WIN, HALF-LOSS ou null")
+        return v
+
+
+@router.post("/picks/set-result")
+def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(require_admin)):
+    table = _PICK_TABLES[body.pick_type][0]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Calcula profit simples quando resultado é definido (apenas para picks com odd)
+        cur.execute(f"SELECT odd FROM {table} WHERE id = %s", (body.pick_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Pick não encontrado")
+
+        odd = float(row["odd"]) if row.get("odd") else None
+        profit = None
+        if body.result == "GREEN" and odd:
+            profit = round(odd - 1, 4)
+        elif body.result == "RED":
+            profit = -1.0
+        elif body.result == "PUSH":
+            profit = 0.0
+        elif body.result == "HALF-WIN" and odd:
+            profit = round((odd - 1) / 2, 4)
+        elif body.result == "HALF-LOSS":
+            profit = -0.5
+
+        cur.execute(
+            f"UPDATE {table} SET result = %s, profit = %s WHERE id = %s RETURNING id, result, profit",
+            (body.result, profit, body.pick_id),
+        )
+        updated = cur.fetchone()
+        conn.commit()
+        return dict(updated)
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stats")
 def admin_stats(current_user: dict = Depends(require_admin)):
     conn = get_connection()

@@ -77,6 +77,13 @@ export default function Admin() {
   const [paymentsLoading, setPaymentsLoading] = useState(false)
   const [paymentsPage, setPaymentsPage] = useState(0)
   const [usersPage, setUsersPage] = useState(0)
+  const [pickSearch, setPickSearch] = useState('')
+  const [pickDateFrom, setPickDateFrom] = useState('')
+  const [pickDateTo, setPickDateTo] = useState('')
+  const [pickTypeFilter, setPickTypeFilter] = useState('')
+  const [pickResults, setPickResults] = useState<any[]>([])
+  const [pickSearching, setPickSearching] = useState(false)
+  const [settingResult, setSettingResult] = useState<number | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
@@ -173,6 +180,39 @@ export default function Admin() {
     } catch (err: any) {
       showToast(err.response?.data?.detail || 'Erro ao desativar usuário', false)
     }
+  }
+
+  const searchPicks = async () => {
+    setPickSearching(true)
+    try {
+      const params: Record<string, string> = {}
+      if (pickSearch)     params.q         = pickSearch
+      if (pickDateFrom)   params.date_from = pickDateFrom
+      if (pickDateTo)     params.date_to   = pickDateTo
+      if (pickTypeFilter) params.pick_type = pickTypeFilter
+      const r = await api.get('/admin/picks/search', { params })
+      setPickResults(r.data)
+    } catch { showToast('Erro ao buscar picks', false) }
+    finally { setPickSearching(false) }
+  }
+
+  const setPickResult = async (pick: any, result: string) => {
+    setSettingResult(pick.id)
+    try {
+      await api.post('/admin/picks/set-result', {
+        pick_type: pick.pick_type,
+        pick_id: pick.id,
+        result: result === 'pending' ? null : result,
+      })
+      setPickResults(prev => prev.map(p =>
+        p.id === pick.id && p.pick_type === pick.pick_type
+          ? { ...p, result: result === 'pending' ? null : result }
+          : p
+      ))
+      showToast(`Resultado alterado para ${result === 'pending' ? 'Pendente' : result}`)
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Erro ao alterar resultado', false)
+    } finally { setSettingResult(null) }
   }
 
   const handleCreate = async (e: React.FormEvent) => {
@@ -391,6 +431,96 @@ export default function Admin() {
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        {/* Corrigir resultado de pick */}
+        <div className="card p-4 mb-6">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Corrigir Resultado de Pick</h2>
+          <div className="flex flex-wrap gap-2 mb-3">
+            <input
+              className="input flex-1 min-w-[160px] text-sm"
+              placeholder="Time (ex: Brasil)"
+              value={pickSearch}
+              onChange={e => setPickSearch(e.target.value)}
+              onKeyDown={e => e.key === 'Enter' && searchPicks()}
+            />
+            <input type="date" className="input text-sm w-36" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
+            <input type="date" className="input text-sm w-36" value={pickDateTo}   onChange={e => setPickDateTo(e.target.value)} />
+            <select className="input text-sm w-36" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
+              <option value="">Todos tipos</option>
+              <option value="vip">VIP</option>
+              <option value="free">Free</option>
+              <option value="multipla">Múltipla</option>
+              <option value="alavancagem">Alavancagem</option>
+            </select>
+            <button onClick={searchPicks} disabled={pickSearching}
+              className="btn-primary text-sm px-4 py-2 disabled:opacity-40">
+              {pickSearching ? '...' : 'Buscar'}
+            </button>
+          </div>
+
+          {pickResults.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-zinc-800">
+                    {['Data', 'Tipo', 'Jogo', 'Resultado atual', 'Alterar para'].map(h => (
+                      <th key={h} className="text-left text-zinc-500 font-medium px-3 py-2 uppercase tracking-wider whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {pickResults.map((p, i) => {
+                    const resultCls: Record<string, string> = {
+                      GREEN: 'text-green-400', RED: 'text-red-400',
+                      PUSH: 'text-zinc-400', 'HALF-WIN': 'text-teal-400', 'HALF-LOSS': 'text-orange-400',
+                    }
+                    const typeCls: Record<string, string> = {
+                      vip: 'text-yellow-400', free: 'text-green-400',
+                      multipla: 'text-blue-400', alavancagem: 'text-orange-400',
+                    }
+                    return (
+                      <tr key={`${p.pick_type}-${p.id}`} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
+                        <td className="px-3 py-2 text-zinc-500 whitespace-nowrap">
+                          {p.match_date ? new Date(p.match_date).toLocaleDateString('pt-BR') : ''}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`font-black uppercase text-[10px] ${typeCls[p.pick_type] ?? 'text-zinc-400'}`}>{p.pick_type}</span>
+                        </td>
+                        <td className="px-3 py-2 text-zinc-200">
+                          {p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}
+                        </td>
+                        <td className="px-3 py-2">
+                          <span className={`font-black ${p.result ? (resultCls[p.result] ?? 'text-zinc-400') : 'text-zinc-600'}`}>
+                            {p.result ?? 'Pendente'}
+                          </span>
+                        </td>
+                        <td className="px-3 py-2">
+                          <select
+                            disabled={settingResult === p.id}
+                            defaultValue=""
+                            onChange={e => { if (e.target.value) setPickResult(p, e.target.value) }}
+                            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500 disabled:opacity-40"
+                          >
+                            <option value="">Selecionar...</option>
+                            <option value="GREEN">GREEN</option>
+                            <option value="RED">RED</option>
+                            <option value="PUSH">PUSH</option>
+                            <option value="HALF-WIN">HALF-WIN</option>
+                            <option value="HALF-LOSS">HALF-LOSS</option>
+                            <option value="pending">Pendente (limpar)</option>
+                          </select>
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          {pickResults.length === 0 && !pickSearching && (pickSearch || pickDateFrom) && (
+            <p className="text-zinc-600 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
         </div>
 
