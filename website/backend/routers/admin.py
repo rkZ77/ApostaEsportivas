@@ -201,6 +201,8 @@ _PIPELINE_SCRIPTS = {
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
 }
 
+_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem"]
+
 
 class PipelineCommandBody(BaseModel):
     command: str
@@ -240,6 +242,21 @@ async def _run_and_track(command: str, script: str):
         _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e)}
 
 
+async def _run_tudo():
+    now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+    started = now()
+    _pipeline_status["tudo"] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, "log": "Iniciando..."}
+    for cmd in _TUDO_STEPS:
+        script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
+        _pipeline_status["tudo"]["log"] = f"Rodando {cmd}..."
+        await _run_and_track(cmd, script)
+        if _pipeline_status[cmd]["status"] == "error":
+            err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
+            _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
+            return
+    _pipeline_status["tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline completo!", "error": None}
+
+
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
@@ -247,6 +264,10 @@ def pipeline_status(current_user: dict = Depends(require_admin)):
 
 @router.post("/run-pipeline")
 async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
+    if body.command == "tudo":
+        asyncio.create_task(_run_tudo())
+        return {"ok": True, "status": "iniciado"}
+
     if body.command not in _PIPELINE_SCRIPTS:
         raise HTTPException(400, detail=f"Comando inválido. Use: {list(_PIPELINE_SCRIPTS)}")
 

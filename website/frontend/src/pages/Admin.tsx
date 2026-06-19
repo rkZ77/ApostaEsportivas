@@ -115,7 +115,7 @@ export default function Admin() {
     try {
       await api.post('/admin/run-pipeline', { command })
     } catch (err: any) {
-      alert(err.response?.data?.detail || 'Erro ao iniciar pipeline')
+      showToast(err.response?.data?.detail || 'Erro ao iniciar pipeline', false)
     } finally {
       setRunningCmd(null)
     }
@@ -276,7 +276,39 @@ export default function Admin() {
 
         {/* Pipeline */}
         <div className="card p-4 mb-6">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Pipeline</h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Pipeline</h2>
+            {(() => {
+              const s = pipelineStatus['tudo']
+              const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
+              return (
+                <div className="flex flex-col items-end gap-1">
+                  <button
+                    onClick={() => runPipeline('tudo')}
+                    disabled={runningCmd !== null || isTudoRunning}
+                    className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-green-500/15 border border-green-500/30 text-green-400 hover:bg-green-500/25 transition-colors disabled:opacity-40 disabled:cursor-not-allowed font-semibold"
+                  >
+                    {isTudoRunning
+                      ? <><span className="w-3 h-3 border border-green-500/50 border-t-green-400 rounded-full animate-spin" /> Rodando tudo...</>
+                      : '▶ Rodar Tudo (jogos → odds → picks)'}
+                  </button>
+                  {s && (
+                    <span
+                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : s.status === 'ok' ? 'text-zinc-500' : 'text-zinc-600'}`}
+                      onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
+                    >
+                      {s.status === 'running' ? `rodando: ${(s as any).log || '...'}` : `${s.status} ${s.finished_at}`}
+                    </span>
+                  )}
+                  {expandedLog === 'tudo' && (s?.error || s?.log) && (
+                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-sm whitespace-pre-wrap break-all ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                      {s.error || s.log}
+                    </pre>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
           <div className="flex flex-wrap gap-2">
             {PIPELINE_ACTIONS.map(({ command, label }) => {
               const s = pipelineStatus[command]
