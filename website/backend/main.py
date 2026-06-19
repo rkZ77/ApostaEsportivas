@@ -286,32 +286,6 @@ async def start_midnight_pipeline():
     _asyncio.create_task(_job_midnight_pipeline())
 
 
-# ── Migrações automáticas de schema ──────────────────────────────────────────
-@app.on_event("startup")
-def run_migrations():
-    try:
-        from database import get_connection
-        conn = get_connection()
-        cur = conn.cursor()
-        migrations = [
-            "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2)",
-            "ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100)",
-            # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
-            "UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64",
-            "UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64",
-            # Normaliza phones existentes para E.164 (+55XXXXXXXXXXX)
-            "UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11",
-        ]
-        for sql in migrations:
-            cur.execute(sql)
-        conn.commit()
-        cur.close()
-        conn.close()
-        logger.info("[STARTUP] Migrações aplicadas com sucesso.")
-    except Exception as e:
-        logger.warning("[STARTUP] Erro ao aplicar migrações: %s", e)
-
-
 # ── Email de lembrete: configurar banca ──────────────────────────────────────
 import resend as _resend
 
@@ -436,6 +410,13 @@ def run_migrations():
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_ip VARCHAR(45);")
         cur.execute("ALTER TABLE picks_alavancagem DROP COLUMN IF EXISTS bankroll_after;")
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
+        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")
+        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100);")
+        # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
+        cur.execute("UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64")
+        cur.execute("UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64")
+        # Normaliza phones para E.164 (+55XXXXXXXXXXX)
+        cur.execute("UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id                SERIAL PRIMARY KEY,
