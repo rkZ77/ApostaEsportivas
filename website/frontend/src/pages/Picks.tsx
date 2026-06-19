@@ -1613,18 +1613,17 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Pick do Dia — visível para todos */}
+              {/* Pick Seguro — visível para todos */}
               <section>
-                <SectionHeader color="bg-green-500" label="Pick do Dia" />
+                <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
                 {today?.dica_do_dia
                   ? <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                   : <PickSeguroEmpty />
                 }
               </section>
 
-
-              {/* PICKS VIP DO DIA */}
-              {canSeeVip && (() => {
+              {/* PICKS VIP DO DIA — free vê lock */}
+              {(() => {
                 const vips = today?.vip ?? []
                 const pending = vips.filter((s: any) => !s.result)
                 return (
@@ -1632,9 +1631,9 @@ export default function Picks() {
                     <SectionHeader
                       color="bg-yellow-400"
                       label="Picks VIP do Dia"
-                      badge={pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
+                      badge={canSeeVip && pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
-                    {vips.length > 0 ? (
+                    {!canSeeVip ? <VipLockOverlay color="yellow" /> : vips.length > 0 ? (
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
                           {vips.slice(0, 4).map((s: any) => (
@@ -1652,48 +1651,66 @@ export default function Picks() {
                       </>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
-                        <p className="text-zinc-600 text-sm">Nenhum pick VIP gerado para hoje ainda.</p>
+                        <p className="text-zinc-500 text-sm font-semibold">Picks VIP ainda não gerados.</p>
+                        <p className="text-zinc-600 text-xs mt-1">Os picks saem pela manhã. Volte mais tarde.</p>
                       </div>
                     )}
                   </section>
                 )
               })()}
 
-              {/* Múltiplas de hoje */}
-              {canSeeVip && today?.multiplas?.length > 0 && (
-                <section>
-                  <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
-                  <div className="grid gap-4 md:grid-cols-2">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
-                  </div>
-                </section>
-              )}
+              {/* Múltipla do Dia — free vê lock */}
+              <section>
+                <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
+                {!canSeeVip ? <VipLockOverlay color="blue" /> : (() => {
+                  const multiplas = today?.multiplas ?? []
+                  return multiplas.length > 0 ? (
+                    <div className="grid gap-4 md:grid-cols-2">
+                      {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
+                    </div>
+                  ) : (
+                    <div className="card p-8 text-center border-dashed">
+                      <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Aguarde a geração automática.</p>
+                    </div>
+                  )
+                })()}
+              </section>
 
-              {/* Alavancagem de hoje */}
-              {canSeeVip && today?.alavancagem && (
-                <section>
-                  <SectionHeader color="bg-orange-400" label="Alavancagem" badge="VIP" />
-                  <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
-                    <p className="text-xs text-zinc-400 leading-relaxed">
-                      Banca composta: começa em{' '}
-                      <span className="text-orange-400 font-bold">
-                        {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
-                      </span>{' '}
-                      e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo ~1.50.
-                    </p>
-                  </div>
-                  <AlavancagemCard
-                    pick={today.alavancagem}
-                    onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
-                    userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
-                    onConfigureBanca={() => setTab('alavancagem')}
-                  />
-                  <button onClick={() => setTab('alavancagem')}
-                    className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
-                    Ver histórico da série →
-                  </button>
-                </section>
-              )}
+              {/* Alavancagem Copa — free vê lock */}
+              <section>
+                <SectionHeader color="bg-orange-400" label="Alavancagem Copa" />
+                {!canSeeVip ? <VipLockOverlay color="orange" /> : (() => {
+                  return today?.alavancagem ? (
+                    <>
+                      <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
+                        <p className="text-xs text-zinc-400 leading-relaxed">
+                          Banca composta: começa em{' '}
+                          <span className="text-orange-400 font-bold">
+                            {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
+                          </span>{' '}
+                          e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo ~1.50.
+                        </p>
+                      </div>
+                      <AlavancagemCard
+                        pick={today.alavancagem}
+                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
+                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
+                        onConfigureBanca={() => setTab('alavancagem')}
+                      />
+                      <button onClick={() => setTab('alavancagem')}
+                        className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
+                        Ver histórico da série →
+                      </button>
+                    </>
+                  ) : (
+                    <div className="card p-8 text-center border-dashed">
+                      <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem ainda não gerado.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Aguarde a geração automática.</p>
+                    </div>
+                  )
+                })()}
+              </section>
 
 
             </div>

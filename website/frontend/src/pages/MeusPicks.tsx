@@ -13,7 +13,6 @@ const fmtSigned = (v: number) =>
 function PicksBarChart({ entries }: { entries: any[] }) {
   const [hover, setHover] = useState<number | null>(null)
 
-  // Agrupa picks resolvidos por dia (últimos 21 dias com resultado)
   const byDay: Record<string, { green: number; red: number; push: number }> = {}
   for (const e of entries) {
     if (!e.result || !e.followed_at) continue
@@ -28,7 +27,7 @@ function PicksBarChart({ entries }: { entries: any[] }) {
   if (days.length < 2) return null
 
   const maxVal = Math.max(...days.map(d => byDay[d].green + byDay[d].red + byDay[d].push), 1)
-  const W = 600, H = 110, PAD_L = 24, PAD_B = 28, PAD_T = 10
+  const W = 600, H = 120, PAD_L = 24, PAD_B = 28, PAD_T = 48
   const chartW = W - PAD_L - 8
   const chartH = H - PAD_B - PAD_T
   const barW   = Math.min(22, chartW / days.length - 4)
@@ -41,9 +40,9 @@ function PicksBarChart({ entries }: { entries: any[] }) {
 
   return (
     <div className="card p-4">
-      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Picks por dia</h3>
+      <h3 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Minha Banca</h3>
       <div className="overflow-x-auto">
-        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }}>
+        <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ minWidth: 280 }} overflow="visible">
           {/* Grade horizontal */}
           {[0.25, 0.5, 0.75, 1].map(f => (
             <line key={f} x1={PAD_L} x2={W - 8} y1={PAD_T + yScale(maxVal * f)} y2={PAD_T + yScale(maxVal * f)}
@@ -60,8 +59,16 @@ function PicksBarChart({ entries }: { entries: any[] }) {
             const isHov = hover === i
             const isToday = day === todayKey
             const [, mo, dy] = day.split('-')
+
+            // Posiciona tooltip com margem segura: sempre acima da barra com espaço
+            const tipX = Math.max(4, Math.min(bx - 30, W - 76))
+            const tipY = PAD_T + yScale(total) - 44
+
             return (
-              <g key={day} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
+              <g key={day} onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)} style={{ cursor: 'pointer' }}>
+                {/* Zona de hover maior */}
+                <rect x={bx - 4} y={PAD_T} width={barW + 8} height={chartH} fill="transparent" />
+
                 {/* PUSH (cinza, base) */}
                 {pH > 0 && <rect x={bx} y={PAD_T + chartH - pH} width={barW} height={pH} rx={2} fill="#3f3f46" opacity={isHov ? 1 : 0.7} />}
                 {/* RED (em cima do push) */}
@@ -75,15 +82,27 @@ function PicksBarChart({ entries }: { entries: any[] }) {
                   {`${dy}/${mo}`}
                 </text>
 
-                {/* Tooltip no hover */}
+                {/* Tooltip no hover — sempre visível (overflow="visible" no SVG) */}
                 {isHov && total > 0 && (
                   <g>
-                    <rect x={Math.min(bx - 16, W - 80)} y={PAD_T + yScale(total) - 38} width={68} height={34} rx={6} fill="#18181b" stroke="#3f3f46" />
-                    <text x={Math.min(bx - 16, W - 80) + 34} y={PAD_T + yScale(total) - 22} textAnchor="middle" fontSize={9} fill="#22c55e" fontWeight={700}>
-                      {d.green > 0 ? `${d.green} GREEN` : ''}
-                    </text>
-                    <text x={Math.min(bx - 16, W - 80) + 34} y={PAD_T + yScale(total) - 10} textAnchor="middle" fontSize={9} fill="#ef4444" fontWeight={700}>
-                      {d.red > 0 ? `${d.red} RED` : (d.green === 0 ? `${d.push} PUSH` : '')}
+                    <rect x={tipX} y={tipY} width={76} height={40} rx={6} fill="#18181b" stroke="#3f3f46" strokeWidth={1} />
+                    {d.green > 0 && (
+                      <text x={tipX + 38} y={tipY + 14} textAnchor="middle" fontSize={10} fill="#22c55e" fontWeight={700}>
+                        {d.green} GREEN
+                      </text>
+                    )}
+                    {d.red > 0 && (
+                      <text x={tipX + 38} y={tipY + (d.green > 0 ? 28 : 14)} textAnchor="middle" fontSize={10} fill="#ef4444" fontWeight={700}>
+                        {d.red} RED
+                      </text>
+                    )}
+                    {d.push > 0 && d.green === 0 && d.red === 0 && (
+                      <text x={tipX + 38} y={tipY + 14} textAnchor="middle" fontSize={10} fill="#a1a1aa" fontWeight={700}>
+                        {d.push} PUSH
+                      </text>
+                    )}
+                    <text x={tipX + 38} y={tipY + (d.green > 0 && d.red > 0 ? 40 : 40)} textAnchor="middle" fontSize={9} fill="#71717a">
+                      {total} total
                     </text>
                   </g>
                 )}
