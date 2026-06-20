@@ -1563,7 +1563,7 @@ export default function Picks() {
                 onClick={() => { clearLive(); setTab('aovivo') }}
                 className="text-xs font-bold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-2.5 py-1 rounded-lg transition-colors"
               >
-                Ver ao vivo →
+                Ver ao vivo
               </button>
               <button onClick={clearLive} className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">✕</button>
             </div>
