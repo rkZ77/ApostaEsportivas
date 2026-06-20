@@ -161,8 +161,9 @@ export default function HowItWorks() {
             </div>
           </Step>
 
-          <Step n={4} title='Acompanhe ao vivo na aba "Ao Vivo"'>
-            <p>Enquanto o jogo acontece, a aba <span className="text-red-400 font-semibold">Ao Vivo</span> mostra placar em tempo real, minuto do jogo e status do seu pick.</p>
+          <Step n={4} title='Acompanhe na aba "Minhas Apostas"'>
+            <p>Enquanto o jogo acontece, a aba <span className="text-red-400 font-semibold">Minhas Apostas</span> mostra placar em tempo real, minuto do jogo e status de cada pick.</p>
+            <p className="mt-1">Para múltiplas, cada seleção mostra individualmente se bateu (verde) ou perdeu (vermelho) enquanto os jogos vão encerrando.</p>
             <p className="mt-1">Quando o resultado for confirmado, a banca e as estatísticas atualizam automaticamente.</p>
           </Step>
 
@@ -223,7 +224,7 @@ export default function HowItWorks() {
             { to: '/results',     Icon: TrendingUp, title: 'Resultados', desc: 'Histórico completo com Win Rate, ROI e lucro' },
             { to: '/agente',      Icon: Bot,       title: 'Agente IA',   desc: 'Pergunte sobre picks, banca e análises ao chat' },
             { to: '/meus-picks',  Icon: Medal,     title: 'Meus Picks',  desc: 'Acompanhe suas apostas pendentes e resolvidas' },
-            { to: '/picks#aovivo', Icon: Radio,    title: 'Ao Vivo',     desc: 'Acompanhe seus picks em tempo real durante os jogos' },
+            { to: '/picks#aovivo', Icon: Radio,    title: 'Minhas Apostas', desc: 'Placar ao vivo, resultado por seleção e status da múltipla em tempo real' },
           ].map(({ to, Icon, title, desc }) => (
             <Link key={to} to={to}
               className="bg-zinc-900 border border-zinc-800 hover:border-zinc-700 rounded-xl p-3.5 transition-colors group"
