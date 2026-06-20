@@ -1,5 +1,5 @@
 ﻿import { useEffect, useState, useCallback, useRef } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useLocation } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
@@ -1226,11 +1226,19 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
 // Dashboard
 export default function Picks() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
   const canSeeVip = isVip || isAdmin
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
 
   const [tab, setTab]               = useState<Tab>('hoje')
+
+  useEffect(() => {
+    const hash = location.hash.replace('#', '') as Tab
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','aovivo','chat','guia']
+    setTab(valid.includes(hash) ? hash : 'hoje')
+  }, [location.hash])
+
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedPickType, setSelectedPickType] = useState<string>('vip')
   const [chatUnread, setChatUnread] = useState(0)
