@@ -398,11 +398,15 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
     for g in games_info:
         if "market" in g:
             g["market"] = translate_market(g["market"])
-        # Enriquece com nomes dos times para exibição independente da tabela fixtures
+        # Enriquece com nomes e IDs dos times para exibição independente da tabela fixtures
         fx = fx_map.get(g.get("fixture_id"))
-        if fx and "home_team" not in g:
-            g["home_team"] = fx.get("home_team", "")
-            g["away_team"] = fx.get("away_team", "")
+        if fx:
+            if "home_team" not in g:
+                g["home_team"] = fx.get("home_team", "")
+                g["away_team"] = fx.get("away_team", "")
+            if not g.get("home_team_id"):
+                g["home_team_id"] = fx.get("home_team_id")
+                g["away_team_id"] = fx.get("away_team_id")
 
     total_odd = 1.0
     for g in games_info:

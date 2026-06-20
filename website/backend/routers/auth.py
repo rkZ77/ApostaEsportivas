@@ -403,7 +403,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
         cur.execute(
             "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code, terms_accepted_at, terms_ip) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
-            (body.name, body.email, hash_password(body.password), phone_e164, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
+            (' '.join(w.capitalize() for w in body.name.strip().split()), body.email, hash_password(body.password), phone_e164, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
         )
         user = dict(cur.fetchone())
         # Trial gratuito de 2 dias — apenas para usuários que forneceram CPF no cadastro
@@ -763,7 +763,7 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
         cpf_added = False
 
         if body.name:
-            fields.append("name = %s"); values.append(body.name)
+            fields.append("name = %s"); values.append(' '.join(w.capitalize() for w in body.name.strip().split()))
 
         if body.username is not None and body.username.strip():
             raw = body.username.strip().lstrip("@").lower()

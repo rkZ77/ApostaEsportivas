@@ -105,7 +105,7 @@ def create_user(body: CreateUserBody, current_user: dict = Depends(require_admin
             raise HTTPException(status_code=400, detail="Email já cadastrado")
         cur.execute(
             "INSERT INTO users (name, email, password_hash, plan) VALUES (%s, %s, %s, %s) RETURNING id, name, email, plan, active",
-            (body.name, body.email, hash_password(body.password), body.plan),
+            (' '.join(w.capitalize() for w in body.name.strip().split()), body.email, hash_password(body.password), body.plan),
         )
         user = dict(cur.fetchone())
         conn.commit()

@@ -99,13 +99,19 @@ export default function Navbar() {
           {/* Right side */}
           <div className="flex items-center gap-2">
             {/* User info — desktop */}
-            <Link to="/profile" className="hidden sm:flex items-center gap-2.5 hover:opacity-80 transition-opacity">
+            <Link to="/profile" className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity">
               {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
-              <div className="flex flex-col items-end">
-                <span className="text-white text-sm font-semibold leading-none">{user?.name?.split(' ')[0]}</span>
-                <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
-                  {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
-                </span>
+              <div className="flex flex-col items-start gap-0.5">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white text-xs font-semibold leading-none">
+                    {user?.name?.split(' ')[0]
+                      ? user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1).toLowerCase()
+                      : ''}
+                  </span>
+                  <span className={planBadge[user?.plan ?? 'free']}>
+                    {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
+                  </span>
+                </div>
               </div>
             </Link>
 

@@ -482,8 +482,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         )
         alav_fixture_map = {r["fixture_id"]: r for r in cur.fetchall()}
 
-    # Batch fixture lookups for multipla legs with missing team names
+    # Batch fixture lookups for multipla legs (nomes ou IDs faltando)
     multipla_fixture_ids: set = set()
+    multipla_stats_ids: set = set()
     for p in multipla_map.values():
         legs_raw = p["games"]
         if isinstance(legs_raw, str):
@@ -491,10 +492,16 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             except Exception: legs_raw = []
         for leg_data in (legs_raw if isinstance(legs_raw, list) else []):
             fid = leg_data.get("fixture_id")
+            if not fid:
+                continue
             home = leg_data.get("home") or leg_data.get("home_team") or ""
             away = leg_data.get("away") or leg_data.get("away_team") or ""
-            if fid and (not home or not away):
+            h_id = leg_data.get("home_team_id")
+            a_id = leg_data.get("away_team_id")
+            if not home or not away:
                 multipla_fixture_ids.add(fid)
+            if not h_id or not a_id:
+                multipla_stats_ids.add(fid)  # busca IDs no match_statistics como fallback
 
     multipla_fixture_map: dict = {}
     if multipla_fixture_ids:
@@ -503,6 +510,15 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             (list(multipla_fixture_ids),),
         )
         multipla_fixture_map = {r["fixture_id"]: r for r in cur.fetchall()}
+
+    # Fallback: busca IDs dos times em match_statistics (jogos já finalizados saem de fixtures)
+    multipla_stats_map: dict = {}
+    if multipla_stats_ids:
+        cur.execute(
+            "SELECT DISTINCT ON (fixture_id) fixture_id, home_team_id, away_team_id FROM match_statistics WHERE fixture_id = ANY(%s)",
+            (list(multipla_stats_ids),),
+        )
+        multipla_stats_map = {r["fixture_id"]: r for r in cur.fetchall()}
 
     cur.close()
 
@@ -581,6 +597,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                         away = away or fx["away_team"] or ""
                         h_id = h_id or fx["home_team_id"]
                         a_id = a_id or fx["away_team_id"]
+                # Fallback: IDs via match_statistics (jogos finalizados não estão em fixtures)
+                if not h_id or not a_id:
+                    ms = multipla_stats_map.get(fid)
+                    if ms:
+                        h_id = h_id or ms["home_team_id"]
+                        a_id = a_id or ms["away_team_id"]
                 legs_out.append(_enrich_leg(
                     fid,
                     leg_data.get("market", ""),
