@@ -74,19 +74,42 @@ class AIMultiplasCheckerService:
                 games = games_json
 
             leg_results = []
-            pending = False
+            games_updated = False
 
             for leg in games:
+                # Reutiliza resultado já anotado de uma passagem anterior
+                existing = leg.get("result")
+                if existing in ("GREEN", "RED"):
+                    leg_results.append(existing)
+                    continue
+
                 r = self.evaluate_leg(leg, cur)
                 if r is None:
                     fid = leg.get("fixture_id", "?")
-                    print(f"[CHECKER MULTIPLAS] id={mid}: sem stats para fixture_id={fid} — aguardando todos os jogos.")
-                    pending = True
-                    break
-                leg_results.append(r)
+                    print(f"[CHECKER MULTIPLAS] id={mid}: sem stats para fixture_id={fid} — aguardando.")
+                    leg_results.append(None)
+                else:
+                    leg["result"] = r  # anota resultado parcial na perna
+                    leg_results.append(r)
+                    games_updated = True
+
+            pending = any(r is None for r in leg_results)
 
             if pending:
-                continue  # só valida quando todos os jogos tiverem dados
+                # Salva resultados parciais nas pernas para exibir no frontend
+                if games_updated:
+                    try:
+                        cur.execute(f"""
+                            UPDATE {self.table}
+                            SET games = %s
+                            WHERE id = %s;
+                        """, (json.dumps(games), mid))
+                        conn.commit()
+                    except Exception as e:
+                        print(f"[CHECKER MULTIPLAS] Erro ao salvar parcial id={mid}: {e}")
+                        try: conn.rollback()
+                        except Exception: pass
+                continue
 
             final_result = "GREEN" if all(r == "GREEN" for r in leg_results) else "RED"
 
@@ -104,9 +127,10 @@ class AIMultiplasCheckerService:
                 cur.execute(f"""
                     UPDATE {self.table}
                     SET result = %s,
-                        profit = %s
+                        profit = %s,
+                        games  = %s
                     WHERE id = %s;
-                """, (final_result, profit, mid))
+                """, (final_result, profit, json.dumps(games), mid))
                 conn.commit()
             except Exception as e:
                 print(f"[CHECKER MULTIPLAS] Erro ao salvar id={mid}: {e} — reconectando...")
@@ -117,9 +141,10 @@ class AIMultiplasCheckerService:
                 cur.execute(f"""
                     UPDATE {self.table}
                     SET result = %s,
-                        profit = %s
+                        profit = %s,
+                        games  = %s
                     WHERE id = %s;
-                """, (final_result, profit, mid))
+                """, (final_result, profit, json.dumps(games), mid))
                 conn.commit()
 
             processed += 1
