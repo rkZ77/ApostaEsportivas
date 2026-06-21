@@ -350,7 +350,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
+    ? suggestStake(dica.probability ?? dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
     : null
   const fato = shortReasoning(dica.reasoning)
 
@@ -563,7 +563,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 3, 0.25)
+    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 3, 0.25)  // múltipla: sem prob_real única, usa confidence
     : null
   const potReturn = stakeSuggestion
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)

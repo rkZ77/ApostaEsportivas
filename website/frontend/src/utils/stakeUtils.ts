@@ -28,12 +28,13 @@ export interface StakeSuggestion {
 
 /**
  * Calcula stake sugerido usando Kelly fracionado.
- * Kelly = (b*p - q) / b  onde b = odd-1, p = confiança, q = 1-p
+ * Kelly = (b*p - q) / b  onde b = odd-1, p = prob_real (Poisson), q = 1-p
+ * Passar prob_real quando disponível; fallback para confidence quando não há Poisson.
  * kellyFraction: 0.5 para picks simples (½ Kelly), 0.25 para múltiplas (¼ Kelly).
  * Resultado arredondado para o 1u mais próximo, entre 1u e maxUnits.
  */
 export function suggestStake(
-  confidence: number,
+  probReal: number,
   odd: number,
   bankroll: number,
   unitValue: number,
@@ -43,7 +44,7 @@ export function suggestStake(
   if (!bankroll || !unitValue || unitValue <= 0) return null
 
   const b = odd - 1
-  const p = confidence
+  const p = probReal
   const q = 1 - p
 
   if (b <= 0 || p <= 0 || p >= 1) return null
