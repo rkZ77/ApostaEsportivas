@@ -117,12 +117,17 @@ Se restar dúvida sobre independência → NO BET.
 ETAPA 3 — MONTAGEM:
 score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
 multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
-Verificacao: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
+Verificacao final: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
+Se QUALQUER par passar todas as verificacoes → emita JSON de multipla (nao no_bet).
 
-IMPORTANTE: realize toda a análise internamente. NÃO escreva texto, markdown, raciocínio ou comentário fora do JSON. Proibido escrever qualquer texto antes ou depois do JSON.
+REGRA DE OUTPUT CRITICA:
+- Realize TODA a analise internamente — nao escreva texto, markdown ou raciocinio fora do JSON.
+- Sua resposta e APENAS o JSON. Comeca com {{ e termina com }}. Nenhum caractere antes ou depois.
+- no_bet so se nenhum par valido existir apos todas as etapas.
+- O campo "motivo" do no_bet deve ser UMA frase curta (ex: "Nenhum par com score_combo>=0.65 e odd_total 2.00-3.00"). Nao use motivo como rascunho de analise.
 
-SAIDA JSON — sua resposta começa com {{ e termina com }}, nada mais:
-Sem multipla: {{"no_bet":true,"motivo":"motivo"}}
+SAIDA JSON:
+Sem multipla: {{"no_bet":true,"motivo":"razao curta"}}
 Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
 multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
 """
