@@ -18,7 +18,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -207,7 +207,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append("\nCLASSIFICACAO:")
             lines.append(_j(ctx["standings"]))
 
-        all_odds = ctx.get("odds", [])
+        all_odds = dedup_odds(ctx.get("odds", []))
         odds_in_range = [o for o in all_odds if ODD_MIN <= o.get("odd", 0) <= ODD_MAX]
         odds_other    = [o for o in all_odds if not (ODD_MIN <= o.get("odd", 0) <= ODD_MAX)]
 
@@ -216,7 +216,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(odds_in_range))
         if odds_other:
             lines.append("\nOUTRAS ODDS (contexto):")
-            lines.append(_j(odds_other[:15]))
+            lines.append(_j(odds_other[:10]))
 
         if ctx.get("home_stats"):
             lines.append(f"\nESTATISTICAS CASA ({fx['home_team']}):")

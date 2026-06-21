@@ -137,6 +137,19 @@ def _market_type_from_name(market: str) -> str:
         return "goals"
     return "result"
 
+def dedup_odds(odds: list) -> list:
+    """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta."""
+    seen: dict[tuple, dict] = {}
+    for o in odds:
+        key = (
+            str(o.get("market_name", o.get("market", ""))).strip().lower(),
+            str(o.get("line", "")).strip(),
+        )
+        if key not in seen or float(o.get("odd", 0)) > float(seen[key].get("odd", 0)):
+            seen[key] = o
+    return list(seen.values())
+
+
 def is_market_reasoning_coherent(market: str, reasoning: str) -> bool:
     """Retorna False se o reasoning fala exclusivamente de outro tipo de mercado."""
     mtype = _market_type_from_name(market)

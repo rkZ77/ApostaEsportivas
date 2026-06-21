@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -248,11 +248,11 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 
         if ctx.get("odds"):
             # Filtra odds válidas para múltiplas (faixa 1.35–1.95, max 60 por fixture)
-            odds_filtered = [
+            odds_filtered = dedup_odds([
                 o for o in ctx["odds"]
                 if 1.03 <= float(o.get("odd", 0)) <= 1.83
-            ][:60]
-            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} entradas):")
+            ])[:60]
+            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} únicos):")
             lines.append(_j(odds_filtered))
 
         if ctx.get("home_stats"):
