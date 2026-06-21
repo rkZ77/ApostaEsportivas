@@ -83,10 +83,13 @@ Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
 OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
 OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
-  - Picks individuais podem ter odd mais baixa (ex: 1.20, 1.22, 1.25) desde que o PRODUTO seja {odd_min}-{odd_max}.
-  - Calcule odd_1 × odd_2 explicitamente. Se produto < {odd_min} ou > {odd_max} → INVALIDO.
-  - Exemplos validos: 1.20×1.22=1.464 ✓ | 1.22×1.25=1.525 ✓ | 1.23×1.22=1.501 ✓
-  - Exemplos invalidos: 1.20×1.20=1.44 ✗ (abaixo de {odd_min}) | 1.30×1.28=1.664 ✗ (acima de {odd_max})
+  REGRA DE SELECAO — filtre ANTES de analisar:
+  - Odd individual MINIMA para combinacao: 1.21 (pois 1.21×1.21=1.464 ≥ {odd_min}). Se odd < 1.21 → DESCARTE imediato, nunca entrará na faixa.
+  - Odd individual MAXIMA para combinacao: 1.26 (pois 1.26×1.26=1.588 > {odd_max}). Se odd > 1.26 → o produto ultrapassará {odd_max}.
+  - Faixa valida por pick em combinacao: 1.21–1.26.
+  - Calcule odd_1 × odd_2 explicitamente antes de confirmar. Produto fora de {odd_min}-{odd_max} → INVALIDO, busque outro par.
+  - Exemplos validos: 1.21×1.22=1.476 ✓ | 1.22×1.25=1.525 ✓ | 1.23×1.22=1.501 ✓
+  - Exemplos invalidos: 1.13×1.13=1.277 ✗ | 1.20×1.20=1.44 ✗ | 1.28×1.28=1.638 ✗
   - Exige confidence>=0.70 em AMBOS os picks. Nao combine pick fraco com forte.
 
 Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.70)
@@ -101,7 +104,8 @@ QUALIDADE DOS DADOS (Copa do Mundo):
 
 PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_min}-{odd_max}.
 PASSO 2 — Candidatos B (se A falhar ou tiver confidence inferior): busque pares de jogos diferentes
-  onde dois picks de alta consistencia (taxa>=65%, confidence>=0.70) tenham produto de odds em {odd_min}-{odd_max}.
+  onde dois picks de alta consistencia (taxa>=65%, confidence>=0.70) e odd individual 1.21–1.26 tenham produto em {odd_min}-{odd_max}.
+  Se nenhum par com odd 1.21–1.26 existir → no_bet direto, nao tente odds fora desta faixa.
 PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=-0.05 | (EV<0 e confidence<0.70).
 PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar A por >=0.05, ou se nao houver A valido.
   Sem pick valido → no_bet.
