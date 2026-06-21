@@ -105,7 +105,7 @@ Gols            X.X    X.X    X.X
 
 ### Picks do site
 Use listas simples:
-• **Brasil x Argentina** · Mais de 2.5 gols @ 1.72 (Bet365) | Confiança: 78% | Pendente
+• **Brasil x Argentina** · Mais de 2.5 gols @ 1.72 (Bet365) · Confiança: 78% · Pendente
 
 ---
 
