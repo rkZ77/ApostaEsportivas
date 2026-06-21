@@ -125,7 +125,11 @@ Se restar dúvida sobre independência → NO BET.
 ETAPA 3 — MONTAGEM:
 score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
 multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
-Verificacao final: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
+FIXTURE ÚNICO POR MÚLTIPLA E ENTRE MÚLTIPLAS:
+  - Dentro de cada múltipla: pick_1.fixture_id ≠ pick_2.fixture_id (obrigatorio).
+  - Entre multipla_1 e multipla_2: os fixture_ids devem ser todos diferentes (4 jogos distintos no total).
+    Se não houver 4 jogos com score_base suficiente, multipla_2 pode reutilizar 1 fixture desde que seja mercado completamente diferente.
+Verificacao final: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? fixture_ids todos distintos dentro e entre multiplas? score_base>=0.55?
 Se QUALQUER par passar todas as verificacoes → emita JSON de multipla (nao no_bet).
 
 REGRA DE OUTPUT CRITICA:
