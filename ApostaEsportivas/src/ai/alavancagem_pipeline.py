@@ -20,6 +20,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.poisson_service import enrich_odds_with_poisson
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -106,7 +107,10 @@ PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar 
   Sem pick valido → no_bet.
 
 CALCULOS:
-taxa=confirmados/total | prob_real=media ponderada (recente=1.0, 0.85, 0.70...) | EV=(prob_real×odd)-1
+ATENCAO: as odds ja contem "prob_real", "edge" e "ev" calculados por modelo de Poisson.
+Use estes valores diretamente. Se prob_real=null: calcule com os dados historicos.
+Prefira picks com maior edge positivo ja calculado — avalie apenas K (confirmadores) e estabilidade.
+
 FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
   Primario: feitos_A_contexto + feitos_B_contexto.
   Validacao: cedidos_A_contexto + cedidos_B_contexto.
@@ -298,12 +302,15 @@ def _format_fixtures(fixtures: list[dict]) -> str:
             f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"]
         )
 
-        # Odds: filtrar pela faixa-alvo (com buffer) para reduzir tokens
+        # Odds: filtrar, deduplicar e enriquecer com Poisson
         all_odds = ctx.pop("odds", [])
         filtered_odds = dedup_odds([
             o for o in all_odds
             if _ODDS_FILTER_MIN <= o.get("odd", 0) <= _ODDS_FILTER_MAX
         ])[:_ODDS_MAX_ITEMS]
+        filtered_odds = enrich_odds_with_poisson(
+            filtered_odds, ctx.get("home_stats"), ctx.get("away_stats")
+        )
 
         # Outras listas: limitar a 5 itens
         ctx_trimmed = {k: (v[:5] if isinstance(v, list) else v) for k, v in ctx.items()}

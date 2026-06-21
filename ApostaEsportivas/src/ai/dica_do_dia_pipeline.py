@@ -19,6 +19,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.poisson_service import enrich_odds_with_poisson
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -83,6 +84,11 @@ CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta vari
 {fixtures_formatados}
 
 CALCULO:
+ATENÇÃO: as odds ja contem "prob_real", "edge" e "ev" calculados por modelo de Poisson.
+Use estes valores diretamente para selecionar o mercado com maior edge positivo.
+Se prob_real=null: calcule manualmente com os dados historicos abaixo.
+Ordene todos os mercados pelo campo "edge" e selecione o maior edge positivo com criterios atendidos.
+
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte. (Copa: total_amostra=historico global conforme descrito acima; outros: venue correto)
    FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
      Estimativa primaria: feitos_A_contexto + feitos_B_contexto.
@@ -213,7 +219,11 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append("\nCLASSIFICACAO:")
             lines.append(_j(ctx["standings"]))
 
-        all_odds = dedup_odds(ctx.get("odds", []))
+        all_odds = enrich_odds_with_poisson(
+            dedup_odds(ctx.get("odds", [])),
+            ctx.get("home_stats"),
+            ctx.get("away_stats"),
+        )
         odds_in_range = [o for o in all_odds if ODD_MIN <= o.get("odd", 0) <= ODD_MAX]
         odds_other    = [o for o in all_odds if not (ODD_MIN <= o.get("odd", 0) <= ODD_MAX)]
 

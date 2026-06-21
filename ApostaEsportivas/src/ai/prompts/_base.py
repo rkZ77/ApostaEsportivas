@@ -23,14 +23,15 @@ REGRAS_BASE = """\
 
 ## 0. VARREDURA SISTEMÁTICA DE MERCADOS (execute ANTES de qualquer análise aprofundada)
 
-a) Liste TODOS os mercados em MERCADOS E ODDS (não filtre por tipo)
-b) Para cada mercado/linha: estime a taxa histórica real usando os dados disponíveis (histórico, médias, standings)
-c) Calcule edge bruto = taxa_real − (1/odd) para cada entrada
-d) Ordene por edge decrescente — ignore todos com edge ≤ 0
-e) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos
-f) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos selecionados
+a) Liste TODOS os mercados em MERCADOS E ODDS — avalie gols, cantos, cartões, dupla chance, handicap.
+   Não existe mercado preferido: escolha pelo maior edge, independente do tipo.
+b) Ordene pelo campo "edge" já calculado por Poisson (disponível em cada odd).
+   Se "edge"=null → calcule manualmente: taxa_real − (1/odd).
+c) Ignore todos com edge ≤ 0.
+d) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos.
+e) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos — avalie K (confirmadores independentes).
 
-O mercado escolhido é o que tem maior desequilíbrio real, não o mais "famoso" ou "fácil de analisar".
+O mercado escolhido é o que tem maior edge real, não o mais "famoso" ou "fácil de analisar".
 
 ## 1. QUALIDADE DOS DADOS
 
@@ -78,7 +79,12 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
 ## 3. CÁLCULO
 
-prob_real=[0.01,0.99] | prob_implícita=1/odd | edge=prob_real−prob_implícita (>0=value) | EV=(prob_real×odd)−1
+ATENÇÃO: os campos prob_real, implied, edge e ev já foram calculados por modelo de Poisson e estão nas odds.
+Use estes valores diretamente — NÃO recalcule prob_real. Sua função é avaliar K (confirmadores independentes)
+e selecionar o mercado com maior edge positivo já calculado.
+Se prob_real=null na odd: o mercado não foi suportado pelo modelo — calcule manualmente com os dados históricos.
+
+edge=prob_real−(1/odd) | EV=(prob_real×odd)−1 (já calculados nas odds como "edge" e "ev")
 Se todos EV≤0 mas EV≥−0.05: retorne os 3 com menor EV negativo e declare ausência de value (veja seção 6).
 Se todos EV<−0.05: nenhum pick válido — retorne JSON com "no_picks":true e explique.
 CONFIRMAÇÃO MÚLTIPLA: edge confirmado por ≥2 indicadores independentes. Se 1 apenas → "confirmação parcial".

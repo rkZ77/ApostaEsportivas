@@ -12,6 +12,7 @@ from anthropic import Anthropic, RateLimitError
 from utils.db_utils import get_connection
 from services.odds_service import OddsService
 from ai.prompts import get_prompt, SYSTEM_PROMPT
+from ai.poisson_service import enrich_odds_with_poisson
 
 load_dotenv(find_dotenv())
 
@@ -447,6 +448,9 @@ HISTÓRICO FORA
                 item["market_name"] = f"{pt} ({item['team']})" if item.get("team") else pt
             odds_for_ai.append(item)
         odds_map = odds_for_ai
+
+        # Enriquece cada odd com prob_real, edge, ev calculados por Poisson
+        odds_map = enrich_odds_with_poisson(odds_map, home_stats, away_stats)
 
         dados = self._build_dados(
             fx, home_stats, away_stats,

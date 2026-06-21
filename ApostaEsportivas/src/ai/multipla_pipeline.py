@@ -14,6 +14,7 @@ from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.poisson_service import enrich_odds_with_poisson
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -82,9 +83,11 @@ gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<1
 {fixtures_formatados}
 
 ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
-Para cada jogo: liste TODOS os mercados das odds, calcule edge bruto = taxa_historica_real − (1/odd) para cada um.
-Ordene por edge decrescente. O mercado vencedor é o de MAIOR EDGE POSITIVO com dados estatísticos que o sustentem.
-Não filtre por tipo — escolha por consistência estatística independente do tipo de mercado.
+ATENÇÃO: as odds já contêm "prob_real", "edge" e "ev" calculados por modelo de Poisson.
+Use o campo "edge" diretamente para ordenar os mercados. Se edge=null: calcule manualmente.
+Avalie TODOS os mercados das odds — gols, cantos, cartões, dupla chance, handicap.
+Não existe mercado preferido: o vencedor é o de MAIOR EDGE POSITIVO, independente do tipo.
+Sua função principal nesta etapa é avaliar K (confirmadores independentes que validam o edge).
 
 FORMULA SCORE_BASE (alinhada com VIP):
 C (Consistência): taxa histórica real dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
@@ -259,12 +262,15 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            # Filtra odds válidas para múltiplas (faixa 1.35–1.95, max 60 por fixture)
-            odds_filtered = dedup_odds([
-                o for o in ctx["odds"]
-                if 1.03 <= float(o.get("odd", 0)) <= 1.83
-            ])[:60]
-            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} únicos):")
+            odds_filtered = enrich_odds_with_poisson(
+                dedup_odds([
+                    o for o in ctx["odds"]
+                    if 1.03 <= float(o.get("odd", 0)) <= 1.83
+                ])[:60],
+                ctx.get("home_stats"),
+                ctx.get("away_stats"),
+            )
+            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} únicos, prob_real=Poisson):")
             lines.append(_j(odds_filtered))
 
         if ctx.get("home_stats"):
