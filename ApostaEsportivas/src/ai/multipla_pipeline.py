@@ -60,7 +60,7 @@ Sua função: analisar cada jogo, identificar o mercado com maior edge real, det
 PRINCÍPIOS:
 - Múltiplas ampliam risco — só monte se AMBOS os picks tiverem score_base >= 0.65
 - Correlação é o maior inimigo: nunca combine picks dependentes
-- Odd individual: MÍNIMO 1.40, MÁXIMO 1.90 — fora dessa faixa o pick é inválido
+- Odd individual: MÍNIMO 1.05, MÁXIMO 1.80 — fora dessa faixa o pick é inválido
 - Odd total: MÍNIMO 2.00, MÁXIMO 3.00 — fora dessa faixa a múltipla é inválida
 - Odd copiada literalmente dos dados fornecidos — nunca inventar
 - Qualidade acima de quantidade: prefira no_bet a uma múltipla fraca
@@ -77,14 +77,19 @@ Antes de finalizar, faça esta pergunta mental: "Se a seleção A ganhar, a sele
 → Se a resposta for "mais difícil" ou "mais fácil" (qualquer influência): DESCARTE a combinação.
 → Só aceite se a resposta for: "Não tem relação nenhuma".
 
-CONFLITOS PROIBIDOS (exemplos concretos — não são os únicos):
+CONFLITOS PROIBIDOS — dois tipos distintos:
+
+Tipo A — logicamente impossíveis (mesmo jogo, co-ocorrência impossível):
 ✗ Dois picks do MESMO fixture_id (sempre proibido)
-✗ Over X.5 gols + Under X.5 gols no mesmo jogo (direções opostas)
-✗ BTTS Sim + Under 2.5 gols no mesmo jogo (BTTS já implica ≥2 gols, sabota o Under)
-✗ BTTS Sim + Under 1.5 gols (impossível se ambos marcam)
+✗ Over X.5 gols + Under X.5 gols no mesmo jogo (direções opostas — um anula o outro)
+✗ BTTS Sim + Under 2.5 gols no mesmo jogo (BTTS implica ≥2 gols; sabota Under)
+✗ BTTS Sim + Under 1.5 gols (impossível — 2 gols já supera 1.5)
 ✗ Resultado 1 ou X (Dupla Chance 1X) + Under 0.5 gols (praticamente impossível co-existir)
-✗ Over 2.5 gols de um jogo + Over 2.5 gols de outro jogo em que os dois times são de defesas sólidas — ok ter dois Over, mas verifique que não é o mesmo padrão estatístico forçado
-✗ Handicap Asiático a favor do mesmo time + Under gols desse jogo (vencer por diferença ampla é contrário a Under)
+✗ Handicap Asiático a favor do mesmo time + Under gols desse jogo (vitória por margem contradiz Under)
+
+Tipo B — estatisticamente correlacionados (jogos diferentes, mas dependência real):
+✗ Dois Over 2.5 de jogos em que o ÚNICO argumento é "defesas fracas da liga" (mesmo fenômeno de liga) — aceite apenas se cada jogo tiver histórico próprio, independente do contexto da liga
+✗ Dois mercados cujo argumento de alta é "árbitro X é permissivo" sendo o MESMO árbitro nos dois jogos
 
 COMBINAÇÕES IDEAIS:
 ✓ Mercados de categorias DIFERENTES (ex: Escanteios Over num jogo + Cartões Over noutro)
@@ -115,7 +120,7 @@ Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
 R (Robustez): edge/implied≥0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
 score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
-Odds: se odd fora de 1.40-1.90 → DESCARTE. Linha: mais conservadora em 1.40-1.90.
+Odds: se odd fora de 1.05-1.80 → DESCARTE. Linha: mais conservadora em 1.05-1.80.
 Descarte jogo se score_base<0.55 ou sem linha válida.
 
 QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
@@ -125,20 +130,22 @@ Para Copa do Mundo: use "weighted_goals_against" do campo quality_breakdown no p
 
 ETAPA 2 — CORRELACAO ESTRITA:
 Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.
-PROIBIDO ABSOLUTO:
+PROIBIDO — Tipo A (mesmo jogo, logicamente impossíveis):
   - Mesmo fixture_id em qualquer seleção
   - Over + Under do MESMO market_type no MESMO jogo
   - BTTS Sim + Under 2.5 (mesmo jogo): BTTS implica ≥2 gols, sabota Under
-  - BTTS Sim + Under 1.5 (mesmo jogo): impossível — 2 gols já supera 1.5
+  - BTTS Sim + Under 1.5 (mesmo jogo): impossível
   - Handicap/Resultado (vitória por margem) + Under gols (mesmo jogo): contradição
-  - Dois Over/Under de gols de jogos em que os argumentos estatísticos são o mesmo fenômeno
-IDEAL: categorias de mercado completamente diferentes (ex: escanteios + cartões) + jogos sem relação.
+PROIBIDO — Tipo B (jogos diferentes, estatisticamente correlacionados):
+  - Dois Over de gols em que o argumento é idêntico ("defesas fracas da liga") — sem histórico individual independente
+  - Dois picks com o MESMO árbitro como único confirmador
+IDEAL: categorias completamente diferentes (ex: escanteios + cartões) + jogos sem relação estatística.
 Se restar dúvida sobre independência → NO BET.
 
 ETAPA 3 — MONTAGEM:
 score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
 multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
-Verificacao: odd individual 1.40-1.90? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
+Verificacao: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
 
 SAIDA JSON:
 Sem multipla: {{"no_bet":true,"motivo":"motivo"}}
@@ -264,9 +271,9 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             # Filtra odds válidas para múltiplas (faixa 1.35–1.95, max 60 por fixture)
             odds_filtered = [
                 o for o in ctx["odds"]
-                if 1.35 <= float(o.get("odd", 0)) <= 1.95
+                if 1.03 <= float(o.get("odd", 0)) <= 1.83
             ][:60]
-            lines.append(f"\nMERCADOS E ODDS (faixa 1.35-1.95, {len(odds_filtered)} entradas):")
+            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} entradas):")
             lines.append(_j(odds_filtered))
 
         if ctx.get("home_stats"):

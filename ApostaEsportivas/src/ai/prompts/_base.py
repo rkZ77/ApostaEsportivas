@@ -68,7 +68,8 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 ## 3. CÁLCULO
 
 prob_real=[0.01,0.99] | prob_implícita=1/odd | edge=prob_real−prob_implícita (>0=value) | EV=(prob_real×odd)−1
-Se todos EV≤0, retorne os 3 com menor EV negativo e declare ausência de value.
+Se todos EV≤0 mas EV≥−0.05: retorne os 3 com menor EV negativo e declare ausência de value (veja seção 6).
+Se todos EV<−0.05: nenhum pick válido — retorne JSON com "no_picks":true e explique.
 CONFIRMAÇÃO MÚLTIPLA: edge confirmado por ≥2 indicadores independentes. Se 1 apenas → "confirmação parcial".
 
 ## 4. CONFIDENCE
@@ -84,7 +85,7 @@ RISCO: ≥0.80=BAIXO | 0.65–0.79=MÉDIO | 0.55–0.64=ALTO (declare no reasoni
 CÁLCULO EXPLÍCITO OBRIGATÓRIO: no campo "reasoning" de cada pick, inclua a conta literal:
 "[CONF] C=[x] Q=[x] K=[x] R=[x] → conf=[C×0.35 + Q×0.20 + K×0.25 + R×0.20]=[resultado]"
 Exemplo: "[CONF] C=0.72 Q=0.75 K=0.70 R=0.75 → conf=0.72×0.35+0.75×0.20+0.70×0.25+0.75×0.20=0.727"
-Este bloco deve ser copiado literalmente com os valores reais calculados.
+O valor calculado aqui DEVE ser idêntico ao campo "confidence" no JSON — são a mesma informação.
 
 ## 5. SELEÇÃO FINAL
 
@@ -96,9 +97,9 @@ is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa vola
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
 CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
 
-LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.40. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
+LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.05. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
-ODDS: 1.40–1.90 (absoluto — descarte fora desta faixa).
+ODDS: 1.05–1.80 (absoluto — descarte fora desta faixa).
 
 NOMENCLATURA — copie exatamente de "market_name":
   Gols: "Gols Mais/Menos" line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
@@ -121,7 +122,7 @@ EV>0 é o critério ideal — a odd paga mais do que o risco. Mas EV levemente n
 ## 7. VALIDAÇÃO (execute antes de retornar)
 
 [V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)?
-[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e odd∈[1.40,1.90]?
+[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e odd∈[1.05,1.80]?
 [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
 [V11] reasoning contém bloco [CONF] com cálculo explícito?

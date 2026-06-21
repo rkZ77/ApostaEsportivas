@@ -409,7 +409,7 @@ HISTÓRICO FORA
         odds_map = [
             o for o in odds_map
             if o.get("market_name", "").strip().lower() not in _BLOCKED_MARKETS
-            and 1.38 <= float(o.get("odd", 0)) <= 1.92
+            and 1.03 <= float(o.get("odd", 0)) <= 1.83
         ]
 
         # Deduplica: para cada (market_name, line) mantém apenas a maior odd (melhor valor)
@@ -420,7 +420,7 @@ HISTÓRICO FORA
             if key not in _seen or float(o.get("odd", 0)) > float(_seen[key].get("odd", 0)):
                 _seen[key] = o
         odds_map = list(_seen.values())
-        print(f"[AI] {len(odds_map)} odds únicas (1.38-1.92) para fixture {fx['fixture_id']}")
+        print(f"[AI] {len(odds_map)} odds únicas (1.03-1.83) para fixture {fx['fixture_id']}")
 
         # Traduz mercados para português APÓS dedup (dedup usa nome inglês como chave)
         # Inclui o time no nome para mercados específicos (ex: "Total de Cartões Visitante (Athletic Club)")
@@ -470,11 +470,11 @@ HISTÓRICO FORA
             return []
 
         before = len(data)
-        data = [s for s in data if 1.40 <= float(s.get("odd", 0)) <= 1.90]
+        data = [s for s in data if 1.05 <= float(s.get("odd", 0)) <= 1.80]
         if len(data) < before:
-            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de 1.40-1.90")
+            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de 1.05-1.80")
         if not data:
-            print(f"[AI] Nenhuma sugestao com odd entre 1.40-1.90 para fixture {fx['fixture_id']}")
+            print(f"[AI] Nenhuma sugestao com odd entre 1.05-1.80 para fixture {fx['fixture_id']}")
             return []
 
         # Rejeita picks com reasoning inconsistente com o mercado (ex: cartões falando de gols)
@@ -533,7 +533,7 @@ HISTÓRICO FORA
     def _is_stat_strong(ev: float, conf: float) -> bool:
         """Pick sem EV mas com base estatística sólida — apostar menos."""
         return (ev <= 0
-                and ev >= AISuggestionsService._EV_STAT_STRONG_FLOOR
+                and ev > AISuggestionsService._EV_STAT_STRONG_FLOOR
                 and conf >= AISuggestionsService._STAT_STRONG_CONF)
 
     # --------------------------------------------------------

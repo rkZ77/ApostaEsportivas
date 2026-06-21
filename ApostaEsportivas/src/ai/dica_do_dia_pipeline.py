@@ -1,6 +1,6 @@
 ﻿"""
 DICA DO DIA — Pipeline de Alta Acertividade
-Objetivo: 1 pick diario com odd 1.40-1.70, maximo de consistencia estatistica.
+Objetivo: 1 pick diario com odd 1.05-1.80, maximo de consistencia estatistica.
 Fallback: qualquer liga com dados suficientes e padrao claro.
 """
 
@@ -25,8 +25,8 @@ load_dotenv(find_dotenv())
 
 AI_MODEL_NAME  = os.getenv("AI_MODEL_DICA", os.getenv("AI_MODEL_NAME"))
 WC_LEAGUE_ID   = 1
-ODD_MIN        = 1.40
-ODD_MAX        = 1.70
+ODD_MIN        = 1.05
+ODD_MAX        = 1.80
 CONFIDENCE_MIN = 0.72
 MAX_FIXTURES   = 12
 
@@ -63,13 +63,13 @@ Voce e QUANTBET-DICA, especializado em selecionar o pick MAIS SEGURO do dia com 
 OBJETIVO: acertividade maxima. Nao busque o maior EV nem a odd mais atrativa — busque o padrao mais repetivel e confirmado pelos dados.
 
 REGRAS:
-- Odd entre 1.40 e 1.70 — sem excecoes
+- Odd entre 1.05 e 1.80 — sem excecoes
 - Confidence >= 0.72 — calculada com base nos dados, nao em suposicoes
 - Consistencia vale mais que EV: prefira 8/10 jogos confirmando a 1.3 de EV instavel
 - Amostra minima: 5 jogos no venue correto (casa para mandante, fora para visitante). EXCECAO Copa do Mundo (league_id=1): jogos sao em sede neutra — venue NAO se aplica; use o historico dos ultimos 15 jogos (todos competicoes) + stats especificas da Copa fornecidas no perfil. Basta amostra>=5 no historico total.
 - MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiático), escanteios, cartões, Dupla Chance, Handicap Asiático.
   Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados fornecidos.
-- Linha Over/Under (qualquer mercado): sempre a mais conservadora com odd 1.40-1.70. Over→linha mais baixa. Under→linha mais alta.
+- Linha Over/Under (qualquer mercado): sempre a mais conservadora com odd 1.05-1.80. Over→linha mais baixa. Under→linha mais alta.
 - Mercados proibidos: Match Winner (1X2 direto).
 - Se nenhum pick atender aos criterios → no_bet. Prefira no_bet a um pick fraco.
 
@@ -94,7 +94,7 @@ CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta vari
 {fixtures_formatados}
 
 CALCULO:
-A) Taxa=confirmados/total_amostra (>=0.65). Copa do Mundo: total_amostra = historico total (nao por venue). Outros: total_venue. Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte
+A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte. (Copa: total_amostra=historico global conforme descrito acima; outros: venue correto)
 B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
 C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
    Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5

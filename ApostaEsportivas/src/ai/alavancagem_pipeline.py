@@ -26,9 +26,12 @@ load_dotenv(find_dotenv())
 
 AI_MODEL_NAME  = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
 WC_LEAGUE_ID   = 1
-ODD_MIN        = 1.40
-ODD_MAX        = 1.60
+ODD_MIN        = 1.45
+ODD_MAX        = 1.55
 ODD_TARGET     = 1.50
+# Para combinações, a IA pode usar picks individuais com odd menor (ex: 1.20×1.22=1.464).
+# O banco precisa buscar odds a partir desse patamar mínimo real.
+_COMBO_ODD_MIN = 1.08  # mínimo individual para combinações (produto deve cair em ODD_MIN-ODD_MAX)
 CONFIDENCE_MIN = 0.72
 BANKROLL_INIT  = 50.0
 MAX_FIXTURES   = 10
@@ -63,17 +66,18 @@ def _clean(obj):
 SYSTEM_PROMPT = """\
 Voce e QUANTBET-ALAVANCAGEM, especializado em selecionar o pick mais seguro do dia em jogos da Copa do Mundo FIFA.
 
-OBJETIVO: 1 pick (ou combinacao de 2 picks de jogos DIFERENTES) com odd COMBINADA entre {odd_min}-{odd_max}. Odd alvo ~{odd_target}. Prioridade maxima: seguranca e consistencia.
+OBJETIVO: ODD COMBINADA entre {odd_min}-{odd_max} (alvo ~{odd_target}). Pode ser 1 pick simples ou 2 picks combinados. Prioridade maxima: seguranca e consistencia estatistica.
 
-LOGICA DE ODD — REGRA CRITICA:
-- Opcao A (simples): 1 pick com odd individual entre {odd_min}-{odd_max}. PREFERIVEL.
-- Opcao B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 resulte em {odd_min}-{odd_max}.
-  ATENCAO: para o COMBINADO ficar em {odd_min}-{odd_max}, cada pick individual DEVE ter odd entre 1.10-1.27.
-  EXEMPLOS validos: 1.22×1.25=1.525 ✓ | 1.20×1.28=1.536 ✓
-  EXEMPLOS INVALIDOS: 1.40×1.50=2.10 ✗ | 1.35×1.45=1.96 ✗ — NUNCA combine picks com odd individual acima de 1.30.
-- Se nao houver pick isolado valido E nao houver dois picks com odd individual ≤1.27 → retorne no_bet.
-- Combinacao: ambos com confidence>=0.70 — nao combine fraco com forte.
-- Consistencia vale tudo: 9/10 confirmando@1.25 > 7/10 confirmando@1.45.
+OPCAO A — SIMPLES: 1 pick com odd individual entre {odd_min}-{odd_max}.
+OPCAO B — COMBINACAO: 2 picks de jogos DIFERENTES onde odd_1 × odd_2 resulte em {odd_min}-{odd_max}.
+  - Cada pick individual pode ter odd mais baixa (ex: 1.20 × 1.22 = 1.464 ✓ | 1.23 × 1.20 = 1.476 ✓).
+  - O que importa e o PRODUTO: ele deve cair entre {odd_min} e {odd_max}. Sem excecoes.
+  - Exemplos invalidos: produto < {odd_min} ✗ | produto > {odd_max} ✗.
+  - Combinacao exige confidence >= 0.70 em AMBOS os picks. Nao combine pick fraco com forte.
+  - Os dois picks devem ser de jogos DIFERENTES (fixture_id diferente) e mercados independentes.
+
+REGRAS GERAIS:
+- Consistencia vale tudo: 9/10 confirmando @ odd 1.22 > 6/10 confirmando @ odd 1.48.
 - Amostra minima: 5 jogos no venue correto | 2+ confirmadores independentes.
 - MERCADOS: avalie TODOS — gols (Over/Under, BTTS, asiatico), escanteios, cartoes, Dupla Chance, Handicap Asiatico.
   Nao existe mercado preferencial. Escolha o que tiver MAIOR consistencia estatistica nos dados.
@@ -86,14 +90,18 @@ SAIDA: apenas JSON valido. Sua resposta comeca com {{ e termina com }}. Nenhum t
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM Copa do Mundo — pick mais seguro do dia. Odd alvo: ~{odd_target} | Faixa ODD COMBINADA: {odd_min}-{odd_max}
+ALAVANCAGEM Copa do Mundo — pick mais seguro do dia.
+Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
-OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}
-OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 = {odd_min}-{odd_max}
-  → Para combinar: cada pick individual DEVE ter odd ≤ 1.27 (ex: 1.22 × 1.25 = 1.525). Se odd_1×odd_2 > {odd_max} → INVALIDO.
-  → NUNCA combine picks com odd individual acima de 1.30 — o combinado sempre ultrapassaria {odd_max}.
+OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
+OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
+  - Picks individuais podem ter odd mais baixa (ex: 1.20, 1.22, 1.25) desde que o PRODUTO seja {odd_min}-{odd_max}.
+  - Calcule odd_1 × odd_2 explicitamente. Se produto < {odd_min} ou > {odd_max} → INVALIDO.
+  - Exemplos validos: 1.20×1.22=1.464 ✓ | 1.22×1.25=1.525 ✓ | 1.23×1.22=1.501 ✓
+  - Exemplos invalidos: 1.20×1.20=1.44 ✗ (abaixo de {odd_min}) | 1.30×1.28=1.664 ✗ (acima de {odd_max})
+  - Exige confidence>=0.70 em AMBOS os picks. Nao combine pick fraco com forte.
 
-Criterios: league_id=1 | amostra>=5 no venue correto | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.70)
+Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.70)
 
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
@@ -103,23 +111,26 @@ QUALIDADE DOS DADOS (Copa do Mundo):
   Use "weighted_goals_against" em vez da media bruta — Copa>Eliminatorias>Amistoso.
   Declare: "bruto X gols/j → ponderado Y gols/j (Z jogos Copa, W Eliminatorias, V amistosos)".
 
-PASSO 1 — Candidatos A (simples): odd individual {odd_min}-{odd_max}. Avalie gols, escanteios, cartoes, BTTS, Dupla Chance, Handicap.
-PASSO 2 — Candidatos B (somente se A falhar): odd individual 1.10-1.27. Verifique se dois picks de jogos diferentes resultam em combinado {odd_min}-{odd_max}.
-PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | (EV<=-0.05) | (EV<=0 e confidence<0.70).
-  Excecao stat_strong: EV>-0.05 com confidence>=0.70 e 3+ confirmadores → aceitar, indicar no reasoning.
-PASSO 4 — Selecionar: prefira A. B somente se confidence media de B superar A por >=0.05. Sem valido→no_bet.
+PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_min}-{odd_max}.
+PASSO 2 — Candidatos B (se A falhar ou tiver confidence inferior): busque pares de jogos diferentes
+  onde dois picks de alta consistencia (taxa>=65%, confidence>=0.70) tenham produto de odds em {odd_min}-{odd_max}.
+PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=-0.05 | (EV<0 e confidence<0.70).
+PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar A por >=0.05, ou se nao houver A valido.
+  Sem pick valido → no_bet.
 
 CALCULOS:
-taxa=confirmados/total | prob_real=media ponderada (1.0,0.85,0.70...) | EV=(prob_real×odd)-1
+taxa=confirmados/total | prob_real=media ponderada (recente=1.0, 0.85, 0.70...) | EV=(prob_real×odd)-1
 CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
-  Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7 | Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos3→1.0|media→0.5
+  Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7|<5→descarte
+  Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos 3 confirmam→1.0|so media→0.5
 
-VERIFICACAO FINAL antes de retornar: odd_combined entre {odd_min} e {odd_max}? Se nao → no_bet.
+VERIFICACAO FINAL obrigatoria: calcule odd_combined = odd_1 × odd_2 (ou odd_1 se simples).
+  Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
 
 SAIDA JSON:
 Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
 Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
-Sem pick: {{"no_bet":true,"motivo":"criterio que falhou — ex: odd combinada fora da faixa"}}
+Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 
 
@@ -208,7 +219,7 @@ def get_wc_fixtures_with_odds() -> list[dict]:
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
         LIMIT %s
-    """, (WC_LEAGUE_ID, ODD_MIN - 0.10, ODD_MAX + 0.10, MAX_FIXTURES))
+    """, (WC_LEAGUE_ID, _COMBO_ODD_MIN, ODD_MAX + 0.10, MAX_FIXTURES))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -262,9 +273,10 @@ def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dic
     return ctx
 
 
-# Faixa de odds com buffer para filtro antes de enviar à IA
-_ODDS_FILTER_MIN = 1.25
-_ODDS_FILTER_MAX = 1.75
+# Filtro de odds antes de enviar à IA.
+# Min inclui odds baixas (~1.10) para picks de combinação; Max com buffer acima de ODD_MAX.
+_ODDS_FILTER_MIN = 1.08
+_ODDS_FILTER_MAX = 1.65
 _ODDS_MAX_ITEMS = 60
 
 
