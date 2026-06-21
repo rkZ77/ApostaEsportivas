@@ -64,7 +64,8 @@ OBJETIVO: acertividade maxima. Nao busque o maior EV nem a odd mais atrativa —
 Consistencia vale mais que EV: prefira 8/10 jogos confirmando @ 1.25 do que 5/10 @ 1.60.
 Odd entre 1.05 e 1.80. Confidence >= 0.72. Se nenhum pick atender → no_bet. Prefira no_bet a um pick fraco.
 
-Retorne APENAS o objeto JSON final. Nada antes, nada depois. Comeca com {{ e termina com }}.\
+Realize toda a analise INTERNAMENTE. NÃO escreva texto, markdown, raciocinio ou comentario fora do JSON.
+Retorne APENAS o objeto JSON final. Proibido qualquer caractere antes ou depois do JSON. Comeca com {{ e termina com }}.\
 """
 
 

@@ -71,7 +71,8 @@ Simples: 1 pick com odd direta em {odd_min}-{odd_max}.
 Combinacao: 2 picks de jogos DIFERENTES onde odd_1 × odd_2 resulta em {odd_min}-{odd_max} — o PRODUTO e o que vale.
 Consistencia acima de tudo: 9/10 @ 1.22 > 6/10 @ 1.48. Nenhum pick com confidence>={conf_min} → no_bet.
 
-SAIDA: apenas JSON valido. Comeca com {{ e termina com }}. Nenhum texto fora do JSON.\
+Realize toda a analise INTERNAMENTE. NÃO escreva texto, markdown, raciocinio ou comentario fora do JSON.
+SAIDA: apenas JSON valido. Proibido qualquer caractere antes ou depois. Comeca com {{ e termina com }}.\
 """
 
 

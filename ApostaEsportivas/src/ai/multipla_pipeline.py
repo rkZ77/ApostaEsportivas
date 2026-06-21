@@ -67,7 +67,8 @@ PRINCÍPIOS INEGOCIÁVEIS:
 COMBINAÇÕES IDEAIS: mercados de categorias diferentes + jogos de ligas sem relação estatística.
 Os detalhes de execução (varredura, score, correlação, montagem, conflitos proibidos) estão no prompt do usuário.
 
-SAÍDA: apenas JSON válido. Começa com { e termina com }. Nenhum texto fora do JSON."""
+SAÍDA OBRIGATÓRIA: realize toda a análise INTERNAMENTE. NÃO escreva texto, markdown, títulos ou raciocínio fora do JSON.
+Sua resposta começa com { e termina com }. Nenhum caractere antes ou depois do JSON."""
 
 
 # ============================================================
@@ -118,7 +119,9 @@ score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_tot
 multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
 Verificacao: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? sem mesmo fixture? score_base>=0.55?
 
-SAIDA JSON:
+IMPORTANTE: realize toda a análise internamente. NÃO escreva texto, markdown, raciocínio ou comentário fora do JSON. Proibido escrever qualquer texto antes ou depois do JSON.
+
+SAIDA JSON — sua resposta começa com {{ e termina com }}, nada mais:
 Sem multipla: {{"no_bet":true,"motivo":"motivo"}}
 Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
 multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
