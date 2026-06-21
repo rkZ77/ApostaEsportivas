@@ -123,7 +123,7 @@ export default function Login() {
       } else {
         await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms)
         localStorage.removeItem('ref_code')
-        navigate('/picks')
+        navigate('/picks#guia')
       }
     } catch (err: any) {
       const detail = err.response?.data?.detail
@@ -171,12 +171,23 @@ export default function Login() {
           <img src="/logo.png" alt="Pick IA" className="w-52 h-52 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
           <h1 className="text-5xl font-black text-white tracking-tight mb-3">Pick<span className="text-green-500">IA</span></h1>
           <p className="text-zinc-400 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
-          <div className="grid grid-cols-3 gap-4 mt-6">
-            {['IA Avançada', 'Copa 2026', '+600 picks'].map(label => (
-              <div key={label} className="bg-zinc-900/80 border border-zinc-800 rounded-xl p-3 text-center">
-                <div className="text-xs text-zinc-400 font-semibold uppercase tracking-wider">{label}</div>
-              </div>
-            ))}
+          <div className="mt-8 text-left max-w-xs mx-auto">
+            <p className="text-zinc-500 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
+            <div className="space-y-3">
+              {[
+                { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
+                { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
+                { dot: 'bg-orange-400', text: 'Alavancagem Copa do Mundo' },
+                { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
+                { dot: 'bg-yellow-400', text: 'Histórico completo com Win Rate' },
+              ].map(({ dot, text }) => (
+                <div key={text} className="flex items-center gap-3">
+                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                  <span className="text-sm text-zinc-300">{text}</span>
+                </div>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-600 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
           </div>
           <a href="https://www.instagram.com/pickia_br/" target="_blank" rel="noopener noreferrer"
             className="mt-8 flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition-colors justify-center">
@@ -197,10 +208,10 @@ export default function Login() {
           </div>
 
           <h2 className="text-2xl font-bold text-white mb-1">
-            {mode === 'login' ? 'Bem-vindo de volta' : 'Criar conta'}
+            {mode === 'login' ? 'Bem-vindo de volta' : '2 dias VIP grátis'}
           </h2>
           <p className="text-zinc-500 mb-6 text-sm">
-            {mode === 'login' ? 'Entre para acessar suas tips' : '2 dias de teste VIP grátis com CPF válido'}
+            {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma. Sem cartão de crédito.'}
           </p>
 
           <form onSubmit={submit} className="space-y-4">
@@ -279,10 +290,10 @@ export default function Login() {
                     onChange={e => handleRegCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
                     inputMode="numeric" autoComplete="off" />
-                  <p className="text-xs text-zinc-600 mt-1">1 conta por CPF. Necessário para o teste grátis.</p>
+                  <p className="text-xs text-zinc-600 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp / Telefone</label>
+                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp</label>
                   <input type="tel" value={phone}
                     onChange={e => setPhone(maskPhone(e.target.value))}
                     required className="input" placeholder="(11) 99999-9999"
@@ -343,7 +354,7 @@ export default function Login() {
             )}
 
             <button type="submit" disabled={loading} className="btn-primary w-full text-center mt-2">
-              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Criar conta grátis'}
+              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Ativar 2 dias VIP grátis'}
             </button>
           </form>
 

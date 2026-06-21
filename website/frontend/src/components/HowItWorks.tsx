@@ -296,6 +296,14 @@ export default function HowItWorks() {
         </div>
       </div>
 
+      {/* CTA */}
+      <Link
+        to="/picks"
+        className="flex items-center justify-center gap-2 py-3.5 bg-green-500 hover:bg-green-400 text-black font-black text-sm rounded-xl transition-colors"
+      >
+        Ver os picks de hoje <ChevronRight className="w-4 h-4" />
+      </Link>
+
     </div>
   )
 }

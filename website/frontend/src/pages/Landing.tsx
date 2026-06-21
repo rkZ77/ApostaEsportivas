@@ -367,7 +367,7 @@ export default function Landing() {
             <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
             <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
             <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors hidden sm:block">
-              Teste grátis 2 dias
+              Criar conta grátis
             </Link>
             {/* Mobile: CTA + hambúrguer */}
             <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors sm:hidden">
@@ -430,28 +430,27 @@ export default function Landing() {
                 </span>
               </div>
 
-              <h1 className="text-4xl md:text-5xl font-black leading-[1.1] mb-6 tracking-tight">
-                A IA que vai te ajudar a
+              <h1 className="text-4xl md:text-5xl font-black leading-[1.1] mb-5 tracking-tight">
+                Picks da Copa 2026
                 <br />
-                <span className="text-green-500">lucrar na Copa</span>
+                <span className="text-green-500">gerados por IA,</span>
                 <br />
-                do Mundo 2026
+                entregues todo dia.
               </h1>
 
-              <p className="text-zinc-400 text-base md:text-lg leading-relaxed mb-8">
-                Analisamos todas as <span className="text-white font-bold">48 seleções</span> e{' '}
-                <span className="text-white font-bold">64 jogos</span> com inteligência artificial.
-                Picks com edge positivo, odds em tempo real e uma IA que responde suas dúvidas.
+              <p className="text-zinc-400 text-base leading-relaxed mb-8">
+                A IA analisa cada jogo com dados reais de estatísticas, forma recente e odds de mercado.
+                Você recebe os melhores picks — com edge positivo — toda manhã. De graça pra começar.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
                 <Link to="/login"
                   className="bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
-                  Começar teste gratuito: 2 dias VIP
+                  Criar conta — 2 dias VIP grátis
                 </Link>
                 <a href="#resultados"
                   className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
-                  Ver picks recentes
+                  Ver resultados reais
                 </a>
               </div>
 
@@ -860,7 +859,7 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/login"
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto">
-              Criar conta grátis: 2 dias VIP
+              Criar conta — 2 dias VIP grátis
             </Link>
             <a href="#resultados"
               className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto text-center">
