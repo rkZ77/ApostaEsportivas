@@ -66,7 +66,7 @@ class MatchStatsService:
               AND ms.season = %s
               AND ms.league_id = %s
             ORDER BY ms.match_date DESC
-            LIMIT 10;
+            LIMIT 15;
         """, (team_id, season, league_id))
 
     ##########################################################################
@@ -94,7 +94,7 @@ class MatchStatsService:
               AND ms.season = %s
               AND ms.league_id = %s
             ORDER BY ms.match_date DESC
-            LIMIT 10;
+            LIMIT 15;
         """, (team_id, season, league_id))
 
     ##########################################################################
@@ -125,7 +125,7 @@ class MatchStatsService:
               AND ms.season = %s
               AND ms.league_id = %s
             ORDER BY ms.match_date DESC
-            LIMIT 10;
+            LIMIT 15;
         """, (team_id, team_id, team_id, season, league_id))
 
     ##########################################################################

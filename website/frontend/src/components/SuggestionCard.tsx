@@ -23,6 +23,7 @@ interface Suggestion {
   bet_house: string
   confidence: number
   probability?: number | null
+  market_type?: string | null
   ev?: number
   reasoning?: string
   result?: string
@@ -131,6 +132,20 @@ export default function SuggestionCard({
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
           <span className="badge-vip">VIP</span>
+          {s.market_type && s.market_type !== 'unknown' && (() => {
+            const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartoes', result:'Resultado' }
+            const mtCls: Record<string,string> = {
+              goals:  'text-green-400 border-green-700/50 bg-green-900/20',
+              corners:'text-blue-400 border-blue-700/50 bg-blue-900/20',
+              cards:  'text-yellow-400 border-yellow-700/50 bg-yellow-900/20',
+              result: 'text-purple-400 border-purple-700/50 bg-purple-900/20',
+            }
+            return (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide ${mtCls[s.market_type] ?? 'text-zinc-500 border-zinc-700'}`}>
+                {mtLabel[s.market_type] ?? s.market_type}
+              </span>
+            )
+          })()}
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={s.league_id} name={s.league_name} />
@@ -225,7 +240,7 @@ export default function SuggestionCard({
       {fato && (
         <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
           <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
-          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{fato}</span>
+          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">{fato}</span>
         </div>
       )}
 

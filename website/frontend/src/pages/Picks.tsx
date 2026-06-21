@@ -448,8 +448,19 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
           </div>
         ) : (
           <div className="flex-1 px-4 py-3 text-center">
-            <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
-            <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+            {dica.ev != null ? (
+              <>
+                <div className="text-[10px] text-zinc-500 mb-0.5">EV</div>
+                <div className={`text-xl font-black ${Number(dica.ev) >= 0 ? 'text-green-400' : 'text-orange-400'}`}>
+                  {Number(dica.ev) >= 0 ? '+' : ''}{(Number(dica.ev) * 100).toFixed(1)}%
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
+                <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+              </>
+            )}
           </div>
         )}
       </div>
@@ -621,6 +632,11 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             {new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {' · '}{legs.length} seleções
           </span>
+          {legs.length >= 2 && legs[0]?.home && legs[1]?.home && (
+            <span className="text-[9px] text-zinc-500 truncate max-w-[140px]">
+              {legs[0].home} · {legs[1].home}
+            </span>
+          )}
         </div>
         {resultStyle ? (
           <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>

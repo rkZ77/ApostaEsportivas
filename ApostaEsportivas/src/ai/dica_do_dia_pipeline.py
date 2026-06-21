@@ -19,6 +19,19 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+
+
+def _detect_market_type(market: str) -> str:
+    m = market.lower()
+    if "corner" in m or "escanteio" in m:
+        return "corners"
+    if "card" in m or "cartão" in m or "cartões" in m:
+        return "cards"
+    if "goal" in m or "gol" in m:
+        return "goals"
+    if any(x in m for x in ["1x2", "result", "winner", "dupla chance", "handicap"]):
+        return "result"
+    return "unknown"
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -243,16 +256,16 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(ctx["away_stats"]))
         if ctx.get("last10_home"):
             lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["last10_home"][:8]))
+            lines.append(_j(ctx["last10_home"][:15]))
         if ctx.get("last10_away"):
             lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["last10_away"][:8]))
-        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 8:
+            lines.append(_j(ctx["last10_away"][:15]))
+        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 15:
             lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["total_home"][:8]))
-        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 8:
+            lines.append(_j(ctx["total_home"][:15]))
+        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 15:
             lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["total_away"][:8]))
+            lines.append(_j(ctx["total_away"][:15]))
 
         lines.append("")
     return "\n".join(lines)
@@ -367,9 +380,9 @@ def save_dica(pick: dict) -> None:
         INSERT INTO picks_free
             (fixture_id, match_date, home_team, away_team,
              home_team_id, away_team_id,
-             league_id, league_name, market, line, odd, bet_house,
+             league_id, league_name, market, market_type, line, odd, bet_house,
              market_id, confidence, prob_real, edge, reasoning)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) DO UPDATE SET
             fixture_id   = EXCLUDED.fixture_id,
             home_team    = EXCLUDED.home_team,
@@ -379,6 +392,7 @@ def save_dica(pick: dict) -> None:
             league_id    = EXCLUDED.league_id,
             league_name  = EXCLUDED.league_name,
             market       = EXCLUDED.market,
+            market_type  = EXCLUDED.market_type,
             line         = EXCLUDED.line,
             odd          = EXCLUDED.odd,
             bet_house    = EXCLUDED.bet_house,
@@ -396,6 +410,7 @@ def save_dica(pick: dict) -> None:
         pick["league_id"],
         pick.get("league_name", ""),
         pick["market"],
+        _detect_market_type(pick["market"]),
         pick["line"],
         float(pick["odd"]),
         pick.get("bet_house", ""),

@@ -99,7 +99,8 @@ OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {od
   - Criterio de qualidade por pick: taxa_real > 1/odd (EV positivo) + taxa>=65% + amostra>=5.
     Calcule prob_real pelos dados historicos. edge = prob_real - (1/odd). Nao combine pick sem edge positivo ou taxa<65%.
 
-Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.70)
+Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
+CARTOES: use apenas se arbitro com >=3 jogos na temporada E historico dos dois times com >=5 jogos e taxa>=60%. Sem esses dois → prefira gols ou escanteios.
 
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}
@@ -113,7 +114,7 @@ PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_m
 PASSO 2 — Candidatos B (se A falhar): busque pares de jogos diferentes com odd individual 1.21–1.26,
   edge>0 (ou taxa_real>1/odd) e taxa>=65% em ambos, cujo produto caia em {odd_min}-{odd_max}.
   Se nenhum par válido existir → no_bet direto.
-PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=-0.05 | (EV<0 e confidence<0.70).
+PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=-0.05 | (EV<0 e confidence<0.72).
 PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar A por >=0.05, ou se nao houver A valido.
   Sem pick valido → no_bet.
 

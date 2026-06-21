@@ -113,7 +113,7 @@ def get_today_suggestions(
                        s.home_team_name, s.away_team_name,
                        s.home_team_id, s.away_team_id,
                        s.market, s.line, s.odd, s.bet_house,
-                       s.market_type, s.confidence, s.ev,
+                       s.market_type, s.confidence, s.ev, s.probability,
                        s.reasoning, s.result, s.profit,
                        f.league_id,
                        l.name AS league_name
@@ -292,7 +292,7 @@ def get_vip_suggestions(
                 s.home_team_name, s.away_team_name,
                 s.home_team_id, s.away_team_id,
                 s.market, s.line, s.odd, s.bet_house,
-                s.market_type, s.confidence, s.ev,
+                s.market_type, s.confidence, s.ev, s.probability,
                 s.reasoning, s.result, s.profit,
                 s.created_at
             FROM picks_vip s

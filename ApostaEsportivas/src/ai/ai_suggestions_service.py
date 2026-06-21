@@ -299,13 +299,12 @@ class AISuggestionsService:
 
         referee_block = to_json(referee_stats) if referee_stats else '"Arbitro nao identificado ou sem historico na temporada"'
 
-        # Histórico total só é enviado quando o venue-específico é insuficiente (< 8 jogos)
-        # Caso contrário é redundante e desperdiça ~2.000 tokens por fixture
-        include_total_home = len(last10_home) < 8
-        include_total_away = len(last10_away) < 8
+        # Histórico total só é enviado quando o venue-específico é insuficiente (< 15 jogos)
+        include_total_home = len(last10_home) < 15
+        include_total_away = len(last10_away) < 15
 
-        total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:8])}" if include_total_home else ""
-        total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:8])}" if include_total_away else ""
+        total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:15])}" if include_total_home else ""
+        total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:15])}" if include_total_away else ""
 
         home_avgs = self._compute_avgs(last10_home, is_home_ctx=True)
         away_avgs = self._compute_avgs(last10_away, is_home_ctx=False)
@@ -331,10 +330,10 @@ ESTATÍSTICAS FORA
 {avgs_away_block}
 
 HISTÓRICO CASA
-{format_last10(last10_home[:8])}
+{format_last10(last10_home[:15])}
 
 HISTÓRICO FORA
-{format_last10(last10_away[:8])}
+{format_last10(last10_away[:15])}
 {total_home_block}
 {total_away_block}
 ÁRBITRO
@@ -744,10 +743,10 @@ HISTÓRICO FORA
                 home_team_name, away_team_name,
                 market, line, odd, bet_house,
                 market_type, market_id,
-                confidence, ev, reasoning,
+                confidence, ev, probability, reasoning,
                 created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (fixture_id) DO NOTHING
             """,
             (
@@ -765,6 +764,7 @@ HISTÓRICO FORA
                 chosen_market_id,
                 conf,
                 ev,
+                float(chosen.get("probability", 0) or 0),
                 chosen.get("reasoning", ""),
             ),
         )

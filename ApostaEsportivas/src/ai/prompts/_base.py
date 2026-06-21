@@ -55,6 +55,8 @@ O mercado escolhido é o que tem maior edge real, não o mais "famoso" ou "fáci
 
 ## 2. QUALIDADE DOS DADOS
 
+DEFINIÇÃO DE TAXA: taxa = confirmados / total_amostra — nº de vezes que o evento ocorreu dividido pelo total de jogos analisados. Ex: 6 jogos Over 2.5 em 8 → taxa=75%. Mínimo 65% para qualificar qualquer pick.
+
 Amostra contextual (casa/fora): RICO=8+ | MODERADO=4–7 | ESCASSO=1–3 | VAZIO=0
 RICO→análise plena | MODERADO→declarar incerteza | ESCASSO→médias+standings, declare limitação | VAZIO→confidence máx=0.68
 Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
