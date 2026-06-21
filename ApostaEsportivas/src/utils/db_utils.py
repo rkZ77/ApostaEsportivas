@@ -4,6 +4,8 @@ from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
+_logged_envs: set = set()
+
 
 def get_connection(env: str = None):
     """
@@ -34,7 +36,9 @@ def get_connection(env: str = None):
             f"Variáveis de banco não definidas para env='{env or 'default'}' no .env")
 
     label = env.upper() if env else "RAILWAY"
-    print(f"[DB] Conectando ao banco {label}: {DB_HOST}")
+    if label not in _logged_envs:
+        print(f"[DB] Conectando ao banco {label}: {DB_HOST}")
+        _logged_envs.add(label)
 
     return psycopg2.connect(
         host=DB_HOST,
