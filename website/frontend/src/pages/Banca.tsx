@@ -180,6 +180,9 @@ export default function Banca() {
   const start   = data?.bankroll_start ?? 100
   const goalPct = goal ? Math.min(100, Math.round(((current - start) / (goal - start)) * 100)) : 0
 
+  // ganho em unidades (exclui alavancagem, igual ao total_pnl)
+  const ganhoUnidades = (data?.unit_value ?? 0) > 0 ? (data?.total_pnl ?? 0) / data.unit_value : 0
+
   // distribuição
   const distTotal = (data?.greens ?? 0) + (data?.reds ?? 0) + (data?.push ?? 0) + (data?.half_wins ?? 0) + (data?.half_loss ?? 0)
   const distItems = [
@@ -281,16 +284,10 @@ export default function Banca() {
                   sub: `${data?.greens ?? 0}G / ${data?.reds ?? 0}R de ${data?.total_resolved ?? 0}`,
                 },
                 {
-                  label: 'Streak atual',
-                  value: data?.streak > 0
-                    ? `${data.streak_type === 'green' ? '+' : '-'}${data.streak}`
-                    : '',
-                  color: data?.streak_type === 'green' ? 'text-green-500'
-                       : data?.streak_type === 'red'   ? 'text-red-400'
-                       : 'text-zinc-500',
-                  sub: data?.best_streak > 0
-                    ? `Melhor: ${data.best_streak} greens seguidos`
-                    : 'Sem sequência ainda',
+                  label: 'Ganho p/ unidade',
+                  value: `${ganhoUnidades >= 0 ? '+' : ''}${ganhoUnidades.toFixed(1)}u`,
+                  color: ganhoUnidades >= 0 ? 'text-green-500' : 'text-red-400',
+                  sub: 'excl. alavancagem',
                 },
               ].map(({ label, value, color, sub }) => (
                 <div key={label} className="stat-card text-center">
