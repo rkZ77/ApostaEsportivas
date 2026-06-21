@@ -243,7 +243,7 @@ function RecentResults() {
         <div className="text-center mb-12">
           <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
           <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-            Todos os picks ficam registrados. Win rate auditável — qualquer pessoa pode conferir.
+            Todos os picks ficam registrados. Win rate auditável, qualquer pessoa pode conferir.
           </p>
         </div>
 
@@ -440,13 +440,13 @@ export default function Landing() {
 
               <p className="text-zinc-400 text-base leading-relaxed mb-8">
                 A IA analisa cada jogo com dados reais de estatísticas, forma recente e odds de mercado.
-                Você recebe os melhores picks — com edge positivo — toda manhã. De graça pra começar.
+                Você recebe os melhores picks com edge positivo toda manhã. De graça pra começar.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
                 <Link to="/login"
                   className="bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
-                  Criar conta — 2 dias VIP grátis
+                  Criar conta · 2 dias VIP grátis
                 </Link>
                 <a href="#resultados"
                   className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
@@ -859,7 +859,7 @@ export default function Landing() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/login"
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto">
-              Criar conta — 2 dias VIP grátis
+              Criar conta · 2 dias VIP grátis
             </Link>
             <a href="#resultados"
               className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto text-center">
