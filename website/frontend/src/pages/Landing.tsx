@@ -116,9 +116,7 @@ function ThreeSteps() {
   return (
     <section className="py-16 bg-black border-b border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
-        <p className="text-center text-xs text-zinc-500 uppercase tracking-widest font-bold mb-10">
-          Simples assim
-        </p>
+        <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
         <div className="grid md:grid-cols-3 gap-5">
           {([
             { n: '1', Icon: UserPlus, title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Sem cartão de crédito. Ganhe 2 dias de acesso VIP completo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
@@ -129,7 +127,7 @@ function ThreeSteps() {
               <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 ${iconBg}`}>
                 <Icon className={`w-6 h-6 ${color}`} />
               </div>
-              <div className={`text-[10px] font-black uppercase tracking-widest ${color} mb-2`}>Passo {n}</div>
+              <div className={`text-sm font-black ${color} mb-2 opacity-60`}>{n}</div>
               <h3 className="text-base font-black text-white mb-2">{title}</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
             </div>
@@ -182,9 +180,7 @@ function ActiveLeagues() {
   return (
     <section className="border-y border-zinc-800/60 bg-zinc-950">
       <div className="max-w-5xl mx-auto px-4 py-10">
-        <p className="text-center text-xs text-zinc-500 uppercase tracking-widest font-bold mb-8">
-          Ligas &amp; torneios cobertos
-        </p>
+        <p className="text-center text-sm text-zinc-500 font-medium mb-8">Ligas &amp; torneios cobertos</p>
         <div className="flex flex-wrap items-center justify-center gap-8">
           {leagues.map(({ league_id, name, logo_url }) => (
             <div key={league_id} className="flex flex-col items-center gap-2">
@@ -245,10 +241,9 @@ function RecentResults() {
     <section id="resultados" className="py-24 bg-zinc-950 border-y border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center mb-12">
-          <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Transparência total</p>
           <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
           <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-            Todos os picks gerados pela IA ficam registrados. Win rate auditável por qualquer pessoa.
+            Todos os picks ficam registrados. Win rate auditável — qualquer pessoa pode conferir.
           </p>
         </div>
 
@@ -341,6 +336,7 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [chatDemo, setChatDemo] = useState(0)
+  const [openFaq, setOpenFaq] = useState<number | null>(null)
   useEffect(() => {
     const t = setInterval(() => setChatDemo(n => (n + 1) % 3), 3000)
     return () => clearInterval(t)
@@ -360,9 +356,9 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+            <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-              Copa 2026 · Ao Vivo
+              Copa 2026 ao vivo
             </span>
           </div>
           <div className="flex items-center gap-5">
@@ -418,9 +414,7 @@ export default function Landing() {
           className="absolute right-0 top-0 h-full max-w-[55%] object-contain object-right opacity-[0.07] pointer-events-none select-none hidden md:block"
           onError={e => (e.currentTarget.style.display = 'none')} />
         {/* Background gradients */}
-        <div className="absolute inset-0 bg-gradient-to-br from-green-500/8 via-transparent to-yellow-400/5" />
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/50 to-transparent" />
-        <div className="absolute -top-40 left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-green-500/5 rounded-full blur-3xl pointer-events-none" />
+        <div className="absolute inset-0 bg-gradient-to-br from-green-500/6 via-transparent to-transparent" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -430,9 +424,9 @@ export default function Landing() {
               {/* Badge Copa AO VIVO */}
               <div className="inline-flex items-center gap-2 mb-6">
                 <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-8 h-8 object-contain" />
-                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider inline-flex items-center gap-1.5">
+                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full inline-flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-                  Copa 2026 · Ao Vivo
+                  Copa 2026 ao vivo
                 </span>
               </div>
 
@@ -473,7 +467,7 @@ export default function Landing() {
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      <span className="text-xs font-bold text-green-500 uppercase tracking-widest">Pick do Dia · Copa 2026</span>
+                      <span className="text-xs font-semibold text-green-500">Pick do dia · Copa 2026</span>
                     </div>
                     <div className="flex items-center gap-1.5">
                       <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Exemplo</span>
@@ -534,7 +528,6 @@ export default function Landing() {
           <div className="grid md:grid-cols-2 gap-16 items-center">
             {/* Texto */}
             <div>
-              <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Agente IA exclusivo</p>
               <h2 className="text-3xl md:text-4xl font-black mb-5 leading-tight">
                 Converse com uma IA<br />
                 <span className="text-green-500">especialista em futebol</span>
@@ -606,7 +599,6 @@ export default function Landing() {
       <section className="py-20 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-5xl mx-auto px-4">
           <div className="text-center mb-12">
-            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Tecnologia</p>
             <h2 className="text-3xl font-black mb-3">Como a IA gera os picks</h2>
             <p className="text-zinc-400 text-sm max-w-lg mx-auto">
               Não é palpite. É processamento de dados em escala, análise estatística e modelos
@@ -640,7 +632,7 @@ export default function Landing() {
             ))}
           </div>
           <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-4 font-semibold">Mercados analisados</p>
+            <p className="text-xs text-zinc-500 font-medium mb-4">Mercados analisados</p>
             <div className="flex flex-wrap gap-2">
               {['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios',
                 'Cartões', 'Gols 1º Tempo', 'Múltiplas', 'Alavancagem'].map(m => (
@@ -656,7 +648,6 @@ export default function Landing() {
       <section id="planos" className="py-24">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-12">
-            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Planos</p>
             <h2 className="text-3xl font-black mb-3">Comece de graça, evolua quando quiser</h2>
             <p className="text-zinc-400 text-sm max-w-md mx-auto">
               Teste 2 dias com acesso VIP completo. Sem cartão de crédito. Depois escolha seu plano.
@@ -666,7 +657,7 @@ export default function Landing() {
           <div className="grid md:grid-cols-3 gap-5">
             {/* Free */}
             <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7">
-              <p className="text-xs text-zinc-500 uppercase tracking-widest font-bold mb-2">Free</p>
+              <span className="inline-block text-xs text-zinc-400 font-semibold bg-zinc-800 px-2.5 py-1 rounded-lg mb-3">Free</span>
               <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
               <p className="text-zinc-500 text-xs mb-6">Para sempre</p>
               <div className="space-y-2.5 mb-8">
@@ -699,7 +690,7 @@ export default function Landing() {
                   Começar agora
                 </span>
               </div>
-              <p className="text-xs text-green-500 uppercase tracking-widest font-bold mb-2">Teste VIP</p>
+              <span className="inline-block text-xs text-green-400 font-semibold bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-lg mb-3">Teste grátis</span>
               <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
               <p className="text-zinc-400 text-xs mb-6">2 dias completos · Sem compromisso</p>
               <div className="space-y-2.5 mb-8">
@@ -727,7 +718,7 @@ export default function Landing() {
             {/* VIP */}
             <div className="bg-zinc-900 border border-yellow-400/30 rounded-2xl p-7 overflow-hidden relative">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
-              <p className="text-xs text-yellow-400 uppercase tracking-widest font-bold mb-2">VIP</p>
+              <span className="inline-block text-xs text-yellow-400 font-semibold bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-1 rounded-lg mb-3">VIP</span>
               <p className="text-3xl font-black text-white mb-0.5">A partir de</p>
               <p className="text-zinc-400 text-xs mb-6">R$ 39,90/mês</p>
               <div className="space-y-2.5 mb-8">
@@ -796,8 +787,7 @@ export default function Landing() {
       <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-12">
-            <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-3">Dúvidas frequentes</p>
-            <h2 className="text-3xl font-black">Perguntas frequentes</h2>
+            <h2 className="text-3xl font-black">Dúvidas frequentes</h2>
           </div>
           <div className="space-y-3">
             {[
@@ -830,15 +820,18 @@ export default function Landing() {
                 a: 'Focamos na Copa do Mundo 2026 com cobertura dos 64 jogos. Após a Copa, as principais ligas europeias (Champions, Premier League, La Liga, Serie A, Bundesliga) entram no sistema.',
               },
             ].map(({ q, a }, i) => (
-              <details key={i} className="group bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-                <summary className="flex items-center justify-between gap-4 px-6 py-4 cursor-pointer list-none font-semibold text-white text-sm select-none">
+              <div key={i} className="border border-zinc-800 rounded-xl overflow-hidden">
+                <button
+                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
+                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-white text-sm hover:bg-zinc-900 transition-colors"
+                >
                   {q}
-                  <svg className="w-4 h-4 text-zinc-500 shrink-0 transition-transform group-open:rotate-180" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </summary>
-                <p className="px-6 pb-5 text-zinc-400 text-sm leading-relaxed border-t border-zinc-800/60 pt-4">{a}</p>
-              </details>
+                  <span className={`text-zinc-500 text-lg font-light shrink-0 leading-none transition-transform duration-200 ${openFaq === i ? 'rotate-45' : ''}`}>+</span>
+                </button>
+                {openFaq === i && (
+                  <p className="px-5 pb-5 pt-3 text-zinc-400 text-sm leading-relaxed border-t border-zinc-800/60">{a}</p>
+                )}
+              </div>
             ))}
           </div>
         </div>
@@ -851,9 +844,9 @@ export default function Landing() {
           <div className="flex items-center justify-center gap-3 mb-6">
             <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
           </div>
-          <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider mb-6">
+          <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full mb-6">
             <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-            Copa em andamento agora
+            Copa em andamento
           </div>
           <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
             A Copa está acontecendo.
