@@ -107,6 +107,11 @@ PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar 
 
 CALCULOS:
 taxa=confirmados/total | prob_real=media ponderada (recente=1.0, 0.85, 0.70...) | EV=(prob_real×odd)-1
+FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
+  Primario: feitos_A_contexto + feitos_B_contexto.
+  Validacao: cedidos_A_contexto + cedidos_B_contexto.
+  Divergencia >15% → reduza Confirmadores 1 nivel.
+  Mercado de time: feitos do time + cedidos do adversario. Resultado: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
 CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
   Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7|<5→descarte
   Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos 3 confirmam→1.0|so media→0.5

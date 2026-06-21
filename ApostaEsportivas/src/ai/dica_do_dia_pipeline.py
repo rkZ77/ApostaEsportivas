@@ -84,6 +84,12 @@ CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta vari
 
 CALCULO:
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte. (Copa: total_amostra=historico global conforme descrito acima; outros: venue correto)
+   FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
+     Estimativa primaria: feitos_A_contexto + feitos_B_contexto.
+     Validacao cruzada:   cedidos_A_contexto + cedidos_B_contexto.
+     Divergencia >15% entre as duas → reduza Confirmadores 1 nivel.
+     Mercado de time: feitos do time no contexto + cedidos do adversario.
+     Resultado/Handicap: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
 B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
 C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
    Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5

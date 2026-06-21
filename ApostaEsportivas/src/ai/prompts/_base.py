@@ -40,10 +40,21 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
 ## 2. ANÁLISE ESTATÍSTICA
 
-2.1 TAXA COMBINADA — use SEMPRE os dois lados:
-  Eventos conjuntos (Over/Under gols, BTTS, cantos, cartões): C = média(taxa_mandante_em_casa, taxa_visitante_fora)
-  Mercado de time específico: use histórico do time relevante no contexto correto.
-  Resultado/Dupla Chance/Handicap: histórico contextual do mandante em casa, complementado pelo visitante.
+2.1 TAXA COMBINADA — feitos E cedidos para TODO mercado:
+  Mercados de total agregado (Over/Under gols/cantos/cartões, BTTS):
+    Estimativa primária:  feitos_A_contexto + feitos_B_contexto
+                          (quantos gols/cantos/cartões cada time PRODUZ por jogo no contexto correto)
+    Validação cruzada:    cedidos_A_contexto + cedidos_B_contexto
+                          (quantos gols/cantos/cartões cada time CONCEDE ao adversário)
+    Convergência (diferença ≤15%): sinal forte → use a média das duas estimativas.
+    Divergência (>15%): declare incerteza no reasoning, reduza K (confirmação) 1 nível.
+  Mercado de time específico (Total Gols/Cantos/Cartões de um time):
+    Primário: feitos do time em questão no contexto correto (casa se mandante, fora se visitante).
+    Validação: cedidos pelo adversário no contexto oposto.
+  Resultado/Dupla Chance/Handicap:
+    Ataque A: gols_feitos_A_casa vs defesa B: gols_cedidos_B_fora.
+    Ataque B: gols_feitos_B_fora vs defesa A: gols_cedidos_A_casa.
+    Combine os dois vetores para estimar probabilidade de cada desfecho.
   Peso temporal decrescente: mais recente=1.0, anterior=0.85...
 
 2.2 ESTABILIDADE: variação taxa recente vs. média total ≥15pp → risco, registrar.

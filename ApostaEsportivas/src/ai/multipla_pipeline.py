@@ -95,6 +95,14 @@ score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
 Odds: se odd fora de 1.05-1.80 → DESCARTE. Linha: mais conservadora em 1.05-1.80.
 Descarte jogo se score_base<0.55 ou sem linha válida.
 
+FEITOS vs CEDIDOS — aplique a TODOS os mercados:
+  Total agregado (Over/Under gols/cantos/cartões, BTTS):
+    Primário: feitos_A_contexto + feitos_B_contexto (o que cada time PRODUZ por jogo).
+    Validação: cedidos_A_contexto + cedidos_B_contexto (o que cada time CONCEDE).
+    Diferença ≤15%: sinal forte. Diferença >15%: reduza K 1 nível no score_base.
+  Mercado de time: feitos do time no seu contexto + cedidos do adversário no contexto oposto.
+  Resultado/Handicap: feitos_A vs cedidos_B (ataque A vs defesa B) + feitos_B vs cedidos_A.
+
 QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
 rank 1-6 (top)→peso 2.0 | rank 7-12 (mid)→peso 1.0 | rank 13+ (fraco)→peso 0.5 | null→peso 1.0
 Taxa real = soma(stat × peso) / soma(pesos). Declare no reason: "taxa bruta X% → ponderada Y%".
