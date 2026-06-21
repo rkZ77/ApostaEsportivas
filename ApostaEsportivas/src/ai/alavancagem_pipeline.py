@@ -358,14 +358,13 @@ def run_alavancagem_llm(fixtures: list[dict]) -> dict:
 
     raw = response.content[0].text.strip()
     start = raw.find("{")
-    end   = raw.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         raise Exception(f"[ALAVANCAGEM] JSON não encontrado na resposta:\n{raw[:500]}")
-    raw = raw[start:end]
     try:
-        return json.loads(raw)
+        obj, _ = json.JSONDecoder().raw_decode(raw[start:])
+        return obj
     except Exception as e:
-        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[:300]}")
+        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[start:start+300]}")
 
 
 # ============================================================

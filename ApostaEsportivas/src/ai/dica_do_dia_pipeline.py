@@ -477,15 +477,13 @@ def run_dica_llm(fixtures_with_context: list) -> dict:
 
     raw = response.content[0].text.strip()
     start = raw.find("{")
-    end   = raw.rfind("}") + 1
-    if start == -1 or end == 0:
+    if start == -1:
         raise Exception(f"[DICA] JSON não encontrado na resposta:\n{raw[:500]}")
-    raw = raw[start:end]
-
     try:
-        return json.loads(raw)
+        obj, _ = json.JSONDecoder().raw_decode(raw[start:])
+        return obj
     except Exception as e:
-        raise Exception(f"[DICA] JSON invalido: {e}\nRAW:\n{raw[:500]}")
+        raise Exception(f"[DICA] JSON invalido: {e}\nRAW:\n{raw[start:start+500]}")
 
 
 # ============================================================
