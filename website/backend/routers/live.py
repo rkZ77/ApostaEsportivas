@@ -173,7 +173,7 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
     if any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"]):
         return None, "Placar", "result"
 
-    return None, market or "—", direction
+    return None, market or "", direction
 
 
 def _pick_status(current: float | None, line_str: str | None,

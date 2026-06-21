@@ -84,7 +84,7 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
         resend.Emails.send({
             "from":    from_addr,
             "to":      [to],
-            "subject": "Acesso ativado — Pick IA",
+            "subject": "Acesso ativado · Pick IA",
             "text":    f"Olá {first_name}, seu acesso foi ativado! Plano {plan_label} válido até {expires_str}. Acesse: {site_url}/picks",
             "html":    html,
         })
@@ -112,10 +112,10 @@ def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, data_
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
 PLANS = {
-    "mensal":     {"price": 39.90,  "title": "Plano Picks — Mensal",     "days": 30},
-    "trimestral": {"price": 99.90,  "title": "Plano Picks — Trimestral", "days": 90},
-    "semestral":  {"price": 199.90, "title": "Plano Picks — Semestral",  "days": 180},
-    "anual":      {"price": 359.90, "title": "Plano Picks — Anual",      "days": 365},
+    "mensal":     {"price": 39.90,  "title": "Plano Picks Mensal",     "days": 30},
+    "trimestral": {"price": 99.90,  "title": "Plano Picks Trimestral", "days": 90},
+    "semestral":  {"price": 199.90, "title": "Plano Picks Semestral",  "days": 180},
+    "anual":      {"price": 359.90, "title": "Plano Picks Anual",      "days": 365},
 }
 
 
@@ -140,7 +140,7 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
     preference_data = {
         "items": [{
             "title":       plan_info["title"],
-            "description": f"Acesso VIP ao Pick IA — picks esportivos por IA por {plan_info['days']} dias",
+            "description": f"Acesso VIP ao Pick IA · picks esportivos por IA por {plan_info['days']} dias",
             "quantity":    1,
             "unit_price":  plan_info["price"],
             "currency_id": "BRL",

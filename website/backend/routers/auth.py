@@ -312,7 +312,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
             f"Confirme seu e-mail para ativar seu acesso VIP gratuito de 2 dias:\n\n"
             f"{verify_url}\n\n"
             f"O link expira em 24 horas.\n\n"
-            f"— Equipe Pick IA"
+            f"Equipe Pick IA"
         ),
         html=_verification_html(first_name, site_url, token, logo_url=_logo_url(site_url)),
     )
@@ -889,14 +889,14 @@ def forgot_password(body: ForgotPasswordBody):
         nome = row["name"]
         _send_email(
             to      = body.email,
-            subject = "Redefinição de senha — Pick IA",
+            subject = "Redefinição de senha · Pick IA",
             body    = (
                 f"Olá {nome},\n\n"
                 f"Seu código para redefinir a senha é:\n\n"
                 f"  {code}\n\n"
                 f"O código expira em 15 minutos.\n"
                 f"Se não foi você, ignore este email.\n\n"
-                f"— Equipe Pick IA"
+                f"Equipe Pick IA"
             ),
         )
         return {"ok": True}

@@ -177,7 +177,7 @@ def _get_site_context(user_id: int) -> str:
                 if alav_hist:
                     lines.append(f"\n--- HISTÓRICO ALAVANCAGEM (últimas {len(alav_hist)} entradas) ---")
                     for a in alav_hist:
-                        lines.append(f"  {a.get('match_date','?')}: {a['home_team_1']} x {a['away_team_1']} — {a.get('result') or 'pendente'}")
+                        lines.append(f"  {a.get('match_date','?')}: {a['home_team_1']} x {a['away_team_1']} · {a.get('result') or 'pendente'}")
 
             else:
                 # Preview free (top 3 sem detalhes)
@@ -200,7 +200,7 @@ def _get_site_context(user_id: int) -> str:
             if free_pick:
                 fp = dict(free_pick)
                 line_s = f" {fp['line']}" if fp.get('line') else ""
-                lines.append(f"\nPick Seguro (grátis): {fp['home_team']} x {fp['away_team']} — {fp['market']}{line_s} @ {fp['odd']} | {fp.get('result') or 'pendente'}")
+                lines.append(f"\nPick Seguro (gratis): {fp['home_team']} x {fp['away_team']} · {fp['market']}{line_s} @ {fp['odd']} | {fp.get('result') or 'pendente'}")
 
             return "\n".join(lines)
         finally:

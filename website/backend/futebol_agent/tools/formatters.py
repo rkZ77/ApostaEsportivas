@@ -5,8 +5,8 @@ ODDS_BINGO_MAX = 3.00
 
 def fmt_live_matches(matches: list[dict]) -> str:
     if not matches:
-        return "LISTA COMPLETA — 0 partidas ao vivo nas ligas monitoradas agora."
-    lines = [f"LISTA COMPLETA — {len(matches)} partida(s) ao vivo nas ligas monitoradas:"]
+        return "LISTA COMPLETA: 0 partidas ao vivo nas ligas monitoradas agora."
+    lines = [f"LISTA COMPLETA: {len(matches)} partida(s) ao vivo nas ligas monitoradas:"]
     for m in matches:
         lines.append(f"ID:{m['fixture_id']} | {m['home']} {m['score']} {m['away']} | {m['minute']}' | {m['league']}")
     return "\n".join(lines)
@@ -14,8 +14,8 @@ def fmt_live_matches(matches: list[dict]) -> str:
 
 def fmt_today_matches(matches: list[dict]) -> str:
     if not matches:
-        return "LISTA COMPLETA — 0 jogos encontrados nas ligas monitoradas hoje."
-    lines = [f"LISTA COMPLETA — {len(matches)} jogo(s) nas ligas monitoradas hoje:"]
+        return "LISTA COMPLETA: 0 jogos encontrados nas ligas monitoradas hoje."
+    lines = [f"LISTA COMPLETA: {len(matches)} jogo(s) nas ligas monitoradas hoje:"]
     for m in matches:
         status = m["status_short"]
         score  = m["score"] if status not in ("NS", "TBD") else "x"
@@ -48,7 +48,7 @@ def fmt_match_stats(data: dict) -> str:
         parts.append("STATS: indisponíveis no intervalo.")
     events = data.get("events", [])
     if events:
-        ev_lines = [f"{e['minute']}' {e['type'].upper()} {e['team']} ({e['player']}) — {e['detail']}" for e in events]
+        ev_lines = [f"{e['minute']}' {e['type'].upper()} {e['team']} ({e['player']}) · {e['detail']}" for e in events]
         parts.append("EVENTOS:\n" + "\n".join(ev_lines))
     return "\n\n".join(parts) if parts else "Sem dados disponíveis."
 
@@ -78,7 +78,7 @@ def _eligible_entries(markets: dict, min_odd: float = ODDS_MIN, max_odd: float =
             if min_odd <= odd <= max_odd:
                 bookmaker = val.get("bookmaker", "") if isinstance(val, dict) else ""
                 bm_str = f" ({bookmaker})" if bookmaker else ""
-                entries.append(f"{market} — {outcome}: {odd}{bm_str}")
+                entries.append(f"{market} · {outcome}: {odd}{bm_str}")
     return entries
 
 
@@ -88,7 +88,7 @@ def _append_eligible_sections(result: str, markets: dict) -> str:
     if eligible:
         result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}):\n" + "\n".join(eligible)
     else:
-        result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}): nenhuma odd neste range — não sugira entradas."
+        result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}): nenhuma odd neste range. Nao sugira entradas."
     bingo_extra = [e for e in bingo if e not in eligible]
     if bingo_extra:
         result += f"\n\nELEGÍVEIS BINGO ({ODDS_MIN}–{ODDS_BINGO_MAX}):\n" + "\n".join(bingo)
@@ -112,7 +112,7 @@ def fmt_live_odds(data: dict) -> str:
     headers = {
         "live":               "",
         "intervalo":          "[INTERVALO] Odds do 2º tempo disponíveis:\n",
-        "prematch_fallback":  "[ODDS PRÉ-JOGO] Live indisponível — exibindo odds pré-jogo:\n",
+        "prematch_fallback":  "[ODDS PRÉ-JOGO] Live indisponível. Exibindo odds pré-jogo:\n",
         "sem_cobertura":      "Sem cobertura de odds para esta partida.",
     }
     header = headers.get(status, "")
@@ -204,7 +204,7 @@ def fmt_lineups(data: list[dict]) -> str:
     parts = []
     for t in data:
         lines = [
-            f"{t['team']} [{t['formation']}] — Técnico: {t['coach']}",
+            f"{t['team']} [{t['formation']}] · Técnico: {t['coach']}",
             f"  GK:  {', '.join(t['gk'])}",
             f"  DEF: {', '.join(t['defenders'])}",
             f"  MED: {', '.join(t['midfielders'])}",
@@ -266,7 +266,7 @@ def fmt_team_historical_stats_any(data: dict) -> str:
     def r(d: dict, k: str) -> str: return str(d.get(k, "?"))
     lines = [
         f"Stats reais {data['team']} | qualquer competição ({leagues}) | {venue_label} | {data['games_analyzed']} jogos",
-        f"⚠️ Dados de múltiplas competições — use como referência.",
+        f"⚠️ Dados de múltiplas competições. Use como referência.",
         f"{'':20} Total   1ºT   2ºT",
         f"{'Escanteios':<20} {r(t,'corners'):>5} {r(h1,'corners'):>5} {r(h2,'corners'):>5}",
         f"{'Chutes total':<20} {r(t,'shots'):>5} {r(h1,'shots'):>5} {r(h2,'shots'):>5}",

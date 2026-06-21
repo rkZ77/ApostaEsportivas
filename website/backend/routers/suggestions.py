@@ -408,7 +408,7 @@ def get_suggestion_detail(
             suggestion = {
                 "id": d["id"],
                 "match_date": d["match_date"],
-                "home_team_name": f"Múltipla — {n} seleções",
+                "home_team_name": f"Múltipla · {n} seleções",
                 "away_team_name": "",
                 "market": f"{n} seleções",
                 "line": None,

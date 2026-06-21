@@ -297,7 +297,7 @@ export default function Admin() {
                       className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-zinc-600'}`}
                       onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
                     >
-                      {s.status === 'running' ? 'rodando...' : `último: ${s.finished_at ?? '—'}`}
+                      {s.status === 'running' ? 'rodando...' : `último: ${s.finished_at ?? 's/d'}`}
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
