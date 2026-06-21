@@ -48,8 +48,14 @@ a) Liste TODOS os mercados em MERCADOS E ODDS — avalie gols, cantos, cartões,
 b) Ordene pelo campo "edge" já calculado por Poisson (disponível em cada odd).
    Se "edge"=null → calcule manualmente: taxa_real − (1/odd).
 c) Ignore todos com edge ≤ 0.
-d) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos.
-e) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos — avalie K (confirmadores independentes).
+d) DEFLACAO DE EDGE EXTREMO: se prob_real > 0.88 em qualquer odd → o Poisson usou médias
+   históricas que divergem do contexto desta competição (ex: times com 2-3 cantos/jogo histórico
+   mas Copa do Mundo exige 8+ cantos/jogo de média). Para ranqueamento NESTA ETAPA, use:
+     edge_efetivo = edge × 0.5
+   Declare no reasoning: "edge deflacionado (prob_real extrema — histórico descontextualizado)".
+   Isso não veta o mercado, apenas impede que domínio artificial oculte outros mercados.
+e) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos.
+f) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos — avalie K (confirmadores independentes).
 
 O mercado escolhido é o que tem maior edge real, não o mais "famoso" ou "fácil de analisar".
 
@@ -133,6 +139,7 @@ Ordem: 1º maior edge positivo → 2º maior EV → 3º maior confidence.
 is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
 CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
+CANTOS — se prob_real > 0.88 (edge veio de histórico descontextualizado): NÃO pode ser is_best_pick. Prefira goals ou cards como best pick. Cantos ainda pode aparecer nas 3 sugestões, mas o edge extremo não é confiável o suficiente para ser o pick principal.
 
 LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.05. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.

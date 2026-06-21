@@ -239,7 +239,13 @@ def enrich_odds_with_poisson(
                 prob = None
 
         if prob is not None and odd_val > 0:
-            prob = max(0.01, min(0.99, prob))
+            # cap em 0.93 / 0.07: prob_real extrema (>0.93) indica histórico
+            # descontextualizado (ex: Copa com médias de cantos muito baixas).
+            # Sem o cap, edge artificial domina e suprime outros mercados.
+            capped = max(0.07, min(0.93, prob))
+            if capped != prob:
+                print(f"[POISSON] prob_real={round(prob,4)} capeada em {capped} ({mn[:40]})")
+            prob = capped
             o['prob_real'] = round(prob, 4)
             o['implied']   = round(1.0 / odd_val, 4)
             o['edge']      = round(prob - (1.0 / odd_val), 4)
