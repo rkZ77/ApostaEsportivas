@@ -82,6 +82,14 @@ gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<1
 --- JOGOS DO DIA + DADOS ---
 {fixtures_formatados}
 
+CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado, para cada jogo):
+Leia a classificacao (standings) e determine a situacao de cada time:
+  PRECISA GANHAR → jogo aberto → BOOST Over gols/BTTS/cantos | VETO Under gols.
+  EMPATE BASTA → pode fechar defensivamente → BOOST Under gols/cantos | VETO Over gols/BTTS.
+  JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza Q 1 nivel, declare no reasoning.
+  NUNCA selecione pick que contraria o contexto situacional evidente (ex: Under gols com time precisando ganhar).
+  Em multipla: se os dois picks forem de jogos com contexto situacional oposto, verifique se nao ha correlacao indireta.
+
 ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
 ATENÇÃO: as odds já contêm "prob_real", "edge" e "ev" calculados por modelo de Poisson.
 Use o campo "edge" diretamente para ordenar os mercados. Se edge=null: calcule manualmente.

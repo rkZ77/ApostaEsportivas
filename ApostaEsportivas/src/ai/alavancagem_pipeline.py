@@ -81,6 +81,13 @@ USER_PROMPT_TEMPLATE = """\
 ALAVANCAGEM Copa do Mundo — pick mais seguro do dia.
 Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
+CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
+Leia a classificacao (standings) e determine a situacao de cada time:
+  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados → BOOST Over gols/BTTS | VETO Under gols.
+  EMPATE BASTA → pode fechar defensivamente → BOOST Under gols | VETO Over gols/BTTS.
+  JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
+  NUNCA selecione pick que contraria o contexto situacional evidente.
+
 OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
 OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
   REGRA DE SELECAO — filtre ANTES de analisar:

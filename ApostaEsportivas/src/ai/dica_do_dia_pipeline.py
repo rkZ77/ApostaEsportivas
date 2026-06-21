@@ -74,6 +74,13 @@ USER_PROMPT_TEMPLATE = """\
 Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
 Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); use historico total (ultimos 15 jogos, todos competicoes) + stats especificas da Copa. Amostra>=5 no historico global.
 
+CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado):
+Leia a classificacao (standings) e determine a situacao de cada time:
+  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados → BOOST Over gols/BTTS/cantos | VETO Under gols.
+  EMPATE BASTA → pode fechar defensivamente → BOOST Under gols/cantos | VETO Over gols/BTTS.
+  JA CLASSIFICADO/ELIMINADO → possivel rotacao de titulares → reduza Q 1 nivel, declare no reasoning.
+  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence. NUNCA selecione mercado que contraria o contexto evidente.
+
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
 Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)

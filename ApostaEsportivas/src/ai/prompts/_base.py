@@ -21,7 +21,27 @@ SAÍDA: apenas JSON válido. Sua resposta começa com { e termina com }. Nenhum 
 
 REGRAS_BASE = """\
 
-## 0. VARREDURA SISTEMÁTICA DE MERCADOS (execute ANTES de qualquer análise aprofundada)
+## 0. CONTEXTO SITUACIONAL (execute PRIMEIRO — antes de qualquer análise de mercado)
+
+Leia a classificação (standings) de cada time e determine a situação antes de analisar qualquer odd:
+
+PRECISA GANHAR (eliminado se não vencer):
+  → Jogo aberto, ataque forçado, mais gols/cantos esperados, pressão = mais cartões.
+  → BOOST: Over gols, BTTS, Over cantos. VETO: Under gols (contradiz contexto evidente).
+
+EMPATE BASTA (ponto garante classificação/permanência):
+  → Pode fechar defensivamente, ritmo lento, menos gols/cantos.
+  → BOOST: Under gols, Under cantos. VETO: Over gols, BTTS (contradiz contexto evidente).
+
+JÁ CLASSIFICADO / JÁ ELIMINADO (sem pressão):
+  → Possível rotação de titulares, jogadores poupados — stats históricos menos confiáveis.
+  → Reduza Q (amostra) 1 nível. Declare no reasoning: "time sem pressão classificatória — rotação possível".
+
+CONFLITO situação vs edge estatístico:
+  → Declare o conflito no reasoning. Reduza confidence. NUNCA selecione mercado que contraria
+    o contexto situacional evidente (ex: Under gols com time precisando ganhar).
+
+## 1. VARREDURA SISTEMÁTICA DE MERCADOS (execute APÓS contexto situacional)
 
 a) Liste TODOS os mercados em MERCADOS E ODDS — avalie gols, cantos, cartões, dupla chance, handicap.
    Não existe mercado preferido: escolha pelo maior edge, independente do tipo.
@@ -33,15 +53,15 @@ e) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos — avalie K (confi
 
 O mercado escolhido é o que tem maior edge real, não o mais "famoso" ou "fácil de analisar".
 
-## 1. QUALIDADE DOS DADOS
+## 2. QUALIDADE DOS DADOS
 
 Amostra contextual (casa/fora): RICO=8+ | MODERADO=4–7 | ESCASSO=1–3 | VAZIO=0
 RICO→análise plena | MODERADO→declarar incerteza | ESCASSO→médias+standings, declare limitação | VAZIO→confidence máx=0.68
 Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 
-## 2. ANÁLISE ESTATÍSTICA
+## 3. ANÁLISE ESTATÍSTICA
 
-2.1 TAXA COMBINADA — feitos E cedidos para TODO mercado:
+3.1 TAXA COMBINADA — feitos E cedidos para TODO mercado:
   Mercados de total agregado (Over/Under gols/cantos/cartões, BTTS):
     Estimativa primária:  feitos_A_contexto + feitos_B_contexto
                           (quantos gols/cantos/cartões cada time PRODUZ por jogo no contexto correto)
