@@ -4,6 +4,23 @@ import api from '../services/api'
 import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 
+function wcPhase(dateStr?: string): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  const phases: [string, string, string][] = [
+    ['2026-06-11', '2026-07-02', 'Grupos'],
+    ['2026-07-04', '2026-07-10', 'Oitavas'],
+    ['2026-07-13', '2026-07-17', 'Quartas'],
+    ['2026-07-19', '2026-07-22', 'Semi'],
+    ['2026-07-25', '2026-07-26', 'Semifinal'],
+    ['2026-07-29', '2026-08-01', 'Final'],
+  ]
+  for (const [start, end, label] of phases) {
+    if (d >= new Date(start) && d <= new Date(end)) return label
+  }
+  return null
+}
+
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
 const LEAGUE_LOGO = (id?: number) =>
@@ -25,6 +42,7 @@ interface Suggestion {
   probability?: number | null
   market_type?: string | null
   ev?: number
+  match_date?: string
   reasoning?: string
   result?: string
   profit?: number
@@ -146,6 +164,11 @@ export default function SuggestionCard({
               </span>
             )
           })()}
+          {isCopa && wcPhase(s.match_date) && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-yellow-500 border-yellow-700/50 bg-yellow-900/20 uppercase tracking-wide">
+              {wcPhase(s.match_date)}
+            </span>
+          )}
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={s.league_id} name={s.league_name} />

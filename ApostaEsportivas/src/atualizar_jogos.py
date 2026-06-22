@@ -158,7 +158,7 @@ class DataCollectorMain:
         conn.close()
         return teams
 
-    def run_stage_5(self, mode="recent", days=3, wc_last_n=10):
+    def run_stage_5(self, mode="recent", days=3, wc_last_n=15):
         print("[STAGE 5] Calculando médias agregadas...")
         aggregator = self._get_team_aggregator()
 
@@ -267,7 +267,7 @@ if __name__ == "__main__":
             #     python atualizar_jogos.py 5 recent 3 15   <- wc_last_n=15
             mode      = sys.argv[2] if len(sys.argv) > 2 else "recent"
             days      = int(sys.argv[3]) if len(sys.argv) > 3 else 3
-            wc_last_n = int(sys.argv[4]) if len(sys.argv) > 4 else 10
+            wc_last_n = int(sys.argv[4]) if len(sys.argv) > 4 else 15
             collector.run_stage_5(mode=mode, days=days, wc_last_n=wc_last_n)
 
         elif stage == "reset":

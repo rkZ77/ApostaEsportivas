@@ -16,6 +16,24 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } f
 import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
 import Watermark from '../components/Watermark'
 
+// Copa do Mundo 2026 — fase pelo match_date
+function wcPhase(dateStr?: string): string | null {
+  if (!dateStr) return null
+  const d = new Date(dateStr)
+  const phases: [string, string, string][] = [
+    ['2026-06-11', '2026-07-02', 'Grupos'],
+    ['2026-07-04', '2026-07-10', 'Oitavas'],
+    ['2026-07-13', '2026-07-17', 'Quartas'],
+    ['2026-07-19', '2026-07-22', 'Semi'],
+    ['2026-07-25', '2026-07-26', 'Semifinal'],
+    ['2026-07-29', '2026-08-01', 'Final'],
+  ]
+  for (const [start, end, label] of phases) {
+    if (d >= new Date(start) && d <= new Date(end)) return label
+  }
+  return null
+}
+
 // Helpers de logo
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
@@ -350,7 +368,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(dica.probability ?? dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
+    ? suggestStake(dica.prob_real ?? dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
     : null
   const fato = shortReasoning(dica.reasoning)
 
@@ -395,6 +413,25 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
           <span className="badge-free">FREE</span>
+          {dica.market_type && dica.market_type !== 'unknown' && (() => {
+            const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartoes', result:'Resultado' }
+            const mtCls: Record<string,string> = {
+              goals:  'text-green-400 border-green-700/50 bg-green-900/20',
+              corners:'text-blue-400 border-blue-700/50 bg-blue-900/20',
+              cards:  'text-yellow-400 border-yellow-700/50 bg-yellow-900/20',
+              result: 'text-purple-400 border-purple-700/50 bg-purple-900/20',
+            }
+            return (
+              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide ${mtCls[dica.market_type] ?? 'text-zinc-500 border-zinc-700'}`}>
+                {mtLabel[dica.market_type] ?? dica.market_type}
+              </span>
+            )
+          })()}
+          {isCopa && wcPhase(dica.match_date) && (
+            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-yellow-500 border-yellow-700/50 bg-yellow-900/20 uppercase tracking-wide">
+              {wcPhase(dica.match_date)}
+            </span>
+          )}
           {dica.league_name && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
@@ -1801,6 +1838,34 @@ export default function Picks() {
               </div>
             )}
 
+
+            {/* Histórico recente */}
+            {pfLoaded && pfRows.filter((r: any) => r.result).length > 0 && (
+              <div>
+                <SectionHeader color="bg-zinc-700" label="Últimos picks" />
+                <div className="space-y-2">
+                  {pfRows.filter((r: any) => r.result).slice(0, 8).map((r: any) => {
+                    const isGreen = r.result === 'GREEN'
+                    const isRed   = r.result === 'RED'
+                    const dt = new Date(r.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
+                    return (
+                      <div key={r.id}
+                        className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700"
+                        onClick={() => openDetail(r.id, 'free')}
+                      >
+                        <span className={`text-xs font-black px-2 py-0.5 rounded ${isGreen ? 'bg-green-500/15 text-green-400' : isRed ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                          {isGreen ? '✓' : isRed ? '✗' : r.result}
+                        </span>
+                        <span className="text-xs text-zinc-500 shrink-0">{dt}</span>
+                        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{r.home_team} vs {r.away_team}</span>
+                        <span className="text-xs text-zinc-500 shrink-0">{r.market?.split(' ').slice(0,2).join(' ')} {r.line ?? ''}</span>
+                        <span className="text-xs font-bold text-green-400 shrink-0">{Number(r.odd).toFixed(2)}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
