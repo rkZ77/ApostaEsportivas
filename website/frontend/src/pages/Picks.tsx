@@ -1617,7 +1617,7 @@ export default function Picks() {
 
         <TabBar
           tab={tab}
-          setTab={(t) => { if (t === 'aovivo') clearLive(); if (t === 'chat') setChatUnread(0); setTab(t) }}
+          setTab={(t) => { if (t === 'aovivo') clearLive(); setTab(t) }}
           canSeeVip={canSeeVip}
           liveCount={liveCount}
           counts={{

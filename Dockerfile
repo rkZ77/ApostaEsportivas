@@ -17,4 +17,4 @@ COPY --from=frontend /frontend/dist ./dist
 ENV PIPELINE_SRC_PATH=/app/pipeline
 # pipeline incluido em /app/pipeline
 EXPOSE 8000
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*
