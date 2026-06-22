@@ -92,8 +92,12 @@ def get_today_suggestions(
 
         _picks_free_sql = f"""
             SELECT pf.id, pf.fixture_id, pf.match_date, pf.home_team, pf.away_team,
-                   pf.league_id, pf.league_name, pf.market, pf.line, pf.odd, pf.bet_house,
-                   pf.confidence, pf.reasoning, pf.result, pf.profit,
+                   pf.league_id, pf.league_name, pf.market, pf.market_type, pf.line, pf.odd, pf.bet_house,
+                   pf.confidence, pf.prob_real, pf.edge,
+                   CASE WHEN pf.prob_real IS NOT NULL AND pf.odd IS NOT NULL
+                        THEN ROUND((pf.prob_real * pf.odd - 1)::numeric, 4)
+                        ELSE NULL END AS ev,
+                   pf.reasoning, pf.result, pf.profit,
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id
             FROM picks_free pf
@@ -941,8 +945,12 @@ def get_picks_free_history(
             SELECT pf.id, pf.fixture_id, pf.match_date,
                    pf.home_team, pf.away_team,
                    pf.league_id, pf.league_name,
-                   pf.market, pf.line, pf.odd, pf.bet_house,
-                   pf.confidence, pf.reasoning, pf.result, pf.profit,
+                   pf.market, pf.market_type, pf.line, pf.odd, pf.bet_house,
+                   pf.confidence, pf.prob_real, pf.edge,
+                   CASE WHEN pf.prob_real IS NOT NULL AND pf.odd IS NOT NULL
+                        THEN ROUND((pf.prob_real * pf.odd - 1)::numeric, 4)
+                        ELSE NULL END AS ev,
+                   pf.reasoning, pf.result, pf.profit,
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id
             FROM picks_free pf
