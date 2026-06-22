@@ -392,6 +392,78 @@ HISTÓRICO FORA
         return []
 
     # --------------------------------------------------------
+    # FORMATA ODDS ESTRUTURADAS (com no-vig) PARA O PROMPT DA IA
+    # --------------------------------------------------------
+    def _format_structured_odds_for_ai(
+        self,
+        structured_odds: list[dict],
+        min_odd: float = 1.05,
+        max_odd: float = 1.80,
+    ) -> list[dict]:
+        """
+        Converte odds estruturadas (com no_vig_prob) para o formato que a IA recebe.
+
+        Cada item informa:
+          - market_name: nome em português
+          - value: "Over" / "Under" / "Home" / "Away" / "Yes" / "No"
+          - line: linha do mercado (ex: "2.5")
+          - best_odd: melhor odd disponível entre as casas coletadas
+          - best_bookmaker: casa com a melhor odd
+          - no_vig_prob: probabilidade real de mercado (sem margem do bookmaker)
+          - market_ev: EV calculado com best_odd × no_vig_prob
+                       [POSITIVO = mercado subestima o evento vs próprio consenso]
+          - bookmakers_count: nº de casas com este mercado
+          - odds_range: {"min", "max"} — alta dispersão indica mercado ineficiente
+
+        A IA usa no_vig_prob como baseline: se sua estimativa estatística superar
+        no_vig_prob, o edge é real e o mercado está sub-precificando o evento.
+        """
+        _BLOCKED = {
+            "match winner", "resultado final (1x2)", "1x2",
+            "first half winner", "vencedor do 1º tempo",
+        }
+
+        result = []
+        for m in structured_odds:
+            raw_name = m.get("market_name", "").strip()
+            if raw_name.lower() in _BLOCKED:
+                continue
+
+            best_odd = m.get("best_odd", 0)
+            if not (min_odd <= best_odd <= max_odd):
+                continue
+
+            no_vig = m.get("no_vig_prob")
+            if no_vig is None:
+                continue
+
+            pt_name = translate_market(raw_name)
+            team    = m.get("team")
+            if pt_name != raw_name and team:
+                pt_name = f"{pt_name} ({team})"
+
+            result.append({
+                "market_id":        m.get("market_id"),
+                "market_name":      pt_name,
+                "market_type":      m.get("market_type"),
+                "value":            m.get("value"),
+                "line":             m.get("line"),
+                "best_odd":         best_odd,
+                "best_bookmaker":   m.get("best_bookmaker"),
+                "no_vig_prob":      no_vig,
+                "market_ev":        m.get("best_ev"),
+                "bookmakers_count": m.get("bookmakers_count", 1),
+                "odds_range":       m.get("odds_range"),
+                "bookmaker_odds":   m.get("bookmaker_odds", []),
+            })
+
+        print(
+            f"[AI] {len(result)} mercados com no-vig ({min_odd}–{max_odd}) "
+            f"| total bruto: {len(structured_odds)}"
+        )
+        return result
+
+    # --------------------------------------------------------
     # IA — GERA 3 SUGESTÕES
     # --------------------------------------------------------
     def generate_suggestions(
@@ -411,41 +483,44 @@ HISTÓRICO FORA
         odds_preloaded: list | None = None,
         web_context: str | None = None,
     ):
-        odds_map = odds_preloaded if odds_preloaded is not None else self.odds_service.load_odds_by_fixture(fx["fixture_id"])
-        if not odds_map:
+        # Detecta se as odds já estão no formato estruturado (com no_vig_prob)
+        # ou no formato legado (lista plana de odds brutas)
+        raw_odds = odds_preloaded if odds_preloaded is not None else \
+            self.odds_service.load_odds_structured(fx["fixture_id"])
+
+        if not raw_odds:
             print(f"[AI] Sem odds para fixture {fx['fixture_id']}")
             return []
 
-        # Filtra mercados bloqueados e odds fora da faixa válida
-        _BLOCKED_MARKETS = {"match winner", "resultado final (1x2)", "1x2"}
-        odds_map = [
-            o for o in odds_map
-            if o.get("market_name", "").strip().lower() not in _BLOCKED_MARKETS
-            and 1.03 <= float(o.get("odd", 0)) <= 1.83
-        ]
+        is_structured = bool(raw_odds) and "no_vig_prob" in raw_odds[0]
 
-        # Deduplica: para cada (market_name, line) mantém apenas a maior odd (melhor valor)
-        # O banco tem 10+ casas por mercado — a IA só precisa de 1 referência por linha
-        _seen: dict[tuple, dict] = {}
-        for o in odds_map:
-            key = (o.get("market_name", "").strip().lower(), str(o.get("line", "")).strip())
-            if key not in _seen or float(o.get("odd", 0)) > float(_seen[key].get("odd", 0)):
-                _seen[key] = o
-        odds_map = list(_seen.values())
-        print(f"[AI] {len(odds_map)} odds únicas (1.03-1.83) para fixture {fx['fixture_id']}")
-
-        # Traduz mercados para português APÓS dedup (dedup usa nome inglês como chave)
-        # Inclui o time no nome para mercados específicos (ex: "Total de Cartões Visitante (Athletic Club)")
-        # Mantém market_id para rastreamento
-        odds_for_ai = []
-        for o in odds_map:
-            item = dict(o)
-            raw = item.get("market_name", "")
-            pt = translate_market(raw)
-            if pt != raw:
-                item["market_name"] = f"{pt} ({item['team']})" if item.get("team") else pt
-            odds_for_ai.append(item)
-        odds_map = odds_for_ai
+        if is_structured:
+            # Formato novo: structured odds com no-vig — pipeline padrão
+            odds_map = self._format_structured_odds_for_ai(raw_odds)
+        else:
+            # Fallback legado: odds brutas (formato antigo, chamadas externas)
+            _BLOCKED_MARKETS = {"match winner", "resultado final (1x2)", "1x2"}
+            odds_filtered = [
+                o for o in raw_odds
+                if o.get("market_name", "").strip().lower() not in _BLOCKED_MARKETS
+                and 1.05 <= float(o.get("odd", 0) or o.get("best_odd", 0)) <= 1.80
+            ]
+            _seen: dict[tuple, dict] = {}
+            for o in odds_filtered:
+                key = (o.get("market_name", "").strip().lower(), str(o.get("line", "")).strip())
+                odd_val = float(o.get("odd", 0) or o.get("best_odd", 0))
+                if key not in _seen or odd_val > float(_seen[key].get("odd", _seen[key].get("best_odd", 0))):
+                    _seen[key] = o
+            odds_for_ai = []
+            for o in _seen.values():
+                item = dict(o)
+                raw = item.get("market_name", "")
+                pt = translate_market(raw)
+                if pt != raw:
+                    item["market_name"] = f"{pt} ({item['team']})" if item.get("team") else pt
+                odds_for_ai.append(item)
+            odds_map = odds_for_ai
+            print(f"[AI] {len(odds_map)} odds únicas (legado) para fixture {fx['fixture_id']}")
 
         dados = self._build_dados(
             fx, home_stats, away_stats,
@@ -654,8 +729,11 @@ HISTÓRICO FORA
         custom_prompt: str | None = None,
         web_context: str | None = None,
     ):
-        # 1. Carrega odds uma única vez (usada pela IA e pelo lookup de market_id)
-        odds_map_full = self.odds_service.load_odds_by_fixture(fx["fixture_id"])
+        # 1. Carrega odds estruturadas com no-vig (melhor qualidade de análise)
+        #    Fallback para odds brutas se estruturado retornar vazio
+        odds_map_full = self.odds_service.load_odds_structured(fx["fixture_id"])
+        if not odds_map_full:
+            odds_map_full = self.odds_service.load_odds_by_fixture(fx["fixture_id"])
 
         # 2. IA gera 3 sugestões usando o prompt da competição
         suggestions = self.generate_suggestions(
@@ -695,8 +773,10 @@ HISTÓRICO FORA
         def _find_market_id(om_full: list, line: str, odd_val: float) -> int | None:
             line_n = str(line).strip().lower()
             for o in om_full:
-                if (str(o.get("line", "")).strip().lower() == line_n
-                        and abs(float(o.get("odd", 0)) - odd_val) < 0.001):
+                # Suporta formato estruturado (best_odd) e legado (odd)
+                o_odd = float(o.get("best_odd", 0) or o.get("odd", 0))
+                o_line = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
+                if o_line == line_n and abs(o_odd - odd_val) < 0.02:
                     return o.get("market_id")
             return None
 

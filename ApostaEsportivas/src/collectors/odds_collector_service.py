@@ -1,4 +1,5 @@
 ﻿import os
+import re
 import requests
 
 from psycopg2.extras import execute_batch
@@ -307,10 +308,12 @@ class OddsCollectorService:
             # --------------------------------------------------
             # 3. UPSERT VALUES (ODDS)
             #
-            # Filtro de odds ajustado para 1.30–2.50:
-            # - mínimo 1.30: odds abaixo disso têm edge muito
-            #   baixo para qualquer análise ser útil
-            # - máximo 2.50: alinhado com o filtro do picks_vip
+            # Coleta odds em range amplo (1.05–2.50) para permitir
+            # cálculo correto de no-vig probability:
+            # - Precisamos do lado oposto do mercado (ex: Under quando
+            #   queremos Over) para remover a margem do bookmaker.
+            # - O filtro final de 1.05–1.80 é aplicado na IA,
+            #   não aqui — assim o EVCalculator tem dados completos.
             # --------------------------------------------------
             values_batch = []
 
@@ -341,7 +344,36 @@ class OddsCollectorService:
                         except (ValueError, TypeError):
                             continue
 
-                        value_name = str(sel["value"])
+                        raw_value = str(sel.get("value", "")).strip()
+
+                        # Separa o lado do mercado (Over/Under/Home/Away/Yes/No)
+                        # do valor numérico da linha (2.5 / 3.5 / 1 / etc.)
+                        # para que o EVCalculator consiga parear os dois lados
+                        # do mesmo mercado e calcular a probabilidade no-vig.
+                        #
+                        # Exemplos:
+                        #   "Over 2.5"  → value_name="Over",  line_value="2.5"
+                        #   "Under 3.5" → value_name="Under", line_value="3.5"
+                        #   "Home"      → value_name="Home",  line_value=""
+                        #   "Yes"       → value_name="Yes",   line_value=""
+                        #
+                        # O campo handicap da API (quando presente) tem precedência.
+                        handicap = str(sel.get("handicap", "") or "").strip()
+
+                        if handicap:
+                            value_name = raw_value
+                            line_value = handicap
+                        else:
+                            _m = re.match(
+                                r'^(Over|Under|Yes|No|Home|Away|1|X|2)\s*([\d.]+)?$',
+                                raw_value, re.IGNORECASE
+                            )
+                            if _m:
+                                value_name = _m.group(1)
+                                line_value = _m.group(2) or ""
+                            else:
+                                value_name = raw_value
+                                line_value = ""
 
                         values_batch.append((
                             market_row_id,
@@ -363,7 +395,7 @@ class OddsCollectorService:
                             side_team,
                             team_id,
                             team_name,
-                            value_name,
+                            line_value,
                             None,  # market_pt
                         ))
 

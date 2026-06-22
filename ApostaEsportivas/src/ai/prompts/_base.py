@@ -43,10 +43,37 @@ CONFLITO situação vs edge estatístico:
 
 ## 1. VARREDURA SISTEMÁTICA DE MERCADOS (execute APÓS contexto situacional)
 
+FORMATO DAS ODDS (novo):
+  Cada mercado agora traz os campos:
+    no_vig_prob   → probabilidade real do mercado (SEM margem do bookmaker)
+                    calculada a partir de múltiplas casas de apostas
+    market_ev     → EV calculado como (no_vig_prob × best_odd) − 1
+                    Se positivo: o bookmaker está sub-precificando vs consenso
+    best_odd      → melhor odd disponível entre as casas coletadas
+    best_bookmaker→ casa que oferece best_odd
+    bookmakers_count → nº de casas que têm este mercado
+    odds_range    → {"min", "max"} — alta dispersão indica mercado ineficiente
+    value         → "Over" / "Under" / "Home" / "Away" / "Yes" / "No"
+
+COMO USAR no_vig_prob:
+  no_vig_prob é o que O MERCADO acha que é a probabilidade real.
+  Sua tarefa é comparar sua estimativa estatística vs no_vig_prob:
+    SE prob_real_estimada > no_vig_prob: EDGE POSITIVO (você acha que evento é mais provável que o mercado)
+    SE prob_real_estimada < no_vig_prob: SEM EDGE (mercado precifica melhor que seus dados)
+    SE prob_real_estimada ≈ no_vig_prob: NEUTRO (evite — risco sem recompensa)
+
+  edge = prob_real_estimada − no_vig_prob   ← USE ESTA FÓRMULA (não 1/odd)
+  EV   = (prob_real_estimada × best_odd) − 1
+
+  Dispersão alta (odds_range.max − odds_range.min > 0.10): mercado ineficiente →
+    possível ineficiência genuína ou falta de liquidez (use com cautela).
+  bookmakers_count ≥ 2: consenso confiável | = 1: menos confiável.
+
 a) Liste TODOS os mercados em MERCADOS E ODDS — avalie gols, cantos, cartões, dupla chance, handicap.
    Não existe mercado preferido: escolha pelo maior edge, independente do tipo.
 b) Para cada mercado, estime prob_real com base nos dados históricos (taxa ponderada temporalmente).
-   Calcule: edge = prob_real − (1/odd).
+   Compare com no_vig_prob. Calcule: edge = prob_real − no_vig_prob.
+   Fallback (se no_vig_prob ausente): edge = prob_real − (1/best_odd).
 c) Ignore todos com edge ≤ 0.
 d) Selecione os 3 MAIORES edges positivos de categorias distintas (goals/corners/cards/result) como candidatos.
 e) SÓ ENTÃO aprofunde a análise completa nos 3 candidatos — avalie K (confirmadores independentes).
@@ -104,7 +131,14 @@ Invalida mercado: odd ausente | inconsistente | sem correspondência nas odds.
 Calcule prob_real manualmente com os dados históricos: taxa ponderada temporalmente
 (mais recente=1.0, anterior=0.85, ...) usando os dados de HISTÓRICO e ESTATÍSTICAS fornecidos.
 
-edge = prob_real − (1/odd) | EV = (prob_real × odd) − 1
+edge = prob_real − no_vig_prob   [use no_vig_prob das odds; fallback: prob_real − (1/best_odd)]
+EV   = (prob_real × best_odd) − 1
+
+INTERPRETAÇÃO DO no_vig_prob:
+  Se no_vig_prob = 0.52 e seus dados apontam para 0.61 → edge = +0.09 → forte oportunidade
+  Se no_vig_prob = 0.65 e seus dados apontam para 0.61 → edge = -0.04 → sem valor (mercado sabe mais)
+  Se market_ev já for positivo (no próprio campo): mercado interno já aponta valor — reforça edge
+
 Se todos EV≤0 mas EV≥−0.05: retorne os 3 com menor EV negativo e declare ausência de value (veja seção 6).
 Se todos EV<−0.05: nenhum pick válido — retorne JSON com "no_picks":true e explique.
 CONFIRMAÇÃO MÚLTIPLA: edge confirmado por ≥2 indicadores independentes. Se 1 apenas → "confirmação parcial".
@@ -114,7 +148,10 @@ CONFIRMAÇÃO MÚLTIPLA: edge confirmado por ≥2 indicadores independentes. Se 
 C (Consistência): média dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
 Q (Amostra): RICO=1.00 | MODERADO=0.75 | ESCASSO=0.45 | VAZIO=0.20
 K (Confirmação): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 (fontes: histórico, médias, standings, árbitro)
-R (Robustez): edge/implied≥0.15→1.00 | 0.10–0.14→0.75 | 0.05–0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
+R (Robustez): edge/no_vig_prob≥0.15→1.00 | 0.10–0.14→0.75 | 0.05–0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
+  [edge = prob_real − no_vig_prob; se no_vig_prob ausente usa edge = prob_real − (1/best_odd)]
+  Bônus: bookmakers_count≥3 → R +0.05 (consenso amplo confirma liquidez)
+  Penalidade: bookmakers_count=1 → R −0.05 (pouco consenso, mercado menos eficiente)
 
 CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92] | só apresente se ≥0.55 e R>0
 RISCO: ≥0.80=BAIXO | 0.65–0.79=MÉDIO | 0.55–0.64=ALTO (declare no reasoning)
@@ -158,12 +195,13 @@ EV>0 é o critério ideal — a odd paga mais do que o risco. Mas EV levemente n
 
 ## 7. VALIDAÇÃO (execute antes de retornar)
 
-[V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−(1/odd)?
-[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e odd∈[1.05,1.80]?
+[V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−no_vig_prob (ou 1/odd fallback)?
+[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e best_odd∈[1.05,1.80]?
 [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
 [V11] reasoning contém bloco [CONF] com cálculo explícito?
 [V12] COERÊNCIA MERCADO↔ANÁLISE: o campo "market" é de cartões? → reasoning deve analisar cartões (não gols/escanteios). Market de escanteios? → reasoning analisa escanteios. Market de gols? → reasoning analisa gols. NUNCA misture tipos: se o mercado é "Total de Cartões" não escreva análise de gols.
+[V13] no_vig_prob disponível e usado no cálculo de edge? Se ausente → declarar no reasoning e usar 1/best_odd.
 Falha → corrija antes de retornar.
 
 ## CALIBRAÇÃO — DESEMPENHO HISTÓRICO PRÓPRIO
@@ -195,14 +233,15 @@ Retorne exatamente este formato — nada antes, nada depois:
       "market_type": "<goals|corners|cards|result>",
       "market": "<nome exato copiado das odds>",
       "line": "<linha exata copiada das odds>",
-      "odd": <número copiado das odds>,
-      "bet_house": "<casa de apostas>",
-      "probability": <prob_real calculada>,
-      "implied_probability": <1/odd>,
-      "edge": <prob_real - implied_probability>,
+      "odd": <best_odd copiado das odds>,
+      "bet_house": "<best_bookmaker copiado das odds>",
+      "probability": <prob_real calculada por você via dados históricos>,
+      "no_vig_prob": <no_vig_prob copiado das odds — prob de mercado sem margem>,
+      "implied_probability": <no_vig_prob se disponível, senão 1/odd>,
+      "edge": <prob_real - no_vig_prob (ou prob_real - 1/odd se no_vig_prob ausente)>,
       "confidence": <score entre 0.55 e 0.92>,
       "is_best_pick": <true no melhor pick, false nos outros dois>,
-      "reasoning": "<VARREDURA: mercado selecionado por ter edge=[X] — maior entre os mercados avaliados. FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. [CONF] C=[x] Q=[x] K=[x] R=[x] → conf=[x×0.35+x×0.20+x×0.25+x×0.20]=[resultado]. RISCO: [BAIXO|MÉDIO|ALTO]. CONCLUSÃO: por que a odd subestima a prob real.>"
+      "reasoning": "<VARREDURA: mercado selecionado por ter edge=[X] vs no_vig_prob=[Y] — maior edge entre os mercados avaliados. FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. [CONF] C=[x] Q=[x] K=[x] R=[x] → conf=[x×0.35+x×0.20+x×0.25+x×0.20]=[resultado]. RISCO: [BAIXO|MÉDIO|ALTO]. CONCLUSÃO: por que minha estimativa estatística supera o consenso de mercado (no_vig_prob).>"
     }},
     {{ ... }},
     {{ ... }}
