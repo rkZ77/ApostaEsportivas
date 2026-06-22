@@ -142,7 +142,7 @@ export default function ApostaModal({
               </div>
               {exceedsSuggested && !exceedsMax && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
-                  Acima da sugestão — você será solicitado a confirmar
+                  Acima da sugestão · você será solicitado a confirmar
                 </p>
               )}
               {exceedsMax && (
@@ -170,7 +170,7 @@ export default function ApostaModal({
                     : 'bg-green-600 hover:bg-green-500 text-white'
                 }`}
               >
-                {loading ? '...' : exceedsSuggested ? `Apostar ${units}u →` : 'Registrar aposta'}
+                {loading ? '...' : exceedsSuggested ? `Apostar ${units}u` : 'Registrar aposta'}
               </button>
             </div>
           </div>
