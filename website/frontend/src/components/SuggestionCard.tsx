@@ -212,7 +212,21 @@ export default function SuggestionCard({
           <div className="text-3xl font-black text-green-400">{Number(s.odd).toFixed(2)}</div>
           <div className="text-[10px] text-zinc-600 mt-0.5">{s.bet_house}</div>
         </div>
-        {stakeSuggestion && !s.result ? (
+        {!s.result && s.is_followed && s.user_stake_units != null ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Apostado</div>
+              <div className="text-xl font-black text-green-400">{s.user_stake_units}u</div>
+              {banca && <div className="text-[11px] text-zinc-600">R${(s.user_stake_units * banca.unit_value).toFixed(0)}</div>}
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
+              <div className="text-xl font-black text-white">
+                {banca ? `R$${(s.user_stake_units * banca.unit_value * Number(s.odd)).toFixed(0)}` : `${(s.user_stake_units * Number(s.odd)).toFixed(1)}u`}
+              </div>
+            </div>
+          </>
+        ) : stakeSuggestion && !s.result ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
