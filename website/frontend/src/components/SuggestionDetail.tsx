@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from 'lucide-react'
 import api from '../services/api'
 import PickSocial from './PickSocial'
+import { suggestStake } from '../utils/stakeUtils'
 
 interface StatBlock {
   context_type: string
@@ -135,11 +136,42 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
 
   const stakeUnits = (() => {
+    // Alavancagem não tem unidades
+    if (pickType === 'alavancagem') return null
+
     if (!s) return 1
-    if (s.stake_pct && banca?.bankroll_current && banca?.unit_value && banca.unit_value > 0) {
+
+    const odd  = Number(s.odd ?? s.total_odd ?? 0)
+    const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
+
+    // 1. Backend Kelly + banca real do usuário
+    if (s.stake_pct && banca?.bankroll_current && banca.unit_value > 0) {
       return Math.max(1, Math.min(5, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value)))
     }
-    return s.user_stake_units ?? (s.stake || null) ?? 1
+
+    // 2. Backend stake_pct sem banca → escala 1-5u de referência (1% = 1u)
+    if (s.stake_pct) {
+      return Math.max(1, Math.min(5, Math.round(s.stake_pct / 0.01)))
+    }
+
+    // 3. Frontend Kelly com banca real
+    if (prob > 0 && odd > 1 && banca?.bankroll_current && banca.unit_value > 0) {
+      const sug = suggestStake(prob, odd, banca.bankroll_current, banca.unit_value, 5)
+      if (sug) return sug.units
+    }
+
+    // 4. Frontend Kelly sem banca → escala 1-5u de referência
+    if (prob > 0 && odd > 1) {
+      const b = odd - 1
+      const q = 1 - prob
+      const kelly = (b * prob - q) / b
+      if (kelly > 0) {
+        const halfKelly = Math.min(0.05, kelly * 0.5)
+        return Math.max(1, Math.min(5, Math.round(halfKelly / 0.01)))
+      }
+    }
+
+    return 1
   })()
 
   return (
@@ -272,7 +304,10 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
-                      <div className="text-2xl font-black text-white">{stakeUnits}u</div>
+                      {stakeUnits != null
+                        ? <div className="text-2xl font-black text-white">{stakeUnits}u</div>
+                        : <div className="text-xs text-zinc-500 mt-1">—</div>
+                      }
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>

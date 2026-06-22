@@ -480,6 +480,7 @@ def run_migrations():
         """)
         # Novas colunas e índices
         cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS probability NUMERIC(5,4);")
+        cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS stake_pct NUMERIC(5,4);")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS market_type VARCHAR(20);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_vip_date ON picks_vip(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_free_date ON picks_free(match_date DESC);")
