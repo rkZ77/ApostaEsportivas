@@ -149,7 +149,7 @@ export default function Results() {
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
+          <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
           <div>
             <h1 className="text-base font-black text-white">Resultados da IA</h1>
             <p className="text-zinc-500 text-xs mt-0.5">Performance histórica da IA · não inclui resultados pessoais da sua banca</p>
@@ -419,7 +419,7 @@ export default function Results() {
                   return (
                     <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
                       <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">←</button>
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
                       {pages.map((pg, i) =>
                         pg === '...'
                           ? <span key={`e${i}`} className="px-2 text-zinc-600 text-xs">…</span>

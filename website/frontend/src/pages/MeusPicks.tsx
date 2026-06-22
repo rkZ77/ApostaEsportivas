@@ -155,7 +155,7 @@ export default function MeusPicks() {
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="text-zinc-500 hover:text-white transition-colors text-lg leading-none">←</button>
+            <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
             <div>
               <h1 className="text-base font-black text-white">Meus Picks</h1>
               <p className="text-zinc-500 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
@@ -425,7 +425,7 @@ export default function MeusPicks() {
                       disabled={todayPage === 0}
                       onClick={() => setTodayPage(p => p - 1)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
-                    >←</button>
+                    >Ant</button>
                     <span className="text-xs text-zinc-500">
                       {todayPage * PAGE_SIZE + 1}–{Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
                     </span>
