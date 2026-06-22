@@ -152,12 +152,12 @@ export default function HowItWorks() {
             <p className="mt-1">Com plano VIP, acesse todos os picks nas abas <span className="text-yellow-400 font-semibold">Picks VIP</span>, <span className="text-yellow-400 font-semibold">Múltiplas</span> e <span className="text-yellow-400 font-semibold">Alavancagem</span>.</p>
           </Step>
 
-          <Step n={3} title='Marque o que apostou com "+ Apostei"'>
-            <p>Quando decidir apostar em um pick, clique em <span className="text-green-400 font-semibold">+ Apostei</span> no card do pick.
+          <Step n={3} title='Registre sua aposta com "Apostar"'>
+            <p>Quando decidir apostar em um pick, clique em <span className="text-green-400 font-semibold">Apostar</span> no card do pick.
                Isso registra a aposta na sua banca e ativa o acompanhamento ao vivo.</p>
             <div className="flex items-start gap-2 bg-zinc-800/60 rounded-lg px-3 py-2 mt-2">
               <Info className="w-3.5 h-3.5 text-zinc-500 shrink-0 mt-0.5" />
-              <span className="text-xs text-zinc-500">Apenas picks marcados como "Apostei" entram no seu Yield e ROI pessoal.</span>
+              <span className="text-xs text-zinc-500">Apenas picks registrados entram no seu Yield e ROI pessoal.</span>
             </div>
           </Step>
 

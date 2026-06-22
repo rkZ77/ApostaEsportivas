@@ -123,14 +123,14 @@ export default function SuggestionCard({
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number, betHouse: string) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
     setFollowing(true)
     setApiError(null)
     try {
       await api.post('/banca/follow', {
         pick_id: s.id,
         pick_type: s.pick_type ?? 'vip',
-        stake_units: stakeSuggestion?.units ?? 1,
+        stake_units: stakeUnits,
         actual_odd: actualOdd,
         bet_house: betHouse,
       })
@@ -301,7 +301,7 @@ export default function SuggestionCard({
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
           </button>
         ) : <span />}
         {onClick && (
@@ -315,6 +315,8 @@ export default function SuggestionCard({
     {showModal && (
       <ApostaModal
         pickOdd={Number(s.odd)}
+        suggestedUnits={stakeSuggestion?.units ?? 1}
+        suggestedHouse={s.bet_house}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}

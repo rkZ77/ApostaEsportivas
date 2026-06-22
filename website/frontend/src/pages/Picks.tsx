@@ -388,11 +388,11 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number, betHouse: string) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
     setFollowing(true)
     setApiError(null)
     try {
-      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeSuggestion?.units ?? 1, actual_odd: actualOdd, bet_house: betHouse })
+      await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeUnits, actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
       setShowSuccess(true)
@@ -563,7 +563,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
           </button>
         ) : <span />}
         {onClick && (
@@ -576,6 +576,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     {showModal && (
       <ApostaModal
         pickOdd={Number(dica.odd)}
+        suggestedUnits={stakeSuggestion?.units ?? 1}
+        suggestedHouse={dica.bet_house}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
@@ -644,14 +646,14 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number, betHouse: string) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
     setFollowing(true)
     setApiError(null)
     try {
       await api.post('/banca/follow', {
         pick_id: m.id,
         pick_type: 'multipla',
-        stake_units: stakeSuggestion?.units ?? 1,
+        stake_units: stakeUnits,
         actual_odd: actualOdd,
         bet_house: betHouse,
       })
@@ -818,7 +820,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : banca ? '+ Apostei' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
           </button>
         ) : <span />}
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
@@ -827,6 +829,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     {showModal && (
       <ApostaModal
         pickOdd={Number(m.total_odd)}
+        suggestedUnits={stakeSuggestion?.units ?? 1}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
@@ -869,11 +872,11 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     setShowModal(true)
   }
 
-  const handleConfirm = async (actualOdd: number, betHouse: string) => {
+  const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
     setFollowing(true)
     setApiError(null)
     try {
-      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', actual_odd: actualOdd, bet_house: betHouse })
+      await api.post('/banca/follow', { pick_id: pick.id, pick_type: 'alavancagem', stake_units: stakeUnits, actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
       setShowModal(false)
       setShowSuccess(true)
@@ -1024,7 +1027,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Apostei' : userBankroll != null ? '+ Apostei' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : userBankroll != null ? 'Apostar' : 'Configurar banca →'}
           </button>
         ) : <span />}
         <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
@@ -1033,6 +1036,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     {showModal && (
       <ApostaModal
         pickOdd={Number(pick.odd_combined)}
+        suggestedUnits={1}
+        suggestedHouse={pick.bet_house_1}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
