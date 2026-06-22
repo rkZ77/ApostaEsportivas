@@ -114,12 +114,6 @@ class TeamPromptBuilder:
                 + self._format_group_table(home_st["group"], home_profile["team_name"])
             )
 
-        h2h_section = self._format_compact_h2h(
-            home_profile["team_id"],
-            away_profile["team_id"],
-            home_profile["team_name"],
-            away_profile["team_name"],
-        )
         tendencias = self._format_league_tendencias(league_id=1, limit=15)
         base = (
             f"COPA DO MUNDO 2026 — {phase}\n"
@@ -128,7 +122,6 @@ class TeamPromptBuilder:
             f"{'─'*60}\n"
             f"{away_text}\n"
             f"{'─'*60}\n"
-            f"{h2h_section}"
             f"{group_section}"
         )
         return f"{base}\n\n{tendencias}" if tendencias else base

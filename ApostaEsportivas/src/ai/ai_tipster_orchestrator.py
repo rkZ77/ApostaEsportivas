@@ -198,97 +198,126 @@ class AITipsterOrchestrator:
             return None
 
     ##########################################################################
-    # Processa fixture da Copa do Mundo com sistema de seleções
+    # Processa fixture da Copa do Mundo — mesmo formato do VIP regular
     ##########################################################################
+    @staticmethod
+    def _compute_copa_team_avgs(matches: list, team_id: int) -> dict:
+        """Médias feitas/cedidas para seleção em jogos de mando misto."""
+        if not matches:
+            return {}
+        n = len(matches)
+        gf = ga = cf = ca = yf = tg_s = tc_s = 0
+        for m in matches:
+            is_home = m.get("home_team_id") == team_id
+            gf  += (m.get("home_goals") or 0)        if is_home else (m.get("away_goals") or 0)
+            ga  += (m.get("away_goals") or 0)        if is_home else (m.get("home_goals") or 0)
+            cf  += (m.get("home_corners") or 0)      if is_home else (m.get("away_corners") or 0)
+            ca  += (m.get("away_corners") or 0)      if is_home else (m.get("home_corners") or 0)
+            yf  += (m.get("home_yellow_cards") or 0) if is_home else (m.get("away_yellow_cards") or 0)
+            tg_s += (m.get("total_goals") or 0)
+            tc_s += (m.get("total_corners") or 0)
+        btts = sum(1 for m in matches if (m.get("home_goals") or 0) > 0 and (m.get("away_goals") or 0) > 0)
+        return {
+            "jogos":                    n,
+            "gols_feitos_media":        round(gf  / n, 2),
+            "gols_cedidos_media":       round(ga  / n, 2),
+            "total_gols_media":         round(tg_s / n, 2),
+            "escanteios_feitos_media":  round(cf  / n, 2),
+            "escanteios_cedidos_media": round(ca  / n, 2),
+            "total_escanteios_media":   round(tc_s / n, 2),
+            "amarelos_media":           round(yf  / n, 2),
+            "btts_pct":                 round(btts / n * 100, 1),
+        }
+
     def _process_world_cup_fixture(self, fx, performance_str: str | None = None):
-        """Processa fixture da Copa do Mundo usando perfis personalizados de seleções"""
-        
+        """Copa do Mundo — mesmo pipeline de dados que ligas regulares.
+        Envia últimos 10 jogos da seleção (com competition_type) como histórico total,
+        e médias feitas/cedidas pré-calculadas nos blocos de estatísticas.
+        """
         fixture_id = fx["fixture_id"]
-        season = fx["season"]
-        league_id = fx["league_id"]
-        home_id = fx["home_team_id"]
-        away_id = fx["away_team_id"]
-        
+        season     = fx["season"]
+        league_id  = fx["league_id"]
+        home_id    = fx["home_team_id"]
+        away_id    = fx["away_team_id"]
+
         try:
-            # Buscar perfis das seleções (fixture_id para injuries precisas)
             print(f"[TIPSTER] Buscando perfil da seleção home (ID: {home_id})...")
             home_profile = self.national_team_profile.get_team_profile(home_id, season, fixture_id=fixture_id)
 
             print(f"[TIPSTER] Buscando perfil da seleção away (ID: {away_id})...")
             away_profile = self.national_team_profile.get_team_profile(away_id, season, fixture_id=fixture_id)
-            
-            print(f"[TIPSTER] ✓ Perfil {home_profile['team_name']}: {home_profile['matches_analyzed']} jogos analisados")
-            print(f"[TIPSTER] ✓ Perfil {away_profile['team_name']}: {away_profile['matches_analyzed']} jogos analisados")
-            
-            # Construir prompt personalizado
-            print(f"[TIPSTER] Construindo prompt personalizado...")
-            base_prompt = get_prompt(league_id)  # Prompt base da Copa
-            custom_prompt = self.prompt_builder.build_world_cup_prompt(
-                home_profile,
-                away_profile,
-                base_prompt
-            )
-            
-            print(f"[TIPSTER] ✓ Prompt personalizado gerado ({len(custom_prompt)} caracteres)")
-            
-            # Buscar dados adicionais (standings, referee, etc.)
-            # Standings (opcional para Copa)
+
+            print(f"[TIPSTER] Perfil {home_profile['team_name']}: {home_profile['matches_analyzed']} jogos")
+            print(f"[TIPSTER] Perfil {away_profile['team_name']}: {away_profile['matches_analyzed']} jogos")
+
+            # Últimos 10 jogos já buscados durante get_team_profile (sem 2ª chamada ao DB)
+            home_matches_raw = home_profile.get("matches_raw", [])
+            away_matches_raw = away_profile.get("matches_raw", [])
+
+            # Médias feitas/cedidas (mando misto corrigido por time_id)
+            home_avgs = self._compute_copa_team_avgs(home_matches_raw, home_id)
+            away_avgs = self._compute_copa_team_avgs(away_matches_raw, away_id)
+
+            # Bloco de estatísticas completo (feitas/cedidas + perfil)
+            home_stats = {
+                **home_avgs,
+                "quality_breakdown": home_profile.get("quality_breakdown", {}),
+                "squad_info":        home_profile.get("squad_info", {}),
+                "injuries":          home_profile.get("injuries", []),
+                "tactical_profile":  home_profile.get("tactical_profile", {}),
+                "strengths":         home_profile.get("strengths", []),
+                "weaknesses":        home_profile.get("weaknesses", []),
+            }
+            away_stats = {
+                **away_avgs,
+                "quality_breakdown": away_profile.get("quality_breakdown", {}),
+                "squad_info":        away_profile.get("squad_info", {}),
+                "injuries":          away_profile.get("injuries", []),
+                "tactical_profile":  away_profile.get("tactical_profile", {}),
+                "strengths":         away_profile.get("strengths", []),
+                "weaknesses":        away_profile.get("weaknesses", []),
+            }
+
+            # Classificação — grupo + situação + Copa stats
             try:
-                home_standing = self.standings.get_team_standing(
-                    team_id=home_id,
-                    league_id=league_id,
-                    season=season
-                )
+                home_standing = self.standings.get_team_standing(home_id, league_id, season)
             except Exception:
                 home_standing = None
-
             try:
-                away_standing = self.standings.get_team_standing(
-                    team_id=away_id,
-                    league_id=league_id,
-                    season=season
-                )
+                away_standing = self.standings.get_team_standing(away_id, league_id, season)
             except Exception:
                 away_standing = None
 
+            # Grupo detalhado (inclui description/situação da Copa)
+            home_group_data = self.prompt_builder._fetch_group_standing(home_id)
+            away_group_data = self.prompt_builder._fetch_group_standing(away_id)
+
             if home_standing and away_standing:
                 standings_stats = {
-                    "home_rank":      home_standing["rank"],
-                    "away_rank":      away_standing["rank"],
-                    "rank_diff":      home_standing["rank"] - away_standing["rank"],
-                    "home_points":    home_standing["points"],
-                    "away_points":    away_standing["points"],
-                    "points_diff":    home_standing["points"] - away_standing["points"],
-                    "home_goal_diff": home_standing["goal_diff"],
-                    "away_goal_diff": away_standing["goal_diff"],
-                    "goal_diff_diff": home_standing["goal_diff"] - away_standing["goal_diff"],
-                    "home_form":      home_standing["form"],
-                    "away_form":      away_standing["form"],
+                    "home_rank":        home_standing["rank"],
+                    "away_rank":        away_standing["rank"],
+                    "rank_diff":        home_standing["rank"] - away_standing["rank"],
+                    "home_points":      home_standing["points"],
+                    "away_points":      away_standing["points"],
+                    "points_diff":      home_standing["points"] - away_standing["points"],
+                    "home_goal_diff":   home_standing["goal_diff"],
+                    "away_goal_diff":   away_standing["goal_diff"],
+                    "goal_diff_diff":   home_standing["goal_diff"] - away_standing["goal_diff"],
+                    "home_form":        home_standing["form"],
+                    "away_form":        away_standing["form"],
                 }
             else:
                 standings_stats = {}
-            
-            # Stats agregadas (usar do perfil se disponível)
-            home_stats = {
-                "avg_goals_for": home_profile["offensive_stats"].get("goals_per_game", 0),
-                "avg_goals_against": home_profile["defensive_stats"].get("goals_against_per_game", 0),
-                "avg_corners": home_profile["set_pieces"].get("corners_per_game", 0),
-                "avg_cards_yellow": home_profile["discipline"].get("yellow_cards_per_game", 0),
-            }
-            
-            away_stats = {
-                "avg_goals_for": away_profile["offensive_stats"].get("goals_per_game", 0),
-                "avg_goals_against": away_profile["defensive_stats"].get("goals_against_per_game", 0),
-                "avg_corners": away_profile["set_pieces"].get("corners_per_game", 0),
-                "avg_cards_yellow": away_profile["discipline"].get("yellow_cards_per_game", 0),
-            }
-            
-            # Histórico (vazio para Copa - já está no perfil)
-            home_matches = []
-            away_matches = []
-            total_home_matches = []
-            total_away_matches = []
-            
+
+            standings_stats.update({
+                "home_group":       home_group_data.get("group")       if home_group_data else None,
+                "away_group":       away_group_data.get("group")       if away_group_data else None,
+                "home_situacao":    home_group_data.get("description") or "em disputa" if home_group_data else "em disputa",
+                "away_situacao":    away_group_data.get("description") or "em disputa" if away_group_data else "em disputa",
+                "home_copa_stats":  home_profile.get("copa_stats", {}),
+                "away_copa_stats":  away_profile.get("copa_stats", {}),
+            })
+
             # Árbitro
             referee = fx.get("referee")
             referee_stats = None
@@ -297,32 +326,31 @@ class AITipsterOrchestrator:
                     referee_stats = self.referee_stats.get_stats(referee, season)
                 except Exception:
                     referee_stats = None
-            
-            # Chamar IA com prompt customizado
+
+            # Passa histórico como total_matches (home/away vazios → IA recebe o total)
             result = self.ai.generate_and_save(
                 fx,
                 home_stats,
                 away_stats,
-                home_matches,
-                away_matches,
-                total_home_matches,
-                total_away_matches,
+                [],                  # home_matches (Copa = sem contexto de mando)
+                [],                  # away_matches
+                home_matches_raw,    # total_home_matches (últimos 10 com competition_type)
+                away_matches_raw,    # total_away_matches
                 standings_stats,
                 referee_stats=referee_stats,
                 league_id=league_id,
                 performance_str=performance_str,
-                custom_prompt=custom_prompt  # NOVO parâmetro
             )
-            
+
             if result:
-                print(f"[TIPSTER] ✅ Sugestão salva para fixture {fixture_id}")
+                print(f"[TIPSTER] Sugestao salva para fixture {fixture_id}")
             else:
-                print(f"[TIPSTER] ⚠️ Nenhuma sugestão válida para fixture {fixture_id}")
-            
+                print(f"[TIPSTER] Nenhuma sugestao valida para fixture {fixture_id}")
+
             return result
-            
+
         except Exception as e:
-            print(f"[TIPSTER] ❌ ERRO ao processar Copa do Mundo fixture {fixture_id}: {e}")
+            print(f"[TIPSTER] ERRO Copa fixture {fixture_id}: {e}")
             import traceback
             traceback.print_exc()
             return None

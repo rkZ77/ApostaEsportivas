@@ -54,7 +54,7 @@ class NationalTeamProfileService:
         )
 
         # Busca últimos jogos (forma geral: eliminatórias + amistosos + Copa)
-        matches = self._fetch_recent_matches(team_id, limit=15)
+        matches = self._fetch_recent_matches(team_id, limit=10)
 
         # Busca jogos específicos desta Copa
         copa_matches = self._fetch_copa_matches(team_id, season)
@@ -103,8 +103,9 @@ class NationalTeamProfileService:
             "country": team_info["country"],
             "season": season,
             "matches_analyzed": len(matches),
-            "data_source": "database" if len(matches) >= 15 else "database + api",
+            "data_source": "database" if len(matches) >= 10 else "database + api",
 
+            "matches_raw": matches,           # últimos 10 jogos com competition_type
             "squad_info": squad_info,
             "injuries": injuries,
             "copa_stats": copa_stats,
@@ -232,7 +233,7 @@ class NationalTeamProfileService:
         else:
             return {"name": f"Team {team_id}", "country": "Unknown"}
     
-    def _fetch_recent_matches(self, team_id: int, limit: int = 15) -> list:
+    def _fetch_recent_matches(self, team_id: int, limit: int = 10) -> list:
         """
         Busca últimos jogos da seleção.
         Prioridade: banco (match_statistics)
@@ -240,10 +241,10 @@ class NationalTeamProfileService:
         """
         # Busca no banco
         db_matches = self._fetch_from_database(team_id, limit)
-        
+
         print(f"[PROFILE] {len(db_matches)} jogos encontrados no banco")
-        
-        # Se tem 15+ jogos no banco, usa só eles
+
+        # Se tem jogos suficientes no banco, usa só eles
         if len(db_matches) >= limit:
             return db_matches[:limit]
         
@@ -354,6 +355,7 @@ class NationalTeamProfileService:
                 "away_fouls": r[25] or 0,
                 "league_id": r[26],
                 "opponent_name": r[27],
+                "competition_type": self._classify_competition(r[26] or 0),
             })
 
         return matches
