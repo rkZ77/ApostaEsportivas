@@ -140,7 +140,7 @@ export default function Navbar() {
           <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-center justify-between">
             <span className="text-blue-300 text-xs font-semibold">
               Confirme seu e-mail para garantir acesso à recuperação de senha.{' '}
-              <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil →</Link>
+              <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil</Link>
             </span>
             <button onClick={() => setEmailBannerDismissed(true)} className="text-blue-600 hover:text-blue-400 text-xs ml-4">×</button>
           </div>

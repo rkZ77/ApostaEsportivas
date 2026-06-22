@@ -433,7 +433,7 @@ export default function MeusPicks() {
                       disabled={(todayPage + 1) * PAGE_SIZE >= filteredTabEntries.length}
                       onClick={() => setTodayPage(p => p + 1)}
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
-                    >→</button>
+                    >Próx</button>
                   </div>
                 )}
               </>

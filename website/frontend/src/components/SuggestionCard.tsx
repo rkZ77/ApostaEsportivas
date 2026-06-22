@@ -328,12 +328,12 @@ export default function SuggestionCard({
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
         {onClick && (
           <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
-            Ver detalhes →
+            Ver detalhes
           </span>
         )}
       </div>

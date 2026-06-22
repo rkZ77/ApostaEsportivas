@@ -275,7 +275,7 @@ export function EstatisticasContent() {
                       {trendLbl(val, def.high, def.low)}
                     </div>
                     {hasRank && (
-                      <div className="mt-1.5 text-[9px] text-zinc-600 font-semibold">Ranking →</div>
+                      <div className="mt-1.5 text-[9px] text-zinc-600 font-semibold">Ranking</div>
                     )}
                   </button>
                 )

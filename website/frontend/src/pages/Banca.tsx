@@ -164,7 +164,7 @@ function SetupModal({ current, onSave, onClose }: {
 
         <div className="mt-4 bg-zinc-800/50 rounded-lg px-3 py-2 text-xs text-zinc-400">
           <p className="font-semibold text-zinc-300 mb-0.5">Como funciona:</p>
-          <p>Pick recomenda 2u → você aposta 2 × R$ {unitValue || '?'} = <strong className="text-white">{fmtBRL((parseFloat(unitValue) || 0) * 2)}</strong></p>
+          <p>Pick recomenda 2u: você aposta 2 × R$ {unitValue || '?'} = <strong className="text-white">{fmtBRL((parseFloat(unitValue) || 0) * 2)}</strong></p>
           <p className="text-zinc-500 mt-0.5">Yield = lucro em unidades / unidades apostadas × 100%</p>
         </div>
 
@@ -634,7 +634,7 @@ export default function Banca() {
                       Últimos picks apostados
                     </p>
                     <Link to="/meus-picks" className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
-                      Ver todos →
+                      Ver todos
                     </Link>
                   </div>
 

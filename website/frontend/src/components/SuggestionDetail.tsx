@@ -655,7 +655,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                               {(bankBefore || bankAfter) && (
                                 <div className="flex items-center gap-1.5 mt-1.5">
                                   {bankBefore && <span className="text-[10px] text-zinc-500">R${Number(bankBefore).toFixed(0)}</span>}
-                                  {bankBefore && bankAfter && <span className="text-[10px] text-zinc-600">→</span>}
+                                  {bankBefore && bankAfter && <span className="text-[10px] text-zinc-600">·</span>}
                                   {bankAfter && (
                                     <span className={`text-[10px] font-bold ${bankAfter > bankBefore ? 'text-green-400' : bankAfter < bankBefore ? 'text-red-400' : 'text-zinc-400'}`}>
                                       R${Number(bankAfter).toFixed(0)}

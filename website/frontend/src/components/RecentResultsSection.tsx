@@ -131,7 +131,7 @@ export default function RecentResultsSection({ limit = 6, title = 'Últimos Resu
             onClick={() => navigate('/results')}
             className="text-xs text-green-500 hover:text-green-400 font-semibold transition-colors"
           >
-            Ver histórico completo →
+            Ver histórico completo
           </button>
         </div>
       </div>

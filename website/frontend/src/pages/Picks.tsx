@@ -563,12 +563,12 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
         {onClick && (
           <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
-            Ver detalhes →
+            Ver detalhes
           </span>
         )}
       </div>
@@ -821,10 +821,10 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
+        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
       </div>
     </div>
     {showModal && (
@@ -934,7 +934,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
                 <span className="text-2xl font-black text-orange-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
-                    <span className="text-zinc-600 text-sm">→</span>
+                    <span className="text-zinc-600 text-sm">·</span>
                     <span className="text-lg font-black text-white">R${potReturn.toFixed(2)}</span>
                     <span className="text-[10px] text-zinc-600">se green</span>
                   </>
@@ -1029,10 +1029,10 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
-            {following ? '...' : followed ? 'Registrado' : userBankroll != null ? 'Apostar' : 'Configurar banca →'}
+            {following ? '...' : followed ? 'Registrado' : userBankroll != null ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes →</span>
+        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
       </div>
     </div>
     {showModal && (
@@ -1536,7 +1536,7 @@ export default function Picks() {
                 }}
                 className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-sm py-3 rounded-xl transition-colors"
               >
-                Configurar banca agora →
+                Configurar banca agora
               </button>
               <button
                 onClick={() => {
@@ -1737,7 +1737,7 @@ export default function Picks() {
                             onClick={() => setTab('vip')}
                             className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700"
                           >
-                            Ver todos os {vips.length} picks →
+                            Ver todos os {vips.length} picks
                           </button>
                         )}
                       </>
@@ -1792,7 +1792,7 @@ export default function Picks() {
                       />
                       <button onClick={() => setTab('alavancagem')}
                         className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
-                        Ver histórico da série →
+                        Ver histórico da série
                       </button>
                     </>
                   ) : (
@@ -1879,7 +1879,7 @@ export default function Picks() {
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
-              Ver todos os resultados →
+              Ver todos os resultados
             </button>
           </div>
         )}
@@ -1944,7 +1944,7 @@ export default function Picks() {
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
-              Ver todos os resultados →
+              Ver todos os resultados
             </button>
           </div>
         )}
@@ -1998,7 +1998,7 @@ export default function Picks() {
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
-              Ver todos os resultados →
+              Ver todos os resultados
             </button>
           </div>
         )}
@@ -2219,7 +2219,7 @@ export default function Picks() {
                                     </div>
                                   )}
                                   {bankAfter != null && (
-                                    <div className="text-[10px] text-zinc-500">→ R${bankAfter.toFixed(2)}</div>
+                                    <div className="text-[10px] text-zinc-500">Banca: R${bankAfter.toFixed(2)}</div>
                                   )}
                                   {!res && bankBefore != null && (
                                     <div className="text-[10px] text-orange-400 font-semibold">Em aberto</div>
@@ -2239,7 +2239,7 @@ export default function Picks() {
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
-              Ver todos os resultados →
+              Ver todos os resultados
             </button>
           </div>
         )}

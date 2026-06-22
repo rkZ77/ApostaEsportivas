@@ -431,7 +431,7 @@ export default function Results() {
                               }`}>{(pg as number) + 1}</button>
                       )}
                       <button disabled={(gamesPage + 1) * PAGE_SIZE >= gamesTotal} onClick={() => goTo(gamesPage + 1)}
-                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">→</button>
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
                     </div>
                   )
                 })()}

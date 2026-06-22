@@ -335,7 +335,7 @@ export default function Profile() {
               onClick={() => navigate('/forgot-password')}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-semibold border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg"
             >
-              Alterar senha →
+              Alterar senha
             </button>
           </div>
 
