@@ -1,10 +1,58 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+import re
 import psycopg2.extras
 from database import get_connection
 from auth_utils import get_current_user, require_vip, is_vip_active
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
+
+_MARKET_PT = {
+    "match winner": "Resultado Final (1X2)",
+    "double chance": "Dupla Chance",
+    "both teams score": "Ambas as Equipes Marcam",
+    "both teams to score": "Ambas as Equipes Marcam",
+    "goals over/under": "Gols Mais/Menos",
+    "goals over/under first half": "Gols Mais/Menos - 1º Tempo",
+    "goals over/under second half": "Gols Mais/Menos - 2º Tempo",
+    "goals over/under - second half": "Gols Mais/Menos - 2º Tempo",
+    "corners over under": "Escanteios Mais/Menos",
+    "corners over/under": "Escanteios Mais/Menos",
+    "corners 1x2": "Escanteios 1x2",
+    "cards over/under": "Cartões Mais/Menos",
+    "home corners over/under": "Escanteios Casa Mais/Menos",
+    "away corners over/under": "Escanteios Visitante Mais/Menos",
+    "home total corners (1st half)": "Escanteios Casa (1º Tempo)",
+    "away total corners (1st half)": "Escanteios Visitante (1º Tempo)",
+    "total corners (1st half)": "Total de Escanteios (1º Tempo)",
+    "total corners (2nd half)": "Total de Escanteios (2º Tempo)",
+    "home team total cards": "Total de Cartões Casa",
+    "away team total cards": "Total de Cartões Visitante",
+    "home team total goals(1st half)": "Total de Gols Casa (1º Tempo)",
+    "away team total goals(1st half)": "Total de Gols Visitante (1º Tempo)",
+    "total - home": "Total de Gols Casa",
+    "total - away": "Total de Gols Visitante",
+    "first half winner": "Vencedor do 1º Tempo",
+    "both teams to score - first half": "BTTS - 1º Tempo",
+}
+_TEAM_PAT = [
+    (r"^(.+?)\s*-\s*goals over/under\s*$",   r"\1 - Gols Mais/Menos"),
+    (r"^(.+?)\s*-\s*total goals?\s*$",        r"\1 - Total de Gols"),
+    (r"^(.+?)\s*-\s*corners over/?under\s*$", r"\1 - Escanteios Mais/Menos"),
+    (r"^(.+?)\s*-\s*total corners?\s*$",      r"\1 - Total de Escanteios"),
+    (r"^(.+?)\s*-\s*cards over/?under\s*$",   r"\1 - Cartões Mais/Menos"),
+]
+
+def _tr(market: str) -> str:
+    if not market:
+        return market
+    k = market.strip().lower()
+    if k in _MARKET_PT:
+        return _MARKET_PT[k]
+    for pat, rep in _TEAM_PAT:
+        if re.match(pat, k, re.IGNORECASE):
+            return re.sub(pat, rep, market.strip(), flags=re.IGNORECASE)
+    return market
 
 
 def _safe_query(cur, sql, params=()):
@@ -127,7 +175,7 @@ def get_today_suggestions(
                 WHERE {_vip_where}
                 ORDER BY s.match_date DESC, s.confidence DESC
             """, _d)
-            result["vip"] = [dict(r) for r in rows]
+            result["vip"] = [{**dict(r), "market": _tr(r["market"])} if r.get("market") else dict(r) for r in rows]
 
             rows_m = _safe_query(cur, f"""
                 SELECT id, match_date,
@@ -306,6 +354,9 @@ def get_vip_suggestions(
         """, params)
 
         picks = [dict(r) for r in rows]
+        for p in picks:
+            if p.get("market"):
+                p["market"] = _tr(p["market"])
 
         # Adiciona is_followed
         user_id = current_user.get("id")
@@ -680,6 +731,8 @@ def get_suggestion_detail(
             WHERE user_id = %s AND pick_id = %s AND pick_type = %s
         """, (current_user["id"], suggestion_id, pick_type))
         suggestion["user_stake_units"] = float(ufp_v["stake_units"]) if ufp_v else None
+        if suggestion.get("market"):
+            suggestion["market"] = _tr(suggestion["market"])
 
         return {
             "suggestion":  suggestion,
@@ -770,7 +823,11 @@ def get_history(days: int = 30, current_user: dict = Depends(require_vip)):
               AND s.result IS NOT NULL
             ORDER BY s.match_date DESC, s.id DESC
         """, (days,))
-        return [dict(r) for r in rows]
+        picks = [dict(r) for r in rows]
+        for p in picks:
+            if p.get("market"):
+                p["market"] = _tr(p["market"])
+        return picks
     finally:
         cur.close()
         conn.close()
@@ -806,6 +863,8 @@ def get_recent_results(
         for r in rows:
             d = dict(r)
             d["pick_type"] = "vip"
+            if d.get("market"):
+                d["market"] = _tr(d["market"])
             results.append(d)
 
         # ── FREE ─────────────────────────────────────────────────────────────
@@ -834,6 +893,8 @@ def get_recent_results(
         for r in rows:
             d = dict(r)
             d["pick_type"] = "free"
+            if d.get("market"):
+                d["market"] = _tr(d["market"])
             results.append(d)
 
         # ── MÚLTIPLAS (resultados visíveis para todos) ───────────────────────
