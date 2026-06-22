@@ -274,7 +274,7 @@ def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dic
     except Exception:
         ctx["last10_away"] = []
     try:
-        ctx["odds"] = odds_svc.load_odds_by_fixture(fixture_id)
+        ctx["odds"] = odds_svc.load_odds_structured(fixture_id) or odds_svc.load_odds_by_fixture(fixture_id)
     except Exception:
         ctx["odds"] = []
     return ctx

@@ -52,6 +52,7 @@ interface Suggestion {
   user_stake_units?: number | null
   user_actual_odd?: number | null
   stake_pct?: number | null
+  suggested_stake_units?: number | null
 }
 
 function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
@@ -94,16 +95,27 @@ export default function SuggestionCard({
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const stakeSuggestion = banca
-    ? calcVipStake(
-        Number(s.probability ?? s.confidence ?? 0),
-        Number(s.odd),
-        Number(s.ev ?? 0),
-        banca.bankroll_current,
-        banca.unit_value,
-        s.stake_pct,
-      )
-    : null
+  // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
+  //             2) calcVipStake como fallback (histórico sem banca no momento)
+  const stakeSuggestion = (() => {
+    if (!banca) return null
+    if (s.suggested_stake_units != null && s.suggested_stake_units > 0) {
+      const units = s.suggested_stake_units
+      return {
+        units,
+        amountR: units * banca.unit_value,
+        kellyPct: Math.round(units * banca.unit_value / banca.bankroll_current * 1000) / 10,
+      }
+    }
+    return calcVipStake(
+      Number(s.probability ?? s.confidence ?? 0),
+      Number(s.odd),
+      Number(s.ev ?? 0),
+      banca.bankroll_current,
+      banca.unit_value,
+      s.stake_pct,
+    )
+  })()
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()

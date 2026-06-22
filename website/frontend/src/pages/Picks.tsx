@@ -12,7 +12,7 @@ import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
-import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
+import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import Watermark from '../components/Watermark'
 
 // Copa do Mundo 2026 — fase pelo match_date
@@ -365,9 +365,21 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const stakeSuggestion = banca
-    ? suggestStake(dica.prob_real ?? dica.confidence, Number(dica.odd), banca.bankroll_current, banca.unit_value, 7)
-    : null
+  // Prioridade: suggested_stake_units do backend → calcFreeStake fallback (max 2%)
+  const stakeSuggestion = (() => {
+    if (!banca) return null
+    if (dica.suggested_stake_units != null && dica.suggested_stake_units > 0) {
+      const units = dica.suggested_stake_units
+      return { units, amountR: units * banca.unit_value }
+    }
+    return calcFreeStake(
+      Number(dica.prob_real ?? dica.confidence ?? 0),
+      Number(dica.odd),
+      Number(dica.ev ?? 0),
+      banca.bankroll_current,
+      banca.unit_value,
+    )
+  })()
   const fato = shortReasoning(dica.reasoning)
 
   const handleFollow = (e: React.MouseEvent) => {
@@ -608,9 +620,20 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const stakeSuggestion = banca
-    ? suggestStake(m.confidence, Number(m.total_odd), banca.bankroll_current, banca.unit_value, 3, 0.25)  // múltipla: sem prob_real única, usa confidence
-    : null
+  // Prioridade: suggested_stake_units do backend → calcMultiplaStake fallback (max 2.5%)
+  const stakeSuggestion = (() => {
+    if (!banca) return null
+    if (m.suggested_stake_units != null && m.suggested_stake_units > 0) {
+      const units = m.suggested_stake_units
+      return { units, amountR: units * banca.unit_value }
+    }
+    return calcMultiplaStake(
+      Number(m.confidence ?? 0),
+      Number(m.total_odd),
+      banca.bankroll_current,
+      banca.unit_value,
+    )
+  })()
   const potReturn = stakeSuggestion
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
     : null

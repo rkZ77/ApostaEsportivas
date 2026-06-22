@@ -74,6 +74,81 @@ def _safe_query_one(cur, sql, params=()):
         return None
 
 
+def _get_user_banca(cur, user_id: int):
+    """Retorna (bankroll_current, unit_value) ou None se banca não configurada."""
+    row = _safe_query_one(cur, """
+        SELECT ub.bankroll_start, ub.unit_value,
+               COALESCE(SUM(ufp.profit), 0) AS total_pnl
+        FROM user_banca ub
+        LEFT JOIN user_followed_picks ufp
+            ON ufp.user_id = ub.user_id AND ufp.profit IS NOT NULL
+        WHERE ub.user_id = %s
+        GROUP BY ub.bankroll_start, ub.unit_value
+    """, (user_id,))
+    if not row:
+        return None
+    unit_value = float(row["unit_value"]) if row["unit_value"] else 0
+    if unit_value <= 0:
+        return None
+    bankroll = float(row["bankroll_start"]) + float(row["total_pnl"] or 0)
+    return bankroll, unit_value
+
+
+def _compute_suggested_stake_units(
+    pick_type: str,
+    stake_pct,
+    confidence,
+    odd,
+    ev,
+    bankroll: float,
+    unit_value: float,
+) -> int:
+    """
+    Calcula unidades sugeridas baseado no tipo de pick e banca real do usuário.
+    Lógica exclusiva do backend — não recalcular no frontend.
+
+    Caps por tipo:
+      VIP      → usa stake_pct do DB (calculate_stake), max 5% da banca
+      Free     → Kelly ½ com max 2% da banca
+      Múltipla → Kelly ¼ com max 2.5% da banca
+    """
+    if not bankroll or not unit_value or unit_value <= 0:
+        return 1
+
+    MAX_PCT   = {'vip': 0.05, 'free': 0.02, 'multipla': 0.025}
+    KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25}
+    max_pct   = MAX_PCT.get(pick_type, 0.03)
+    kelly_frac = KELLY_FR.get(pick_type, 0.5)
+
+    # VIP: stake_pct já calculado pelo backend com Kelly ajustado
+    if pick_type == 'vip' and stake_pct and float(stake_pct) > 0:
+        final_pct = min(float(stake_pct), max_pct)
+    else:
+        conf  = float(confidence or 0)
+        odd_f = float(odd or 0)
+        ev_f  = float(ev or 0)
+
+        # EV negativo sem base sólida → stake mínimo (1u)
+        if ev_f <= 0 and pick_type != 'multipla':
+            return 1
+
+        if odd_f <= 1 or conf <= 0 or conf >= 1:
+            return 1
+
+        b = odd_f - 1.0
+        q = 1.0 - conf
+        kelly = (b * conf - q) / b
+        if kelly <= 0:
+            return 1
+
+        final_pct = min(max_pct, kelly * kelly_frac)
+        final_pct = max(0.005, final_pct)
+
+    stake_amount = final_pct * bankroll
+    units = round(stake_amount / unit_value)
+    return max(1, units)
+
+
 def _enrich_multipla_legs(cur, rows: list) -> list:
     """Enriquece o JSONB de legs das múltiplas com home/away team IDs e nomes via fixtures."""
     import json as _json
@@ -166,6 +241,7 @@ def get_today_suggestions(
                        s.home_team_id, s.away_team_id,
                        s.market, s.line, s.odd, s.bet_house,
                        s.market_type, s.confidence, s.ev, s.probability,
+                       s.stake_pct,
                        s.reasoning, s.result, s.profit,
                        f.league_id,
                        l.name AS league_name
@@ -270,6 +346,34 @@ def get_today_suggestions(
                 alav["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
                 alav["pick_type"] = "alavancagem"
 
+        # ── Calcula suggested_stake_units com banca real do usuário ─────────
+        # Centraliza a lógica no backend; frontend apenas exibe o valor.
+        if user_id:
+            banca = _get_user_banca(cur, user_id)
+            if banca:
+                bankroll, unit_value = banca
+
+                for p in result.get("vip") or []:
+                    if not p.get("is_followed"):
+                        p["suggested_stake_units"] = _compute_suggested_stake_units(
+                            'vip', p.get("stake_pct"), p.get("confidence"),
+                            p.get("odd"), p.get("ev"), bankroll, unit_value,
+                        )
+
+                dica = result.get("dica_do_dia")
+                if dica and not dica.get("is_followed"):
+                    dica["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'free', None, dica.get("confidence"), dica.get("odd"),
+                        dica.get("ev"), bankroll, unit_value,
+                    )
+
+                for m in result.get("multiplas") or []:
+                    if not m.get("is_followed"):
+                        m["suggested_stake_units"] = _compute_suggested_stake_units(
+                            'multipla', None, m.get("confidence"), m.get("total_odd"),
+                            None, bankroll, unit_value,
+                        )
+
         return result
     finally:
         cur.close()
@@ -345,6 +449,7 @@ def get_vip_suggestions(
                 s.home_team_id, s.away_team_id,
                 s.market, s.line, s.odd, s.bet_house,
                 s.market_type, s.confidence, s.ev, s.probability,
+                s.stake_pct,
                 s.reasoning, s.result, s.profit,
                 s.created_at
             FROM picks_vip s
@@ -371,6 +476,18 @@ def get_vip_suggestions(
                 for p in picks:
                     p["is_followed"] = p.get("id") in followed_set
                     p["pick_type"] = "vip"
+
+        # Calcula suggested_stake_units com banca real do usuário
+        if user_id and picks:
+            banca = _get_user_banca(cur, user_id)
+            if banca:
+                bankroll, unit_value = banca
+                for p in picks:
+                    if not p.get("is_followed"):
+                        p["suggested_stake_units"] = _compute_suggested_stake_units(
+                            'vip', p.get("stake_pct"), p.get("confidence"),
+                            p.get("odd"), p.get("ev"), bankroll, unit_value,
+                        )
 
         return picks
     finally:

@@ -104,19 +104,33 @@ CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta vari
 
 CALCULO:
 Calcule prob_real voce mesmo com base nos dados historicos: taxa ponderada temporalmente (recente=1.0, anterior=0.9...).
-edge = prob_real - (1/odd) | EV = prob_real * odd - 1.
-Ordene todos os mercados por edge calculado e selecione o maior edge positivo com criterios atendidos.
 
-A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte. (Copa: total_amostra=historico global conforme descrito acima; outros: venue correto)
+FORMATO DAS ODDS (quando disponivel):
+  no_vig_prob   → probabilidade real sem margem do bookmaker (calculada de varias casas)
+  market_ev     → EV = (no_vig_prob × best_odd) − 1
+  best_odd      → melhor odd disponivel
+  best_bookmaker→ casa com best_odd
+  bookmakers_count → numero de casas
+
+edge = prob_real − no_vig_prob   (se no_vig_prob disponivel)
+     = prob_real − (1/best_odd)  (fallback se no_vig_prob ausente)
+EV  = prob_real × best_odd − 1
+Ordene TODOS os mercados por edge e selecione o maior edge positivo que atenda os criterios.
+
+A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte.
    FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
      Estimativa primaria: feitos_A_contexto + feitos_B_contexto.
      Validacao cruzada:   cedidos_A_contexto + cedidos_B_contexto.
-     Divergencia >15% entre as duas → reduza Confirmadores 1 nivel.
+     Divergencia >15% → reduza Confirmadores 1 nivel.
      Mercado de time: feitos do time no contexto + cedidos do adversario.
      Resultado/Handicap: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
 B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
-C) CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
-   Consistencia: >=0.80→1.0 | 0.70-0.79→0.8 | 0.65-0.69→0.6 | Confirmadores: 3+→1.0 | 2→0.7 | 1→0.3 | Estabilidade: ultimos 3→1.0 | so media→0.5
+C) CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) — MESMA FORMULA DO VIP
+   C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
+   Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+   K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
+   R (Robustez): edge/no_vig_prob>=0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge<=0→R=0 (veto)
+   Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
 
 QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
   NUNCA trate jogos vs tops e fracos com o mesmo peso:
@@ -181,7 +195,10 @@ def _load_fixture_context(
         total_away = []
 
     try:
-        odds = odds_svc.load_odds_by_fixture(fixture_id)
+        # Prefere odds estruturadas (com no_vig_prob) — mais precisas para cálculo de edge
+        odds = odds_svc.load_odds_structured(fixture_id)
+        if not odds:
+            odds = odds_svc.load_odds_by_fixture(fixture_id)
     except Exception:
         odds = []
 

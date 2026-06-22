@@ -92,13 +92,23 @@ Leia a classificacao (standings) e determine a situacao de cada time:
 ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
 Avalie TODOS os mercados das odds — gols, cantos, cartões, dupla chance, handicap.
 Nao existe mercado preferido: o vencedor e o de MAIOR EDGE POSITIVO, independente do tipo.
-Calcule prob_real com base nos dados historicos. edge = prob_real - (1/odd). Selecione mercados com edge > 0.
+
+FORMATO DAS ODDS (quando disponivel):
+  no_vig_prob   → probabilidade real sem margem do bookmaker
+  market_ev     → EV = (no_vig_prob × best_odd) − 1
+  best_odd, best_bookmaker, bookmakers_count
+
+Calcule prob_real com base nos dados historicos.
+edge = prob_real − no_vig_prob  (se no_vig_prob disponivel)
+     = prob_real − (1/best_odd)  (fallback se no_vig_prob ausente)
+Selecione mercados com edge > 0.
 
 FORMULA SCORE_BASE (alinhada com VIP):
 C (Consistência): taxa histórica real dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
 Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-R (Robustez): edge/implied≥0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge≤0→R=0 (veto)
+R (Robustez): edge/no_vig_prob>=0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge<=0→R=0 (veto)
+  Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
 score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
 Odds: se odd fora de 1.05-1.80 → DESCARTE. Linha: mais conservadora em 1.05-1.80.
 Descarte jogo se score_base<0.55 ou sem linha válida.
@@ -209,7 +219,10 @@ def load_fixture_context(
         total_away = []
 
     try:
-        odds = odds_svc.load_odds_by_fixture(fixture_id)
+        # Prefere odds estruturadas (com no_vig_prob) — mais precisas para cálculo de edge
+        odds = odds_svc.load_odds_structured(fixture_id)
+        if not odds:
+            odds = odds_svc.load_odds_by_fixture(fixture_id)
     except Exception:
         odds = []
 
