@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useRef } from 'react'
+﻿import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -8,7 +8,6 @@ import ApostaModal from '../components/ApostaModal'
 import SuggestionDetail from '../components/SuggestionDetail'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
-import CommunityChat from '../components/CommunityChat'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
@@ -139,7 +138,6 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
         ? 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse'
         : 'bg-red-500/10 text-red-400 border-red-500/20',
     },
-    { key: 'chat',         label: 'Comunidade'       },
   ]
 
   return (
@@ -1294,8 +1292,6 @@ export default function Picks() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null)
   const [selectedPickType, setSelectedPickType] = useState<string>('vip')
-  const [chatUnread, setChatUnread] = useState(0)
-  const chatLastIdRef = useRef(0)
 
   const openDetail = (id: number, pickType = 'vip') => {
     setSelectedId(id)
@@ -1402,21 +1398,6 @@ export default function Picks() {
     if (tab === 'alavancagem'  && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
   }, [tab, canSeeVip])
 
-  // Badge de não lidas na aba Comunidade
-  useEffect(() => {
-    if (tab === 'chat') { setChatUnread(0); return }
-    if (chatLastIdRef.current === 0) return
-    const interval = setInterval(() => {
-      api.get('/social/chat/messages', { params: { after_id: chatLastIdRef.current, limit: 30 } })
-        .then(r => {
-          if (r.data.length) {
-            chatLastIdRef.current = r.data[r.data.length - 1].id
-            setChatUnread(prev => prev + r.data.length)
-          }
-        }).catch(() => {})
-    }, 15_000)
-    return () => clearInterval(interval)
-  }, [tab])
 
   const fetchVip = useCallback((f: VipFilters) => {
     setVipLoading(true)
@@ -1644,7 +1625,6 @@ export default function Picks() {
             vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
-            chat:        chatUnread || undefined,
           }}
         />
 
@@ -2237,17 +2217,6 @@ export default function Picks() {
           <LivePicks isActive={tab === 'aovivo'} />
         </div>
 
-        {tab === 'chat' && (
-          <div className="max-w-2xl mx-auto">
-            <div className="mb-4">
-              <p className="text-xs text-zinc-500 leading-relaxed">
-                Chat em tempo real da comunidade Pick<span className="text-green-500">IA</span>.
-                Discuta picks, compartilhe análises e conecte-se com outros apostadores.
-              </p>
-            </div>
-            <CommunityChat onLatestId={id => { chatLastIdRef.current = id }} />
-          </div>
-        )}
 
         {tab === 'guia' && (
           <div className="max-w-2xl mx-auto">
