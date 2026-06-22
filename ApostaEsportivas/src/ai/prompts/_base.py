@@ -52,7 +52,7 @@ FORMATO DAS ODDS (novo):
     best_odd      → melhor odd disponível entre as casas coletadas
     best_bookmaker→ casa que oferece best_odd
     bookmakers_count → nº de casas que têm este mercado
-    odds_range    → {"min", "max"} — alta dispersão indica mercado ineficiente
+    odds_range    → min/max — alta dispersão indica mercado ineficiente
     value         → "Over" / "Under" / "Home" / "Away" / "Yes" / "No"
 
 COMO USAR no_vig_prob:
