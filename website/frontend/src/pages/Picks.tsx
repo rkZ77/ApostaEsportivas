@@ -1476,7 +1476,7 @@ export default function Picks() {
 
   return (
     <div className="min-h-screen bg-black">
-      {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} />}
+      {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
 
       {/* Modal de boas-vindas — configura banca */}
       {showBancaModal && (

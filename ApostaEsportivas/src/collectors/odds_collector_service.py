@@ -282,6 +282,9 @@ class OddsCollectorService:
 
                 for bet in bk.get("bets", []):
 
+                    if bet.get("id") not in VALID_BET_IDS:
+                        continue
+
                     cur.execute("""
                         INSERT INTO odds_markets (
                             bookmaker_row_id, bet_id, bet_name,

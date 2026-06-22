@@ -94,7 +94,7 @@ export default function SuggestionCard({
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(s.probability ?? s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value)
+    ? suggestStake(s.probability ?? s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value, 5)
     : null
 
   const handleFollow = (e: React.MouseEvent) => {

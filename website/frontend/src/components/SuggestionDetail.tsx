@@ -69,8 +69,9 @@ function StatBar({ label, home, away, higherIsBetter = true }: {
   )
 }
 
-export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
+export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca }: {
   id: number; onClose: () => void; pickType?: string
+  banca?: { bankroll_current: number; unit_value: number } | null
 }) {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -132,6 +133,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
   const resultStyle = s?.result ? pickResultStyle[s.result] : null
   const confidence = Math.round((s?.confidence ?? 0) * 100)
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
+
+  const stakeUnits = (() => {
+    if (!s) return 1
+    if (s.stake_pct && banca?.bankroll_current && banca?.unit_value && banca.unit_value > 0) {
+      return Math.max(1, Math.min(5, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value)))
+    }
+    return s.user_stake_units ?? (s.stake || null) ?? 1
+  })()
 
   return (
     <div className="fixed inset-0 z-[60] flex" onClick={onClose}>
@@ -263,7 +272,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip' }: {
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
-                      <div className="text-2xl font-black text-white">{s.user_stake_units ?? s.stake ?? 1}u</div>
+                      <div className="text-2xl font-black text-white">{stakeUnits}u</div>
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>

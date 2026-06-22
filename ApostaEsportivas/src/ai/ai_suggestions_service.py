@@ -442,12 +442,23 @@ HISTÓRICO FORA
             if pt_name != raw_name and team:
                 pt_name = f"{pt_name} ({team})"
 
+            # Exige pelo menos 2 bookmakers para validar que o mercado é real
+            if m.get("bookmakers_count", 0) < 2:
+                continue
+
+            # Combina value + line em campo único para que a IA copie corretamente
+            # ex: value="Over" + line="2.5" → combined_line="Over 2.5"
+            # Isso garante que _find_market_id consiga fazer o lookup depois
+            value_raw = m.get("value", "")
+            line_raw  = m.get("line", "")
+            combined_line = f"{value_raw} {line_raw}".strip() if line_raw else value_raw
+
             result.append({
                 "market_id":        m.get("market_id"),
                 "market_name":      pt_name,
                 "market_type":      m.get("market_type"),
-                "value":            m.get("value"),
-                "line":             m.get("line"),
+                "value":            value_raw,
+                "line":             combined_line,
                 "best_odd":         best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
                 "no_vig_prob":      no_vig,
@@ -702,13 +713,51 @@ HISTÓRICO FORA
         return best
 
     # --------------------------------------------------------
-    # CÁLCULO DE STAKE (Kelly fracionado — 25% Kelly)
+    # CÁLCULO DE STAKE — ½ Kelly fracionado
     #
-    # Faixa: 2% mínimo, 5% máximo do bankroll
+    # Retorna (stake_pct, stake_units_ref)
+    #   stake_pct      → fração da banca a apostar (0.01–0.05)
+    #   stake_units_ref→ unidades de referência (escala 1–5u)
+    #
+    # Faixas por nível de confiança + EV:
+    #   ≥ 80% conf e EV > 10% → até 5% / 5u
+    #   ≥ 72% conf e EV > 5%  → até 4% / 4u
+    #   demais positivos       → até 3% / 2-3u
+    #   stat_strong (EV ≤ 0)  → 1% / 1u
     # --------------------------------------------------------
-    def calculate_stake(self, confidence, odd):
-        # Stake calculado no frontend com banca real do usuário (½ Kelly personalizado)
-        return None, None
+    @staticmethod
+    def calculate_stake(confidence: float, odd: float, ev: float = 0.0, stat_strong: bool = False) -> tuple[float, int]:
+        if stat_strong or ev <= 0:
+            return 0.01, 1
+
+        b = float(odd) - 1.0
+        p = float(confidence)
+        q = 1.0 - p
+
+        if b <= 0 or p <= 0 or p >= 1:
+            return 0.01, 1
+
+        kelly = (b * p - q) / b
+        if kelly <= 0:
+            return 0.01, 1
+
+        half_kelly = kelly * 0.5
+
+        # Cap por nível de confiança
+        if confidence >= 0.80 and ev > 0.10:
+            cap = 0.05
+        elif confidence >= 0.72 and ev > 0.05:
+            cap = 0.04
+        else:
+            cap = 0.03
+
+        stake_pct = round(max(0.01, min(cap, half_kelly)), 4)
+
+        # Unidades de referência (escala 1-5u para bankroll padrão R$1000, unit R$50)
+        # Serve como guia visual — o frontend converte com a banca real do usuário
+        ref_units = max(1, min(5, round(stake_pct / 0.01)))
+
+        return stake_pct, ref_units
 
     # --------------------------------------------------------
     # GERAR E SALVAR NO BANCO (com ON CONFLICT para evitar duplicatas)
@@ -772,11 +821,18 @@ HISTÓRICO FORA
 
         def _find_market_id(om_full: list, line: str, odd_val: float) -> int | None:
             line_n = str(line).strip().lower()
+            # A IA pode retornar "Over 2.5" — extrai só a parte numérica como fallback
+            import re as _re
+            line_numeric = _re.sub(
+                r'^(over|under|yes|no|home|away|1|x|2)\s*', '', line_n
+            ).strip()
+
             for o in om_full:
-                # Suporta formato estruturado (best_odd) e legado (odd)
-                o_odd = float(o.get("best_odd", 0) or o.get("odd", 0))
+                o_odd  = float(o.get("best_odd", 0) or o.get("odd", 0))
                 o_line = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
-                if o_line == line_n and abs(o_odd - odd_val) < 0.02:
+                # Match exato OU match do lado numérico
+                if (o_line == line_n or (line_numeric and o_line == line_numeric)) \
+                        and abs(o_odd - odd_val) < 0.02:
                     return o.get("market_id")
             return None
 
@@ -785,6 +841,14 @@ HISTÓRICO FORA
             chosen.get("line", ""),
             float(chosen.get("odd", 0)),
         )
+
+        if chosen_market_id is None:
+            print(
+                f"[REJECT] IA escolheu mercado não encontrado nas odds: "
+                f"'{chosen.get('market')}' linha '{chosen.get('line')}' @ {chosen.get('odd')} — "
+                f"mercado não existe ou foi inventado. Pick descartado."
+            )
+            return []
 
         odd  = float(chosen["odd"])
         conf = float(chosen["confidence"])
@@ -800,11 +864,14 @@ HISTÓRICO FORA
                 reasoning = f"[STAT-STRONG] Base estatística sólida (conf {round(conf*100)}%) mas EV levemente negativo ({round(ev*100,1)}%) — aposta 50% do stake normal. " + reasoning
             chosen["reasoning"] = reasoning
 
+        stat_strong_flag = bool(chosen.get("stat_strong") or self._is_stat_strong(ev, conf))
+        stake_pct, stake_units = self.calculate_stake(conf, odd, ev, stat_strong_flag)
+
         print(
             f"\n[SAVE] {fx['home_team']} x {fx['away_team']} | "
             f"{chosen['market']} {chosen['line']} | odd {odd} | "
             f"edge {round(float(chosen.get('edge', 0)) * 100, 1)}% | "
-            f"conf {round(conf * 100)}% | EV {ev}"
+            f"conf {round(conf * 100)}% | EV {ev} | stake {stake_pct*100:.1f}% ({stake_units}u)"
         )
 
         # 3. Salva no banco — ON CONFLICT ignora duplicata do mesmo fixture
@@ -824,9 +891,10 @@ HISTÓRICO FORA
                 market, line, odd, bet_house,
                 market_type, market_id,
                 confidence, ev, probability, reasoning,
+                stake_pct,
                 created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (fixture_id) DO NOTHING
             """,
             (
@@ -846,6 +914,7 @@ HISTÓRICO FORA
                 ev,
                 float(chosen.get("probability", 0) or 0),
                 chosen.get("reasoning", ""),
+                stake_pct,
             ),
         )
 
