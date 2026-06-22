@@ -297,7 +297,7 @@ def get_today_suggestions(
             if not ids:
                 return {}
             rows = _safe_query(cur, """
-                SELECT pick_id, stake_units, actual_odd FROM user_followed_picks
+                SELECT pick_id, stake_units, actual_odd, bet_house FROM user_followed_picks
                 WHERE user_id = %s AND pick_type = %s AND pick_id = ANY(%s)
             """, (user_id, pick_type, ids))
             return {r["pick_id"]: r for r in rows}
@@ -309,6 +309,7 @@ def get_today_suggestions(
                 p["is_followed"]      = fr is not None
                 p["user_stake_units"] = float(fr["stake_units"]) if fr else None
                 p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 p["pick_type"] = "vip"
 
         if user_id and result.get("dica_do_dia"):
@@ -316,12 +317,13 @@ def get_today_suggestions(
             dica_id = dica.get("id")
             if dica_id:
                 fr = _safe_query_one(cur, """
-                    SELECT stake_units, actual_odd FROM user_followed_picks
+                    SELECT stake_units, actual_odd, bet_house FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'free' AND pick_id = %s
                 """, (user_id, dica_id))
                 dica["is_followed"]      = fr is not None
                 dica["user_stake_units"] = float(fr["stake_units"]) if fr else None
                 dica["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                dica["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 dica["pick_type"] = "free"
 
         if user_id and result.get("multiplas"):
@@ -331,6 +333,7 @@ def get_today_suggestions(
                 m["is_followed"]      = fr is not None
                 m["user_stake_units"] = float(fr["stake_units"]) if fr else None
                 m["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                m["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 m["pick_type"] = "multipla"
 
         if user_id and result.get("alavancagem"):
@@ -338,12 +341,13 @@ def get_today_suggestions(
             alav_id = alav.get("id")
             if alav_id:
                 fr = _safe_query_one(cur, """
-                    SELECT stake_units, actual_odd FROM user_followed_picks
+                    SELECT stake_units, actual_odd, bet_house FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'alavancagem' AND pick_id = %s
                 """, (user_id, alav_id))
                 alav["is_followed"]      = fr is not None
                 alav["user_stake_units"] = float(fr["stake_units"]) if fr else None
                 alav["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                alav["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 alav["pick_type"] = "alavancagem"
 
         # ── Calcula suggested_stake_units com banca real do usuário ─────────
@@ -469,7 +473,7 @@ def get_vip_suggestions(
             pick_ids = [p["id"] for p in picks if p.get("id")]
             if pick_ids:
                 frows = _safe_query(cur, """
-                    SELECT pick_id, stake_units, actual_odd FROM user_followed_picks
+                    SELECT pick_id, stake_units, actual_odd, bet_house FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'vip' AND pick_id = ANY(%s)
                 """, (user_id, pick_ids))
                 followed_map = {r["pick_id"]: r for r in frows}
@@ -478,6 +482,7 @@ def get_vip_suggestions(
                     p["is_followed"]      = fr is not None
                     p["user_stake_units"] = float(fr["stake_units"]) if fr else None
                     p["user_actual_odd"]  = float(fr["actual_odd"]) if fr and fr["actual_odd"] else None
+                    p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                     p["pick_type"] = "vip"
 
         # Calcula suggested_stake_units com banca real do usuário

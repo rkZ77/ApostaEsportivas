@@ -356,12 +356,21 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
         conn.close()
 
 
+STAKE_LIMITS = {
+    "vip":        (1, 10),
+    "free":       (1, 5),
+    "multipla":   (1, 3),
+    "alavancagem":(1, 10),
+}
+
 @router.post("/follow")
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
     if body.pick_type not in ("vip", "free", "multipla", "alavancagem"):
         raise HTTPException(400, "Tipo inválido.")
-    if not (1 <= body.stake_units <= 10):
-        raise HTTPException(400, "Stake deve ser entre 1 e 10 unidades.")
+    min_u, max_u = STAKE_LIMITS[body.pick_type]
+    if not (min_u <= body.stake_units <= max_u):
+        labels = {"vip": "VIP", "free": "Free", "multipla": "Múltipla", "alavancagem": "Alavancagem"}
+        raise HTTPException(400, f"Stake para picks {labels[body.pick_type]} deve ser entre {min_u} e {max_u} unidades.")
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()

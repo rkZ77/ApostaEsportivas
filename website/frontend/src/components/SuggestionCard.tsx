@@ -51,6 +51,7 @@ interface Suggestion {
   is_followed?: boolean
   user_stake_units?: number | null
   user_actual_odd?: number | null
+  user_bet_house?: string | null
   stake_pct?: number | null
   suggested_stake_units?: number | null
 }
@@ -209,8 +210,17 @@ export default function SuggestionCard({
       <div className="flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
-          <div className="text-3xl font-black text-green-400">{Number(s.odd).toFixed(2)}</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">{s.bet_house}</div>
+          <div className="text-3xl font-black text-green-400">
+            {s.is_followed && s.user_actual_odd != null
+              ? Number(s.user_actual_odd).toFixed(2)
+              : Number(s.odd).toFixed(2)}
+          </div>
+          {s.is_followed && s.user_actual_odd != null && Math.abs(s.user_actual_odd - Number(s.odd)) > 0.001 && (
+            <div className="text-[9px] text-zinc-600 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
+          )}
+          <div className="text-[10px] text-zinc-600 mt-0.5">
+            {s.is_followed && s.user_bet_house ? s.user_bet_house : s.bet_house}
+          </div>
         </div>
         {!s.result && s.is_followed && s.user_stake_units != null ? (
           <>
@@ -221,9 +231,12 @@ export default function SuggestionCard({
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
-              <div className="text-xl font-black text-white">
-                {banca ? `R$${(s.user_stake_units * banca.unit_value * Number(s.odd)).toFixed(0)}` : `${(s.user_stake_units * Number(s.odd)).toFixed(1)}u`}
-              </div>
+              {(() => {
+                const effOdd = s.user_actual_odd ?? Number(s.odd)
+                return banca
+                  ? <div className="text-xl font-black text-white">R${(s.user_stake_units * banca.unit_value * effOdd).toFixed(0)}</div>
+                  : <div className="text-xl font-black text-white">{(s.user_stake_units * effOdd).toFixed(1)}u</div>
+              })()}
             </div>
           </>
         ) : stakeSuggestion && !s.result ? (

@@ -172,8 +172,8 @@ function SetupModal({ current, onSave, onClose }: {
 
         <div className="flex gap-3 mt-5">
           <button onClick={handleSave} disabled={loading || isBlocked}
-            className={`btn-primary flex-1 py-2.5 ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}`}>
-            {loading ? 'Salvando...' : isBlocked ? 'Corrija a unidade' : 'Salvar'}
+            className="btn-primary flex-1 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            {loading ? 'Salvando...' : 'Salvar'}
           </button>
           <button onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">Cancelar</button>
         </div>

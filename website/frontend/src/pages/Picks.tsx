@@ -578,6 +578,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         pickOdd={Number(dica.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={dica.bet_house}
+        maxUnits={5}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
@@ -830,6 +831,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       <ApostaModal
         pickOdd={Number(m.total_odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
+        maxUnits={3}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
@@ -1036,8 +1038,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     {showModal && (
       <ApostaModal
         pickOdd={Number(pick.odd_combined)}
-        suggestedUnits={1}
         suggestedHouse={pick.bet_house_1}
+        hideUnits
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}

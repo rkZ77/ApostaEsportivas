@@ -6,6 +6,8 @@ interface Props {
   pickOdd: number
   suggestedUnits?: number
   suggestedHouse?: string
+  maxUnits?: number
+  hideUnits?: boolean
   onConfirm: (actualOdd: number, betHouse: string, stakeUnits: number) => void
   onCancel: () => void
   loading?: boolean
@@ -13,7 +15,8 @@ interface Props {
 }
 
 export default function ApostaModal({
-  pickOdd, suggestedUnits = 1, suggestedHouse, onConfirm, onCancel, loading, error
+  pickOdd, suggestedUnits = 1, suggestedHouse, maxUnits = 10, hideUnits = false,
+  onConfirm, onCancel, loading, error
 }: Props) {
   const [oddStr, setOddStr] = useState(String(pickOdd))
   const [house,  setHouse]  = useState(suggestedHouse ?? '')
@@ -23,9 +26,9 @@ export default function ApostaModal({
   const parsed   = parseFloat(oddStr)
   const validOdd = !isNaN(parsed) && parsed >= 1.01 && parsed <= 99
   const oddChanged = validOdd && Math.abs(parsed - pickOdd) > 0.001
-  const exceedsMax = units > 10
-  const exceedsSuggested = units > suggestedUnits
-  const valid = validOdd && house.length > 0 && units >= 1 && !exceedsMax
+  const exceedsMax = !hideUnits && units > maxUnits
+  const exceedsSuggested = !hideUnits && units > suggestedUnits
+  const valid = validOdd && house.length > 0 && (hideUnits || (units >= 1 && !exceedsMax))
 
   function handlePrimary() {
     if (!valid) return
@@ -118,37 +121,39 @@ export default function ApostaModal({
             </div>
 
             {/* Unidades */}
-            <div className="mb-4">
-              <div className="flex items-center justify-between mb-1.5">
-                <label className="text-zinc-400 text-xs font-semibold">Unidades a apostar</label>
-                <span className="text-[10px] text-zinc-600">IA sugere: <span className="text-green-400 font-bold">{suggestedUnits}u</span></span>
+            {!hideUnits && (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-zinc-400 text-xs font-semibold">Unidades a apostar</label>
+                  <span className="text-[10px] text-zinc-600">IA sugere: <span className="text-green-400 font-bold">{suggestedUnits}u</span></span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUnits(u => Math.max(1, u - 1))}
+                    className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
+                  >−</button>
+                  <input
+                    type="number" min="1" max={maxUnits} step="1" value={units}
+                    onChange={e => setUnits(Math.max(1, Math.min(maxUnits, parseInt(e.target.value) || 1)))}
+                    className="input flex-1 text-center text-xl font-black"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setUnits(u => Math.min(maxUnits, u + 1))}
+                    className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
+                  >+</button>
+                </div>
+                {exceedsSuggested && !exceedsMax && (
+                  <p className="text-yellow-400 text-[11px] mt-1.5">
+                    Acima da sugestão · você será solicitado a confirmar
+                  </p>
+                )}
+                {exceedsMax && (
+                  <p className="text-red-400 text-[11px] mt-1.5">Máximo {maxUnits} unidades por aposta</p>
+                )}
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setUnits(u => Math.max(1, u - 1))}
-                  className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
-                >−</button>
-                <input
-                  type="number" min="1" max="10" step="1" value={units}
-                  onChange={e => setUnits(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
-                  className="input flex-1 text-center text-xl font-black"
-                />
-                <button
-                  type="button"
-                  onClick={() => setUnits(u => Math.min(10, u + 1))}
-                  className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
-                >+</button>
-              </div>
-              {exceedsSuggested && !exceedsMax && (
-                <p className="text-yellow-400 text-[11px] mt-1.5">
-                  Acima da sugestão · você será solicitado a confirmar
-                </p>
-              )}
-              {exceedsMax && (
-                <p className="text-red-400 text-[11px] mt-1.5">Máximo 10 unidades por aposta</p>
-              )}
-            </div>
+            )}
 
             {error && (
               <p className="text-red-400 text-xs mb-3 text-center">{error}</p>
