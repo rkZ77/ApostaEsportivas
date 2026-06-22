@@ -325,6 +325,17 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
         raise HTTPException(400, "Meta deve ser maior que a banca inicial.")
     if body.unit_value is not None and body.unit_value <= 0:
         raise HTTPException(400, "Valor da unidade deve ser maior que zero.")
+    if body.unit_value is not None:
+        total_units = body.bankroll_start / body.unit_value
+        if total_units < 20:
+            max_unit = round(body.bankroll_start / 20, 2)
+            raise HTTPException(
+                400,
+                f"Unidade muito alta para sua banca. "
+                f"Com R${body.bankroll_start:.2f} de banca e R${body.unit_value:.2f} por unidade "
+                f"você teria apenas {total_units:.0f} unidades — alto risco de ruína. "
+                f"Reduza a unidade para no máximo R${max_unit:.2f} (20 unidades mínimas)."
+            )
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()

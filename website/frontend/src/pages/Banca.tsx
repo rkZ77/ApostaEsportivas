@@ -47,8 +47,21 @@ function SetupModal({ current, onSave, onClose }: {
   const [err,       setErr]       = useState('')
   const [loading,   setLoading]   = useState(false)
 
-  const startNum    = parseFloat(start.replace(',', '.')) || 0
-  const suggested   = startNum > 0 ? (startNum / 100).toFixed(2) : ''
+  const startNum  = parseFloat(start.replace(',', '.')) || 0
+  const uvNum     = parseFloat(unitValue.replace(',', '.')) || 0
+  const suggested = startNum > 0 ? (startNum / 100).toFixed(2) : ''
+
+  // Validação de risco de banca em tempo real
+  const totalUnits   = startNum > 0 && uvNum > 0 ? startNum / uvNum : null
+  const unitPct      = startNum > 0 && uvNum > 0 ? (uvNum / startNum) * 100 : null
+  const isBlocked    = totalUnits !== null && totalUnits < 20
+  const isWarning    = totalUnits !== null && totalUnits >= 20 && totalUnits < 50
+  const maxUnitSafe  = startNum > 0 ? (startNum / 20).toFixed(2) : null
+
+  const bancaStatus = isBlocked ? 'blocked'
+    : isWarning ? 'warning'
+    : totalUnits !== null ? 'ok'
+    : null
 
   const handleSave = async () => {
     setErr('')
@@ -58,6 +71,7 @@ function SetupModal({ current, onSave, onClose }: {
     if (!s || s <= 0)          { setErr('Banca inicial deve ser maior que zero.'); return }
     if (g !== null && g <= s)  { setErr('Meta deve ser maior que a banca inicial.'); return }
     if (!uv || uv <= 0)        { setErr('Valor da unidade deve ser maior que zero.'); return }
+    if (isBlocked)             { setErr(`Unidade muito alta. Máximo permitido: ${fmtBRL(parseFloat(maxUnitSafe ?? '0'))} para ter 20 unidades mínimas.`); return }
     setLoading(true)
     try {
       await api.post('/banca/setup', { bankroll_start: s, bankroll_goal: g, unit_value: uv })
@@ -87,8 +101,12 @@ function SetupModal({ current, onSave, onClose }: {
               Valor de 1 unidade (R$)
               <span className="text-zinc-600 ml-1">quanto você aposta por unidade</span>
             </label>
-            <input type="number" min="0.01" step="0.01" value={unitValue}
-              onChange={e => setUnitValue(e.target.value)} className="input w-full" placeholder="Ex: 5" />
+            <input
+              type="number" min="0.01" step="0.01" value={unitValue}
+              onChange={e => setUnitValue(e.target.value)}
+              className={`input w-full ${isBlocked ? 'border-red-500/60 focus:border-red-500' : isWarning ? 'border-yellow-500/60 focus:border-yellow-500' : ''}`}
+              placeholder="Ex: 5"
+            />
             {startNum > 0 && (
               <p className="text-zinc-600 text-xs mt-1">
                 Sugerido: <button type="button" onClick={() => setUnitValue(suggested)}
@@ -97,6 +115,41 @@ function SetupModal({ current, onSave, onClose }: {
                 </button>
                 {' '}(1% da banca, gestão conservadora)
               </p>
+            )}
+
+            {/* Indicador de saúde da banca */}
+            {bancaStatus === 'blocked' && totalUnits !== null && (
+              <div className="mt-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs">
+                <p className="text-red-400 font-black mb-0.5">Bloqueado — risco de ruína</p>
+                <p className="text-red-300">
+                  Com R${fmtBRL(uvNum)} por unidade sua banca teria apenas <strong>{Math.floor(totalUnits)} unidades</strong>.
+                  Menos de 20 unidades é alto risco de ruína total.
+                </p>
+                <p className="text-red-400 mt-1 font-semibold">
+                  Máximo permitido: <button type="button" onClick={() => setUnitValue(maxUnitSafe ?? '')}
+                    className="underline hover:text-red-300">{fmtBRL(parseFloat(maxUnitSafe ?? '0'))}</button> por unidade
+                </p>
+              </div>
+            )}
+            {bancaStatus === 'warning' && totalUnits !== null && unitPct !== null && (
+              <div className="mt-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-xs">
+                <p className="text-yellow-400 font-black mb-0.5">Atenção — unidade acima do ideal</p>
+                <p className="text-yellow-300">
+                  Sua banca teria <strong>{Math.floor(totalUnits)} unidades</strong> ({unitPct.toFixed(1)}% por unidade).
+                  Recomendado: mínimo 50 unidades (≤ 2% por unidade).
+                </p>
+                <p className="text-yellow-400 mt-1 font-semibold">
+                  Ideal: <button type="button" onClick={() => setUnitValue(suggested)}
+                    className="underline hover:text-yellow-300">{fmtBRL(parseFloat(suggested) || 0)}</button> por unidade
+                </p>
+              </div>
+            )}
+            {bancaStatus === 'ok' && totalUnits !== null && (
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-green-500">
+                <span className="font-bold">Banca saudável</span>
+                <span className="text-zinc-600">·</span>
+                <span className="text-zinc-400">{Math.floor(totalUnits)} unidades totais</span>
+              </div>
             )}
           </div>
 
@@ -118,8 +171,9 @@ function SetupModal({ current, onSave, onClose }: {
         {err && <p className="text-red-400 text-xs mt-3">{err}</p>}
 
         <div className="flex gap-3 mt-5">
-          <button onClick={handleSave} disabled={loading} className="btn-primary flex-1 py-2.5">
-            {loading ? 'Salvando...' : 'Salvar'}
+          <button onClick={handleSave} disabled={loading || isBlocked}
+            className={`btn-primary flex-1 py-2.5 ${isBlocked ? 'opacity-40 cursor-not-allowed' : ''}`}>
+            {loading ? 'Salvando...' : isBlocked ? 'Corrija a unidade' : 'Salvar'}
           </button>
           <button onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">Cancelar</button>
         </div>
