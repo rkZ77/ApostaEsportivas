@@ -463,18 +463,21 @@ def get_vip_suggestions(
             if p.get("market"):
                 p["market"] = _tr(p["market"])
 
-        # Adiciona is_followed
+        # Adiciona is_followed + user_stake_units + user_actual_odd
         user_id = current_user.get("id")
         if user_id and picks:
             pick_ids = [p["id"] for p in picks if p.get("id")]
             if pick_ids:
                 frows = _safe_query(cur, """
-                    SELECT pick_id FROM user_followed_picks
+                    SELECT pick_id, stake_units, actual_odd FROM user_followed_picks
                     WHERE user_id = %s AND pick_type = 'vip' AND pick_id = ANY(%s)
                 """, (user_id, pick_ids))
-                followed_set = {r["pick_id"] for r in frows}
+                followed_map = {r["pick_id"]: r for r in frows}
                 for p in picks:
-                    p["is_followed"] = p.get("id") in followed_set
+                    fr = followed_map.get(p.get("id"))
+                    p["is_followed"]      = fr is not None
+                    p["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                    p["user_actual_odd"]  = float(fr["actual_odd"]) if fr and fr["actual_odd"] else None
                     p["pick_type"] = "vip"
 
         # Calcula suggested_stake_units com banca real do usuário
@@ -593,10 +596,11 @@ def get_suggestion_detail(
                 "pick_type": "multipla",
             }
             ufp_m = _safe_query_one(cur, """
-                SELECT stake_units FROM user_followed_picks
+                SELECT stake_units, actual_odd FROM user_followed_picks
                 WHERE user_id = %s AND pick_id = %s AND pick_type = 'multipla'
             """, (current_user["id"], suggestion_id))
             suggestion["user_stake_units"] = float(ufp_m["stake_units"]) if ufp_m else None
+            suggestion["user_actual_odd"]  = float(ufp_m["actual_odd"]) if ufp_m and ufp_m["actual_odd"] else None
             return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
                     "home_recent": [], "away_recent": [], "odds": []}
 
@@ -711,10 +715,11 @@ def get_suggestion_detail(
                 return result
 
             ufp_a = _safe_query_one(cur, """
-                SELECT stake_units FROM user_followed_picks
+                SELECT stake_units, actual_odd FROM user_followed_picks
                 WHERE user_id = %s AND pick_id = %s AND pick_type = 'alavancagem'
             """, (current_user["id"], suggestion_id))
             alav_suggestion["user_stake_units"] = float(ufp_a["stake_units"]) if ufp_a else None
+            alav_suggestion["user_actual_odd"]  = float(ufp_a["actual_odd"]) if ufp_a and ufp_a["actual_odd"] else None
             return {
                 "suggestion":  alav_suggestion,
                 "home_stats":  get_alav_stats(alav_home_id),
@@ -844,10 +849,11 @@ def get_suggestion_detail(
         """, (suggestion["fixture_id"],))
 
         ufp_v = _safe_query_one(cur, """
-            SELECT stake_units FROM user_followed_picks
+            SELECT stake_units, actual_odd FROM user_followed_picks
             WHERE user_id = %s AND pick_id = %s AND pick_type = %s
         """, (current_user["id"], suggestion_id, pick_type))
         suggestion["user_stake_units"] = float(ufp_v["stake_units"]) if ufp_v else None
+        suggestion["user_actual_odd"]  = float(ufp_v["actual_odd"]) if ufp_v and ufp_v["actual_odd"] else None
         if suggestion.get("market"):
             suggestion["market"] = _tr(suggestion["market"])
 
