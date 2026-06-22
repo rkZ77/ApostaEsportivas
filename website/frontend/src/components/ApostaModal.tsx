@@ -51,7 +51,7 @@ export default function ApostaModal({
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-5">
               <p className="text-yellow-400 font-black text-sm mb-1">Stake acima do recomendado</p>
               <p className="text-yellow-200 text-xs leading-relaxed">
-                Você está apostando <strong>{units}u</strong> — a IA recomendou <strong>{suggestedUnits}u</strong> para proteger sua banca.
+                Você está apostando <strong>{units}u</strong>, a IA recomendou <strong>{suggestedUnits}u</strong> para proteger sua banca.
                 Apostar mais do que o sugerido pode aumentar o risco de ruína.
               </p>
               <p className="text-yellow-400/70 text-xs mt-2">Tem certeza que quer continuar?</p>
@@ -68,7 +68,7 @@ export default function ApostaModal({
                 disabled={loading}
                 className="flex-1 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
               >
-                {loading ? '...' : 'Confirmar mesmo assim'}
+                {loading ? '...' : 'Estou ciente'}
               </button>
             </div>
           </div>
