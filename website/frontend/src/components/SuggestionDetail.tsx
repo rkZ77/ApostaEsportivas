@@ -139,7 +139,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
     if (pickType === 'alavancagem') return null
     if (!s) return 1
 
-    // 1. suggested_stake_units do backend (mais preciso — usa banca real do usuário)
+    // 1. Stake real apostada pelo usuário (user_followed_picks)
+    if (s.user_stake_units != null && s.user_stake_units > 0) {
+      return s.user_stake_units
+    }
+
+    // 2. Sugestão calculada pelo backend com banca real
     if (s.suggested_stake_units != null && s.suggested_stake_units > 0) {
       return s.suggested_stake_units
     }
@@ -148,12 +153,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
     const odd  = Number(s.total_odd ?? s.odd ?? 0)
     const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
 
-    // 2. VIP: stake_pct do DB + banca real
+    // 3. VIP: stake_pct do DB + banca real
     if (!isMultipla && s.stake_pct && banca?.bankroll_current && banca.unit_value > 0) {
       return Math.max(1, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value))
     }
 
-    // 3. Frontend com banca real (fallback)
+    // 4. Frontend com banca real (fallback)
     if (prob > 0 && odd > 1 && banca?.bankroll_current && banca.unit_value > 0) {
       if (isMultipla) {
         const sug = suggestStake(prob, odd, banca.bankroll_current, banca.unit_value, 5, 0.25)
@@ -164,7 +169,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
       }
     }
 
-    // 4. Sem banca: escala de referência (1% banca ref. R$1000 = 1u)
+    // 5. Sem banca: escala de referência (1% banca ref. R$1000 = 1u)
     if (s.stake_pct) return Math.max(1, Math.round(s.stake_pct / 0.01))
 
     return 1
