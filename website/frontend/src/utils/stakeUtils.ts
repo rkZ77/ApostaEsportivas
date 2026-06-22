@@ -33,6 +33,43 @@ export interface StakeSuggestion {
  * kellyFraction: 0.5 para picks simples (½ Kelly), 0.25 para múltiplas (¼ Kelly).
  * Resultado arredondado para o 1u mais próximo, entre 1u e maxUnits.
  */
+/**
+ * Calcula stake para picks VIP/Free espelhando o cap do backend:
+ *   conf ≥ 80% e EV > 10% → até 5% da banca (5u por R$10 unit em R$1k banca)
+ *   conf ≥ 72% e EV > 5%  → até 4% da banca
+ *   demais positivos       → até 3% da banca
+ * Usa stake_pct do backend quando disponível (mais preciso).
+ */
+export function calcVipStake(
+  prob: number,
+  odd: number,
+  ev: number,
+  bankroll: number,
+  unitValue: number,
+  stakePctFromBackend?: number | null,
+): { units: number; amountR: number; kellyPct: number } | null {
+  if (!bankroll || !unitValue || unitValue <= 0) return null
+
+  let stakePct: number
+
+  if (stakePctFromBackend != null && stakePctFromBackend > 0) {
+    stakePct = stakePctFromBackend
+  } else {
+    const b = odd - 1
+    const q = 1 - prob
+    if (b <= 0 || prob <= 0 || prob >= 1) return null
+    const kelly = (b * prob - q) / b
+    if (kelly <= 0) return null
+    const cap = prob >= 0.80 && ev > 0.10 ? 0.05
+              : prob >= 0.72 && ev > 0.05 ? 0.04
+              : 0.03
+    stakePct = Math.max(0.01, Math.min(cap, kelly * 0.5))
+  }
+
+  const units = Math.max(1, Math.min(5, Math.round((stakePct * bankroll) / unitValue)))
+  return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
+}
+
 export function suggestStake(
   probReal: number,
   odd: number,

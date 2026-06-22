@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from 'lucide-react'
 import api from '../services/api'
 import PickSocial from './PickSocial'
-import { suggestStake } from '../utils/stakeUtils'
+import { suggestStake, calcVipStake } from '../utils/stakeUtils'
 
 interface StatBlock {
   context_type: string
@@ -136,38 +136,50 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
 
   const stakeUnits = (() => {
-    // Alavancagem não tem unidades
     if (pickType === 'alavancagem') return null
-
     if (!s) return 1
 
-    const odd  = Number(s.odd ?? s.total_odd ?? 0)
+    // Parâmetros idênticos aos cards de cada tipo
+    const isMultipla   = pickType === 'multipla'
+    const maxU         = isMultipla ? 3 : 5
+    const kellyFrac    = isMultipla ? 0.25 : 0.5
+    const pctPerUnit   = isMultipla ? 0.005 : 0.01   // escala sem banca: 0.5%=1u vs 1%=1u
+
+    const odd  = Number(s.total_odd ?? s.odd ?? 0)
     const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
 
-    // 1. Backend Kelly + banca real do usuário
-    if (s.stake_pct && banca?.bankroll_current && banca.unit_value > 0) {
-      return Math.max(1, Math.min(5, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value)))
+    // 1. Backend stake_pct (VIP) + banca real
+    if (!isMultipla && s.stake_pct && banca?.bankroll_current && banca.unit_value > 0) {
+      return Math.max(1, Math.min(maxU, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value)))
     }
 
-    // 2. Backend stake_pct sem banca → escala 1-5u de referência (1% = 1u)
-    if (s.stake_pct) {
-      return Math.max(1, Math.min(5, Math.round(s.stake_pct / 0.01)))
+    // 2. Backend stake_pct sem banca → escala de referência
+    if (!isMultipla && s.stake_pct) {
+      return Math.max(1, Math.min(maxU, Math.round(s.stake_pct / pctPerUnit)))
     }
 
-    // 3. Frontend Kelly com banca real
+    // 3. Frontend com banca real
     if (prob > 0 && odd > 1 && banca?.bankroll_current && banca.unit_value > 0) {
-      const sug = suggestStake(prob, odd, banca.bankroll_current, banca.unit_value, 5)
-      if (sug) return sug.units
+      if (isMultipla) {
+        const sug = suggestStake(prob, odd, banca.bankroll_current, banca.unit_value, maxU, kellyFrac)
+        if (sug) return sug.units
+      } else {
+        const sug = calcVipStake(prob, odd, Number(s.ev ?? 0), banca.bankroll_current, banca.unit_value)
+        if (sug) return sug.units
+      }
     }
 
-    // 4. Frontend Kelly sem banca → escala 1-5u de referência
+    // 4. Sem banca → escala de referência via cap backend (1%=1u)
     if (prob > 0 && odd > 1) {
       const b = odd - 1
       const q = 1 - prob
       const kelly = (b * prob - q) / b
       if (kelly > 0) {
-        const halfKelly = Math.min(0.05, kelly * 0.5)
-        return Math.max(1, Math.min(5, Math.round(halfKelly / 0.01)))
+        const ev = Number(s.ev ?? 0)
+        const cap = isMultipla
+          ? Math.min(maxU * pctPerUnit, kelly * kellyFrac)
+          : (prob >= 0.80 && ev > 0.10 ? 0.05 : prob >= 0.72 && ev > 0.05 ? 0.04 : 0.03)
+        return Math.max(1, Math.min(maxU, Math.round(cap / pctPerUnit)))
       }
     }
 

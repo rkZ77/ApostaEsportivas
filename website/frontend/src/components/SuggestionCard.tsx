@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
-import { suggestStake, calcProfitUnits } from '../utils/stakeUtils'
+import { calcVipStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 
 function wcPhase(dateStr?: string): string | null {
@@ -51,6 +51,7 @@ interface Suggestion {
   is_followed?: boolean
   user_stake_units?: number | null
   user_actual_odd?: number | null
+  stake_pct?: number | null
 }
 
 function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
@@ -94,7 +95,14 @@ export default function SuggestionCard({
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const stakeSuggestion = banca
-    ? suggestStake(s.probability ?? s.confidence, Number(s.odd), banca.bankroll_current, banca.unit_value, 5)
+    ? calcVipStake(
+        Number(s.probability ?? s.confidence ?? 0),
+        Number(s.odd),
+        Number(s.ev ?? 0),
+        banca.bankroll_current,
+        banca.unit_value,
+        s.stake_pct,
+      )
     : null
 
   const handleFollow = (e: React.MouseEvent) => {
