@@ -468,8 +468,20 @@ HISTÓRICO FORA
                 "bookmaker_odds":   m.get("bookmaker_odds", []),
             })
 
+        # Deduplica por market_id — mantém só a entrada com maior odd por mercado.
+        # Evita que a IA receba 4 linhas do mesmo mercado (Over 1.5/2.5/3.5/...)
+        # e escolha pela melhor opção de valor disponível.
+        _best: dict[int, dict] = {}
+        for item in result:
+            mid = item.get("market_id")
+            if mid is None:
+                continue
+            if mid not in _best or item["best_odd"] > _best[mid]["best_odd"]:
+                _best[mid] = item
+        result = list(_best.values())
+
         print(
-            f"[AI] {len(result)} mercados com no-vig ({min_odd}–{max_odd}) "
+            f"[AI] {len(result)} mercados únicos (por market_id, melhor odd) "
             f"| total bruto: {len(structured_odds)}"
         )
         return result
