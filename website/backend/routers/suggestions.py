@@ -144,8 +144,8 @@ def _compute_suggested_stake_units(
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
 
-    _MAX_UNITS = {'vip': 15, 'free': 6, 'multipla': 5, 'alavancagem': 10}
-    max_units  = _MAX_UNITS.get(pick_type, 10)
+    _MAX_UNITS = {'vip': 10, 'free': 6, 'multipla': 5}
+    max_units  = _MAX_UNITS.get(pick_type, 9999)  # alavancagem sem limite fixo
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
     return max(1, min(max_units, units))
