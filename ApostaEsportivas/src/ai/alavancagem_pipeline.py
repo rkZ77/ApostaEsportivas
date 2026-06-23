@@ -29,8 +29,6 @@ WC_LEAGUE_ID   = 1
 ODD_MIN        = 1.45
 ODD_MAX        = 1.55
 ODD_TARGET     = 1.50
-# Para combinações, a IA pode usar picks individuais com odd menor (ex: 1.20×1.22=1.464).
-# O banco precisa buscar odds a partir desse patamar mínimo real.
 _COMBO_ODD_MIN = 1.08  # mínimo individual para combinações (produto deve cair em ODD_MIN-ODD_MAX)
 CONFIDENCE_MIN = 0.72
 BANKROLL_INIT  = 50.0
@@ -135,8 +133,8 @@ VERIFICACAO FINAL obrigatoria: calcule odd_combined = odd_1 × odd_2 (ou odd_1 s
   Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
 
 SAIDA JSON:
-Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
-Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
+Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
+Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 
@@ -280,11 +278,7 @@ def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dic
     return ctx
 
 
-# Filtro de odds antes de enviar à IA.
-# Min inclui odds baixas (~1.10) para picks de combinação; Max com buffer acima de ODD_MAX.
-_ODDS_FILTER_MIN = 1.08
-_ODDS_FILTER_MAX = 1.65
-_ODDS_MAX_ITEMS = 60
+_ODDS_MAX_ITEMS = 80  # limite de itens de odds por fixture enviados à IA
 
 
 # ============================================================
@@ -303,22 +297,23 @@ def _get_copa_profiles_text(fixture_id: int, home_team_id: int, away_team_id: in
 # ============================================================
 # FORMATA CONTEXTO PARA O PROMPT
 # ============================================================
-def _format_fixtures(fixtures: list[dict]) -> str:
+def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = None) -> str:
+    """Formata fixtures para o prompt da IA.
+    preloaded_contexts: dict[fixture_id -> ctx] para evitar re-carregar dados.
+    """
     parts = []
     for f in fixtures:
-        ctx = _load_fixture_context(
-            f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"]
-        )
-        profiles_text = _get_copa_profiles_text(
-            f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"]
-        )
+        fid = f["fixture_id"]
+        if preloaded_contexts and fid in preloaded_contexts:
+            import copy as _copy
+            ctx = _copy.deepcopy(preloaded_contexts[fid])
+        else:
+            ctx = _load_fixture_context(fid, f["home_team_id"], f["away_team_id"], f["season"])
+        profiles_text = _get_copa_profiles_text(fid, f["home_team_id"], f["away_team_id"], f["season"])
 
-        # Odds: filtrar e deduplicar
+        # Odds: sem filtro de odd — a IA escolhe o melhor conforme o prompt
         all_odds = ctx.pop("odds", [])
-        filtered_odds = strip_precalc_from_odds(dedup_odds([
-            o for o in all_odds
-            if _ODDS_FILTER_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= _ODDS_FILTER_MAX
-        ])[:_ODDS_MAX_ITEMS])
+        filtered_odds = strip_precalc_from_odds(dedup_odds(all_odds)[:_ODDS_MAX_ITEMS])
 
         # Outras listas: limitar a 5 itens
         ctx_trimmed = {k: (v[:5] if isinstance(v, list) else v) for k, v in ctx.items()}
@@ -343,8 +338,9 @@ def _format_fixtures(fixtures: list[dict]) -> str:
 # ============================================================
 # CHAMA A IA
 # ============================================================
-def run_alavancagem_llm(fixtures: list[dict]) -> dict:
-    fixtures_formatados = _format_fixtures(fixtures)
+def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = None) -> dict:
+    """Call 2: análise completa. Usa preloaded_contexts para evitar re-carregamento."""
+    fixtures_formatados = _format_fixtures(fixtures, preloaded_contexts=preloaded_contexts)
     user_prompt = USER_PROMPT_TEMPLATE.format(
         odd_min=ODD_MIN,
         odd_max=ODD_MAX,
@@ -486,9 +482,24 @@ def run_alavancagem_pipeline() -> dict | None:
         return None
 
     print(f"⚽ {len(fixtures)} jogo(s) encontrado(s)")
-    print("🤖 Enviando para IA selecionar o pick mais seguro...")
+    print("🔄 Carregando dados dos fixtures...")
 
-    result = run_alavancagem_llm(fixtures)
+    # Pré-carrega contextos uma vez para usar nas duas chamadas
+    preloaded: dict[int, dict] = {}
+    for f in fixtures:
+        try:
+            ctx = _load_fixture_context(f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"])
+            preloaded[f["fixture_id"]] = ctx
+        except Exception as e:
+            print(f"  [WARN] Erro ao carregar fixture {f['fixture_id']}: {e}")
+
+    if not preloaded:
+        print("❌ Nenhum fixture com dados carregados.")
+        return None
+
+    # ── IA: análise completa com contextos pré-carregados ─────────────────────
+    print("🤖 Chamando IA com análise completa...")
+    result = run_alavancagem_llm(fixtures, preloaded_contexts=preloaded)
 
     if result.get("no_bet"):
         print(f"⚠️  no_bet: {result.get('motivo')}")

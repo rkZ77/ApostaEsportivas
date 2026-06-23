@@ -42,6 +42,8 @@ CONFLITO situação vs edge estatístico:
 
 ## 1. VARREDURA SISTEMÁTICA DE MERCADOS (execute APÓS contexto situacional)
 
+Varre TODOS os mercados disponíveis nas odds. Calcule edge e confidence para cada um. Selecione os 3 com maiores edges positivos de categorias distintas.
+
 FORMATO DAS ODDS:
   Cada mercado traz os campos:
     best_odd      → melhor odd disponível entre as casas coletadas
@@ -216,6 +218,7 @@ Retorne exatamente este formato — nada antes, nada depois:
 {{
   "suggestions": [
     {{
+      "market_id": <copiado exatamente do campo market_id nas odds — não invente>,
       "market_type": "<goals|corners|cards|result>",
       "market": "<nome exato copiado das odds>",
       "line": "<linha exata copiada das odds>",

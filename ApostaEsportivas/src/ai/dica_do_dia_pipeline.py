@@ -148,7 +148,7 @@ Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_b
 Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? EV>0 ou (EV>-0.05 e conf>=0.72)?
 
 SAIDA JSON:
-Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"edge":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: odd subestima prob real."}}}}
+Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"edge":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: odd subestima prob real."}}}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 
@@ -220,7 +220,7 @@ def _load_fixture_context(
 
 
 # ============================================================
-# FORMATA FIXTURES PARA O PROMPT
+# FORMATA FIXTURES PARA O PROMPT (CALL 2 — análise completa)
 # ============================================================
 def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
     lines = []
@@ -259,16 +259,11 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append("\nCLASSIFICACAO:")
             lines.append(_j(ctx["standings"]))
 
-        all_odds = dedup_odds(ctx.get("odds", []))
-        odds_in_range = strip_precalc_from_odds([o for o in all_odds if ODD_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= ODD_MAX])
-        odds_other    = strip_precalc_from_odds([o for o in all_odds if not (ODD_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= ODD_MAX)])
+        all_odds = strip_precalc_from_odds(dedup_odds(ctx.get("odds", [])))
 
-        if odds_in_range:
-            lines.append(f"\nODDS NA FAIXA {ODD_MIN}-{ODD_MAX} (CANDIDATOS DICA DO DIA):")
-            lines.append(_j(odds_in_range))
-        if odds_other:
-            lines.append("\nOUTRAS ODDS (contexto):")
-            lines.append(_j(odds_other[:10]))
+        if all_odds:
+            lines.append(f"\nMERCADOS E ODDS (todos, odd alvo {ODD_MIN}-{ODD_MAX}):")
+            lines.append(_j(all_odds))
 
         if ctx.get("home_stats"):
             lines.append(f"\nESTATISTICAS CASA ({fx['home_team']}):")
@@ -668,7 +663,8 @@ def run_dica_pipeline() -> dict | None:
         print("❌ Nenhum fixture com dados completos disponivel.")
         return None
 
-    print(f"🤖 Enviando {len(fixtures_with_context)} fixture(s) para a IA selecionar a Dica do Dia...")
+    # ── IA: análise completa de todos os fixtures ─────────────────────────────
+    print(f"🤖 Chamando IA com {len(fixtures_with_context)} fixture(s)...")
     result = run_dica_llm(fixtures_with_context)
 
     if result.get("no_bet"):
@@ -684,7 +680,7 @@ def run_dica_pipeline() -> dict | None:
         print(f"[DICA] REJEITADO — reasoning incoerente com mercado '{pick.get('market')}'. Retornando no_bet.")
         return None
 
-    # Enriquecer pick com IDs de time e market_id do fixture original
+    # Enriquecer pick com IDs de time e market_id
     fid = pick.get("fixture_id")
     if fid:
         src_fc = next((fc for fc in fixtures_with_context if fc["fixture"]["fixture_id"] == fid), None)
@@ -692,12 +688,20 @@ def run_dica_pipeline() -> dict | None:
             src = src_fc["fixture"]
             pick.setdefault("home_team_id", src.get("home_team_id"))
             pick.setdefault("away_team_id", src.get("away_team_id"))
-            # Lookup market_id pela (line, odd) nas odds do contexto
-            pick_line = str(pick.get("line", "")).strip().lower()
-            pick_odd  = float(pick.get("odd", 0))
+
+    # market_id: fonte primária = JSON de saída da IA (copiado das odds enviadas)
+    # Fallback: lookup por nome + linha + odd nas odds do fixture
+    if not pick.get("market_id"):
+        src_fc = next((fc for fc in fixtures_with_context if fc["fixture"]["fixture_id"] == fid), None)
+        if src_fc:
+            pick_market = str(pick.get("market", "")).strip().lower()
+            pick_line   = str(pick.get("line", "")).strip().lower()
+            pick_odd    = float(pick.get("odd", 0))
             for o in src_fc["context"].get("odds", []):
-                if (str(o.get("line", "")).strip().lower() == pick_line
-                        and abs(float(o.get("odd", 0)) - pick_odd) < 0.001):
+                o_market = str(o.get("market_name", "") or o.get("market_pt", "")).strip().lower()
+                o_line   = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
+                o_odd    = float(o.get("best_odd") or o.get("odd", 0))
+                if o_market == pick_market and o_line == pick_line and abs(o_odd - pick_odd) < 0.05:
                     pick["market_id"] = o.get("market_id")
                     break
 

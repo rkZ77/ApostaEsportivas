@@ -176,6 +176,7 @@ def _market_type_from_name(market: str) -> str | None:
 
 _PRECALC_FIELDS = {"no_vig_prob", "best_ev", "market_ev", "no_vig"}
 
+
 def strip_precalc_from_odds(odds: list) -> list:
     """Remove campos pré-calculados das odds antes de enviar à IA.
     A IA deve calcular edge/prob_real a partir dos dados históricos — não receber esses valores prontos.
@@ -438,20 +439,11 @@ HISTÓRICO FORA
         return []
 
     # --------------------------------------------------------
-    # FORMATA ODDS ESTRUTURADAS (com no-vig) PARA O PROMPT DA IA
+    # FORMATA ODDS ESTRUTURADAS (com no-vig) PARA O PROMPT DA IA (Call 2)
     # --------------------------------------------------------
-    def _format_structured_odds_for_ai(
-        self,
-        structured_odds: list[dict],
-        min_odd: float = 1.01,
-        max_odd: float = 2.00,
-    ) -> list[dict]:
-        """
-        Converte odds estruturadas para o formato que a IA recebe.
-
-        Envia todos os mercados na faixa de odds — sem exigir no_vig_prob.
-        Cada pipeline aplica sua própria regra de odds no prompt e na validação final.
-        """
+    def _format_structured_odds_for_ai(self, structured_odds: list[dict]) -> list[dict]:
+        """Converte odds estruturadas para o formato que a IA recebe na Call 2 (análise).
+        Sem filtro de odd — cada prompt define o range permitido. Bloqueia só Match Winner."""
         _BLOCKED = {
             "match winner", "resultado final (1x2)", "1x2",
             "first half winner", "vencedor do 1º tempo",
@@ -464,11 +456,9 @@ HISTÓRICO FORA
                 continue
 
             best_odd = m.get("best_odd", 0)
-            if not (min_odd <= best_odd <= max_odd):
+            if not best_odd or best_odd <= 1.0:
                 continue
 
-            # Preferência: market_pt do banco (preenchido pelo bet_id, mais confiável)
-            # Fallback: tradução em tempo real pelo nome inglês
             pt_name    = m.get("market_pt") or translate_market(raw_name)
             team       = m.get("team")
             translated = pt_name != raw_name
@@ -492,10 +482,7 @@ HISTÓRICO FORA
                 "bookmaker_odds":   m.get("bookmaker_odds", []),
             })
 
-        print(
-            f"[AI] {len(result)} mercados ({min_odd}–{max_odd}) "
-            f"| total bruto: {len(structured_odds)}"
-        )
+        print(f"[AI] {len(result)} mercados (sem filtro de odd) | total bruto: {len(structured_odds)}")
         return result
 
     # --------------------------------------------------------
@@ -530,7 +517,7 @@ HISTÓRICO FORA
         is_structured = bool(raw_odds) and "best_bookmaker" in raw_odds[0]
 
         if is_structured:
-            # Formato estruturado — pipeline padrão
+            # Formato estruturado — todos os mercados sem filtro de odd
             odds_map = self._format_structured_odds_for_ai(raw_odds)
         else:
             # Fallback legado: odds brutas (formato antigo, chamadas externas)
@@ -538,7 +525,7 @@ HISTÓRICO FORA
             odds_filtered = [
                 o for o in raw_odds
                 if o.get("market_name", "").strip().lower() not in _BLOCKED_MARKETS
-                and 1.01 <= float(o.get("odd", 0) or o.get("best_odd", 0)) <= 2.00
+                and float(o.get("odd", 0) or o.get("best_odd", 0)) > 1.0
             ]
             _seen: dict[tuple, dict] = {}
             for o in odds_filtered:
@@ -846,28 +833,43 @@ HISTÓRICO FORA
         if self._is_stat_strong(ev_val, conf_val):
             print(f"[RESULT] STAT-STRONG aceito: EV {round(ev_val*100,1)}% conf {round(conf_val*100)}% — stake 50% recomendado")
 
-        def _find_market_id(om_full: list, line: str, odd_val: float) -> int | None:
-            line_n = str(line).strip().lower()
-            # A IA pode retornar "Over 2.5" — extrai só a parte numérica como fallback
+        def _find_market_id_fallback(om_full: list, market: str, line: str, odd_val: float) -> int | None:
+            """Fallback: busca market_id por (nome + linha + odd), com match de nome como critério extra."""
             import re as _re
-            line_numeric = _re.sub(
-                r'^(over|under|yes|no|home|away|1|x|2)\s*', '', line_n
-            ).strip()
+            line_n    = str(line).strip().lower()
+            market_n  = str(market).strip().lower()
+            line_numeric = _re.sub(r'^(over|under|yes|no|home|away|1|x|2)\s*', '', line_n).strip()
 
+            # 1ª tentativa: match completo (nome + linha + odd)
+            for o in om_full:
+                o_odd    = float(o.get("best_odd", 0) or o.get("odd", 0))
+                o_line   = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
+                o_market = str(o.get("market_name", "") or o.get("market_pt", "")).strip().lower()
+                if ((o_line == line_n or (line_numeric and o_line == line_numeric))
+                        and abs(o_odd - odd_val) < 0.02
+                        and o_market == market_n):
+                    return o.get("market_id")
+
+            # 2ª tentativa: apenas linha + odd (comportamento original — menos preciso)
             for o in om_full:
                 o_odd  = float(o.get("best_odd", 0) or o.get("odd", 0))
                 o_line = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
-                # Match exato OU match do lado numérico
                 if (o_line == line_n or (line_numeric and o_line == line_numeric)) \
                         and abs(o_odd - odd_val) < 0.02:
                     return o.get("market_id")
             return None
 
-        chosen_market_id = _find_market_id(
-            odds_map_full,
-            chosen.get("line", ""),
-            float(chosen.get("odd", 0)),
-        )
+        # Fonte primária: market_id do JSON de saída da IA (copiado das odds enviadas)
+        chosen_market_id = chosen.get("market_id")
+
+        if chosen_market_id is None:
+            # Fallback: lookup por nome+linha+odd nas odds completas
+            chosen_market_id = _find_market_id_fallback(
+                odds_map_full,
+                chosen.get("market", ""),
+                chosen.get("line", ""),
+                float(chosen.get("odd", 0)),
+            )
 
         if chosen_market_id is None:
             print(

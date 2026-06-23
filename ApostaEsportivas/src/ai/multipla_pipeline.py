@@ -160,7 +160,7 @@ REGRA DE OUTPUT CRITICA:
 
 SAIDA JSON:
 Sem multipla: {{"no_bet":true,"motivo":"razao curta"}}
-Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
+Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
 multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
 """
 
@@ -282,12 +282,9 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            odds_filtered = strip_precalc_from_odds(dedup_odds([
-                o for o in ctx["odds"]
-                if 1.01 <= float(o.get("best_odd") or o.get("odd", 0)) <= 2.00
-            ])[:60])
-            lines.append(f"\nMERCADOS E ODDS (faixa 1.01-2.00, {len(odds_filtered)} únicos):")
-            lines.append(_j(odds_filtered))
+            odds_all = strip_precalc_from_odds(dedup_odds(ctx["odds"]))
+            lines.append(f"\nMERCADOS E ODDS (todos, odd individual alvo 1.01-2.00, {len(odds_all)} únicos):")
+            lines.append(_j(odds_all))
 
         if ctx.get("home_stats"):
             lines.append(f"\nESTATÍSTICAS CASA ({fx['home_team']}):")
@@ -338,7 +335,7 @@ def get_today_fixtures() -> list:
 
 
 # ============================================================
-# CHAMADA À IA
+# CHAMADA À IA — análise completa
 # ============================================================
 def run_multipla_llm(fixtures: list) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
@@ -557,7 +554,8 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis — sem multipla.")
         return None
 
-    print(f"[MULTIPLA] Enviando {len(fixtures)} jogo(s) para IA montar multiplas...")
+    # ── IA: análise completa de todos os jogos ────────────────────────────────
+    print(f"[MULTIPLA] Chamando IA com {len(fixtures)} jogo(s)...")
     try:
         multipla_json = run_multipla_llm(fixtures)
     except Exception as e:
