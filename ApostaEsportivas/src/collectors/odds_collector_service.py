@@ -17,118 +17,11 @@ HEADERS = {"x-apisports-key": API_KEY}
 # ============================================================
 # CASAS DE APOSTAS PERMITIDAS
 # 8  = Bet365
-# 32 = Sportingbet
-# 34 = Betano
+# 32 = Betano
+# 34 = SuperBet
 # ============================================================
 BR_BOOKMAKERS = {8, 32, 34}
 
-# ============================================================
-# MERCADOS PERMITIDOS
-#
-# Critério de seleção:
-# - Mercados que a IA consegue analisar com dados estatísticos
-# - Baixa a média variância
-# - Suporte em médias, frequências e xG disponíveis na API
-#
-# REMOVIDOS intencionalmente:
-# - SHOTS (211, 221, 220, 87, 88, 89, 340, 176): alta variância,
-#   IA não tem dados suficientes para analisar com consistência
-# - CARDS HT (155) e CARDS 2H (156): altíssima variância
-# - CARDS HOME/AWAY individuais por tempo: ruído estatístico
-# ============================================================
-
-# -----------------------------------------------------------
-# GOLS — TEMPO NORMAL (FT)
-# id 5  = Goals Over/Under
-# id 16 = Total - Home (gols time da casa)
-# id 17 = Total - Away (gols time visitante)
-# id 8  = Both Teams Score (BTTS)
-# id 12 = Double Chance (1X, 12, X2)
-# id 1  = Match Winner (1X2)
-# -----------------------------------------------------------
-GOALS_FT = {5, 16, 17}
-BTTS_FT  = {8}
-MATCH    = {1, 12}
-
-# -----------------------------------------------------------
-# GOLS — PRIMEIRO TEMPO (HT)
-# id 6   = Goals Over/Under First Half
-# id 105 = Home Team Total Goals (1st Half)
-# id 106 = Away Team Total Goals (1st Half)
-# id 34  = Both Teams Score - First Half
-# id 13  = First Half Winner
-# -----------------------------------------------------------
-GOALS_HT = {6, 105, 106, 34, 13}
-
-# -----------------------------------------------------------
-# GOLS — SEGUNDO TEMPO (2H)
-# id 26  = Goals Over/Under Second Half
-# id 107 = Home Team Total Goals (2nd Half)
-# id 108 = Away Team Total Goals (2nd Half)
-# id 35  = Both Teams To Score - Second Half
-# -----------------------------------------------------------
-GOALS_2H = {26, 107, 108, 35}
-
-# -----------------------------------------------------------
-# ESCANTEIOS — TEMPO NORMAL (FT)
-# id 45 = Corners Over/Under
-# id 57 = Home Corners Over/Under
-# id 58 = Away Corners Over/Under
-# id 55 = Corners 1x2
-# -----------------------------------------------------------
-CORNERS_FT = {45, 57, 58, 55}
-
-# -----------------------------------------------------------
-# ESCANTEIOS — PRIMEIRO TEMPO (HT)
-# id 77  = Total Corners (1st Half)
-# id 132 = Home Total Corners (1st Half)
-# id 134 = Away Total Corners (1st Half)
-# -----------------------------------------------------------
-CORNERS_HT = {77, 132, 134}
-
-# -----------------------------------------------------------
-# ESCANTEIOS — SEGUNDO TEMPO (2H)
-# id 127 = Total Corners (2nd Half)
-# id 133 = Home Total Corners (2nd Half)
-# id 135 = Away Total Corners (2nd Half)
-# -----------------------------------------------------------
-CORNERS_2H = {127, 133, 135}
-
-# -----------------------------------------------------------
-# CARTÕES — TEMPO NORMAL (FT) APENAS
-# id 80  = Cards Over/Under (total da partida)
-# id 82  = Home Team Total Cards
-# id 83  = Away Team Total Cards
-#
-# HT e 2H removidos — variância muito alta,
-# IA não consegue analisar com consistência.
-# -----------------------------------------------------------
-CARDS_FT = {80, 82, 83}
-
-# -----------------------------------------------------------
-# PLACAR EXATO
-# id 10 = Exact Score (ex: "3:0", "2:1", "0:0")
-# -----------------------------------------------------------
-CORRECT_SCORE = {10}
-
-# -----------------------------------------------------------
-# TODOS OS MERCADOS VÁLIDOS
-# -----------------------------------------------------------
-VALID_BET_IDS = (
-    GOALS_FT
-    | BTTS_FT
-    | MATCH
-    | GOALS_HT
-    | GOALS_2H
-    | CORNERS_FT
-    | CORNERS_HT
-    | CORNERS_2H
-    | CARDS_FT
-    | CORRECT_SCORE
-)
-
-# Log dos IDs para referência
-print(f"[ODDS] Mercados monitorados: {sorted(VALID_BET_IDS)}")
 
 
 # ============================================================
@@ -241,33 +134,41 @@ class OddsCollectorService:
         self.api_url = "https://v3.football.api-sports.io/odds"
 
     # --------------------------------------------------------
-    # BUSCA ODDS NA API
+    # BUSCA ODDS NA API — uma chamada por bookmaker BR
     # --------------------------------------------------------
     def fetch_odds_by_fixture(self, fixture_id: int) -> dict | None:
-        try:
-            response = requests.get(
-                self.api_url,
-                headers=HEADERS,
-                params={"fixture": fixture_id},
-                timeout=20,
-            )
-            response.raise_for_status()
-        except requests.RequestException as e:
-            print(f"[ODDS API ERROR] fixture {fixture_id}: {e}")
-            return None
+        merged: list[dict] = []
+        seen: set[int] = set()
 
-        data = response.json().get("response", [])
-        return data[0] if data else None
+        for bm_id in sorted(BR_BOOKMAKERS):
+            try:
+                response = requests.get(
+                    self.api_url,
+                    headers=HEADERS,
+                    params={"fixture": fixture_id, "bookmaker": bm_id},
+                    timeout=20,
+                )
+                response.raise_for_status()
+            except requests.RequestException as e:
+                print(f"[ODDS API ERROR] fixture {fixture_id} bookmaker {bm_id}: {e}")
+                continue
+
+            data = response.json().get("response", [])
+            if not data:
+                continue
+
+            for bk in data[0].get("bookmakers", []):
+                if bk["id"] not in seen:
+                    seen.add(bk["id"])
+                    merged.append(bk)
+
+        return {"bookmakers": merged} if merged else None
 
     # --------------------------------------------------------
     # DETECTA SIDE (home / away / total)
     # --------------------------------------------------------
-    def _detect_side(self, bet_id: int, bet_name: str) -> str:
+    def _detect_side(self, bet_name: str) -> str:
         name = bet_name.lower()
-        if bet_id in CORNERS_HT and "home" in name:
-            return "home"
-        if bet_id in CORNERS_HT and "away" in name:
-            return "away"
         if "home" in name or "team 1" in name:
             return "home"
         if "away" in name or "team 2" in name:
@@ -335,9 +236,6 @@ class OddsCollectorService:
 
                 for bet in bk.get("bets", []):
 
-                    if bet.get("id") not in VALID_BET_IDS:
-                        continue
-
                     cur.execute("""
                         INSERT INTO odds_markets (
                             bookmaker_row_id, bet_id, bet_name,
@@ -364,13 +262,6 @@ class OddsCollectorService:
 
             # --------------------------------------------------
             # 3. UPSERT VALUES (ODDS)
-            #
-            # Coleta odds em range amplo (1.05–2.50) para permitir
-            # cálculo correto de no-vig probability:
-            # - Precisamos do lado oposto do mercado (ex: Under quando
-            #   queremos Over) para remover a margem do bookmaker.
-            # - O filtro final de 1.05–1.80 é aplicado na IA,
-            #   não aqui — assim o EVCalculator tem dados completos.
             # --------------------------------------------------
             values_batch = []
 
@@ -386,7 +277,7 @@ class OddsCollectorService:
 
                     market_row_id = market_map[key]
                     market_type   = detect_market_type(bet["id"], bet["name"])
-                    side_team     = self._detect_side(bet["id"], bet["name"])
+                    side_team     = self._detect_side(bet["name"])
 
                     team_id   = None
                     team_name = None
@@ -403,18 +294,8 @@ class OddsCollectorService:
 
                         raw_value = str(sel.get("value", "")).strip()
 
-                        # Separa o lado do mercado (Over/Under/Home/Away/Yes/No)
-                        # do valor numérico da linha (2.5 / 3.5 / 1 / etc.)
-                        # para que o EVCalculator consiga parear os dois lados
-                        # do mesmo mercado e calcular a probabilidade no-vig.
-                        #
-                        # Exemplos:
-                        #   "Over 2.5"  → value_name="Over",  line_value="2.5"
-                        #   "Under 3.5" → value_name="Under", line_value="3.5"
-                        #   "Home"      → value_name="Home",  line_value=""
-                        #   "Yes"       → value_name="Yes",   line_value=""
-                        #
-                        # O campo handicap da API (quando presente) tem precedência.
+                        # Separa value_name (Over/Under/Home/Away/Yes/No) de line_value (2.5/3.5/...).
+                        # Handicap da API tem precedência quando presente.
                         handicap = str(sel.get("handicap", "") or "").strip()
 
                         if handicap:
