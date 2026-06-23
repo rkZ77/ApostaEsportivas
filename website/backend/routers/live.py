@@ -192,6 +192,10 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
             return float(away_goals or 0), "Gols Fora", direction
         return float((home_goals or 0) + (away_goals or 0)), "Gols", direction
 
+    # ── Correct Score / Placar Exato ──
+    if mtype == "correct_score" or "placar exato" in m:
+        return None, "Placar Exato", "correct_score"
+
     # ── Result / Dupla Chance ──
     if is_result:
         return None, "Placar", "result"
@@ -228,6 +232,17 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
     return "neutral"
 
 
+def _correct_score_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
+    """Status ao vivo do placar exato — verifica se o placar atual bate com o previsto."""
+    try:
+        parts = line_str.strip().replace("-", ":").split(":")
+        ph, pa = int(parts[0]), int(parts[1])
+    except Exception:
+        return "neutral"
+    hg, ag = int(home_goals or 0), int(away_goals or 0)
+    return "winning" if (hg == ph and ag == pa) else "losing"
+
+
 def _calc_result(market: str, line: str, cur_val: float | None,
                  home_goals: int, away_goals: int,
                  market_type: str | None = None) -> str | None:
@@ -252,6 +267,16 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     is_result = _mtype_is_result or direction == "result" or \
                 any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"])
     is_btts   = mtype == "btts"  or any(k in m for k in ["ambas", "btts", "ambos"])
+
+    # ── Placar Exato — compara placar real com previsto (ex: "3:0") ───────────
+    if mtype == "correct_score" or "placar exato" in m:
+        try:
+            parts = (line or "").strip().replace("-", ":").split(":")
+            ph, pa = int(parts[0]), int(parts[1])
+        except Exception:
+            return None
+        hg, ag = int(home_goals or 0), int(away_goals or 0)
+        return "GREEN" if (hg == ph and ag == pa) else "RED"
 
     # ── Resultado / 1x2 / Dupla Chance — não depende de cur_val ──────────────
     if is_result:
@@ -425,6 +450,7 @@ def _enrich_leg(fid: int, market: str, line: str,
     _, line_val = _extract_line(line)
     pst = _pick_status(cur_val, line, home_goals, away_goals) if cur_val is not None \
           else _result_pick_status(line, home_goals, away_goals) if direction == "result" \
+          else _correct_score_pick_status(line, home_goals, away_goals) if direction == "correct_score" \
           else "neutral"
 
     # Locked: resultado já determinado e irreversível

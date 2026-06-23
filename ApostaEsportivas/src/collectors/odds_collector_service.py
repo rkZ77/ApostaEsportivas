@@ -62,9 +62,12 @@ GOALS_HT = {6, 105, 106, 34, 13}
 
 # -----------------------------------------------------------
 # GOLS — SEGUNDO TEMPO (2H)
-# id 26 = Goals Over/Under Second Half
+# id 26  = Goals Over/Under Second Half
+# id 107 = Home Team Total Goals (2nd Half)
+# id 108 = Away Team Total Goals (2nd Half)
+# id 35  = Both Teams To Score - Second Half
 # -----------------------------------------------------------
-GOALS_2H = {26}
+GOALS_2H = {26, 107, 108, 35}
 
 # -----------------------------------------------------------
 # ESCANTEIOS — TEMPO NORMAL (FT)
@@ -86,8 +89,10 @@ CORNERS_HT = {77, 132, 134}
 # -----------------------------------------------------------
 # ESCANTEIOS — SEGUNDO TEMPO (2H)
 # id 127 = Total Corners (2nd Half)
+# id 133 = Home Total Corners (2nd Half)
+# id 135 = Away Total Corners (2nd Half)
 # -----------------------------------------------------------
-CORNERS_2H = {127}
+CORNERS_2H = {127, 133, 135}
 
 # -----------------------------------------------------------
 # CARTÕES — TEMPO NORMAL (FT) APENAS
@@ -99,6 +104,12 @@ CORNERS_2H = {127}
 # IA não consegue analisar com consistência.
 # -----------------------------------------------------------
 CARDS_FT = {80, 82, 83}
+
+# -----------------------------------------------------------
+# PLACAR EXATO
+# id 10 = Exact Score (ex: "3:0", "2:1", "0:0")
+# -----------------------------------------------------------
+CORRECT_SCORE = {10}
 
 # -----------------------------------------------------------
 # TODOS OS MERCADOS VÁLIDOS
@@ -113,6 +124,7 @@ VALID_BET_IDS = (
     | CORNERS_HT
     | CORNERS_2H
     | CARDS_FT
+    | CORRECT_SCORE
 )
 
 # Log dos IDs para referência
@@ -139,6 +151,9 @@ MARKET_TYPE_MAP = {
     13:  "result",
     # Gols 2H
     26:  "goals",
+    35:  "btts",
+    107: "goals",
+    108: "goals",
     # Escanteios FT
     45:  "corners",
     57:  "corners",
@@ -150,10 +165,14 @@ MARKET_TYPE_MAP = {
     134: "corners",
     # Escanteios 2H
     127: "corners",
+    133: "corners",
+    135: "corners",
     # Cartões FT
     80:  "cards",
     82:  "cards",
     83:  "cards",
+    # Placar Exato
+    10:  "correct_score",
 }
 
 # Nome em português canônico por bet_id (mais confiável que traduzir o nome inglês)
@@ -167,6 +186,9 @@ BET_ID_PT_MAP: dict[int, str] = {
     5:   "Gols Mais/Menos",
     6:   "Gols Mais/Menos - 1º Tempo",
     26:  "Gols Mais/Menos - 2º Tempo",
+    35:  "Ambas Marcam - 2º Tempo",
+    107: "Total de Gols Casa (2º Tempo)",
+    108: "Total de Gols Visitante (2º Tempo)",
     16:  "Total de Gols Casa",
     17:  "Total de Gols Visitante",
     105: "Total de Gols Casa (1º Tempo)",
@@ -177,11 +199,14 @@ BET_ID_PT_MAP: dict[int, str] = {
     58:  "Escanteios Visitante Mais/Menos",
     77:  "Total de Escanteios (1º Tempo)",
     127: "Total de Escanteios (2º Tempo)",
+    133: "Escanteios Casa (2º Tempo)",
+    135: "Escanteios Visitante (2º Tempo)",
     132: "Escanteios Casa (1º Tempo)",
     134: "Escanteios Visitante (1º Tempo)",
     80:  "Cartões Mais/Menos",
     82:  "Total de Cartões Casa",
     83:  "Total de Cartões Visitante",
+    10:  "Placar Exato",
 }
 
 

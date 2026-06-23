@@ -167,6 +167,8 @@ def _market_type_from_name(market: str) -> str | None:
         return "btts"
     if "goal" in m or "gol" in m:
         return "goals"
+    if "placar exato" in m or "correct score" in m or "exact score" in m:
+        return "correct_score"
     if any(x in m for x in ["1x2", "resultado", "winner", "vencedor",
                               "dupla chance", "handicap", "match winner"]):
         return "result"
