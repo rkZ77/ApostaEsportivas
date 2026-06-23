@@ -606,6 +606,13 @@ def get_suggestion_detail(
             """, (current_user["id"], suggestion_id))
             suggestion["user_stake_units"] = float(ufp_m["stake_units"]) if ufp_m else None
             suggestion["user_actual_odd"]  = float(ufp_m["actual_odd"]) if ufp_m and ufp_m["actual_odd"] else None
+            if not suggestion["user_stake_units"]:
+                banca_d = _get_user_banca(cur, current_user["id"])
+                if banca_d:
+                    bl, uv = banca_d
+                    suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'multipla', None, d.get("confidence"), d.get("total_odd"), None, bl, uv,
+                    )
             return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
                     "home_recent": [], "away_recent": [], "odds": []}
 
