@@ -171,9 +171,9 @@ is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa vola
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
 CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
 
-LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.05. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
+LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.01. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
-ODDS: 1.05–1.80 (absoluto — descarte fora desta faixa).
+ODDS: 1.01–2.00 (absoluto — descarte fora desta faixa).
 
 NOMENCLATURA — copie exatamente de "market_name":
   Gols: "Gols Mais/Menos" line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
@@ -196,7 +196,7 @@ EV>0 é o critério ideal — a odd paga mais do que o risco. Mas EV levemente n
 ## 7. VALIDAÇÃO (execute antes de retornar)
 
 [V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] edge=prob_real−no_vig_prob (ou 1/odd fallback)?
-[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e best_odd∈[1.05,1.80]?
+[V4] EV>0 ou (EV>−0.05 e confidence≥0.72)? [V5] confidence∈[0.55,0.92] e best_odd∈[1.01,2.00]?
 [V6] ≥1 fato numérico no reasoning? [V7] Amostra declarada se ESCASSO/VAZIO?
 [V8] Coerência prob_real/edge/EV/confidence? [V9] Exatamente 1 is_best_pick=true? [V10] best_pick sem RISCO ALTO?
 [V11] reasoning contém bloco [CONF] com cálculo explícito?

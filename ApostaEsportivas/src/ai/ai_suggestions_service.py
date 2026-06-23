@@ -434,26 +434,14 @@ HISTÓRICO FORA
     def _format_structured_odds_for_ai(
         self,
         structured_odds: list[dict],
-        min_odd: float = 1.05,
-        max_odd: float = 1.80,
+        min_odd: float = 1.01,
+        max_odd: float = 2.00,
     ) -> list[dict]:
         """
-        Converte odds estruturadas (com no_vig_prob) para o formato que a IA recebe.
+        Converte odds estruturadas para o formato que a IA recebe.
 
-        Cada item informa:
-          - market_name: nome em português
-          - value: "Over" / "Under" / "Home" / "Away" / "Yes" / "No"
-          - line: linha do mercado (ex: "2.5")
-          - best_odd: melhor odd disponível entre as casas coletadas
-          - best_bookmaker: casa com a melhor odd
-          - no_vig_prob: probabilidade real de mercado (sem margem do bookmaker)
-          - market_ev: EV calculado com best_odd × no_vig_prob
-                       [POSITIVO = mercado subestima o evento vs próprio consenso]
-          - bookmakers_count: nº de casas com este mercado
-          - odds_range: {"min", "max"} — alta dispersão indica mercado ineficiente
-
-        A IA usa no_vig_prob como baseline: se sua estimativa estatística superar
-        no_vig_prob, o edge é real e o mercado está sub-precificando o evento.
+        Envia todos os mercados na faixa de odds — sem exigir no_vig_prob.
+        Cada pipeline aplica sua própria regra de odds no prompt e na validação final.
         """
         _BLOCKED = {
             "match winner", "resultado final (1x2)", "1x2",
@@ -470,25 +458,14 @@ HISTÓRICO FORA
             if not (min_odd <= best_odd <= max_odd):
                 continue
 
-            no_vig = m.get("no_vig_prob")
-            if no_vig is None:
-                continue
-
             # Preferência: market_pt do banco (preenchido pelo bet_id, mais confiável)
             # Fallback: tradução em tempo real pelo nome inglês
             pt_name    = m.get("market_pt") or translate_market(raw_name)
             team       = m.get("team")
-            translated = pt_name != raw_name  # True = conseguiu traduzir
+            translated = pt_name != raw_name
             if team and translated:
                 pt_name = f"{pt_name} ({team})"
 
-            # Exige pelo menos 2 bookmakers para validar que o mercado é real
-            if m.get("bookmakers_count", 0) < 2:
-                continue
-
-            # Combina value + line em campo único para que a IA copie corretamente
-            # ex: value="Over" + line="2.5" → combined_line="Over 2.5"
-            # Isso garante que _find_market_id consiga fazer o lookup depois
             value_raw = m.get("value", "")
             line_raw  = m.get("line", "")
             combined_line = f"{value_raw} {line_raw}".strip() if line_raw else value_raw
@@ -501,7 +478,7 @@ HISTÓRICO FORA
                 "line":             combined_line,
                 "best_odd":         best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
-                "no_vig_prob":      no_vig,
+                "no_vig_prob":      m.get("no_vig_prob"),
                 "market_ev":        m.get("best_ev"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
                 "odds_range":       m.get("odds_range"),
@@ -509,7 +486,7 @@ HISTÓRICO FORA
             })
 
         print(
-            f"[AI] {len(result)} mercados com no-vig ({min_odd}–{max_odd}) "
+            f"[AI] {len(result)} mercados ({min_odd}–{max_odd}) "
             f"| total bruto: {len(structured_odds)}"
         )
         return result
@@ -554,7 +531,7 @@ HISTÓRICO FORA
             odds_filtered = [
                 o for o in raw_odds
                 if o.get("market_name", "").strip().lower() not in _BLOCKED_MARKETS
-                and 1.05 <= float(o.get("odd", 0) or o.get("best_odd", 0)) <= 1.80
+                and 1.01 <= float(o.get("odd", 0) or o.get("best_odd", 0)) <= 2.00
             ]
             _seen: dict[tuple, dict] = {}
             for o in odds_filtered:
@@ -608,11 +585,11 @@ HISTÓRICO FORA
             return []
 
         before = len(data)
-        data = [s for s in data if 1.05 <= float(s.get("odd", 0)) <= 1.80]
+        data = [s for s in data if 1.01 <= float(s.get("odd", 0)) <= 2.00]
         if len(data) < before:
-            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de 1.05-1.80")
+            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de 1.01-2.00")
         if not data:
-            print(f"[AI] Nenhuma sugestao com odd entre 1.05-1.80 para fixture {fx['fixture_id']}")
+            print(f"[AI] Nenhuma sugestao com odd entre 1.01-2.00 para fixture {fx['fixture_id']}")
             return []
 
         # Rejeita picks com reasoning inconsistente com o mercado (ex: cartões falando de gols)
