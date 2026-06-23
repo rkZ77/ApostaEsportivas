@@ -22,6 +22,7 @@ class OddsMain:
             SELECT fixture_id
             FROM fixtures
             WHERE status IN ('NS', 'TBD')
+              AND match_datetime::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '2 days'
         """)
 
         fixtures = [row[0] for row in cur.fetchall()]
