@@ -1201,7 +1201,16 @@ def get_multiplas(
             ORDER BY {order_col} DESC, created_at DESC
             LIMIT %s
         """, params)
-        return _enrich_multipla_legs(cur, rows)
+        enriched = _enrich_multipla_legs(cur, rows)
+        banca_d = _get_user_banca(cur, current_user["id"])
+        if banca_d:
+            bl, uv = banca_d
+            for m in enriched:
+                if not m.get("result"):
+                    m["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'multipla', None, m.get("confidence"), m.get("total_odd"), None, bl, uv
+                    )
+        return enriched
     finally:
         cur.close()
         conn.close()
