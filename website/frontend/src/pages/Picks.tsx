@@ -578,7 +578,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         pickOdd={Number(dica.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={dica.bet_house}
-        maxUnits={5}
+        maxUnits={Math.max(6, stakeSuggestion?.units ?? 6)}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
