@@ -19,6 +19,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 
 def _detect_market_type(market: str) -> str | None:
@@ -432,7 +433,7 @@ def save_dica(pick: dict) -> None:
         pick["league_id"],
         pick.get("league_name", ""),
         pick["market"],
-        _detect_market_type(pick["market"]),
+        _BET_ID_TYPE_MAP.get(pick.get("market_id")) or _detect_market_type(pick["market"]),
         pick["line"],
         float(pick["odd"]),
         pick.get("bet_house", ""),

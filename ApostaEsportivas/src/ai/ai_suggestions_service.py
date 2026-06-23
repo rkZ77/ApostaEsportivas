@@ -12,6 +12,7 @@ from anthropic import Anthropic, RateLimitError
 from utils.db_utils import get_connection
 from services.odds_service import OddsService
 from ai.prompts import get_prompt, SYSTEM_PROMPT
+from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 load_dotenv(find_dotenv())
 
@@ -69,32 +70,59 @@ def fetch_web_context(home_team: str, away_team: str, competition: str, match_da
 # TRADUÇÃO DE MERCADOS (inglês → português)
 # ============================================================
 _MARKET_MAP = {
-    "match winner":                    "Resultado Final (1X2)",
-    "double chance":                   "Dupla Chance",
-    "both teams score":                "Ambas as Equipes Marcam",
-    "both teams to score":             "Ambas as Equipes Marcam",
-    "asian handicap":                  "Handicap Asiático",
-    "goals over/under":                "Gols Mais/Menos",
-    "goals over/under first half":     "Gols Mais/Menos - 1º Tempo",
-    "goals over/under - second half":  "Gols Mais/Menos - 2º Tempo",
-    "goals over/under second half":    "Gols Mais/Menos - 2º Tempo",
-    "corners over under":              "Escanteios Mais/Menos",
-    "corners over/under":              "Escanteios Mais/Menos",
-    "corners 1x2":                     "Escanteios 1x2",
-    "cards over/under":                "Cartões Mais/Menos",
-    "home corners over/under":         "Escanteios Casa Mais/Menos",
-    "away corners over/under":         "Escanteios Visitante Mais/Menos",
-    "home total corners (1st half)":   "Escanteios Casa (1º Tempo)",
-    "away total corners (1st half)":   "Escanteios Visitante (1º Tempo)",
-    "total corners (1st half)":        "Total de Escanteios (1º Tempo)",
-    "total corners (2nd half)":        "Total de Escanteios (2º Tempo)",
-    "home team total cards":           "Total de Cartões Casa",
-    "away team total cards":           "Total de Cartões Visitante",
-    "home team total goals(1st half)": "Total de Gols Casa (1º Tempo)",
-    "away team total goals(1st half)": "Total de Gols Visitante (1º Tempo)",
-    "total - home":                    "Total de Gols Casa",
-    "total - away":                    "Total de Gols Visitante",
-    "first half winner":               "Vencedor do 1º Tempo",
+    # Resultado
+    "match winner":                         "Resultado Final (1X2)",
+    "double chance":                         "Dupla Chance",
+    "double chance - 1st half":             "Dupla Chance - 1º Tempo",
+    "first half winner":                    "Vencedor do 1º Tempo",
+    "asian handicap":                       "Handicap Asiático",
+    # BTTS
+    "both teams score":                     "Ambas as Equipes Marcam",
+    "both teams to score":                  "Ambas as Equipes Marcam",
+    "both teams score - first half":        "Ambas Marcam - 1º Tempo",
+    "both teams to score - first half":     "Ambas Marcam - 1º Tempo",
+    "both teams score first half":          "Ambas Marcam - 1º Tempo",
+    # Gols FT
+    "goals over/under":                     "Gols Mais/Menos",
+    "total goals":                          "Gols Mais/Menos",
+    # Gols 1º Tempo
+    "goals over/under first half":          "Gols Mais/Menos - 1º Tempo",
+    "goals over/under - first half":        "Gols Mais/Menos - 1º Tempo",
+    "goals over/under 1st half":            "Gols Mais/Menos - 1º Tempo",
+    # Gols 2º Tempo
+    "goals over/under - second half":       "Gols Mais/Menos - 2º Tempo",
+    "goals over/under second half":         "Gols Mais/Menos - 2º Tempo",
+    "goals over/under 2nd half":            "Gols Mais/Menos - 2º Tempo",
+    # Gols por time
+    "total - home":                         "Total de Gols Casa",
+    "total - away":                         "Total de Gols Visitante",
+    "home team total goals":                "Total de Gols Casa",
+    "away team total goals":                "Total de Gols Visitante",
+    "home team total goals(1st half)":      "Total de Gols Casa (1º Tempo)",
+    "away team total goals(1st half)":      "Total de Gols Visitante (1º Tempo)",
+    "home team total goals - 1st half":     "Total de Gols Casa (1º Tempo)",
+    "away team total goals - 1st half":     "Total de Gols Visitante (1º Tempo)",
+    # Escanteios FT
+    "corners over under":                   "Escanteios Mais/Menos",
+    "corners over/under":                   "Escanteios Mais/Menos",
+    "total corners":                        "Escanteios Mais/Menos",
+    "corners 1x2":                          "Escanteios 1x2",
+    "home corners over/under":              "Escanteios Casa Mais/Menos",
+    "away corners over/under":              "Escanteios Visitante Mais/Menos",
+    # Escanteios 1º Tempo
+    "total corners (1st half)":             "Total de Escanteios (1º Tempo)",
+    "corners over/under - 1st half":        "Total de Escanteios (1º Tempo)",
+    "home total corners (1st half)":        "Escanteios Casa (1º Tempo)",
+    "away total corners (1st half)":        "Escanteios Visitante (1º Tempo)",
+    # Escanteios 2º Tempo
+    "total corners (2nd half)":             "Total de Escanteios (2º Tempo)",
+    "corners over/under - 2nd half":        "Total de Escanteios (2º Tempo)",
+    # Cartões FT
+    "cards over/under":                     "Cartões Mais/Menos",
+    "home team total cards":                "Total de Cartões Casa",
+    "away team total cards":                "Total de Cartões Visitante",
+    "home team cards":                      "Total de Cartões Casa",
+    "away team cards":                      "Total de Cartões Visitante",
 }
 
 # Padrões para mercados com nome de time: "[Time] - Goals Over/Under" → "[Time] - Gols Mais/Menos"
@@ -444,9 +472,12 @@ HISTÓRICO FORA
             if no_vig is None:
                 continue
 
-            pt_name = translate_market(raw_name)
-            team    = m.get("team")
-            if pt_name != raw_name and team:
+            # Preferência: market_pt do banco (preenchido pelo bet_id, mais confiável)
+            # Fallback: tradução em tempo real pelo nome inglês
+            pt_name    = m.get("market_pt") or translate_market(raw_name)
+            team       = m.get("team")
+            translated = pt_name != raw_name  # True = conseguiu traduzir
+            if team and translated:
                 pt_name = f"{pt_name} ({team})"
 
             # Exige pelo menos 2 bookmakers para validar que o mercado é real
@@ -915,7 +946,7 @@ HISTÓRICO FORA
                 chosen["line"],
                 odd,
                 chosen["bet_house"],
-                self.detect_market_type(chosen["market"]),
+                _BET_ID_TYPE_MAP.get(chosen_market_id) or self.detect_market_type(chosen["market"]),
                 chosen_market_id,
                 conf,
                 ev,

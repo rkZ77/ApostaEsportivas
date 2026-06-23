@@ -156,6 +156,34 @@ MARKET_TYPE_MAP = {
     83:  "cards",
 }
 
+# Nome em português canônico por bet_id (mais confiável que traduzir o nome inglês)
+BET_ID_PT_MAP: dict[int, str] = {
+    1:   "Resultado Final (1X2)",
+    12:  "Dupla Chance",
+    13:  "Vencedor do 1º Tempo",
+    4:   "Ambas as Equipes Marcam",
+    8:   "Ambas as Equipes Marcam",
+    34:  "Ambas Marcam - 1º Tempo",
+    5:   "Gols Mais/Menos",
+    6:   "Gols Mais/Menos - 1º Tempo",
+    26:  "Gols Mais/Menos - 2º Tempo",
+    16:  "Total de Gols Casa",
+    17:  "Total de Gols Visitante",
+    105: "Total de Gols Casa (1º Tempo)",
+    106: "Total de Gols Visitante (1º Tempo)",
+    45:  "Escanteios Mais/Menos",
+    55:  "Escanteios 1x2",
+    57:  "Escanteios Casa Mais/Menos",
+    58:  "Escanteios Visitante Mais/Menos",
+    77:  "Total de Escanteios (1º Tempo)",
+    127: "Total de Escanteios (2º Tempo)",
+    132: "Escanteios Casa (1º Tempo)",
+    134: "Escanteios Visitante (1º Tempo)",
+    80:  "Cartões Mais/Menos",
+    82:  "Total de Cartões Casa",
+    83:  "Total de Cartões Visitante",
+}
+
 
 def detect_market_type(bet_id: int, bet_name: str) -> str:
     """
@@ -295,6 +323,7 @@ class OddsCollectorService:
                         ON CONFLICT (bookmaker_row_id, bet_id)
                         DO UPDATE SET
                             bet_name   = EXCLUDED.bet_name,
+                            market_pt  = EXCLUDED.market_pt,
                             updated_at = NOW()
                         RETURNING id;
                     """, (
@@ -302,7 +331,7 @@ class OddsCollectorService:
                         bet["id"],
                         bet["name"],
                         fixture_id,
-                        None,
+                        BET_ID_PT_MAP.get(bet["id"]),
                     ))
 
                     market_row_id = cur.fetchone()[0]
@@ -399,7 +428,7 @@ class OddsCollectorService:
                             team_id,
                             team_name,
                             line_value,
-                            None,  # market_pt
+                            BET_ID_PT_MAP.get(bet["id"]),  # market_pt por bet_id
                         ))
 
             if values_batch:
