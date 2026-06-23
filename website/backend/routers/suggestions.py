@@ -868,6 +868,19 @@ def get_suggestion_detail(
         """, (current_user["id"], suggestion_id, pick_type))
         suggestion["user_stake_units"] = float(ufp_v["stake_units"]) if ufp_v else None
         suggestion["user_actual_odd"]  = float(ufp_v["actual_odd"]) if ufp_v and ufp_v["actual_odd"] else None
+        if not suggestion["user_stake_units"]:
+            banca_d = _get_user_banca(cur, current_user["id"])
+            if banca_d:
+                bl, uv = banca_d
+                pt = 'free' if pick_type == 'free' else 'vip'
+                suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
+                    pt,
+                    suggestion.get("stake_pct"),
+                    suggestion.get("confidence"),
+                    suggestion.get("odd"),
+                    suggestion.get("ev"),
+                    bl, uv,
+                )
         if suggestion.get("market"):
             suggestion["market"] = _tr(suggestion["market"])
 
@@ -1157,7 +1170,16 @@ def get_picks_free_history(
             ORDER BY pf.match_date DESC
             LIMIT %s
         """, params)
-        return [dict(r) for r in rows]
+        result_rows = [dict(r) for r in rows]
+        banca_d = _get_user_banca(cur, current_user["id"])
+        if banca_d:
+            bl, uv = banca_d
+            for p in result_rows:
+                if not p.get("result"):
+                    p["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'free', None, p.get("confidence"), p.get("odd"), p.get("ev"), bl, uv
+                    )
+        return result_rows
     finally:
         cur.close()
         conn.close()
