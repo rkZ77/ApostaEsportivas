@@ -19,7 +19,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -432,25 +432,29 @@ def save_pick(result: dict):
 
     conn = get_connection()
     cur  = conn.cursor()
+    mtype1 = _classify_market_type(p1["market"])
+    mtype2 = _classify_market_type(p2["market"]) if p2 else None
+
     cur.execute("""
         INSERT INTO picks_alavancagem
             (match_date, tipo,
-             fixture_id_1, home_team_1, away_team_1, market_1, line_1, odd_1, bet_house_1, confidence_1, prob_real_1, reasoning_1,
-             fixture_id_2, home_team_2, away_team_2, market_2, line_2, odd_2, bet_house_2, confidence_2, prob_real_2, reasoning_2,
+             fixture_id_1, home_team_1, away_team_1, market_1, market_type_1, line_1, odd_1, bet_house_1, confidence_1, prob_real_1, reasoning_1,
+             fixture_id_2, home_team_2, away_team_2, market_2, market_type_2, line_2, odd_2, bet_house_2, confidence_2, prob_real_2, reasoning_2,
              odd_combined, confidence_media)
         VALUES
             (CURRENT_DATE, %s,
-             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
+             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
              %s, %s)
     """, (
         tipo,
         p1.get("fixture_id"), p1["home_team"], p1["away_team"],
-        p1["market"], p1.get("line"), p1["odd"], p1.get("bet_house"),
+        p1["market"], mtype1, p1.get("line"), p1["odd"], p1.get("bet_house"),
         p1.get("confidence"), p1.get("prob_real"), p1.get("reasoning"),
         p2.get("fixture_id") if p2 else None,
         p2["home_team"] if p2 else None, p2["away_team"] if p2 else None,
-        p2["market"] if p2 else None, p2.get("line") if p2 else None,
+        p2["market"] if p2 else None, mtype2,
+        p2.get("line") if p2 else None,
         p2["odd"] if p2 else None, p2.get("bet_house") if p2 else None,
         p2.get("confidence") if p2 else None, p2.get("prob_real") if p2 else None,
         p2.get("reasoning") if p2 else None,

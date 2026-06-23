@@ -111,13 +111,36 @@ def _extract_line(line_str: str | None) -> tuple[str | None, float | None]:
 
 
 def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
-                     home_goals: int, away_goals: int) -> tuple[float | None, str, str | None]:
-    """Returns (current_value, stat_label, direction_for_bar)."""
-    m   = (market or "").lower()
+                     home_goals: int, away_goals: int,
+                     market_type: str | None = None) -> tuple[float | None, str, str | None]:
+    """Returns (current_value, stat_label, direction_for_bar).
+
+    market_type (from DB column) takes priority over keyword matching so that
+    picks created with structured market data resolve to the correct stat even
+    when the free-text market name is ambiguous or in a different language.
+    """
+    m     = (market or "").lower()
+    mtype = (market_type or "").lower()
     direction, _ = _extract_line(line)
 
+    # mtype == "result" só conta como resultado quando a direção não é over/under,
+    # porque Over X.Y e Under X.Y nunca são mercados de resultado (1x2/dupla chance).
+    # Isso protege contra market_type mal classificado no banco.
+    _mtype_is_result = mtype == "result" and direction not in ("over", "under")
+
+    # Dispatch determinístico: market_type do banco + fallback em keywords do texto
+    is_corners = mtype == "corners" or any(k in m for k in ["escanteio", "corner"])
+    is_cards   = mtype == "cards"   or any(k in m for k in ["cart", "card"])
+    is_fouls   = any(k in m for k in ["falta", "foul"])
+    is_saves   = any(k in m for k in ["defesa", "save", "goleiro"])
+    is_shots   = any(k in m for k in ["chute", "shot", "finaliza"])
+    is_btts    = mtype == "btts"    or any(k in m for k in ["ambas", "btts", "ambos"])
+    is_goals   = mtype == "goals"   or any(k in m for k in ["gol", "goal"])
+    is_result  = _mtype_is_result   or direction == "result" or \
+                 any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"])
+
     # ── Corners ──
-    if any(k in m for k in ["escanteio", "corner"]):
+    if is_corners:
         hc = home_stats.get("Corner Kicks", 0)
         ac = away_stats.get("Corner Kicks", 0)
         if "casa" in m or "home" in m:
@@ -127,7 +150,7 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return float(hc + ac), "Escanteios", direction
 
     # ── Cards ──
-    if any(k in m for k in ["cart", "card"]):
+    if is_cards:
         hy = home_stats.get("Yellow Cards", 0)
         hr = home_stats.get("Red Cards", 0)
         ay = away_stats.get("Yellow Cards", 0)
@@ -139,30 +162,30 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return float(hy + hr + ay + ar), "Cartões", direction
 
     # ── Fouls ──
-    if any(k in m for k in ["falta", "foul"]):
+    if is_fouls:
         hf = home_stats.get("Fouls", 0)
         af = away_stats.get("Fouls", 0)
         return float(hf + af), "Faltas", direction
 
     # ── Saves ──
-    if any(k in m for k in ["defesa", "save", "goleiro"]):
+    if is_saves:
         hs = home_stats.get("Goalkeeper Saves", 0)
         as_ = away_stats.get("Goalkeeper Saves", 0)
         return float(hs + as_), "Defesas do Goleiro", direction
 
     # ── Shots ──
-    if any(k in m for k in ["chute", "shot", "finaliza"]):
+    if is_shots:
         hs = home_stats.get("Shots on Goal", 0) + home_stats.get("Shots off Goal", 0)
         as_ = away_stats.get("Shots on Goal", 0) + away_stats.get("Shots off Goal", 0)
         return float(hs + as_), "Chutes", direction
 
     # ── BTTS ──
-    if any(k in m for k in ["ambas", "btts", "ambos"]):
+    if is_btts:
         both = int(home_goals or 0) > 0 and int(away_goals or 0) > 0
         return (1.0 if both else 0.0), "Ambas Marcam", None
 
     # ── Goals ──
-    if any(k in m for k in ["gol", "goal"]):
+    if is_goals:
         if "casa" in m or "home" in m:
             return float(home_goals or 0), "Gols Casa", direction
         if any(k in m for k in ["fora", "away", "visitante"]):
@@ -170,7 +193,7 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return float((home_goals or 0) + (away_goals or 0)), "Gols", direction
 
     # ── Result / Dupla Chance ──
-    if any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"]):
+    if is_result:
         return None, "Placar", "result"
 
     return None, market or "", direction
@@ -206,7 +229,8 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
 
 
 def _calc_result(market: str, line: str, cur_val: float | None,
-                 home_goals: int, away_goals: int) -> str | None:
+                 home_goals: int, away_goals: int,
+                 market_type: str | None = None) -> str | None:
     """Resultado definitivo de um pick com jogo encerrado.
 
     Suporta handicap asiático quarter-ball (.25 / .75):
@@ -216,19 +240,28 @@ def _calc_result(market: str, line: str, cur_val: float | None,
       Under X.75: GREEN se cur<=X, HALF-LOSS se cur==X+1, RED se cur>X+1
     Linhas inteiras (.0): PUSH quando cur==line.
     Linhas em .5: nunca PUSH (stats são inteiros).
+    market_type do banco tem prioridade sobre keyword matching.
     """
-    m = (market or "").lower()
+    m     = (market or "").lower()
+    mtype = (market_type or "").lower()
+
+    direction, line_val = _extract_line(line)
+
+    _mtype_is_result = mtype == "result" and direction not in ("over", "under")
+
+    is_result = _mtype_is_result or direction == "result" or \
+                any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"])
+    is_btts   = mtype == "btts"  or any(k in m for k in ["ambas", "btts", "ambos"])
 
     # ── Resultado / 1x2 / Dupla Chance — não depende de cur_val ──────────────
-    direction, line_val = _extract_line(line)
-    if direction == "result" or any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"]):
+    if is_result:
         pst = _result_pick_status(line, home_goals, away_goals)
         if pst == "winning":  return "GREEN"
         if pst == "losing":   return "RED"
         return None  # "neutral" = linha não reconhecida, não resolve
 
     # ── BTTS — usa cur_val (1.0 = ambas marcaram, 0.0 = não) ─────────────────
-    if any(k in m for k in ["ambas", "btts", "ambos"]):
+    if is_btts:
         if cur_val is None:
             return None
         return "GREEN" if cur_val >= 1.0 else "RED"
@@ -287,6 +320,7 @@ def _locked_leg_result(leg: dict) -> str | None:
         return _calc_result(
             leg["market"], leg["line"],
             leg["current_val"], leg["home_goals"], leg["away_goals"],
+            market_type=leg.get("market_type"),
         )
     if leg.get("is_locked"):
         direction, line_val = _extract_line(leg["line"])
@@ -371,7 +405,8 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
 def _enrich_leg(fid: int, market: str, line: str,
                 home_team: str, away_team: str,
                 home_team_id: int | None, away_team_id: int | None,
-                odd: float) -> dict:
+                odd: float,
+                market_type: str | None = None) -> dict:
     fix_data   = _fetch_fixture(fid)
     fix        = fix_data.get("fixture", {})
     goals      = fix_data.get("goals", {})
@@ -385,7 +420,7 @@ def _enrich_leg(fid: int, market: str, line: str,
         home_stats, away_stats = _parse_stats(_fetch_stats(fid, status))
 
     cur_val, stat_label, direction = _stat_for_market(
-        market, line, home_stats, away_stats, home_goals, away_goals
+        market, line, home_stats, away_stats, home_goals, away_goals, market_type
     )
     _, line_val = _extract_line(line)
     pst = _pick_status(cur_val, line, home_goals, away_goals) if cur_val is not None \
@@ -415,6 +450,7 @@ def _enrich_leg(fid: int, market: str, line: str,
         "home_team_id": home_team_id,
         "away_team_id": away_team_id,
         "market":       market,
+        "market_type":  market_type,
         "line":         line,
         "odd":          odd,
         "status":       status,
@@ -459,7 +495,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     vip_map: dict = {}
     if vip_ids:
         cur.execute("""
-            SELECT id, fixture_id, market, line, odd, result,
+            SELECT id, fixture_id, market, market_type, line, odd, result,
                    home_team_name AS home_team, away_team_name AS away_team,
                    home_team_id, away_team_id, match_date, NULL::integer AS league_id
             FROM picks_vip WHERE id = ANY(%s)
@@ -469,7 +505,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     free_map: dict = {}
     if free_ids:
         cur.execute("""
-            SELECT id, fixture_id, market, line, odd, result,
+            SELECT id, fixture_id, market, market_type, line, odd, result,
                    home_team, away_team, home_team_id, away_team_id, match_date, league_id
             FROM picks_free WHERE id = ANY(%s)
         """, (free_ids,))
@@ -487,8 +523,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     if alavancagem_ids:
         cur.execute("""
             SELECT id, fixture_id_1, fixture_id_2,
-                   market_1, line_1, odd_1, home_team_1, away_team_1,
-                   market_2, line_2, odd_2, home_team_2, away_team_2,
+                   market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
+                   market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
                    odd_combined, result, match_date
             FROM picks_alavancagem WHERE id = ANY(%s)
         """, (alavancagem_ids,))
@@ -567,12 +603,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 p["home_team"], p["away_team"],
                 p["home_team_id"], p["away_team_id"],
                 odd,
+                market_type=p.get("market_type"),
             )
             # Auto-save quando jogo encerrou
             if leg["is_ft"]:
                 auto_res = _calc_result(
                     p["market"], p["line"],
-                    leg["current_val"], leg["home_goals"], leg["away_goals"]
+                    leg["current_val"], leg["home_goals"], leg["away_goals"],
+                    market_type=p.get("market_type"),
                 )
                 if auto_res:
                     _save_single_result(pick_id, pick_type, auto_res, odd, conn)
@@ -635,6 +673,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     leg_data.get("line", ""),
                     home, away, h_id, a_id,
                     float(leg_data.get("odd", 1)),
+                    market_type=leg_data.get("market_type"),
                 ))
 
             if legs_out:
@@ -678,6 +717,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     fx["home_team_id"] if fx else None,
                     fx["away_team_id"] if fx else None,
                     float(p.get(f"odd_{i}") or 1),
+                    market_type=p.get(f"market_type_{i}"),
                 ))
 
             if legs_out:
@@ -721,7 +761,7 @@ def resolve_all_pending() -> dict:
     try:
         # ── VIP ──────────────────────────────────────────────────────────────
         cur.execute("""
-            SELECT id, fixture_id, market, line, odd,
+            SELECT id, fixture_id, market, market_type, line, odd,
                    home_team_name AS home_team, away_team_name AS away_team,
                    home_team_id, away_team_id
             FROM picks_vip WHERE result IS NULL AND fixture_id IS NOT NULL
@@ -730,17 +770,19 @@ def resolve_all_pending() -> dict:
             odd = float(p["odd"] or 1)
             leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
                               p["home_team"], p["away_team"],
-                              p["home_team_id"], p["away_team_id"], odd)
+                              p["home_team_id"], p["away_team_id"], odd,
+                              market_type=p.get("market_type"))
             if leg["is_ft"]:
                 res = _calc_result(p["market"], p["line"],
-                                   leg["current_val"], leg["home_goals"], leg["away_goals"])
+                                   leg["current_val"], leg["home_goals"], leg["away_goals"],
+                                   market_type=p.get("market_type"))
                 if res:
                     _save_single_result(p["id"], "vip", res, odd, conn)
                     resolved["vip"] += 1
 
         # ── FREE ─────────────────────────────────────────────────────────────
         cur.execute("""
-            SELECT id, fixture_id, market, line, odd,
+            SELECT id, fixture_id, market, market_type, line, odd,
                    home_team, away_team, home_team_id, away_team_id
             FROM picks_free WHERE result IS NULL AND fixture_id IS NOT NULL
         """)
@@ -748,10 +790,12 @@ def resolve_all_pending() -> dict:
             odd = float(p["odd"] or 1)
             leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
                               p["home_team"], p["away_team"],
-                              p["home_team_id"], p["away_team_id"], odd)
+                              p["home_team_id"], p["away_team_id"], odd,
+                              market_type=p.get("market_type"))
             if leg["is_ft"]:
                 res = _calc_result(p["market"], p["line"],
-                                   leg["current_val"], leg["home_goals"], leg["away_goals"])
+                                   leg["current_val"], leg["home_goals"], leg["away_goals"],
+                                   market_type=p.get("market_type"))
                 if res:
                     _save_single_result(p["id"], "free", res, odd, conn)
                     resolved["free"] += 1
@@ -781,6 +825,7 @@ def resolve_all_pending() -> dict:
                     leg_data.get("home_team_id"),
                     leg_data.get("away_team_id"),
                     float(leg_data.get("odd", 1)),
+                    market_type=leg_data.get("market_type"),
                 ))
 
             if not legs_out:
@@ -798,8 +843,8 @@ def resolve_all_pending() -> dict:
         # ── ALAVANCAGEM ──────────────────────────────────────────────────────
         cur.execute("""
             SELECT id, fixture_id_1, fixture_id_2,
-                   market_1, line_1, odd_1, home_team_1, away_team_1,
-                   market_2, line_2, odd_2, home_team_2, away_team_2,
+                   market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
+                   market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
                    odd_combined
             FROM picks_alavancagem WHERE result IS NULL
         """)
@@ -827,6 +872,7 @@ def resolve_all_pending() -> dict:
                     fx["home_team_id"] if fx else None,
                     fx["away_team_id"] if fx else None,
                     float(p.get(f"odd_{i}") or 1),
+                    market_type=p.get(f"market_type_{i}"),
                 ))
 
             if not legs_out:

@@ -127,15 +127,22 @@ _COHERENCE_KEYWORDS: dict[str, list[str]] = {
     "goals":   ["gol", "goal", "marcar", "score", "btts", "over", "under"],
 }
 
-def _market_type_from_name(market: str) -> str:
+def _market_type_from_name(market: str) -> str | None:
+    """Classifica market_type a partir do nome. Retorna None quando não reconhecido
+    para que o caller use keyword matching no texto em vez de forçar "result"."""
     m = market.lower()
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
         return "cards"
+    if "btts" in m or "ambas" in m or "ambos" in m:
+        return "btts"
     if "goal" in m or "gol" in m:
         return "goals"
-    return "result"
+    if any(x in m for x in ["1x2", "resultado", "winner", "vencedor",
+                              "dupla chance", "handicap", "match winner"]):
+        return "result"
+    return None  # desconhecido — não force "result", deixa keyword matching agir
 
 def dedup_odds(odds: list) -> list:
     """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta."""

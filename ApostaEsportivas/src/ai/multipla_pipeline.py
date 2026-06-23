@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -414,6 +414,9 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
     for g in games_info:
         if "market" in g:
             g["market"] = translate_market(g["market"])
+        # Garante market_type em cada leg para resolução correta no live.py
+        if not g.get("market_type"):
+            g["market_type"] = _classify_market_type(g.get("market", ""))
         # Enriquece com nomes e IDs dos times para exibição independente da tabela fixtures
         fx = fx_map.get(g.get("fixture_id"))
         if fx:

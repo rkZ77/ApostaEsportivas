@@ -21,17 +21,22 @@ from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
 
 
-def _detect_market_type(market: str) -> str:
+def _detect_market_type(market: str) -> str | None:
+    """Mesma lógica de _market_type_from_name em ai_suggestions_service — mantidas em sync.
+    Retorna None para mercados não reconhecidos em vez de 'unknown' ou 'result' errado."""
     m = market.lower()
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
         return "cards"
+    if "btts" in m or "ambas" in m or "ambos" in m:
+        return "btts"
     if "goal" in m or "gol" in m:
         return "goals"
-    if any(x in m for x in ["1x2", "result", "winner", "dupla chance", "handicap"]):
+    if any(x in m for x in ["1x2", "result", "winner", "dupla chance", "handicap",
+                              "resultado", "vencedor", "match winner"]):
         return "result"
-    return "unknown"
+    return None
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
