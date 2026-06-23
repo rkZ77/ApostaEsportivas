@@ -59,7 +59,7 @@ PRINCÍPIOS INEGOCIÁVEIS:
 - Só monte múltipla se AMBOS os picks tiverem score_base >= 0.65. Prefira no_bet a múltipla fraca.
 - Correlação é o maior inimigo. Cada pick deve ser de jogo DIFERENTE e mercado INDEPENDENTE.
   Teste: "Se A ganhar, B fica mais fácil ou mais difícil?" — qualquer influência = DESCARTE.
-- Odd individual: 1.05–1.80. Odd total: 2.00–3.00. Fora dessas faixas = inválido.
+- Odd individual: 1.01–2.00. Odd total: 2.00–4.00. Fora dessas faixas = inválido.
 - Avalie TODOS os mercados — gols, escanteios, cartões, Dupla Chance, Handicap. Escolha por consistência estatística.
 - Cartões: só use se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60%) confirmarem. Sem ambos → prefira gols/escanteios.
 - Odd copiada dos dados — nunca inventar. Match Winner (1X2 direto) proibido.
@@ -94,23 +94,21 @@ Avalie TODOS os mercados das odds — gols, cantos, cartões, dupla chance, hand
 Nao existe mercado preferido: o vencedor e o de MAIOR EDGE POSITIVO, independente do tipo.
 
 FORMATO DAS ODDS (quando disponivel):
-  no_vig_prob   → probabilidade real sem margem do bookmaker
-  market_ev     → EV = (no_vig_prob × best_odd) − 1
   best_odd, best_bookmaker, bookmakers_count
 
 Calcule prob_real com base nos dados historicos.
-edge = prob_real − no_vig_prob  (se no_vig_prob disponivel)
-     = prob_real − (1/best_odd)  (fallback se no_vig_prob ausente)
+edge = prob_real − (1/best_odd)
+EV   = (prob_real × best_odd) − 1
 Selecione mercados com edge > 0.
 
 FORMULA SCORE_BASE (alinhada com VIP):
 C (Consistência): taxa histórica real dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
 Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-R (Robustez): edge/no_vig_prob>=0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge<=0→R=0 (veto)
+R (Robustez): edge>=0.10→1.00 | 0.07-0.09→0.75 | 0.04-0.06→0.50 | <0.04→0.25 | edge<=0→R=0 (veto)
   Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
 score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
-Odds: se odd fora de 1.05-1.80 → DESCARTE. Linha: mais conservadora em 1.05-1.80.
+Odds: se odd fora de 1.01-2.00 → DESCARTE. Linha: mais conservadora em 1.01-2.00.
 Descarte jogo se score_base<0.55 ou sem linha válida.
 
 FEITOS vs CEDIDOS — aplique a TODOS os mercados:
@@ -147,7 +145,7 @@ FIXTURE ÚNICO POR MÚLTIPLA E ENTRE MÚLTIPLAS:
   - Dentro de cada múltipla: pick_1.fixture_id ≠ pick_2.fixture_id (obrigatorio).
   - Entre multipla_1 e multipla_2: os fixture_ids devem ser todos diferentes (4 jogos distintos no total).
     Se não houver 4 jogos com score_base suficiente, multipla_2 pode reutilizar 1 fixture desde que seja mercado completamente diferente.
-Verificacao final: odd individual 1.05-1.80? odd_total 2.00-3.00? market_types diferentes? fixture_ids todos distintos dentro e entre multiplas? score_base>=0.55?
+Verificacao final: odd individual 1.01-2.00? odd_total 2.00-4.00? market_types diferentes? fixture_ids todos distintos dentro e entre multiplas? score_base>=0.55?
 Se QUALQUER par passar todas as verificacoes → emita JSON de multipla (nao no_bet).
 
 REGRA DE OUTPUT CRITICA:
@@ -282,9 +280,9 @@ def format_fixtures_for_llm(fixtures: list) -> str:
         if ctx.get("odds"):
             odds_filtered = dedup_odds([
                 o for o in ctx["odds"]
-                if 1.03 <= float(o.get("odd", 0)) <= 1.83
+                if 1.01 <= float(o.get("odd", 0)) <= 2.00
             ])[:60]
-            lines.append(f"\nMERCADOS E ODDS (faixa 1.03-1.83, {len(odds_filtered)} únicos):")
+            lines.append(f"\nMERCADOS E ODDS (faixa 1.01-2.00, {len(odds_filtered)} únicos):")
             lines.append(_j(odds_filtered))
 
         if ctx.get("home_stats"):

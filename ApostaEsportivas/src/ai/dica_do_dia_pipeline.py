@@ -114,15 +114,12 @@ CALCULO:
 Calcule prob_real voce mesmo com base nos dados historicos: taxa ponderada temporalmente (recente=1.0, anterior=0.9...).
 
 FORMATO DAS ODDS (quando disponivel):
-  no_vig_prob   → probabilidade real sem margem do bookmaker (calculada de varias casas)
-  market_ev     → EV = (no_vig_prob × best_odd) − 1
   best_odd      → melhor odd disponivel
   best_bookmaker→ casa com best_odd
   bookmakers_count → numero de casas
 
-edge = prob_real − no_vig_prob   (se no_vig_prob disponivel)
-     = prob_real − (1/best_odd)  (fallback se no_vig_prob ausente)
-EV  = prob_real × best_odd − 1
+edge = prob_real − (1/best_odd)
+EV   = prob_real × best_odd − 1
 Ordene TODOS os mercados por edge e selecione o maior edge positivo que atenda os criterios.
 
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte.
@@ -137,7 +134,7 @@ C) CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) — MESMA FORMULA DO VIP
    C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
    Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
    K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-   R (Robustez): edge/no_vig_prob>=0.15→1.00 | 0.10-0.14→0.75 | 0.05-0.09→0.50 | <0.05→0.25 | edge<=0→R=0 (veto)
+   R (Robustez): edge>=0.10→1.00 | 0.07-0.09→0.75 | 0.04-0.06→0.50 | <0.04→0.25 | edge<=0→R=0 (veto)
    Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
 
 QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
