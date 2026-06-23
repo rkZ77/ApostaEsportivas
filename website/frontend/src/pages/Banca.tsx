@@ -547,7 +547,7 @@ export default function Banca() {
 
             {/* Lista de picks agrupada por data */}
             {(() => {
-              const allEntries: any[] = (data?.entries ?? []).slice(0, 6)
+              const allEntries: any[] = [...(data?.entries ?? [])].reverse().slice(0, 10)
               const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
               const yesterdayKey = new Date(Date.now() - 86400000).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
               const dayLabel = (key: string) =>
