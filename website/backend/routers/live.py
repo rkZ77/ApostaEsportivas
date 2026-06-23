@@ -98,13 +98,13 @@ def _extract_line(line_str: str | None) -> tuple[str | None, float | None]:
     for prefix in ("over ", "mais de "):
         if l.startswith(prefix):
             try:
-                return "over", float(l[len(prefix):])
+                return "over", float(l[len(prefix):].replace(",", "."))
             except Exception:
                 pass
     for prefix in ("under ", "menos de "):
         if l.startswith(prefix):
             try:
-                return "under", float(l[len(prefix):])
+                return "under", float(l[len(prefix):].replace(",", "."))
             except Exception:
                 pass
     return l, None
@@ -217,9 +217,25 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     Linhas inteiras (.0): PUSH quando cur==line.
     Linhas em .5: nunca PUSH (stats são inteiros).
     """
+    m = (market or "").lower()
+
+    # ── Resultado / 1x2 / Dupla Chance — não depende de cur_val ──────────────
+    direction, line_val = _extract_line(line)
+    if direction == "result" or any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"]):
+        pst = _result_pick_status(line, home_goals, away_goals)
+        if pst == "winning":  return "GREEN"
+        if pst == "losing":   return "RED"
+        return None  # "neutral" = linha não reconhecida, não resolve
+
+    # ── BTTS — usa cur_val (1.0 = ambas marcaram, 0.0 = não) ─────────────────
+    if any(k in m for k in ["ambas", "btts", "ambos"]):
+        if cur_val is None:
+            return None
+        return "GREEN" if cur_val >= 1.0 else "RED"
+
+    # ── Mercados estatísticos (gols, escanteios, cartões…) ────────────────────
     if cur_val is None:
         return None
-    direction, line_val = _extract_line(line)
 
     if direction in ("over", "under") and line_val is not None:
         frac = round(line_val % 1, 2)  # 0.0 | 0.25 | 0.5 | 0.75
@@ -227,24 +243,19 @@ def _calc_result(market: str, line: str, cur_val: float | None,
 
         if direction == "over":
             if frac == 0.25:
-                # split: Over floor e Over floor+0.5
-                # floor = int(line_val)  ex: 2.25 → 2
                 f = int(line_val)
                 if v > f:   return "GREEN"
                 if v == f:  return "HALF-LOSS"
                 return "RED"
             elif frac == 0.75:
-                # split: Over floor+0.5 e Over ceil
-                # ceil = int(line_val) + 1  ex: 2.75 → ceil = 3
                 c = int(line_val) + 1
                 if v > c:   return "GREEN"
                 if v == c:  return "HALF-WIN"
                 return "RED"
-            else:
-                # .0 ou .5
+            else:  # .0 ou .5
                 if v > line_val:   return "GREEN"
                 if v < line_val:   return "RED"
-                return "PUSH"   # só possível em linhas .0
+                return "PUSH"      # só possível em linhas .0
 
         else:  # under
             if frac == 0.25:
@@ -262,9 +273,6 @@ def _calc_result(market: str, line: str, cur_val: float | None,
                 if v > line_val:   return "RED"
                 return "PUSH"
 
-    if direction == "result":
-        pst = _result_pick_status(line, home_goals, away_goals)
-        return "GREEN" if pst == "winning" else "RED"
     return None
 
 
@@ -273,6 +281,7 @@ def _locked_leg_result(leg: dict) -> str | None:
     Retorna resultado definitivo de uma leg se já determinado, else None.
     FT  → resultado completo via _calc_result.
     Bloqueado antes do FT (over/under cujo valor já cruzou a linha) → RED ou GREEN antecipado.
+    Linhas fracionárias (.25/.75): early-lock só quando o resultado final é inequivocamente GREEN.
     """
     if leg["is_ft"]:
         return _calc_result(
@@ -283,10 +292,18 @@ def _locked_leg_result(leg: dict) -> str | None:
         direction, line_val = _extract_line(leg["line"])
         cur = leg.get("current_val")
         if cur is not None and line_val is not None:
+            frac = round(line_val % 1, 2)
+            v    = int(cur)
             if direction == "under" and cur >= line_val:
                 return "RED"    # Under X com cur >= X: impossível de recuperar
-            if direction == "over" and cur > line_val:
-                return "GREEN"  # Over X com cur > X: nunca vai descer
+            if direction == "over":
+                # Só trava como GREEN se o resultado final não pode ser HALF-WIN
+                # .25: GREEN garantido quando v > floor  (v == floor → HALF-LOSS no FT)
+                # .75: GREEN garantido apenas quando v > ceil (v == ceil → HALF-WIN no FT)
+                # .0 / .5: GREEN garantido quando v > line_val
+                if frac == 0.25 and v > int(line_val):   return "GREEN"
+                if frac == 0.75 and v > int(line_val)+1: return "GREEN"
+                if frac not in (0.25, 0.75) and cur > line_val: return "GREEN"
     return None
 
 
@@ -379,8 +396,17 @@ def _enrich_leg(fid: int, market: str, line: str,
     is_ft     = status in FT_STATUSES
     is_locked = is_ft
     if not is_ft and cur_val is not None and line_val is not None:
-        if direction == "over"  and cur_val > line_val:  is_locked = True  # stats só sobem
-        if direction == "under" and cur_val >= line_val: is_locked = True  # já estourou o limite
+        frac_lv = round(line_val % 1, 2)
+        v_int   = int(cur_val)
+        if direction == "under" and cur_val >= line_val:
+            is_locked = True   # já estourou: impossível de recuperar
+        if direction == "over":
+            # Para .25: locked quando v > floor (HALF-LOSS ou GREEN garantido)
+            # Para .75: locked quando v > floor (mas só GREEN garantido quando v > ceil)
+            # Para .0/.5: locked quando cur > line
+            if frac_lv == 0.25 and v_int > int(line_val):   is_locked = True
+            elif frac_lv == 0.75 and v_int > int(line_val): is_locked = True
+            elif frac_lv not in (0.25, 0.75) and cur_val > line_val: is_locked = True
 
     return {
         "fixture_id":   fid,
