@@ -1,6 +1,6 @@
 """
 ALAVANCAGEM — Pipeline Copa do Mundo
-Objetivo: 1 pick diario (ou combinacao de 2) da Copa com odd alvo ~1.50 (faixa 1.40-1.60).
+Objetivo: 1 pick diario (ou combinacao de 2) da Copa com odd alvo ~1.50 (faixa 1.00-1.55).
 Banca composita: inicia em R$50, reinveste ganhos a cada GREEN.
 Exclusivo VIP. Ativo apenas durante a Copa do Mundo.
 """
@@ -26,10 +26,10 @@ load_dotenv(find_dotenv())
 
 AI_MODEL_NAME  = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
 WC_LEAGUE_ID   = 1
-ODD_MIN        = 1.45
+ODD_MIN        = 1.00
 ODD_MAX        = 1.55
 ODD_TARGET     = 1.50
-_COMBO_ODD_MIN = 1.08  # mínimo individual para combinações (produto deve cair em ODD_MIN-ODD_MAX)
+_COMBO_ODD_MIN = 1.00  # mínimo individual para combinações (produto deve cair em ODD_MIN-ODD_MAX)
 CONFIDENCE_MIN = 0.72
 BANKROLL_INIT  = 50.0
 MAX_FIXTURES   = 10
@@ -88,12 +88,8 @@ Leia a classificacao (standings) e determine a situacao de cada time:
 OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
 OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
   REGRA DE SELECAO — filtre ANTES de analisar:
-  - Odd individual MINIMA para combinacao: 1.21 (pois 1.21×1.21=1.464 ≥ {odd_min}). Se odd < 1.21 → DESCARTE imediato.
-  - Odd individual MAXIMA para combinacao: 1.26 (pois 1.26×1.26=1.588 > {odd_max}). Se odd > 1.26 → DESCARTE imediato.
-  - Faixa valida por pick em combinacao: 1.21–1.26.
+  - Odd individual MAXIMA para par simetrico: 1.24 (pois 1.24×1.24=1.538 ≤ {odd_max}). Para pares assimetricos, calcule o produto.
   - Calcule odd_1 × odd_2 explicitamente antes de confirmar. Produto fora de {odd_min}-{odd_max} → INVALIDO.
-  - Exemplos validos: 1.21×1.22=1.476 ✓ | 1.22×1.25=1.525 ✓ | 1.23×1.22=1.501 ✓
-  - Exemplos invalidos: 1.13×1.13=1.277 ✗ | 1.20×1.20=1.44 ✗ | 1.28×1.28=1.638 ✗
   - Criterio de qualidade por pick: taxa>=65% + amostra>=5 + confidence>={conf_min}.
     Calcule taxa_real pelos dados historicos. Nao combine pick sem taxa>=65%.
 
@@ -109,7 +105,7 @@ QUALIDADE DOS DADOS (Copa do Mundo):
   Declare: "bruto X gols/j → ponderado Y gols/j (Z jogos Copa, W Eliminatorias, V amistosos)".
 
 PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_min}-{odd_max}.
-PASSO 2 — Candidatos B (se A falhar): busque pares de jogos diferentes com odd individual 1.21–1.26,
+PASSO 2 — Candidatos B (se A falhar): busque pares de jogos diferentes com odd individual onde produto caia em {odd_min}-{odd_max},
   taxa>=65% e amostra>=5 em ambos, cujo produto caia em {odd_min}-{odd_max}.
   Se nenhum par válido existir → no_bet direto.
 PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min}.

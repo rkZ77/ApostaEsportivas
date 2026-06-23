@@ -174,7 +174,7 @@ SMART SAFE LINE — SELEÇÃO DE LINHA (aplica a Over/Under de gols, cantos, car
     "SMART SAFE LINE | Linhas: [lista] | Rejeitadas: [linha @odd — motivo] | Escolhida: [linha @odd — taxa=X%, edge=Y%, EV=Z%]"
 
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
-ODDS: 1.01–2.00 (absoluto — descarte fora desta faixa). Para linhas Over/Under: prefira odd ≥ 1.60 via Smart Safe Line.
+ODDS: 1.30–1.95 (absoluto — descarte fora desta faixa). Para linhas Over/Under: prefira odd ≥ 1.60 via Smart Safe Line.
 
 NOMENCLATURA — copie exatamente de "market_name":
   Gols: "Gols Mais/Menos" line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
@@ -188,7 +188,7 @@ NOMENCLATURA — copie exatamente de "market_name":
 ## 6. VALIDAÇÃO (execute antes de retornar)
 
 [V1] Odds existem nos dados? [V2] 3 categorias distintas? [V3] taxa≥65% e amostra≥5?
-[V4] confidence∈[0.55,0.92] e best_odd∈[1.01,2.00]? [V5] ≥1 fato numérico no reasoning?
+[V4] confidence∈[0.55,0.92] e best_odd∈[1.30,1.95]? [V5] ≥1 fato numérico no reasoning?
 [V6] Amostra declarada se ESCASSO/VAZIO? [V7] Exatamente 1 is_best_pick=true? [V8] best_pick sem RISCO ALTO?
 [V9] reasoning contém bloco [CONF] com cálculo explícito?
 [V10] COERÊNCIA MERCADO↔ANÁLISE: o campo "market" é de cartões? → reasoning deve analisar cartões (não gols/escanteios). Market de escanteios? → reasoning analisa escanteios. Market de gols? → reasoning analisa gols. NUNCA misture tipos: se o mercado é "Total de Cartões" não escreva análise de gols.

@@ -59,7 +59,7 @@ PRINCÍPIOS INEGOCIÁVEIS:
 - Só monte múltipla se AMBOS os picks tiverem score_base >= 0.65. Prefira no_bet a múltipla fraca.
 - Correlação é o maior inimigo. Cada pick deve ser de jogo DIFERENTE e mercado INDEPENDENTE.
   Teste: "Se A ganhar, B fica mais fácil ou mais difícil?" — qualquer influência = DESCARTE.
-- Odd individual: 1.01–2.00. Odd total: 2.00–4.00. Fora dessas faixas = inválido.
+- Odd individual: 1.00–2.50. Odd total: 2.00–3.00. Fora dessas faixas = inválido.
 - Avalie TODOS os mercados — gols, escanteios, cartões, Dupla Chance, Handicap. Escolha por consistência estatística.
 - Cartões: só use se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60%) confirmarem. Sem ambos → nao use cartoes nesta multipla.
 - Odd copiada dos dados — nunca inventar. Match Winner (1X2 direto) proibido.
@@ -109,7 +109,7 @@ Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
   Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 score_base = (C×0.45)+(Q×0.25)+(K×0.30) → range [0.20,0.92]
-Odds: se odd fora de 1.01-2.00 → DESCARTE. Descarte jogo se score_base<0.55 ou sem linha válida.
+Odds: se odd fora de 1.00-2.50 → DESCARTE. Descarte jogo se score_base<0.55 ou sem linha válida.
 
 SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
   1. Liste todas as linhas do mercado nas odds.
@@ -157,7 +157,7 @@ FIXTURE E MERCADO ÚNICOS ENTRE MÚLTIPLAS:
     Exemplo PROIBIDO: multipla_1 tem França escanteios Over 10 → multipla_2 NÃO pode ter França escanteios (mesmo jogo, mesmo tipo de mercado, qualquer linha).
     Exemplo PROIBIDO: multipla_1 tem Alemanha gols Over 2.5 → multipla_2 NÃO pode ter Alemanha gols (nenhuma linha).
     Se o melhor candidato para multipla_2 repetiria um (fixture_id + market_type) de multipla_1 → descartar e usar o próximo melhor.
-Verificacao final: odd individual 1.01-2.00? odd_total 2.00-4.00? market_types diferentes dentro de cada multipla? nenhuma combinacao (fixture_id+market_type) repetida entre multipla_1 e multipla_2? score_base>=0.55?
+Verificacao final: odd individual 1.00-2.50? odd_total 2.00-3.00? market_types diferentes dentro de cada multipla? nenhuma combinacao (fixture_id+market_type) repetida entre multipla_1 e multipla_2? score_base>=0.55?
 Se QUALQUER par passar todas as verificacoes → emita JSON de multipla (nao no_bet).
 
 REGRA DE OUTPUT CRITICA:

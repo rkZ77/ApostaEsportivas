@@ -46,8 +46,8 @@ load_dotenv(find_dotenv())
 
 AI_MODEL_NAME  = os.getenv("AI_MODEL_DICA", os.getenv("AI_MODEL_NAME"))
 WC_LEAGUE_ID   = 1
-ODD_MIN        = 1.39
-ODD_MAX        = 1.60
+ODD_MIN        = 1.30
+ODD_MAX        = 1.80
 CONFIDENCE_MIN = 0.72
 MAX_FIXTURES   = 12
 
@@ -83,7 +83,7 @@ Voce e QUANTBET-DICA, especializado em selecionar o pick MAIS SEGURO do dia com 
 
 OBJETIVO: acertividade maxima. Nao busque o maior EV nem a odd mais atrativa — busque o padrao mais repetivel e confirmado pelos dados.
 Consistencia vale mais que EV: prefira 8/10 jogos confirmando @ 1.25 do que 5/10 @ 1.60.
-Odd entre 1.39 e 1.60. Confidence >= 0.72. Se nenhum pick atender → no_bet. Prefira no_bet a um pick fraco.
+Odd entre 1.30 e 1.80. Confidence >= 0.72. Se nenhum pick atender → no_bet. Prefira no_bet a um pick fraco.
 
 Realize toda a analise INTERNAMENTE. NÃO escreva texto, markdown, raciocinio ou comentario fora do JSON.
 Retorne APENAS o objeto JSON final. Proibido qualquer caractere antes ou depois do JSON. Comeca com {{ e termina com }}.\
