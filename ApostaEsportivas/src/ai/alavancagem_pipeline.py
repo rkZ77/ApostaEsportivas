@@ -135,6 +135,15 @@ CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
   K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
   Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 
+SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
+  Odd minima para linha na alavancagem: {odd_min} (respeita a faixa do pipeline).
+  1. Liste todas as linhas do mercado nas odds.
+  2. Calcule: implied_prob=1/odd | edge=taxa_real−implied_prob | EV=taxa_real×odd−1
+  3. Descarte: odd fora da faixa {odd_min}-{odd_max} | edge<0.05 | EV≤0
+  4. Das aprovadas: maior taxa_real. Empate: maior edge.
+  5. Sem aprovadas: fallback linha mais proxima da faixa {odd_min}-{odd_max}.
+  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+
 VERIFICACAO FINAL obrigatoria: calcule odd_combined = odd_1 × odd_2 (ou odd_1 se simples).
   Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
 

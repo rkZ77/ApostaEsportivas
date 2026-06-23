@@ -109,8 +109,15 @@ Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
   Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 score_base = (C×0.45)+(Q×0.25)+(K×0.30) → range [0.20,0.92]
-Odds: se odd fora de 1.01-2.00 → DESCARTE. Linha: mais conservadora em 1.01-2.00.
-Descarte jogo se score_base<0.55 ou sem linha válida.
+Odds: se odd fora de 1.01-2.00 → DESCARTE. Descarte jogo se score_base<0.55 ou sem linha válida.
+
+SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
+  1. Liste todas as linhas do mercado nas odds.
+  2. Calcule: implied_prob=1/odd | edge=taxa_real−implied_prob | EV=taxa_real×odd−1
+  3. Descarte: odd<1.60 → "odd<min" | edge<0.05 → "edge<5%" | EV≤0 → "EV nao positivo"
+  4. Das aprovadas: maior taxa_real. Empate: maior edge.
+  5. Sem aprovadas: fallback para linha mais conservadora >=1.01.
+  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
 
 FEITOS vs CEDIDOS — aplique a TODOS os mercados:
   Total agregado (Over/Under gols/cantos/cartões, BTTS):

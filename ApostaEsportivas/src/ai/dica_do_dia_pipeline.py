@@ -144,12 +144,20 @@ QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao 
   Taxa ponderada = soma(taxa_jogo × peso) / soma(pesos). Declare: "taxa bruta X% → ponderada Y%".
   Para Copa do Mundo: use "quality_breakdown" do perfil — "weighted_goals_against" em vez da media bruta.
 
+SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
+  1. Liste todas as linhas do mercado disponíveis nas odds.
+  2. Calcule para cada linha: implied_prob=1/odd | edge=taxa_real−implied_prob | EV=taxa_real×odd−1
+  3. Descarte: odd < 1.60 → "odd abaixo do minimo" | edge < 0.05 → "edge<5%" | EV≤0 → "EV nao positivo"
+  4. Das aprovadas: escolha a de MAIOR taxa_real. Empate: maior edge.
+  5. Sem aprovadas: declare fallback e use linha mais conservadora >=1.01.
+  No reasoning: "SMART SAFE LINE | Linhas:[...] | Rejeitadas:[linha @odd — motivo] | Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+
 Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_bet.
 
-Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}?
+Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? SMART SAFE LINE aplicado?
 
 SAIDA JSON:
-Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: padrao estatistico solido."}}}}
+Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. SMART SAFE LINE|Linhas:[...]|Rejeitadas:[...]|Escolhida:[linha @odd]. CONCLUSAO: padrao estatistico solido."}}}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 

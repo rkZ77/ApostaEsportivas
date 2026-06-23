@@ -152,10 +152,29 @@ is_best_pick=true: melhor combinação de confidence + baixa volatilidade + RISC
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 com maior confidence forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'.
 CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões NÃO pode ser is_best_pick; nesse caso, defina is_best_pick=true no melhor pick de goals ou corners.
 
-LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.01. Over→linha mais baixa (menor número). Under→linha mais alta (maior número). Acertividade>retorno.
-  REGRA ABSOLUTA UNDER: Se odd Under > 1.75 E existir linha Under superior (número maior) com odd entre 1.01–1.75 nas odds disponíveis: use obrigatoriamente a linha superior, mesmo que o padrão calculado seja menor. Odd > 1.75 para Under indica linha perigosa — não aposte nessa linha se existir alternativa mais segura.
+SMART SAFE LINE — SELEÇÃO DE LINHA (aplica a Over/Under de gols, cantos, cartões e qualquer mercado com múltiplas linhas):
+  Não escolha automaticamente a linha mais baixa nem a maior odd. Encontre o melhor equilíbrio entre segurança, valor e probabilidade de acerto.
+
+  PROCESSO OBRIGATÓRIO:
+  1. Liste TODAS as linhas disponíveis do mercado nas odds.
+  2. Estime a taxa_real de cada linha com os dados históricos.
+  3. Calcule para cada linha:
+       implied_prob = 1 / best_odd
+       edge         = taxa_real − implied_prob
+       EV           = taxa_real × best_odd − 1
+  4. DESCARTE linhas com:
+       odd < 1.60  → "odd abaixo do mínimo"
+       edge < 0.05 → "edge insuficiente (<5%)"
+       EV ≤ 0      → "EV não positivo"
+  5. Das linhas que passam o filtro: escolha a de MAIOR taxa_real (maior probabilidade de acerto).
+     Empate em taxa: prefira maior edge positivo.
+  6. Se NENHUMA linha passar o filtro: declare no reasoning e use a linha mais conservadora com odd ≥ 1.01.
+
+  Documente OBRIGATORIAMENTE no reasoning:
+    "SMART SAFE LINE | Linhas: [lista] | Rejeitadas: [linha @odd — motivo] | Escolhida: [linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
-ODDS: 1.01–2.00 (absoluto — descarte fora desta faixa).
+ODDS: 1.01–2.00 (absoluto — descarte fora desta faixa). Para linhas Over/Under: prefira odd ≥ 1.60 via Smart Safe Line.
 
 NOMENCLATURA — copie exatamente de "market_name":
   Gols: "Gols Mais/Menos" line "Over 2.5" | "Gols Mais/Menos - 1º Tempo"
@@ -173,6 +192,7 @@ NOMENCLATURA — copie exatamente de "market_name":
 [V6] Amostra declarada se ESCASSO/VAZIO? [V7] Exatamente 1 is_best_pick=true? [V8] best_pick sem RISCO ALTO?
 [V9] reasoning contém bloco [CONF] com cálculo explícito?
 [V10] COERÊNCIA MERCADO↔ANÁLISE: o campo "market" é de cartões? → reasoning deve analisar cartões (não gols/escanteios). Market de escanteios? → reasoning analisa escanteios. Market de gols? → reasoning analisa gols. NUNCA misture tipos: se o mercado é "Total de Cartões" não escreva análise de gols.
+[V11] SMART SAFE LINE aplicado? Para mercados Over/Under com múltiplas linhas: reasoning contém bloco "SMART SAFE LINE |"? Edge ≥ 5% e EV > 0 na linha escolhida (ou justificativa de fallback)?
 Falha → corrija antes de retornar.
 
 ## CALIBRAÇÃO — DESEMPENHO HISTÓRICO PRÓPRIO
@@ -209,7 +229,7 @@ Retorne exatamente este formato — nada antes, nada depois:
       "bet_house": "<best_bookmaker copiado das odds>",
       "confidence": <score entre 0.55 e 0.92>,
       "is_best_pick": <true no melhor pick, false nos outros dois>,
-      "reasoning": "<VARREDURA: mercado selecionado por ter maior consistência estatística — taxa=[X]% em [N] jogos. FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. [CONF] C=[x] Q=[x] K=[x] → conf=[x×0.45+x×0.25+x×0.30]=[resultado]. RISCO: [BAIXO|MÉDIO|ALTO]. CONCLUSÃO: por que este padrão se sustenta nos dados.>"
+      "reasoning": "<VARREDURA: mercado selecionado por ter maior consistência estatística — taxa=[X]% em [N] jogos. FATO: dado numérico concreto. ANÁLISE: padrão e confirmadores. SMART SAFE LINE | Linhas: [Over 8.5 @1.72, Over 9.5 @1.90, ...] | Rejeitadas: [Over 6.5 @1.40 — odd<1.60, Over 7.5 @1.58 — odd<1.60] | Escolhida: Over 8.5 @1.72 — taxa=74%, edge=+9%, EV=+27%. [CONF] C=[x] Q=[x] K=[x] → conf=[x×0.45+x×0.25+x×0.30]=[resultado]. RISCO: [BAIXO|MÉDIO|ALTO]. CONCLUSÃO: por que este padrão se sustenta nos dados.>"
     }},
     {{ ... }},
     {{ ... }}
