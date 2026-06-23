@@ -18,7 +18,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds, AISuggestionsService
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, AISuggestionsService
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 
@@ -200,7 +200,6 @@ def _load_fixture_context(
         total_away = []
 
     try:
-        # Prefere odds estruturadas (com no_vig_prob) — mais precisas para cálculo de edge
         odds = odds_svc.load_odds_structured(fixture_id)
         if not odds:
             odds = odds_svc.load_odds_by_fixture(fixture_id)
@@ -259,7 +258,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append("\nCLASSIFICACAO:")
             lines.append(_j(ctx["standings"]))
 
-        all_odds = strip_precalc_from_odds(dedup_odds(ctx.get("odds", [])))
+        all_odds = dedup_odds(ctx.get("odds", []))
 
         if all_odds:
             lines.append(f"\nMERCADOS E ODDS (todos, odd alvo {ODD_MIN}-{ODD_MAX}):")

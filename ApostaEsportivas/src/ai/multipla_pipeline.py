@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -221,7 +221,6 @@ def load_fixture_context(
         total_away = []
 
     try:
-        # Prefere odds estruturadas (com no_vig_prob) — mais precisas para cálculo de edge
         odds = odds_svc.load_odds_structured(fixture_id)
         if not odds:
             odds = odds_svc.load_odds_by_fixture(fixture_id)
@@ -282,7 +281,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            odds_all = strip_precalc_from_odds(dedup_odds(ctx["odds"]))
+            odds_all = dedup_odds(ctx["odds"])
             lines.append(f"\nMERCADOS E ODDS (todos, odd individual alvo 1.01-2.00, {len(odds_all)} únicos):")
             lines.append(_j(odds_all))
 

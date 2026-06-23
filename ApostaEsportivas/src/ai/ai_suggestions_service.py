@@ -174,15 +174,6 @@ def _market_type_from_name(market: str) -> str | None:
         return "result"
     return None  # desconhecido — não force "result", deixa keyword matching agir
 
-_PRECALC_FIELDS = {"no_vig_prob", "best_ev", "market_ev", "no_vig"}
-
-
-def strip_precalc_from_odds(odds: list) -> list:
-    """Remove campos pré-calculados das odds antes de enviar à IA.
-    A IA deve calcular edge/prob_real a partir dos dados históricos — não receber esses valores prontos.
-    """
-    return [{k: v for k, v in o.items() if k not in _PRECALC_FIELDS} for o in odds]
-
 def dedup_odds(odds: list) -> list:
     """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta."""
     seen: dict[tuple, dict] = {}
@@ -505,8 +496,8 @@ HISTÓRICO FORA
         odds_preloaded: list | None = None,
         web_context: str | None = None,
     ):
-        # Detecta se as odds já estão no formato estruturado (com no_vig_prob)
-        # ou no formato legado (lista plana de odds brutas)
+        # Detecta se as odds já estão no formato estruturado (best_odd agregado)
+        # ou no formato legado (lista plana de odds brutas por bookmaker)
         raw_odds = odds_preloaded if odds_preloaded is not None else \
             self.odds_service.load_odds_structured(fx["fixture_id"])
 
