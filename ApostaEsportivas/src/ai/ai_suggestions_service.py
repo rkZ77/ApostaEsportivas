@@ -750,7 +750,7 @@ HISTÓRICO FORA
     #   stat_strong (EV ≤ 0)  → 1% / 1u
     # --------------------------------------------------------
     @staticmethod
-    def calculate_stake(confidence: float, odd: float, ev: float = 0.0, stat_strong: bool = False) -> tuple[float, int]:
+    def calculate_stake(confidence: float, odd: float, ev: float = 0.0, stat_strong: bool = False, max_units: int = 10) -> tuple[float, int]:
         if stat_strong or ev <= 0:
             return 0.01, 1
 
@@ -767,19 +767,22 @@ HISTÓRICO FORA
 
         half_kelly = kelly * 0.5
 
-        # Cap por nível de confiança
+        # Cap por nível de confiança — escala com max_units (VIP=10u, Free=5u)
+        cap_high = round(max_units * 0.01, 4)                       # 10% p/ VIP, 5% p/ Free
+        cap_mid  = round(max_units * 0.008, 4)                      # 8%  p/ VIP, 4% p/ Free
+        cap_low  = round(max(0.03, max_units * 0.005), 4)           # 5%  p/ VIP, 3% p/ Free
+
         if confidence >= 0.80 and ev > 0.10:
-            cap = 0.05
+            cap = cap_high
         elif confidence >= 0.72 and ev > 0.05:
-            cap = 0.04
+            cap = cap_mid
         else:
-            cap = 0.03
+            cap = cap_low
 
         stake_pct = round(max(0.01, min(cap, half_kelly)), 4)
 
-        # Unidades de referência (escala 1-5u para bankroll padrão R$1000, unit R$50)
-        # Serve como guia visual — o frontend converte com a banca real do usuário
-        ref_units = max(1, min(5, round(stake_pct / 0.01)))
+        # Unidades de referência (1u = 1% da banca)
+        ref_units = max(1, min(max_units, round(stake_pct / 0.01)))
 
         return stake_pct, ref_units
 
@@ -915,10 +918,10 @@ HISTÓRICO FORA
                 market, line, odd, bet_house,
                 market_type, market_id,
                 confidence, ev, probability, reasoning,
-                stake_pct,
+                stake_pct, stake_units,
                 created_at
             )
-            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+            VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
             ON CONFLICT (fixture_id) DO NOTHING
             """,
             (
@@ -939,6 +942,7 @@ HISTÓRICO FORA
                 float(chosen.get("probability", 0) or 0),
                 chosen.get("reasoning", ""),
                 stake_pct,
+                stake_units,
             ),
         )
 

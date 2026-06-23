@@ -18,7 +18,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds, AISuggestionsService
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 
@@ -388,6 +388,8 @@ def create_dica_table():
         );
         ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;
         ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS away_team_id INTEGER;
+        ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS stake_pct NUMERIC;
+        ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS stake_units INTEGER;
     """)
     conn.commit()
     cur.close()
@@ -396,6 +398,11 @@ def create_dica_table():
 
 def save_dica(pick: dict) -> None:
     pick["market"] = translate_market(pick["market"])
+    odd  = float(pick["odd"])
+    conf = float(pick["confidence"])
+    ev   = float(pick.get("edge", 0))
+    stake_pct, stake_units = AISuggestionsService.calculate_stake(conf, odd, ev, max_units=5)
+
     conn = get_connection()
     cur  = conn.cursor()
     cur.execute("""
@@ -403,8 +410,9 @@ def save_dica(pick: dict) -> None:
             (fixture_id, match_date, home_team, away_team,
              home_team_id, away_team_id,
              league_id, league_name, market, market_type, line, odd, bet_house,
-             market_id, confidence, prob_real, edge, reasoning)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             market_id, confidence, prob_real, edge, reasoning,
+             stake_pct, stake_units)
+        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) DO UPDATE SET
             fixture_id   = EXCLUDED.fixture_id,
             home_team    = EXCLUDED.home_team,
@@ -422,7 +430,9 @@ def save_dica(pick: dict) -> None:
             confidence   = EXCLUDED.confidence,
             prob_real    = EXCLUDED.prob_real,
             edge         = EXCLUDED.edge,
-            reasoning    = EXCLUDED.reasoning
+            reasoning    = EXCLUDED.reasoning,
+            stake_pct    = EXCLUDED.stake_pct,
+            stake_units  = EXCLUDED.stake_units
     """, (
         pick["fixture_id"],
         pick["home_team"],
@@ -434,13 +444,15 @@ def save_dica(pick: dict) -> None:
         pick["market"],
         _BET_ID_TYPE_MAP.get(pick.get("market_id")) or _detect_market_type(pick["market"]),
         pick["line"],
-        float(pick["odd"]),
+        odd,
         pick.get("bet_house", ""),
         pick.get("market_id"),
-        float(pick["confidence"]),
+        conf,
         float(pick.get("prob_real", 0)),
-        float(pick.get("edge", 0)),
+        ev,
         pick["reasoning"],
+        stake_pct,
+        stake_units,
     ))
     conn.commit()
     cur.close()

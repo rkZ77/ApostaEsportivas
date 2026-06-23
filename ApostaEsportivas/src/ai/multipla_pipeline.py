@@ -399,11 +399,15 @@ def create_multipla_table():
 
 
 # ============================================================
-# STAKE PARA MÚLTIPLAS (conservador)
+# STAKE PARA MÚLTIPLAS (conservador — max 3u)
 # ============================================================
-def calculate_multipla_stake(total_odd: float):
-    # Stake calculado no frontend com banca real do usuário (½ Kelly personalizado)
-    return None, None
+def calculate_multipla_stake(score_combo: float) -> tuple[float, int]:
+    if score_combo >= 0.80:
+        return 0.03, 3
+    elif score_combo >= 0.70:
+        return 0.02, 2
+    else:
+        return 0.01, 1
 
 
 # ============================================================
@@ -447,14 +451,18 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
                 match_date = dt.date()
             break
 
+    stake_pct, stake_units = calculate_multipla_stake(score_combo)
+
     cur.execute("""
         INSERT INTO picks_multiplas
-        (multipla_name, games, total_odd, score_combo, match_date, reasoning)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         name,
         json.dumps(games_info, default=str),
         total_odd,
+        stake_pct,
+        stake_units,
         round(score_combo, 4),
         match_date,
         reasoning,
@@ -464,7 +472,7 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
     cur.close()
     conn.close()
 
-    print(f"[SAVE] {name} | odd total {total_odd} | score {round(score_combo * 100)}%")
+    print(f"[SAVE] {name} | odd total {total_odd} | score {round(score_combo * 100)}% | stake {stake_units}u")
 
     return total_odd
 
