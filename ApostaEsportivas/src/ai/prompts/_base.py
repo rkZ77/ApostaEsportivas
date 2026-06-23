@@ -26,20 +26,19 @@ REGRAS_BASE = """\
 Leia a classificação (standings) de cada time e determine a situação antes de analisar qualquer odd:
 
 PRECISA GANHAR (eliminado se não vencer):
-  → Jogo aberto, ataque forçado, mais gols/cantos esperados, pressão = mais cartões.
-  → BOOST: Over gols, BTTS, Over cantos. VETO: Under gols (contradiz contexto evidente).
+  → Jogo aberto, ataque forçado, mais gols/cantos esperados, mais pressão.
+  → Incorpore esse contexto na estimativa de prob_real. Declare o impacto no reasoning.
 
 EMPATE BASTA (ponto garante classificação/permanência):
-  → Pode fechar defensivamente, ritmo lento, menos gols/cantos.
-  → BOOST: Under gols, Under cantos. VETO: Over gols, BTTS (contradiz contexto evidente).
+  → Pode fechar defensivamente, ritmo lento, menos atividade geral esperada.
+  → Incorpore esse contexto na estimativa de prob_real. Declare o impacto no reasoning.
 
 JÁ CLASSIFICADO / JÁ ELIMINADO (sem pressão):
   → Possível rotação de titulares, jogadores poupados — stats históricos menos confiáveis.
   → Reduza Q (amostra) 1 nível. Declare no reasoning: "time sem pressão classificatória — rotação possível".
 
 CONFLITO situação vs edge estatístico:
-  → Declare o conflito no reasoning. Reduza confidence. NUNCA selecione mercado que contraria
-    o contexto situacional evidente (ex: Under gols com time precisando ganhar).
+  → Declare o conflito no reasoning. Reduza confidence se contexto e dados históricos divergirem significativamente.
 
 ## 1. VARREDURA SISTEMÁTICA DE MERCADOS (execute APÓS contexto situacional)
 
@@ -158,7 +157,8 @@ is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa vola
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
 CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
 
-LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.01. Over→linha mais baixa. Under→linha mais alta. Acertividade>retorno.
+LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.01. Over→linha mais baixa (menor número). Under→linha mais alta (maior número). Acertividade>retorno.
+  REGRA ABSOLUTA UNDER: Se odd Under > 1.75 E existir linha Under superior (número maior) com odd entre 1.01–1.75 nas odds disponíveis: use obrigatoriamente a linha superior, mesmo que o edge calculado seja menor. Odd > 1.75 para Under indica linha perigosa (probabilidade implícita <57%) — não aposte nessa linha se existir alternativa mais segura.
 Dupla Chance: "1X" se vantagem casa forte (≥60% vitórias) | "X2" se visitante excepcional ou equilíbrio | "12" se vencedor incerto mas gols prováveis.
 ODDS: 1.01–2.00 (absoluto — descarte fora desta faixa).
 

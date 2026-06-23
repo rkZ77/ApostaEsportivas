@@ -96,10 +96,10 @@ Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); u
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado):
 Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados → BOOST Over gols/BTTS/cantos | VETO Under gols.
-  EMPATE BASTA → pode fechar defensivamente → BOOST Under gols/cantos | VETO Over gols/BTTS.
+  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados, mais pressao. Incorpore na estimativa de prob_real.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa de prob_real.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao de titulares → reduza Q 1 nivel, declare no reasoning.
-  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence. NUNCA selecione mercado que contraria o contexto evidente.
+  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
