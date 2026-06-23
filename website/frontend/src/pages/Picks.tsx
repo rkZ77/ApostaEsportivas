@@ -831,7 +831,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       <ApostaModal
         pickOdd={Number(m.total_odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
-        maxUnits={3}
+        maxUnits={Math.max(10, stakeSuggestion?.units ?? 10)}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}

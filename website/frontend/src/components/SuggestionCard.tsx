@@ -344,6 +344,7 @@ export default function SuggestionCard({
         pickOdd={Number(s.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={s.bet_house}
+        maxUnits={Math.max(10, stakeSuggestion?.units ?? 10)}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}
