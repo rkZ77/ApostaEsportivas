@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -282,10 +282,10 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            odds_filtered = dedup_odds([
+            odds_filtered = strip_precalc_from_odds(dedup_odds([
                 o for o in ctx["odds"]
                 if 1.01 <= float(o.get("odd", 0)) <= 2.00
-            ])[:60]
+            ])[:60])
             lines.append(f"\nMERCADOS E ODDS (faixa 1.01-2.00, {len(odds_filtered)} únicos):")
             lines.append(_j(odds_filtered))
 

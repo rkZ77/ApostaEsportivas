@@ -312,8 +312,8 @@ class AITipsterOrchestrator:
             standings_stats.update({
                 "home_group":       home_group_data.get("group")       if home_group_data else None,
                 "away_group":       away_group_data.get("group")       if away_group_data else None,
-                "home_situacao":    home_group_data.get("description") or "em disputa" if home_group_data else "em disputa",
-                "away_situacao":    away_group_data.get("description") or "em disputa" if away_group_data else "em disputa",
+                "home_situacao":    (home_group_data.get("description") or "em disputa") if home_group_data else "em disputa",
+                "away_situacao":    (away_group_data.get("description") or "em disputa") if away_group_data else "em disputa",
                 "home_copa_stats":  home_profile.get("copa_stats", {}),
                 "away_copa_stats":  away_profile.get("copa_stats", {}),
             })

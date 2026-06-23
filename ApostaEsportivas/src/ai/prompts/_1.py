@@ -4,11 +4,11 @@ from ai.prompts._base import build_prompt
 LEAGUE_CONTEXT = """\
 CONTEXTO — COPA DO MUNDO FIFA 2026 (league_id=1)
 
-SEDE NEUTRA (OVERRIDE OBRIGATÓRIO):
-  Copa do Mundo é disputada em campo neutro. Não existe vantagem de mando.
-  IGNORE a instrução "casa se mandante, fora se visitante" do prompt base.
-  Para TODOS os mercados: use os dados TOTAIS de cada seleção como amostra única (histórico casa e fora unificados).
-  Declare no reasoning: "Copa: sede neutra — usando dados totais sem filtro de mando."
+SEDE NEUTRA (regra específica Copa — prevalece sobre contexto geral):
+  Copa do Mundo é disputada em campo neutro. Não existe vantagem de mando para nenhuma seleção.
+  Para mercados de time específico: use os dados TOTAIS da seleção (casa e fora combinados) — não filtre por mando.
+  A distinção casa/fora NÃO se aplica a esta competição. Trate ambas as seleções com dados totais.
+  Declare no reasoning: "Copa: sede neutra — dados totais usados para ambas as seleções."
 
 BASELINE Copa 2026 (referência estatística — não use como confirmador isolado):
   Gols/jogo: grupos=2.5–2.8 | mata-mata=2.0–2.3

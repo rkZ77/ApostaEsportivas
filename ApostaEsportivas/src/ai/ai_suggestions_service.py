@@ -174,6 +174,14 @@ def _market_type_from_name(market: str) -> str | None:
         return "result"
     return None  # desconhecido — não force "result", deixa keyword matching agir
 
+_PRECALC_FIELDS = {"no_vig_prob", "best_ev", "market_ev", "no_vig"}
+
+def strip_precalc_from_odds(odds: list) -> list:
+    """Remove campos pré-calculados das odds antes de enviar à IA.
+    A IA deve calcular edge/prob_real a partir dos dados históricos — não receber esses valores prontos.
+    """
+    return [{k: v for k, v in o.items() if k not in _PRECALC_FIELDS} for o in odds]
+
 def dedup_odds(odds: list) -> list:
     """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta."""
     seen: dict[tuple, dict] = {}
@@ -478,8 +486,6 @@ HISTÓRICO FORA
                 "line":             combined_line,
                 "best_odd":         best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
-                "no_vig_prob":      m.get("no_vig_prob"),
-                "market_ev":        m.get("best_ev"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
                 "odds_range":       m.get("odds_range"),
                 "bookmaker_odds":   m.get("bookmaker_odds", []),
@@ -520,10 +526,10 @@ HISTÓRICO FORA
             print(f"[AI] Sem odds para fixture {fx['fixture_id']}")
             return []
 
-        is_structured = bool(raw_odds) and "no_vig_prob" in raw_odds[0]
+        is_structured = bool(raw_odds) and "best_bookmaker" in raw_odds[0]
 
         if is_structured:
-            # Formato novo: structured odds com no-vig — pipeline padrão
+            # Formato estruturado — pipeline padrão
             odds_map = self._format_structured_odds_for_ai(raw_odds)
         else:
             # Fallback legado: odds brutas (formato antigo, chamadas externas)

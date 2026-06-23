@@ -19,7 +19,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -315,10 +315,10 @@ def _format_fixtures(fixtures: list[dict]) -> str:
 
         # Odds: filtrar e deduplicar
         all_odds = ctx.pop("odds", [])
-        filtered_odds = dedup_odds([
+        filtered_odds = strip_precalc_from_odds(dedup_odds([
             o for o in all_odds
             if _ODDS_FILTER_MIN <= o.get("odd", 0) <= _ODDS_FILTER_MAX
-        ])[:_ODDS_MAX_ITEMS]
+        ])[:_ODDS_MAX_ITEMS])
 
         # Outras listas: limitar a 5 itens
         ctx_trimmed = {k: (v[:5] if isinstance(v, list) else v) for k, v in ctx.items()}

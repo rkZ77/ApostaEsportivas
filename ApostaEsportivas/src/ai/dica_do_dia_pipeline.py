@@ -18,7 +18,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, strip_precalc_from_odds
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 
@@ -260,8 +260,8 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         all_odds = dedup_odds(ctx.get("odds", []))
-        odds_in_range = [o for o in all_odds if ODD_MIN <= o.get("odd", 0) <= ODD_MAX]
-        odds_other    = [o for o in all_odds if not (ODD_MIN <= o.get("odd", 0) <= ODD_MAX)]
+        odds_in_range = strip_precalc_from_odds([o for o in all_odds if ODD_MIN <= o.get("odd", 0) <= ODD_MAX])
+        odds_other    = strip_precalc_from_odds([o for o in all_odds if not (ODD_MIN <= o.get("odd", 0) <= ODD_MAX)])
 
         if odds_in_range:
             lines.append(f"\nODDS NA FAIXA {ODD_MIN}-{ODD_MAX} (CANDIDATOS DICA DO DIA):")

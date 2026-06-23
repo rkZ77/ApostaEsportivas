@@ -154,8 +154,8 @@ Categorias (máx 1 cada): goals=Over/Under gols/BTTS/asiáticas | corners=cantos
 Ordem: 1º maior edge positivo → 2º maior EV → 3º maior confidence.
 
 is_best_pick=true: melhor combinação de EV real + qualidade dados + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
-DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'. O pick de cards só vence o is_best_pick se seu edge for >8pp maior que o melhor pick de outra categoria; caso contrário, prefira goals ou corners como best_pick.
-CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões pode estar nas 3 sugestões mas NÃO como is_best_pick.
+DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 maiores edges brutos forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'.
+CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões NÃO pode ser is_best_pick; nesse caso, defina is_best_pick=true no melhor pick de goals ou corners.
 
 LINHA Over/Under: SEMPRE a mais conservadora com odd≥1.01. Over→linha mais baixa (menor número). Under→linha mais alta (maior número). Acertividade>retorno.
   REGRA ABSOLUTA UNDER: Se odd Under > 1.75 E existir linha Under superior (número maior) com odd entre 1.01–1.75 nas odds disponíveis: use obrigatoriamente a linha superior, mesmo que o edge calculado seja menor. Odd > 1.75 para Under indica linha perigosa (probabilidade implícita <57%) — não aposte nessa linha se existir alternativa mais segura.
