@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -292,7 +292,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 
         if ctx.get("odds"):
             odds_all = [
-                o for o in dedup_odds(ctx["odds"])
+                o for o in dedup_odds(normalize_structured_odds(ctx["odds"]))
                 if PICK_ODD_MIN <= float(o.get("best_odd") or 0) <= PICK_ODD_MAX
             ]
             lines.append(f"\nMERCADOS E ODDS (faixa {PICK_ODD_MIN}-{PICK_ODD_MAX}, {len(odds_all)} mercados):")

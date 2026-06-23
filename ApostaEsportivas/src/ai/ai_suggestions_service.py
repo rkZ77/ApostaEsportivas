@@ -174,13 +174,31 @@ def _market_type_from_name(market: str) -> str | None:
         return "result"
     return None  # desconhecido — não force "result", deixa keyword matching agir
 
+def normalize_structured_odds(odds: list) -> list:
+    """Combina value_name + line_value em um campo 'line' unificado.
+    Ex: {"value":"Over","line":"2.5"} → {"value":"Over","line":"Over 2.5"}.
+    Necessário antes de dedup_odds para preservar Over E Under de uma mesma linha."""
+    result = []
+    for o in odds:
+        item = dict(o)
+        value = str(item.get("value", "") or "").strip()
+        line  = str(item.get("line", "") or "").strip()
+        if value and line and not line.lower().startswith(value.lower()):
+            item["line"] = f"{value} {line}"
+        elif value and not line:
+            item["line"] = value
+        result.append(item)
+    return result
+
+
 def dedup_odds(odds: list) -> list:
-    """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta."""
+    """Para cada (market_name, line), mantém apenas a entrada com maior odd entre casas de aposta.
+    Espera odds já normalizadas (line = 'Over 2.5', não '2.5') para preservar Over/Under."""
     seen: dict[tuple, dict] = {}
     for o in odds:
         key = (
             str(o.get("market_name", o.get("market", ""))).strip().lower(),
-            str(o.get("line", "")).strip(),
+            str(o.get("line", "")).strip().lower(),
         )
         cur_odd = float(o.get("best_odd") or o.get("odd", 0))
         if key not in seen or cur_odd > float(seen[key].get("best_odd") or seen[key].get("odd", 0)):

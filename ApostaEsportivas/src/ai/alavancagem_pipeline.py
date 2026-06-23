@@ -19,7 +19,7 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -324,7 +324,7 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
 
         all_odds = ctx.pop("odds", [])
         filtered_odds = [
-            o for o in dedup_odds(all_odds)
+            o for o in dedup_odds(normalize_structured_odds(all_odds))
             if ODD_MIN <= float(o.get("best_odd") or 0) <= ODD_MAX
         ][:_ODDS_MAX_ITEMS]
 
