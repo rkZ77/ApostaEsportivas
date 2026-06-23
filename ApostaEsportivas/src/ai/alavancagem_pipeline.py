@@ -317,7 +317,7 @@ def _format_fixtures(fixtures: list[dict]) -> str:
         all_odds = ctx.pop("odds", [])
         filtered_odds = strip_precalc_from_odds(dedup_odds([
             o for o in all_odds
-            if _ODDS_FILTER_MIN <= o.get("odd", 0) <= _ODDS_FILTER_MAX
+            if _ODDS_FILTER_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= _ODDS_FILTER_MAX
         ])[:_ODDS_MAX_ITEMS])
 
         # Outras listas: limitar a 5 itens

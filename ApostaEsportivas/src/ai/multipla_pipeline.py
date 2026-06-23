@@ -284,7 +284,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
         if ctx.get("odds"):
             odds_filtered = strip_precalc_from_odds(dedup_odds([
                 o for o in ctx["odds"]
-                if 1.01 <= float(o.get("odd", 0)) <= 2.00
+                if 1.01 <= float(o.get("best_odd") or o.get("odd", 0)) <= 2.00
             ])[:60])
             lines.append(f"\nMERCADOS E ODDS (faixa 1.01-2.00, {len(odds_filtered)} únicos):")
             lines.append(_j(odds_filtered))

@@ -190,7 +190,8 @@ def dedup_odds(odds: list) -> list:
             str(o.get("market_name", o.get("market", ""))).strip().lower(),
             str(o.get("line", "")).strip(),
         )
-        if key not in seen or float(o.get("odd", 0)) > float(seen[key].get("odd", 0)):
+        cur_odd = float(o.get("best_odd") or o.get("odd", 0))
+        if key not in seen or cur_odd > float(seen[key].get("best_odd") or seen[key].get("odd", 0)):
             seen[key] = o
     return list(seen.values())
 

@@ -260,8 +260,8 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         all_odds = dedup_odds(ctx.get("odds", []))
-        odds_in_range = strip_precalc_from_odds([o for o in all_odds if ODD_MIN <= o.get("odd", 0) <= ODD_MAX])
-        odds_other    = strip_precalc_from_odds([o for o in all_odds if not (ODD_MIN <= o.get("odd", 0) <= ODD_MAX)])
+        odds_in_range = strip_precalc_from_odds([o for o in all_odds if ODD_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= ODD_MAX])
+        odds_other    = strip_precalc_from_odds([o for o in all_odds if not (ODD_MIN <= float(o.get("best_odd") or o.get("odd", 0)) <= ODD_MAX)])
 
         if odds_in_range:
             lines.append(f"\nODDS NA FAIXA {ODD_MIN}-{ODD_MAX} (CANDIDATOS DICA DO DIA):")
