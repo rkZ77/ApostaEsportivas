@@ -96,31 +96,33 @@ Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); u
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado):
 Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados, mais pressao. Incorpore na estimativa de prob_real.
-  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa de prob_real.
+  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados, mais pressao. Incorpore na estimativa da taxa real.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa da taxa real.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao de titulares → reduza Q 1 nivel, declare no reasoning.
-  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
+  CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
 Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
-Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
+Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min}
 
 CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → nao use cartoes como dica.
 
 --- FIXTURES + DADOS ---
 {fixtures_formatados}
 
-CALCULO:
-Calcule prob_real voce mesmo com base nos dados historicos: taxa ponderada temporalmente (recente=1.0, anterior=0.9...).
+ANALISE:
+Calcule a taxa de ocorrencia real voce mesmo com base nos dados historicos: taxa ponderada temporalmente (recente=1.0, anterior=0.9...).
+Taxa = confirmados / total_amostra. Descarte mercados com taxa < 65% ou amostra < 5 jogos.
+Selecione o mercado com MAIOR CONSISTENCIA ESTATISTICA que atenda os criterios.
 
 FORMATO DAS ODDS (quando disponivel):
   best_odd      → melhor odd disponivel
   best_bookmaker→ casa com best_odd
   bookmakers_count → numero de casas
 
-edge = prob_real − (1/best_odd)
-EV   = prob_real × best_odd − 1
-Ordene TODOS os mercados por edge e selecione o maior edge positivo que atenda os criterios.
+FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
+  HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
+  HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
 
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte.
    FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
@@ -129,13 +131,12 @@ A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5�
      Divergencia >15% → reduza Confirmadores 1 nivel.
      Mercado de time: feitos do time no contexto + cedidos do adversario.
      Resultado/Handicap: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
-B) prob_real: taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings
-C) CONFIDENCE = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) — MESMA FORMULA DO VIP
+B) Taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings.
+C) CONFIDENCE = (C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
    C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
    Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
    K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-   R (Robustez): edge>=0.10→1.00 | 0.07-0.09→0.75 | 0.04-0.06→0.50 | <0.04→0.25 | edge<=0→R=0 (veto)
-   Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
+   Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 
 QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
   NUNCA trate jogos vs tops e fracos com o mesmo peso:
@@ -145,10 +146,10 @@ QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao 
 
 Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_bet.
 
-Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? EV>0 ou (EV>-0.05 e conf>=0.72)?
+Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}?
 
 SAIDA JSON:
-Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"edge":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: odd subestima prob real."}}}}
+Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES: [...]. CONCLUSAO: padrao estatistico solido."}}}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 

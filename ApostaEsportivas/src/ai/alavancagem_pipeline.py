@@ -80,10 +80,10 @@ Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
 Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa de prob_real.
-  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa de prob_real.
+  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa da taxa real.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa da taxa real.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
-  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
+  CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
 OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
 OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
@@ -94,10 +94,10 @@ OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {od
   - Calcule odd_1 × odd_2 explicitamente antes de confirmar. Produto fora de {odd_min}-{odd_max} → INVALIDO.
   - Exemplos validos: 1.21×1.22=1.476 ✓ | 1.22×1.25=1.525 ✓ | 1.23×1.22=1.501 ✓
   - Exemplos invalidos: 1.13×1.13=1.277 ✗ | 1.20×1.20=1.44 ✗ | 1.28×1.28=1.638 ✗
-  - Criterio de qualidade por pick: taxa_real > 1/odd (EV positivo) + taxa>=65% + amostra>=5.
-    Calcule prob_real pelos dados historicos. edge = prob_real - (1/odd). Nao combine pick sem edge positivo ou taxa<65%.
+  - Criterio de qualidade por pick: taxa>=65% + amostra>=5 + confidence>={conf_min}.
+    Calcule taxa_real pelos dados historicos. Nao combine pick sem taxa>=65%.
 
-Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
+Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min}
 CARTOES: use apenas se arbitro com >=3 jogos na temporada E historico dos dois times com >=5 jogos e taxa>=60%. Sem esses dois → nao use cartoes como pick.
 
 --- FIXTURES DA COPA + DADOS ---
@@ -110,31 +110,37 @@ QUALIDADE DOS DADOS (Copa do Mundo):
 
 PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_min}-{odd_max}.
 PASSO 2 — Candidatos B (se A falhar): busque pares de jogos diferentes com odd individual 1.21–1.26,
-  edge>0 (ou taxa_real>1/odd) e taxa>=65% em ambos, cujo produto caia em {odd_min}-{odd_max}.
+  taxa>=65% e amostra>=5 em ambos, cujo produto caia em {odd_min}-{odd_max}.
   Se nenhum par válido existir → no_bet direto.
-PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min} | EV<=-0.05 | (EV<0 e confidence<0.72).
+PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min}.
 PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar A por >=0.05, ou se nao houver A valido.
   Sem pick valido → no_bet.
 
 CALCULOS:
-Calcule prob_real voce mesmo com base nos dados historicos: taxa ponderada dos ultimos jogos.
-edge = prob_real - (1/odd). EV = prob_real * odd - 1. Prefira picks com maior edge positivo.
+Calcule a taxa de ocorrencia real com base nos dados historicos: taxa ponderada dos ultimos jogos (recente=1.0, anterior=0.9...).
+Prefira picks com maior taxa real e maior numero de confirmadores independentes.
+
+FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
+  HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
+  HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
 
 FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
   Primario: feitos_A_contexto + feitos_B_contexto.
   Validacao: cedidos_A_contexto + cedidos_B_contexto.
   Divergencia >15% → reduza Confirmadores 1 nivel.
   Mercado de time: feitos do time + cedidos do adversario. Resultado: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
-CONFIDENCE=(Consistencia×0.40)+(Amostra×0.25)+(Confirmadores×0.20)+(Estabilidade×0.15)
-  Consistencia: >=0.80→1.0|0.70-0.79→0.8|0.65-0.69→0.6 | Amostra: 10+→1.0|5-9→0.7|<5→descarte
-  Confirmadores: 3+→1.0|2→0.7|1→0.3 | Estabilidade: ultimos 3 confirmam→1.0|so media→0.5
+CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
+  C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
+  Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+  K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
+  Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 
 VERIFICACAO FINAL obrigatoria: calcule odd_combined = odd_1 × odd_2 (ou odd_1 se simples).
   Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
 
 SAIDA JSON:
-Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
-Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","prob_real":0.00,"confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
+Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao estatistico solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
+Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
 """
 

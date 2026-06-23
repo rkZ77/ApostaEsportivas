@@ -83,31 +83,32 @@ gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<1
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado, para cada jogo):
 Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa de prob_real.
-  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa de prob_real.
+  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa da taxa real.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa da taxa real.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza Q 1 nivel, declare no reasoning.
-  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
+  CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
   Em multipla: se os dois picks forem de jogos com contexto situacional oposto, verifique se nao ha correlacao indireta.
 
 ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
 Avalie TODOS os mercados das odds — gols, cantos, cartões, dupla chance, handicap.
-Nao existe mercado preferido: o vencedor e o de MAIOR EDGE POSITIVO, independente do tipo.
+Nao existe mercado preferido: o vencedor e o de MAIOR CONSISTENCIA ESTATISTICA, independente do tipo.
 
 FORMATO DAS ODDS (quando disponivel):
   best_odd, best_bookmaker, bookmakers_count
 
-Calcule prob_real com base nos dados historicos.
-edge = prob_real − (1/best_odd)
-EV   = (prob_real × best_odd) − 1
-Selecione mercados com edge > 0.
+FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
+  HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
+  HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
+
+Calcule a taxa de ocorrencia real com base nos dados historicos. Descarte mercados com taxa < 65% ou amostra < 5 jogos.
+Selecione mercados com taxa >= 65% e padrao confirmado por >=2 indicadores.
 
 FORMULA SCORE_BASE (alinhada com VIP):
 C (Consistência): taxa histórica real dos dois times no contexto correto; VAZIO→0.40; ESCASSO→máx 0.65
 Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
 K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-R (Robustez): edge>=0.10→1.00 | 0.07-0.09→0.75 | 0.04-0.06→0.50 | <0.04→0.25 | edge<=0→R=0 (veto)
-  Bonus: bookmakers_count>=3 → R +0.05 | bookmakers_count=1 → R −0.05
-score_base = (C×0.35)+(Q×0.20)+(K×0.25)+(R×0.20) → range [0.20,0.92]
+  Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
+score_base = (C×0.45)+(Q×0.25)+(K×0.30) → range [0.20,0.92]
 Odds: se odd fora de 1.01-2.00 → DESCARTE. Linha: mais conservadora em 1.01-2.00.
 Descarte jogo se score_base<0.55 ou sem linha válida.
 

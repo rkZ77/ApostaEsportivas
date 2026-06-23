@@ -783,7 +783,7 @@ HISTÓRICO FORA
         custom_prompt: str | None = None,
         web_context: str | None = None,
     ):
-        # 1. Carrega odds estruturadas com no-vig (melhor qualidade de análise)
+        # 1. Carrega odds estruturadas (melhor odd por mercado+linha+side entre as casas)
         #    Fallback para odds brutas se estruturado retornar vazio
         odds_map_full = self.odds_service.load_odds_structured(fx["fixture_id"])
         if not odds_map_full:
@@ -816,13 +816,6 @@ HISTÓRICO FORA
 
         ev_val   = float(chosen.get("ev", 0))
         conf_val = float(chosen.get("confidence", 0))
-
-        if ev_val <= 0 and not self._is_stat_strong(ev_val, conf_val):
-            print(f"[RESULT] EV {round(ev_val*100,1)}% — sem base estatística suficiente para stat_strong (conf {round(conf_val*100)}%) — descartado para {fx.get('home_team')} x {fx.get('away_team')}")
-            return []
-
-        if self._is_stat_strong(ev_val, conf_val):
-            print(f"[RESULT] STAT-STRONG aceito: EV {round(ev_val*100,1)}% conf {round(conf_val*100)}% — stake 50% recomendado")
 
         def _find_market_id_fallback(om_full: list, market: str, line: str, odd_val: float) -> int | None:
             """Fallback: busca market_id por (nome + linha + odd), com match de nome como critério extra."""
@@ -877,14 +870,7 @@ HISTÓRICO FORA
         # Garante que o mercado seja salvo em português
         chosen["market"] = translate_market(chosen["market"])
 
-        # Sinaliza stat_strong no reasoning para o frontend exibir aviso de stake reduzido
-        reasoning = chosen.get("reasoning", "")
-        if chosen.get("stat_strong") or self._is_stat_strong(ev, conf):
-            if "[STAT-STRONG]" not in reasoning:
-                reasoning = f"[STAT-STRONG] Base estatística sólida (conf {round(conf*100)}%) mas EV levemente negativo ({round(ev*100,1)}%) — aposta 50% do stake normal. " + reasoning
-            chosen["reasoning"] = reasoning
-
-        stat_strong_flag = bool(chosen.get("stat_strong") or self._is_stat_strong(ev, conf))
+        stat_strong_flag = False
         stake_pct, stake_units = self.calculate_stake(conf, odd, ev, stat_strong_flag)
 
         print(
