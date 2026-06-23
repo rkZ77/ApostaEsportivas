@@ -267,10 +267,13 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append("\nCLASSIFICACAO:")
             lines.append(_j(ctx["standings"]))
 
-        all_odds = dedup_odds(ctx.get("odds", []))
+        all_odds = [
+            o for o in dedup_odds(ctx.get("odds", []))
+            if ODD_MIN <= float(o.get("best_odd") or 0) <= ODD_MAX
+        ]
 
         if all_odds:
-            lines.append(f"\nMERCADOS E ODDS (todos, odd alvo {ODD_MIN}-{ODD_MAX}):")
+            lines.append(f"\nMERCADOS E ODDS (faixa {ODD_MIN}-{ODD_MAX}, {len(all_odds)} mercados):")
             lines.append(_j(all_odds))
 
         if ctx.get("home_stats"):

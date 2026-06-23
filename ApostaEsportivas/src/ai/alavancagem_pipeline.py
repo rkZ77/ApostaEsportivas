@@ -322,9 +322,11 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
             ctx = _load_fixture_context(fid, f["home_team_id"], f["away_team_id"], f["season"])
         profiles_text = _get_copa_profiles_text(fid, f["home_team_id"], f["away_team_id"], f["season"])
 
-        # Odds: sem filtro de odd — a IA escolhe o melhor conforme o prompt
         all_odds = ctx.pop("odds", [])
-        filtered_odds = dedup_odds(all_odds)[:_ODDS_MAX_ITEMS]
+        filtered_odds = [
+            o for o in dedup_odds(all_odds)
+            if ODD_MIN <= float(o.get("best_odd") or 0) <= ODD_MAX
+        ][:_ODDS_MAX_ITEMS]
 
         # Outras listas: limitar a 5 itens
         ctx_trimmed = {k: (v[:5] if isinstance(v, list) else v) for k, v in ctx.items()}

@@ -21,8 +21,10 @@ load_dotenv(find_dotenv())
 # ============================================================
 # CONFIG
 # ============================================================
-AI_MODEL_NAME = os.getenv("AI_MODEL_NAME")
-BANKROLL      = float(os.getenv("BANKROLL", "1000"))
+AI_MODEL_NAME  = os.getenv("AI_MODEL_NAME")
+BANKROLL       = float(os.getenv("BANKROLL", "1000"))
+PICK_ODD_MIN   = 1.00
+PICK_ODD_MAX   = 2.50
 
 client              = Anthropic()
 fixtures_svc        = FixturesService()
@@ -289,8 +291,11 @@ def format_fixtures_for_llm(fixtures: list) -> str:
             lines.append(_j(ctx["standings"]))
 
         if ctx.get("odds"):
-            odds_all = dedup_odds(ctx["odds"])
-            lines.append(f"\nMERCADOS E ODDS (todos, odd individual alvo 1.01-2.00, {len(odds_all)} únicos):")
+            odds_all = [
+                o for o in dedup_odds(ctx["odds"])
+                if PICK_ODD_MIN <= float(o.get("best_odd") or 0) <= PICK_ODD_MAX
+            ]
+            lines.append(f"\nMERCADOS E ODDS (faixa {PICK_ODD_MIN}-{PICK_ODD_MAX}, {len(odds_all)} mercados):")
             lines.append(_j(odds_all))
 
         if ctx.get("home_stats"):

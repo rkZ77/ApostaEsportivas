@@ -201,8 +201,10 @@ def is_market_reasoning_coherent(market: str, reasoning: str) -> bool:
     return True
 
 
-MODEL    = os.getenv("AI_MODEL_NAME")
-BANKROLL = float(os.getenv("BANKROLL", "1000"))
+MODEL        = os.getenv("AI_MODEL_NAME")
+BANKROLL     = float(os.getenv("BANKROLL", "1000"))
+VIP_ODD_MIN  = 1.30
+VIP_ODD_MAX  = 1.95
 
 
 # ============================================================
@@ -508,8 +510,8 @@ HISTÓRICO FORA
         is_structured = bool(raw_odds) and "best_bookmaker" in raw_odds[0]
 
         if is_structured:
-            # Formato estruturado — todos os mercados sem filtro de odd
-            odds_map = self._format_structured_odds_for_ai(raw_odds)
+            raw_odds_vip = [o for o in raw_odds if VIP_ODD_MIN <= float(o.get("best_odd") or 0) <= VIP_ODD_MAX]
+            odds_map = self._format_structured_odds_for_ai(raw_odds_vip)
         else:
             # Fallback legado: odds brutas (formato antigo, chamadas externas)
             _BLOCKED_MARKETS = {"match winner", "resultado final (1x2)", "1x2"}
