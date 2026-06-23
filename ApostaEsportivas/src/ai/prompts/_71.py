@@ -23,12 +23,12 @@ FATORES CONTEXTUAIS PERMANENTES:
   — Árbitros brasileiros são mais rigorosos com cartões do que a média europeia
 
 CONDIÇÕES DE CONFIABILIDADE POR MERCADO:
-  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.0 E histórico dos dois times > 3.5 amarelos/jogo (ambas as condições — não apenas uma)
-  RESULTADO → resultado home confiável quando time da casa está no G4 com forma positiva
-  GOLS/OVER → use com soma de médias de gols > 2.7; Over 2.5 mais arriscado que na Europa
-  BTTS      → exija evidência em ambos os times (> 55% dos jogos marcando gols)
-  HANDICAP  → confiável com rank_diff > 8 e time melhor jogando em casa
-  CANTOS    → use quando time da casa tem média > 5.0 cantos/jogo em casa
+  CARTÕES   → requer árbitro com avg_yellow > 4.0 E histórico dos dois times > 3.5 amarelos/jogo (ambas as condições)
+  RESULTADO → requer dados de forma e standing sólidos; alta variância quando equilíbrio de pontos
+  GOLS      → amostra mínima: soma de médias > 2.5; abaixo disso, incerteza alta
+  BTTS      → requer evidência em ambos os times (taxa > 55% em cada time)
+  HANDICAP  → requer rank_diff > 8 com dados históricos consistentes
+  CANTOS    → requer média > 5.0 cantos/jogo no time analisado
 
 PROTOCOLO PARA DADOS ESCASSOS NESTA LIGA:
   Com amostra ESCASSO/VAZIO: standings (posição, pontos, forma) são indicadores robustos.

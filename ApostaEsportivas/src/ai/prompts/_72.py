@@ -23,13 +23,12 @@ FATORES CONTEXTUAIS PERMANENTES:
   — Viagens longas entre regiões afetam rendimento dos visitantes (fadiga cumulativa)
 
 CONDIÇÕES DE CONFIABILIDADE POR MERCADO:
-  CARTÕES   → confiável quando árbitro tem avg_yellow > 4.5 E histórico dos dois times > 4.0 amarelos/jogo (ambas as condições — não apenas uma)
-  RESULTADO → resultado home confiável quando G4 joga em casa com forma positiva
-  GOLS/OVER → use Over 2.5 apenas com médias combinadas > 2.8
-  UNDER     → pode ter edge em duelos entre times intermediários defensivos (rank 8–14)
-  BTTS      → exija evidência muito clara (> 55% dos jogos com gols em ambos)
-  HANDICAP  → confiável com rank_diff > 10 (G4 vs Z4) e time melhor jogando em casa
-  CANTOS    → volume menor que Série A; use somente com média > 5.0/jogo e time ofensivo em casa
+  CARTÕES   → requer árbitro com avg_yellow > 4.5 E histórico dos dois times > 4.0 amarelos/jogo (ambas as condições)
+  RESULTADO → alta variância; requer dados de forma e standing sólidos
+  GOLS      → soma de médias combinadas deve suportar a linha analisada; abaixo de 2.4/jogo incerteza alta
+  BTTS      → requer evidência muito clara em ambos os times (taxa > 55% em cada)
+  HANDICAP  → requer rank_diff > 10 com dados históricos consistentes
+  CANTOS    → volume menor que Série A; requer média > 5.0/jogo no time analisado
 
 PROTOCOLO PARA DADOS ESCASSOS NESTA LIGA:
   Com amostra ESCASSO/VAZIO: posição na tabela (G4 vs Z4) é o preditor mais forte disponível.

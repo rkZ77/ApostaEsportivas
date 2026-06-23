@@ -82,10 +82,10 @@ Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
 Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais gols/cantos esperados → BOOST Over gols/BTTS | VETO Under gols.
-  EMPATE BASTA → pode fechar defensivamente → BOOST Under gols | VETO Over gols/BTTS.
+  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa de prob_real.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa de prob_real.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
-  NUNCA selecione pick que contraria o contexto situacional evidente.
+  CONFLITO situacao vs edge estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
 OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
 OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
@@ -100,7 +100,7 @@ OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {od
     Calcule prob_real pelos dados historicos. edge = prob_real - (1/odd). Nao combine pick sem edge positivo ou taxa<65%.
 
 Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min} | EV>0 ou (EV>-0.05 e confidence>=0.72)
-CARTOES: use apenas se arbitro com >=3 jogos na temporada E historico dos dois times com >=5 jogos e taxa>=60%. Sem esses dois → prefira gols ou escanteios.
+CARTOES: use apenas se arbitro com >=3 jogos na temporada E historico dos dois times com >=5 jogos e taxa>=60%. Sem esses dois → nao use cartoes como pick.
 
 --- FIXTURES DA COPA + DADOS ---
 {fixtures_formatados}

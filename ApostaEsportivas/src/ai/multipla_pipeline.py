@@ -61,7 +61,7 @@ PRINCÍPIOS INEGOCIÁVEIS:
   Teste: "Se A ganhar, B fica mais fácil ou mais difícil?" — qualquer influência = DESCARTE.
 - Odd individual: 1.01–2.00. Odd total: 2.00–4.00. Fora dessas faixas = inválido.
 - Avalie TODOS os mercados — gols, escanteios, cartões, Dupla Chance, Handicap. Escolha por consistência estatística.
-- Cartões: só use se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60%) confirmarem. Sem ambos → prefira gols/escanteios.
+- Cartões: só use se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60%) confirmarem. Sem ambos → nao use cartoes nesta multipla.
 - Odd copiada dos dados — nunca inventar. Match Winner (1X2 direto) proibido.
 
 COMBINAÇÕES IDEAIS: mercados de categorias diferentes + jogos de ligas sem relação estatística.
