@@ -144,9 +144,11 @@ def _compute_suggested_stake_units(
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
 
+    _MAX_UNITS = {'vip': 15, 'free': 6, 'multipla': 5, 'alavancagem': 10}
+    max_units  = _MAX_UNITS.get(pick_type, 10)
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
-    return max(1, units)
+    return max(1, min(max_units, units))
 
 
 def _enrich_multipla_legs(cur, rows: list) -> list:

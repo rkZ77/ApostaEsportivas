@@ -357,10 +357,10 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
 
 
 STAKE_LIMITS = {
-    "vip":        (1, 30),
-    "free":       (1, 10),
-    "multipla":   (1, 20),
-    "alavancagem":(1, 20),
+    "vip":        (1, 15),
+    "free":       (1, 6),
+    "multipla":   (1, 5),
+    "alavancagem":(1, 10),
 }
 
 @router.post("/follow")
