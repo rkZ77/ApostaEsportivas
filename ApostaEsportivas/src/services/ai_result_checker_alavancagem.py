@@ -93,7 +93,7 @@ class AIResultCheckerAlavancagem:
 
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
-                f"P1={r1} P2={r2} → {final_result} | "
+                f"P1={r1} P2={r2} -> {final_result} | "
                 f"profit={float(profit):.2f}u"
             )
 
