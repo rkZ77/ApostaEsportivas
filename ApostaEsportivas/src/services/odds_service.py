@@ -66,20 +66,34 @@ class OddsService:
         na API (ex: Superbet retornando Under 0.5 rotulado como Under 1.5) e são
         descartados antes de calcular o best_odd.
         """
+        import re as _re
+
         raw = self.load_odds_by_fixture(fixture_id)
         if not raw:
             return []
+
+        _LINE_RE = _re.compile(
+            r'^(Over|Under)\s+([\d.]+)$', _re.IGNORECASE
+        )
+
+        def _parse_over_under(vn: str):
+            """Retorna (direction, line_num) para 'Over 1.5' → ('over','1.5'); None se não bater."""
+            m = _LINE_RE.match(vn.strip())
+            if m:
+                return m.group(1).lower(), m.group(2)
+            return None
 
         # Detecta pares Over/Under corrompidos por bookmaker
         # (probabilidade implícita fora de 85-130% → dado inválido da API)
         pair_groups: dict[tuple, dict] = {}
         for r in raw:
-            vn = (r.get("value_name") or "").strip().lower()
-            if vn not in ("over", "under"):
+            parsed = _parse_over_under(r.get("value_name", ""))
+            if not parsed:
                 continue
-            bk = r.get("bookmaker") or r.get("bookmaker_name", "")
-            key = (bk, r["market_id"], r.get("line", ""))
-            pair_groups.setdefault(key, {})[vn] = float(r.get("odd") or r.get("odd_value") or 0)
+            direction, line_num = parsed
+            bk  = r.get("bookmaker") or r.get("bookmaker_name", "")
+            key = (bk, r["market_id"], line_num)
+            pair_groups.setdefault(key, {})[direction] = float(r.get("odd") or r.get("odd_value") or 0)
 
         corrupt_pairs: set[tuple] = set()
         for key, pair in pair_groups.items():
@@ -93,20 +107,28 @@ class OddsService:
                     print(f"[ODDS] Par corrompido descartado: {bk} market={mid} line={lv} "
                           f"Over={o} Under={u} impl_sum={implied_sum:.2%}")
 
+        # Agrupa por (market_id, value_name) — value_name já inclui a linha ("Over 1.5")
         groups: dict[tuple, list[dict]] = {}
         for r in raw:
-            bk = r.get("bookmaker") or r.get("bookmaker_name", "")
-            vn = (r.get("value_name") or "").strip().lower()
-            if vn in ("over", "under"):
-                pair_key = (bk, r["market_id"], r.get("line", ""))
+            vn     = r.get("value_name", "")
+            parsed = _parse_over_under(vn)
+            if parsed:
+                direction, line_num = parsed
+                bk      = r.get("bookmaker") or r.get("bookmaker_name", "")
+                pair_key = (bk, r["market_id"], line_num)
                 if pair_key in corrupt_pairs:
-                    continue  # descarta entrada com dado corrompido
-            key = (r["market_id"], r.get("line", ""), r.get("value_name", ""))
+                    continue
+            key = (r["market_id"], vn)
             groups.setdefault(key, []).append(r)
 
         results: list[dict] = []
-        for (market_id, line_value, value_name), rows in groups.items():
+        for (market_id, value_name), rows in groups.items():
             sample = rows[0]
+
+            # Extrai direction e linha do value_name ("Over 1.5" → direction="Over", line="1.5")
+            parsed   = _parse_over_under(value_name)
+            direction = parsed[0].capitalize() if parsed else value_name
+            line_out  = parsed[1] if parsed else (sample.get("line_value") or sample.get("line") or "")
 
             best_odd = 0.0
             best_bk  = ""
@@ -131,8 +153,9 @@ class OddsService:
                 "market_name":      sample.get("market_name", ""),
                 "market_type":      sample.get("market_type", ""),
                 "market_pt":        sample.get("market_pt"),
-                "line":             line_value,
-                "value":            value_name,
+                "line":             line_out,
+                "value":            direction,
+                "value_label":      value_name,   # label completo ex: "Over 1.5"
                 "best_odd":         round(best_odd, 2),
                 "best_bookmaker":   best_bk,
                 "bookmakers_count": len(bk_odds),

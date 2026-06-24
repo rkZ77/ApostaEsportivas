@@ -292,25 +292,13 @@ class OddsCollectorService:
                             continue
 
                         raw_value = str(sel.get("value", "")).strip()
+                        handicap  = str(sel.get("handicap", "") or "").strip()
 
-                        # Separa value_name (Over/Under/Home/Away/Yes/No) de line_value (2.5/3.5/...).
-                        # Handicap da API tem precedência quando presente.
-                        handicap = str(sel.get("handicap", "") or "").strip()
-
-                        if handicap:
-                            value_name = raw_value
-                            line_value = handicap
-                        else:
-                            _m = re.match(
-                                r'^(Over|Under|Yes|No|Home|Away|1|X|2)\s*([\d.]+)?$',
-                                raw_value, re.IGNORECASE
-                            )
-                            if _m:
-                                value_name = _m.group(1)
-                                line_value = _m.group(2) or ""
-                            else:
-                                value_name = raw_value
-                                line_value = ""
+                        # Guarda o value completo da API (ex: "Over 1.5", "Under 0.5").
+                        # Assim cada linha é um registro único pelo conflict key (market_row_id, value_name).
+                        # line_value vem só do campo handicap quando disponível.
+                        value_name = raw_value
+                        line_value = handicap if handicap else ""
 
                         values_batch.append((
                             market_row_id,
@@ -357,9 +345,10 @@ class OddsCollectorService:
                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                         NOW(), NOW()
                     )
-                    ON CONFLICT (market_row_id, value_name, line_value)
+                    ON CONFLICT (market_row_id, value_name)
                     DO UPDATE SET
                         odd_value  = EXCLUDED.odd_value,
+                        line_value = EXCLUDED.line_value,
                         updated_at = NOW();
                 """, values_batch, page_size=500)
 
