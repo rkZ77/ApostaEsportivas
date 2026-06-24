@@ -159,15 +159,21 @@ function StatBar({ currentVal, lineVal, direction }: {
 }
 
 function LiveLeg({ leg }: { leg: any }) {
-  const isLive  = LIVE_SET.has(leg.status)
+  const isLive    = LIVE_SET.has(leg.status)
   const legLineLc = leg.line?.toLowerCase() ?? ''
-  const hasBar  = leg.current_val != null && leg.line_val != null &&
+  const hasBar    = leg.current_val != null && leg.line_val != null &&
     (legLineLc.startsWith('over') || legLineLc.startsWith('mais') ||
      legLineLc.startsWith('under') || legLineLc.startsWith('menos'))
   const direction: 'over' | 'under' = (leg.line || '').toLowerCase().startsWith('under') ||
     (leg.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = leg.pick_status === 'winning' ? 'text-green-400'
     : leg.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
+
+  const legProb = isLive && leg.elapsed != null && !leg.is_locked ? calcLiveProb(leg) : null
+  const probCls = legProb == null ? '' : legProb >= 60
+    ? 'text-green-400 bg-green-400/10 border-green-500/25'
+    : legProb >= 35 ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
+    : 'text-red-400 bg-red-400/10 border-red-500/25'
 
   return (
     <div className="bg-zinc-800/60 rounded-lg p-3">
@@ -185,8 +191,13 @@ function LiveLeg({ leg }: { leg: any }) {
           <TeamLogo id={leg.away_team_id} name={leg.away_team || ''} size={14} />
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          {isLive && leg.elapsed && (
+          {isLive && leg.elapsed != null && (
             <span className="text-[9px] font-black text-green-400 animate-pulse">{leg.elapsed}'</span>
+          )}
+          {legProb != null && (
+            <span className={`text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
+              {legProb}%
+            </span>
           )}
           {leg.is_locked && leg.pick_status === 'winning' && (
             <span className="text-[9px] font-black text-green-400 bg-green-400/15 border border-green-500/30 px-1.5 py-0.5 rounded">✓</span>
@@ -299,6 +310,29 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
   )
 }
 
+// Probabilidade combinada de uma múltipla/alavancagem
+// Produto das probabilidades individuais de cada leg ainda em aberto.
+function calcMultiProb(legs: any[]): number | null {
+  if (!legs || legs.length === 0) return null
+  let combined = 1.0
+  for (const leg of legs) {
+    const finished = FINISHED_SET.has(leg.status)
+    if (leg.is_locked || finished) {
+      if (leg.pick_status === 'winning') continue  // já ganhou → fator 1
+      return 1                                     // já perdeu → pick inteiro perdido
+    }
+    const isLive = LIVE_SET.has(leg.status)
+    const legOdd = Number(leg.odd)
+    if (legOdd <= 1) return null
+    // Leg ao vivo: usa Poisson. Leg aguardando: probabilidade implícita da odd.
+    const legProb = isLive && leg.elapsed != null
+      ? (calcLiveProb(leg) ?? Math.round(100 / legOdd))
+      : Math.round(100 / legOdd)
+    combined *= legProb / 100
+  }
+  return Math.round(combined * 100)
+}
+
 // Detecta se o resultado já é matematicamente irreversível (gols não voltam atrás, etc.)
 function isEarlyLocked(pick: any): boolean {
   const lineLc   = (pick.line   || '').toLowerCase()
@@ -343,10 +377,12 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = pick.pick_status === 'winning' ? 'text-green-400'
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
-  const liveProb = isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
-  const probCls  = liveProb == null ? '' : liveProb >= 60
+  const liveProb  = !isMulti && isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
+  const multiProb = isMulti ? calcMultiProb(pick.legs ?? []) : null
+  const displayProb = liveProb ?? multiProb
+  const probCls  = displayProb == null ? '' : displayProb >= 60
     ? 'text-green-400 bg-green-400/10 border-green-500/25'
-    : liveProb >= 35
+    : displayProb >= 35
     ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
     : 'text-red-400 bg-red-400/10 border-red-500/25'
   const isCopa = pick.league_id === 1
@@ -393,9 +429,9 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               AO VIVO{pick.elapsed ? ` ${pick.elapsed}'` : ''}
             </span>
           )}
-          {liveProb != null && (
+          {displayProb != null && (
             <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
-              {liveProb}%
+              {displayProb}%
             </span>
           )}
           {!pick.is_locked && !isLive && (
@@ -410,6 +446,24 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
       {isMulti ? (
         <div className="space-y-2">
           {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} />)}
+          {multiProb != null && (
+            <div className="mt-1 pt-2.5 border-t border-zinc-800/60">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wide">
+                  Probabilidade combinada
+                </span>
+                <span className={`text-sm font-black ${
+                  multiProb >= 60 ? 'text-green-400' : multiProb >= 35 ? 'text-yellow-400' : 'text-red-400'
+                }`}>{multiProb}%</span>
+              </div>
+              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div className={`h-full rounded-full transition-all duration-700 ${
+                  multiProb >= 60 ? 'bg-green-500' : multiProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
+                }`} style={{ width: `${multiProb}%` }} />
+              </div>
+              <p className="text-[9px] text-zinc-700 mt-1">Produto das probabilidades de cada leg · Poisson ao vivo</p>
+            </div>
+          )}
         </div>
       ) : (
         <>
@@ -444,7 +498,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
           {hasBar && !effectiveLocked && (
             <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
           )}
-          {/* Barra de probabilidade ao vivo */}
+          {/* Barra de probabilidade ao vivo — singles */}
           {liveProb != null && !effectiveLocked && isLive && (
             <div className="mt-3 pt-2.5 border-t border-zinc-800/60">
               <div className="flex items-center justify-between mb-1.5">
@@ -456,16 +510,11 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 }`}>{liveProb}%</span>
               </div>
               <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all duration-700 ${
-                    liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
-                  }`}
-                  style={{ width: `${liveProb}%` }}
-                />
+                <div className={`h-full rounded-full transition-all duration-700 ${
+                  liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
+                }`} style={{ width: `${liveProb}%` }} />
               </div>
-              <p className="text-[9px] text-zinc-700 mt-1">
-                Estimativa via Poisson · atualiza a cada 5s
-              </p>
+              <p className="text-[9px] text-zinc-700 mt-1">Estimativa via Poisson · atualiza a cada 5s</p>
             </div>
           )}
         </>

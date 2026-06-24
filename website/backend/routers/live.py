@@ -440,6 +440,7 @@ def _enrich_leg(fid: int, market: str, line: str,
     fix_data   = _fetch_fixture(fid)
     fix        = fix_data.get("fixture", {})
     goals      = fix_data.get("goals", {})
+    league_id  = fix_data.get("league", {}).get("id")
     status     = fix.get("status", {}).get("short", "NS")
     elapsed    = fix.get("status", {}).get("elapsed")
     home_goals = int(goals.get("home") or 0)
@@ -479,6 +480,7 @@ def _enrich_leg(fid: int, market: str, line: str,
 
     return {
         "fixture_id":   fid,
+        "league_id":    league_id,
         "home_team":    home_team,
         "away_team":    away_team,
         "home_team_id": home_team_id,
