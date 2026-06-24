@@ -16,7 +16,7 @@ from utils.db_utils import get_connection
 from services.odds_service import OddsService
 from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
-from services.match_stats_service import MatchStatsService
+from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, AISuggestionsService
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
@@ -188,25 +188,37 @@ def _load_fixture_context(
     except Exception:
         away_stats = None
 
-    try:
-        last10_home = match_stats_svc.get_all_matches(home_team_id, season, league_id, is_home=True)
-    except Exception:
-        last10_home = []
+    is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
 
-    try:
-        last10_away = match_stats_svc.get_all_matches(away_team_id, season, league_id, is_home=False)
-    except Exception:
-        last10_away = []
-
-    try:
-        total_home = match_stats_svc.get_total_matches(home_team_id, season, league_id)
-    except Exception:
-        total_home = []
-
-    try:
-        total_away = match_stats_svc.get_total_matches(away_team_id, season, league_id)
-    except Exception:
-        total_away = []
+    if is_national:
+        # Seleções: usa últimos 15 jogos em QUALQUER competição
+        try:
+            last10_home = match_stats_svc.get_last_n_all_competitions(home_team_id, limit=15)
+        except Exception:
+            last10_home = []
+        try:
+            last10_away = match_stats_svc.get_last_n_all_competitions(away_team_id, limit=15)
+        except Exception:
+            last10_away = []
+        total_home = last10_home
+        total_away = last10_away
+    else:
+        try:
+            last10_home = match_stats_svc.get_all_matches(home_team_id, season, league_id, is_home=True)
+        except Exception:
+            last10_home = []
+        try:
+            last10_away = match_stats_svc.get_all_matches(away_team_id, season, league_id, is_home=False)
+        except Exception:
+            last10_away = []
+        try:
+            total_home = match_stats_svc.get_total_matches(home_team_id, season, league_id)
+        except Exception:
+            total_home = []
+        try:
+            total_away = match_stats_svc.get_total_matches(away_team_id, season, league_id)
+        except Exception:
+            total_away = []
 
     try:
         odds = odds_svc.load_odds_structured(fixture_id)

@@ -3,6 +3,21 @@ import psycopg2.extras
 from datetime import datetime, date
 from decimal import Decimal
 
+# Competições de seleções nacionais (API-Football IDs).
+# Para esses torneios, o histórico deve cruzar TODAS as competições
+# (Copa + Eliminatórias + Amistosos) — não só a liga atual.
+NATIONAL_TEAM_LEAGUE_IDS: frozenset = frozenset({
+    1,    # Copa do Mundo FIFA
+    9,    # Copa América
+    10,   # Amistosos Internacionais
+    4,    # Eurocopa (UEFA)
+    14,   # Copa Africana de Nações (AFCON)
+    23,   # Copa Asiática (AFC)
+    11,   # Eliminatórias Copa América (CONMEBOL)
+    31, 32, 33, 34, 35, 36, 37, 38, 39,  # Eliminatórias Copa do Mundo
+    882, 780,                              # Outros qualificatórios
+})
+
 
 ###############################################################################
 # Sanitização universal (garante compatibilidade com JSON)
@@ -143,6 +158,31 @@ class MatchStatsService:
     ##########################################################################
     def get_total_matches(self, team_id, season, league_id):
         return self.get_all_matches_full(team_id, season, league_id)
+
+    ##########################################################################
+    # SELEÇÕES — Últimos N jogos em QUALQUER competição (sem filtro de liga)
+    # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
+    # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
+    ##########################################################################
+    def get_last_n_all_competitions(self, team_id, limit=15):
+        return self._query("""
+            SELECT
+                ms.match_date,
+                ms.league_id,
+                ms.home_team_id, ms.away_team_id,
+                ms.home_goals, ms.away_goals, ms.total_goals,
+                ms.home_corners, ms.away_corners, ms.total_corners,
+                ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
+                ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
+                ms.home_fouls, ms.away_fouls,
+                NULL::text    AS opponent_name,
+                NULL::integer AS opponent_rank
+            FROM match_statistics ms
+            WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
+              AND ms.status = 'FT'
+            ORDER BY ms.match_date DESC
+            LIMIT %s;
+        """, (team_id, team_id, limit))
 
     ##########################################################################
     # Ponderação por qualidade do adversário

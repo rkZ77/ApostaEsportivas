@@ -17,7 +17,7 @@ from utils.db_utils import get_connection
 from services.odds_service import OddsService
 from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
-from services.match_stats_service import MatchStatsService
+from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.national_team_profile_service import NationalTeamProfileService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
@@ -274,12 +274,13 @@ def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dic
         ctx["away_stats"] = team_stats_svc.get_stats(away_team_id, WC_LEAGUE_ID, season, "AWAY")
     except Exception:
         ctx["away_stats"] = None
+    # Histórico cross-competition: últimos 15 jogos em qualquer competição
     try:
-        ctx["last10_home"] = match_stats_svc.get_all_matches(home_team_id, season, WC_LEAGUE_ID, is_home=True)
+        ctx["last10_home"] = match_stats_svc.get_last_n_all_competitions(home_team_id, limit=15)
     except Exception:
         ctx["last10_home"] = []
     try:
-        ctx["last10_away"] = match_stats_svc.get_all_matches(away_team_id, season, WC_LEAGUE_ID, is_home=False)
+        ctx["last10_away"] = match_stats_svc.get_last_n_all_competitions(away_team_id, limit=15)
     except Exception:
         ctx["last10_away"] = []
     try:

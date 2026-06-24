@@ -1,6 +1,6 @@
 ﻿import time
 from services.team_stats_service import TeamStatsService
-from services.match_stats_service import MatchStatsService
+from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.standings_service import StandingsService
 from services.referee_stats_service import RefereeStatsService
 from services.ai_performance_service import AIPerformanceService
@@ -106,36 +106,28 @@ class AITipsterOrchestrator:
                 return None
 
             # =============================
-            # HISTÓRICO FILTRADO (Casa/Fora)
+            # HISTÓRICO — seleções usam cross-competition (último 15 de qualquer liga)
             # =============================
-            home_matches = self.match_stats.get_all_matches(
-                team_id=home_id,
-                season=season,
-                league_id=league_id,
-                is_home=True
-            )
+            is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
 
-            away_matches = self.match_stats.get_all_matches(
-                team_id=away_id,
-                season=season,
-                league_id=league_id,
-                is_home=False
-            )
-
-            # =============================
-            # HISTÓRICO TOTAL
-            # =============================
-            total_home_matches = self.match_stats.get_total_matches(
-                team_id=home_id,
-                season=season,
-                league_id=league_id
-            )
-
-            total_away_matches = self.match_stats.get_total_matches(
-                team_id=away_id,
-                season=season,
-                league_id=league_id
-            )
+            if is_national:
+                home_matches       = self.match_stats.get_last_n_all_competitions(home_id, limit=15)
+                away_matches       = self.match_stats.get_last_n_all_competitions(away_id, limit=15)
+                total_home_matches = home_matches
+                total_away_matches = away_matches
+            else:
+                home_matches = self.match_stats.get_all_matches(
+                    team_id=home_id, season=season, league_id=league_id, is_home=True
+                )
+                away_matches = self.match_stats.get_all_matches(
+                    team_id=away_id, season=season, league_id=league_id, is_home=False
+                )
+                total_home_matches = self.match_stats.get_total_matches(
+                    team_id=home_id, season=season, league_id=league_id
+                )
+                total_away_matches = self.match_stats.get_total_matches(
+                    team_id=away_id, season=season, league_id=league_id
+                )
 
             # =============================
             # FALLBACK: sem histórico no banco
