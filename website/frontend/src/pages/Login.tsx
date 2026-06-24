@@ -127,7 +127,8 @@ export default function Login() {
         setError('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX.')
         return
       }
-      if (password.length < 8) { setError('A senha deve ter pelo menos 8 caracteres.'); return }
+      const { score: pwScore } = getPasswordStrength(password)
+      if (pwScore < 4) { setError('A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, um número e um caractere especial.'); return }
       if (password !== confirm) { setError('As senhas não coincidem.'); return }
       if (!acceptedTerms) { setError('Você precisa aceitar os Termos de Uso e a Política de Privacidade.'); return }
     }
