@@ -7,6 +7,20 @@ import secrets
 import pathlib
 import shutil
 
+def _detect_device(user_agent: str) -> str:
+    ua = (user_agent or "").lower()
+    if "iphone" in ua or "ipad" in ua:
+        return "iPhone/iPad"
+    if "android" in ua:
+        return "Android"
+    if "mobile" in ua or "phone" in ua:
+        return "Celular"
+    if "tablet" in ua:
+        return "Tablet"
+    if "windows" in ua or "mac" in ua or "linux" in ua:
+        return "Computador"
+    return "Dispositivo desconhecido"
+
 import resend
 logger = logging.getLogger(__name__)
 from datetime import datetime, timedelta, timezone
@@ -475,7 +489,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
 
 
 @router.post("/login")
-def login(body: LoginBody, response: Response):
+def login(body: LoginBody, response: Response, request: Request):
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -508,10 +522,13 @@ def login(body: LoginBody, response: Response):
                 user["plan"] = "free"
                 user["expires_at"] = None
 
-        # Sessão única: novo login invalida qualquer sessão anterior
+        # Sessão única: novo login invalida sessão anterior e grava dispositivo
+        device = _detect_device(request.headers.get("user-agent", ""))
         session_id = secrets.token_hex(32)
-        cur.execute("UPDATE users SET session_token=%s WHERE id=%s",
-                    (hashlib.sha256(session_id.encode()).hexdigest(), user["id"]))
+        cur.execute(
+            "UPDATE users SET session_token=%s, last_login_device=%s, last_login_at=NOW() WHERE id=%s",
+            (hashlib.sha256(session_id.encode()).hexdigest(), device, user["id"])
+        )
         conn.commit()
 
         plan_expires_at = user["expires_at"].isoformat() if user.get("expires_at") else None

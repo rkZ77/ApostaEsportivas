@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
+import { translateMarket } from '../utils/marketTranslate'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import RecentResultsSection from '../components/RecentResultsSection'
@@ -381,7 +382,7 @@ export default function Results() {
                               )}
                             </div>
                             <p className="text-xs text-zinc-500 truncate">
-                              {g.market}{g.line ? <> · <span className="text-zinc-400">{g.line}</span></> : ''}
+                              {translateMarket(g.market)}{g.line ? <> · <span className="text-zinc-400">{g.line}</span></> : ''}
                               {g.odd ? ` · Odd ${Number(g.odd).toFixed(2)}` : ''}
                             </p>
                           </div>

@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
+import { translateMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 
@@ -92,7 +93,10 @@ export default function MeusPicks() {
 
   const allEntries: any[] = data?.entries ?? []
   const pendentes  = allEntries.filter(e => !e.result)
-  const resolvidos = allEntries.filter(e =>  e.result)
+  // Resolvidos: mais recente primeiro
+  const resolvidos = allEntries
+    .filter(e => e.result)
+    .sort((a, b) => new Date(b.followed_at ?? 0).getTime() - new Date(a.followed_at ?? 0).getTime())
   const tabEntries = tab === 'pendentes' ? pendentes : resolvidos
 
   const todayKey     = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -380,7 +384,7 @@ export default function MeusPicks() {
                                 )}
                               </div>
                               <p className="text-xs text-zinc-600 truncate">
-                                {e.market ?? ''}
+                                {translateMarket(e.market) ?? ''}
                                 {e.line ? ` · ${e.line}` : ''}
                                 {e.actual_odd
                                   ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>

@@ -115,7 +115,7 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, active, session_token FROM users WHERE id = %s", (payload.get("sub"),))
+        cur.execute("SELECT id, active, session_token, last_login_device, last_login_at FROM users WHERE id = %s", (payload.get("sub"),))
         row = cur.fetchone()
     finally:
         cur.close(); conn.close()
@@ -127,9 +127,10 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     session_id = payload.get("session_id")
     if row["session_token"] and session_id:
         if _hash_session(session_id) != row["session_token"]:
+            device = row.get("last_login_device") or "outro dispositivo"
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Sessão encerrada. Faça login novamente.",
+                detail=f"SESSION_INVALIDATED|{device}",
             )
 
     # Lazy expiry: se o plano VIP/trial já passou, trata como free

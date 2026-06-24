@@ -66,6 +66,7 @@ export default function Login() {
 
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
+  const [kickedDevice, setKickedDevice] = useState<string | null>(null)
 
   useEffect(() => {
     const ref = searchParams.get('ref')
@@ -76,6 +77,12 @@ export default function Login() {
     } else {
       const stored = localStorage.getItem('ref_code')
       if (stored) setRefCode(stored)
+    }
+    // Sessão encerrada por novo login em outro dispositivo
+    if (searchParams.get('kicked') === '1') {
+      const device = localStorage.getItem('session_kicked_device') ?? 'outro dispositivo'
+      setKickedDevice(device)
+      localStorage.removeItem('session_kicked_device')
     }
   }, [])
 
@@ -213,6 +220,21 @@ export default function Login() {
           <p className="text-zinc-500 mb-6 text-sm">
             {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma. Sem cartão de crédito.'}
           </p>
+
+          {kickedDevice && (
+            <div className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
+              <p className="text-yellow-300 font-semibold mb-1">Sessão encerrada</p>
+              <p className="text-zinc-300">
+                Um acesso foi feito de <strong className="text-white">{kickedDevice}</strong> e sua sessão foi encerrada.
+              </p>
+              <p className="text-zinc-400 mt-2">
+                Se não foi você,{' '}
+                <a href="/reset-password" className="text-yellow-400 underline hover:text-yellow-300">
+                  redefina sua senha
+                </a>.
+              </p>
+            </div>
+          )}
 
           <form onSubmit={submit} className="space-y-4">
 

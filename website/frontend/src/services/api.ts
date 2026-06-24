@@ -17,6 +17,17 @@ api.interceptors.response.use(
     }
     if (err.response?.status === 401 && !original._retry) {
       original._retry = true
+
+      // Sessão invalidada por novo login em outro dispositivo
+      const detail: string = err.response?.data?.detail ?? ''
+      if (detail.startsWith('SESSION_INVALIDATED|')) {
+        const device = detail.split('|')[1] ?? 'outro dispositivo'
+        localStorage.setItem('session_kicked_device', device)
+        localStorage.removeItem('user')
+        window.location.href = '/login?kicked=1'
+        return Promise.reject(err)
+      }
+
       if (!_refreshing) {
         _refreshing = api.post('/auth/refresh')
           .catch(() => {

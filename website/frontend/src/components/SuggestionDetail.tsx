@@ -3,6 +3,7 @@ import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from '
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { suggestStake, calcVipStake } from '../utils/stakeUtils'
+import { translateMarket } from '../utils/marketTranslate'
 
 interface StatBlock {
   context_type: string
@@ -249,7 +250,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             <div className="flex items-center gap-0 border-t border-zinc-800/60 text-center divide-x divide-zinc-800/60">
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-zinc-500 mb-0.5">Mercado</div>
-                <div className="text-xs font-bold text-white truncate">{s.market ?? ''}</div>
+                <div className="text-xs font-bold text-white truncate">{translateMarket(s.market) ?? ''}</div>
               </div>
               {s.line && (
                 <div className="flex-1 py-2.5 px-3">
@@ -383,7 +384,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                                 </div>
                                 <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                               </div>
-                              <div className="text-xs text-zinc-500 mt-0.5">{g.market}{g.line ? ` · ${g.line}` : ''}</div>
+                              <div className="text-xs text-zinc-500 mt-0.5">{translateMarket(g.market)}{g.line ? ` · ${g.line}` : ''}</div>
                             </div>
                           )
                         })}

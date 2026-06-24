@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { calcVipStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
+import { translateMarket } from '../utils/marketTranslate'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -287,7 +288,7 @@ export default function SuggestionCard({
           <TeamLogo id={s.away_team_id} name={s.away_team_name} />
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <span className="font-semibold text-zinc-300">{s.market}</span>
+          <span className="font-semibold text-zinc-300">{translateMarket(s.market)}</span>
           {s.line && <><span>·</span><span>{s.line}</span></>}
         </div>
       </div>

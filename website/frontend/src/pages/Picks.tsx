@@ -13,8 +13,6 @@ import LivePicks from '../components/LivePicks'
 import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import Watermark from '../components/Watermark'
-
 // Copa do Mundo 2026 — fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -1592,8 +1590,6 @@ export default function Picks() {
           </div>
         </div>
       )}
-
-      {!isAdmin && user && <Watermark email={user.email} />}
 
       <Navbar />
 
