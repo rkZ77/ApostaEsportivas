@@ -357,7 +357,7 @@ class OddsCollectorService:
                         %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
                         NOW(), NOW()
                     )
-                    ON CONFLICT (market_row_id, value_name)
+                    ON CONFLICT (market_row_id, value_name, line_value)
                     DO UPDATE SET
                         odd_value  = EXCLUDED.odd_value,
                         updated_at = NOW();
