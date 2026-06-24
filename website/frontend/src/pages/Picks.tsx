@@ -889,7 +889,8 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 // Alavancagem card
 function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
   const navigate    = useNavigate()
-  const isCombo     = pick.tipo === 'combinacao'
+  const isCombo     = pick.tipo === 'dupla' || pick.tipo === 'tripla' || pick.tipo === 'combinacao'
+  const comboLabel  = pick.tipo === 'tripla' ? 'Tripla' : pick.tipo === 'dupla' ? 'Dupla' : 'Combinada'
   const oddCombined = Number(pick.odd_combined ?? 0)
   // stake monetário: bankroll do usuário > bankroll_before salvo > fallback 50
   const stake       = userBankroll != null ? userBankroll : Number(pick.bankroll_before ?? pick.stake ?? 50)
@@ -932,6 +933,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   const legs: any[] = []
   if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1 })
   if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2 })
+  if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3 })
 
   const resultStyle = pick.result === 'GREEN'
     ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
@@ -952,7 +954,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Alavancagem</span>
           <span className="badge-vip">VIP</span>
-          {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">Combinada</span>}
+          {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
         {resultStyle ? (
           <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>

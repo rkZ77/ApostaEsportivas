@@ -1,8 +1,8 @@
 """
-ALAVANCAGEM — Pipeline Copa do Mundo
-Objetivo: 1 pick diario (ou combinacao de 2) da Copa com odd alvo ~1.50 (faixa 1.00-1.55).
-Banca composita: inicia em R$50, reinveste ganhos a cada GREEN.
-Exclusivo VIP. Ativo apenas durante a Copa do Mundo.
+ALAVANCAGEM — Pipeline multi-liga
+Objetivo: 1 pick diario (simples, dupla ou tripla) com odd combinada 1.45-1.55.
+Busca mercados de qualquer liga disponivel no dia.
+Exclusivo VIP.
 """
 
 import os
@@ -24,15 +24,15 @@ from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
 
-AI_MODEL_NAME  = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
-WC_LEAGUE_ID   = 1
-ODD_MIN        = 1.00
-ODD_MAX        = 1.55
-ODD_TARGET     = 1.50
-_COMBO_ODD_MIN = 1.00  # mínimo individual para combinações (produto deve cair em ODD_MIN-ODD_MAX)
-CONFIDENCE_MIN = 0.72
-BANKROLL_INIT  = 50.0
-MAX_FIXTURES   = 10
+AI_MODEL_NAME      = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
+WC_LEAGUE_ID       = 1          # Copa do Mundo — mantido para enriquecimento de contexto
+ODD_COMBINED_MIN   = 1.45       # odd combinada mínima (produto final)
+ODD_COMBINED_MAX   = 1.55       # odd combinada máxima (produto final)
+ODD_TARGET         = 1.50       # alvo ideal
+ODD_INDIVIDUAL_MIN = 1.05       # mínimo por pick individual (para combos)
+ODD_INDIVIDUAL_MAX = 1.55       # máximo por pick individual (simples)
+CONFIDENCE_MIN     = 0.72
+MAX_FIXTURES       = 15
 
 client               = Anthropic()
 odds_svc             = OddsService()
@@ -62,91 +62,75 @@ def _clean(obj):
 # PROMPTS
 # ============================================================
 SYSTEM_PROMPT = """\
-Voce e QUANTBET-ALAVANCAGEM, especializado em selecionar o pick mais seguro do dia em jogos da Copa do Mundo FIFA.
+Voce e QUANTBET-ALAVANCAGEM, especializado em montar o pick mais seguro do dia para alavancar banca.
 
-OBJETIVO: ODD COMBINADA entre {odd_min}-{odd_max} (alvo ~{odd_target}).
-Simples: 1 pick com odd direta em {odd_min}-{odd_max}.
-Combinacao: 2 picks de jogos DIFERENTES onde odd_1 × odd_2 resulta em {odd_min}-{odd_max} — o PRODUTO e o que vale.
-Consistencia acima de tudo: 9/10 @ 1.22 > 6/10 @ 1.48. Nenhum pick com confidence>={conf_min} → no_bet.
+OBJETIVO: ODD COMBINADA entre {odd_min} e {odd_max} (alvo ~{odd_target}).
+- Simples: 1 pick com odd individual entre {odd_min}-{odd_max}.
+- Dupla: 2 picks (mesmo jogo ou jogos diferentes) onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
+- Tripla: 3 picks (mesmo jogo ou jogos diferentes) onde odd_1 × odd_2 × odd_3 cai em {odd_min}-{odd_max}.
+Consistencia acima de tudo: 9/10 @ 1.12 > 6/10 @ 1.45. Nenhum pick sem confidence>={conf_min} → no_bet.
 
-Realize toda a analise INTERNAMENTE. NÃO escreva texto, markdown, raciocinio ou comentario fora do JSON.
-SAIDA: apenas JSON valido. Proibido qualquer caractere antes ou depois. Comeca com {{ e termina com }}.\
+Realize toda a analise INTERNAMENTE. Proibido texto fora do JSON.
+SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
 """
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM Copa do Mundo — pick mais seguro do dia.
-Faixa ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
+ALAVANCAGEM — pick mais seguro do dia para alavancar banca.
+ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
-CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
-Leia a classificacao (standings) e determine a situacao de cada time:
-  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada. Incorpore na estimativa da taxa real.
-  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada. Incorpore na estimativa da taxa real.
-  JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
-  CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
+FORMATOS POSSIVEIS (escolha o que tiver maior confidence media):
+  SIMPLES : 1 pick com odd individual entre {odd_min}-{odd_max}.
+  DUPLA   : 2 picks onde odd_1 × odd_2 ∈ [{odd_min},{odd_max}]. Picks do mesmo jogo ou jogos diferentes.
+  TRIPLA  : 3 picks onde odd_1 × odd_2 × odd_3 ∈ [{odd_min},{odd_max}]. Picks do mesmo jogo ou jogos diferentes.
 
-OPCAO A (simples): 1 pick isolado com odd individual entre {odd_min}-{odd_max}.
-OPCAO B (combinacao): 2 picks de jogos DIFERENTES onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
-  REGRA DE SELECAO — filtre ANTES de analisar:
-  - Odd individual MAXIMA para par simetrico: 1.24 (pois 1.24×1.24=1.538 ≤ {odd_max}). Para pares assimetricos, calcule o produto.
-  - Calcule odd_1 × odd_2 explicitamente antes de confirmar. Produto fora de {odd_min}-{odd_max} → INVALIDO.
-  - Criterio de qualidade por pick: taxa>=65% + amostra>=5 + confidence>={conf_min}.
-    Calcule taxa_real pelos dados historicos. Nao combine pick sem taxa>=65%.
+FAIXAS DE ODD INDIVIDUAL (para produto cair em {odd_min}-{odd_max}):
+  Simples : {odd_min}-{odd_max} cada.
+  Dupla   : ~1.20-1.40 cada (calcule o produto; maximo simetrico 1.245×1.245≈1.55).
+  Tripla  : ~1.08-1.28 cada (calcule o produto; maximo simetrico 1.157×1.157×1.157≈1.55).
+  Regra final: calcule o produto EXPLICITAMENTE e confirme que esta em {odd_min}-{odd_max}. Fora da faixa → INVALIDO.
 
-Criterios de cada pick: league_id=1 | amostra>=5 | taxa>=65% | confidence>={conf_min}
-CARTOES: use apenas se arbitro com >=3 jogos na temporada E historico dos dois times com >=5 jogos e taxa>=60%. Sem esses dois → nao use cartoes como pick.
+CRITERIOS POR PICK:
+  amostra>=5 | taxa_real>=65% | confidence>={conf_min}
+  CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e taxa>=60%.
 
---- FIXTURES DA COPA + DADOS ---
+--- FIXTURES DISPONIVEL HOJE + DADOS ---
 {fixtures_formatados}
 
-QUALIDADE DOS DADOS (Copa do Mundo):
-  Cada perfil de selecao inclui "quality_breakdown" com stats separados por tipo de competicao.
-  Use "weighted_goals_against" em vez da media bruta — Copa>Eliminatorias>Amistoso.
-  Declare: "bruto X gols/j → ponderado Y gols/j (Z jogos Copa, W Eliminatorias, V amistosos)".
+ANALISE:
+PASSO 1 — Para cada fixture analise os mercados disponíveis e calcule taxa_real (ponderada, recente=1.0, anterior=0.9...).
+PASSO 2 — Monte candidatos simples (odd direta {odd_min}-{odd_max}), dupla e tripla que respeitem os criterios.
+PASSO 3 — Descarte: amostra<5 | taxa<65% | confidence<{conf_min} | produto fora de {odd_min}-{odd_max}.
+PASSO 4 — Escolha o formato com maior confidence media. Em caso de empate: prefira mais picks (tripla>dupla>simples) pois indica mais evidencias.
+  Sem nenhum valido → no_bet.
 
-PASSO 1 — Candidatos A (simples): avalie mercados com odd individual em {odd_min}-{odd_max}.
-PASSO 2 — Candidatos B (se A falhar): busque pares de jogos diferentes com odd individual onde produto caia em {odd_min}-{odd_max},
-  taxa>=65% e amostra>=5 em ambos, cujo produto caia em {odd_min}-{odd_max}.
-  Se nenhum par válido existir → no_bet direto.
-PASSO 3 — Descartar: amostra<5 | taxa<65% | confidence<{conf_min}.
-PASSO 4 — Selecionar: prefira A. Escolha B se a confidence media de B superar A por >=0.05, ou se nao houver A valido.
-  Sem pick valido → no_bet.
+FORMATO DO HISTORICO: home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards.
+  CASA: time analisado e mandante → feitos=home_*, cedidos=away_*.
+  FORA: time analisado e visitante → feitos=away_*, cedidos=home_*.
 
-CALCULOS:
-Calcule a taxa de ocorrencia real com base nos dados historicos: taxa ponderada dos ultimos jogos (recente=1.0, anterior=0.9...).
-Prefira picks com maior taxa real e maior numero de confirmadores independentes.
-
-FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
-  HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
-  HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
-
-FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
-  Primario: feitos_A_contexto + feitos_B_contexto.
-  Validacao: cedidos_A_contexto + cedidos_B_contexto.
+FEITOS vs CEDIDOS (mercados totais/BTTS):
+  Primario: feitos_A + feitos_B. Validacao: cedidos_A + cedidos_B.
   Divergencia >15% → reduza Confirmadores 1 nivel.
-  Mercado de time: feitos do time + cedidos do adversario. Resultado: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
-CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
-  C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
-  Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
-  K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
-  Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 
-SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
-  Odd minima para linha na alavancagem: {odd_min} (respeita a faixa do pipeline).
-  1. Liste todas as linhas do mercado nas odds.
-  2. Calcule: implied_prob=1/odd | edge=taxa_real−implied_prob | EV=taxa_real×odd−1
-  3. Descarte: odd fora da faixa {odd_min}-{odd_max} | edge<0.05 | EV≤0
-  4. Das aprovadas: maior taxa_real. Empate: maior edge.
-  5. Sem aprovadas: fallback linha mais proxima da faixa {odd_min}-{odd_max}.
-  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30)
+  C: taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
+  Q: RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+  K: 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 | bookmakers_count>=3→K+0.05 | bookmakers_count=1→K-0.05
 
-VERIFICACAO FINAL obrigatoria: calcule odd_combined = odd_1 × odd_2 (ou odd_1 se simples).
-  Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
+SMART SAFE LINE (obrigatorio para Over/Under):
+  1. Liste todas as linhas. 2. edge=taxa_real-1/odd | EV=taxa_real×odd-1.
+  3. Descarte: edge<0.05 | EV≤0 | odd individual fora da faixa valida para o formato.
+  4. Escolha maior taxa_real entre aprovadas.
+  No reasoning: "SMART SAFE LINE|Escolhida:[linha @odd — taxa=X%, edge=Y%]"
+
+VERIFICACAO FINAL: calcule odd_combined = produto de todas as odds. Fora de {odd_min}-{odd_max} → no_bet imediato.
 
 SAIDA JSON:
-Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao estatistico solido."}},"pick_2":null,"odd_combined":0.00,"confidence_media":0.00}}
-Combinacao: {{"tipo":"combinacao","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
+Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
+Dupla: {{"tipo":"dupla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
+Tripla: {{"tipo":"tripla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
+prob_real = taxa_real do mercado (0.00-1.00).
 """
 
 
@@ -191,9 +175,22 @@ def create_table():
     """)
     # Garante colunas opcionais que podem não existir em instalações antigas
     for col_def in [
-        "checked_at  TIMESTAMP",
-        "prob_real_1 NUMERIC",
-        "prob_real_2 NUMERIC",
+        "checked_at    TIMESTAMP",
+        "prob_real_1   NUMERIC",
+        "prob_real_2   NUMERIC",
+        "market_type_1 TEXT",
+        "market_type_2 TEXT",
+        "fixture_id_3  INTEGER",
+        "home_team_3   TEXT",
+        "away_team_3   TEXT",
+        "market_3      TEXT",
+        "market_type_3 TEXT",
+        "line_3        TEXT",
+        "odd_3         NUMERIC",
+        "bet_house_3   TEXT",
+        "confidence_3  NUMERIC",
+        "prob_real_3   NUMERIC",
+        "reasoning_3   TEXT",
     ]:
         try:
             cur.execute(f"ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS {col_def}")
@@ -218,9 +215,10 @@ def has_today_pick() -> bool:
 
 
 # ============================================================
-# BUSCA FIXTURES DA COPA COM ODDS NA FAIXA
+# BUSCA FIXTURES DA COPA COM ODDS NA FAIXA INDIVIDUAL
 # ============================================================
 def get_wc_fixtures_with_odds() -> list[dict]:
+    """Busca fixtures da Copa de hoje com ao menos uma odd na faixa individual válida para combos."""
     conn = get_connection()
     cur  = conn.cursor()
     cur.execute("""
@@ -235,18 +233,19 @@ def get_wc_fixtures_with_odds() -> list[dict]:
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
         LIMIT %s
-    """, (WC_LEAGUE_ID, _COMBO_ODD_MIN, ODD_MAX + 0.10, MAX_FIXTURES))
+    """, (WC_LEAGUE_ID, ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX + 0.10, MAX_FIXTURES))
     rows = cur.fetchall()
     cur.close()
     conn.close()
     return [
         {
-            "fixture_id":   r[0],
-            "home_team_id": r[1],
-            "away_team_id": r[2],
-            "home_team":    r[3],
-            "away_team":    r[4],
-            "season":       r[5],
+            "fixture_id":     r[0],
+            "home_team_id":   r[1],
+            "away_team_id":   r[2],
+            "home_team":      r[3],
+            "away_team":      r[4],
+            "league_id":      WC_LEAGUE_ID,
+            "season":         r[5],
             "match_datetime": str(r[6]),
         }
         for r in rows
@@ -326,7 +325,7 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
         all_odds = ctx.pop("odds", [])
         filtered_odds = [
             o for o in dedup_odds(normalize_structured_odds(all_odds))
-            if ODD_MIN <= float(o.get("best_odd") or 0) <= ODD_MAX
+            if ODD_INDIVIDUAL_MIN <= float(o.get("best_odd") or 0) <= ODD_INDIVIDUAL_MAX
         ][:_ODDS_MAX_ITEMS]
 
         # Outras listas: limitar a 5 itens
@@ -356,8 +355,8 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
     """Call 2: análise completa. Usa preloaded_contexts para evitar re-carregamento."""
     fixtures_formatados = _format_fixtures(fixtures, preloaded_contexts=preloaded_contexts)
     user_prompt = USER_PROMPT_TEMPLATE.format(
-        odd_min=ODD_MIN,
-        odd_max=ODD_MAX,
+        odd_min=ODD_COMBINED_MIN,
+        odd_max=ODD_COMBINED_MAX,
         odd_target=ODD_TARGET,
         conf_min=CONFIDENCE_MIN,
         fixtures_formatados=fixtures_formatados,
@@ -371,8 +370,8 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
                 max_tokens=8096,
                 system=SYSTEM_PROMPT.format(
                     conf_min=CONFIDENCE_MIN,
-                    odd_min=ODD_MIN,
-                    odd_max=ODD_MAX,
+                    odd_min=ODD_COMBINED_MIN,
+                    odd_max=ODD_COMBINED_MAX,
                     odd_target=ODD_TARGET,
                 ),
                 messages=[{"role": "user", "content": user_prompt}],
@@ -407,6 +406,7 @@ def save_pick(result: dict):
 
     p1   = result["pick_1"]
     p2   = result.get("pick_2")
+    p3   = result.get("pick_3")
     tipo = result.get("tipo", "simples")
 
     # Valida coerência mercado↔reasoning
@@ -414,48 +414,57 @@ def save_pick(result: dict):
         print(f"[ALAVANCAGEM] REJEITADO pick_1 — reasoning incoerente com mercado '{p1.get('market')}'")
         return
     if p2 and not is_market_reasoning_coherent(p2.get("market", ""), p2.get("reasoning", "")):
-        print(f"[ALAVANCAGEM] pick_2 removido — reasoning incoerente com mercado '{p2.get('market')}'. Downgrade para simples.")
-        p2 = None
-        tipo = "simples"
-        result["pick_2"] = None
-        result["tipo"] = "simples"
+        print(f"[ALAVANCAGEM] pick_2 removido — reasoning incoerente. Downgrade para simples.")
+        p2 = None; p3 = None; tipo = "simples"
         result["odd_combined"] = p1.get("odd", result["odd_combined"])
+    if p3 and not is_market_reasoning_coherent(p3.get("market", ""), p3.get("reasoning", "")):
+        print(f"[ALAVANCAGEM] pick_3 removido — reasoning incoerente. Downgrade para dupla.")
+        p3 = None
+        tipo = "dupla"
 
-    odd_combined      = float(result["odd_combined"])
+    odd_combined = float(result["odd_combined"])
 
     # Validação hard: rejeita se odd_combined fora da faixa permitida
-    if not (ODD_MIN <= odd_combined <= ODD_MAX):
-        print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_MIN}-{ODD_MAX}. Retornando no_bet.")
+    if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
+        print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
         return
-    confidence_media  = float(result.get("confidence_media", p1["confidence"]))
+
+    confidence_media = float(result.get("confidence_media", p1["confidence"]))
 
     # Traduz mercados
     p1["market"] = translate_market(p1["market"])
     if p2:
         p2["market"] = translate_market(p2["market"])
+    if p3:
+        p3["market"] = translate_market(p3["market"])
 
     print(f"[ALAVANCAGEM] Pick selecionado ({tipo}):")
     print(f"  {p1['home_team']} x {p1['away_team']} | {p1['market']} {p1.get('line','')} @ {p1['odd']}")
     if p2:
         print(f"  + {p2['home_team']} x {p2['away_team']} | {p2['market']} {p2.get('line','')} @ {p2['odd']}")
-    print(f"  Odd combinada: {odd_combined}")
+    if p3:
+        print(f"  + {p3['home_team']} x {p3['away_team']} | {p3['market']} {p3.get('line','')} @ {p3['odd']}")
+    print(f"  Odd combinada: {odd_combined:.2f}")
+
+    mtype1 = _classify_market_type(p1["market"])
+    mtype2 = _classify_market_type(p2["market"]) if p2 else None
+    mtype3 = _classify_market_type(p3["market"]) if p3 else None
 
     conn = get_connection()
     cur  = conn.cursor()
-    mtype1 = _classify_market_type(p1["market"])
-    mtype2 = _classify_market_type(p2["market"]) if p2 else None
-
     cur.execute("""
         INSERT INTO picks_alavancagem
             (match_date, tipo,
              fixture_id_1, home_team_1, away_team_1, market_1, market_type_1, line_1, odd_1, bet_house_1, confidence_1, prob_real_1, reasoning_1,
              fixture_id_2, home_team_2, away_team_2, market_2, market_type_2, line_2, odd_2, bet_house_2, confidence_2, prob_real_2, reasoning_2,
+             fixture_id_3, home_team_3, away_team_3, market_3, market_type_3, line_3, odd_3, bet_house_3, confidence_3, prob_real_3, reasoning_3,
              odd_combined, confidence_media)
         VALUES
             (CURRENT_DATE, %s,
-             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-             %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s,
-             %s, %s)
+             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+             %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,
+             %s,%s)
     """, (
         tipo,
         p1.get("fixture_id"), p1["home_team"], p1["away_team"],
@@ -468,6 +477,13 @@ def save_pick(result: dict):
         p2["odd"] if p2 else None, p2.get("bet_house") if p2 else None,
         p2.get("confidence") if p2 else None, p2.get("prob_real") if p2 else None,
         p2.get("reasoning") if p2 else None,
+        p3.get("fixture_id") if p3 else None,
+        p3["home_team"] if p3 else None, p3["away_team"] if p3 else None,
+        p3["market"] if p3 else None, mtype3,
+        p3.get("line") if p3 else None,
+        p3["odd"] if p3 else None, p3.get("bet_house") if p3 else None,
+        p3.get("confidence") if p3 else None, p3.get("prob_real") if p3 else None,
+        p3.get("reasoning") if p3 else None,
         odd_combined, confidence_media,
     ))
     conn.commit()
@@ -488,7 +504,7 @@ def run_alavancagem_pipeline() -> dict | None:
         print("✅ Pick de alavancagem já existe para hoje.")
         return None
 
-    print(f"🔍 Buscando jogos da Copa do Mundo com odds {ODD_MIN}-{ODD_MAX}...")
+    print(f"🔍 Buscando jogos da Copa do Mundo (odd combinada alvo {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX})...")
     fixtures = get_wc_fixtures_with_odds()
 
     if not fixtures:
