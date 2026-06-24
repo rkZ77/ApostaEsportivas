@@ -15,7 +15,7 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     warnings.warn("⚠️  JWT_SECRET não configurado! Use apenas em desenvolvimento.", stacklevel=1)
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_DAYS  = 30
+ACCESS_TOKEN_EXPIRE_HOURS = 12
 REFRESH_TOKEN_EXPIRE_DAYS = 0   # não usado separadamente
 
 COOKIE_NAME = "access_token"
@@ -34,19 +34,19 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRE_DAYS * 86400
+_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRE_HOURS * 3600
 
 
 def create_access_token(data: dict) -> str:
     payload = data.copy()
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     payload["type"] = "access"
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict) -> str:
     payload = {"sub": data["sub"], "type": "refresh"}
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
