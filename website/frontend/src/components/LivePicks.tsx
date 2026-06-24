@@ -87,8 +87,9 @@ function calcLiveProb(pick: any): number | null {
   if (isBTTS && pick.home_goals != null && pick.away_goals != null && elapsed != null && remainRatio != null) {
     const scoredHome = Number(pick.home_goals) > 0
     const scoredAway = Number(pick.away_goals) > 0
-    // Média: ~1.3 gols por equipe por 90 min (dado da média de ligas europeias)
-    const lambda  = 1.3 * remainRatio
+    // Copa do Mundo (league_id=1): ~1.0 gols/equipe/90min. Outras ligas: ~1.3
+    const lambdaBase = pick.league_id === 1 ? 1.0 : 1.3
+    const lambda  = lambdaBase * remainRatio
     const pScore  = 1 - poissonPmf(lambda, 0) // P(marcar pelo menos 1)
     const pNoScore = poissonPmf(lambda, 0)     // P(não marcar)
 
@@ -342,7 +343,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = pick.pick_status === 'winning' ? 'text-green-400'
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
-  const liveProb = isLive && !effectiveLocked && pick.elapsed ? calcLiveProb(pick) : null
+  const liveProb = isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
   const probCls  = liveProb == null ? '' : liveProb >= 60
     ? 'text-green-400 bg-green-400/10 border-green-500/25'
     : liveProb >= 35
