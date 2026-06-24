@@ -94,7 +94,9 @@ export function calcFreeStake(
   unitValue: number,
 ): StakeSuggestion | null {
   if (!bankroll || !unitValue || unitValue <= 0) return null
-  if (ev <= 0) {
+  // Fallback: se ev não vier (picks antigos sem prob_real), deriva de prob × odd - 1
+  const evEff = ev > 0 ? ev : (prob > 0 && odd > 1 ? Math.max(0, prob * odd - 1) : 0)
+  if (evEff <= 0) {
     return { units: 1, amountR: unitValue, kellyPct: Math.round(unitValue / bankroll * 1000) / 10 }
   }
   const b = odd - 1
@@ -106,6 +108,7 @@ export function calcFreeStake(
   const units = Math.max(1, Math.round(stakePct * bankroll / unitValue))
   return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
 }
+
 
 /**
  * Calcula stake para picks Múltipla: Kelly ¼, max 2.5% da banca.

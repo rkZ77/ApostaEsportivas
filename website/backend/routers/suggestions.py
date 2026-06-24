@@ -128,6 +128,10 @@ def _compute_suggested_stake_units(
         odd_f = float(odd or 0)
         ev_f  = float(ev or 0)
 
+        # EV nulo: deriva de confidence × odd como fallback (prob_real ausente em picks antigos)
+        if ev_f <= 0 and conf > 0 and odd_f > 1:
+            ev_f = max(0.0, conf * odd_f - 1.0)
+
         # EV negativo sem base sólida → stake mínimo (1u)
         if ev_f <= 0 and pick_type != 'multipla':
             return 1

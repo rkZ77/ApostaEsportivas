@@ -157,8 +157,9 @@ Ordene por confidence. Empate: maior taxa → maior amostra. Sem valido → no_b
 Verificacao: odd {odd_min}-{odd_max}? amostra>=5? taxa>=65%? 2+ confirmadores? confidence>={conf_min}? SMART SAFE LINE aplicado?
 
 SAIDA JSON:
-Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. SMART SAFE LINE|Linhas:[...]|Rejeitadas:[...]|Escolhida:[linha @odd]. CONCLUSAO: padrao estatistico solido."}}}}
+Pick: {{"pick": {{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"league_name":"","market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"edge":0.00,"reasoning":"FATO: X/Y (taxa Z%). CONFIRMADORES:[...]. SMART SAFE LINE|Linhas:[...]|Rejeitadas:[...]|Escolhida:[linha @odd]. CONCLUSAO: padrao estatistico solido."}}}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
+prob_real = taxa_real do mercado escolhido (0.00-1.00). edge = prob_real - (1/odd).
 """
 
 
@@ -420,7 +421,10 @@ def save_dica(pick: dict) -> None:
     pick["market"] = translate_market(pick["market"])
     odd  = float(pick["odd"])
     conf = float(pick["confidence"])
-    ev   = float(pick.get("edge", 0))
+    ev   = float(pick.get("edge") or 0)
+    # Fallback: se a IA não retornou edge, deriva do EV (conf × odd - 1)
+    if ev <= 0 and conf > 0 and odd > 1:
+        ev = max(0.0, conf * odd - 1.0)
     stake_pct, stake_units = AISuggestionsService.calculate_stake(conf, odd, ev, max_units=5)
 
     conn = get_connection()
