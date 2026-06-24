@@ -368,9 +368,10 @@ class OddsCollectorService:
             conn.close()
 
     # --------------------------------------------------------
-    # PROCESSA UM FIXTURE
+    # PROCESSA UM FIXTURE (com retry em deadlock)
     # --------------------------------------------------------
-    def process_fixture_odds(self, fixture_id: int):
+    def process_fixture_odds(self, fixture_id: int, _retry: int = 3):
+        import time as _time
         data = self.fetch_odds_by_fixture(fixture_id)
 
         if not data:
@@ -389,7 +390,16 @@ class OddsCollectorService:
             return
 
         print(f"[ODDS] Processando fixture {fixture_id} — {len(br_bookmakers)} casa(s) encontrada(s).")
-        self.save_odds(fixture_id, bookmakers)
+        for attempt in range(1, _retry + 1):
+            try:
+                self.save_odds(fixture_id, bookmakers)
+                break
+            except Exception as e:
+                if "deadlock" in str(e).lower() and attempt < _retry:
+                    print(f"[ODDS] Deadlock fixture {fixture_id} — tentativa {attempt}/{_retry}, aguardando 2s...")
+                    _time.sleep(2)
+                else:
+                    raise
 
     # --------------------------------------------------------
     # PROCESSA LISTA DE FIXTURES
