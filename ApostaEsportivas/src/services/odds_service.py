@@ -148,6 +148,12 @@ class OddsService:
             if not best_odd:
                 continue
 
+            # Over/Under com apenas 1 bookmaker → dado suspeito, descarta
+            # (linha pode estar errada se só uma fonte reporta aquele valor)
+            is_over_under = parsed is not None  # só True quando value_name é "Over X" / "Under X"
+            if is_over_under and len(bk_odds) < 2:
+                continue
+
             results.append({
                 "market_id":        market_id,
                 "market_name":      sample.get("market_name", ""),

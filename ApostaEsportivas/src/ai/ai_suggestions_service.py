@@ -480,13 +480,6 @@ HISTÓRICO FORA
             line_raw  = m.get("line", "")
             combined_line = f"{value_raw} {line_raw}".strip() if line_raw else value_raw
 
-            # Mercados com linha numérica (Over/Under) exigem ao menos 2 bookmakers
-            # concordando com a mesma linha — previne dados corrompidos de API única.
-            bk_count = m.get("bookmakers_count", 1)
-            is_over_under = value_raw.lower() in ("over", "under")
-            if is_over_under and bk_count < 2:
-                continue
-
             result.append({
                 "market_id":        m.get("market_id"),
                 "market_name":      pt_name,
