@@ -76,61 +76,75 @@ SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM — pick mais seguro do dia para alavancar banca.
+ALAVANCAGEM Copa do Mundo — pick mais seguro do dia para alavancar banca.
 ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
-FORMATOS POSSIVEIS (escolha o que tiver maior confidence media):
+FORMATOS POSSIVEIS:
   SIMPLES : 1 pick com odd individual entre {odd_min}-{odd_max}.
-  DUPLA   : 2 picks onde odd_1 × odd_2 ∈ [{odd_min},{odd_max}]. Picks do mesmo jogo ou jogos diferentes.
-  TRIPLA  : 3 picks onde odd_1 × odd_2 × odd_3 ∈ [{odd_min},{odd_max}]. Picks do mesmo jogo ou jogos diferentes.
+  DUPLA   : 2 picks onde odd_1 × odd_2 ∈ [{odd_min},{odd_max}]. Mesmo jogo ou jogos diferentes.
+  TRIPLA  : 3 picks onde odd_1 × odd_2 × odd_3 ∈ [{odd_min},{odd_max}]. Mesmo jogo ou jogos diferentes.
 
 FAIXAS DE ODD INDIVIDUAL (para produto cair em {odd_min}-{odd_max}):
-  Simples : {odd_min}-{odd_max} cada.
-  Dupla   : ~1.20-1.40 cada (calcule o produto; maximo simetrico 1.245×1.245≈1.55).
-  Tripla  : ~1.08-1.28 cada (calcule o produto; maximo simetrico 1.157×1.157×1.157≈1.55).
-  Regra final: calcule o produto EXPLICITAMENTE e confirme que esta em {odd_min}-{odd_max}. Fora da faixa → INVALIDO.
+  Simples : {odd_min}-{odd_max}.
+  Dupla   : ~1.20-1.40 cada (maximo simetrico 1.245×1.245≈1.55).
+  Tripla  : ~1.08-1.28 cada (maximo simetrico 1.157×1.157×1.157≈1.55).
+  Regra: calcule o produto EXPLICITAMENTE antes de confirmar. Fora de {odd_min}-{odd_max} → INVALIDO.
 
-CRITERIOS POR PICK:
-  amostra>=5 | taxa_real>=65% | confidence>={conf_min}
-  CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e taxa>=60%.
+CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
+  Leia standings e determine a situacao de cada selecao:
+  PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada.
+  EMPATE BASTA → pode fechar defensivamente, menos atividade esperada.
+  JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
+  CONFLITO situacao vs dados → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
---- FIXTURES DISPONIVEL HOJE + DADOS ---
+CRITERIOS POR PICK: amostra>=5 | taxa_real>=65% | confidence>={conf_min}
+CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e taxa>=60%.
+
+--- FIXTURES COPA DO MUNDO + DADOS ---
 {fixtures_formatados}
 
-ANALISE:
-PASSO 1 — Para cada fixture analise os mercados disponíveis e calcule taxa_real (ponderada, recente=1.0, anterior=0.9...).
-PASSO 2 — Monte candidatos simples (odd direta {odd_min}-{odd_max}), dupla e tripla que respeitem os criterios.
-PASSO 3 — Descarte: amostra<5 | taxa<65% | confidence<{conf_min} | produto fora de {odd_min}-{odd_max}.
-PASSO 4 — Escolha o formato com maior confidence media. Em caso de empate: prefira mais picks (tripla>dupla>simples) pois indica mais evidencias.
-  Sem nenhum valido → no_bet.
+QUALIDADE DOS DADOS (Copa do Mundo):
+  Cada perfil inclui "quality_breakdown" com stats por tipo de competicao.
+  Use "weighted_goals_against" em vez de media bruta — Copa>Eliminatorias>Amistoso.
+  Declare: "bruto X gols/j → ponderado Y gols/j (Z Copa, W Eliminatorias, V amistosos)".
 
-FORMATO DO HISTORICO: home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards.
-  CASA: time analisado e mandante → feitos=home_*, cedidos=away_*.
-  FORA: time analisado e visitante → feitos=away_*, cedidos=home_*.
+ANALISE:
+PASSO 1 — Leia standings e situacao situacional de cada selecao.
+PASSO 2 — Calcule taxa_real ponderada (recente=1.0, anterior=0.9...) para cada mercado candidato.
+PASSO 3 — Monte candidatos simples, dupla e tripla que respeitem os criterios e tenham produto em {odd_min}-{odd_max}.
+PASSO 4 — Descarte: amostra<5 | taxa<65% | confidence<{conf_min} | produto fora de {odd_min}-{odd_max}.
+PASSO 5 — Selecao: escolha o candidato com MAIOR confidence media. Empate → prefira SIMPLES (menos risco de correlacao).
+  Sem candidato valido → no_bet.
+
+FORMATO DO HISTORICO: home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
+  CASA: time mandante → feitos=home_*, cedidos=away_*.
+  FORA: time visitante → feitos=away_*, cedidos=home_*.
 
 FEITOS vs CEDIDOS (mercados totais/BTTS):
   Primario: feitos_A + feitos_B. Validacao: cedidos_A + cedidos_B.
   Divergencia >15% → reduza Confirmadores 1 nivel.
+  Mercado de time: feitos do time + cedidos do adversario.
 
 CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30)
   C: taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
   Q: RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
   K: 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 | bookmakers_count>=3→K+0.05 | bookmakers_count=1→K-0.05
 
-SMART SAFE LINE (obrigatorio para Over/Under):
+SMART SAFE LINE (obrigatorio para Over/Under com multiplas linhas):
   1. Liste todas as linhas. 2. edge=taxa_real-1/odd | EV=taxa_real×odd-1.
-  3. Descarte: edge<0.05 | EV≤0 | odd individual fora da faixa valida para o formato.
-  4. Escolha maior taxa_real entre aprovadas.
-  No reasoning: "SMART SAFE LINE|Escolhida:[linha @odd — taxa=X%, edge=Y%]"
+  3. Descarte: edge<0.05 | EV≤0 | odd individual fora da faixa valida para o formato escolhido.
+  4. Das aprovadas: maior taxa_real. Empate: maior edge.
+  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
 
-VERIFICACAO FINAL: calcule odd_combined = produto de todas as odds. Fora de {odd_min}-{odd_max} → no_bet imediato.
+VERIFICACAO FINAL obrigatoria: calcule odd_combined = produto de todas as odds.
+  Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
 
 SAIDA JSON:
-Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
-Dupla: {{"tipo":"dupla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
-Tripla: {{"tipo":"tripla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":{{"fixture_id":0,"home_team":"","away_team":"","league_id":0,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
+Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
+Dupla: {{"tipo":"dupla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
+Tripla: {{"tipo":"tripla","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_2":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"pick_3":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%)."}},"odd_combined":0.00,"confidence_media":0.00}}
 Sem pick: {{"no_bet":true,"motivo":"criterio que falhou"}}
-prob_real = taxa_real do mercado (0.00-1.00).
+prob_real = taxa_real do mercado escolhido (0.00-1.00).
 """
 
 
