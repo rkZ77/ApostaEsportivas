@@ -261,10 +261,17 @@ export default function SuggestionCard({
               const u = s.user_stake_units ?? stakeSuggestion?.units ?? 1
               const p = calcProfitUnits(s.result, Number(s.odd), u, s.user_actual_odd)
               return (
-                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                </div>
+                <>
+                  <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                    {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                  </div>
+                  {banca && (
+                    <div className={`text-[11px] font-semibold mt-0.5 ${p >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
+                    </div>
+                  )}
+                </>
               )
             })()}
           </div>

@@ -524,10 +524,17 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
               const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
               const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
               return (
-                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                </div>
+                <>
+                  <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                    {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                  </div>
+                  {banca && (
+                    <div className={`text-[11px] font-semibold mt-0.5 ${p >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
+                    </div>
+                  )}
+                </>
               )
             })()}
           </div>
@@ -772,10 +779,17 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
               const u = m.user_stake_units ?? stakeSuggestion?.units ?? 1
               const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
               return (
-                <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                </div>
+                <>
+                  <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                    {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
+                  </div>
+                  {banca && (
+                    <div className={`text-[11px] font-semibold mt-0.5 ${p >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                      {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
+                    </div>
+                  )}
+                </>
               )
             })()}
           </div>
