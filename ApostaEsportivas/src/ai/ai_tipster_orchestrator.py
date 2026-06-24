@@ -86,17 +86,21 @@ class AITipsterOrchestrator:
 
             # =====================
             # MÉDIAS (contexto)
+            # Stats de seleções são salvas com league_id=1 pelo process_national_team
             # =====================
+            is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
+            stats_league_id = 1 if is_national else league_id
+
             home_stats = self.team_stats.get_stats(
                 team_id=home_id,
-                league_id=league_id,
+                league_id=stats_league_id,
                 season=season,
                 context_type="HOME"
             )
 
             away_stats = self.team_stats.get_stats(
                 team_id=away_id,
-                league_id=league_id,
+                league_id=stats_league_id,
                 season=season,
                 context_type="AWAY"
             )
@@ -108,7 +112,6 @@ class AITipsterOrchestrator:
             # =============================
             # HISTÓRICO — seleções usam cross-competition (último 15 de qualquer liga)
             # =============================
-            is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
 
             if is_national:
                 home_matches       = self.match_stats.get_last_n_all_competitions(home_id, limit=15)

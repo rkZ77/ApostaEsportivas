@@ -178,17 +178,19 @@ def _load_fixture_context(
     except Exception:
         home_standing, away_standing = None, None
 
+    is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
+    # Stats de seleções são salvas com league_id=1 pelo process_national_team
+    stats_league_id = 1 if is_national else league_id
+
     try:
-        home_stats = team_stats_svc.get_stats(home_team_id, league_id, season, "HOME")
+        home_stats = team_stats_svc.get_stats(home_team_id, stats_league_id, season, "HOME")
     except Exception:
         home_stats = None
 
     try:
-        away_stats = team_stats_svc.get_stats(away_team_id, league_id, season, "AWAY")
+        away_stats = team_stats_svc.get_stats(away_team_id, stats_league_id, season, "AWAY")
     except Exception:
         away_stats = None
-
-    is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
 
     if is_national:
         # Seleções: usa últimos 15 jogos em QUALQUER competição
