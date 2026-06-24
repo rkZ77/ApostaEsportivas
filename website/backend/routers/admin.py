@@ -505,3 +505,11 @@ def admin_stats(current_user: dict = Depends(require_admin)):
     finally:
         cur.close()
         conn.close()
+
+
+@router.post("/resolve-picks")
+def admin_resolve_picks(current_user: dict = Depends(require_admin)):
+    """Dispara manualmente o resolver de picks pendentes (mesmo job do scheduler)."""
+    from routers.live import resolve_all_pending
+    result = resolve_all_pending()
+    return {"ok": True, "resolved": result}

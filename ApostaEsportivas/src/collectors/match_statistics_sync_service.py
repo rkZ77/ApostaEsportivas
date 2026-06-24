@@ -380,22 +380,32 @@ class MatchStatisticsSyncService:
 
         # Coleta fixture_ids pendentes das tabelas de sugestões
         pending_ids = set()
-
-        _sync_allowed = frozenset({"picks_vip", "picks_free", "picks_alavancagem"})
-        for table in ("picks_vip", "picks_free"):
-            if table not in _sync_allowed:
-                continue
-            self.cur.execute(f"SELECT DISTINCT fixture_id FROM {table} WHERE result IS NULL;")
-            for row in self.cur.fetchall():
-                pending_ids.add(row[0])
-
-        # Para múltiplas, extrai fixture_ids do JSON das legs
-        self.cur.execute("SELECT games FROM picks_multiplas WHERE result IS NULL;")
         import json as _json
+
+        for table in ("picks_vip", "picks_free"):
+            self.cur.execute(f"SELECT DISTINCT fixture_id FROM {table} WHERE result IS NULL AND fixture_id IS NOT NULL;")
+            for row in self.cur.fetchall():
+                if row[0] is not None:
+                    pending_ids.add(row[0])
+
+        # Alavancagem: dois fixtures por pick
+        self.cur.execute("SELECT fixture_id_1, fixture_id_2 FROM picks_alavancagem WHERE result IS NULL;")
+        for row in self.cur.fetchall():
+            for fid in (row[0], row[1]):
+                if fid is not None:
+                    pending_ids.add(fid)
+
+        # Múltiplas: extrai fixture_ids do JSON das legs
+        self.cur.execute("SELECT games FROM picks_multiplas WHERE result IS NULL;")
         for (games_raw,) in self.cur.fetchall():
-            games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
-            for leg in games:
-                pending_ids.add(leg["fixture_id"])
+            try:
+                games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
+                for leg in (games if isinstance(games, list) else []):
+                    fid = leg.get("fixture_id")
+                    if fid is not None:
+                        pending_ids.add(fid)
+            except Exception:
+                pass
 
         # Remove os que já têm stats
         if pending_ids:
