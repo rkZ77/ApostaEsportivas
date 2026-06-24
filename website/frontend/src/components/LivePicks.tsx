@@ -266,7 +266,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   const isFinished = FINISHED_SET.has(pick.status)
   const isMulti    = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
   const hasCashout = pick.cashout_amount != null
-  const canCashout = !isFinished && !hasCashout
+  const canCashout = !isFinished && !hasCashout && !pick.is_locked
   const lineLc     = pick.line?.toLowerCase() ?? ''
   const hasBar     = !isMulti && pick.current_val != null && pick.line_val != null &&
     (lineLc.startsWith('over') || lineLc.startsWith('mais') ||

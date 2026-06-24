@@ -35,6 +35,8 @@ class AIMultiplasCheckerService:
             market, line, float(odd), stats, home_team, away_team
         )
 
+        if result is None:
+            return None  # dados ausentes → leg ainda pendente
         # Múltipla exige acerto pleno — HALF e PUSH viram RED
         if result not in ("GREEN", "RED"):
             return "RED"

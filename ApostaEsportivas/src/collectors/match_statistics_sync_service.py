@@ -198,6 +198,7 @@ class MatchStatisticsSyncService:
                 fixture_id, league_id, season,
                 home_team_id, away_team_id,
                 home_goals, away_goals, total_goals,
+                home_goals_ht, away_goals_ht,
                 home_corners, away_corners, total_corners,
                 home_yellow_cards, away_yellow_cards, total_yellow_cards,
                 home_red_cards, away_red_cards, total_red_cards,
@@ -221,6 +222,7 @@ class MatchStatisticsSyncService:
                 %s,%s,%s,
                 %s,%s,
                 %s,%s,%s,
+                %s,%s,
                 %s,%s,%s,
                 %s,%s,%s,
                 %s,%s,%s,
@@ -237,6 +239,8 @@ class MatchStatisticsSyncService:
                 home_goals = EXCLUDED.home_goals,
                 away_goals = EXCLUDED.away_goals,
                 total_goals = EXCLUDED.total_goals,
+                home_goals_ht = COALESCE(EXCLUDED.home_goals_ht, match_statistics.home_goals_ht),
+                away_goals_ht = COALESCE(EXCLUDED.away_goals_ht, match_statistics.away_goals_ht),
 
                 home_corners = EXCLUDED.home_corners,
                 away_corners = EXCLUDED.away_corners,
@@ -280,6 +284,7 @@ class MatchStatisticsSyncService:
             fx["fixture_id"], fx["league_id"], fx["season"],
             fx["home_id"], fx["away_id"],
             home_goals, away_goals, total_goals,
+            fx.get("home_goals_ht"), fx.get("away_goals_ht"),
             home_corners, away_corners, home_corners + away_corners,
             home_yellow, away_yellow, home_yellow + away_yellow,
             home_red, away_red, home_red + away_red,
@@ -451,6 +456,8 @@ class MatchStatisticsSyncService:
                 goals = item["goals"]
                 match_date = datetime.fromisoformat(fixture_info["date"].replace("Z", "+00:00"))
 
+                score = item.get("score", {})
+                ht = score.get("halftime", {})
                 fx = {
                     "fixture_id": fixture_id,
                     "league_id": league_id,
@@ -461,6 +468,8 @@ class MatchStatisticsSyncService:
                     "status": status,
                     "home_goals": goals["home"] or 0,
                     "away_goals": goals["away"] or 0,
+                    "home_goals_ht": ht.get("home"),
+                    "away_goals_ht": ht.get("away"),
                     "referee": fixture_info.get("referee"),
                 }
 

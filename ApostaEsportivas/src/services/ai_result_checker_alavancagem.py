@@ -29,8 +29,10 @@ class AIResultCheckerAlavancagem:
             market, line, float(odd), stats, home_team, away_team
         )
 
+        if result is None:
+            return None  # dados ausentes → aguardando
         if result not in ("GREEN", "RED"):
-            result = "RED"
+            result = "RED"  # HALF / PUSH → RED para alavancagem
 
         return result
 

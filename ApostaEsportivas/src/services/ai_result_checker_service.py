@@ -20,16 +20,11 @@ class AIResultCheckerService:
 
         cur.execute("""
             SELECT
-                home_goals,
-                away_goals,
-                total_goals,
-                home_corners,
-                away_corners,
-                total_corners,
-                home_yellow_cards,
-                away_yellow_cards,
-                home_red_cards,
-                away_red_cards
+                home_goals, away_goals, total_goals,
+                home_corners, away_corners, total_corners,
+                home_yellow_cards, away_yellow_cards,
+                home_red_cards, away_red_cards,
+                home_goals_ht, away_goals_ht
             FROM match_statistics
             WHERE fixture_id = %s
             LIMIT 1;
@@ -40,22 +35,30 @@ class AIResultCheckerService:
         if not row:
             return None
 
+        hy, hr = (row[6] or 0), (row[8] or 0)
+        ay, ar = (row[7] or 0), (row[9] or 0)
+        hg_ht  = row[10]
+        ag_ht  = row[11]
+
         return {
-            "home_goals":    row[0],
-            "away_goals":    row[1],
-            "total_goals":   row[2],
-            "home_corners":  row[3],
-            "away_corners":  row[4],
-            "total_corners": row[5],
-            "home_yellow":   row[6],
-            "away_yellow":   row[7],
-            "home_red":      row[8],
-            "away_red":      row[9],
-            "home_cards":    row[6] + row[8],
-            "away_cards":    row[7] + row[9],
-            "total_cards":   (row[6] + row[8]) + (row[7] + row[9]),
-            "total_yellow":  row[6] + row[7],
-            "total_red":     row[8] + row[9],
+            "home_goals":    row[0] or 0,
+            "away_goals":    row[1] or 0,
+            "total_goals":   row[2] or 0,
+            "home_corners":  row[3] or 0,
+            "away_corners":  row[4] or 0,
+            "total_corners": row[5] or 0,
+            "home_yellow":   hy,
+            "away_yellow":   ay,
+            "home_red":      hr,
+            "away_red":      ar,
+            "home_cards":    hy + hr,
+            "away_cards":    ay + ar,
+            "total_cards":   hy + hr + ay + ar,
+            "total_yellow":  hy + ay,
+            "total_red":     hr + ar,
+            "home_goals_ht": hg_ht,
+            "away_goals_ht": ag_ht,
+            "total_goals_ht": (hg_ht or 0) + (ag_ht or 0) if hg_ht is not None else None,
         }
 
     ##########################################################################
@@ -87,44 +90,70 @@ class AIResultCheckerService:
         return None, num_val
 
     ##########################################################################
+    # DETECTA SE É MERCADO DE 1° TEMPO
+    ##########################################################################
+    @staticmethod
+    def _is_first_half(market_name: str) -> bool:
+        n = market_name.lower()
+        return any(k in n for k in [
+            "1° tempo", "1º tempo", "primeiro tempo",
+            "1st half", "first half", "halftime", "half time",
+            "ht -", "- ht", "(ht)", "[ht]",
+        ])
+
+    ##########################################################################
     # DETECTA MERCADO
+    # Retorna tipo base (sem sufixo _ht); use _is_first_half() separado.
     ##########################################################################
     def detect_market_type(self, market_name):
         name = market_name.lower()
 
-        # Cartões (antes de "corner" para evitar falso positivo em "red card")
+        # Remove qualificadores de tempo para não confundir keywords
+        for strip in ["1° tempo", "1º tempo", "primeiro tempo", "1st half",
+                      "first half", "halftime", "half time", "2° tempo", "2º tempo"]:
+            name = name.replace(strip, "")
+
+        # Cartões (antes de corner para evitar "red card")
         if any(w in name for w in ["cart", "card", "amarelo", "yellow", "vermelho"]):
             return "cards"
 
-        # Escanteios / Cantos
-        if any(w in name for w in ["canto", "escanteio", "corner", " esc"]):
+        # Escanteios
+        if any(w in name for w in ["canto", "escanteio", "corner", " esc", "asian handicap corner"]):
             return "corners"
 
-        # Gols
-        if any(w in name for w in ["gol", "goal"]):
-            return "goals"
-
         # BTTS
-        if any(w in name for w in ["btts", "ambas marcam", "ambas as equipes", "ambas"]):
+        if any(w in name for w in ["btts", "ambas marcam", "ambas as equipes", "ambas", "both teams"]):
             return "btts"
 
-        # Resultado / 1X2
-        if any(w in name for w in ["resultado", "1x2", "vencedor", "moneyline"]):
-            return "result_1x2"
+        # Gols
+        if any(w in name for w in ["gol", "goal", "total de gol"]):
+            return "goals"
 
-        # Dupla chance
-        if any(w in name for w in ["dupla chance", "double chance"]):
+        # Dupla Chance  (1X / X2 / 12 / "Casa ou Empate" etc.)
+        dc_kws = ["dupla chance", "double chance",
+                  "casa ou empate", "empate ou casa", "empate ou visit",
+                  "visit ou empate", "casa ou visit", "visit ou casa",
+                  "1x2x", "1x ", "x2 ", " 1x", " x2", "(1x)", "(x2)", "(12)"]
+        if any(w in name for w in dc_kws):
             return "double_chance"
+
+        # Resultado / 1X2
+        if any(w in name for w in ["resultado", "1x2", "vencedor", "moneyline",
+                                    "match winner", "full time result"]):
+            return "result_1x2"
 
         # Handicap asiático / europeu
         if any(w in name for w in ["handicap", "handi", "h.a.", " ha "]):
             return "handicap"
 
+        # Over/Under genérico → trata como gols se nada mais encaixou
+        if any(w in name for w in ["over", "under", "acima", "abaixo", "mais de", "menos de"]):
+            return "goals"
+
         return "unknown"
 
     ##########################################################################
     # DETECTA LADO (CASA / VISITANTE / TOTAL)
-    # home_team / away_team: nomes dos times para matching por nome
     ##########################################################################
     def detect_side(self, market_name, home_team=None, away_team=None):
         name = market_name.lower()
@@ -134,7 +163,6 @@ class AIResultCheckerService:
         if any(w in name for w in ["visitante", "away", "fora", "visita"]):
             return "away"
 
-        # Tenta detectar pelo nome do time
         if home_team and home_team.lower() in name:
             return "home"
         if away_team and away_team.lower() in name:
@@ -198,22 +226,30 @@ class AIResultCheckerService:
         return ("RED", Decimal("-1"))
 
     ##########################################################################
-    # RESULTADO 1X2
+    # RESULTADO 1X2  (aceita também variantes de dupla chance na linha)
     ##########################################################################
-    def evaluate_result_1x2(self, stats, raw_line):
-        """Avalia resultado final. raw_line: '1', 'X', '2', 'casa', 'empate', 'visitante'."""
-        ln = (raw_line or "").lower().strip()
+    def evaluate_result_1x2(self, hg, ag, raw_line, market=""):
+        """hg/ag: gols casa/fora. raw_line: '1', 'X', '2', '1X', 'Casa ou Empate', etc."""
+        ln  = (raw_line or "").lower().replace(" ", "").replace("ou", "").strip()
+        mkt = (market or "").lower()
 
-        home_g = stats["home_goals"]
-        away_g = stats["away_goals"]
+        if hg > ag:   actual = "1"
+        elif hg == ag: actual = "x"
+        else:          actual = "2"
 
-        if home_g > away_g:
-            actual = "1"
-        elif home_g == away_g:
-            actual = "x"
-        else:
-            actual = "2"
+        # Dupla chance dentro do evaluate_result_1x2
+        combos = {
+            "1x": {"1", "x"}, "x1": {"1", "x"},
+            "12": {"1", "2"}, "21": {"1", "2"},
+            "x2": {"x", "2"}, "2x": {"x", "2"},
+            "casaempate": {"1", "x"}, "empatevisitante": {"x", "2"},
+            "casavisitante": {"1", "2"},
+        }
+        for key, valid in combos.items():
+            if key in ln or key in mkt.replace(" ", ""):
+                return ("GREEN", Decimal("1")) if actual in valid else ("RED", Decimal("-1"))
 
+        # Resultado simples
         if ln in ("1", "casa", "mandante", "home"):
             pred = "1"
         elif ln in ("x", "empate", "draw", "e"):
@@ -221,83 +257,50 @@ class AIResultCheckerService:
         elif ln in ("2", "visitante", "away", "fora"):
             pred = "2"
         else:
-            return ("RED", Decimal("-1"))
+            return (None, Decimal("0"))  # linha não reconhecida → não resolve
 
-        if pred == actual:
-            return ("GREEN", Decimal("1"))
-        return ("RED", Decimal("-1"))
+        return ("GREEN", Decimal("1")) if pred == actual else ("RED", Decimal("-1"))
 
     ##########################################################################
     # DUPLA CHANCE
     ##########################################################################
-    def evaluate_double_chance(self, stats, raw_line):
-        """Avalia dupla chance. raw_line: '1X', '12', 'X2' etc."""
-        ln = (raw_line or "").lower().replace(" ", "").replace("ou", "").strip()
-
-        home_g = stats["home_goals"]
-        away_g = stats["away_goals"]
-
-        if home_g > away_g:
-            actual = "1"
-        elif home_g == away_g:
-            actual = "x"
-        else:
-            actual = "2"
-
-        combos = {
-            "1x": {"1", "x"}, "x1": {"1", "x"},
-            "12": {"1", "2"}, "21": {"1", "2"},
-            "x2": {"x", "2"}, "2x": {"x", "2"},
-            # formas extensas
-            "casaouempate": {"1", "x"},
-            "casaouvisitante": {"1", "2"},
-            "empateouvisitante": {"x", "2"},
-        }
-
-        for key, valid in combos.items():
-            if key in ln:
-                win = actual in valid
-                return ("GREEN", Decimal("1")) if win else ("RED", Decimal("-1"))
-
-        return ("RED", Decimal("-1"))
+    def evaluate_double_chance(self, hg, ag, raw_line, market=""):
+        return self.evaluate_result_1x2(hg, ag, raw_line, market)
 
     ##########################################################################
     # HANDICAP ASIÁTICO (resultado)
-    # market_name ex: "Handicap Asiático Casa -1.5", line ex: "-1.5"
     ##########################################################################
-    def evaluate_handicap(self, stats, raw_line, side):
-        """Handicap asiático aplicado ao resultado (gols)."""
+    def evaluate_handicap(self, hg, ag, raw_line, side):
         try:
             handicap = Decimal(str(raw_line).replace(",", ".").strip())
         except Exception:
             return ("RED", Decimal("-1"))
 
-        home_g = Decimal(str(stats["home_goals"]))
-        away_g = Decimal(str(stats["away_goals"]))
+        home_g = Decimal(str(hg))
+        away_g = Decimal(str(ag))
 
         if side == "home":
-            adj_home = home_g + handicap
-            if adj_home > away_g:
-                return ("GREEN", Decimal("1"))
-            elif adj_home == away_g:
-                return ("PUSH", Decimal("0"))
-            else:
-                return ("RED", Decimal("-1"))
+            adj = home_g + handicap
+            if adj > away_g:   return ("GREEN", Decimal("1"))
+            elif adj == away_g: return ("PUSH", Decimal("0"))
+            return ("RED", Decimal("-1"))
         else:
-            adj_away = away_g + handicap
-            if adj_away > home_g:
-                return ("GREEN", Decimal("1"))
-            elif adj_away == home_g:
-                return ("PUSH", Decimal("0"))
-            else:
-                return ("RED", Decimal("-1"))
+            adj = away_g + handicap
+            if adj > home_g:   return ("GREEN", Decimal("1"))
+            elif adj == home_g: return ("PUSH", Decimal("0"))
+            return ("RED", Decimal("-1"))
 
     ##########################################################################
-    # RESOLVE STAT_VAL + RESULTADO para mercados over/under
+    # RESOLVE STAT_VAL para mercados over/under
     ##########################################################################
-    def _resolve_overunder(self, stats, mt, side):
-        """Retorna o valor estatístico correto para o mercado e lado."""
+    def _resolve_overunder(self, stats, mt, side, is_ht=False):
         if mt == "goals":
+            if is_ht:
+                hg = stats.get("home_goals_ht")
+                ag = stats.get("away_goals_ht")
+                if hg is None or ag is None:
+                    return None  # dados de 1° tempo ainda não disponíveis
+                return hg if side == "home" else ag if side == "away" else hg + ag
             return (
                 stats["home_goals"]  if side == "home" else
                 stats["away_goals"]  if side == "away" else
@@ -319,55 +322,68 @@ class AIResultCheckerService:
 
     ##########################################################################
     # AVALIA UM PICK COMPLETO
-    # Aceita nome dos times para detect_side funcionar com times no nome do mercado
+    # Retorna (None, Decimal("0")) quando não é possível determinar o resultado.
     ##########################################################################
     def evaluate_pick(self, market, line, odd, stats, home_team=None, away_team=None):
-        """
-        Avalia um pick individual. Retorna (result_str, factor, profit_str).
-        result_str: GREEN / RED / PUSH / HALF-WIN / HALF-LOSS
-        factor:     Decimal usado em calculate_profit
-        """
-        mt   = self.detect_market_type(market)
-        side = self.detect_side(market, home_team, away_team)
+        mt     = self.detect_market_type(market)
+        is_ht  = self._is_first_half(market)
+        side   = self.detect_side(market, home_team, away_team)
         op, val = self.parse_line(line)
 
+        # Seleciona gols corretos (1° tempo ou jogo completo)
+        if is_ht:
+            hg = stats.get("home_goals_ht")
+            ag = stats.get("away_goals_ht")
+            if hg is None or ag is None:
+                return (None, Decimal("0"))  # aguardando dados de HT
+        else:
+            hg = stats["home_goals"]
+            ag = stats["away_goals"]
+
         if mt in ("goals", "corners"):
-            stat_val = self._resolve_overunder(stats, mt, side)
-            result, factor = self.evaluate_asian(stat_val, val, op)
+            stat_val = self._resolve_overunder(stats, mt, side, is_ht)
+            if stat_val is None or val is None:
+                return (None, Decimal("0"))
+            if op in ("over", "under"):
+                result, factor = self.evaluate_asian(stat_val, val, op)
+            else:
+                # Asian handicap sem over/under (ex: "Corners Asian Handicap Away -5.5")
+                if mt == "corners":
+                    result, factor = self.evaluate_handicap(
+                        stats["home_corners"], stats["away_corners"], str(val), side
+                    )
+                else:
+                    result, factor = self.evaluate_handicap(hg, ag, str(val), side)
 
         elif mt == "cards":
-            if "amarelo" in market.lower() or "yellow" in market.lower():
-                stat_val = (
-                    stats["home_yellow"] if side == "home" else
-                    stats["away_yellow"] if side == "away" else
-                    stats["total_yellow"]
-                )
+            if val is None:
+                return (None, Decimal("0"))
+            is_yellow = any(k in market.lower() for k in ["amarelo", "yellow"])
+            if side == "home":
+                stat_val = stats["home_yellow"] if is_yellow else stats["home_cards"]
+            elif side == "away":
+                stat_val = stats["away_yellow"] if is_yellow else stats["away_cards"]
             else:
-                stat_val = (
-                    stats["home_cards"] if side == "home" else
-                    stats["away_cards"] if side == "away" else
-                    stats["total_cards"]
-                )
+                stat_val = stats["total_yellow"] if is_yellow else stats["total_cards"]
             result, factor = self.evaluate_asian(stat_val, val, op)
 
         elif mt == "btts":
-            if op == "yes":
-                win = stats["home_goals"] > 0 and stats["away_goals"] > 0
+            both = hg > 0 and ag > 0
+            if op in ("yes", None) and line and "sim" in (line or "").lower():
+                result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
+            elif op == "no" or (line and any(k in (line or "").lower() for k in ["no", "não", "nao"])):
+                result, factor = ("RED", Decimal("1")) if both else ("GREEN", Decimal("1"))
             else:
-                win = stats["home_goals"] == 0 or stats["away_goals"] == 0
-            result, factor = ("GREEN", Decimal("1")) if win else ("RED", Decimal("-1"))
+                result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
 
-        elif mt == "result_1x2":
-            result, factor = self.evaluate_result_1x2(stats, line)
-
-        elif mt == "double_chance":
-            result, factor = self.evaluate_double_chance(stats, line)
+        elif mt in ("result_1x2", "double_chance"):
+            result, factor = self.evaluate_result_1x2(hg, ag, line, market)
 
         elif mt == "handicap":
-            result, factor = self.evaluate_handicap(stats, line, side)
+            result, factor = self.evaluate_handicap(hg, ag, line, side)
 
         else:
-            result, factor = ("RED", Decimal("-1"))
+            return (None, Decimal("0"))  # mercado desconhecido → não resolve
 
         return result, factor
 
@@ -422,6 +438,10 @@ class AIResultCheckerService:
 
             result, factor = self.evaluate_pick(market, line, float(odd), stats,
                                                 home_team, away_team)
+
+            if result is None:
+                print(f"[CHECKER] id={sid}: mercado nao reconhecido ou dados HT ausentes - pulando.")
+                continue
 
             profit = self.calculate_profit(factor, odd)
 

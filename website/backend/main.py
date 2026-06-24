@@ -392,6 +392,8 @@ def run_migrations():
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100);")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS cashout_amount NUMERIC(10,2);")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_token VARCHAR(64);")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS home_goals_ht INTEGER;")
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS away_goals_ht INTEGER;")
         # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
         cur.execute("UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64")
         cur.execute("UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64")
