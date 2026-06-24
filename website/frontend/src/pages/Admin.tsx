@@ -75,6 +75,11 @@ export default function Admin() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [revenue, setRevenue] = useState<{
+    total: number; count: number; avg_ticket: number; active_vip: number;
+    monthly: { month: string; total: number; count: number }[];
+    by_plan: { plan: string; total: number; count: number }[];
+  } | null>(null)
   const [paymentsPage, setPaymentsPage] = useState(0)
   const [usersPage, setUsersPage] = useState(0)
   const [pickSearch, setPickSearch] = useState('')
@@ -137,6 +142,7 @@ export default function Admin() {
     reload()
     setPaymentsLoading(true)
     api.get('/admin/payments').then(r => setPayments(r.data)).catch(() => {}).finally(() => setPaymentsLoading(false))
+    api.get('/admin/revenue').then(r => setRevenue(r.data)).catch(() => {})
   }, [isAdmin])
 
   const setPlan = async (id: number, plan: string) => {
@@ -403,6 +409,115 @@ export default function Admin() {
               </div>
             </div>
           </>
+        )}
+
+        {/* Financeiro */}
+        {revenue && (
+          <div className="mb-6">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Financeiro</h2>
+
+            {/* KPIs */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              {[
+                { label: 'Receita Total',    value: `R$${revenue.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-green-400' },
+                { label: 'Assinaturas',      value: String(revenue.count),                                                        color: 'text-white'    },
+                { label: 'Ticket Médio',     value: `R$${revenue.avg_ticket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-400' },
+                { label: 'VIPs Ativos Agora',value: String(revenue.active_vip),                                                   color: 'text-yellow-400' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="stat-card text-center py-4">
+                  <div className={`text-2xl font-black ${color}`}>{value}</div>
+                  <div className="text-xs text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+              {/* Receita por mês */}
+              <div className="card overflow-hidden lg:col-span-2">
+                <div className="px-4 py-3 border-b border-zinc-800">
+                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Receita por mês (últimos 12)</span>
+                </div>
+                {revenue.monthly.length === 0 ? (
+                  <p className="text-center text-zinc-600 text-sm py-6">Sem dados.</p>
+                ) : (() => {
+                  const maxTotal = Math.max(...revenue.monthly.map(m => m.total), 1)
+                  return (
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="border-b border-zinc-800">
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase tracking-wider">Mês</th>
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase tracking-wider">Receita</th>
+                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase tracking-wider">Vendas</th>
+                            <th className="w-32 px-4 py-2"></th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {revenue.monthly.map(m => {
+                            const [y, mo] = m.month.split('-')
+                            const label = new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+                            const pct = (m.total / maxTotal) * 100
+                            return (
+                              <tr key={m.month} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
+                                <td className="px-4 py-2.5 text-zinc-300 font-medium capitalize">{label}</td>
+                                <td className="px-4 py-2.5 text-green-400 font-semibold">
+                                  R${m.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                </td>
+                                <td className="px-4 py-2.5 text-zinc-400">{m.count}</td>
+                                <td className="px-4 py-2.5">
+                                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                    <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
+                                  </div>
+                                </td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  )
+                })()}
+              </div>
+
+              {/* Por plano */}
+              <div className="card overflow-hidden">
+                <div className="px-4 py-3 border-b border-zinc-800">
+                  <span className="text-xs font-semibold text-zinc-500 uppercase tracking-wider">Por plano</span>
+                </div>
+                {revenue.by_plan.length === 0 ? (
+                  <p className="text-center text-zinc-600 text-sm py-6">Sem dados.</p>
+                ) : (() => {
+                  const planColors: Record<string, string> = {
+                    mensal: 'text-blue-400', trimestral: 'text-purple-400',
+                    semestral: 'text-orange-400', anual: 'text-green-400',
+                  }
+                  const maxTotal = Math.max(...revenue.by_plan.map(p => p.total), 1)
+                  return (
+                    <div className="p-4 space-y-4">
+                      {revenue.by_plan.map(p => {
+                        const pct = (p.total / maxTotal) * 100
+                        const color = planColors[p.plan] ?? 'text-zinc-400'
+                        return (
+                          <div key={p.plan}>
+                            <div className="flex items-center justify-between mb-1">
+                              <span className={`text-xs font-bold capitalize ${color}`}>{p.plan}</span>
+                              <div className="text-right">
+                                <span className="text-xs text-white font-semibold">R${p.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-[10px] text-zinc-600 ml-1">({p.count}x)</span>
+                              </div>
+                            </div>
+                            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500/60 rounded-full" style={{ width: `${pct}%` }} />
+                            </div>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )
+                })()}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Pagamentos */}

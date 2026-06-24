@@ -339,6 +339,64 @@ async def sync_payment(body: SyncPaymentBody, current_user: dict = Depends(requi
         conn.close()
 
 
+@router.get("/revenue")
+def admin_revenue(current_user: dict = Depends(require_admin)):
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                COALESCE(SUM(amount), 0)   AS total,
+                COUNT(*)                    AS count,
+                COALESCE(AVG(amount), 0)   AS avg_ticket
+            FROM payments WHERE status = 'approved'
+        """)
+        totals = dict(cur.fetchone())
+
+        cur.execute("""
+            SELECT
+                TO_CHAR(created_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS month,
+                COALESCE(SUM(amount), 0) AS total,
+                COUNT(*)                 AS count
+            FROM payments
+            WHERE status = 'approved'
+              AND created_at >= NOW() - INTERVAL '12 months'
+            GROUP BY month
+            ORDER BY month DESC
+        """)
+        monthly = [dict(r) for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT
+                plan_key,
+                COALESCE(SUM(amount), 0) AS total,
+                COUNT(*)                 AS count
+            FROM payments
+            WHERE status = 'approved'
+            GROUP BY plan_key
+            ORDER BY total DESC
+        """)
+        by_plan = [dict(r) for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT COUNT(*) AS active_vip FROM users
+            WHERE plan = 'vip' AND expires_at > NOW() AND active = true
+        """)
+        active_vip = cur.fetchone()["active_vip"]
+
+        return {
+            "total":      float(totals["total"]),
+            "count":      int(totals["count"]),
+            "avg_ticket": float(totals["avg_ticket"]),
+            "monthly":    [{"month": r["month"], "total": float(r["total"]), "count": int(r["count"])} for r in monthly],
+            "by_plan":    [{"plan": r["plan_key"], "total": float(r["total"]), "count": int(r["count"])} for r in by_plan],
+            "active_vip": int(active_vip),
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/payments")
 def admin_payments(current_user: dict = Depends(require_admin)):
     conn = get_connection()
