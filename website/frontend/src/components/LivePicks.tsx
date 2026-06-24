@@ -260,13 +260,42 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
   )
 }
 
+// Detecta se o resultado já é matematicamente irreversível (gols não voltam atrás, etc.)
+function isEarlyLocked(pick: any): boolean {
+  const lineLc   = (pick.line   || '').toLowerCase()
+  const marketLc = (pick.market || '').toLowerCase()
+  const cur      = Number(pick.current_val)
+  const lineVal  = Number(pick.line_val)
+  if (pick.current_val == null) return false
+
+  // Ambas as Equipes Marcam — uma vez que ambas marcaram, é irreversível
+  if (marketLc.includes('both teams') || marketLc.includes('ambas') || marketLc.includes('btts')) {
+    return cur >= 1
+  }
+  if (!pick.line_val) return false
+  // Over X.5 — gols não são descontados
+  if (lineLc.startsWith('over') || lineLc.startsWith('mais')) {
+    return cur > lineVal
+  }
+  // Under X.5 — já passou do limite, pick perdido para sempre
+  if (lineLc.startsWith('under') || lineLc.startsWith('menos')) {
+    return cur >= Math.ceil(lineVal)
+  }
+  return false
+}
+
 function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: number; onRefresh: () => void }) {
   const [showCashout, setShowCashout] = useState(false)
   const isLive     = pick.is_live
   const isFinished = FINISHED_SET.has(pick.status)
   const isMulti    = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
   const hasCashout = pick.cashout_amount != null
-  const canCashout = !isFinished && !hasCashout && !pick.is_locked
+
+  // early lock: mercado cujo resultado já é matematicamente certo (ainda ao vivo)
+  const earlyLocked    = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)
+  const effectiveLocked = pick.is_locked || earlyLocked
+
+  const canCashout = !isFinished && !hasCashout && !effectiveLocked
   const lineLc     = pick.line?.toLowerCase() ?? ''
   const hasBar     = !isMulti && pick.current_val != null && pick.line_val != null &&
     (lineLc.startsWith('over') || lineLc.startsWith('mais') ||
@@ -275,7 +304,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
   const stColor = pick.pick_status === 'winning' ? 'text-green-400'
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
-  const liveProb = isLive && !pick.is_locked && pick.elapsed ? calcLiveProb(pick) : null
+  const liveProb = isLive && !effectiveLocked && pick.elapsed ? calcLiveProb(pick) : null
   const probCls  = liveProb == null ? '' : liveProb >= 60
     ? 'text-green-400 bg-green-400/10 border-green-500/25'
     : liveProb >= 35
@@ -285,14 +314,16 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
 
   const resultBadge = hasCashout
     ? <span className="text-[10px] font-black text-orange-400 bg-orange-400/10 border border-orange-500/30 px-2 py-0.5 rounded-full">CASHOUT</span>
-    : pick.is_locked
+    : effectiveLocked
     ? pick.pick_status === 'winning'
-      ? <span className="text-[10px] font-black text-green-400 bg-green-400/10 border border-green-500/30 px-2 py-0.5 rounded-full">GREEN ✓</span>
+      ? <span className={`text-[10px] font-black text-green-400 bg-green-400/10 border border-green-500/30 px-2 py-0.5 rounded-full ${earlyLocked ? 'animate-pulse' : ''}`}>GREEN ✓</span>
       : <span className="text-[10px] font-black text-red-400 bg-red-400/10 border border-red-500/30 px-2 py-0.5 rounded-full">RED ✗</span>
     : null
 
   return (
     <div className={`relative rounded-2xl border p-4 transition-colors ${
+      earlyLocked && pick.pick_status === 'winning' ? 'border-green-500/50 bg-green-500/5' :
+      earlyLocked && pick.pick_status === 'losing'  ? 'border-red-500/40 bg-red-500/5' :
       isCopa && isLive ? 'border-yellow-500/30 bg-zinc-900' :
       isCopa           ? 'border-yellow-500/20 bg-zinc-900/60' :
       isLive           ? 'border-green-500/25 bg-zinc-900' :
@@ -371,7 +402,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               </span>
             )}
           </div>
-          {hasBar && !pick.is_locked && (
+          {hasBar && !effectiveLocked && (
             <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
           )}
         </>
