@@ -18,9 +18,8 @@ HEADERS = {"x-apisports-key": API_KEY}
 # CASAS DE APOSTAS PERMITIDAS
 # 8  = Bet365
 # 32 = Betano
-# 34 = SuperBet
 # ============================================================
-BR_BOOKMAKERS = {8, 32, 34}
+BR_BOOKMAKERS = {8, 32}
 
 
 
