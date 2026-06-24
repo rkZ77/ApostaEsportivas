@@ -79,7 +79,7 @@ export function calcVipStake(
   }
 
   const stakeAmount = stakePct * bankroll
-  const units = Math.max(1, Math.round(stakeAmount / unitValue))
+  const units = Math.max(1, Math.min(10, Math.round(stakeAmount / unitValue)))
   return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
 }
 
