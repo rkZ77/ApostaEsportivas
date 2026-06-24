@@ -511,10 +511,9 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
               <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
-              <div className="text-xl font-black text-white">
-                R${(stakeSuggestion.amountR * Number(dica.odd)).toFixed(0)}
-              </div>
+              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-white">+{((Number(dica.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(dica.odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
         ) : dica.result ? (
@@ -768,8 +767,9 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
               <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
-              <div className="text-xl font-black text-white">R${potReturn}</div>
+              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-white">+{((Number(m.total_odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(m.total_odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
         ) : m.result ? (

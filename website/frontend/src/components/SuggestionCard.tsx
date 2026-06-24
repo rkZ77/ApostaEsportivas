@@ -231,12 +231,16 @@ export default function SuggestionCard({
               {banca && <div className="text-[11px] text-zinc-600">R${(s.user_stake_units * banca.unit_value).toFixed(0)}</div>}
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
+              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
               {(() => {
                 const effOdd = s.user_actual_odd ?? Number(s.odd)
-                return banca
-                  ? <div className="text-xl font-black text-white">R${(s.user_stake_units * banca.unit_value * effOdd).toFixed(0)}</div>
-                  : <div className="text-xl font-black text-white">{(s.user_stake_units * effOdd).toFixed(1)}u</div>
+                const profitU = (effOdd - 1) * s.user_stake_units
+                return (
+                  <>
+                    <div className="text-xl font-black text-white">+{profitU.toFixed(2)}u</div>
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                  </>
+                )
               })()}
             </div>
           </>
@@ -248,10 +252,9 @@ export default function SuggestionCard({
               <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
-              <div className="text-xl font-black text-white">
-                R${(stakeSuggestion.amountR * Number(s.odd)).toFixed(0)}
-              </div>
+              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-white">+{((Number(s.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[11px] text-green-600 font-semibold">+R${((Number(s.odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
         ) : s.result ? (
