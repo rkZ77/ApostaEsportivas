@@ -115,6 +115,11 @@ class AIMultiplasCheckerService:
 
             final_result = "GREEN" if all(r == "GREEN" for r in leg_results) else "RED"
 
+            # Garante consistência: se overall GREEN, todas as pernas ficam GREEN
+            if final_result == "GREEN":
+                for leg in games:
+                    leg["result"] = "GREEN"
+
             total_odd = Decimal(str(total_odd))
 
             # Profit por 1 unidade
