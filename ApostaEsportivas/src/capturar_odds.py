@@ -95,9 +95,19 @@ class OddsMain:
                 print("[ODDS] Sem bookmakers.")
                 continue
 
-            # ---------------- SAVE ----------------
+            # ---------------- SAVE (com retry em deadlock) ----------------
             save_start = time.perf_counter()
-            self.odds_collector.save_odds(fixture_id, bookmakers)
+            for attempt in range(1, 4):
+                try:
+                    self.odds_collector.save_odds(fixture_id, bookmakers)
+                    break
+                except Exception as e:
+                    if "deadlock" in str(e).lower() and attempt < 3:
+                        print(f"[ODDS] Deadlock — tentativa {attempt}/3, aguardando 3s...")
+                        time.sleep(3)
+                    else:
+                        print(f"[ODDS] Erro ao salvar fixture {fixture_id}: {e}")
+                        break
             save_time = time.perf_counter() - save_start
             print(f"[TIMER] Save DB levou {save_time:.4f}s")
 
