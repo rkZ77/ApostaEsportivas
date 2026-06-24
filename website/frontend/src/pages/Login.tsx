@@ -3,6 +3,16 @@ import { PartyPopper } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
+function getPasswordStrength(pwd: string): { score: number; checks: { label: string; ok: boolean }[] } {
+  const checks = [
+    { label: 'Mínimo 8 caracteres', ok: pwd.length >= 8 },
+    { label: 'Letra maiúscula',      ok: /[A-Z]/.test(pwd) },
+    { label: 'Número',               ok: /\d/.test(pwd) },
+    { label: 'Caractere especial',   ok: /[^A-Za-z0-9]/.test(pwd) },
+  ]
+  return { score: checks.filter(c => c.ok).length, checks }
+}
+
 function formatCPF(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11)
   if (d.length <= 3) return d
@@ -332,6 +342,33 @@ export default function Login() {
                 required className="input"
                 placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
                 autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+              {mode === 'register' && password.length > 0 && (() => {
+                const { score, checks } = getPasswordStrength(password)
+                const barColors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-500']
+                const labels    = ['Fraca', 'Razoável', 'Boa', 'Forte']
+                const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                const label     = score > 0 ? labels[score - 1] : ''
+                return (
+                  <div className="mt-2 space-y-2">
+                    {/* Barras */}
+                    <div className="flex items-center gap-1.5">
+                      {[1,2,3,4].map(i => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                      ))}
+                      {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
+                    </div>
+                    {/* Checklist */}
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      {checks.map(c => (
+                        <div key={c.label} className="flex items-center gap-1.5">
+                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
 
             {mode === 'register' && (
