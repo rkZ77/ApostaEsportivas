@@ -458,13 +458,70 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
     return () => clearInterval(id)
   }, [load, isActive])
 
+  // Atualiza quando o usuário volta ao browser (troca de aba, minimiza, etc.)
+  useEffect(() => {
+    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
+  }, [load])
+
   if (loading && picks.length === 0) {
     return <LiveSkeleton />
   }
 
-  const live      = picks.filter(p => p.is_live)
-  const pending   = picks.filter(p => !p.is_live && !FINISHED_SET.has(p.status))
-  const finalized = picks.filter(p => FINISHED_SET.has(p.status))
+  // DEV MOCK — só injeta em desenvolvimento (import.meta.env.DEV = false em prod)
+  const DEV_MOCK: any[] = !import.meta.env.DEV ? [] : [
+    {
+      pick_id: 9001, pick_type: 'vip', match_date: '2026-06-23',
+      odd: 1.87, stake_units: 3, cashout_amount: null,
+      is_live: true, status: '2H', elapsed: 67, league_id: null,
+      fixture_id: 1001, home_team: 'Brasil', away_team: 'Argentina',
+      home_team_id: 6, away_team_id: 7,
+      market: 'Total de Gols', line: 'Over 2.5',
+      home_goals: 1, away_goals: 1,
+      stat_label: 'Gols', current_val: 2, line_val: 2.5,
+      pick_status: 'losing', is_locked: false,
+    },
+    {
+      pick_id: 9002, pick_type: 'free', match_date: '2026-06-23',
+      odd: 2.10, stake_units: 2, cashout_amount: null,
+      is_live: false, status: 'NS', elapsed: null, league_id: null,
+      fixture_id: 1002, home_team: 'França', away_team: 'Espanha',
+      home_team_id: 2, away_team_id: 9,
+      market: 'Resultado Final', line: 'França',
+      home_goals: 0, away_goals: 0,
+      stat_label: null, current_val: null, line_val: null,
+      pick_status: null, is_locked: false,
+    },
+    {
+      pick_id: 9003, pick_type: 'multipla', match_date: '2026-06-22',
+      odd: 3.45, stake_units: 1, cashout_amount: 28.50,
+      is_live: false, status: 'FT', elapsed: null, league_id: null,
+      legs: [
+        {
+          fixture_id: 1003, home_team: 'Alemanha', away_team: 'Holanda',
+          home_team_id: 3, away_team_id: 5,
+          market: 'Resultado', line: 'Alemanha', odd: 1.85,
+          status: 'FT', elapsed: null, home_goals: 2, away_goals: 1,
+          stat_label: null, current_val: null, line_val: null,
+          pick_status: 'winning', is_locked: true, is_live: false,
+        },
+        {
+          fixture_id: 1004, home_team: 'Portugal', away_team: 'Marrocos',
+          home_team_id: 4, away_team_id: 8,
+          market: 'Total de Gols', line: 'Under 2.5', odd: 1.87,
+          status: 'FT', elapsed: null, home_goals: 1, away_goals: 2,
+          stat_label: 'Gols', current_val: 3, line_val: 2.5,
+          pick_status: 'losing', is_locked: true, is_live: false,
+        },
+      ],
+    },
+  ]
+
+  const allPicks  = [...picks, ...DEV_MOCK]
+  const live      = allPicks.filter(p => p.is_live)
+  const pending   = allPicks.filter(p => !p.is_live && !FINISHED_SET.has(p.status))
+  const finalized = allPicks.filter(p => FINISHED_SET.has(p.status))
 
   return (
     <div className="space-y-6">
