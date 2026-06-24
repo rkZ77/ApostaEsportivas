@@ -214,6 +214,11 @@ def _pick_status(current: float | None, line_str: str | None,
         return "winning" if current < line_val else "losing"
     if direction == "result":
         return _result_pick_status(line_str or "", home_goals, away_goals)
+    # BTTS: line é "yes"/"sim" ou "no"/"não" — current=1.0 → ambas marcaram
+    if direction in ("yes", "sim"):
+        return "winning" if current >= 1.0 else "losing"
+    if direction in ("no", "não", "nao"):
+        return "winning" if current < 1.0 else "losing"
     return "neutral"
 
 
@@ -456,18 +461,21 @@ def _enrich_leg(fid: int, market: str, line: str,
     # Locked: resultado já determinado e irreversível
     is_ft     = status in FT_STATUSES
     is_locked = is_ft
-    if not is_ft and cur_val is not None and line_val is not None:
-        frac_lv = round(line_val % 1, 2)
-        v_int   = int(cur_val)
-        if direction == "under" and cur_val >= line_val:
-            is_locked = True   # já estourou: impossível de recuperar
-        if direction == "over":
-            # Para .25: locked quando v > floor (HALF-LOSS ou GREEN garantido)
-            # Para .75: locked quando v > floor (mas só GREEN garantido quando v > ceil)
-            # Para .0/.5: locked quando cur > line
-            if frac_lv == 0.25 and v_int > int(line_val):   is_locked = True
-            elif frac_lv == 0.75 and v_int > int(line_val): is_locked = True
-            elif frac_lv not in (0.25, 0.75) and cur_val > line_val: is_locked = True
+    if not is_ft and cur_val is not None:
+        # BTTS: uma vez que ambas marcaram (cur_val=1) não tem como voltar
+        is_btts_market = "btts" in (market_type or "").lower() or \
+                         any(k in (market or "").lower() for k in ("ambas", "btts"))
+        if is_btts_market and cur_val >= 1.0:
+            is_locked = True
+        elif line_val is not None:
+            frac_lv = round(line_val % 1, 2)
+            v_int   = int(cur_val)
+            if direction == "under" and cur_val >= line_val:
+                is_locked = True   # já estourou: impossível de recuperar
+            if direction == "over":
+                if frac_lv == 0.25 and v_int > int(line_val):   is_locked = True
+                elif frac_lv == 0.75 and v_int > int(line_val): is_locked = True
+                elif frac_lv not in (0.25, 0.75) and cur_val > line_val: is_locked = True
 
     return {
         "fixture_id":   fid,
@@ -632,8 +640,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 odd,
                 market_type=p.get("market_type"),
             )
-            # Auto-save quando jogo encerrou
-            if leg["is_ft"]:
+            # Auto-save quando jogo encerrou OU resultado já irreversível (early lock)
+            if leg["is_ft"] or leg["is_locked"]:
                 auto_res = _calc_result(
                     p["market"], p["line"],
                     leg["current_val"], leg["home_goals"], leg["away_goals"],
@@ -804,7 +812,7 @@ def resolve_all_pending() -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"]:
+                    if leg["is_ft"] or leg["is_locked"]:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
                                            market_type=p.get("market_type"))
@@ -830,7 +838,7 @@ def resolve_all_pending() -> dict:
                                       p["home_team"], p["away_team"],
                                       p["home_team_id"], p["away_team_id"], odd,
                                       market_type=p.get("market_type"))
-                    if leg["is_ft"]:
+                    if leg["is_ft"] or leg["is_locked"]:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
                                            market_type=p.get("market_type"))
