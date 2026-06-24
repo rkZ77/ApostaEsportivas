@@ -444,6 +444,12 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             conn.rollback()
             email_token = None
 
+        # Sessão única: gera token e guarda hash no banco
+        session_id = secrets.token_hex(32)
+        cur.execute("UPDATE users SET session_token=%s WHERE id=%s",
+                    (hashlib.sha256(session_id.encode()).hexdigest(), user["id"]))
+        conn.commit()
+
         user["plan"] = plan_final
         user["expires_at"] = expires_final
         user["email_verified"] = False
@@ -452,6 +458,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             "name": user["name"], "email": user["email"],
             "plan": plan_final, "plan_expires_at": expires_final,
             "avatar_url": None,
+            "session_id": session_id,
         }
         access_token  = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)
@@ -501,12 +508,19 @@ def login(body: LoginBody, response: Response):
                 user["plan"] = "free"
                 user["expires_at"] = None
 
+        # Sessão única: novo login invalida qualquer sessão anterior
+        session_id = secrets.token_hex(32)
+        cur.execute("UPDATE users SET session_token=%s WHERE id=%s",
+                    (hashlib.sha256(session_id.encode()).hexdigest(), user["id"]))
+        conn.commit()
+
         plan_expires_at = user["expires_at"].isoformat() if user.get("expires_at") else None
         token_data = {
             "sub": str(user["id"]), "id": user["id"],
             "name": user["name"], "email": user["email"],
             "plan": user["plan"], "plan_expires_at": plan_expires_at,
             "avatar_url": user.get("avatar_url"),
+            "session_id": session_id,
         }
         access_token  = create_access_token(token_data)
         refresh_token = create_refresh_token(token_data)

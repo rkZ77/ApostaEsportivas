@@ -15,8 +15,8 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     warnings.warn("⚠️  JWT_SECRET não configurado! Use apenas em desenvolvimento.", stacklevel=1)
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 4
-REFRESH_TOKEN_EXPIRE_DAYS = 0   # não usado — sessão expira junto com o access token
+ACCESS_TOKEN_EXPIRE_DAYS  = 30
+REFRESH_TOKEN_EXPIRE_DAYS = 0   # não usado separadamente
 
 COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
@@ -34,16 +34,19 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
+_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRE_DAYS * 86400
+
+
 def create_access_token(data: dict) -> str:
     payload = data.copy()
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     payload["type"] = "access"
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
 def create_refresh_token(data: dict) -> str:
     payload = {"sub": data["sub"], "type": "refresh"}
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -56,7 +59,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        max_age=_TOKEN_MAX_AGE,
         path="/",
     )
     response.set_cookie(
@@ -65,7 +68,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        max_age=_TOKEN_MAX_AGE,
         path="/api/auth/refresh",
     )
 
@@ -78,7 +81,7 @@ def set_access_cookie(response, access_token: str) -> None:
         httponly=True,
         secure=_IS_PRODUCTION,
         samesite="strict",
-        max_age=ACCESS_TOKEN_EXPIRE_HOURS * 3600,
+        max_age=_TOKEN_MAX_AGE,
         path="/",
     )
 
@@ -96,6 +99,11 @@ def decode_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
 
+def _hash_session(token: str) -> str:
+    import hashlib
+    return hashlib.sha256(token.encode()).hexdigest()
+
+
 def get_current_user(request: Request, bearer: str | None = Depends(oauth2_scheme)) -> dict:
     # Cookie httpOnly tem prioridade; cai para Bearer como fallback (mobile/API)
     token = request.cookies.get(COOKIE_NAME) or bearer
@@ -103,17 +111,26 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
     payload = decode_token(token)
 
-    # Verifica se o usuário ainda existe e está ativo no banco
+    # Verifica usuário ativo e sessão única
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, active FROM users WHERE id = %s", (payload.get("sub"),))
+        cur.execute("SELECT id, active, session_token FROM users WHERE id = %s", (payload.get("sub"),))
         row = cur.fetchone()
     finally:
         cur.close(); conn.close()
 
     if not row or not row["active"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
+
+    # Sessão única: session_token no JWT deve bater com o hash guardado no banco
+    session_id = payload.get("session_id")
+    if row["session_token"] and session_id:
+        if _hash_session(session_id) != row["session_token"]:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sessão encerrada. Faça login novamente.",
+            )
 
     # Lazy expiry: se o plano VIP/trial já passou, trata como free
     if payload.get("plan") in ("vip", "trial") and payload.get("plan_expires_at"):
