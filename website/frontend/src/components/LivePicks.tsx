@@ -52,18 +52,21 @@ function findLambda(targetProb: number, minGoals: number): number {
 }
 function calcLiveProb(pick: any): number | null {
   const odd = Number(pick.odd)
-  if (!odd || odd <= 1 || pick.is_locked) return null
-  const baseProb = 1 / odd
-  const lineLc = (pick.line || '').toLowerCase()
-  const isOver  = lineLc.startsWith('over') || lineLc.startsWith('mais')
-  const isUnder = lineLc.startsWith('under') || lineLc.startsWith('menos')
+  if (!odd || odd <= 1) return null
+  const baseProb  = 1 / odd
+  const lineLc    = (pick.line   || '').toLowerCase()
+  const marketLc  = (pick.market || '').toLowerCase()
+  const isOver    = lineLc.startsWith('over')  || lineLc.startsWith('mais')
+  const isUnder   = lineLc.startsWith('under') || lineLc.startsWith('menos')
+  const isBTTS    = marketLc.includes('both teams') || marketLc.includes('ambas') || marketLc.includes('btts')
 
-  if ((isOver || isUnder) && pick.current_val != null && pick.line_val != null && pick.elapsed) {
-    const totalMins   = pick.status === 'ET' ? 120 : 90
-    const elapsed     = Math.min(Number(pick.elapsed), totalMins)
-    const remaining   = Math.max(0, totalMins - elapsed)
-    const remainRatio = remaining / totalMins
+  const totalMins   = pick.status === 'ET' ? 120 : 90
+  const elapsed     = pick.elapsed ? Math.min(Number(pick.elapsed), totalMins) : null
+  const remaining   = elapsed != null ? Math.max(0, totalMins - elapsed) : null
+  const remainRatio = remaining != null ? remaining / totalMins : null
 
+  // Over/Under — Poisson sobre gols/eventos restantes
+  if ((isOver || isUnder) && pick.current_val != null && pick.line_val != null && elapsed != null && remainRatio != null) {
     if (isOver) {
       const needed = Math.ceil(pick.line_val) - Math.floor(Number(pick.current_val))
       if (needed <= 0) return 99
@@ -79,8 +82,43 @@ function calcLiveProb(pick: any): number | null {
       return Math.round(poissonLe(lambdaFull * remainRatio, maxMore) * 100)
     }
   }
-  // Fallback: implied probability from odd
-  return Math.round(baseProb * 100)
+
+  // Ambas as Equipes Marcam (BTTS) — Poisson independente por equipe
+  if (isBTTS && pick.home_goals != null && pick.away_goals != null && elapsed != null && remainRatio != null) {
+    const scoredHome = Number(pick.home_goals) > 0
+    const scoredAway = Number(pick.away_goals) > 0
+    // Média: ~1.3 gols por equipe por 90 min (dado da média de ligas europeias)
+    const lambda  = 1.3 * remainRatio
+    const pScore  = 1 - poissonPmf(lambda, 0) // P(marcar pelo menos 1)
+    const pNoScore = poissonPmf(lambda, 0)     // P(não marcar)
+
+    if (lineLc === 'yes' || lineLc === 'sim') {
+      if (scoredHome && scoredAway)  return 99 // early lock cuida, mas garante
+      if (!scoredHome && !scoredAway) return Math.round(pScore * pScore * 100)
+      return Math.round(pScore * 100) // uma já marcou, falta a outra
+    }
+    if (lineLc === 'no' || lineLc === 'não' || lineLc === 'nao') {
+      if (scoredHome && scoredAway)  return 1  // perdeu
+      if (!scoredHome && !scoredAway) return Math.round((pNoScore * pNoScore + 2 * pNoScore * pScore) * 100)
+      return Math.round(pNoScore * 100) // uma já marcou; precisa que a outra não marque
+    }
+  }
+
+  // Match Winner / Dupla Chance — ajuste dinâmico por placar e tempo
+  if (elapsed != null && remainRatio != null && pick.home_goals != null && pick.away_goals != null && pick.pick_status) {
+    const progress = elapsed / totalMins
+    if (pick.pick_status === 'winning') {
+      // Quanto mais perto do FT ganhando, maior a probabilidade
+      return Math.round(Math.min(97, (baseProb + (1 - baseProb) * progress * 0.65) * 100))
+    }
+    if (pick.pick_status === 'losing') {
+      // Probabilidade cai conforme o tempo passa sem virar
+      return Math.round(Math.max(2, baseProb * (1 - progress * 0.7) * 100))
+    }
+  }
+
+  // Fallback estático: probabilidade implícita da odd
+  return elapsed != null ? null : Math.round(baseProb * 100)
 }
 
 function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
@@ -355,7 +393,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
             </span>
           )}
           {liveProb != null && (
-            <span className={`text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`} title="Probabilidade estimada via Poisson">
+            <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
               {liveProb}%
             </span>
           )}
@@ -404,6 +442,30 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
           </div>
           {hasBar && !effectiveLocked && (
             <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
+          )}
+          {/* Barra de probabilidade ao vivo */}
+          {liveProb != null && !effectiveLocked && isLive && (
+            <div className="mt-3 pt-2.5 border-t border-zinc-800/60">
+              <div className="flex items-center justify-between mb-1.5">
+                <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wide">
+                  Probabilidade de acertar
+                </span>
+                <span className={`text-sm font-black ${
+                  liveProb >= 60 ? 'text-green-400' : liveProb >= 35 ? 'text-yellow-400' : 'text-red-400'
+                }`}>{liveProb}%</span>
+              </div>
+              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-700 ${
+                    liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${liveProb}%` }}
+                />
+              </div>
+              <p className="text-[9px] text-zinc-700 mt-1">
+                Estimativa via Poisson · atualiza a cada 5s
+              </p>
+            </div>
           )}
         </>
       )}
