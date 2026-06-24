@@ -635,16 +635,17 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 // Vazio do Pick Seguro
 function PickSeguroEmpty() {
   const hour = new Date().getHours()
-  const msg = hour < 8
-    ? 'O Pick do Dia será publicado após as 08:00.'
-    : hour < 12
-    ? 'O Pick do Dia está sendo preparado pela IA.'
+  const msg = hour < 7
+    ? 'O Pick do Dia é publicado diariamente às 07h.'
+    : hour < 9
+    ? 'O Pick do Dia está sendo gerado pela IA. Volte em instantes.'
     : 'Nenhum Pick do Dia disponível para hoje.'
 
   return (
     <div className="card p-10 text-center border-dashed">
       <p className="text-zinc-500 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
       <p className="text-zinc-600 text-xs">{msg}</p>
+      {hour < 7 && <p className="text-zinc-700 text-xs mt-2">Publicado todos os dias às 07h00</p>}
     </div>
   )
 }
@@ -1802,7 +1803,7 @@ export default function Picks() {
                   ) : (
                     <div className="card p-8 text-center border-dashed">
                       <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Aguarde a geração automática.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Publicada diariamente às 07h.</p>
                     </div>
                   )
                 })()}
@@ -1837,7 +1838,7 @@ export default function Picks() {
                   ) : (
                     <div className="card p-8 text-center border-dashed">
                       <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem ainda não gerado.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Aguarde a geração automática.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Publicado diariamente às 07h.</p>
                     </div>
                   )
                 })()}
@@ -2200,7 +2201,7 @@ export default function Picks() {
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Nenhum pick de alavancagem disponível para hoje.</p>
+                        <p className="text-zinc-600 text-xs mt-1">Publicado diariamente às 07h.</p>
                       </div>
                     )}
                   </div>

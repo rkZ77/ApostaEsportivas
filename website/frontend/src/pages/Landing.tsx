@@ -79,10 +79,11 @@ const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: '
 // Social proof stats bar (picks totais + win rate, tempo real)
 function SocialProofStats() {
   const [summary, setSummary] = useState<{ total: number; greens: number } | null>(null)
+  const [loaded, setLoaded] = useState(false)
   useEffect(() => {
     axios.get(`${API_BASE}/api/public/results`)
-      .then(r => setSummary(r.data?.summary ?? null))
-      .catch(() => {})
+      .then(r => { setSummary(r.data?.summary ?? null); setLoaded(true) })
+      .catch(() => setLoaded(true))
   }, [])
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
   return (
@@ -98,7 +99,14 @@ function SocialProofStats() {
             <span><span className="text-white font-bold">{winRate}%</span> win rate</span>
           </div>
         </>
-      ) : null}
+      ) : loaded ? (
+        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+          <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+          <span>Picks gerados diariamente com IA</span>
+        </div>
+      ) : (
+        <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
+      )}
       <div className="flex items-center gap-1.5 text-xs text-zinc-500">
         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
         <span><span className="text-white font-bold">Auditável</span> publicamente</span>

@@ -307,7 +307,7 @@ export default function Admin() {
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-sm whitespace-pre-wrap break-all ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-sm whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
                       {s.error || s.log}
                     </pre>
                   )}
@@ -356,7 +356,7 @@ export default function Admin() {
                       : '▶ rodar'}
                   </button>
                   {expandedLog === command && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-zinc-950 rounded p-2 whitespace-pre-wrap break-all ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    <pre className={`text-[10px] bg-zinc-950 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
                       {s.error || s.log}
                     </pre>
                   )}

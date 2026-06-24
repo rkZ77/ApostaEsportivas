@@ -46,7 +46,8 @@ export default function Profile() {
   const [avatarPreview, setAvatarPreview]     = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [referral, setReferral] = useState<ReferralData | null>(null)
+  const [referral, setReferral]       = useState<ReferralData | null>(null)
+  const [referralLoaded, setReferralLoaded] = useState(false)
   const [referralCopied, setReferralCopied] = useState(false)
 
   const [emailResending, setEmailResending] = useState(false)
@@ -65,7 +66,7 @@ export default function Profile() {
   }, [emailCooldown])
 
   useEffect(() => {
-    api.get('/auth/referral').then(r => setReferral(r.data)).catch(() => {})
+    api.get('/auth/referral').then(r => { setReferral(r.data); setReferralLoaded(true) }).catch(() => setReferralLoaded(true))
     api.get('/auth/me').then(r => { setMeData(r.data); setUsername(r.data.username ?? '') }).catch(() => {})
   }, [])
 
@@ -177,7 +178,7 @@ export default function Profile() {
     }
     const tick = () => {
       const diff = new Date(user.expires_at!).getTime() - Date.now()
-      if (diff <= 0) { setCountdown('Expirado'); return }
+      if (isNaN(diff) || diff <= 0) { setCountdown('Expirado'); return }
       const d = Math.floor(diff / 86400000)
       const h = Math.floor((diff % 86400000) / 3600000)
       const m = Math.floor((diff % 3600000) / 60000)
@@ -467,6 +468,8 @@ export default function Profile() {
                 </p>
               )}
             </>
+          ) : referralLoaded ? (
+            <p className="text-zinc-600 text-xs">Não foi possível carregar os dados de indicação. Tente recarregar a página.</p>
           ) : (
             <div className="flex items-center gap-2 text-zinc-600 text-xs">
               <div className="w-4 h-4 border border-zinc-700 border-t-transparent rounded-full animate-spin" />
