@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Radio } from 'lucide-react'
 import api from '../services/api'
 
@@ -172,10 +172,101 @@ function LiveLeg({ leg }: { leg: any }) {
   )
 }
 
-function PickCard({ pick }: { pick: any }) {
+function CashoutModal({ pick, unitValue, onClose, onDone }: {
+  pick: any; unitValue?: number; onClose: () => void; onDone: () => void
+}) {
+  const [amount, setAmount]   = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError]     = useState('')
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => { inputRef.current?.focus() }, [])
+
+  const stakeR = unitValue ? Number(pick.stake_units) * unitValue : null
+  const received = parseFloat(amount)
+  const pnlR = stakeR != null && !isNaN(received) ? received - stakeR : null
+  const pnlColor = pnlR == null ? 'text-zinc-400' : pnlR >= 0 ? 'text-green-400' : 'text-red-400'
+
+  const confirm = async () => {
+    if (isNaN(received) || received < 0) { setError('Informe um valor válido.'); return }
+    setLoading(true); setError('')
+    try {
+      await api.post(`/banca/cashout/${pick.pick_id}/${pick.pick_type}`, { cashout_amount: received })
+      onDone()
+    } catch (e: any) {
+      setError(e?.response?.data?.detail ?? 'Erro ao registrar cashout.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+        <div>
+          <p className="font-bold text-white text-sm">Registrar Cashout</p>
+          <p className="text-xs text-zinc-500 mt-0.5">
+            Quanto você recebeu de volta (R$)?
+          </p>
+        </div>
+
+        {stakeR != null && (
+          <div className="bg-zinc-800/60 rounded-xl px-3 py-2 flex justify-between text-xs">
+            <span className="text-zinc-500">Apostado</span>
+            <span className="text-white font-semibold">{pick.stake_units}u · R$ {stakeR.toFixed(2)}</span>
+          </div>
+        )}
+
+        <div className="space-y-1">
+          <label className="text-xs text-zinc-400">Valor recebido (R$)</label>
+          <input
+            ref={inputRef}
+            type="number"
+            min="0"
+            step="0.01"
+            value={amount}
+            onChange={e => { setAmount(e.target.value); setError('') }}
+            onKeyDown={e => e.key === 'Enter' && confirm()}
+            placeholder="0.00"
+            className="w-full bg-zinc-800 border border-zinc-700 focus:border-green-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none transition-colors"
+          />
+        </div>
+
+        {pnlR != null && (
+          <div className={`text-sm font-bold text-center ${pnlColor}`}>
+            {pnlR >= 0 ? '+' : ''}R$ {pnlR.toFixed(2)}
+            {stakeR != null && stakeR > 0 && (
+              <span className="text-xs font-normal text-zinc-500 ml-1">
+                ({(pnlR / stakeR * 100).toFixed(0)}%)
+              </span>
+            )}
+          </div>
+        )}
+
+        {error && <p className="text-xs text-red-400 text-center">{error}</p>}
+
+        <div className="flex gap-2">
+          <button onClick={onClose} disabled={loading}
+            className="flex-1 text-sm text-zinc-400 border border-zinc-700 rounded-xl py-2.5 hover:bg-zinc-800 transition-colors">
+            Cancelar
+          </button>
+          <button onClick={confirm} disabled={loading || amount === ''}
+            className="flex-1 text-sm font-semibold bg-green-500/20 text-green-400 border border-green-500/30 rounded-xl py-2.5 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            {loading ? 'Salvando...' : 'Confirmar'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: number; onRefresh: () => void }) {
+  const [showCashout, setShowCashout] = useState(false)
   const isLive     = pick.is_live
   const isFinished = FINISHED_SET.has(pick.status)
   const isMulti    = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  const hasCashout = pick.cashout_amount != null
+  const canCashout = !isFinished && !hasCashout
   const lineLc     = pick.line?.toLowerCase() ?? ''
   const hasBar     = !isMulti && pick.current_val != null && pick.line_val != null &&
     (lineLc.startsWith('over') || lineLc.startsWith('mais') ||
@@ -192,7 +283,9 @@ function PickCard({ pick }: { pick: any }) {
     : 'text-red-400 bg-red-400/10 border-red-500/25'
   const isCopa = pick.league_id === 1
 
-  const resultBadge = pick.is_locked
+  const resultBadge = hasCashout
+    ? <span className="text-[10px] font-black text-orange-400 bg-orange-400/10 border border-orange-500/30 px-2 py-0.5 rounded-full">CASHOUT</span>
+    : pick.is_locked
     ? pick.pick_status === 'winning'
       ? <span className="text-[10px] font-black text-green-400 bg-green-400/10 border border-green-500/30 px-2 py-0.5 rounded-full">GREEN ✓</span>
       : <span className="text-[10px] font-black text-red-400 bg-red-400/10 border border-red-500/30 px-2 py-0.5 rounded-full">RED ✗</span>
@@ -283,6 +376,32 @@ function PickCard({ pick }: { pick: any }) {
           )}
         </>
       )}
+
+      {canCashout && (
+        <div className="mt-3 pt-3 border-t border-zinc-800/60">
+          <button
+            onClick={() => setShowCashout(true)}
+            className="w-full text-xs font-semibold text-orange-400 border border-orange-500/25 bg-orange-500/5 hover:bg-orange-500/15 rounded-xl py-2 transition-colors">
+            Registrar Cashout
+          </button>
+        </div>
+      )}
+
+      {hasCashout && (
+        <div className="mt-3 pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
+          <span className="text-zinc-500">Cashout recebido</span>
+          <span className="font-semibold text-orange-400">R$ {Number(pick.cashout_amount).toFixed(2)}</span>
+        </div>
+      )}
+
+      {showCashout && (
+        <CashoutModal
+          pick={pick}
+          unitValue={unitValue}
+          onClose={() => setShowCashout(false)}
+          onDone={() => { setShowCashout(false); onRefresh() }}
+        />
+      )}
     </div>
   )
 }
@@ -315,7 +434,7 @@ function LiveSkeleton() {
   )
 }
 
-export default function LivePicks({ isActive = true }: { isActive?: boolean }) {
+export default function LivePicks({ isActive = true, unitValue }: { isActive?: boolean; unitValue?: number }) {
   const [picks, setPicks]           = useState<any[]>([])
   const [loading, setLoading]       = useState(true)
   const [refreshing, setRefreshing] = useState(false)
@@ -398,7 +517,7 @@ export default function LivePicks({ isActive = true }: { isActive?: boolean }) {
                 <span className="text-[10px] text-red-400/60 bg-red-500/10 px-1.5 py-0.5 rounded-full">{live.length}</span>
               </div>
               <div className="space-y-3">
-                {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} />)}
+                {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
               </div>
             </div>
           )}
@@ -411,7 +530,7 @@ export default function LivePicks({ isActive = true }: { isActive?: boolean }) {
                 <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded-full">{pending.length}</span>
               </div>
               <div className="space-y-3">
-                {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} />)}
+                {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
               </div>
             </div>
           )}
@@ -424,7 +543,7 @@ export default function LivePicks({ isActive = true }: { isActive?: boolean }) {
                 <span className="text-[10px] text-zinc-700 bg-zinc-800/50 px-1.5 py-0.5 rounded-full">{finalized.length}</span>
               </div>
               <div className="space-y-3">
-                {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} />)}
+                {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
               </div>
             </div>
           )}

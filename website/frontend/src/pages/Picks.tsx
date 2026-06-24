@@ -2244,7 +2244,7 @@ export default function Picks() {
           </div>
         )}
         <div className={tab !== 'aovivo' ? 'hidden' : ''}>
-          <LivePicks isActive={tab === 'aovivo'} />
+          <LivePicks isActive={tab === 'aovivo'} unitValue={bancaSummary?.unit_value} />
         </div>
 
 

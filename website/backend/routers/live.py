@@ -500,7 +500,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     cur     = conn.cursor()
 
     cur.execute("""
-        SELECT pick_id, pick_type, stake_units
+        SELECT pick_id, pick_type, stake_units, cashout_amount
         FROM user_followed_picks
         WHERE user_id = %s
     """, (user_id,))
@@ -613,9 +613,10 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     result = []
 
     for row in followed:
-        pick_id   = row["pick_id"]
-        pick_type = row["pick_type"]
-        stake_u   = float(row["stake_units"])
+        pick_id      = row["pick_id"]
+        pick_type    = row["pick_type"]
+        stake_u      = float(row["stake_units"])
+        cashout_amt  = float(row["cashout_amount"]) if row.get("cashout_amount") is not None else None
 
         # ── VIP / FREE ──────────────────────────────────────────────────────
         if pick_type in ("vip", "free"):
@@ -643,13 +644,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     continue
 
             result.append({
-                "pick_id":     pick_id,
-                "pick_type":   pick_type,
-                "match_date":  str(p["match_date"]),
-                "odd":         odd,
-                "stake_units": stake_u,
-                "is_live":     leg["is_live"],
-                "league_id":   p.get("league_id"),
+                "pick_id":        pick_id,
+                "pick_type":      pick_type,
+                "match_date":     str(p["match_date"]),
+                "odd":            odd,
+                "stake_units":    stake_u,
+                "cashout_amount": cashout_amt,
+                "is_live":        leg["is_live"],
+                "league_id":      p.get("league_id"),
                 **{k: leg[k] for k in (
                     "fixture_id", "home_team", "away_team",
                     "home_team_id", "away_team_id",
@@ -713,13 +715,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     continue
 
                 result.append({
-                    "pick_id":     pick_id,
-                    "pick_type":   "multipla",
-                    "match_date":  str(p["match_date"]),
-                    "odd":         total_odd,
-                    "stake_units": stake_u,
-                    "is_live":     any(l["is_live"] for l in legs_out),
-                    "legs":        legs_out,
+                    "pick_id":        pick_id,
+                    "pick_type":      "multipla",
+                    "match_date":     str(p["match_date"]),
+                    "odd":            total_odd,
+                    "stake_units":    stake_u,
+                    "cashout_amount": cashout_amt,
+                    "is_live":        any(l["is_live"] for l in legs_out),
+                    "legs":           legs_out,
                 })
 
         # ── ALAVANCAGEM ─────────────────────────────────────────────────────
@@ -757,13 +760,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     continue
 
                 result.append({
-                    "pick_id":     pick_id,
-                    "pick_type":   "alavancagem",
-                    "match_date":  str(p["match_date"]),
-                    "odd":         odd_combined,
-                    "stake_units": stake_u,
-                    "is_live":     any(l["is_live"] for l in legs_out),
-                    "legs":        legs_out,
+                    "pick_id":        pick_id,
+                    "pick_type":      "alavancagem",
+                    "match_date":     str(p["match_date"]),
+                    "odd":            odd_combined,
+                    "stake_units":    stake_u,
+                    "cashout_amount": cashout_amt,
+                    "is_live":        any(l["is_live"] for l in legs_out),
+                    "legs":           legs_out,
                 })
 
     conn.close()

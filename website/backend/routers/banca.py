@@ -21,6 +21,10 @@ class FollowPick(BaseModel):
     bet_house: Optional[str] = None
 
 
+class CashoutBody(BaseModel):
+    cashout_amount: float  # valor recebido de volta em R$
+
+
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if pick_type == "vip":
         cur.execute("""
@@ -139,7 +143,8 @@ def get_banca(
             date_params.append(days)
 
         cur.execute(f"""
-            SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at, uf.actual_odd
+            SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at,
+                   uf.actual_odd, uf.cashout_amount
             FROM user_followed_picks uf
             WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
             ORDER BY uf.followed_at ASC
@@ -209,14 +214,22 @@ def get_banca(
                 pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
                 if not pick:
                     continue
+                cashout_amount = float(f["cashout_amount"]) if f.get("cashout_amount") is not None else None
                 result     = pick.get("result")
                 actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
-                if result in ("GREEN", "RED", "PUSH"):
+                # Cashout sobrepõe resultado oficial
+                if cashout_amount is not None:
+                    result = "CASHOUT"
+                    stake_r = float(f["stake_units"]) * unit_value
+                    pnl_r = cashout_amount - stake_r
+                    profit_u = pnl_r / unit_value if unit_value else 0
+                elif result in ("GREEN", "RED", "PUSH"):
                     _odd = actual_odd or float(pick.get("odd") or 1)
                     profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
+                    pnl_r = profit_u * float(f["stake_units"]) * unit_value
                 else:
                     profit_u = None
-                pnl_r = profit_u * float(f["stake_units"]) * unit_value if profit_u is not None else None
+                    pnl_r = None
                 if pnl_r is not None:
                     running += pnl_r
 
@@ -481,14 +494,18 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         bankroll_start = float(row["bankroll_start"])
         unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
 
-        # P&L acumulado de picks seguidos com resultado
+        # P&L acumulado — cashout sobrepõe resultado oficial
         cur.execute("""
             SELECT COALESCE(SUM(
-                CASE uf.pick_type
-                    WHEN 'vip'      THEN COALESCE(pv.profit, 0) * uf.stake_units * %s
-                    WHEN 'free'     THEN COALESCE(pf.profit, 0) * uf.stake_units * %s
-                    WHEN 'multipla' THEN
-                        CASE pm.result
+                CASE
+                    WHEN uf.cashout_amount IS NOT NULL
+                        THEN uf.cashout_amount - uf.stake_units * %s
+                    WHEN uf.pick_type = 'vip'      AND pv.result IS NOT NULL
+                        THEN COALESCE(pv.profit, 0) * uf.stake_units * %s
+                    WHEN uf.pick_type = 'free'     AND pf.result IS NOT NULL
+                        THEN COALESCE(pf.profit, 0) * uf.stake_units * %s
+                    WHEN uf.pick_type = 'multipla' AND pm.result IS NOT NULL
+                        THEN CASE pm.result
                             WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %s
                             WHEN 'RED'   THEN -1.0 * uf.stake_units * %s
                             WHEN 'PUSH'  THEN 0.0
@@ -498,11 +515,11 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
                 END
             ), 0) AS total_pnl
             FROM user_followed_picks uf
-            LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id AND pv.result IS NOT NULL
-            LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id AND pf.result IS NOT NULL
-            LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id AND pm.result IS NOT NULL
+            LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
+            LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
+            LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
             WHERE uf.user_id = %s
-        """, (unit_value, unit_value, unit_value, unit_value, user_id))
+        """, (unit_value, unit_value, unit_value, unit_value, unit_value, user_id))
         pnl_row = cur.fetchone()
         pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
 
@@ -511,6 +528,34 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
             "bankroll_current": round(bankroll_start + pnl, 2),
             "unit_value": unit_value,
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/cashout/{pick_id}/{pick_type}")
+def cashout_pick(pick_id: int, pick_type: str, body: CashoutBody, current_user: dict = Depends(get_current_user)):
+    if body.cashout_amount < 0:
+        raise HTTPException(400, "Valor de cashout não pode ser negativo.")
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT id, cashout_amount FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
+            (user_id, pick_id, pick_type),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Aposta não encontrada.")
+        if row["cashout_amount"] is not None:
+            raise HTTPException(400, "Cashout já registrado para esta aposta.")
+        cur.execute(
+            "UPDATE user_followed_picks SET cashout_amount=%s WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
+            (body.cashout_amount, user_id, pick_id, pick_type),
+        )
+        conn.commit()
+        return {"ok": True, "cashout_amount": body.cashout_amount}
     finally:
         cur.close()
         conn.close()
