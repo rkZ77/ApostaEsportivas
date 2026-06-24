@@ -53,23 +53,28 @@ def get_leaderboard(
                     uf.user_id,
                     uf.stake_units,
                     uf.followed_at,
-                    CASE uf.pick_type
-                        WHEN 'vip'         THEN pv.result
-                        WHEN 'free'        THEN pf.result
-                        WHEN 'multipla'    THEN pm.result
-                        WHEN 'alavancagem' THEN pa.result
+                    CASE
+                        WHEN uf.cashout_amount IS NOT NULL THEN 'CASHOUT'
+                        WHEN uf.pick_type = 'vip'         THEN pv.result
+                        WHEN uf.pick_type = 'free'        THEN pf.result
+                        WHEN uf.pick_type = 'multipla'    THEN pm.result
+                        WHEN uf.pick_type = 'alavancagem' THEN pa.result
                     END AS result,
-                    CASE uf.pick_type
-                        WHEN 'vip'         THEN COALESCE(pv.profit, 0) * uf.stake_units
-                        WHEN 'free'        THEN COALESCE(pf.profit, 0) * uf.stake_units
-                        WHEN 'multipla'    THEN COALESCE(pm.profit, 0) * uf.stake_units
-                        WHEN 'alavancagem' THEN COALESCE(pa.profit, 0) * uf.stake_units
+                    CASE
+                        WHEN uf.cashout_amount IS NOT NULL
+                            THEN (uf.cashout_amount / COALESCE(ub.unit_value, 1)) - uf.stake_units
+                        WHEN uf.pick_type = 'vip'         THEN COALESCE(pv.profit, 0) * uf.stake_units
+                        WHEN uf.pick_type = 'free'        THEN COALESCE(pf.profit, 0) * uf.stake_units
+                        WHEN uf.pick_type = 'multipla'    THEN COALESCE(pm.profit, 0) * uf.stake_units
+                        WHEN uf.pick_type = 'alavancagem' THEN COALESCE(pa.profit, 0) * uf.stake_units
+                        ELSE 0
                     END AS profit_weighted
                 FROM user_followed_picks uf
                 LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
                 LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
                 LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
                 LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+                LEFT JOIN user_banca ub        ON ub.user_id = uf.user_id
                 WHERE 1=1 {date_cond}
             ),
             user_stats AS (
