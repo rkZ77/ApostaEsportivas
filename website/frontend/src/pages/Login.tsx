@@ -1,5 +1,5 @@
 import { useState, FormEvent, useEffect } from 'react'
-import { PartyPopper } from 'lucide-react'
+import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
@@ -77,6 +77,8 @@ export default function Login() {
   const [error, setError]     = useState('')
   const [loading, setLoading] = useState(false)
   const [kickedDevice, setKickedDevice] = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
+  const [showConfirm, setShowConfirm]   = useState(false)
 
   useEffect(() => {
     const ref = searchParams.get('ref')
@@ -338,11 +340,17 @@ export default function Login() {
             {/* Senha — comum aos dois modos */}
             <div>
               <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
-              <input type="password" value={password}
-                onChange={e => setPassword(e.target.value)}
-                required className="input"
-                placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
-                autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+              <div className="relative">
+                <input type={showPassword ? 'text' : 'password'} value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required className="input pr-10"
+                  placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
+                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
               {mode === 'register' && password.length > 0 && (() => {
                 const { score, checks } = getPasswordStrength(password)
                 const barColors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-500']
@@ -375,10 +383,16 @@ export default function Login() {
             {mode === 'register' && (
               <div>
                 <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Confirmar senha</label>
-                <input type="password" value={confirm}
-                  onChange={e => setConfirm(e.target.value)}
-                  required className="input" placeholder="Repita a senha"
-                  autoComplete="new-password" />
+                <div className="relative">
+                  <input type={showConfirm ? 'text' : 'password'} value={confirm}
+                    onChange={e => setConfirm(e.target.value)}
+                    required className="input pr-10" placeholder="Repita a senha"
+                    autoComplete="new-password" />
+                  <button type="button" onClick={() => setShowConfirm(v => !v)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
             )}
 
