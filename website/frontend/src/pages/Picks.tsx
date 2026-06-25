@@ -517,26 +517,30 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
             </div>
           </>
         ) : dica.result ? (
-          <div className="flex-1 px-5 py-3 text-center">
-            <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-            {(() => {
-              const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
-              const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
-              return (
-                <>
-                  <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          (() => {
+            const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
+            const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
+            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            return (
+              <>
+                <div className="flex-1 px-4 py-3 text-center">
+                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                  <div className={`text-2xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                     {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
                   </div>
-                  {banca && (
-                    <div className={`text-[11px] font-semibold mt-0.5 ${p >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                </div>
+                {banca && (
+                  <div className="flex-1 px-4 py-3 text-center">
+                    <div className="text-[10px] text-zinc-500 mb-0.5">Lucro R$</div>
+                    <div className={`text-2xl font-black ${color}`}>
                       {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
                     </div>
-                  )}
-                </>
-              )
-            })()}
-          </div>
+                  </div>
+                )}
+              </>
+            )
+          })()
         ) : (
           <div className="flex-1 px-4 py-3 text-center">
             {dica.ev != null ? (
@@ -773,26 +777,30 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             </div>
           </>
         ) : m.result ? (
-          <div className="flex-1 px-5 py-3 text-center">
-            <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-            {(() => {
-              const u = m.user_stake_units ?? stakeSuggestion?.units ?? 1
-              const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
-              return (
-                <>
-                  <div className={`text-2xl font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          (() => {
+            const u = m.user_stake_units ?? stakeSuggestion?.units ?? 1
+            const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
+            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            return (
+              <>
+                <div className="flex-1 px-4 py-3 text-center">
+                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                  <div className={`text-2xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                     {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
                   </div>
-                  {banca && (
-                    <div className={`text-[11px] font-semibold mt-0.5 ${p >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                </div>
+                {banca && (
+                  <div className="flex-1 px-4 py-3 text-center">
+                    <div className="text-[10px] text-zinc-500 mb-0.5">Lucro R$</div>
+                    <div className={`text-2xl font-black ${color}`}>
                       {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
                     </div>
-                  )}
-                </>
-              )
-            })()}
-          </div>
+                  </div>
+                )}
+              </>
+            )
+          })()
         ) : (
           <div className="flex-1 px-5 py-3 text-center">
             <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
