@@ -206,6 +206,13 @@ hit_recente_10>hit_geral → calibração melhorando | hit_recente_10<hit_geral�
 
 {desempenho}
 
+## PICKS ANTERIORES — TIMES DESTE JOGO
+
+Últimos picks gerados para estes times (todos os pipelines). Use para identificar padrões de acerto/erro por time e mercado — não como substituto da análise estatística.
+resultado: GREEN=acertou | RED=errou | pendente=sem resultado ainda.
+
+{picks_anteriores}
+
 ## CONTEXTO EXTERNO DO JOGO
 
 {contexto_web}

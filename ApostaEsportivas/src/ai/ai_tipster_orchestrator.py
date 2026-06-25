@@ -27,7 +27,7 @@ class AITipsterOrchestrator:
     ##########################################################################
     # Processa 1 fixture
     ##########################################################################
-    def run_single_fixture(self, fx, performance_str: str | None = None):
+    def run_single_fixture(self, fx, performance_str: str | None = None, picks_anteriores_str: str | None = None):
 
         fixture_id = fx["fixture_id"]
         season = fx["season"]
@@ -42,7 +42,7 @@ class AITipsterOrchestrator:
             # ========== SISTEMA DE SELEÇÕES PARA COPA DO MUNDO ==========
             if league_id == 1:  # Copa do Mundo
                 print(f"[TIPSTER] 🏆 Copa do Mundo detectada - usando sistema de seleções")
-                return self._process_world_cup_fixture(fx, performance_str)
+                return self._process_world_cup_fixture(fx, performance_str, picks_anteriores_str)
             # =============================================================
 
             # =====================
@@ -179,6 +179,7 @@ class AITipsterOrchestrator:
                 referee_stats=referee_stats,
                 league_id=league_id,
                 performance_str=performance_str,
+                picks_anteriores_str=picks_anteriores_str,
             )
 
             if result:
@@ -224,7 +225,7 @@ class AITipsterOrchestrator:
             "btts_pct":                 round(btts / n * 100, 1),
         }
 
-    def _process_world_cup_fixture(self, fx, performance_str: str | None = None):
+    def _process_world_cup_fixture(self, fx, performance_str: str | None = None, picks_anteriores_str: str | None = None):
         """Copa do Mundo — mesmo pipeline de dados que ligas regulares.
         Envia últimos 10 jogos da seleção (com competition_type) como histórico total,
         e médias feitas/cedidas pré-calculadas nos blocos de estatísticas.
@@ -335,6 +336,7 @@ class AITipsterOrchestrator:
                 referee_stats=referee_stats,
                 league_id=league_id,
                 performance_str=performance_str,
+                picks_anteriores_str=picks_anteriores_str,
             )
 
             if result:
@@ -360,7 +362,17 @@ class AITipsterOrchestrator:
 
         results = []
         for fx in fixtures:
-            sug = self.run_single_fixture(fx, performance_str=performance_str)
+            # Busca picks anteriores específicos dos times deste fixture
+            teams = [t for t in [fx.get("home_team"), fx.get("away_team")] if t]
+            picks_anteriores_str = self.performance.get_team_picks_str(teams, limit=15)
+            print(f"[TIPSTER] Picks anteriores para {' vs '.join(teams)}: "
+                  f"{len(self.performance.get_team_picks(teams, limit=15))} picks encontrados")
+
+            sug = self.run_single_fixture(
+                fx,
+                performance_str=performance_str,
+                picks_anteriores_str=picks_anteriores_str,
+            )
             if sug:
                 results.append(sug)
 

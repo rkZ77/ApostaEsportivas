@@ -18,8 +18,11 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.national_team_profile_service import NationalTeamProfileService
+from services.ai_performance_service import AIPerformanceService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, AISuggestionsService
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
+
+_performance_svc = AIPerformanceService()
 
 
 def _detect_market_type(market: str) -> str | None:
@@ -106,6 +109,12 @@ Nao existe mercado preferido — escolha o com maior consistencia estatistica no
 Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min}
 
 CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → nao use cartoes como dica.
+
+--- PICKS ANTERIORES (calibracao por time) ---
+Ultimos picks gerados para os times destes fixtures (todos os pipelines).
+Use para identificar padroes de acerto/erro por time e mercado — nao como substituto da analise estatistica.
+resultado: GREEN=acertou | RED=errou | pendente=sem resultado ainda.
+{picks_anteriores}
 
 --- FIXTURES + DADOS ---
 {fixtures_formatados}
@@ -539,11 +548,21 @@ def get_today_dica() -> dict | None:
 def run_dica_llm(fixtures_with_context: list) -> dict:
     fixtures_formatados = _format_fixtures_for_llm(fixtures_with_context)
 
+    # Coleta picks anteriores para todos os times dos fixtures do dia
+    all_teams = []
+    for fwc in fixtures_with_context:
+        fx = fwc.get("fixture") or fwc
+        all_teams += [fx.get("home_team"), fx.get("away_team")]
+    teams = [t for t in all_teams if t]
+    picks_anteriores = _performance_svc.get_team_picks_str(teams, limit=15)
+    print(f"[DICA] Picks anteriores injetados para {len(teams)} times")
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         odd_min=ODD_MIN,
         odd_max=ODD_MAX,
         conf_min=CONFIDENCE_MIN,
         fixtures_formatados=fixtures_formatados,
+        picks_anteriores=picks_anteriores,
     )
 
     RATE_LIMIT_WAIT = 65

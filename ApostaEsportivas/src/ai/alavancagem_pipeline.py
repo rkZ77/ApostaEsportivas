@@ -19,8 +19,11 @@ from services.standings_service import StandingsService
 from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.national_team_profile_service import NationalTeamProfileService
+from services.ai_performance_service import AIPerformanceService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
+
+_performance_svc = AIPerformanceService()
 
 load_dotenv(find_dotenv())
 
@@ -78,6 +81,12 @@ SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
 USER_PROMPT_TEMPLATE = """\
 ALAVANCAGEM Copa do Mundo — pick mais seguro do dia para alavancar banca.
 ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
+
+--- PICKS ANTERIORES (calibracao por time) ---
+Ultimos picks gerados para os times de hoje (todos os pipelines). Use para identificar padroes de acerto/erro.
+resultado: GREEN=acertou | RED=errou | pendente=sem resultado ainda.
+{picks_anteriores}
+---
 
 FORMATOS POSSIVEIS:
   SIMPLES : 1 pick com odd individual entre {odd_min}-{odd_max}.
@@ -368,12 +377,19 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
 def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = None) -> dict:
     """Call 2: análise completa. Usa preloaded_contexts para evitar re-carregamento."""
     fixtures_formatados = _format_fixtures(fixtures, preloaded_contexts=preloaded_contexts)
+
+    # Coleta picks anteriores para todos os times dos fixtures do dia
+    all_teams = [t for fx in fixtures for t in [fx.get("home_team"), fx.get("away_team")] if t]
+    picks_anteriores = _performance_svc.get_team_picks_str(all_teams, limit=15)
+    print(f"[ALAVANCAGEM] Picks anteriores injetados para {len(all_teams)} times")
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         odd_min=ODD_COMBINED_MIN,
         odd_max=ODD_COMBINED_MAX,
         odd_target=ODD_TARGET,
         conf_min=CONFIDENCE_MIN,
         fixtures_formatados=fixtures_formatados,
+        picks_anteriores=picks_anteriores,
     )
     RATE_LIMIT_WAIT = 65
     MAX_RETRIES = 3

@@ -80,6 +80,11 @@ USER_PROMPT_TEMPLATE = """
 CALIBRACAO: {desempenho}
 gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<10→ignore | multiplas.hit<0.35→score_combo>=0.70
 
+--- PICKS ANTERIORES (calibracao por time) ---
+Ultimos picks gerados para os times de hoje (todos os pipelines). Use para identificar padroes de acerto/erro.
+resultado: GREEN=acertou | RED=errou | pendente=sem resultado ainda.
+{picks_anteriores}
+
 --- JOGOS DO DIA + DADOS ---
 {fixtures_formatados}
 
@@ -364,9 +369,16 @@ def get_today_fixtures() -> list:
 def run_multipla_llm(fixtures: list) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
     desempenho = performance_svc.format_for_prompt()
+
+    # Coleta picks anteriores para todos os times dos fixtures do dia
+    all_teams = [t for fx in fixtures for t in [fx.get("home_team"), fx.get("away_team")] if t]
+    picks_anteriores = performance_svc.get_team_picks_str(all_teams, limit=15)
+    print(f"[MULTIPLA] Picks anteriores injetados para {len(all_teams)} times")
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         fixtures_formatados=fixtures_formatados,
         desempenho=desempenho,
+        picks_anteriores=picks_anteriores,
     )
 
     try:

@@ -113,3 +113,83 @@ class AIPerformanceService:
         if not data:
             return '{"status": "sem historico suficiente — menos de 5 resultados registrados"}'
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
+
+    def get_team_picks(self, teams: list[str], limit: int = 15) -> list[dict]:
+        """Últimos picks de qualquer pipeline envolvendo os times informados.
+        Pesquisa picks_vip, picks_free e picks_alavancagem.
+        """
+        if not teams:
+            return []
+        teams_arr = list({t.strip() for t in teams if t})
+
+        conn = get_connection()
+        cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            cur.execute("""
+                (
+                  SELECT 'VIP' AS pipeline, match_date,
+                         home_team_name AS home, away_team_name AS away,
+                         market, COALESCE(line,'') AS line,
+                         odd::text AS odd, confidence, result,
+                         LEFT(reasoning, 250) AS reasoning,
+                         created_at
+                  FROM picks_vip
+                  WHERE home_team_name = ANY(%s) OR away_team_name = ANY(%s)
+                )
+                UNION ALL
+                (
+                  SELECT 'Free' AS pipeline, match_date,
+                         home_team AS home, away_team AS away,
+                         market, COALESCE(line,'') AS line,
+                         odd::text AS odd, confidence, result,
+                         LEFT(reasoning, 250) AS reasoning,
+                         created_at
+                  FROM picks_free
+                  WHERE home_team = ANY(%s) OR away_team = ANY(%s)
+                )
+                UNION ALL
+                (
+                  SELECT 'Alavancagem' AS pipeline, match_date,
+                         home_team_1 AS home, away_team_1 AS away,
+                         market_1 AS market, COALESCE(line_1,'') AS line,
+                         odd_1::text AS odd, confidence_1 AS confidence,
+                         result,
+                         LEFT(reasoning_1, 250) AS reasoning,
+                         created_at
+                  FROM picks_alavancagem
+                  WHERE home_team_1 = ANY(%s) OR away_team_1 = ANY(%s)
+                     OR home_team_2 = ANY(%s) OR away_team_2 = ANY(%s)
+                )
+                ORDER BY created_at DESC
+                LIMIT %s
+            """, (
+                teams_arr, teams_arr,
+                teams_arr, teams_arr,
+                teams_arr, teams_arr, teams_arr, teams_arr,
+                limit,
+            ))
+            rows = cur.fetchall()
+        finally:
+            cur.close()
+            conn.close()
+
+        result = []
+        for r in rows:
+            result.append({
+                "pipeline":   r["pipeline"],
+                "data":       str(r["match_date"]),
+                "jogo":       f"{r['home']} vs {r['away']}",
+                "mercado":    r["market"] + (f" {r['line']}" if r["line"] else ""),
+                "odd":        r["odd"],
+                "confidence": float(r["confidence"]) if r["confidence"] else None,
+                "resultado":  r["result"] or "pendente",
+                "reasoning":  r["reasoning"] or "",
+            })
+        return result
+
+    def get_team_picks_str(self, teams: list[str], limit: int = 15) -> str:
+        """Retorna JSON compacto dos últimos picks por time, pronto para o prompt."""
+        picks = self.get_team_picks(teams, limit)
+        if not picks:
+            return '{"status": "sem picks anteriores para estes times"}'
+        return json.dumps(picks, ensure_ascii=False, separators=(",", ":"))

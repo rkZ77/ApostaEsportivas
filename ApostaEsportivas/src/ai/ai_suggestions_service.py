@@ -512,6 +512,7 @@ HISTÓRICO FORA
         referee_stats=None,
         league_id: int = 0,
         performance_str: str | None = None,
+        picks_anteriores_str: str | None = None,
         custom_prompt: str | None = None,
         odds_preloaded: list | None = None,
         web_context: str | None = None,
@@ -576,13 +577,20 @@ HISTÓRICO FORA
             )
 
         desempenho = performance_str or '{"status":"sem historico suficiente ainda"}'
+        picks_anteriores = picks_anteriores_str or '{"status":"sem picks anteriores para estes times"}'
 
         if custom_prompt:
-            user_prompt = custom_prompt.format(dados=dados, desempenho=desempenho, contexto_web=web_context)
+            user_prompt = custom_prompt.format(
+                dados=dados, desempenho=desempenho,
+                contexto_web=web_context, picks_anteriores=picks_anteriores,
+            )
             print(f"[AI] Usando prompt PERSONALIZADO para fixture {fx['fixture_id']}")
         else:
             prompt_template = get_prompt(league_id)
-            user_prompt = prompt_template.format(dados=dados, desempenho=desempenho, contexto_web=web_context)
+            user_prompt = prompt_template.format(
+                dados=dados, desempenho=desempenho,
+                contexto_web=web_context, picks_anteriores=picks_anteriores,
+            )
             print(f"[AI] Usando prompt liga {league_id} -> fixture {fx['fixture_id']}")
 
         data = self._call_api(user_prompt, fx["fixture_id"])
@@ -800,6 +808,7 @@ HISTÓRICO FORA
         referee_stats=None,
         league_id: int = 0,
         performance_str: str | None = None,
+        picks_anteriores_str: str | None = None,
         custom_prompt: str | None = None,
         web_context: str | None = None,
     ):
@@ -819,6 +828,7 @@ HISTÓRICO FORA
             league_id=league_id,
             custom_prompt=custom_prompt,
             performance_str=performance_str,
+            picks_anteriores_str=picks_anteriores_str,
             odds_preloaded=odds_map_full,
             web_context=web_context,
         )
