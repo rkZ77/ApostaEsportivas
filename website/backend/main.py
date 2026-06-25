@@ -42,6 +42,7 @@ for _var, _desc in _OPTIONAL_VARS.items():
 from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
 
 app = FastAPI(title="Pick IA API", version="1.0.0", docs_url=None, redoc_url=None)
+_SERVER_VERSION = str(int(time.time()))
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
 _origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
@@ -525,6 +526,11 @@ def run_migrations():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/version", include_in_schema=False)
+def get_version():
+    return {"v": _SERVER_VERSION}
 
 
 # Serve React SPA (deve ficar por último — só ativo se o build existir)
