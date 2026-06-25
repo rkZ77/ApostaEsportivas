@@ -241,11 +241,12 @@ def sanitize(obj):
 
 
 _LAST10_SKIP = {
-    # campos derivados (calculáveis pela IA a partir dos individuais)
-    "total_goals", "total_corners", "total_yellow_cards", "total_red_cards", "total_cards",
-    # IDs e metadados irrelevantes para análise
-    "home_team_id", "away_team_id", "fixture_id", "league_id", "season",
-    "home_shots_on", "away_shots_on",  # raramente usados nas regras de pick
+    # IDs e metadados sem valor analítico
+    "fixture_id", "league_id", "season",
+    # shots_on não está no formato descrito no prompt e raramente influencia o pick
+    "home_shots_on", "away_shots_on",
+    # total_cards = total_yellow_cards + total_red_cards (redundante)
+    "total_cards",
 }
 
 def format_last10(rows) -> str:
