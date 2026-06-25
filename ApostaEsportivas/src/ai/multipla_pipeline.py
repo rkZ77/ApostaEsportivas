@@ -353,19 +353,19 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 
         if ctx.get("last10_home"):
             lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["last10_home"][:15]))
+            lines.append(_j(ctx["last10_home"][:10]))
 
         if ctx.get("last10_away"):
             lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["last10_away"][:15]))
+            lines.append(_j(ctx["last10_away"][:10]))
 
         if ctx.get("total_home"):
             lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["total_home"][:15]))
+            lines.append(_j(ctx["total_home"][:10]))
 
         if ctx.get("total_away"):
             lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["total_away"][:15]))
+            lines.append(_j(ctx["total_away"][:10]))
 
         lines.append("")
     return "\n".join(lines)
@@ -400,7 +400,7 @@ def run_multipla_llm(fixtures: list) -> dict:
 
     # Coleta picks anteriores para todos os times dos fixtures do dia
     all_teams = [t for fx in fixtures for t in [fx.get("home_team"), fx.get("away_team")] if t]
-    picks_anteriores = performance_svc.get_team_picks_str(all_teams, limit=15)
+    picks_anteriores = performance_svc.get_team_picks_str(all_teams, limit=10)
     print(f"[MULTIPLA] Picks anteriores injetados para {len(all_teams)} times")
 
     user_prompt = USER_PROMPT_TEMPLATE.format(
@@ -591,6 +591,7 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures disponiveis — sem multipla.")
         return None
 
+    fixtures_raw = fixtures_raw[:6]  # máx 6 fixtures por chamada
     print(f"[MULTIPLA] Carregando dados para {len(fixtures_raw)} fixture(s)...")
     fixtures = []
     fx_map   = {}

@@ -52,7 +52,7 @@ WC_LEAGUE_ID   = 1
 ODD_MIN        = 1.30
 ODD_MAX        = 1.80
 CONFIDENCE_MIN = 0.72
-MAX_FIXTURES   = 12
+MAX_FIXTURES   = 8
 
 client              = Anthropic()
 odds_svc            = OddsService()
@@ -308,16 +308,16 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(ctx["away_stats"]))
         if ctx.get("last10_home"):
             lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["last10_home"][:15]))
+            lines.append(_j(ctx["last10_home"][:10]))
         if ctx.get("last10_away"):
             lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["last10_away"][:15]))
-        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 15:
+            lines.append(_j(ctx["last10_away"][:10]))
+        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 10:
             lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["total_home"][:15]))
-        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 15:
+            lines.append(_j(ctx["total_home"][:10]))
+        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 10:
             lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["total_away"][:15]))
+            lines.append(_j(ctx["total_away"][:10]))
 
         lines.append("")
     return "\n".join(lines)
@@ -554,7 +554,7 @@ def run_dica_llm(fixtures_with_context: list) -> dict:
         fx = fwc.get("fixture") or fwc
         all_teams += [fx.get("home_team"), fx.get("away_team")]
     teams = [t for t in all_teams if t]
-    picks_anteriores = _performance_svc.get_team_picks_str(teams, limit=15)
+    picks_anteriores = _performance_svc.get_team_picks_str(teams, limit=10)
     print(f"[DICA] Picks anteriores injetados para {len(teams)} times")
 
     user_prompt = USER_PROMPT_TEMPLATE.format(
