@@ -327,7 +327,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
 # DB — BUSCA FIXTURES COM ODDS NA FAIXA
 # ============================================================
 def get_fixtures_with_odds_in_range() -> list:
-    """Fixtures de hoje com pelo menos 1 odd entre ODD_MIN e ODD_MAX. WC primeiro."""
+    """Fixtures de hoje com pelo menos 1 odd entre ODD_MIN e ODD_MAX. Ligas mais atrativas primeiro."""
     conn = get_connection()
     cur  = conn.cursor()
 
@@ -350,9 +350,28 @@ def get_fixtures_with_odds_in_range() -> list:
         WHERE DATE(f.match_datetime) = CURRENT_DATE
           AND f.status IN ('NS', 'TBD', 'LIVE')
           AND ov.odd_value BETWEEN %s AND %s
-        ORDER BY (f.league_id = %s) DESC, f.match_datetime ASC
+        ORDER BY
+            CASE f.league_id
+                WHEN 1   THEN 1   -- Copa do Mundo
+                WHEN 2   THEN 2   -- Champions League
+                WHEN 3   THEN 3   -- Europa League
+                WHEN 848 THEN 4   -- Conference League
+                WHEN 39  THEN 5   -- Premier League
+                WHEN 140 THEN 6   -- La Liga
+                WHEN 135 THEN 7   -- Serie A
+                WHEN 78  THEN 8   -- Bundesliga
+                WHEN 61  THEN 9   -- Ligue 1
+                WHEN 94  THEN 10  -- Primeira Liga
+                WHEN 88  THEN 11  -- Eredivisie
+                WHEN 13  THEN 12  -- Copa Libertadores
+                WHEN 11  THEN 13  -- Copa Sudamericana
+                WHEN 71  THEN 14  -- Brasileirao Serie A
+                WHEN 72  THEN 15  -- Brasileirao Serie B
+                ELSE 99
+            END ASC,
+            f.match_datetime ASC
         LIMIT %s
-    """, (WC_LEAGUE_ID, ODD_MIN, ODD_MAX, WC_LEAGUE_ID, MAX_FIXTURES))
+    """, (WC_LEAGUE_ID, ODD_MIN, ODD_MAX, MAX_FIXTURES))
 
     rows = cur.fetchall()
     cur.close()
