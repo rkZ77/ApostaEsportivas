@@ -52,9 +52,9 @@ def fetch_web_context(home_team: str, away_team: str, competition: str, match_da
             with urllib.request.urlopen(req, timeout=8) as resp:
                 data = json.loads(resp.read())
                 if data.get("answer"):
-                    results.append(f"[{query}]\n{data['answer']}")
+                    results.append(f"[{query}]\n{data['answer'][:500]}")
                 for r in data.get("results", [])[:2]:
-                    snippet = r.get("content", "")[:400]
+                    snippet = r.get("content", "")[:300]
                     if snippet:
                         results.append(f"Fonte: {r.get('url','')}\n{snippet}")
         except (urllib.error.URLError, Exception) as e:
@@ -240,11 +240,21 @@ def sanitize(obj):
     return obj
 
 
+_LAST10_SKIP = {
+    # campos derivados (calculáveis pela IA a partir dos individuais)
+    "total_goals", "total_corners", "total_yellow_cards", "total_red_cards", "total_cards",
+    # IDs e metadados irrelevantes para análise
+    "home_team_id", "away_team_id", "fixture_id", "league_id", "season",
+    "home_shots_on", "away_shots_on",  # raramente usados nas regras de pick
+}
+
 def format_last10(rows) -> str:
     clean = []
     for r in rows:
         item = {}
         for k, v in r.items():
+            if k in _LAST10_SKIP:
+                continue
             if isinstance(v, (datetime, date)):
                 item[k] = v.isoformat()
             elif isinstance(v, Decimal):
@@ -357,21 +367,25 @@ class AISuggestionsService:
 
         referee_block = to_json(referee_stats) if referee_stats else '"Arbitro nao identificado ou sem historico na temporada"'
 
-        # Histórico total só é enviado quando o venue-específico é insuficiente (< 15 jogos)
-        include_total_home = len(last10_home) < 15
-        include_total_away = len(last10_away) < 15
+        # Histórico total só é enviado quando o venue-específico é insuficiente (< 10 jogos)
+        include_total_home = len(last10_home) < 10
+        include_total_away = len(last10_away) < 10
 
-        total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:15])}" if include_total_home else ""
-        total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:15])}" if include_total_away else ""
+        total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:10])}" if include_total_home else ""
+        total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:10])}" if include_total_away else ""
 
         home_avgs = self._compute_avgs(last10_home, is_home_ctx=True)
         away_avgs = self._compute_avgs(last10_away, is_home_ctx=False)
         avgs_home_block = f"\nMÉDIAS RECENTES CASA (feitas/cedidas)\n{to_json(home_avgs)}" if home_avgs else ""
         avgs_away_block = f"\nMÉDIAS RECENTES FORA (feitas/cedidas)\n{to_json(away_avgs)}" if away_avgs else ""
 
+        # Campos do fixture relevantes para análise (remove IDs e metadados)
+        fx_slim = {k: v for k, v in sanitize(fx).items()
+                   if k not in {"home_team_id", "away_team_id", "season", "status"}}
+
         return f"""
 FIXTURE
-{to_json(fx)}
+{to_json(fx_slim)}
 
 CLASSIFICAÇÃO
 {to_json(standings_stats)}
@@ -388,10 +402,10 @@ ESTATÍSTICAS FORA
 {avgs_away_block}
 
 HISTÓRICO CASA
-{format_last10(last10_home[:15])}
+{format_last10(last10_home[:10])}
 
 HISTÓRICO FORA
-{format_last10(last10_away[:15])}
+{format_last10(last10_away[:10])}
 {total_home_block}
 {total_away_block}
 ÁRBITRO
@@ -490,7 +504,6 @@ HISTÓRICO FORA
                 "best_bookmaker":   m.get("best_bookmaker"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
                 "odds_range":       m.get("odds_range"),
-                "bookmaker_odds":   m.get("bookmaker_odds", []),
             })
 
         print(f"[AI] {len(result)} mercados (sem filtro de odd) | total bruto: {len(structured_odds)}")

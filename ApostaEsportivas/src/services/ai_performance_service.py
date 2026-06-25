@@ -131,7 +131,7 @@ class AIPerformanceService:
                          home_team_name AS home, away_team_name AS away,
                          market, COALESCE(line,'') AS line,
                          odd::text AS odd, confidence, result,
-                         LEFT(reasoning, 250) AS reasoning,
+                         LEFT(reasoning, 120) AS reasoning,
                          created_at
                   FROM picks_vip
                   WHERE home_team_name = ANY(%s) OR away_team_name = ANY(%s)
@@ -142,7 +142,7 @@ class AIPerformanceService:
                          home_team AS home, away_team AS away,
                          market, COALESCE(line,'') AS line,
                          odd::text AS odd, confidence, result,
-                         LEFT(reasoning, 250) AS reasoning,
+                         LEFT(reasoning, 120) AS reasoning,
                          created_at
                   FROM picks_free
                   WHERE home_team = ANY(%s) OR away_team = ANY(%s)
@@ -154,7 +154,7 @@ class AIPerformanceService:
                          market_1 AS market, COALESCE(line_1,'') AS line,
                          odd_1::text AS odd, confidence_1 AS confidence,
                          result,
-                         LEFT(reasoning_1, 250) AS reasoning,
+                         LEFT(reasoning_1, 120) AS reasoning,
                          created_at
                   FROM picks_alavancagem
                   WHERE home_team_1 = ANY(%s) OR away_team_1 = ANY(%s)
