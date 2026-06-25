@@ -107,10 +107,6 @@ FORMATO DO HISTÓRICO (HISTÓRICO CASA / HISTÓRICO FORA / HISTÓRICO TOTAL):
     Combine os dois vetores para estimar probabilidade de cada desfecho.
   Peso temporal decrescente: mais recente=1.0, anterior=0.85...
 
-2.2 ESTABILIDADE: variação taxa recente vs. média total ≥15pp → risco, registrar.
-
-2.3 PESO (decrescente): 1º taxa contextual combinada | 2º médias temporada | 3º standings | 4º perfil competição.
-
 2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: Alta=resultado puro/BTTS irregular | Média=handicap/cartões | Baixa=Over 1.5/cantos.
   CARTÕES — volatilidade MÉDIA por padrão: a taxa de amarelos por jogo tem desvio-padrão alto mesmo em times disciplinados. Upgrade para BAIXO apenas se AMBAS as condições forem satisfeitas: (a) árbitro com ≥5 jogos e avg_yellow consistente (desvio ≤0.8) E (b) histórico dos dois times com ≥5 jogos e desvio ≤0.9 amarelos/jogo. Sem esses dados → declare volatilidade MÉDIA.
 

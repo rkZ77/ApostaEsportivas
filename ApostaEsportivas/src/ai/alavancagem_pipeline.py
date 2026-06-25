@@ -139,11 +139,9 @@ CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30)
   Q: RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
   K: 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 | bookmakers_count>=3→K+0.05 | bookmakers_count=1→K-0.05
 
-SMART SAFE LINE (obrigatorio para Over/Under com multiplas linhas):
-  1. Liste todas as linhas. 2. edge=taxa_real-1/odd | EV=taxa_real×odd-1.
-  3. Descarte: edge<0.05 | EV≤0 | odd individual fora da faixa valida para o formato escolhido.
-  4. Das aprovadas: maior taxa_real. Empate: maior edge.
-  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
+Descarte: edge<0.05 | EV≤0 | odd fora da faixa valida. Escolha maior taxa_real. Sem aprovada: fallback.
+Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
 VERIFICACAO FINAL obrigatoria: calcule odd_combined = produto de todas as odds.
   Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.

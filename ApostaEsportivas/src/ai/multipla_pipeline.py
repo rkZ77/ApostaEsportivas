@@ -118,26 +118,15 @@ K (Confirmação): indicadores independentes 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
 score_base = (C×0.45)+(Q×0.25)+(K×0.30) → range [0.20,0.92]
 Odds: se odd fora de 1.00-2.50 → DESCARTE. Descarte jogo se score_base<0.55 ou sem linha válida.
 
-SMART SAFE LINE — SELECAO DE LINHA (obrigatorio para Over/Under com multiplas linhas):
-  1. Liste todas as linhas do mercado nas odds.
-  2. Calcule: implied_prob=1/odd | edge=taxa_real−implied_prob | EV=taxa_real×odd−1
-  3. Descarte: odd<1.60 → "odd<min" | edge<0.05 → "edge<5%" | EV≤0 → "EV nao positivo"
-  4. Das aprovadas: maior taxa_real. Empate: maior edge.
-  5. Sem aprovadas: fallback para linha mais conservadora >=1.01.
-  No reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[linha @odd — motivo]|Escolhida:[linha @odd — taxa=X%, edge=Y%, EV=Z%]"
+SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
+Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.
+Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
-FEITOS vs CEDIDOS — aplique a TODOS os mercados:
-  Total agregado (Over/Under gols/cantos/cartões, BTTS):
-    Primário: feitos_A_contexto + feitos_B_contexto (o que cada time PRODUZ por jogo).
-    Validação: cedidos_A_contexto + cedidos_B_contexto (o que cada time CONCEDE).
-    Diferença ≤15%: sinal forte. Diferença >15%: reduza K 1 nível no score_base.
-  Mercado de time: feitos do time no seu contexto + cedidos do adversário no contexto oposto.
-  Resultado/Handicap: feitos_A vs cedidos_B (ataque A vs defesa B) + feitos_B vs cedidos_A.
+FEITOS vs CEDIDOS: total/BTTS→feitos_A+feitos_B vs cedidos_A+cedidos_B (divergencia>15%→reduza K).
+Mercado de time→feitos do time+cedidos do adversario. Resultado/Handicap→feitos_A vs cedidos_B + feitos_B vs cedidos_A.
 
-QUALIDADE DO ADVERSARIO: cada jogo no historico contem "opponent_rank" (posicao na tabela).
-rank 1-6 (top)→peso 2.0 | rank 7-12 (mid)→peso 1.0 | rank 13+ (fraco)→peso 0.5 | null→peso 1.0
-Taxa real = soma(stat × peso) / soma(pesos). Declare no reason: "taxa bruta X% → ponderada Y%".
-Para Copa do Mundo: use "weighted_goals_against" do campo quality_breakdown no perfil da selecao.
+QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against.
 
 ETAPA 2 — CORRELACAO ESTRITA:
 Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.
