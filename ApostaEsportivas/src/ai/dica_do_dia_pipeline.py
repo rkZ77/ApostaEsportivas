@@ -308,16 +308,16 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
             lines.append(_j(ctx["away_stats"]))
         if ctx.get("last10_home"):
             lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["last10_home"][:10]))
+            lines.append(_j(ctx["last10_home"][:6]))
         if ctx.get("last10_away"):
             lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["last10_away"][:10]))
-        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 10:
+            lines.append(_j(ctx["last10_away"][:6]))
+        if ctx.get("total_home") and len(ctx.get("last10_home", [])) < 6:
             lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["total_home"][:10]))
-        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 10:
+            lines.append(_j(ctx["total_home"][:6]))
+        if ctx.get("total_away") and len(ctx.get("last10_away", [])) < 6:
             lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["total_away"][:10]))
+            lines.append(_j(ctx["total_away"][:6]))
 
         lines.append("")
     return "\n".join(lines)
