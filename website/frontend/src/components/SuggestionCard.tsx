@@ -186,11 +186,6 @@ export default function SuggestionCard({
               </span>
             )
           })()}
-          {isCopa && wcPhase(s.match_date) && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-yellow-500 border-yellow-700/50 bg-yellow-900/20 uppercase tracking-wide">
-              {wcPhase(s.match_date)}
-            </span>
-          )}
           {(s.league_id || s.league_name) && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={s.league_id} name={s.league_name} />

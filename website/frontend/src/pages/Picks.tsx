@@ -475,11 +475,6 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
               </span>
             )
           })()}
-          {isCopa && wcPhase(dica.match_date) && (
-            <span className="text-[9px] font-bold px-1.5 py-0.5 rounded border text-yellow-500 border-yellow-700/50 bg-yellow-900/20 uppercase tracking-wide">
-              {wcPhase(dica.match_date)}
-            </span>
-          )}
           {dica.league_name && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
