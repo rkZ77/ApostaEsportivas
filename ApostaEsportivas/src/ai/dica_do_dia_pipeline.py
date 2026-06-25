@@ -52,7 +52,7 @@ WC_LEAGUE_ID   = 1
 ODD_MIN        = 1.30
 ODD_MAX        = 1.80
 CONFIDENCE_MIN = 0.72
-MAX_FIXTURES   = 8
+MAX_FIXTURES   = 3
 
 client              = Anthropic()
 odds_svc            = OddsService()
