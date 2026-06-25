@@ -154,7 +154,12 @@ IDEAL: categorias completamente diferentes (ex: escanteios + cartões) + jogos s
 Se restar dúvida sobre independência → NO BET.
 
 ETAPA 3 — MONTAGEM:
-score_combo=(A+B)/2, penalizar -0.10 se perfis parecidos/alta variancia. odd_total=odd_A×odd_B (2.00-3.00).
+CALCULO OBRIGATORIO (mostre no reason):
+  score_base_A = C_A×0.45 + Q_A×0.25 + K_A×0.30  (substitua pelos valores reais calculados na ETAPA 1)
+  score_base_B = C_B×0.45 + Q_B×0.25 + K_B×0.30
+  score_combo  = (score_base_A + score_base_B) / 2
+  Penalize -0.10 no score_combo se perfis parecidos ou alta variancia.
+odd_total=odd_A×odd_B (2.00-3.00).
 multipla_1=maior score_combo valido | multipla_2=segundo melhor (score_combo>=0.60 apenas). Sem par→no_bet.
 FIXTURE E MERCADO ÚNICOS ENTRE MÚLTIPLAS:
   - Dentro de cada múltipla: pick_1.fixture_id ≠ pick_2.fixture_id (obrigatorio).
@@ -175,8 +180,31 @@ REGRA DE OUTPUT CRITICA:
 
 SAIDA JSON:
 Sem multipla: {{"no_bet":true,"motivo":"razao curta"}}
-Com multiplas: {{"multipla_1":{{"name":"MULTIPLA_1","games":[{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"dados que validam + baixa correlacao"}},"multipla_2":{{"name":"MULTIPLA_2","games":[{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}},{{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00}}],"odd_final":0.00,"score_combo":0.00,"reason":"segunda melhor"}}}}
+Com multiplas:
+{{
+  "multipla_1":{{
+    "name":"MULTIPLA_1",
+    "games":[
+      {{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00,"score_base":0.00}},
+      {{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00,"score_base":0.00}}
+    ],
+    "odd_final":0.00,
+    "score_combo":0.00,
+    "reason":"PICK A (Jogo X): mercado escolhido por taxa=XX% em N jogos — FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | PICK B (Jogo Y): mercado escolhido por taxa=XX% em N jogos — FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | COMBO: score_combo=(A+B)/2=0.XX. INDEPENDENCIA: picks de jogos distintos e mercados diferentes — sem correlacao estatistica."
+  }},
+  "multipla_2":{{
+    "name":"MULTIPLA_2",
+    "games":[
+      {{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00,"score_base":0.00}},
+      {{"fixture_id":0,"market_id":0,"market":"","line":"","odd":0.00,"score_base":0.00}}
+    ],
+    "odd_final":0.00,
+    "score_combo":0.00,
+    "reason":"PICK A: ... [CONF] ... | PICK B: ... [CONF] ... | COMBO: score_combo=0.XX. INDEPENDENCIA: ..."
+  }}
+}}
 multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
+O campo score_base em cada game DEVE conter o valor real calculado (nao 0). O score_combo DEVE ser (score_base_A + score_base_B)/2 calculado — nao use 0.
 """
 
 
