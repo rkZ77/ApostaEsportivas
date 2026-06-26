@@ -23,6 +23,9 @@ export default function Navbar() {
   const [expiryDismissed, setExpiryDismissed]       = useState(false)
   const [emailBannerDismissed, setEmailBannerDismissed] = useState(false)
   const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [profileOpen, setProfileOpen] = useState(false)
+
+  useEffect(() => { setProfileOpen(false) }, [pathname])
 
   // Fecha sidebar ao navegar
   useEffect(() => { setSidebarOpen(false) }, [pathname])
@@ -43,7 +46,6 @@ export default function Navbar() {
     pathname === path ? 'text-green-500 font-semibold' : 'text-zinc-400 hover:text-white'
 
   const navLinks = [
-    { to: '/como-funciona', label: 'Como funciona', Icon: BookOpen },
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
@@ -99,10 +101,13 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
-            {/* User info — desktop */}
-            <Link to="/profile" className="hidden sm:flex items-center gap-2 hover:opacity-80 transition-opacity">
-              {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
-              <div className="flex flex-col items-start gap-0.5">
+            {/* Avatar dropdown — desktop */}
+            <div className="relative hidden sm:block">
+              <button
+                onClick={() => setProfileOpen(v => !v)}
+                className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+              >
+                {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
                 <div className="flex items-center gap-1.5">
                   <span className="text-white text-xs font-semibold leading-none">
                     {user?.name?.split(' ')[0]
@@ -113,17 +118,39 @@ export default function Navbar() {
                     {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
                   </span>
                 </div>
-              </div>
-            </Link>
+              </button>
 
-            {/* Logout — desktop */}
-            <button
-              onClick={() => { logout(); navigate('/login') }}
-              className="hidden lg:block text-zinc-500 hover:text-red-400 transition-colors p-2"
-              title="Sair"
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
+              {profileOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-zinc-800">
+                      <p className="text-white text-sm font-bold truncate">{user?.name}</p>
+                      <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
+                    </div>
+                    <div className="py-1">
+                      <Link to="/como-funciona" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                        <BookOpen className="w-4 h-4 text-green-400" />
+                        Como funciona
+                      </Link>
+                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                        <Avatar name={user?.name ?? ''} size="sm" />
+                        Meu perfil
+                      </Link>
+                    </div>
+                    <div className="border-t border-zinc-800 py-1">
+                      <button
+                        onClick={() => { logout(); navigate('/login') }}
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                      >
+                        <LogOut className="w-4 h-4" />
+                        Sair
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
 
             {/* Hamburger — mobile */}
             <button
@@ -225,8 +252,16 @@ export default function Navbar() {
           ))}
         </nav>
 
-        {/* Logout */}
-        <div className="border-t border-zinc-800 p-4">
+        {/* Como funciona + Logout */}
+        <div className="border-t border-zinc-800 p-4 space-y-1">
+          <Link
+            to="/como-funciona"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+          >
+            <BookOpen className="w-4 h-4 text-green-400" />
+            Como funciona
+          </Link>
           <button
             onClick={() => { logout(); navigate('/login') }}
             className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-colors"
