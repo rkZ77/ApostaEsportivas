@@ -28,6 +28,7 @@ def get_connection():
             password=parsed.password,
             sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
             cursor_factory=psycopg2.extras.RealDictCursor,
+            connect_timeout=10,
         )
     return psycopg2.connect(
         host=_env("DB_HOST", "DB_HOST_PROD"),
@@ -37,4 +38,5 @@ def get_connection():
         password=_env("DB_PASS", "DB_PASS_PROD"),
         sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
         cursor_factory=psycopg2.extras.RealDictCursor,
+        connect_timeout=10,
     )

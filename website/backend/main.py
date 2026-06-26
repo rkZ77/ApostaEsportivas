@@ -369,7 +369,11 @@ def _job_banca_reminder():
 def run_migrations():
     """Migrations não-destrutivas: ADD COLUMN IF NOT EXISTS."""
     from database import get_connection
-    conn = get_connection()
+    try:
+        conn = get_connection()
+    except Exception as e:
+        logger.error("[MIGRATION] DB indisponível no startup: %s — pulando migration", e)
+        return
     cur = conn.cursor()
     try:
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;")
