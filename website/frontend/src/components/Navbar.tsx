@@ -4,7 +4,7 @@ import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X,
+  LogOut, Menu, X, BookOpen,
 } from 'lucide-react'
 import Avatar from './Avatar'
 
@@ -43,6 +43,7 @@ export default function Navbar() {
     pathname === path ? 'text-green-500 font-semibold' : 'text-zinc-400 hover:text-white'
 
   const navLinks = [
+    { to: '/como-funciona', label: 'Como funciona', Icon: BookOpen },
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },

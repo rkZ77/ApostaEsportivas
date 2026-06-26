@@ -1,5 +1,5 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { lazy, Suspense, Component, ReactNode, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import WhatsAppButton from './components/WhatsAppButton'
@@ -26,6 +26,7 @@ const Privacidade    = lazy(() => import('./pages/Privacidade'))
 const Termos         = lazy(() => import('./pages/Termos'))
 const Estatisticas   = lazy(() => import('./pages/Estatisticas'))
 const NotFound       = lazy(() => import('./pages/NotFound'))
+const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
 
 class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -73,6 +74,21 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return !user ? children : <Navigate to="/picks" replace />
 }
 
+// Redireciona novos usuários para /como-funciona na primeira vez que logam
+function FirstLoginRedirect() {
+  const { user } = useAuth()
+  const navigate = useNavigate()
+  useEffect(() => {
+    if (!user) return
+    const key = `pickia_onboarded_${user.id}`
+    if (!localStorage.getItem(key)) {
+      localStorage.setItem(key, '1')
+      navigate('/como-funciona', { replace: true })
+    }
+  }, [user?.id])
+  return null
+}
+
 export default function App() {
   return (
     <BrowserRouter>
@@ -81,6 +97,7 @@ export default function App() {
           <WhatsAppButton />
           <CookieBanner />
           <UpdateBanner />
+          <FirstLoginRedirect />
           <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
@@ -103,6 +120,7 @@ export default function App() {
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/termos" element={<Termos />} />
                 <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />
+                <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
