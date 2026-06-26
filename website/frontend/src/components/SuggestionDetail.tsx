@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from 'lucide-react'
 import api from '../services/api'
 import PickSocial from './PickSocial'
-import { suggestStake, calcVipStake } from '../utils/stakeUtils'
+import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket } from '../utils/marketTranslate'
 
 interface StatBlock {
@@ -150,27 +150,27 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
       return s.suggested_stake_units
     }
 
+    // 3. Fallback com mesmas funções dos cards (por tipo de pick)
     const isMultipla = pickType === 'multipla'
+    const isFree     = pickType === 'free'
     const odd  = Number(s.total_odd ?? s.odd ?? 0)
     const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
+    const ev   = Number(s.ev ?? 0)
 
-    // 3. VIP: stake_pct do DB + banca real
-    if (!isMultipla && s.stake_pct && banca?.bankroll_current && banca.unit_value > 0) {
-      return Math.max(1, Math.round((s.stake_pct * banca.bankroll_current) / banca.unit_value))
-    }
-
-    // 4. Frontend com banca real (fallback)
     if (prob > 0 && odd > 1 && banca?.bankroll_current && banca.unit_value > 0) {
       if (isMultipla) {
-        const sug = suggestStake(prob, odd, banca.bankroll_current, banca.unit_value, 5, 0.25)
+        const sug = calcMultiplaStake(prob, odd, banca.bankroll_current, banca.unit_value)
+        if (sug) return sug.units
+      } else if (isFree) {
+        const sug = calcFreeStake(prob, odd, ev, banca.bankroll_current, banca.unit_value)
         if (sug) return sug.units
       } else {
-        const sug = calcVipStake(prob, odd, Number(s.ev ?? 0), banca.bankroll_current, banca.unit_value)
+        const sug = calcVipStake(prob, odd, ev, banca.bankroll_current, banca.unit_value, s.stake_pct)
         if (sug) return sug.units
       }
     }
 
-    // 5. Sem banca: escala de referência (1% banca ref. R$1000 = 1u)
+    // 4. Sem banca: escala de referência (1% banca ref. R$1000 = 1u)
     if (s.stake_pct) return Math.max(1, Math.round(s.stake_pct / 0.01))
 
     return 1
