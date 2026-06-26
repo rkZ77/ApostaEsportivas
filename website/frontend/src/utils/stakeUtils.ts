@@ -131,7 +131,7 @@ export function calcMultiplaStake(
   const kelly = (b * prob - q) / b
   if (kelly <= 0) return null
   const stakePct = Math.max(0.005, Math.min(STAKE_CAPS.multipla.maxPct, kelly * STAKE_CAPS.multipla.kellyFrac))
-  const units = Math.max(1, Math.round(stakePct * bankroll / unitValue))
+  const units = Math.max(1, Math.min(3, Math.round(stakePct * bankroll / unitValue)))
   return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
 }
 

@@ -181,7 +181,7 @@ def _compute_suggested_stake_units(
 
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
-        max_units = {'free': 6, 'multipla': 5}.get(pick_type, 9999)
+        max_units = {'free': 6, 'multipla': 3}.get(pick_type, 9999)
 
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
