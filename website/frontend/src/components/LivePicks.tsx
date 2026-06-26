@@ -612,8 +612,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   )
 }
 
-const REFRESH_LIVE    = 5_000   // 5s — quando tem jogo ao vivo
-const REFRESH_IDLE    = 60_000  // 60s — sem jogo ao vivo
+const REFRESH_LIVE = 5_000 // 5s — polling quando tem pick ao vivo
 
 function LiveSkeleton() {
   return (
