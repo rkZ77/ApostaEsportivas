@@ -75,22 +75,47 @@ def _safe_query_one(cur, sql, params=()):
 
 
 def _get_user_banca(cur, user_id: int):
-    """Retorna (bankroll_current, unit_value) ou None se banca não configurada."""
+    """Retorna (bankroll_current, unit_value) ou None se banca não configurada.
+    Calcula bankroll_current = bankroll_start + PnL real (usando picks_vip/free/multiplas).
+    """
     row = _safe_query_one(cur, """
-        SELECT ub.bankroll_start, ub.unit_value,
-               COALESCE(SUM(ufp.profit), 0) AS total_pnl
-        FROM user_banca ub
-        LEFT JOIN user_followed_picks ufp
-            ON ufp.user_id = ub.user_id AND ufp.profit IS NOT NULL
-        WHERE ub.user_id = %s
-        GROUP BY ub.bankroll_start, ub.unit_value
+        SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s
     """, (user_id,))
     if not row:
         return None
     unit_value = float(row["unit_value"]) if row["unit_value"] else 0
     if unit_value <= 0:
         return None
-    bankroll = float(row["bankroll_start"]) + float(row["total_pnl"] or 0)
+    bankroll_start = float(row["bankroll_start"])
+
+    # PnL real: espelha o cálculo do /banca/summary
+    pnl_row = _safe_query_one(cur, """
+        SELECT COALESCE(SUM(
+            CASE
+                WHEN uf.cashout_amount IS NOT NULL
+                    THEN uf.cashout_amount - uf.stake_units * %(uv)s
+                WHEN uf.pick_type = 'vip' AND pv.result IS NOT NULL
+                    THEN COALESCE(pv.profit, 0) * uf.stake_units * %(uv)s
+                WHEN uf.pick_type = 'free' AND pf.result IS NOT NULL
+                    THEN COALESCE(pf.profit, 0) * uf.stake_units * %(uv)s
+                WHEN uf.pick_type = 'multipla' AND pm.result IS NOT NULL
+                    THEN CASE pm.result
+                        WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %(uv)s
+                        WHEN 'RED'   THEN -1.0 * uf.stake_units * %(uv)s
+                        ELSE 0.0
+                    END
+                ELSE 0
+            END
+        ), 0) AS total_pnl
+        FROM user_followed_picks uf
+        LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
+        LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
+        LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
+        WHERE uf.user_id = %(uid)s
+    """, {"uv": unit_value, "uid": user_id})
+
+    pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
+    bankroll = bankroll_start + pnl
     return bankroll, unit_value
 
 
