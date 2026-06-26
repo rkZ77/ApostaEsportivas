@@ -111,10 +111,6 @@ function SocialProofStats() {
         <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
         <span><span className="text-white font-bold">Auditável</span> publicamente</span>
       </div>
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-        <span className="w-1.5 h-1.5 bg-purple-400 rounded-full" />
-        <span>Sem cartão de crédito</span>
-      </div>
     </div>
   )
 }
@@ -127,7 +123,7 @@ function ThreeSteps() {
         <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
         <div className="grid md:grid-cols-3 gap-5">
           {([
-            { n: '1', Icon: UserPlus, title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Sem cartão de crédito. Ganhe 2 dias de acesso VIP completo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
+            { n: '1', Icon: UserPlus, title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
             { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
@@ -159,7 +155,7 @@ function StickyMobileCTA() {
     <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-4 py-3 flex items-center gap-3">
       <div className="flex-1 min-w-0">
         <p className="text-white text-xs font-bold leading-none">2 dias VIP grátis</p>
-        <p className="text-zinc-500 text-[10px] mt-0.5">Copa ao vivo · Sem cartão</p>
+        <p className="text-zinc-500 text-[10px] mt-0.5">Copa ao vivo · IA em tempo real</p>
       </div>
       <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap">
         Criar conta
@@ -657,7 +653,7 @@ export default function Landing() {
           <div className="text-center mb-12">
             <h2 className="text-3xl font-black mb-3">Comece de graça, evolua quando quiser</h2>
             <p className="text-zinc-400 text-sm max-w-md mx-auto">
-              Teste 2 dias com acesso VIP completo. Sem cartão de crédito. Depois escolha seu plano.
+              Teste 2 dias com acesso VIP completo. Depois escolha seu plano.
             </p>
           </div>
 
@@ -808,7 +804,7 @@ export default function Landing() {
               },
               {
                 q: 'O que é o trial gratuito de 2 dias?',
-                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo, sem cartão de crédito e sem compromisso. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
+                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
               },
               {
                 q: 'Os picks são garantidos?',
@@ -861,7 +857,7 @@ export default function Landing() {
             <span className="text-green-500">Não fique de fora.</span>
           </h2>
           <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
-            Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span> Sem cartão de crédito.
+            Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span>
             Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
