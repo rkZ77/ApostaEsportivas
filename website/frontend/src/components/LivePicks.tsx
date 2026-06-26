@@ -521,7 +521,64 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
       )}
 
       {canCashout && (
-        <div className="mt-3 pt-3 border-t border-zinc-800/60">
+        <div className="mt-3 pt-3 border-t border-zinc-800/60 space-y-3">
+          {/* Painel de stake + cashout sugerido */}
+          {(() => {
+            const effOdd   = pick.actual_odd ?? Number(pick.odd)
+            const stakeR   = unitValue ? pick.stake_units * unitValue : null
+            const potRetR  = stakeR != null ? stakeR * effOdd : null
+            const suggested = displayProb != null && potRetR != null
+              ? potRetR * (displayProb / 100) : null
+            return (
+              <div className="bg-zinc-800/50 rounded-xl p-3 space-y-2.5">
+                {/* Linha 1: onde apostou · unidades · R$ apostado → retorno pot. */}
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {pick.bet_house && (
+                      <span className="text-zinc-500 font-medium">{pick.bet_house}</span>
+                    )}
+                    <span className="text-zinc-300 font-bold">
+                      {pick.stake_units}u{stakeR != null ? ` · R$${stakeR.toFixed(0)}` : ''}
+                    </span>
+                    <span className="text-zinc-600">·</span>
+                    <span className="text-zinc-500">Odd {effOdd.toFixed(2)}</span>
+                  </div>
+                  {potRetR != null && (
+                    <div className="text-right shrink-0 ml-2">
+                      <div className="text-[10px] text-zinc-500">Retorno pot.</div>
+                      <div className="text-sm font-black text-white">R${potRetR.toFixed(0)}</div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Linha 2: cashout sugerido + probabilidade */}
+                {suggested != null && (
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-[10px] text-zinc-500 mb-0.5">Cashout justo agora</div>
+                      <div className="text-xl font-black text-orange-400">~R${suggested.toFixed(0)}</div>
+                    </div>
+                    <span className={`text-sm font-black border px-2.5 py-1 rounded-lg ${probCls}`}>
+                      {displayProb}%
+                    </span>
+                  </div>
+                )}
+
+                {/* Mini barra de progresso */}
+                {displayProb != null && (
+                  <div className="h-1 bg-zinc-700 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        displayProb >= 60 ? 'bg-green-500' : displayProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${displayProb}%` }}
+                    />
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+
           <button
             onClick={() => setShowCashout(true)}
             className="w-full text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors">

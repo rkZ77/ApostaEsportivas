@@ -510,7 +510,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     cur     = conn.cursor()
 
     cur.execute("""
-        SELECT pick_id, pick_type, stake_units, cashout_amount
+        SELECT pick_id, pick_type, stake_units, cashout_amount, actual_odd, bet_house
         FROM user_followed_picks
         WHERE user_id = %s
     """, (user_id,))
@@ -627,6 +627,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         pick_type    = row["pick_type"]
         stake_u      = float(row["stake_units"])
         cashout_amt  = float(row["cashout_amount"]) if row.get("cashout_amount") is not None else None
+        actual_odd   = float(row["actual_odd"]) if row.get("actual_odd") is not None else None
+        bet_house    = row.get("bet_house")
 
         # ── VIP / FREE ──────────────────────────────────────────────────────
         if pick_type in ("vip", "free"):
@@ -658,6 +660,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 "pick_type":      pick_type,
                 "match_date":     str(p["match_date"]),
                 "odd":            odd,
+                "actual_odd":     actual_odd,
+                "bet_house":      bet_house,
                 "stake_units":    stake_u,
                 "cashout_amount": cashout_amt,
                 "is_live":        leg["is_live"],
@@ -729,6 +733,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "pick_type":      "multipla",
                     "match_date":     str(p["match_date"]),
                     "odd":            total_odd,
+                    "actual_odd":     actual_odd,
+                    "bet_house":      bet_house,
                     "stake_units":    stake_u,
                     "cashout_amount": cashout_amt,
                     "is_live":        any(l["is_live"] for l in legs_out),
@@ -774,6 +780,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "pick_type":      "alavancagem",
                     "match_date":     str(p["match_date"]),
                     "odd":            odd_combined,
+                    "actual_odd":     actual_odd,
+                    "bet_house":      bet_house,
                     "stake_units":    stake_u,
                     "cashout_amount": cashout_amt,
                     "is_live":        any(l["is_live"] for l in legs_out),
