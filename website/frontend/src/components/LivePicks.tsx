@@ -450,7 +450,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
       {/* ── Header colapsável ── */}
       <div
         className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-800/40 transition-colors"
-        onClick={() => setExpanded(e => !e)}
+        onClick={() => setExpanded((e: boolean) => !e)}
       >
         {/* Esquerda: badge + valor apostado + sub */}
         <div className="flex-1 min-w-0">
