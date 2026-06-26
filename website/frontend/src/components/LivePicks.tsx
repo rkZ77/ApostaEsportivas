@@ -606,7 +606,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   )
 }
 
-const REFRESH_INTERVAL = 5_000
+const REFRESH_LIVE    = 5_000   // 5s — quando tem jogo ao vivo
+const REFRESH_IDLE    = 60_000  // 60s — sem jogo ao vivo
 
 function LiveSkeleton() {
   return (
@@ -651,12 +652,14 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   // Primeiro fetch sempre (ao montar, antes de clicar na aba)
   useEffect(() => { load() }, [load])
 
-  // Polling só quando a aba está visível
+  // Polling adaptativo: 5s com jogo ao vivo, 60s sem
+  const hasLive = picks.some(p => p.is_live)
   useEffect(() => {
     if (!isActive) return
-    const id = setInterval(load, REFRESH_INTERVAL)
+    const interval = hasLive ? REFRESH_LIVE : REFRESH_IDLE
+    const id = setInterval(load, interval)
     return () => clearInterval(id)
-  }, [load, isActive])
+  }, [load, isActive, hasLive])
 
   // Atualiza quando o usuário volta ao browser (troca de aba, minimiza, etc.)
   useEffect(() => {

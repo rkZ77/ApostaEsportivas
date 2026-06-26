@@ -797,8 +797,12 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg: any, i: number) => {
-          // Se o overall é GREEN, todas as pernas são GREEN por definição
-          const lr = (m.result === 'GREEN' ? 'GREEN' : leg.result) as 'GREEN' | 'RED' | undefined
+          // Se overall GREEN → todas GREEN. Se overall RED → legs sem GREEN explícito são RED
+          const lr = (
+            m.result === 'GREEN' ? 'GREEN' :
+            m.result === 'RED'   ? (leg.result === 'GREEN' ? 'GREEN' : 'RED') :
+            leg.result ?? undefined
+          ) as 'GREEN' | 'RED' | undefined
           const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : lr === 'RED'
