@@ -517,23 +517,18 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
             const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-                  <div className={`text-2xl font-black ${color}`}>
-                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                    {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                  </div>
+              <div className="flex-1 px-4 py-3 text-center">
+                <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                <div className={`text-2xl font-black ${color}`}>
+                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
                 </div>
                 {banca && (
-                  <div className="flex-1 px-4 py-3 text-center">
-                    <div className="text-[10px] text-zinc-500 mb-0.5">Lucro R$</div>
-                    <div className={`text-2xl font-black ${color}`}>
-                      {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
-                    </div>
+                  <div className={`text-sm font-bold ${color} mt-0.5`}>
+                    {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
                   </div>
                 )}
-              </>
+              </div>
             )
           })()
         ) : (
@@ -777,23 +772,18 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-                  <div className={`text-2xl font-black ${color}`}>
-                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                    {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                  </div>
+              <div className="flex-1 px-4 py-3 text-center">
+                <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                <div className={`text-2xl font-black ${color}`}>
+                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
                 </div>
                 {banca && (
-                  <div className="flex-1 px-4 py-3 text-center">
-                    <div className="text-[10px] text-zinc-500 mb-0.5">Lucro R$</div>
-                    <div className={`text-2xl font-black ${color}`}>
-                      {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
-                    </div>
+                  <div className={`text-sm font-bold ${color} mt-0.5`}>
+                    {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
                   </div>
                 )}
-              </>
+              </div>
             )
           })()
         ) : (
