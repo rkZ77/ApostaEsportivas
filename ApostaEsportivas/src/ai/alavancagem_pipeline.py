@@ -69,9 +69,14 @@ Voce e QUANTBET-ALAVANCAGEM, especializado em montar o pick mais seguro do dia p
 
 OBJETIVO: ODD COMBINADA entre {odd_min} e {odd_max} (alvo ~{odd_target}).
 - Simples: 1 pick com odd individual entre {odd_min}-{odd_max}.
-- Dupla: 2 picks (mesmo jogo ou jogos diferentes) onde odd_1 × odd_2 cai em {odd_min}-{odd_max}.
-- Tripla: 3 picks (mesmo jogo ou jogos diferentes) onde odd_1 × odd_2 × odd_3 cai em {odd_min}-{odd_max}.
-Consistencia acima de tudo: 9/10 @ 1.12 > 6/10 @ 1.45. Nenhum pick sem confidence>={conf_min} → no_bet.
+- Dupla: 2 picks (mesmo jogo ou jogos diferentes) onde odd_1 x odd_2 cai em {odd_min}-{odd_max}.
+- Tripla: 3 picks (mesmo jogo ou jogos diferentes) onde odd_1 x odd_2 x odd_3 cai em {odd_min}-{odd_max}.
+Consistencia acima de tudo: 9/10 @ 1.12 > 6/10 @ 1.45. Nenhum pick sem confidence>={conf_min} -> no_bet.
+
+REGRA CRITICA: odd_combined DEVE estar em [{odd_min},{odd_max}]. Nenhuma excecao.
+  Calcule o produto EXPLICITAMENTE antes de emitir o JSON.
+  Se o produto < {odd_min} ou > {odd_max}: descarte e tente outro combo, ou emita no_bet.
+  Emitir odd_combined fora da faixa e PROIBIDO — o sistema rejeita automaticamente.
 
 Realize toda a analise INTERNAMENTE. Proibido texto fora do JSON.
 SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
@@ -143,8 +148,11 @@ SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=t
 Descarte: edge<0.05 | EV≤0 | odd fora da faixa valida. Escolha maior taxa_real. Sem aprovada: fallback.
 Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
-VERIFICACAO FINAL obrigatoria: calcule odd_combined = produto de todas as odds.
-  Se odd_combined < {odd_min} ou > {odd_max} → no_bet imediato.
+VERIFICACAO FINAL OBRIGATORIA — execute antes de emitir o JSON:
+  1. Escreva: odd_combined = odd_1 [x odd_2] [x odd_3] = <valor calculado>
+  2. Verifique: {odd_min} <= odd_combined <= {odd_max}
+  3. Se FALSO: descarte este combo e tente outra combinacao, ou emita no_bet.
+  NUNCA emita JSON com odd_combined fora de [{odd_min},{odd_max}]. O sistema rejeita e o pick e perdido.
 
 SAIDA JSON:
 Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
@@ -427,10 +435,10 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
 # ============================================================
 # SALVA NO BANCO
 # ============================================================
-def save_pick(result: dict):
+def save_pick(result: dict) -> bool:
     if result.get("no_bet"):
         print(f"[ALAVANCAGEM] no_bet: {result.get('motivo')}")
-        return
+        return False
 
     p1   = result["pick_1"]
     p2   = result.get("pick_2")
@@ -440,7 +448,7 @@ def save_pick(result: dict):
     # Valida coerência mercado↔reasoning
     if not is_market_reasoning_coherent(p1.get("market", ""), p1.get("reasoning", "")):
         print(f"[ALAVANCAGEM] REJEITADO pick_1 — reasoning incoerente com mercado '{p1.get('market')}'")
-        return
+        return False
     if p2 and not is_market_reasoning_coherent(p2.get("market", ""), p2.get("reasoning", "")):
         print(f"[ALAVANCAGEM] pick_2 removido — reasoning incoerente. Downgrade para simples.")
         p2 = None; p3 = None; tipo = "simples"
@@ -455,7 +463,7 @@ def save_pick(result: dict):
     # Validação hard: rejeita se odd_combined fora da faixa permitida
     if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
         print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
-        return
+        return False
 
     confidence_media = float(result.get("confidence_media", p1["confidence"]))
 
@@ -518,6 +526,7 @@ def save_pick(result: dict):
     cur.close()
     conn.close()
     print("[ALAVANCAGEM] Pick salvo com sucesso.")
+    return True
 
 
 # ============================================================
@@ -555,16 +564,27 @@ def run_alavancagem_pipeline() -> dict | None:
         print("❌ Nenhum fixture com dados carregados.")
         return None
 
-    # ── IA: análise completa com contextos pré-carregados ─────────────────────
-    print("🤖 Chamando IA com análise completa...")
-    result = run_alavancagem_llm(fixtures, preloaded_contexts=preloaded)
+    # ── IA: análise completa com retry se odd sair da faixa ──────────────────
+    MAX_PICK_RETRIES = 2
+    result = None
+    for attempt in range(1, MAX_PICK_RETRIES + 2):
+        print(f"🤖 Chamando IA (tentativa {attempt}/{MAX_PICK_RETRIES + 1})...")
+        result = run_alavancagem_llm(fixtures, preloaded_contexts=preloaded)
 
-    if result.get("no_bet"):
-        print(f"⚠️  no_bet: {result.get('motivo')}")
-        return None
+        if result.get("no_bet"):
+            print(f"⚠️  no_bet: {result.get('motivo')}")
+            return None
 
-    save_pick(result)
-    return result
+        odd_combined = float(result.get("odd_combined", 0))
+        if ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX:
+            break  # IA acertou a faixa — prossegue
+        print(f"[ALAVANCAGEM] Tentativa {attempt}: odd_combined={odd_combined:.2f} fora de {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX} — retentando...")
+        if attempt == MAX_PICK_RETRIES + 1:
+            print(f"[ALAVANCAGEM] IA não convergiu para faixa válida após {attempt} tentativas — abortando.")
+            return None
+
+    saved = save_pick(result)
+    return result if saved else None
 
 
 if __name__ == "__main__":
