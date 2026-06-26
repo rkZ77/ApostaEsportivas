@@ -407,8 +407,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     ? potRetR * (displayProb / 100) : null
   const isCopa = pick.league_id === 1
 
-  // Expandido por padrão: ao vivo ou pendente; fechado: finalizados
-  const [expanded, setExpanded] = useState(isLive || (!isFinished && !hasResult))
+  // Expandido por padrão: só ao vivo; aguardando e resolvido ficam fechados
+  const [expanded, setExpanded] = useState(isLive)
 
   // Header right-side content
   const headerRight = hasCashout ? (
@@ -654,12 +654,11 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   // Primeiro fetch sempre (ao montar, antes de clicar na aba)
   useEffect(() => { load() }, [load])
 
-  // Polling adaptativo: 5s com jogo ao vivo, 60s sem
+  // Polling só quando tem pick ao vivo — aguardando e resolvido não chamam API
   const hasLive = picks.some(p => p.is_live)
   useEffect(() => {
-    if (!isActive) return
-    const interval = hasLive ? REFRESH_LIVE : REFRESH_IDLE
-    const id = setInterval(load, interval)
+    if (!isActive || !hasLive) return
+    const id = setInterval(load, REFRESH_LIVE)
     return () => clearInterval(id)
   }, [load, isActive, hasLive])
 
