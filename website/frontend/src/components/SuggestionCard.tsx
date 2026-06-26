@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
-import { calcVipStake, calcProfitUnits } from '../utils/stakeUtils'
+import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket } from '../utils/marketTranslate'
 
@@ -98,7 +98,7 @@ export default function SuggestionCard({
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
-  //             2) calcVipStake como fallback (histórico sem banca no momento)
+  //             2) função específica por tipo como fallback
   const stakeSuggestion = (() => {
     if (!banca) return null
     if (s.suggested_stake_units != null && s.suggested_stake_units > 0) {
@@ -109,14 +109,17 @@ export default function SuggestionCard({
         kellyPct: Math.round(units * banca.unit_value / banca.bankroll_current * 1000) / 10,
       }
     }
-    return calcVipStake(
-      Number(s.probability ?? s.confidence ?? 0),
-      Number(s.odd),
-      Number(s.ev ?? 0),
-      banca.bankroll_current,
-      banca.unit_value,
-      s.stake_pct,
-    )
+    const prob = Number(s.probability ?? s.confidence ?? 0)
+    const odd  = Number(s.odd)
+    const ev   = Number(s.ev ?? 0)
+    const pickType = s.pick_type ?? 'vip'
+    if (pickType === 'multipla') {
+      return calcMultiplaStake(prob, odd, banca.bankroll_current, banca.unit_value)
+    }
+    if (pickType === 'free') {
+      return calcFreeStake(prob, odd, ev, banca.bankroll_current, banca.unit_value)
+    }
+    return calcVipStake(prob, odd, ev, banca.bankroll_current, banca.unit_value, s.stake_pct)
   })()
 
   const handleFollow = (e: React.MouseEvent) => {

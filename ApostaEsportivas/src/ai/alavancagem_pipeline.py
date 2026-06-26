@@ -148,8 +148,8 @@ SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=t
 Descarte: edge<0.05 | EV≤0 | odd fora da faixa valida. Escolha maior taxa_real. Sem aprovada: fallback.
 Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
-VERIFICACAO FINAL OBRIGATORIA — execute antes de emitir o JSON:
-  1. Escreva: odd_combined = odd_1 [x odd_2] [x odd_3] = <valor calculado>
+VERIFICACAO FINAL OBRIGATORIA — execute INTERNAMENTE antes de emitir o JSON:
+  1. Calcule internamente: odd_combined = odd_1 [x odd_2] [x odd_3]
   2. Verifique: {odd_min} <= odd_combined <= {odd_max}
   3. Se FALSO: descarte este combo e tente outra combinacao, ou emita no_bet.
   NUNCA emita JSON com odd_combined fora de [{odd_min},{odd_max}]. O sistema rejeita e o pick e perdido.
@@ -410,7 +410,10 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
                     odd_max=ODD_COMBINED_MAX,
                     odd_target=ODD_TARGET,
                 ),
-                messages=[{"role": "user", "content": user_prompt}],
+                messages=[
+                    {"role": "user", "content": user_prompt},
+                    {"role": "assistant", "content": "{"},
+                ],
             )
             break
         except RateLimitError:
@@ -421,15 +424,13 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
         except Exception as e:
             raise Exception(f"[ALAVANCAGEM] Erro na API Anthropic: {e}")
 
-    raw = response.content[0].text.strip()
-    start = raw.find("{")
-    if start == -1:
-        raise Exception(f"[ALAVANCAGEM] JSON não encontrado na resposta:\n{raw[:500]}")
+    # prefill was "{" — prepend it back before parsing
+    raw = "{" + response.content[0].text.strip()
     try:
-        obj, _ = json.JSONDecoder().raw_decode(raw[start:])
+        obj, _ = json.JSONDecoder().raw_decode(raw)
         return obj
     except Exception as e:
-        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[start:start+300]}")
+        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[:300]}")
 
 
 # ============================================================
