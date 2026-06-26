@@ -117,42 +117,12 @@ CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e t
 --- FIXTURES COPA DO MUNDO + DADOS ---
 {fixtures_formatados}
 
-QUALIDADE DOS DADOS (Copa do Mundo):
-  Cada perfil inclui "quality_breakdown" com stats por tipo de competicao.
-  Use "weighted_goals_against" em vez de media bruta — Copa>Eliminatorias>Amistoso.
-  Declare: "bruto X gols/j → ponderado Y gols/j (Z Copa, W Eliminatorias, V amistosos)".
-
-ANALISE:
-PASSO 1 — Leia standings e situacao situacional de cada selecao.
-PASSO 2 — Calcule taxa_real ponderada (recente=1.0, anterior=0.9...) para cada mercado candidato.
-PASSO 3 — Monte candidatos simples, dupla e tripla que respeitem os criterios e tenham produto em {odd_min}-{odd_max}.
-PASSO 4 — Descarte: amostra<5 | taxa<65% | confidence<{conf_min} | produto fora de {odd_min}-{odd_max}.
-PASSO 5 — Selecao: escolha o candidato com MAIOR confidence media. Empate → prefira SIMPLES (menos risco de correlacao).
-  Sem candidato valido → no_bet.
-
-FORMATO DO HISTORICO: home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
-  CASA: time mandante → feitos=home_*, cedidos=away_*.
-  FORA: time visitante → feitos=away_*, cedidos=home_*.
-
-FEITOS vs CEDIDOS (mercados totais/BTTS):
-  Primario: feitos_A + feitos_B. Validacao: cedidos_A + cedidos_B.
-  Divergencia >15% → reduza Confirmadores 1 nivel.
-  Mercado de time: feitos do time + cedidos do adversario.
-
-CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30)
-  C: taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
-  Q: RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
-  K: 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10 | bookmakers_count>=3→K+0.05 | bookmakers_count=1→K-0.05
-
-SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
-Descarte: edge<0.05 | EV≤0 | odd fora da faixa valida. Escolha maior taxa_real. Sem aprovada: fallback.
-Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
-
-VERIFICACAO FINAL OBRIGATORIA — execute INTERNAMENTE antes de emitir o JSON:
-  1. Calcule internamente: odd_combined = odd_1 [x odd_2] [x odd_3]
-  2. Verifique: {odd_min} <= odd_combined <= {odd_max}
-  3. Se FALSO: descarte este combo e tente outra combinacao, ou emita no_bet.
-  NUNCA emita JSON com odd_combined fora de [{odd_min},{odd_max}]. O sistema rejeita e o pick e perdido.
+QUALIDADE: use "weighted_goals_against" (Copa>Eliminatorias>Amistoso). Declare ponderacao no reasoning.
+HISTORICO: home_*/away_* → CASA=mandante, FORA=visitante. FEITOS vs CEDIDOS: feitos_A+feitos_B (primario), cedidos_A+cedidos_B (validacao). Divergencia >15% → reduza Confirmadores.
+CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) | C=taxa_real; Q: RICO(8+)=1.00,MOD(4-7)=0.75,ESC(1-3)=0.45,VAZIO=0.20; K: 3+=1.00,2=0.70,1=0.40,0=0.10.
+SMART SAFE LINE: edge=taxa_real−1/odd | EV=taxa_real×odd−1. Descarte: edge<0.05|EV≤0. Reasoning: "SMART SAFE LINE|Escolhida:[taxa=X%,EV=Z%]".
+SELECAO: maior confidence_media. Empate → SIMPLES. Sem candidato valido com criterios: no_bet.
+VERIFICACAO (interna): odd_combined={odd_min}..{odd_max}. Fora da faixa → tente outro combo ou no_bet.
 
 SAIDA JSON:
 Simples: {{"tipo":"simples","pick_1":{{"fixture_id":0,"home_team":"","away_team":"","league_id":1,"market_id":0,"market":"","line":"","odd":0.00,"bet_house":"","confidence":0.00,"prob_real":0.00,"reasoning":"FATO:X/Y(taxa Z%). CONFIRMADORES:[...]. CONCLUSAO:padrao solido."}},"pick_2":null,"pick_3":null,"odd_combined":0.00,"confidence_media":0.00}}
@@ -410,10 +380,7 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
                     odd_max=ODD_COMBINED_MAX,
                     odd_target=ODD_TARGET,
                 ),
-                messages=[
-                    {"role": "user", "content": user_prompt},
-                    {"role": "assistant", "content": "{"},
-                ],
+                messages=[{"role": "user", "content": user_prompt}],
             )
             break
         except RateLimitError:
@@ -424,13 +391,15 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
         except Exception as e:
             raise Exception(f"[ALAVANCAGEM] Erro na API Anthropic: {e}")
 
-    # prefill was "{" — prepend it back before parsing
-    raw = "{" + response.content[0].text.strip()
+    raw = response.content[0].text.strip()
+    start = raw.find("{")
+    if start == -1:
+        raise Exception(f"[ALAVANCAGEM] JSON não encontrado na resposta:\n{raw[:500]}")
     try:
-        obj, _ = json.JSONDecoder().raw_decode(raw)
+        obj, _ = json.JSONDecoder().raw_decode(raw[start:])
         return obj
     except Exception as e:
-        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[:300]}")
+        raise Exception(f"[ALAVANCAGEM] JSON inválido: {e}\n{raw[start:start+300]}")
 
 
 # ============================================================
