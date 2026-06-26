@@ -125,7 +125,7 @@ export default function ComoFunciona() {
         <div className="space-y-4">
           {features.map(({ icon: Icon, color, bg, badge, badgeColor, title, desc, items }) => (
             <div key={title} className={`border rounded-2xl p-5 ${bg}`}>
-              <div className="flex items-start gap-4">
+              <div className="flex items-start gap-3 sm:gap-4">
                 <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-zinc-900 border border-zinc-800`}>
                   <Icon className={`w-5 h-5 ${color}`} />
                 </div>

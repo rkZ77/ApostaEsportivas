@@ -165,26 +165,26 @@ export default function Navbar() {
 
         {/* E-mail não verificado */}
         {!emailBannerDismissed && user?.email_verified === false && (
-          <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-center justify-between">
-            <span className="text-blue-300 text-xs font-semibold">
+          <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-start sm:items-center justify-between gap-2">
+            <span className="text-blue-300 text-xs font-semibold leading-relaxed">
               Confirme seu e-mail para garantir acesso à recuperação de senha.{' '}
               <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil</Link>
             </span>
-            <button onClick={() => setEmailBannerDismissed(true)} className="text-blue-600 hover:text-blue-400 text-xs ml-4">×</button>
+            <button onClick={() => setEmailBannerDismissed(true)} className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-sm font-black transition-colors">×</button>
           </div>
         )}
 
         {/* VIP expiry warning */}
         {showExpiryWarning && (
-          <div className="bg-yellow-400/10 border-b border-yellow-400/20 px-4 py-2 flex items-center justify-between">
-            <span className="text-yellow-400 text-xs font-semibold">
+          <div className="bg-yellow-400/10 border-b border-yellow-400/20 px-4 py-2 flex items-start sm:items-center justify-between gap-2">
+            <span className="text-yellow-400 text-xs font-semibold leading-relaxed">
               {daysUntilExpiry === 0
                 ? 'Seu plano VIP expira hoje!'
                 : `Seu plano VIP expira em ${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'}.`}
               {' '}
               <Link to="/checkout" className="underline hover:text-yellow-300">Renovar</Link>
             </span>
-            <button onClick={() => setExpiryDismissed(true)} className="text-yellow-600 hover:text-yellow-400 text-xs ml-4">×</button>
+            <button onClick={() => setExpiryDismissed(true)} className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 text-sm font-black transition-colors">×</button>
           </div>
         )}
 

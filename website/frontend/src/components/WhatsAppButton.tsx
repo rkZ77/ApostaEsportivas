@@ -17,7 +17,7 @@ export default function WhatsAppButton() {
       <button
         onClick={() => setDismissed(true)}
         aria-label="Fechar suporte"
-        className="w-7 h-7 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-600 hover:bg-zinc-700 text-zinc-300 text-sm font-black transition-colors shadow"
+        className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-600 hover:bg-zinc-700 text-zinc-300 text-base font-black transition-colors shadow"
       >
         ×
       </button>

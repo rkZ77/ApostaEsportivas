@@ -377,7 +377,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
         : null
       : null)
   const hasResult   = !!effectiveResult
-  const canCashout  = !isFinished && !hasCashout && !effectiveLocked && !hasResult
+  const canCashout  = isLive && !isFinished && !hasCashout && !effectiveLocked && !hasResult
 
   // Odds e valores financeiros
   const effOdd   = pick.actual_odd ?? Number(pick.odd)
@@ -529,7 +529,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 </div>
                 {/* Mercado + stat atual */}
                 <div className="flex items-center justify-between text-xs">
-                  <span className="text-zinc-400">{pick.market} · {pick.line}</span>
+                  <span className="text-zinc-400 truncate">{pick.market} · {pick.line}</span>
                   {pick.current_val != null && (
                     <span className={`font-black shrink-0 ml-2 ${stColor}`}>{pick.stat_label}: {pick.current_val}</span>
                   )}

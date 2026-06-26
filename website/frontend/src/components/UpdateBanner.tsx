@@ -35,7 +35,7 @@ export default function UpdateBanner() {
   return (
     <div
       style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 w-64 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-xl shadow-black/50 p-4"
+      className="fixed right-2 sm:right-4 z-50 w-56 sm:w-64 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-xl shadow-black/50 p-4"
     >
       <div className="flex items-start justify-between gap-2 mb-3">
         <div>
@@ -44,7 +44,7 @@ export default function UpdateBanner() {
         </div>
         <button
           onClick={() => setDismissed(true)}
-          className="w-5 h-5 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-xs font-black shrink-0 transition-colors"
+          className="w-8 h-8 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-600 text-zinc-400 text-sm font-black shrink-0 transition-colors"
         >
           ×
         </button>
