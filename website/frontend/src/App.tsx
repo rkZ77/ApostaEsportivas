@@ -71,7 +71,8 @@ function PrivateRoute({ children }: { children: JSX.Element }) {
 
 function PublicRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
-  return !user ? children : <Navigate to="/picks" replace />
+  if (!user || user.plan === 'admin') return children
+  return <Navigate to="/picks" replace />
 }
 
 // Redireciona apenas usuários recém-cadastrados para /como-funciona
