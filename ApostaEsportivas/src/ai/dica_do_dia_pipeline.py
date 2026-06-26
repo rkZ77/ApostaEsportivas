@@ -336,33 +336,32 @@ def get_fixtures_with_odds_in_range() -> list:
             f.away_team,
             f.match_datetime,
             f.status,
-            (f.league_id = %s) AS is_world_cup
+            (f.league_id = %s) AS is_world_cup,
+            CASE f.league_id
+                WHEN 1   THEN 1
+                WHEN 2   THEN 2
+                WHEN 3   THEN 3
+                WHEN 848 THEN 4
+                WHEN 39  THEN 5
+                WHEN 140 THEN 6
+                WHEN 135 THEN 7
+                WHEN 78  THEN 8
+                WHEN 61  THEN 9
+                WHEN 94  THEN 10
+                WHEN 88  THEN 11
+                WHEN 13  THEN 12
+                WHEN 11  THEN 13
+                WHEN 71  THEN 14
+                WHEN 72  THEN 15
+                ELSE 99
+            END AS league_priority
         FROM fixtures f
         LEFT JOIN leagues l ON f.league_id = l.league_id
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         WHERE DATE(f.match_datetime) = CURRENT_DATE
           AND f.status IN ('NS', 'TBD', 'LIVE')
           AND ov.odd_value BETWEEN %s AND %s
-        ORDER BY
-            CASE f.league_id
-                WHEN 1   THEN 1   -- Copa do Mundo
-                WHEN 2   THEN 2   -- Champions League
-                WHEN 3   THEN 3   -- Europa League
-                WHEN 848 THEN 4   -- Conference League
-                WHEN 39  THEN 5   -- Premier League
-                WHEN 140 THEN 6   -- La Liga
-                WHEN 135 THEN 7   -- Serie A
-                WHEN 78  THEN 8   -- Bundesliga
-                WHEN 61  THEN 9   -- Ligue 1
-                WHEN 94  THEN 10  -- Primeira Liga
-                WHEN 88  THEN 11  -- Eredivisie
-                WHEN 13  THEN 12  -- Copa Libertadores
-                WHEN 11  THEN 13  -- Copa Sudamericana
-                WHEN 71  THEN 14  -- Brasileirao Serie A
-                WHEN 72  THEN 15  -- Brasileirao Serie B
-                ELSE 99
-            END ASC,
-            f.match_datetime ASC
+        ORDER BY league_priority ASC, f.match_datetime ASC
         LIMIT %s
     """, (WC_LEAGUE_ID, ODD_MIN, ODD_MAX, MAX_FIXTURES))
 
