@@ -1830,7 +1830,7 @@ export default function Picks() {
                           <span className="text-orange-400 font-bold">
                             {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
                           </span>{' '}
-                          e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo ~1.50.
+                          e reinveste o lucro a cada GREEN. Reset automático no RED. Odds alvo 1.50.
                         </p>
                       </div>
                       <AlavancagemCard
@@ -2120,7 +2120,7 @@ export default function Picks() {
                 <p>
                   A cada <span className="text-red-400 font-bold">RED</span>, a banca reseta para R$50 e uma nova
                   série começa do zero. A IA seleciona 1 pick (ou combinada de 2 com alta correlação)
-                  com <span className="text-white font-bold">odd alvo ~1.50</span> para maximizar a consistência.
+                  com <span className="text-white font-bold">odd alvo 1.50</span> para maximizar a consistência.
                 </p>
                 <p>
                   O objetivo é <span className="text-green-400 font-bold">encadear greens consecutivos</span> e multiplicar
@@ -2129,9 +2129,9 @@ export default function Picks() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                   {[
                     { label: 'Banca inicial', value: 'R$50',   color: 'text-orange-400' },
-                    { label: 'Odd alvo',      value: '~1.50',  color: 'text-green-400'  },
+                    { label: 'Odd alvo',      value: '1.50',   color: 'text-green-400'  },
                     { label: 'Reset no RED',  value: 'R$50',   color: 'text-red-400'    },
-                    { label: '5 greens',      value: '~R$300', color: 'text-white'      },
+                    { label: '5 greens',      value: 'R$300+', color: 'text-white'      },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>

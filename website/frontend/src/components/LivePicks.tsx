@@ -428,7 +428,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
       onClick={e => { e.stopPropagation(); setShowCashout(true) }}
       className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
     >
-      Cash Out ~R${suggestedCashout.toFixed(0)}
+      Cash Out R${suggestedCashout.toFixed(0)}
     </button>
   ) : displayProb != null ? (
     <span className={`text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
@@ -581,7 +581,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 {suggestedCashout != null && (
                   <div className="flex justify-between text-sm pt-1">
                     <span className="text-zinc-500">Cash Out justo agora</span>
-                    <span className="font-black text-orange-400">~R${suggestedCashout.toFixed(2)}</span>
+                    <span className="font-black text-orange-400">R${suggestedCashout.toFixed(2)}</span>
                   </div>
                 )}
                 <button
