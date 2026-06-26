@@ -1,6 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
+import Navbar from '../components/Navbar'
+import Footer from '../components/Footer'
 
 const features = [
   {
@@ -89,6 +91,8 @@ export default function ComoFunciona() {
   }
 
   return (
+    <>
+    <Navbar />
     <div className="min-h-screen bg-black text-white">
       {/* Fechar */}
       <div className="sticky top-16 z-10 flex justify-end px-4 pt-4">
@@ -167,5 +171,7 @@ export default function ComoFunciona() {
         </div>
       </div>
     </div>
+    <Footer />
+    </>
   )
 }

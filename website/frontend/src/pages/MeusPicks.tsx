@@ -67,10 +67,12 @@ export default function MeusPicks() {
   }, [data])
 
   const handleUnfollow = async (pick_id: number, pick_type: string) => {
-    await api.delete(`/banca/follow/${pick_id}/${pick_type}`).catch(() => {})
-    load()
-    setShowRemoved(true)
-    setTimeout(() => setShowRemoved(false), 3000)
+    try {
+      await api.delete(`/banca/follow/${pick_id}/${pick_type}`)
+      load()
+      setShowRemoved(true)
+      setTimeout(() => setShowRemoved(false), 3000)
+    } catch { /* silently ignore */ }
   }
 
   // daysBack: 0 = Hoje/Tudo (sem filtro), 1 = ontem, 3 = 3 dias, 7 = semana, 15 = 15 dias
