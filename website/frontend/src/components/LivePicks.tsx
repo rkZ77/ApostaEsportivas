@@ -524,7 +524,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
         <div className="mt-3 pt-3 border-t border-zinc-800/60">
           <button
             onClick={() => setShowCashout(true)}
-            className="w-full text-xs font-semibold text-orange-400 border border-orange-500/25 bg-orange-500/5 hover:bg-orange-500/15 rounded-xl py-2 transition-colors">
+            className="w-full text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors">
             Registrar Cashout
           </button>
         </div>
