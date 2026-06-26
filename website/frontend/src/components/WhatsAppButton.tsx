@@ -11,8 +11,17 @@ export default function WhatsAppButton() {
   return (
     <div
       style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 flex items-center gap-1"
+      className="fixed right-4 z-50 flex flex-col items-end gap-1.5"
     >
+      {/* X separado acima do botão */}
+      <button
+        onClick={() => setDismissed(true)}
+        aria-label="Fechar suporte"
+        className="w-7 h-7 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-600 hover:bg-zinc-700 text-zinc-300 text-sm font-black transition-colors shadow"
+      >
+        ×
+      </button>
+
       <a
         href={WA_LINK}
         target="_blank"
@@ -26,14 +35,6 @@ export default function WhatsAppButton() {
         </svg>
         <span className="hidden sm:inline text-sm">Suporte</span>
       </a>
-
-      <button
-        onClick={() => setDismissed(true)}
-        aria-label="Fechar suporte"
-        className="w-5 h-5 flex items-center justify-center rounded-full bg-zinc-700 hover:bg-zinc-500 text-zinc-300 text-xs font-black transition-colors self-start -mt-1 -ml-2 shadow"
-      >
-        ×
-      </button>
     </div>
   )
 }
