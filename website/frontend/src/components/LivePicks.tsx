@@ -426,7 +426,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   ) : canCashout && suggestedCashout != null ? (
     <button
       onClick={e => { e.stopPropagation(); setShowCashout(true) }}
-      className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+      className="text-xs font-bold text-white bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
     >
       Cash Out R${suggestedCashout.toFixed(0)}
     </button>
@@ -554,8 +554,20 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
             )}
           </div>
 
-          {/* ── Montante + Prêmios + Cashout ── */}
+          {/* ── Detalhes da aposta + Cashout ── */}
           <div className="px-4 pb-4 space-y-2 border-t border-zinc-800/60 pt-3">
+            {effOdd > 1 && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-400">{isMulti ? 'Odd total' : 'Odd apostada'}</span>
+                <span className="text-white font-semibold">{effOdd.toFixed(2)}</span>
+              </div>
+            )}
+            {pick.bet_house && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-400">Casa</span>
+                <span className="text-white font-semibold">{pick.bet_house}</span>
+              </div>
+            )}
             {stakeR != null && (
               <div className="flex justify-between text-sm">
                 <span className="text-zinc-400">Montante apostado</span>
@@ -564,7 +576,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
             )}
             {premioR != null && !hasCashout && (
               <div className="flex justify-between text-sm">
-                <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-zinc-400'}`}>Prêmios</span>
+                <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-zinc-400'}`}>Retorno</span>
                 <span className={`font-black ${premioR > 0 ? 'text-green-400' : 'text-red-400'}`}>
                   R${premioR.toFixed(2)}
                 </span>
@@ -579,9 +591,9 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
             {canCashout && (
               <button
                 onClick={() => setShowCashout(true)}
-                className="w-full mt-1 text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors"
+                className="w-full mt-1 text-sm font-bold text-white bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-xl py-2.5 transition-colors"
               >
-                Cash Out
+                {suggestedCashout != null ? `Cash Out · R$${suggestedCashout.toFixed(0)}` : 'Cash Out'}
               </button>
             )}
           </div>
