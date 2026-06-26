@@ -45,8 +45,8 @@ function findLambda(targetProb: number, minGoals: number): number {
   let lo = 0.001, hi = 20
   for (let i = 0; i < 60; i++) {
     const mid = (lo + hi) / 2
-    if (poissonGe(mid, minGoals) < targetProb) hi = mid
-    else lo = mid
+    if (poissonGe(mid, minGoals) < targetProb) lo = mid
+    else hi = mid
   }
   return (lo + hi) / 2
 }
