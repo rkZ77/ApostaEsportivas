@@ -433,8 +433,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   ) : displayProb != null ? (
     <span className={`text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
   ) : isLive ? (
-    <span className="flex items-center gap-1 text-[9px] font-black text-red-400">
-      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+    <span className="flex items-center gap-1 text-[9px] font-black text-green-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
       AO VIVO
     </span>
   ) : (
@@ -469,8 +469,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
             </span>
             {isLive && (
-              <span className="flex items-center gap-1 text-[9px] font-black text-red-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+              <span className="flex items-center gap-1 text-[9px] font-black text-green-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 {pick.elapsed ? `${pick.elapsed}'` : 'AO VIVO'}
               </span>
             )}
@@ -800,9 +800,9 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           {live.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-red-500/10 border border-red-500/20 rounded-full px-3 py-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
-              <span className="text-xs font-black text-red-400">{live.length} ao vivo</span>
+            <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              <span className="text-xs font-black text-green-400">{live.length} ao vivo</span>
             </div>
           )}
           <p className="text-xs text-zinc-500">
@@ -826,8 +826,8 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       {picks.length === 0 ? (
         <div className="card p-10 text-center border-dashed">
           <div className="flex justify-center mb-4">
-            <div className="w-14 h-14 rounded-full bg-red-500/10 flex items-center justify-center">
-              <Radio className="w-6 h-6 text-red-400" />
+            <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
+              <Radio className="w-6 h-6 text-green-400" />
             </div>
           </div>
           <p className="font-semibold text-zinc-300">Nenhum pick sendo acompanhado</p>
@@ -840,9 +840,9 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
           {live.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse" />
-                <span className="text-xs font-black text-red-400 uppercase tracking-widest">Ao Vivo</span>
-                <span className="text-[10px] text-red-400/60 bg-red-500/10 px-1.5 py-0.5 rounded-full">{live.length}</span>
+                <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+                <span className="text-xs font-black text-green-400 uppercase tracking-widest">Ao Vivo</span>
+                <span className="text-[10px] text-green-400/60 bg-green-500/10 px-1.5 py-0.5 rounded-full">{live.length}</span>
               </div>
               <div className="space-y-3">
                 {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
@@ -853,9 +853,9 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
           {pending.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 bg-zinc-600 rounded-full" />
-                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Aguardando</span>
-                <span className="text-[10px] text-zinc-600 bg-zinc-800 px-1.5 py-0.5 rounded-full">{pending.length}</span>
+                <span className="w-2 h-2 bg-zinc-500 rounded-full" />
+                <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">Aguardando</span>
+                <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded-full">{pending.length}</span>
               </div>
               <div className="space-y-3">
                 {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
@@ -866,9 +866,9 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
           {finalized.length > 0 && (
             <div>
               <div className="flex items-center gap-2 mb-3">
-                <span className="w-2 h-2 bg-zinc-700 rounded-full" />
-                <span className="text-xs font-black text-zinc-600 uppercase tracking-widest">Finalizados</span>
-                <span className="text-[10px] text-zinc-700 bg-zinc-800/50 px-1.5 py-0.5 rounded-full">{finalized.length}</span>
+                <span className="w-2 h-2 bg-zinc-600 rounded-full" />
+                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Finalizados</span>
+                <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded-full">{finalized.length}</span>
               </div>
               <div className="space-y-3">
                 {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
