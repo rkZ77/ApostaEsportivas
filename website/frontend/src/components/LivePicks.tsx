@@ -577,20 +577,12 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               </div>
             )}
             {canCashout && (
-              <>
-                {suggestedCashout != null && (
-                  <div className="flex justify-between text-sm pt-1">
-                    <span className="text-zinc-500">Cash Out justo agora</span>
-                    <span className="font-black text-orange-400">R${suggestedCashout.toFixed(2)}</span>
-                  </div>
-                )}
-                <button
-                  onClick={() => setShowCashout(true)}
-                  className="w-full mt-1 text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors"
-                >
-                  Registrar Cash Out
-                </button>
-              </>
+              <button
+                onClick={() => setShowCashout(true)}
+                className="w-full mt-1 text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors"
+              >
+                Cash Out
+              </button>
             )}
           </div>
         </div>
