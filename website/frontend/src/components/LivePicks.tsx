@@ -666,50 +666,117 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
 
   // DEV MOCK — só injeta em desenvolvimento (import.meta.env.DEV = false em prod)
   const DEV_MOCK: any[] = !import.meta.env.DEV ? [] : [
+    // 1. VIP ao vivo — Over perdendo, cashout disponível
     {
-      pick_id: 9001, pick_type: 'vip', match_date: '2026-06-23',
-      odd: 1.87, stake_units: 3, cashout_amount: null,
-      is_live: true, status: '2H', elapsed: 67, league_id: null,
+      pick_id: 9001, pick_type: 'vip', match_date: '2026-06-26',
+      odd: 1.87, actual_odd: 1.87, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,
+      is_live: true, status: '2H', elapsed: 67, league_id: 1,
       fixture_id: 1001, home_team: 'Brasil', away_team: 'Argentina',
       home_team_id: 6, away_team_id: 7,
-      market: 'Total de Gols', line: 'Over 2.5',
+      market: 'Gols Mais/Menos', line: 'Over 2.5',
       home_goals: 1, away_goals: 1,
       stat_label: 'Gols', current_val: 2, line_val: 2.5,
-      pick_status: 'losing', is_locked: false,
+      pick_status: 'losing', is_locked: false, result: null,
     },
+    // 2. VIP ao vivo — Under ganhando, cashout disponível
     {
-      pick_id: 9002, pick_type: 'free', match_date: '2026-06-23',
-      odd: 2.10, stake_units: 2, cashout_amount: null,
-      is_live: false, status: 'NS', elapsed: null, league_id: null,
+      pick_id: 9002, pick_type: 'vip', match_date: '2026-06-26',
+      odd: 2.10, actual_odd: 2.10, stake_units: 3, bet_house: 'Sportingbet', cashout_amount: null,
+      is_live: true, status: '1H', elapsed: 38, league_id: null,
       fixture_id: 1002, home_team: 'França', away_team: 'Espanha',
       home_team_id: 2, away_team_id: 9,
-      market: 'Resultado Final', line: 'França',
+      market: 'Gols Mais/Menos', line: 'Under 1.5',
       home_goals: 0, away_goals: 0,
-      stat_label: null, current_val: null, line_val: null,
-      pick_status: null, is_locked: false,
+      stat_label: 'Gols', current_val: 0, line_val: 1.5,
+      pick_status: 'winning', is_locked: false, result: null,
     },
+    // 3. Múltipla ao vivo — 2 legs, uma ganhando, outra em aberto
     {
-      pick_id: 9003, pick_type: 'multipla', match_date: '2026-06-22',
-      odd: 3.45, stake_units: 1, cashout_amount: 28.50,
-      is_live: false, status: 'FT', elapsed: null, league_id: null,
+      pick_id: 9003, pick_type: 'multipla', match_date: '2026-06-26',
+      odd: 3.19, actual_odd: 3.19, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,
+      is_live: true, result: null,
       legs: [
         {
-          fixture_id: 1003, home_team: 'Alemanha', away_team: 'Holanda',
-          home_team_id: 3, away_team_id: 5,
-          market: 'Resultado', line: 'Alemanha', odd: 1.85,
+          fixture_id: 1003, home_team: 'Ecuador', away_team: 'Germany',
+          home_team_id: 5, away_team_id: 3,
+          market: 'Gols Mais/Menos', line: 'Over 2.5', odd: 1.67,
           status: 'FT', elapsed: null, home_goals: 2, away_goals: 1,
-          stat_label: null, current_val: null, line_val: null,
-          pick_status: 'winning', is_locked: true, is_live: false,
+          stat_label: 'Gols', current_val: 3, line_val: 2.5,
+          pick_status: 'winning', is_locked: true, is_live: false, result: 'GREEN',
         },
         {
-          fixture_id: 1004, home_team: 'Portugal', away_team: 'Marrocos',
-          home_team_id: 4, away_team_id: 8,
-          market: 'Total de Gols', line: 'Under 2.5', odd: 1.87,
-          status: 'FT', elapsed: null, home_goals: 1, away_goals: 2,
-          stat_label: 'Gols', current_val: 3, line_val: 2.5,
-          pick_status: 'losing', is_locked: true, is_live: false,
+          fixture_id: 1004, home_team: 'Japan', away_team: 'Sweden',
+          home_team_id: 12, away_team_id: 13,
+          market: 'Gols Mais/Menos', line: 'Over 2.5', odd: 1.91,
+          status: '2H', elapsed: 72, home_goals: 1, away_goals: 0,
+          stat_label: 'Gols', current_val: 1, line_val: 2.5,
+          pick_status: 'losing', is_locked: false, is_live: true, result: null,
         },
       ],
+    },
+    // 4. Alavancagem aguardando
+    {
+      pick_id: 9004, pick_type: 'alavancagem', match_date: '2026-06-26',
+      odd: 1.50, actual_odd: 1.50, stake_units: 1, bet_house: 'Bet365', cashout_amount: null,
+      is_live: false, status: 'NS', result: null,
+      legs: [
+        {
+          fixture_id: 1005, home_team: 'Portugal', away_team: 'Morocco',
+          home_team_id: 4, away_team_id: 8,
+          market: 'Gols Mais/Menos', line: 'Under 2.5', odd: 1.50,
+          status: 'NS', elapsed: null, home_goals: null, away_goals: null,
+          stat_label: null, current_val: null, line_val: null,
+          pick_status: null, is_locked: false, is_live: false, result: null,
+        },
+      ],
+    },
+    // 5. VIP finalizado GREEN
+    {
+      pick_id: 9005, pick_type: 'vip', match_date: '2026-06-25',
+      odd: 1.70, actual_odd: 1.70, stake_units: 10, bet_house: 'Bet365', cashout_amount: null,
+      is_live: false, status: 'FT', elapsed: null, league_id: 1,
+      fixture_id: 1006, home_team: 'Paraguay', away_team: 'Australia',
+      home_team_id: 14, away_team_id: 15,
+      market: 'Gols Mais/Menos', line: 'Over 1.5',
+      home_goals: 1, away_goals: 1,
+      stat_label: 'Gols', current_val: 2, line_val: 1.5,
+      pick_status: 'winning', is_locked: true, result: 'GREEN',
+    },
+    // 6. Múltipla finalizada RED — leg 1 GREEN, leg 2 RED
+    {
+      pick_id: 9006, pick_type: 'multipla', match_date: '2026-06-25',
+      odd: 3.19, actual_odd: 3.19, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,
+      is_live: false, status: 'FT', result: 'RED',
+      legs: [
+        {
+          fixture_id: 1007, home_team: 'Ecuador', away_team: 'Germany',
+          home_team_id: 5, away_team_id: 3,
+          market: 'Gols Mais/Menos', line: 'Over 2.5', odd: 1.67,
+          status: 'FT', elapsed: null, home_goals: 2, away_goals: 1,
+          stat_label: 'Gols', current_val: 3, line_val: 2.5,
+          pick_status: 'winning', is_locked: true, is_live: false, result: 'GREEN',
+        },
+        {
+          fixture_id: 1008, home_team: 'Japan', away_team: 'Sweden',
+          home_team_id: 12, away_team_id: 13,
+          market: 'Gols Mais/Menos', line: 'Over 2.5', odd: 1.91,
+          status: 'FT', elapsed: null, home_goals: 1, away_goals: 0,
+          stat_label: 'Gols', current_val: 1, line_val: 2.5,
+          pick_status: 'losing', is_locked: true, is_live: false, result: 'RED',
+        },
+      ],
+    },
+    // 7. VIP com cashout já registrado
+    {
+      pick_id: 9007, pick_type: 'vip', match_date: '2026-06-25',
+      odd: 1.82, actual_odd: 1.82, stake_units: 10, bet_house: 'Betano', cashout_amount: 85.00,
+      is_live: false, status: 'FT', elapsed: null, league_id: null,
+      fixture_id: 1009, home_team: 'Turkey', away_team: 'USA',
+      home_team_id: 16, away_team_id: 17,
+      market: 'Total de Gols Visitante', line: 'Over 1.5',
+      home_goals: 2, away_goals: 1,
+      stat_label: 'Gols Fora', current_val: 1, line_val: 1.5,
+      pick_status: 'losing', is_locked: true, result: null,
     },
   ]
 
