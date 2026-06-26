@@ -140,22 +140,31 @@ def _compute_suggested_stake_units(
     if not bankroll or not unit_value or unit_value <= 0:
         return 1
 
-    MAX_PCT   = {'vip': 0.05, 'free': 0.02, 'multipla': 0.025}
     KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25}
-    max_pct   = MAX_PCT.get(pick_type, 0.03)
     kelly_frac = KELLY_FR.get(pick_type, 0.5)
+
+    conf  = float(confidence or 0)
+    odd_f = float(odd or 0)
+    ev_f  = float(ev or 0)
+
+    # EV nulo: deriva de confidence × odd como fallback (prob_real ausente em picks antigos)
+    if ev_f <= 0 and conf > 0 and odd_f > 1:
+        ev_f = max(0.0, conf * odd_f - 1.0)
 
     # VIP: stake_pct já calculado pelo backend com Kelly ajustado
     if pick_type == 'vip' and stake_pct and float(stake_pct) > 0:
+        # Cap por tier de confiança — diferencia unidades em vez de sempre ir ao máximo
+        if conf >= 0.80 and ev_f > 0.10:
+            max_pct, max_units = 0.05, 10
+        elif conf >= 0.72 and ev_f > 0.05:
+            max_pct, max_units = 0.04, 7
+        else:
+            max_pct, max_units = 0.03, 5
         final_pct = min(float(stake_pct), max_pct)
     else:
-        conf  = float(confidence or 0)
-        odd_f = float(odd or 0)
-        ev_f  = float(ev or 0)
-
-        # EV nulo: deriva de confidence × odd como fallback (prob_real ausente em picks antigos)
-        if ev_f <= 0 and conf > 0 and odd_f > 1:
-            ev_f = max(0.0, conf * odd_f - 1.0)
+        # Free / Múltipla / VIP sem stake_pct: Kelly direto
+        MAX_PCT = {'free': 0.02, 'multipla': 0.025}
+        max_pct = MAX_PCT.get(pick_type, 0.03)
 
         # EV negativo sem base sólida → stake mínimo (1u)
         if ev_f <= 0 and pick_type != 'multipla':
@@ -172,9 +181,8 @@ def _compute_suggested_stake_units(
 
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
+        max_units = {'free': 6, 'multipla': 5}.get(pick_type, 9999)
 
-    _MAX_UNITS = {'vip': 10, 'free': 6, 'multipla': 5}
-    max_units  = _MAX_UNITS.get(pick_type, 9999)  # alavancagem sem limite fixo
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
     return max(1, min(max_units, units))

@@ -108,12 +108,13 @@ export default function MeusPicks() {
     : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
   // Entradas filtradas pelo período selecionado (para stats + lista)
+  // daysBack: 0=Todos, -1=Hoje, 1=Ontem, 3/7/15=N dias
   const filteredByPeriod = daysBack === 0
     ? allEntries
     : allEntries.filter((e: any) => {
         if (!e.followed_at) return false
         const dayKey = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-        return dayKey >= isoDateDaysAgo(daysBack)
+        return daysBack < 0 ? dayKey === todayKey : dayKey >= isoDateDaysAgo(daysBack)
       })
 
   const filteredTabEntries = daysBack === 0 ? tabEntries : filteredByPeriod.filter((e: any) =>
@@ -181,6 +182,7 @@ export default function MeusPicks() {
               <div className="flex gap-2 flex-wrap">
                 {[
                   { label: 'Todos', value: 0 },
+                  { label: 'Hoje', value: -1 },
                   { label: 'Ontem', value: 1 },
                   { label: '3 dias', value: 3 },
                   { label: 'Semana', value: 7 },
@@ -248,6 +250,8 @@ export default function MeusPicks() {
               }))
               const chartFiltered = daysBack === 0
                 ? allChart
+                : daysBack < 0
+                ? allChart.filter((c: any) => c.match_date === todayKey)
                 : allChart.filter((c: any) => c.match_date >= isoDateDaysAgo(daysBack))
               if (chartFiltered.length < 2) return null
               const pnl = data?.total_pnl ?? 0

@@ -185,6 +185,8 @@ function SetupModal({ current, onSave, onClose }: {
 // componente principal
 const PERIODS = [
   { key: 0,  label: 'Tudo' },
+  { key: 1,  label: 'Hoje' },
+  { key: 2,  label: 'Ontem' },
   { key: 7,  label: '7 dias' },
   { key: 30, label: '30 dias' },
   { key: 90, label: '90 dias' },

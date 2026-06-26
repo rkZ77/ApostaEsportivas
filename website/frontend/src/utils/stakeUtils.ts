@@ -64,22 +64,27 @@ export function calcVipStake(
 
   let stakePct: number
 
+  // Cap por tier de confiança — diferencia unidades em vez de sempre ir ao máximo
+  const maxUnits = prob >= 0.80 && ev > 0.10 ? 10
+                 : prob >= 0.72 && ev > 0.05 ? 7
+                 : 5
+  const maxPct   = prob >= 0.80 && ev > 0.10 ? 0.05
+                 : prob >= 0.72 && ev > 0.05 ? 0.04
+                 : 0.03
+
   if (stakePctFromBackend != null && stakePctFromBackend > 0) {
-    stakePct = Math.min(stakePctFromBackend, STAKE_CAPS.vip.maxPct)
+    stakePct = Math.min(stakePctFromBackend, maxPct)
   } else {
     const b = odd - 1
     const q = 1 - prob
     if (b <= 0 || prob <= 0 || prob >= 1) return null
     const kelly = (b * prob - q) / b
     if (kelly <= 0) return null
-    const cap = prob >= 0.80 && ev > 0.10 ? 0.05
-              : prob >= 0.72 && ev > 0.05 ? 0.04
-              : 0.03
-    stakePct = Math.max(0.01, Math.min(cap, kelly * STAKE_CAPS.vip.kellyFrac))
+    stakePct = Math.max(0.01, Math.min(maxPct, kelly * STAKE_CAPS.vip.kellyFrac))
   }
 
   const stakeAmount = stakePct * bankroll
-  const units = Math.max(1, Math.min(10, Math.round(stakeAmount / unitValue)))
+  const units = Math.max(1, Math.min(maxUnits, Math.round(stakeAmount / unitValue)))
   return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
 }
 
