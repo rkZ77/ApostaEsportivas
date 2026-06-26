@@ -1,6 +1,6 @@
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check } from 'lucide-react'
+import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
 
 const features = [
   {
@@ -80,16 +80,29 @@ export default function ComoFunciona() {
   const { user } = useAuth()
 
   const handleStart = () => {
-    if (user) {
-      localStorage.setItem(`pickia_onboarded_${user.id}`, '1')
-    }
     navigate('/picks', { replace: true })
+  }
+
+  const handleClose = () => {
+    if (window.history.length > 1) navigate(-1)
+    else navigate('/picks', { replace: true })
   }
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {/* Fechar */}
+      <div className="sticky top-16 z-10 flex justify-end px-4 pt-4">
+        <button
+          onClick={handleClose}
+          className="flex items-center gap-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold transition-colors"
+        >
+          <X className="w-3.5 h-3.5" />
+          Fechar
+        </button>
+      </div>
+
       {/* Header */}
-      <div className="max-w-3xl mx-auto px-4 pt-12 pb-8 text-center">
+      <div className="max-w-3xl mx-auto px-4 pt-6 pb-8 text-center">
         <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-6">
           <span className="text-green-400 text-xs font-bold">Bem-vindo ao PickIA</span>
         </div>

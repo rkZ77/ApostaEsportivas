@@ -46,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string, accepted_terms?: boolean): Promise<User> => {
     const { data } = await api.post('/auth/register', { name, email, password, phone, cpf, username, ref_code, accepted_terms })
+    localStorage.setItem('pickia_just_registered', '1')
     _save(data.user)
     return data.user
   }

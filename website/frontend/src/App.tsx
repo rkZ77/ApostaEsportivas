@@ -74,15 +74,14 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return !user ? children : <Navigate to="/picks" replace />
 }
 
-// Redireciona novos usuários para /como-funciona na primeira vez que logam
+// Redireciona apenas usuários recém-cadastrados para /como-funciona
 function FirstLoginRedirect() {
   const { user } = useAuth()
   const navigate = useNavigate()
   useEffect(() => {
     if (!user) return
-    const key = `pickia_onboarded_${user.id}`
-    if (!localStorage.getItem(key)) {
-      localStorage.setItem(key, '1')
+    if (localStorage.getItem('pickia_just_registered')) {
+      localStorage.removeItem('pickia_just_registered')
       navigate('/como-funciona', { replace: true })
     }
   }, [user?.id])

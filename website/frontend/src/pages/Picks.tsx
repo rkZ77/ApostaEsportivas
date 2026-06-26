@@ -10,7 +10,6 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
-import HowItWorks from '../components/HowItWorks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 // Copa do Mundo 2026 — fase pelo match_date
@@ -120,7 +119,7 @@ const translateMarket = (m?: string): string => {
 }
 
 // Tipos
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat' | 'guia'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -164,7 +163,6 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
 }) {
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
-    { key: 'guia',         label: 'Como Funciona'   },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
@@ -1369,7 +1367,7 @@ export default function Picks() {
 
   useEffect(() => {
     const hash = location.hash.replace('#', '') as Tab
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','aovivo','chat','guia']
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','aovivo','chat']
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
 
@@ -2382,11 +2380,6 @@ export default function Picks() {
         </div>
 
 
-        {tab === 'guia' && (
-          <div className="max-w-2xl mx-auto">
-            <HowItWorks />
-          </div>
-        )}
 
       </main>
       <Footer />
