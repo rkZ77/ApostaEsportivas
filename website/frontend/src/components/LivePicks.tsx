@@ -884,7 +884,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
 
       {lastUpdate && (
         <p className="text-center text-[10px] text-zinc-700">
-          Atualiza a cada 5s · última: {lastUpdate.toLocaleTimeString('pt-BR')}
+          {hasLive ? 'Atualiza a cada 5s · ' : ''}última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
         </p>
       )}
     </div>

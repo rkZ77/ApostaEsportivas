@@ -1,5 +1,4 @@
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
 import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
@@ -79,7 +78,6 @@ const features = [
 
 export default function ComoFunciona() {
   const navigate = useNavigate()
-  const { user } = useAuth()
 
   const handleStart = () => {
     navigate('/picks', { replace: true })

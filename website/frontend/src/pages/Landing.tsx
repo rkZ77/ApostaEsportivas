@@ -123,7 +123,7 @@ function ThreeSteps() {
         <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
         <div className="grid md:grid-cols-3 gap-5">
           {([
-            { n: '1', Icon: UserPlus, title: 'Cria conta grátis', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
+            { n: '1', Icon: UserPlus, title: 'Cria sua conta', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
             { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
@@ -139,7 +139,7 @@ function ThreeSteps() {
         </div>
         <div className="text-center mt-8">
           <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
-            Começar agora · É grátis
+            Começar agora
           </Link>
         </div>
       </div>
