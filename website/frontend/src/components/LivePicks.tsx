@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Radio } from 'lucide-react'
+import { Radio, ChevronDown } from 'lucide-react'
 import api from '../services/api'
 
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
@@ -359,238 +359,230 @@ function isEarlyLocked(pick: any): boolean {
 
 function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: number; onRefresh: () => void }) {
   const [showCashout, setShowCashout] = useState(false)
-  const isLive     = pick.is_live
-  const isFinished = FINISHED_SET.has(pick.status)
-  const isMulti    = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
-  const hasCashout = pick.cashout_amount != null
+  const isLive      = pick.is_live
+  const isFinished  = FINISHED_SET.has(pick.status)
+  const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  const hasCashout  = pick.cashout_amount != null
+  const hasResult   = !!pick.result
 
-  // early lock: mercado cujo resultado já é matematicamente certo (ainda ao vivo)
-  const earlyLocked    = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)
+  const earlyLocked     = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)
   const effectiveLocked = pick.is_locked || earlyLocked
+  const canCashout      = !isFinished && !hasCashout && !effectiveLocked && !hasResult
 
-  const canCashout = !isFinished && !hasCashout && !effectiveLocked
-  const lineLc     = pick.line?.toLowerCase() ?? ''
-  const hasBar     = !isMulti && pick.current_val != null && pick.line_val != null &&
+  // Odds e valores financeiros
+  const effOdd   = pick.actual_odd ?? Number(pick.odd)
+  const stakeR   = unitValue != null ? pick.stake_units * unitValue : null
+  const potRetR  = stakeR != null ? stakeR * effOdd : null
+  const premioR  = potRetR != null
+    ? (pick.result === 'GREEN' ? potRetR : pick.result === 'RED' ? 0 : null)
+    : null
+
+  // Probabilidade ao vivo
+  const lineLc      = pick.line?.toLowerCase() ?? ''
+  const hasBar      = !isMulti && pick.current_val != null && pick.line_val != null &&
     (lineLc.startsWith('over') || lineLc.startsWith('mais') ||
      lineLc.startsWith('under') || lineLc.startsWith('menos'))
-  const direction: 'over' | 'under' = (pick.line || '').toLowerCase().startsWith('under') ||
-    (pick.line || '').toLowerCase().startsWith('menos') ? 'under' : 'over'
-  const stColor = pick.pick_status === 'winning' ? 'text-green-400'
+  const direction: 'over' | 'under' = lineLc.startsWith('under') || lineLc.startsWith('menos') ? 'under' : 'over'
+  const stColor     = pick.pick_status === 'winning' ? 'text-green-400'
     : pick.pick_status === 'losing' ? 'text-red-400' : 'text-zinc-400'
-  const liveProb  = !isMulti && isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
-  const multiProb = isMulti ? calcMultiProb(pick.legs ?? []) : null
+  const liveProb    = !isMulti && isLive && !effectiveLocked && pick.elapsed != null ? calcLiveProb(pick) : null
+  const multiProb   = isMulti ? calcMultiProb(pick.legs ?? []) : null
   const displayProb = liveProb ?? multiProb
-  const probCls  = displayProb == null ? '' : displayProb >= 60
+  const probCls     = displayProb == null ? '' : displayProb >= 60
     ? 'text-green-400 bg-green-400/10 border-green-500/25'
     : displayProb >= 35
     ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
     : 'text-red-400 bg-red-400/10 border-red-500/25'
+  const suggestedCashout = displayProb != null && potRetR != null
+    ? potRetR * (displayProb / 100) : null
   const isCopa = pick.league_id === 1
 
-  const resultBadge = hasCashout
-    ? <span className="text-[10px] font-black text-orange-400 bg-orange-400/10 border border-orange-500/30 px-2 py-0.5 rounded-full">CASHOUT</span>
-    : effectiveLocked
-    ? pick.pick_status === 'winning'
-      ? <span className={`text-[10px] font-black text-green-400 bg-green-400/10 border border-green-500/30 px-2 py-0.5 rounded-full ${earlyLocked ? 'animate-pulse' : ''}`}>GREEN ✓</span>
-      : <span className="text-[10px] font-black text-red-400 bg-red-400/10 border border-red-500/30 px-2 py-0.5 rounded-full">RED ✗</span>
-    : null
+  // Expandido por padrão: ao vivo ou pendente; fechado: finalizados
+  const [expanded, setExpanded] = useState(isLive || (!isFinished && !hasResult))
+
+  // Header right-side content
+  const headerRight = hasCashout ? (
+    <span className="text-sm font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+  ) : (hasResult || isFinished) ? (
+    <div className="text-right">
+      {pick.result === 'GREEN' && potRetR != null ? (
+        <span className="text-sm font-black text-green-400">+R${(potRetR - (stakeR ?? 0)).toFixed(2)}</span>
+      ) : pick.result === 'RED' && stakeR != null ? (
+        <span className="text-sm font-black text-red-400">-R${stakeR.toFixed(2)}</span>
+      ) : (
+        <span className="text-xs text-zinc-500">{STATUS_LABEL[pick.status] ?? pick.status}</span>
+      )}
+    </div>
+  ) : canCashout && suggestedCashout != null ? (
+    <button
+      onClick={e => { e.stopPropagation(); setShowCashout(true) }}
+      className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-500 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+    >
+      Cash Out ~R${suggestedCashout.toFixed(0)}
+    </button>
+  ) : displayProb != null ? (
+    <span className={`text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
+  ) : isLive ? (
+    <span className="flex items-center gap-1 text-[9px] font-black text-red-400">
+      <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+      AO VIVO
+    </span>
+  ) : (
+    <span className="text-[10px] text-zinc-600">{STATUS_LABEL[pick.status] ?? 'Aguardando'}</span>
+  )
+
+  // Sub-label do header
+  const headerSub = isMulti
+    ? `${(pick.legs ?? []).length} seleções`
+    : [pick.market, pick.line].filter(Boolean).join(' · ')
 
   return (
-    <div className={`relative rounded-2xl border p-4 transition-colors ${
-      earlyLocked && pick.pick_status === 'winning' ? 'border-green-500/50 bg-green-500/5' :
-      earlyLocked && pick.pick_status === 'losing'  ? 'border-red-500/40 bg-red-500/5' :
-      isCopa && isLive ? 'border-yellow-500/30 bg-zinc-900' :
-      isCopa           ? 'border-yellow-500/20 bg-zinc-900/60' :
-      isLive           ? 'border-green-500/25 bg-zinc-900' :
-      isFinished       ? 'border-zinc-800/50 bg-zinc-900/40' :
+    <div className={`rounded-xl border overflow-hidden transition-colors ${
+      earlyLocked && pick.pick_status === 'winning' ? 'border-green-500/40 bg-green-500/5' :
+      earlyLocked && pick.pick_status === 'losing'  ? 'border-red-500/30 bg-red-500/5' :
+      isCopa && isLive ? 'border-yellow-500/25 bg-zinc-900' :
+      isLive           ? 'border-green-500/20 bg-zinc-900' :
+      hasResult && pick.result === 'GREEN' ? 'border-green-500/15 bg-zinc-900/60' :
+      hasResult && pick.result === 'RED'   ? 'border-red-500/15 bg-zinc-900/60' :
+      hasCashout       ? 'border-orange-500/15 bg-zinc-900/60' :
                          'border-zinc-800 bg-zinc-900/60'
     }`}>
-      {isCopa && <div className="absolute top-0 left-4 right-4 h-px bg-gradient-to-r from-transparent via-yellow-500/60 to-transparent -mt-px rounded-t-2xl" />}
-      {/* Header */}
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${TYPE_CLS[pick.pick_type] ?? 'text-zinc-400 bg-zinc-700/50'}`}>
-            {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
-          </span>
-          {isCopa && (
-            <span className="flex items-center gap-1 text-[9px] font-black text-yellow-400 bg-yellow-400/10 border border-yellow-500/30 px-1.5 py-0.5 rounded-full">
-              <img src="/logo-copa-mundo.png" alt="Copa" width={10} height={10} className="object-contain opacity-90" onError={e => (e.currentTarget.style.display = 'none')} />
-              Copa do Mundo
+      {/* ── Header colapsável ── */}
+      <div
+        className="flex items-center gap-3 px-4 py-3 cursor-pointer hover:bg-zinc-800/40 transition-colors"
+        onClick={() => setExpanded(e => !e)}
+      >
+        {/* Esquerda: badge + valor apostado + sub */}
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${TYPE_CLS[pick.pick_type] ?? 'text-zinc-400 bg-zinc-700/50'}`}>
+              {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
             </span>
+            {isLive && (
+              <span className="flex items-center gap-1 text-[9px] font-black text-red-400">
+                <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                {pick.elapsed ? `${pick.elapsed}'` : 'AO VIVO'}
+              </span>
+            )}
+            {stakeR != null && (
+              <span className="text-sm font-bold text-white">R${stakeR.toFixed(2)}</span>
+            )}
+            {pick.bet_house && (
+              <span className="text-[10px] text-zinc-600">{pick.bet_house}</span>
+            )}
+          </div>
+          {headerSub && (
+            <p className="text-xs text-zinc-500 mt-0.5 truncate">{headerSub}</p>
           )}
-          <span className="text-xs text-zinc-500">Odd {Number(pick.odd).toFixed(2)}</span>
-          <span className="text-xs text-zinc-700">· {pick.stake_units}u</span>
         </div>
-        <div className="flex items-center gap-2">
-          {resultBadge}
-          {!pick.is_locked && isLive && (
-            <span className="flex items-center gap-1 text-[9px] font-black text-red-400 bg-red-400/10 border border-red-500/20 px-2 py-0.5 rounded-full">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse shrink-0" />
-              AO VIVO{pick.elapsed ? ` ${pick.elapsed}'` : ''}
-            </span>
-          )}
-          {displayProb != null && (
-            <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
-              {displayProb}%
-            </span>
-          )}
-          {!pick.is_locked && !isLive && (
-            <span className="text-[10px] text-zinc-600 uppercase tracking-wide">
-              {STATUS_LABEL[pick.status] ?? pick.status ?? 'Aguardando'}
-            </span>
-          )}
+
+        {/* Direita: cashout / resultado + chevron */}
+        <div className="flex items-center gap-2 shrink-0">
+          {headerRight}
+          <ChevronDown className={`w-4 h-4 text-zinc-600 transition-transform duration-200 ${expanded ? 'rotate-180' : ''}`} />
         </div>
       </div>
 
-      {/* Conteúdo */}
-      {isMulti ? (
-        <div className="space-y-2">
-          {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} />)}
-          {multiProb != null && (
-            <div className="mt-1 pt-2.5 border-t border-zinc-800/60">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wide">
-                  Probabilidade combinada
-                </span>
-                <span className={`text-sm font-black ${
-                  multiProb >= 60 ? 'text-green-400' : multiProb >= 35 ? 'text-yellow-400' : 'text-red-400'
-                }`}>{multiProb}%</span>
-              </div>
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${
-                  multiProb >= 60 ? 'bg-green-500' : multiProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
-                }`} style={{ width: `${multiProb}%` }} />
-              </div>
-              <p className="text-[9px] text-zinc-700 mt-1">Produto das probabilidades de cada leg · Poisson ao vivo</p>
-            </div>
-          )}
-        </div>
-      ) : (
-        <>
-          {/* Times + Placar — layout inline igual ao LiveLeg */}
-          <div className="flex items-center gap-1.5 min-w-0 mb-2 flex-wrap">
-            <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={16} />
-            <span className="text-xs font-bold text-white truncate">{pick.home_team}</span>
-            {pick.status !== 'NS' && (
-              <span className={`text-xs font-black tabular-nums mx-1 shrink-0 ${isLive ? 'text-green-400' : 'text-zinc-300'}`}>
-                {pick.home_goals} – {pick.away_goals}
-              </span>
-            )}
-            <span className="text-zinc-600 text-xs shrink-0">vs</span>
-            <span className="text-xs font-bold text-white truncate">{pick.away_team}</span>
-            <TeamLogo id={pick.away_team_id} name={pick.away_team || ''} size={16} />
-            {isLive && pick.elapsed && (
-              <span className="text-[10px] font-black text-green-400 animate-pulse ml-1">{pick.elapsed}'</span>
-            )}
-            {pick.status === 'NS' && pick.match_time && (
-              <span className="text-[10px] text-zinc-500 ml-1">{pick.match_time}</span>
-            )}
-          </div>
-          {/* Mercado + stat */}
-          <div className="flex items-center justify-between text-xs mb-1">
-            <span className="text-zinc-500 truncate">{pick.market} · {pick.line}</span>
-            {pick.current_val != null && (
-              <span className={`font-black shrink-0 ml-2 ${stColor}`}>
-                {pick.stat_label}: {pick.current_val}
-              </span>
-            )}
-          </div>
-          {hasBar && !effectiveLocked && (
-            <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
-          )}
-          {/* Barra de probabilidade ao vivo — singles */}
-          {liveProb != null && !effectiveLocked && isLive && (
-            <div className="mt-3 pt-2.5 border-t border-zinc-800/60">
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-[10px] text-zinc-500 font-semibold uppercase tracking-wide">
-                  Probabilidade de acertar
-                </span>
-                <span className={`text-sm font-black ${
-                  liveProb >= 60 ? 'text-green-400' : liveProb >= 35 ? 'text-yellow-400' : 'text-red-400'
-                }`}>{liveProb}%</span>
-              </div>
-              <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                <div className={`h-full rounded-full transition-all duration-700 ${
-                  liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
-                }`} style={{ width: `${liveProb}%` }} />
-              </div>
-              <p className="text-[9px] text-zinc-700 mt-1">Estimativa via Poisson · atualiza a cada 5s</p>
-            </div>
-          )}
-        </>
-      )}
-
-      {canCashout && (
-        <div className="mt-3 pt-3 border-t border-zinc-800/60 space-y-3">
-          {/* Painel de stake + cashout sugerido */}
-          {(() => {
-            const effOdd   = pick.actual_odd ?? Number(pick.odd)
-            const stakeR   = unitValue ? pick.stake_units * unitValue : null
-            const potRetR  = stakeR != null ? stakeR * effOdd : null
-            const suggested = displayProb != null && potRetR != null
-              ? potRetR * (displayProb / 100) : null
-            return (
-              <div className="bg-zinc-800/50 rounded-xl p-3 space-y-2.5">
-                {/* Linha 1: onde apostou · unidades · R$ apostado → retorno pot. */}
-                <div className="flex items-center justify-between text-xs">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {pick.bet_house && (
-                      <span className="text-zinc-500 font-medium">{pick.bet_house}</span>
-                    )}
-                    <span className="text-zinc-300 font-bold">
-                      {pick.stake_units}u{stakeR != null ? ` · R$${stakeR.toFixed(0)}` : ''}
-                    </span>
-                    <span className="text-zinc-600">·</span>
-                    <span className="text-zinc-500">Odd {effOdd.toFixed(2)}</span>
-                  </div>
-                  {potRetR != null && (
-                    <div className="text-right shrink-0 ml-2">
-                      <div className="text-[10px] text-zinc-500">Retorno pot.</div>
-                      <div className="text-sm font-black text-white">R${potRetR.toFixed(0)}</div>
+      {/* ── Conteúdo expandido ── */}
+      {expanded && (
+        <div className="border-t border-zinc-800/60">
+          <div className="px-4 py-3">
+            {isMulti ? (
+              <div className="space-y-2">
+                {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} />)}
+                {multiProb != null && !hasResult && (
+                  <div className="pt-2 border-t border-zinc-800/60 space-y-1.5">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">Prob. combinada</span>
+                      <span className={`font-black ${multiProb >= 60 ? 'text-green-400' : multiProb >= 35 ? 'text-yellow-400' : 'text-red-400'}`}>{multiProb}%</span>
                     </div>
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${multiProb >= 60 ? 'bg-green-500' : multiProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${multiProb}%` }} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Times + placar */}
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={16} />
+                  <span className="text-sm font-bold text-white truncate">{pick.home_team}</span>
+                  {pick.status !== 'NS' && (
+                    <span className={`text-sm font-black tabular-nums mx-1 ${isLive ? 'text-green-400' : 'text-zinc-300'}`}>
+                      {pick.home_goals} – {pick.away_goals}
+                    </span>
+                  )}
+                  <span className="text-zinc-600 text-xs">vs</span>
+                  <span className="text-sm font-bold text-white truncate">{pick.away_team}</span>
+                  <TeamLogo id={pick.away_team_id} name={pick.away_team || ''} size={16} />
+                </div>
+                {/* Mercado + stat atual */}
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-zinc-400">{pick.market} · {pick.line}</span>
+                  {pick.current_val != null && (
+                    <span className={`font-black shrink-0 ml-2 ${stColor}`}>{pick.stat_label}: {pick.current_val}</span>
                   )}
                 </div>
-
-                {/* Linha 2: cashout sugerido + probabilidade */}
-                {suggested != null && (
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <div className="text-[10px] text-zinc-500 mb-0.5">Cashout justo agora</div>
-                      <div className="text-xl font-black text-orange-400">~R${suggested.toFixed(0)}</div>
-                    </div>
-                    <span className={`text-sm font-black border px-2.5 py-1 rounded-lg ${probCls}`}>
-                      {displayProb}%
-                    </span>
-                  </div>
+                {hasBar && !effectiveLocked && (
+                  <StatBar currentVal={pick.current_val} lineVal={pick.line_val} direction={direction} />
                 )}
-
-                {/* Mini barra de progresso */}
-                {displayProb != null && (
-                  <div className="h-1 bg-zinc-700 rounded-full overflow-hidden">
-                    <div
-                      className={`h-full rounded-full transition-all duration-700 ${
-                        displayProb >= 60 ? 'bg-green-500' : displayProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'
-                      }`}
-                      style={{ width: `${displayProb}%` }}
-                    />
+                {/* Probabilidade ao vivo */}
+                {liveProb != null && !effectiveLocked && isLive && (
+                  <div className="pt-1 space-y-1">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-zinc-500">Probabilidade de acertar</span>
+                      <span className={`font-black ${liveProb >= 60 ? 'text-green-400' : liveProb >= 35 ? 'text-yellow-400' : 'text-red-400'}`}>{liveProb}%</span>
+                    </div>
+                    <div className="h-1 bg-zinc-800 rounded-full overflow-hidden">
+                      <div className={`h-full rounded-full transition-all duration-700 ${liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${liveProb}%` }} />
+                    </div>
+                    <p className="text-[9px] text-zinc-700">Estimativa via Poisson · atualiza a cada 5s</p>
                   </div>
                 )}
               </div>
-            )
-          })()}
+            )}
+          </div>
 
-          <button
-            onClick={() => setShowCashout(true)}
-            className="w-full text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors">
-            Registrar Cashout
-          </button>
-        </div>
-      )}
-
-      {hasCashout && (
-        <div className="mt-3 pt-3 border-t border-zinc-800/60 flex items-center justify-between text-xs">
-          <span className="text-zinc-500">Cashout recebido</span>
-          <span className="font-semibold text-orange-400">R$ {Number(pick.cashout_amount).toFixed(2)}</span>
+          {/* ── Montante + Prêmios + Cashout ── */}
+          <div className="px-4 pb-4 space-y-2 border-t border-zinc-800/60 pt-3">
+            {stakeR != null && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-400">Montante apostado</span>
+                <span className="text-white font-semibold">R${stakeR.toFixed(2)}</span>
+              </div>
+            )}
+            {premioR != null && (
+              <div className="flex justify-between text-sm">
+                <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-zinc-400'}`}>Prêmios</span>
+                <span className={`font-black ${premioR > 0 ? 'text-green-400' : 'text-red-400'}`}>
+                  R${premioR.toFixed(2)}
+                </span>
+              </div>
+            )}
+            {hasCashout && (
+              <div className="flex justify-between text-sm">
+                <span className="text-zinc-400">Cash Out recebido</span>
+                <span className="font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+              </div>
+            )}
+            {canCashout && (
+              <>
+                {suggestedCashout != null && (
+                  <div className="flex justify-between text-sm pt-1">
+                    <span className="text-zinc-500">Cash Out justo agora</span>
+                    <span className="font-black text-orange-400">~R${suggestedCashout.toFixed(2)}</span>
+                  </div>
+                )}
+                <button
+                  onClick={() => setShowCashout(true)}
+                  className="w-full mt-1 text-sm font-bold text-white bg-zinc-800 border border-zinc-700 hover:bg-zinc-700 hover:border-zinc-500 rounded-xl py-2.5 transition-colors"
+                >
+                  Registrar Cash Out
+                </button>
+              </>
+            )}
+          </div>
         </div>
       )}
 
