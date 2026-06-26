@@ -363,18 +363,28 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   const isFinished  = FINISHED_SET.has(pick.status)
   const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
   const hasCashout  = pick.cashout_amount != null
-  const hasResult   = !!pick.result
 
   const earlyLocked     = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)
   const effectiveLocked = pick.is_locked || earlyLocked
-  const canCashout      = !isFinished && !hasCashout && !effectiveLocked && !hasResult
+
+  // Quando o jogo encerrou mas o resultado ainda não foi gravado pelo backend,
+  // derivamos GREEN/RED de pick_status para mostrar ao usuário
+  const effectiveResult: 'GREEN' | 'RED' | null =
+    pick.result ??
+    (isFinished
+      ? pick.pick_status === 'winning' ? 'GREEN'
+        : pick.pick_status === 'losing' ? 'RED'
+        : null
+      : null)
+  const hasResult   = !!effectiveResult
+  const canCashout  = !isFinished && !hasCashout && !effectiveLocked && !hasResult
 
   // Odds e valores financeiros
   const effOdd   = pick.actual_odd ?? Number(pick.odd)
   const stakeR   = unitValue != null ? pick.stake_units * unitValue : null
   const potRetR  = stakeR != null ? stakeR * effOdd : null
   const premioR  = potRetR != null
-    ? (pick.result === 'GREEN' ? potRetR : pick.result === 'RED' ? 0 : null)
+    ? (effectiveResult === 'GREEN' ? potRetR : effectiveResult === 'RED' ? 0 : null)
     : null
 
   // Probabilidade ao vivo
@@ -405,9 +415,9 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     <span className="text-sm font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
   ) : (hasResult || isFinished) ? (
     <div className="text-right">
-      {pick.result === 'GREEN' && potRetR != null ? (
+      {effectiveResult === 'GREEN' && potRetR != null ? (
         <span className="text-sm font-black text-green-400">+R${(potRetR - (stakeR ?? 0)).toFixed(2)}</span>
-      ) : pick.result === 'RED' && stakeR != null ? (
+      ) : effectiveResult === 'RED' && stakeR != null ? (
         <span className="text-sm font-black text-red-400">-R${stakeR.toFixed(2)}</span>
       ) : (
         <span className="text-xs text-zinc-500">{STATUS_LABEL[pick.status] ?? pick.status}</span>
@@ -442,8 +452,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
       earlyLocked && pick.pick_status === 'losing'  ? 'border-red-500/30 bg-red-500/5' :
       isCopa && isLive ? 'border-yellow-500/25 bg-zinc-900' :
       isLive           ? 'border-green-500/20 bg-zinc-900' :
-      hasResult && pick.result === 'GREEN' ? 'border-green-500/15 bg-zinc-900/60' :
-      hasResult && pick.result === 'RED'   ? 'border-red-500/15 bg-zinc-900/60' :
+      hasResult && effectiveResult === 'GREEN' ? 'border-green-500/15 bg-zinc-900/60' :
+      hasResult && effectiveResult === 'RED'   ? 'border-red-500/15 bg-zinc-900/60' :
       hasCashout       ? 'border-orange-500/15 bg-zinc-900/60' :
                          'border-zinc-800 bg-zinc-900/60'
     }`}>
@@ -552,7 +562,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 <span className="text-white font-semibold">R${stakeR.toFixed(2)}</span>
               </div>
             )}
-            {premioR != null && (
+            {premioR != null && !hasCashout && (
               <div className="flex justify-between text-sm">
                 <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-zinc-400'}`}>Prêmios</span>
                 <span className={`font-black ${premioR > 0 ? 'text-green-400' : 'text-red-400'}`}>
