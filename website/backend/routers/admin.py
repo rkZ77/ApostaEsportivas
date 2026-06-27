@@ -519,6 +519,12 @@ def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(requ
             (body.result, profit, body.pick_id),
         )
         updated = cur.fetchone()
+        # Propaga resultado para todos os usuários que seguiram este pick
+        result_val = None if body.result == "pending" else body.result
+        cur.execute(
+            "UPDATE user_followed_picks SET result=%s WHERE pick_id=%s AND pick_type=%s",
+            (result_val, body.pick_id, body.pick_type),
+        )
         conn.commit()
         return dict(updated)
     finally:

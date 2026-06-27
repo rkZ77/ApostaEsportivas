@@ -15,8 +15,8 @@ if not SECRET_KEY or SECRET_KEY == "change-me-in-production-please":
     warnings.warn("⚠️  JWT_SECRET não configurado! Use apenas em desenvolvimento.", stacklevel=1)
     SECRET_KEY = "dev-only-insecure-secret-do-not-use-in-prod"
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 12
-REFRESH_TOKEN_EXPIRE_DAYS = 0   # não usado separadamente
+ACCESS_TOKEN_EXPIRE_HOURS  = 12
+REFRESH_TOKEN_EXPIRE_DAYS  = 30
 
 COOKIE_NAME = "access_token"
 REFRESH_COOKIE_NAME = "refresh_token"
@@ -34,7 +34,9 @@ def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
 
-_TOKEN_MAX_AGE = ACCESS_TOKEN_EXPIRE_HOURS * 3600
+_ACCESS_MAX_AGE  = ACCESS_TOKEN_EXPIRE_HOURS * 3600
+_REFRESH_MAX_AGE = REFRESH_TOKEN_EXPIRE_DAYS * 86400
+_TOKEN_MAX_AGE   = _ACCESS_MAX_AGE  # compat alias
 
 
 def create_access_token(data: dict) -> str:
@@ -46,7 +48,7 @@ def create_access_token(data: dict) -> str:
 
 def create_refresh_token(data: dict) -> str:
     payload = {"sub": data["sub"], "type": "refresh"}
-    payload["exp"] = datetime.now(timezone.utc) + timedelta(hours=ACCESS_TOKEN_EXPIRE_HOURS)
+    payload["exp"] = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 
@@ -59,7 +61,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="strict",
-        max_age=_TOKEN_MAX_AGE,
+        max_age=_ACCESS_MAX_AGE,
         path="/",
     )
     response.set_cookie(
@@ -68,7 +70,7 @@ def set_auth_cookies(response, access_token: str, refresh_token: str) -> None:
         httponly=True,
         secure=secure,
         samesite="strict",
-        max_age=_TOKEN_MAX_AGE,
+        max_age=_REFRESH_MAX_AGE,
         path="/api/auth/refresh",
     )
 
@@ -81,7 +83,7 @@ def set_access_cookie(response, access_token: str) -> None:
         httponly=True,
         secure=_IS_PRODUCTION,
         samesite="strict",
-        max_age=_TOKEN_MAX_AGE,
+        max_age=_ACCESS_MAX_AGE,
         path="/",
     )
 
@@ -124,14 +126,16 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
 
     # Sessão única: session_token no JWT deve bater com o hash guardado no banco
-    session_id = payload.get("session_id")
-    if row["session_token"] and session_id:
-        if _hash_session(session_id) != row["session_token"]:
-            device = row.get("last_login_device") or "outro dispositivo"
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail=f"SESSION_INVALIDATED|{device}",
-            )
+    # Admin fica isento — pode acessar de múltiplos dispositivos simultaneamente
+    if payload.get("plan") != "admin":
+        session_id = payload.get("session_id")
+        if row["session_token"] and session_id:
+            if _hash_session(session_id) != row["session_token"]:
+                device = row.get("last_login_device") or "outro dispositivo"
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail=f"SESSION_INVALIDATED|{device}",
+                )
 
     # Lazy expiry: se o plano VIP/trial já passou, trata como free
     if payload.get("plan") in ("vip", "trial") and payload.get("plan_expires_at"):
