@@ -249,7 +249,7 @@ def get_today_suggestions(
             TODAY_BR    = "(NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
             _pf_where   = f"pf.match_date = {TODAY_BR} OR (pf.result IS NULL AND pf.match_date >= {TODAY_BR} - INTERVAL '3 days')"
             _vip_where  = f"s.match_date = {TODAY_BR} OR (s.result IS NULL AND s.match_date >= {TODAY_BR} - INTERVAL '3 days')"
-            _m_where    = f"match_date = {TODAY_BR} OR (result IS NULL AND match_date >= {TODAY_BR} - INTERVAL '3 days')"
+            _m_where    = "result IS NULL"
             _alav_where = f"pa.match_date = {TODAY_BR} OR (pa.result IS NULL AND pa.match_date >= {TODAY_BR} - INTERVAL '3 days')"
 
         _picks_free_sql = f"""

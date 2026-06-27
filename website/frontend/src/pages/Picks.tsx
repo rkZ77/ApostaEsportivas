@@ -2073,33 +2073,6 @@ export default function Picks() {
             </div>
 
 
-            {/* Histórico recente Múltiplas */}
-            {mLoaded && multiplas.filter((m: any) => m.result).length > 0 && (
-              <div>
-                <SectionHeader color="bg-zinc-700" label="Últimas múltiplas" />
-                <div className="space-y-2">
-                  {multiplas.filter((m: any) => m.result).slice(0, 6).map((m: any) => {
-                    const isGreen = m.result === 'GREEN'
-                    const isRed   = m.result === 'RED'
-                    const dt = new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                    return (
-                      <div key={m.id}
-                        className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700"
-                        onClick={() => openDetail(m.id, 'multipla')}
-                      >
-                        <span className={`text-xs font-black px-2 py-0.5 rounded ${isGreen ? 'bg-green-500/15 text-green-400' : isRed ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                          {isGreen ? '✓' : isRed ? '✗' : m.result}
-                        </span>
-                        <span className="text-xs text-zinc-500 shrink-0">{dt}</span>
-                        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">Múltipla · Odd {Number(m.total_odd).toFixed(2)}</span>
-                        <span className="text-xs font-bold text-blue-400 shrink-0">{Number(m.total_odd).toFixed(2)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
