@@ -237,11 +237,11 @@ def load_fixture_context(
 
     if is_national:
         try:
-            last10_home = match_stats_svc.get_last_n_all_competitions(home_team_id, limit=15)
+            last10_home = match_stats_svc.get_last_n_all_competitions(home_team_id, limit=8)
         except Exception:
             last10_home = []
         try:
-            last10_away = match_stats_svc.get_last_n_all_competitions(away_team_id, limit=15)
+            last10_away = match_stats_svc.get_last_n_all_competitions(away_team_id, limit=8)
         except Exception:
             last10_away = []
         total_home = last10_home
@@ -342,19 +342,19 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 
         if ctx.get("last10_home"):
             lines.append(f"\nLAST10 CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["last10_home"][:10]))
+            lines.append(_j(ctx["last10_home"][:8]))
 
         if ctx.get("last10_away"):
             lines.append(f"\nLAST10 FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["last10_away"][:10]))
+            lines.append(_j(ctx["last10_away"][:8]))
 
         if ctx.get("total_home"):
             lines.append(f"\nTOTAL CASA ({fx['home_team']}):")
-            lines.append(_j(ctx["total_home"][:10]))
+            lines.append(_j(ctx["total_home"][:8]))
 
         if ctx.get("total_away"):
             lines.append(f"\nTOTAL FORA ({fx['away_team']}):")
-            lines.append(_j(ctx["total_away"][:10]))
+            lines.append(_j(ctx["total_away"][:8]))
 
         lines.append("")
     return "\n".join(lines)
@@ -580,7 +580,7 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures disponiveis — sem multipla.")
         return None
 
-    fixtures_raw = fixtures_raw[:6]  # máx 6 fixtures por chamada
+    fixtures_raw = fixtures_raw[:4]  # máx 4 fixtures por chamada
     print(f"[MULTIPLA] Carregando dados para {len(fixtures_raw)} fixture(s)...")
     fixtures = []
     fx_map   = {}
