@@ -508,36 +508,6 @@ function BastidoresAnimation() {
   )
 }
 
-// ── Depoimentos ──────────────────────────────────────────────────────────
-function Testimonials() {
-  const items = [
-    { name: 'Lucas M.', text: 'Recuperei o valor da assinatura em poucos dias seguindo os picks VIP. O histórico transparente foi o que me convenceu.', stars: 5 },
-    { name: 'Carlos R.', text: 'Muito melhor do que grupos do Telegram. Aqui tem dado, tem estatística, tem contexto. Não é achismo.', stars: 5 },
-    { name: 'Ana P.',    text: 'As análises fazem sentido. A IA explica o motivo de cada pick, não manda resultado sem contexto.', stars: 5 },
-  ]
-  return (
-    <section className="py-16 bg-black">
-      <div className="max-w-5xl mx-auto px-4">
-        <p className="text-center text-sm text-zinc-500 font-medium mb-8">O que dizem os usuários</p>
-        <div className="grid md:grid-cols-3 gap-4">
-          {items.map(({ name, text, stars }) => (
-            <div key={name} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5">
-              <div className="flex gap-0.5 mb-3">
-                {Array.from({ length: stars }).map((_, i) => (
-                  <svg key={i} className="w-3.5 h-3.5 fill-yellow-400" viewBox="0 0 20 20">
-                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                  </svg>
-                ))}
-              </div>
-              <p className="text-zinc-300 text-sm leading-relaxed mb-4">"{text}"</p>
-              <p className="text-zinc-600 text-xs font-semibold">{name} · usuário verificado</p>
-            </div>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
 
 // Landing
 export default function Landing() {
@@ -739,8 +709,6 @@ export default function Landing() {
       <PorQueDiferente />
 
       <RecentResults />
-
-      <Testimonials />
 
       <section id="como-funciona" className="py-24">
         <div className="max-w-5xl mx-auto px-4">
