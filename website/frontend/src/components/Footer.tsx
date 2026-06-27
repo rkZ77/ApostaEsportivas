@@ -16,7 +16,7 @@ export default function Footer() {
           {/* Links */}
           <div className="flex items-center gap-5 flex-wrap justify-center">
             <a
-              href="https://www.instagram.com/pickia_br/"
+              href="https://www.instagram.com/pickia.br/"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors font-semibold"

@@ -209,7 +209,7 @@ export default function Login() {
             </div>
             <p className="text-xs text-zinc-600 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
           </div>
-          <a href="https://www.instagram.com/pickia_br/" target="_blank" rel="noopener noreferrer"
+          <a href="https://www.instagram.com/pickia.br/" target="_blank" rel="noopener noreferrer"
             className="mt-8 flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition-colors justify-center">
             <img src="/instagram.png" alt="Instagram" className="w-5 h-5 rounded-sm object-cover" />
             <span className="text-sm font-semibold">@pickia_br</span>
