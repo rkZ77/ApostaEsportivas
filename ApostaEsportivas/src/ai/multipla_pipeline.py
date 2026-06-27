@@ -366,7 +366,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 def has_today_multipla() -> bool:
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM picks_multiplas WHERE match_date = CURRENT_DATE")
+    cur.execute("SELECT COUNT(*) FROM picks_multiplas WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'")
     count = cur.fetchone()[0]
     cur.close()
     conn.close()
