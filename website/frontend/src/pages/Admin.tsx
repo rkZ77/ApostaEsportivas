@@ -15,6 +15,7 @@ interface User {
   active: boolean
   expires_at: string | null
   created_at: string
+  last_login_at: string | null
   bankroll_current: number | null
   unit_value: number | null
 }
@@ -26,6 +27,8 @@ interface Stats {
   free: number
   ativos: number
   vip_expirando: number
+  ativos_hoje: number
+  ativos_semana: number
   picks_hoje: {
     vip_picks: number
     alavancagem: number
@@ -372,11 +375,13 @@ export default function Admin() {
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
               {[
                 { label: 'Total',         value: stats.total,         color: 'text-white' },
-                { label: 'VIP',           value: stats.vip,           color: 'text-yellow-400' },
-                { label: 'Trial',         value: stats.trial,         color: 'text-blue-400' },
-                { label: 'Free',          value: stats.free,          color: 'text-zinc-400' },
-                { label: 'Ativos',        value: stats.ativos,        color: 'text-green-500' },
-                { label: 'VIP expirando', value: stats.vip_expirando, color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-zinc-600' },
+                { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
+                { label: 'Trial',         value: stats.trial,          color: 'text-blue-400' },
+                { label: 'Free',          value: stats.free,           color: 'text-zinc-400' },
+                { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
+                { label: 'Online hoje',   value: stats.ativos_hoje,    color: 'text-green-400' },
+                { label: 'Online 7 dias', value: stats.ativos_semana,  color: 'text-teal-400' },
+                { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-zinc-600' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-3">
                   <div className={`text-3xl font-black ${color}`}>{value}</div>
@@ -594,10 +599,9 @@ export default function Admin() {
           )}
         </div>
 
-        {/* Corrigir resultado de pick */}
-        <div className="card p-4 mb-6">
+        {/* REMOVED: Corrigir resultado de pick */}
+        {false && <div className="card p-4 mb-6">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-3">Corrigir Resultado de Pick</h2>
-          {/* Atalhos rápidos de data */}
           {(() => {
             const brt = (daysAgo = 0) => {
               const d = new Date()
@@ -710,7 +714,7 @@ export default function Admin() {
           {pickResults.length === 0 && !pickSearching && (pickSearch || pickDateFrom) && (
             <p className="text-zinc-600 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
-        </div>
+        </div>}
 
         {/* Criar usuário */}
         {creating && (
@@ -763,7 +767,7 @@ export default function Admin() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-zinc-800">
-                  {['Usuário', 'WhatsApp', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Ações'].map(h => (
+                  {['Usuário', 'WhatsApp', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Último acesso', 'Ações'].map(h => (
                     <th key={h} className="text-left text-zinc-500 font-medium px-4 py-3 uppercase text-xs tracking-wider whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
@@ -819,6 +823,18 @@ export default function Admin() {
                     </td>
                     <td className="px-4 py-3 text-zinc-500 text-xs whitespace-nowrap">
                       {new Date(u.created_at).toLocaleDateString('pt-BR')}
+                    </td>
+                    <td className="px-4 py-3 text-xs whitespace-nowrap">
+                      {u.last_login_at ? (() => {
+                        const diff = Date.now() - new Date(u.last_login_at).getTime()
+                        const mins = Math.floor(diff / 60000)
+                        const hrs  = Math.floor(diff / 3600000)
+                        const days = Math.floor(diff / 86400000)
+                        if (mins < 60)  return <span className="text-green-400 font-semibold">{mins}min atrás</span>
+                        if (hrs  < 24)  return <span className="text-green-300">{hrs}h atrás</span>
+                        if (days < 7)   return <span className="text-zinc-400">{days}d atrás</span>
+                        return <span className="text-zinc-600">{new Date(u.last_login_at).toLocaleDateString('pt-BR')}</span>
+                      })() : <span className="text-zinc-700">nunca</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 items-center">
