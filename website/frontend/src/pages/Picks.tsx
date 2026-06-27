@@ -514,19 +514,27 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
             const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
             const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
+            const profitR = banca ? Math.abs(p) * banca.unit_value : null
             return (
-              <div className="flex-1 px-4 py-3 text-center">
-                <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-                <div className={`text-2xl font-black ${color}`}>
-                  {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  {u > 1 && <span className="text-[10px] text-zinc-600 font-normal ml-1">({u}u)</span>}
-                </div>
-                {banca && (
-                  <div className={`text-sm font-bold ${color} mt-0.5`}>
-                    {p >= 0 ? '+' : '-'}R${(Math.abs(p) * banca.unit_value).toFixed(0)}
+              <>
+                <div className="flex-1 px-4 py-3 text-center">
+                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                  <div className={`text-xl font-black ${color}`}>
+                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                )}
-              </div>
+                  {u > 1 && <div className="text-[10px] text-zinc-600">({u}u)</div>}
+                </div>
+                <div className="flex-1 px-4 py-3 text-center">
+                  <div className="text-[10px] text-zinc-500 mb-0.5">Em reais</div>
+                  {profitR != null ? (
+                    <div className={`text-xl font-black ${color}`}>
+                      {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                    </div>
+                  ) : (
+                    <div className="text-xl font-black text-zinc-600">-</div>
+                  )}
+                </div>
+              </>
             )
           })()
         ) : (
