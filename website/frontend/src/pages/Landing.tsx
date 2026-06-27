@@ -342,34 +342,41 @@ function RecentResults() {
         )}
 
         {/* Simulação de lucro */}
-        {s && s.profit > 1 && (
-          <div className="mt-8 bg-zinc-900 border border-green-500/20 rounded-2xl p-5">
-            <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-              <div>
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Simulação · R$50 por unidade</p>
-                <p className="text-[10px] text-zinc-700 mt-0.5">Seguindo todos os picks desde o início</p>
+        {s && s.profit > 1 && (() => {
+          const unidade = 10
+          const inicial = 600
+          const ganho = Math.round(s.profit * unidade)
+          const final_ = inicial + ganho
+          const pct = ((ganho / inicial) * 100).toFixed(0)
+          return (
+            <div className="mt-8 bg-zinc-900 border border-green-500/20 rounded-2xl p-5">
+              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+                <div>
+                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Simulação · R$10 por unidade</p>
+                  <p className="text-[10px] text-zinc-700 mt-0.5">Seguindo todos os picks desde o início</p>
+                </div>
+                <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-full shrink-0">
+                  Atualizado automaticamente
+                </span>
               </div>
-              <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-full shrink-0">
-                Atualizado automaticamente
-              </span>
+              <div className="flex items-center gap-3 sm:gap-6">
+                <div className="text-center shrink-0">
+                  <p className="text-xl sm:text-2xl font-black text-zinc-400">R${inicial}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">banca inicial</p>
+                </div>
+                <div className="flex-1 flex flex-col items-center gap-1">
+                  <span className="text-green-400 text-sm font-black">+R${ganho}</span>
+                  <div className="w-full border-t-2 border-dashed border-green-500/30" />
+                  <span className="text-zinc-600 text-[10px]">{s.total} picks · +{pct}%</span>
+                </div>
+                <div className="text-center shrink-0">
+                  <p className="text-xl sm:text-2xl font-black text-green-400">R${final_}</p>
+                  <p className="text-[10px] text-zinc-600 mt-0.5">banca atual</p>
+                </div>
+              </div>
             </div>
-            <div className="flex items-center gap-3 sm:gap-6">
-              <div className="text-center shrink-0">
-                <p className="text-xl sm:text-2xl font-black text-zinc-400">R$500</p>
-                <p className="text-[10px] text-zinc-600 mt-0.5">banca inicial</p>
-              </div>
-              <div className="flex-1 flex flex-col items-center gap-1">
-                <span className="text-green-400 text-sm font-black">+R${Math.round(s.profit * 50)}</span>
-                <div className="w-full border-t-2 border-dashed border-green-500/30" />
-                <span className="text-zinc-600 text-[10px]">{s.total} picks · {((s.profit * 50 / 500) * 100).toFixed(0)}% de ganho</span>
-              </div>
-              <div className="text-center shrink-0">
-                <p className="text-xl sm:text-2xl font-black text-green-400">R${Math.round(500 + s.profit * 50)}</p>
-                <p className="text-[10px] text-zinc-600 mt-0.5">banca atual</p>
-              </div>
-            </div>
-          </div>
-        )}
+          )
+        })()}
       </div>
     </section>
   )
