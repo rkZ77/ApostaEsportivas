@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
 import { lazy, Suspense, Component, ReactNode, useEffect } from 'react'
+import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import WhatsAppButton from './components/WhatsAppButton'
@@ -91,6 +92,7 @@ function FirstLoginRedirect() {
 
 export default function App() {
   return (
+    <HelmetProvider>
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
@@ -128,5 +130,6 @@ export default function App() {
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>
+    </HelmetProvider>
   )
 }

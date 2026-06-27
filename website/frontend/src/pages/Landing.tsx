@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { Menu, X as XIcon, UserPlus, Zap, TrendingUp } from 'lucide-react'
 import axios from 'axios'
 import Footer from '../components/Footer'
@@ -353,6 +354,12 @@ export default function Landing() {
   ]
 
   return (
+    <>
+    <Helmet>
+      <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
+      <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. VIP, múltiplas, alavancagem e picks gratuitos. Copa do Mundo 2026. Teste grátis por 2 dias." />
+      <link rel="canonical" href="https://pickia.com.br/" />
+    </Helmet>
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
 
       <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md" ref={menuRef}>
@@ -879,5 +886,6 @@ export default function Landing() {
       <StickyMobileCTA />
 
     </div>
+    </>
   )
 }
