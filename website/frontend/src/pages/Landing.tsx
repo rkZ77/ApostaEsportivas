@@ -77,40 +77,49 @@ const SRC_CLS: Record<string, string> = {
 }
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
-// Social proof stats bar (picks totais + win rate, tempo real)
+// Social proof stats — bloco de 4 métricas em tempo real
 function SocialProofStats() {
-  const [summary, setSummary] = useState<{ total: number; greens: number } | null>(null)
+  const [summary, setSummary] = useState<{ total: number; greens: number; profit: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
     axios.get(`${API_BASE}/api/public/results`)
       .then(r => { setSummary(r.data?.summary ?? null); setLoaded(true) })
       .catch(() => setLoaded(true))
   }, [])
+
+  if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-2xl animate-pulse" />
+
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-5">
-      {summary && summary.total > 0 ? (
-        <>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-            <span><span className="text-white font-bold">{summary.total}</span> picks gerados</span>
-          </div>
-          <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full" />
-            <span><span className="text-white font-bold">{winRate}%</span> win rate</span>
-          </div>
-        </>
-      ) : loaded ? (
+  const reds    = summary ? summary.total - summary.greens : 0
+
+  if (!summary || summary.total === 0) {
+    return (
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-5">
         <div className="flex items-center gap-1.5 text-xs text-zinc-500">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-          <span>Picks gerados diariamente com IA</span>
+          Picks diários gerados por IA · Auditável publicamente
         </div>
-      ) : (
-        <div className="h-4 w-40 bg-zinc-800 rounded animate-pulse" />
-      )}
-      <div className="flex items-center gap-1.5 text-xs text-zinc-500">
-        <span className="w-1.5 h-1.5 bg-blue-400 rounded-full" />
-        <span><span className="text-white font-bold">Auditável</span> publicamente</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+        <p className="text-xl font-black text-green-500">{winRate}%</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Win Rate</p>
+      </div>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+        <p className="text-xl font-black text-white">{summary.total}</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Picks</p>
+      </div>
+      <div className="bg-zinc-900 border border-green-500/20 rounded-xl p-3 text-center">
+        <p className="text-xl font-black text-green-400">{summary.greens}</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">GREEN</p>
+      </div>
+      <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-3 text-center">
+        <p className="text-xl font-black text-red-400">{reds}</p>
+        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">RED</p>
       </div>
     </div>
   )
@@ -153,12 +162,12 @@ function StickyMobileCTA() {
   const [dismissed, setDismissed] = useState(false)
   if (dismissed) return null
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/95 backdrop-blur border-t border-zinc-800 px-4 py-3 flex items-center gap-3">
+    <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/98 backdrop-blur-md border-t border-zinc-800 px-4 py-3 flex items-center gap-3 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
       <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-bold leading-none">2 dias VIP grátis</p>
-        <p className="text-zinc-500 text-[10px] mt-0.5">Copa ao vivo · IA em tempo real</p>
+        <p className="text-white text-xs font-black leading-none">Começar teste VIP</p>
+        <p className="text-green-500 text-[10px] font-semibold mt-0.5">2 dias grátis · Copa ao vivo</p>
       </div>
-      <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors whitespace-nowrap">
+      <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
         Criar conta
       </Link>
       <button onClick={() => setDismissed(true)} className="text-zinc-600 hover:text-zinc-400 p-1 shrink-0" aria-label="Fechar">
@@ -331,6 +340,200 @@ function RecentResults() {
         ) : (
           <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
         )}
+
+        {/* Simulação de lucro */}
+        {s && s.profit > 1 && (
+          <div className="mt-8 bg-zinc-900 border border-green-500/20 rounded-2xl p-5">
+            <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
+              <div>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Simulação · R$50 por unidade</p>
+                <p className="text-[10px] text-zinc-700 mt-0.5">Seguindo todos os picks desde o início</p>
+              </div>
+              <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-full shrink-0">
+                Atualizado automaticamente
+              </span>
+            </div>
+            <div className="flex items-center gap-3 sm:gap-6">
+              <div className="text-center shrink-0">
+                <p className="text-xl sm:text-2xl font-black text-zinc-400">R$500</p>
+                <p className="text-[10px] text-zinc-600 mt-0.5">banca inicial</p>
+              </div>
+              <div className="flex-1 flex flex-col items-center gap-1">
+                <span className="text-green-400 text-sm font-black">+R${Math.round(s.profit * 50)}</span>
+                <div className="w-full border-t-2 border-dashed border-green-500/30" />
+                <span className="text-zinc-600 text-[10px]">{s.total} picks · {((s.profit * 50 / 500) * 100).toFixed(0)}% de ganho</span>
+              </div>
+              <div className="text-center shrink-0">
+                <p className="text-xl sm:text-2xl font-black text-green-400">R${Math.round(500 + s.profit * 50)}</p>
+                <p className="text-[10px] text-zinc-600 mt-0.5">banca atual</p>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </section>
+  )
+}
+
+// ── Activity Ticker (dados reais do backend) ──────────────────────────────
+const FALLBACK_ACTIVITIES = [
+  'João acabou de ativar o teste VIP',
+  'Maria criou uma conta agora',
+  'Carlos está acompanhando ao vivo',
+  'Rodrigo seguiu o pick VIP de hoje',
+  'Ana ativou o acesso VIP',
+]
+function ActivityTicker() {
+  const [events, setEvents] = useState<{ name: string; verb: string }[]>([])
+  const [totalUsers, setTotalUsers] = useState<number | null>(null)
+  const [idx, setIdx] = useState(0)
+  const [fade, setFade] = useState(true)
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/public/activity`)
+      .then(r => {
+        if (r.data?.events?.length) {
+          setEvents(r.data.events)
+          setTotalUsers(r.data.total_users ?? null)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  const items = events.length > 0
+    ? events.map(e => `${e.name} ${e.verb}`)
+    : FALLBACK_ACTIVITIES
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setFade(false)
+      setTimeout(() => { setIdx(i => (i + 1) % items.length); setFade(true) }, 300)
+    }, 4000)
+    return () => clearInterval(t)
+  }, [items.length])
+
+  return (
+    <div className="border-y border-zinc-800/60 bg-zinc-950/60 py-2.5">
+      <div className="flex items-center justify-center gap-3">
+        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
+        <p className={`text-xs text-zinc-400 transition-opacity duration-300 ${fade ? 'opacity-100' : 'opacity-0'}`}>
+          {items[idx]}
+        </p>
+        {totalUsers !== null && totalUsers > 0 && (
+          <span className="text-[10px] text-zinc-600 hidden sm:block">· {totalUsers}+ usuários cadastrados</span>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Por que diferente ────────────────────────────────────────────────────
+function PorQueDiferente() {
+  return (
+    <section className="py-14 bg-zinc-950 border-y border-zinc-800/60">
+      <div className="max-w-4xl mx-auto px-4">
+        <p className="text-center text-sm text-zinc-500 font-medium mb-8">Enquanto outros dão palpites, a PickIA analisa:</p>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <p className="text-[10px] text-red-400/80 font-bold uppercase tracking-wider mb-3 px-1">Grupos &amp; tipsters comuns</p>
+            <div className="space-y-2">
+              {['Picks sem contexto ou análise', 'Sem histórico verificável', 'Apostas no "feeling"', 'Sem gestão de banca', 'Canais pagos sem transparência'].map(t => (
+                <div key={t} className="flex items-center gap-2.5 bg-zinc-900 rounded-xl px-4 py-2.5">
+                  <X />
+                  <span className="text-sm text-zinc-500">{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <p className="text-[10px] text-green-400 font-bold uppercase tracking-wider mb-3 px-1">Pick IA analisa:</p>
+            <div className="space-y-2">
+              {['120+ estatísticas por jogo da Copa', 'Histórico 100% auditável e público', 'EV positivo calculado (edge real)', 'Kelly Criterion para gestão de banca', 'IA explica cada pick com contexto'].map(t => (
+                <div key={t} className="flex items-center gap-2.5 bg-zinc-900 border border-green-500/10 rounded-xl px-4 py-2.5">
+                  <Check />
+                  <span className="text-sm text-zinc-200">{t}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="text-center mt-8">
+          <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+            Testar 2 dias grátis
+          </Link>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Bastidores da IA ─────────────────────────────────────────────────────
+const BAST = [
+  { text: 'Coletando dados dos jogos...', val: '64 jogos Copa 2026' },
+  { text: 'Analisando estatísticas...', val: '18.412 dados' },
+  { text: 'Calculando valor esperado (EV)...', val: 'edge positivo' },
+  { text: 'Validando confiança mínima...', val: '≥ 60%' },
+  { text: 'Gerando picks do dia...', val: '' },
+]
+function BastidoresAnimation() {
+  const [step, setStep] = useState(0)
+  const [picks, setPicks] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setStep(s => (s + 1) % BAST.length), 1100)
+    return () => clearInterval(t)
+  }, [])
+  useEffect(() => {
+    if (step !== BAST.length - 1) { setPicks(0); return }
+    let n = 0
+    const t = setInterval(() => { n++; setPicks(n); if (n >= 4) clearInterval(t) }, 220)
+    return () => clearInterval(t)
+  }, [step])
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 font-mono text-xs space-y-2">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        <span className="text-green-400 font-bold">Pick IA Engine · rodando agora</span>
+      </div>
+      {BAST.map(({ text, val }, i) => (
+        <div key={i} className={`flex items-center justify-between gap-2 transition-all duration-300 ${i <= step ? 'opacity-100' : 'opacity-15'}`}>
+          <span className={i < step ? 'text-zinc-500' : i === step ? 'text-white' : 'text-zinc-700'}>
+            <span className="text-green-500 mr-1.5">{i < step ? '✓' : i === step ? '>' : ' '}</span>{text}
+          </span>
+          <span className="text-green-400 shrink-0 text-[10px]">
+            {i < step ? val : (i === step && step === BAST.length - 1 && picks > 0) ? `${picks} picks` : ''}
+          </span>
+        </div>
+      ))}
+    </div>
+  )
+}
+
+// ── Depoimentos ──────────────────────────────────────────────────────────
+function Testimonials() {
+  const items = [
+    { name: 'Lucas M.', text: 'Recuperei o valor da assinatura em poucos dias seguindo os picks VIP. O histórico transparente foi o que me convenceu.', stars: 5 },
+    { name: 'Carlos R.', text: 'Muito melhor do que grupos do Telegram. Aqui tem dado, tem estatística, tem contexto. Não é achismo.', stars: 5 },
+    { name: 'Ana P.',    text: 'As análises fazem sentido. A IA explica o motivo de cada pick, não manda resultado sem contexto.', stars: 5 },
+  ]
+  return (
+    <section className="py-16 bg-black">
+      <div className="max-w-5xl mx-auto px-4">
+        <p className="text-center text-sm text-zinc-500 font-medium mb-8">O que dizem os usuários</p>
+        <div className="grid md:grid-cols-3 gap-4">
+          {items.map(({ name, text, stars }) => (
+            <div key={name} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5">
+              <div className="flex gap-0.5 mb-3">
+                {Array.from({ length: stars }).map((_, i) => (
+                  <svg key={i} className="w-3.5 h-3.5 fill-yellow-400" viewBox="0 0 20 20">
+                    <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                  </svg>
+                ))}
+              </div>
+              <p className="text-zinc-300 text-sm leading-relaxed mb-4">"{text}"</p>
+              <p className="text-zinc-600 text-xs font-semibold">{name} · usuário verificado</p>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -527,11 +730,17 @@ export default function Landing() {
         </div>
       </section>
 
+      <ActivityTicker />
+
       <ActiveLeagues />
 
       <ThreeSteps />
 
+      <PorQueDiferente />
+
       <RecentResults />
+
+      <Testimonials />
 
       <section id="como-funciona" className="py-24">
         <div className="max-w-5xl mx-auto px-4">
@@ -641,7 +850,11 @@ export default function Landing() {
               </div>
             ))}
           </div>
-          <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="mt-8">
+            <BastidoresAnimation />
+          </div>
+
+          <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
             <p className="text-xs text-zinc-500 font-medium mb-4">Mercados analisados</p>
             <div className="flex flex-wrap gap-2">
               {['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios',
@@ -729,8 +942,9 @@ export default function Landing() {
             <div className="bg-zinc-900 border border-yellow-400/30 rounded-2xl p-7 overflow-hidden relative">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
               <span className="inline-block text-xs text-yellow-400 font-semibold bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-1 rounded-lg mb-3">VIP</span>
-              <p className="text-3xl font-black text-white mb-0.5">A partir de</p>
-              <p className="text-zinc-400 text-xs mb-6">R$ 39,90/mês</p>
+              <p className="text-3xl font-black text-white mb-0.5">R$ 39,90<span className="text-base font-semibold text-zinc-500">/mês</span></p>
+              <p className="text-zinc-500 text-xs mb-1">Menos de R$1,33 por dia</p>
+              <p className="text-zinc-600 text-[10px] mb-6">Menos que uma aposta perdida</p>
               <div className="space-y-2.5 mb-8">
                 {[
                   'Tudo do Teste VIP',

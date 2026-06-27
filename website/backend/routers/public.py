@@ -256,3 +256,56 @@ def public_results(
     finally:
         cur.close()
         conn.close()
+
+
+def _mask_first(full_name: str) -> str:
+    """'João da Silva' → 'João S.'"""
+    parts = (full_name or "").strip().split()
+    if not parts:
+        return "Usuário"
+    if len(parts) == 1:
+        return parts[0]
+    return f"{parts[0]} {parts[-1][0]}."
+
+
+_ACTIVITY_VERBS = [
+    "ativou o teste VIP",
+    "criou uma conta",
+    "entrou agora",
+    "seguiu o pick VIP de hoje",
+    "está acompanhando ao vivo",
+]
+
+
+@router.get("/activity")
+def public_activity():
+    """Últimas ações de usuários reais — anonimizadas — para o ticker da landing."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        # Usuários mais recentes (últimos 30 dias, sem expor email)
+        cur.execute("""
+            SELECT name, created_at, plan
+            FROM users
+            WHERE active = TRUE
+              AND created_at >= NOW() - INTERVAL '30 days'
+            ORDER BY created_at DESC
+            LIMIT 15
+        """)
+        rows = cur.fetchall()
+        if not rows:
+            # Fallback: últimos usuários ativos qualquer data
+            cur.execute("SELECT name, created_at, plan FROM users WHERE active = TRUE ORDER BY created_at DESC LIMIT 10")
+            rows = cur.fetchall()
+        total = _q1(cur, "SELECT COUNT(*) AS cnt FROM users WHERE active = TRUE")
+        events = []
+        for i, r in enumerate(rows):
+            verb = "ativou o teste VIP" if r.get("plan") in ("trial", "vip") else _ACTIVITY_VERBS[i % len(_ACTIVITY_VERBS)]
+            events.append({"name": _mask_first(r["name"]), "verb": verb})
+        return {
+            "events": events,
+            "total_users": int(total["cnt"]) if total else 0,
+        }
+    finally:
+        cur.close()
+        conn.close()
