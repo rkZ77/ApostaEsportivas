@@ -22,7 +22,7 @@ export default function Footer() {
               className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors font-semibold"
             >
               <img src="/instagram.png" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
-              @pickia_br
+              @pickia.br
             </a>
             <Link to="/planos" className="text-xs text-zinc-500 hover:text-green-400 transition-colors">
               Planos
