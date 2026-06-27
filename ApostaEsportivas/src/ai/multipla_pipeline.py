@@ -388,7 +388,7 @@ def run_multipla_llm(fixtures: list) -> dict:
     desempenho = performance_svc.format_for_prompt()
 
     # Coleta picks anteriores para todos os times dos fixtures do dia
-    all_teams = [t for fx in fixtures for t in [fx.get("home_team"), fx.get("away_team")] if t]
+    all_teams = [t for fx in fixtures for t in [fx["fixture"].get("home_team"), fx["fixture"].get("away_team")] if t]
     picks_anteriores = performance_svc.get_team_picks_str(all_teams, limit=10)
     print(f"[MULTIPLA] Picks anteriores injetados para {len(all_teams)} times")
 
