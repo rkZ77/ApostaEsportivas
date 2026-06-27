@@ -134,6 +134,17 @@ interface Fixture {
   pick_type_flag?: 'vip' | 'free' | null
 }
 
+interface LiveStats {
+  home_corners: number
+  away_corners: number
+  home_shots_on: number
+  away_shots_on: number
+  home_yellow: number
+  away_yellow: number
+  home_possession: number
+  away_possession: number
+}
+
 type PageTab = 'jogos' | 'estatistica'
 
 export default function Fixtures() {
@@ -146,6 +157,8 @@ export default function Fixtures() {
   const [loading, setLoading]      = useState(true)
   const [statsFixture, setStatsFixture] = useState<Fixture | null>(null)
   const [lockPrompt, setLockPrompt]    = useState(false)
+  const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
+  const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
 
   function fetchFixtures(d: string) {
     setLoading(true)
@@ -157,10 +170,36 @@ export default function Fixtures() {
 
   function handleDateChange(d: string) {
     setDate(d)
+    setLiveStats({})
     fetchFixtures(d)
   }
 
+  function toggleCollapse(key: string) {
+    setCollapsed(prev => {
+      const next = new Set(prev)
+      if (next.has(key)) next.delete(key)
+      else next.add(key)
+      return next
+    })
+  }
+
   useEffect(() => { fetchFixtures(TODAY) }, [])
+
+  // Atualiza estatísticas ao vivo a cada 30s para jogos em andamento
+  useEffect(() => {
+    const liveGames = fixtures.filter(f => isLive(f.status))
+    if (liveGames.length === 0) return
+    const fetchAll = () => {
+      liveGames.forEach(f => {
+        api.get(`/live/fixture/${f.fixture_id}/live-stats`)
+          .then(r => setLiveStats(prev => ({ ...prev, [f.fixture_id]: r.data })))
+          .catch(() => {})
+      })
+    }
+    fetchAll()
+    const timer = setInterval(fetchAll, 30_000)
+    return () => clearInterval(timer)
+  }, [fixtures])
 
   // Agrupa por liga (preserva ordem de aparição)
   const grouped: { key: string; league_id: number; logo?: string; flag?: string; country?: string; games: Fixture[] }[] = []
@@ -279,8 +318,11 @@ export default function Fixtures() {
               return (
               <div key={league} className={`card overflow-hidden ${isCopa ? 'border border-yellow-500/20' : ''}`}>
 
-                {/* Cabeçalho da liga com logo + bandeira */}
-                <div className={`px-4 py-3 border-b flex items-center gap-2.5 ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-zinc-800/60 border-zinc-800'}`}>
+                {/* Cabeçalho da liga com logo + bandeira (clicável para recolher) */}
+                <div
+                  className={`px-4 py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-zinc-800/60 border-zinc-800'}`}
+                  onClick={() => toggleCollapse(league)}
+                >
                   {logo && (
                     <img src={logo} alt={league} width={24} height={24}
                       className="w-6 h-6 object-contain shrink-0"
@@ -299,10 +341,15 @@ export default function Fixtures() {
                   )}
                   {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase tracking-wider ml-1">Copa do Mundo</span>}
                   <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
+                  <svg
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${collapsed.has(league) ? '-rotate-90' : ''} ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}
+                    fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                  </svg>
                 </div>
 
                 {/* Jogos */}
-                <div className="divide-y divide-zinc-800/50">
+                {!collapsed.has(league) && <div className="divide-y divide-zinc-800/50">
                   {games.map(f => {
                     const st       = STATUS_MAP[f.status] ?? { label: f.status, color: 'text-zinc-500' }
                     const live     = isLive(f.status)
@@ -311,9 +358,11 @@ export default function Fixtures() {
                       ? new Date(f.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
                       : '--:--'
 
+                    const ls = liveStats[f.fixture_id]
+
                     return (
+                      <div key={f.fixture_id}>
                       <div
-                        key={f.fixture_id}
                         className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
                         onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
                       >
@@ -392,9 +441,32 @@ export default function Fixtures() {
                           )}
                         </div>
                       </div>
+
+                      {/* Stats ao vivo — aparece apenas quando o jogo está em andamento */}
+                      {live && ls && (
+                        <div className="px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
+                          <div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-0.5">Esc</div>
+                            <div className="text-xs font-bold text-zinc-300">{ls.home_corners} <span className="text-zinc-600">-</span> {ls.away_corners}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-0.5">Fin</div>
+                            <div className="text-xs font-bold text-zinc-300">{ls.home_shots_on} <span className="text-zinc-600">-</span> {ls.away_shots_on}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-0.5">Cart</div>
+                            <div className="text-xs font-bold text-zinc-300">{ls.home_yellow} <span className="text-zinc-600">-</span> {ls.away_yellow}</div>
+                          </div>
+                          <div>
+                            <div className="text-[10px] text-zinc-500 uppercase tracking-wide mb-0.5">Posse</div>
+                            <div className="text-xs font-bold text-zinc-300">{ls.home_possession}% <span className="text-zinc-600">-</span> {ls.away_possession}%</div>
+                          </div>
+                        </div>
+                      )}
+                      </div>
                     )
                   })}
-                </div>
+                </div>}
               </div>
             )
             })}

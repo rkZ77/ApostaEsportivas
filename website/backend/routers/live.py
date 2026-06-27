@@ -381,12 +381,21 @@ def _profit_for_result(result: str, odd: float) -> float:
     return -1.0  # RED
 
 
+def _sync_followed_result(pick_id: int, pick_type: str, result: str, c) -> None:
+    """Sincroniza resultado na user_followed_picks para todos que seguiram este pick."""
+    c.execute(
+        "UPDATE user_followed_picks SET result=%s WHERE pick_id=%s AND pick_type=%s",
+        (result, pick_id, pick_type),
+    )
+
+
 def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn) -> None:
     profit = _profit_for_result(result, odd)
     tbl = "picks_vip" if pick_type == "vip" else "picks_free"
     c = conn.cursor()
     c.execute(f"UPDATE {tbl} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
+    _sync_followed_result(pick_id, pick_type, result, c)
     conn.commit()
     c.close()
     logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
@@ -413,6 +422,7 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
     c = conn.cursor()
     c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
+    _sync_followed_result(pick_id, "multipla", result, c)
     conn.commit()
     c.close()
     logger.info("[AUTO-RESULT] multipla #%s → %s (%+.4fu)", pick_id, result, profit)
@@ -427,6 +437,7 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
     c = conn.cursor()
     c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
+    _sync_followed_result(pick_id, "alavancagem", result, c)
     conn.commit()
     c.close()
     logger.info("[AUTO-RESULT] alavancagem #%s → %s (%+.2fu)", pick_id, result, profit)
@@ -500,6 +511,56 @@ def _enrich_leg(fid: int, market: str, line: str,
         "is_live":      status in LIVE_STATUSES,
         "is_ft":        is_ft,
         "is_locked":    is_locked,
+    }
+
+
+@router.get("/fixture/{fixture_id}/live-stats")
+def get_fixture_live_stats(fixture_id: int):
+    """Retorna estatísticas ao vivo de um jogo (escanteios, chutes, cartões, posse)."""
+    data = _fetch_fixture(fixture_id)
+    if not data:
+        return {}
+    fx     = data.get("fixture", {})
+    status = fx.get("status", {}).get("short", "NS")
+    goals  = data.get("goals", {})
+
+    stats_raw = _fetch_stats(fixture_id, status)
+    home_s, away_s = {}, {}
+    for i, team in enumerate(stats_raw):
+        d: dict = {}
+        for s in team.get("statistics", []):
+            key = s["type"]
+            val = s.get("value")
+            if val is None:
+                d[key] = 0
+            elif isinstance(val, str) and val.endswith("%"):
+                try:
+                    d[key] = int(val.rstrip("%"))
+                except Exception:
+                    d[key] = 0
+            else:
+                try:
+                    d[key] = int(val)
+                except Exception:
+                    d[key] = 0
+        if i == 0:
+            home_s = d
+        else:
+            away_s = d
+
+    return {
+        "status":           status,
+        "elapsed":          fx.get("status", {}).get("elapsed"),
+        "home_goals":       goals.get("home"),
+        "away_goals":       goals.get("away"),
+        "home_corners":     home_s.get("Corner Kicks", 0),
+        "away_corners":     away_s.get("Corner Kicks", 0),
+        "home_shots_on":    home_s.get("Shots on Goal", 0),
+        "away_shots_on":    away_s.get("Shots on Goal", 0),
+        "home_yellow":      home_s.get("Yellow Cards", 0),
+        "away_yellow":      away_s.get("Yellow Cards", 0),
+        "home_possession":  home_s.get("Ball Possession", 0),
+        "away_possession":  away_s.get("Ball Possession", 0),
     }
 
 
