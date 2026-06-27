@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
-import ProfitChart from '../components/ProfitChart'
 import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import RecentResultsSection from '../components/RecentResultsSection'
@@ -74,6 +73,10 @@ export default function Results() {
   // Por mês
   const [monthly,    setMonthly]    = useState<any[]>([])
   const [monthLoad,  setMonthLoad]  = useState(false)
+
+  // Paginação tabela por dia
+  const [dayPage,    setDayPage]    = useState(0)
+  const DAY_PAGE_SIZE = 7
 
   // fetchers
   const fetchSummary = useCallback((p: Period, src: Source, from?: string, to?: string) => {
@@ -241,20 +244,6 @@ export default function Results() {
                 ))}
               </div>
 
-              {/* Curva de performance */}
-              {stats?.by_day?.length >= 2 && (
-                <div className="card p-5 mb-5">
-                  <div className="flex items-center justify-between mb-1">
-                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Curva de Performance</p>
-                    <span className={`text-sm font-black ${profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      {winRate}% win rate
-                    </span>
-                  </div>
-                  <p className="text-[10px] text-zinc-700 mb-4">Evolução cumulativa de picks (1u padrão por aposta)</p>
-                  <ProfitChart data={stats.by_day} />
-                </div>
-              )}
-
               {/* Greens por dia */}
               {stats?.by_day?.length >= 2 && (
                 <div className="card p-5 mb-5">
@@ -283,26 +272,32 @@ export default function Results() {
                 ))}
               </div>
 
-              {/* Por dia — sem colunas de lucro/banca */}
-              {stats?.by_day?.length > 0 && (
-                <div className="card overflow-hidden">
-                  <div className="px-5 py-4 border-b border-zinc-800 flex items-center gap-3">
-                    <span className="w-0.5 h-5 bg-green-500 rounded-full block" />
-                    <h3 className="font-black text-white text-sm uppercase tracking-wider">Por dia</h3>
-                  </div>
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm min-w-[460px]">
-                      <thead>
-                        <tr className="border-b border-zinc-800">
-                          {['Data','Picks','Greens','Reds','Win %'].map(h => (
-                            <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
-                          ))}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {[...stats.by_day]
-                          .sort((a: any, b: any) => b.match_date.localeCompare(a.match_date))
-                          .map((d: any) => {
+              {/* Por dia — com paginação */}
+              {stats?.by_day?.length > 0 && (() => {
+                const sorted = [...stats.by_day].sort((a: any, b: any) => b.match_date.localeCompare(a.match_date))
+                const totalDayPages = Math.ceil(sorted.length / DAY_PAGE_SIZE)
+                const daySlice = sorted.slice(dayPage * DAY_PAGE_SIZE, (dayPage + 1) * DAY_PAGE_SIZE)
+                const goDay = (p: number) => setDayPage(p)
+                return (
+                  <div className="card overflow-hidden">
+                    <div className="px-5 py-4 border-b border-zinc-800 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3">
+                        <span className="w-0.5 h-5 bg-green-500 rounded-full block" />
+                        <h3 className="font-black text-white text-sm uppercase tracking-wider">Por dia</h3>
+                      </div>
+                      <span className="text-xs text-zinc-600">{sorted.length} dias</span>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm min-w-[460px]">
+                        <thead>
+                          <tr className="border-b border-zinc-800">
+                            {['Data','Picks','Greens','Reds','Win %'].map(h => (
+                              <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {daySlice.map((d: any) => {
                             const wr   = d.total > 0 ? Math.round((d.greens / d.total) * 100) : 0
                             const reds = d.reds ?? (d.total - d.greens - (d.push ?? 0) - (d.half_wins ?? 0) - (d.half_losses ?? 0))
                             return (
@@ -321,13 +316,27 @@ export default function Results() {
                                 </td>
                               </tr>
                             )
-                          })
-                        }
-                      </tbody>
-                    </table>
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {totalDayPages > 1 && (
+                      <div className="px-5 py-3 border-t border-zinc-800 flex items-center justify-center gap-1 flex-wrap">
+                        <button disabled={dayPage === 0} onClick={() => goDay(dayPage - 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
+                        {Array.from({ length: totalDayPages }, (_, i) => (
+                          <button key={i} onClick={() => goDay(i)}
+                            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                              dayPage === i ? 'bg-green-500 border-green-500 text-black' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                            }`}>{i + 1}</button>
+                        ))}
+                        <button disabled={dayPage >= totalDayPages - 1} onClick={() => goDay(dayPage + 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
+                      </div>
+                    )}
                   </div>
-                </div>
-              )}
+                )
+              })()}
             </>
           )
         )}
