@@ -497,6 +497,32 @@ def run_migrations():
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_free_date ON picks_free(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_alav_date ON picks_alavancagem(match_date DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_multi_date ON picks_multiplas(match_date DESC);")
+        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS result VARCHAR(20);")
+        # Backfill resultado para registros existentes
+        cur.execute("""
+            UPDATE user_followed_picks uf SET result = pv.result
+            FROM picks_vip pv
+            WHERE uf.pick_type = 'vip' AND uf.pick_id = pv.id
+              AND pv.result IS NOT NULL AND uf.result IS NULL
+        """)
+        cur.execute("""
+            UPDATE user_followed_picks uf SET result = pf.result
+            FROM picks_free pf
+            WHERE uf.pick_type = 'free' AND uf.pick_id = pf.id
+              AND pf.result IS NOT NULL AND uf.result IS NULL
+        """)
+        cur.execute("""
+            UPDATE user_followed_picks uf SET result = pm.result
+            FROM picks_multiplas pm
+            WHERE uf.pick_type = 'multipla' AND uf.pick_id = pm.id
+              AND pm.result IS NOT NULL AND uf.result IS NULL
+        """)
+        cur.execute("""
+            UPDATE user_followed_picks uf SET result = pa.result
+            FROM picks_alavancagem pa
+            WHERE uf.pick_type = 'alavancagem' AND uf.pick_id = pa.id
+              AND pa.result IS NOT NULL AND uf.result IS NULL
+        """)
         conn.commit()
     except Exception as e:
         logger.error("[MIGRATION] Erro: %s", e)
