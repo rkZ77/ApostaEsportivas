@@ -4,6 +4,7 @@ import api from '../services/api'
 import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import ProfitChart from '../components/ProfitChart'
+import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import RecentResultsSection from '../components/RecentResultsSection'
 
@@ -251,6 +252,18 @@ export default function Results() {
                   </div>
                   <p className="text-[10px] text-zinc-700 mb-4">Evolução cumulativa de picks (1u padrão por aposta)</p>
                   <ProfitChart data={stats.by_day} />
+                </div>
+              )}
+
+              {/* Greens por dia */}
+              {stats?.by_day?.length >= 2 && (
+                <div className="card p-5 mb-5">
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-xs text-zinc-500 uppercase tracking-wider">Greens por dia</p>
+                    <span className="text-xs text-zinc-600">{stats.by_day.length} dias</span>
+                  </div>
+                  <p className="text-[10px] text-zinc-700 mb-4">Barra verde = greens · Barra cinza = total de picks</p>
+                  <DailyGreensChart data={stats.by_day} />
                 </div>
               )}
 
