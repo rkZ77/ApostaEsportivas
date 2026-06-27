@@ -5,7 +5,6 @@ import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
-import RecentResultsSection from '../components/RecentResultsSection'
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
 type View    = 'resumo' | 'por_jogo' | 'por_mes'
@@ -110,14 +109,14 @@ export default function Results() {
   }, [view])
 
   function applySource(s: Source) {
-    setSource(s); setGamesPage(0)
+    setSource(s); setGamesPage(0); setDayPage(0)
     if (view === 'resumo')   fetchSummary(period, s, customFrom || undefined, customTo || undefined)
     if (view === 'por_jogo') fetchGames(period, 0, gamesFilter, s, customFrom, customTo)
     if (view === 'por_mes')  fetchMonthly(s)
   }
 
   function applyPeriod(p: Period) {
-    setPeriod(p); setGamesPage(0)
+    setPeriod(p); setGamesPage(0); setDayPage(0)
     if (p !== 'custom') {
       if (view === 'resumo')   fetchSummary(p, source)
       if (view === 'por_jogo') fetchGames(p, 0, gamesFilter, source)
@@ -136,7 +135,6 @@ export default function Results() {
   const profit  = Number(stats?.profit_total ?? 0)
   const stake   = Number(stats?.stake_total ?? 0)
   const winRate = total > 0 ? Math.round((greens / total) * 100) : 0
-  const roi     = stake > 0 ? ((profit / stake) * 100).toFixed(1) : '0.0'
 
   // render
   return (
