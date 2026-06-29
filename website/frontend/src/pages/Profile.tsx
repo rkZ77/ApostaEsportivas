@@ -55,6 +55,7 @@ export default function Profile() {
   const [emailCooldown, setEmailCooldown]   = useState(0)
   const [showEmailChange, setShowEmailChange] = useState(false)
   const [newEmail, setNewEmail]             = useState('')
+  const [emailPassword, setEmailPassword]   = useState('')
   const [emailChanging, setEmailChanging]   = useState(false)
   const [emailChangeErr, setEmailChangeErr] = useState('')
   const [emailChanged, setEmailChanged]     = useState('')
@@ -85,13 +86,14 @@ export default function Profile() {
     setEmailChangeErr('')
     setEmailChanging(true)
     try {
-      const { data } = await api.post('/auth/change-email', { new_email: newEmail })
+      const { data } = await api.post('/auth/change-email', { new_email: newEmail, current_password: emailPassword })
       updateUser({ email: data.email, email_verified: false })
       setEmailChanged(data.email)
       setShowEmailChange(false)
       setEmailResent(true)
       setEmailCooldown(60)
       setNewEmail('')
+      setEmailPassword('')
     } catch (err: any) {
       setEmailChangeErr(err?.response?.data?.detail || 'Erro ao alterar e-mail')
     } finally {
@@ -401,13 +403,21 @@ export default function Profile() {
                     required
                     className="input w-full text-sm"
                   />
+                  <input
+                    type="password"
+                    value={emailPassword}
+                    onChange={e => setEmailPassword(e.target.value)}
+                    placeholder="Confirme sua senha atual"
+                    required
+                    className="input w-full text-sm"
+                  />
                   {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={emailChanging}
                       className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                       {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
                     </button>
-                    <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr('') }}
+                    <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
                       className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
                       Cancelar
                     </button>

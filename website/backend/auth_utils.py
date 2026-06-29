@@ -48,6 +48,8 @@ def create_access_token(data: dict) -> str:
 
 def create_refresh_token(data: dict) -> str:
     payload = {"sub": data["sub"], "type": "refresh"}
+    if "session_id" in data:
+        payload["session_id"] = data["session_id"]
     payload["exp"] = datetime.now(timezone.utc) + timedelta(days=REFRESH_TOKEN_EXPIRE_DAYS)
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
