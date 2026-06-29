@@ -658,6 +658,8 @@ def refresh_token(request: Request, response: Response):
         "plan": user["plan"], "plan_expires_at": plan_expires_at,
         "avatar_url": user.get("avatar_url"),
     }
+    if payload.get("session_id"):
+        token_data["session_id"] = payload["session_id"]
     new_access = create_access_token(token_data)
     set_access_cookie(response, new_access)  # não renova o refresh → sessão expira em 30 dias
     return {"status": "ok"}
@@ -870,6 +872,7 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
 
 class ChangeEmailBody(BaseModel):
     new_email: str
+    current_password: str
 
 @router.post("/change-email")
 def change_email(body: ChangeEmailBody, background_tasks: BackgroundTasks, request: Request, current_user: dict = Depends(get_current_user)):
@@ -880,6 +883,10 @@ def change_email(body: ChangeEmailBody, background_tasks: BackgroundTasks, reque
     conn = get_connection()
     cur = conn.cursor()
     try:
+        cur.execute("SELECT password_hash FROM users WHERE id = %s", (current_user["sub"],))
+        pw_row = cur.fetchone()
+        if not pw_row or not verify_password(body.current_password, pw_row["password_hash"]):
+            raise HTTPException(400, "Senha atual incorreta")
         cur.execute("SELECT id FROM users WHERE email = %s AND id != %s", (new_email, current_user["sub"]))
         if cur.fetchone():
             raise HTTPException(400, "E-mail já cadastrado em outra conta")

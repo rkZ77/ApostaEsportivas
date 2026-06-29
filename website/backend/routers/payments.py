@@ -181,15 +181,20 @@ async def webhook(request: Request):
     except Exception:
         raise HTTPException(400, "Payload inválido")
 
-    # Verificação de assinatura HMAC do MercadoPago
+    # Verificação de assinatura HMAC do MercadoPago (obrigatória)
     webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
+    _is_prod = os.getenv("APP_ENV", "production").lower() in ("production", "prod")
     if webhook_secret:
         x_signature  = request.headers.get("x-signature", "")
         x_request_id = request.headers.get("x-request-id", "")
         data_id      = str(data.get("data", {}).get("id", ""))
         if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
-            logger.warning("[WEBHOOK] Assinatura inválida de %s — processando mesmo assim (verificar secret)",
+            logger.warning("[WEBHOOK] Assinatura inválida — rejeitando requisição de %s",
                            request.client.host if request.client else "unknown")
+            raise HTTPException(403, "Assinatura inválida")
+    elif _is_prod:
+        logger.error("[WEBHOOK] MERCADOPAGO_WEBHOOK_SECRET não configurado — bloqueando em produção")
+        raise HTTPException(500, "Webhook não configurado")
 
     event_type = data.get("type")
     logger.info("[WEBHOOK] Evento recebido: type=%s data=%s", event_type, data.get("data"))
@@ -243,10 +248,7 @@ async def webhook(request: Request):
     user_name  = None
     user_email = None
     try:
-        cur.execute(
-            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s RETURNING name, email",
-            (expires_at, plan_key, int(user_id)),
-        )
+        cur.execute("SELECT name, email FROM users WHERE id = %s", (int(user_id),))
         row = cur.fetchone()
         if not row:
             logger.error("[WEBHOOK] user_id=%s não encontrado no banco — pagamento %s ignorado", user_id, payment_id)
@@ -254,7 +256,8 @@ async def webhook(request: Request):
         user_name  = row["name"]
         user_email = row["email"]
 
-        # Registra pagamento (ignora se já existe — idempotente)
+        # Registra pagamento ANTES do UPDATE — garante idempotência real
+        # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
         cur.execute(
             """
             INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
@@ -262,6 +265,14 @@ async def webhook(request: Request):
             ON CONFLICT (mp_payment_id) DO NOTHING
             """,
             (int(user_id), str(payment_id), plan_key, amount, expires_at, payment_method),
+        )
+        if cur.rowcount == 0:
+            logger.info("[WEBHOOK] Pagamento %s já processado anteriormente — ignorando", payment_id)
+            return {"status": "ok", "detail": "already processed"}
+
+        cur.execute(
+            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s",
+            (expires_at, plan_key, int(user_id)),
         )
 
         # Crédito de indicação: +2 dias VIP para o referrer quando indicado assina VIP
