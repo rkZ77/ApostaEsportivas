@@ -28,17 +28,25 @@ RANKING FIFA (primário quando histórico<3 jogos competitivos):
   Diff<20: equilíbrio — resultado puro tem alta variância; prefira mercados de volume (gols/cantos totais)
   Top-10 vs abaixo #50: desequilíbrio máximo — exija dados robustos do time fraco
 
-FASE:
-  Grupos r1-r2: times precisam de pontos → mais pressionados, mais abertos
-  r3: resultados combinados possíveis → resultado puro tem variância altíssima
-  Mata-mata: contexto tático — intensidade defensiva maior; analise o histórico específico
+FASE ATUAL — ELIMINATÓRIA (a partir de 29/06/2026):
+  A fase de grupos ENCERROU. O torneio está agora no mata-mata.
+  Estrutura restante: Oitavas (16 avos) → Quartas → Semifinais → Final (+ 3º lugar).
+  REGRAS DESTA FASE:
+    - Empate no tempo normal vai para prorrogação (2×15 min) → pênaltis se necessário.
+    - Não existe "resultado puro" com empate — considere sempre 3 desfechos: vitória A, vitória B, decisão por pênaltis.
+    - Para handicap/ML, ajuste: equilíbrio tático é maior pois um empate classifica o adversário.
+    - Intensidade defensiva é MAIOR que na fase de grupos → prefira UNDER em mercados de gols totais.
+    - Volume de jogo (cantos, cartões) tende a ser maior em jogos tensos e de alta pressão.
+    - Times eliminados da discussão de grupo costumam ter formação mais conservadora nesta fase.
+  Baseline mata-mata: 2.0–2.3 gols/jogo (vs 2.5–2.8 grupos). Use 2.1 como referência central.
+  Histórico Copa: ~30–35% dos jogos de mata-mata terminam em prorrogação.
 
 CARTÕES: NUNCA aposte em vermelho.
   O baseline 2.5–3.0 amarelos/jogo é média da competição — variância jogo-a-jogo é ALTA.
   NÃO use o baseline como confirmador: exija histórico específico dos dois times E do árbitro.
   Sem ambos → cartões tem volatilidade MÉDIA e NÃO deve ser is_best_pick.
 
-DADOS ESCASSOS: Ranking FIFA + forma recente. Baseline 2.6 gols/jogo grupos.
+DADOS ESCASSOS: Ranking FIFA + forma recente. Baseline 2.1 gols/jogo (fase eliminatória).
 """
 
 PROMPT = build_prompt(LEAGUE_CONTEXT)
