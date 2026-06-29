@@ -374,7 +374,7 @@ class AIResultCheckerService:
             elif op == "no" or (line and any(k in (line or "").lower() for k in ["no", "não", "nao"])):
                 result, factor = ("RED", Decimal("-1")) if both else ("GREEN", Decimal("1"))
             else:
-                result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
+                return (None, Decimal("0"))  # linha BTTS não reconhecida → não resolve
 
         elif mt in ("result_1x2", "double_chance"):
             result, factor = self.evaluate_result_1x2(hg, ag, line, market)

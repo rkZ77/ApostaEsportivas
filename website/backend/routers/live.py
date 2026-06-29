@@ -294,7 +294,11 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     if is_btts:
         if cur_val is None:
             return None
-        return "GREEN" if cur_val >= 1.0 else "RED"
+        both_scored = cur_val >= 1.0
+        direction, _ = _extract_line(line)
+        if direction in ("no", "não", "nao"):
+            return "RED" if both_scored else "GREEN"
+        return "GREEN" if both_scored else "RED"
 
     # ── Mercados estatísticos (gols, escanteios, cartões…) ────────────────────
     if cur_val is None:
