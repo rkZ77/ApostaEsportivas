@@ -1,6 +1,6 @@
 import logging
 import traceback
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from database import get_connection
 
@@ -381,6 +381,77 @@ def public_pick(pick_type: str, pick_id: int):
 
         d["pick_type"] = pick_type
         return d
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/leaderboard")
+def public_leaderboard():
+    """Top 5 usuarios por yield ROI — anonimizados para landing page (min 5 picks resolvidos)."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            WITH resolved AS (
+                SELECT
+                    uf.user_id,
+                    uf.stake_units,
+                    CASE uf.pick_type
+                        WHEN 'vip'         THEN pv.result
+                        WHEN 'free'        THEN pf.result
+                        WHEN 'multipla'    THEN pm.result
+                        WHEN 'alavancagem' THEN pa.result
+                    END AS result,
+                    CASE uf.pick_type
+                        WHEN 'vip'         THEN COALESCE(pv.profit, 0)
+                        WHEN 'free'        THEN COALESCE(pf.profit, 0)
+                        WHEN 'multipla'    THEN COALESCE(pm.profit, 0)
+                        WHEN 'alavancagem' THEN COALESCE(pa.profit, 0)
+                        ELSE 0
+                    END AS profit
+                FROM user_followed_picks uf
+                LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
+                LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
+                LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
+                LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+            ),
+            user_stats AS (
+                SELECT
+                    user_id,
+                    COUNT(*) FILTER (WHERE result IS NOT NULL)  AS total,
+                    COUNT(*) FILTER (WHERE result = 'GREEN')    AS greens,
+                    ROUND(
+                        COUNT(*) FILTER (WHERE result = 'GREEN')::numeric /
+                        NULLIF(COUNT(*) FILTER (WHERE result IS NOT NULL), 0) * 100
+                    ) AS win_rate,
+                    ROUND(
+                        COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) /
+                        NULLIF(COALESCE(SUM(stake_units) FILTER (WHERE result IS NOT NULL), 0), 0) * 100,
+                        1
+                    ) AS yield_roi
+                FROM resolved
+                GROUP BY user_id
+                HAVING COUNT(*) FILTER (WHERE result IS NOT NULL) >= 5
+            )
+            SELECT u.name, u.avatar_url, us.total, us.greens, us.win_rate, us.yield_roi
+            FROM user_stats us
+            JOIN users u ON u.id = us.user_id
+            ORDER BY us.yield_roi DESC
+            LIMIT 5
+        """)
+        rows = cur.fetchall()
+        return [
+            {
+                "name":      _mask_first(r["name"]),
+                "avatar_url": r["avatar_url"],
+                "total":     int(r["total"]),
+                "greens":    int(r["greens"]),
+                "win_rate":  int(r["win_rate"]),
+                "yield_roi": float(r["yield_roi"]),
+            }
+            for r in rows
+        ]
     finally:
         cur.close()
         conn.close()

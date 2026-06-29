@@ -28,7 +28,8 @@ const Termos         = lazy(() => import('./pages/Termos'))
 const Estatisticas   = lazy(() => import('./pages/Estatisticas'))
 const NotFound       = lazy(() => import('./pages/NotFound'))
 const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
-const PickPublico    = lazy(() => import('./pages/PickPublico'))
+const PickPublico         = lazy(() => import('./pages/PickPublico'))
+const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
 
 class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
@@ -125,6 +126,7 @@ export default function App() {
                 <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />
                 <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
+                <Route path="/resultados" element={<ResultadosPublicos />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
