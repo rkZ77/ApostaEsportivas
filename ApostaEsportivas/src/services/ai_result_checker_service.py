@@ -372,7 +372,7 @@ class AIResultCheckerService:
             if op in ("yes", None) and line and "sim" in (line or "").lower():
                 result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
             elif op == "no" or (line and any(k in (line or "").lower() for k in ["no", "não", "nao"])):
-                result, factor = ("RED", Decimal("1")) if both else ("GREEN", Decimal("1"))
+                result, factor = ("RED", Decimal("-1")) if both else ("GREEN", Decimal("1"))
             else:
                 result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
 

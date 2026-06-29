@@ -657,13 +657,19 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   // Primeiro fetch sempre (ao montar, antes de clicar na aba)
   useEffect(() => { load() }, [load])
 
-  // Polling só quando tem pick ao vivo — aguardando e resolvido não chamam API
-  const hasLive = picks.some(p => p.is_live)
+  // Polling: 5s quando tem pick ao vivo, 60s quando tem pick pendente
+  const hasLive    = picks.some(p => p.is_live)
+  const hasPending = picks.some(p => !p.is_live && !FINISHED_SET.has(p.status))
   useEffect(() => {
     if (!isActive || !hasLive) return
     const id = setInterval(load, REFRESH_LIVE)
     return () => clearInterval(id)
   }, [load, isActive, hasLive])
+  useEffect(() => {
+    if (!isActive || hasLive || !hasPending) return
+    const id = setInterval(load, 60_000)
+    return () => clearInterval(id)
+  }, [load, isActive, hasLive, hasPending])
 
   // Atualiza quando o usuário volta ao browser (troca de aba, minimiza, etc.)
   useEffect(() => {
