@@ -18,11 +18,11 @@ function wcPhase(dateStr?: string): string | null {
   const d = new Date(dateStr)
   const phases: [string, string, string][] = [
     ['2026-06-11', '2026-07-02', 'Grupos'],
-    ['2026-07-04', '2026-07-10', 'Oitavas'],
-    ['2026-07-13', '2026-07-17', 'Quartas'],
-    ['2026-07-19', '2026-07-22', 'Semi'],
-    ['2026-07-25', '2026-07-26', 'Semifinal'],
-    ['2026-07-29', '2026-08-01', 'Final'],
+    ['2026-07-03', '2026-07-10', 'Oitavas'],
+    ['2026-07-11', '2026-07-17', 'Quartas'],
+    ['2026-07-18', '2026-07-22', 'Semis'],
+    ['2026-07-23', '2026-07-26', '3º Lugar'],
+    ['2026-07-27', '2026-08-01', 'Final'],
   ]
   for (const [start, end, label] of phases) {
     if (d >= new Date(start) && d <= new Date(end)) return label
