@@ -99,8 +99,11 @@ class FixtureStatusSyncService:
                 print(f"[STATUS] Fixture {fixture_id} não encontrado na API.")
                 continue
 
-            # 3️⃣ INDEPENDENTE DO STATUS → SEMPRE ATUALIZA (FT será deletado na próxima rodada)
-            self.update_fixture_status(fixture_id, updated)
-            print(f"[STATUS] Atualizado fixture {fixture_id} → {updated['status']}")
+            # 3️⃣ SE JÁ FINALIZOU → DELETA DIRETO; SENÃO ATUALIZA
+            if updated["status"] in FINALIZED_STATUSES:
+                self.delete_fixture(fixture_id)
+            else:
+                self.update_fixture_status(fixture_id, updated)
+                print(f"[STATUS] Atualizado fixture {fixture_id} → {updated['status']}")
 
         print("[STATUS] Processamento concluído.")
