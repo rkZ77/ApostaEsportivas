@@ -118,7 +118,7 @@ export default function PickPublico() {
         <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
 
           {/* Accent bar */}
-          <div className={`h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent ${rs?.result === 'RED' ? 'via-red-500' : ''}`} />
+          <div className={`h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent ${pick.result === 'RED' ? 'via-red-500' : ''}`} />
 
           {/* Header: tipo + resultado */}
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
