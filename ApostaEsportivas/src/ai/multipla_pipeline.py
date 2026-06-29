@@ -74,11 +74,85 @@ Sua resposta começa com { e termina com }. Nenhum caractere antes ou depois do 
 
 
 # ============================================================
+# PICKS JA USADOS HOJE — carrega VIP + Free do banco
+# ============================================================
+def _get_today_used_picks() -> list[dict]:
+    """Retorna picks VIP e Free já gerados hoje com fixture_id e market_type."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    used = []
+
+    try:
+        cur.execute("""
+            SELECT fixture_id, market_type, market, line, home_team_name, away_team_name
+            FROM picks_vip
+            WHERE match_date = CURRENT_DATE
+        """)
+        for row in cur.fetchall():
+            used.append({
+                "source":     "VIP",
+                "fixture_id": row[0],
+                "market_type": row[1],
+                "market":     row[2],
+                "line":       row[3],
+                "home_team":  row[4],
+                "away_team":  row[5],
+            })
+    except Exception as e:
+        print(f"[MULTIPLA] Aviso: erro ao buscar picks VIP do dia: {e}")
+
+    try:
+        cur.execute("""
+            SELECT fixture_id, market_type, market, line, home_team, away_team
+            FROM picks_free
+            WHERE match_date = CURRENT_DATE
+        """)
+        for row in cur.fetchall():
+            used.append({
+                "source":     "Free",
+                "fixture_id": row[0],
+                "market_type": row[1],
+                "market":     row[2],
+                "line":       row[3],
+                "home_team":  row[4],
+                "away_team":  row[5],
+            })
+    except Exception as e:
+        print(f"[MULTIPLA] Aviso: erro ao buscar picks Free do dia: {e}")
+
+    cur.close()
+    conn.close()
+    return used
+
+
+def _format_picks_ja_usados(picks: list[dict]) -> str:
+    if not picks:
+        return "Nenhum pick simples gerado hoje."
+    lines = []
+    for p in picks:
+        lines.append(
+            f"  [{p['source']}] fixture_id={p['fixture_id']} | "
+            f"{p['home_team']} x {p['away_team']} | "
+            f"mercado={p['market']} | linha={p['line']} | "
+            f"market_type={p['market_type']}"
+        )
+    return "\n".join(lines)
+
+
+# ============================================================
 # USER PROMPT
 # ============================================================
 USER_PROMPT_TEMPLATE = """
 CALIBRACAO: {desempenho}
 gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<10→ignore | multiplas.hit<0.35→score_combo>=0.70
+
+--- PICKS SIMPLES JA GERADOS HOJE (VIP + Free) ---
+REGRA CRITICA E INEGOCIAVEL: NUNCA use o mesmo (fixture_id + market_type) de qualquer pick listado abaixo em nenhuma leg da multipla.
+Exemplos: se VIP usou goals no fixture 123 → a multipla NAO pode usar NENHUM mercado de gols no fixture 123 (nem Over 1.5, nem Under 2.5, nada).
+Se Free usou corners no fixture 456 → a multipla NAO pode usar escanteios no fixture 456.
+Fixture com market_type diferente do que foi usado e permitido (ex: VIP usou goals, multipla pode usar corners no mesmo fixture).
+{picks_ja_usados}
+---
 
 --- PICKS ANTERIORES (calibracao por time) ---
 Ultimos picks gerados para os times de hoje (todos os pipelines). Use para identificar padroes de acerto/erro.
@@ -383,7 +457,7 @@ def get_today_fixtures() -> list:
 # ============================================================
 # CHAMADA À IA — análise completa
 # ============================================================
-def run_multipla_llm(fixtures: list) -> dict:
+def run_multipla_llm(fixtures: list, today_used_picks: list | None = None) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
     desempenho = performance_svc.format_for_prompt()
 
@@ -392,10 +466,15 @@ def run_multipla_llm(fixtures: list) -> dict:
     picks_anteriores = performance_svc.get_team_picks_str(all_teams, limit=10)
     print(f"[MULTIPLA] Picks anteriores injetados para {len(all_teams)} times")
 
+    picks_ja_usados = _format_picks_ja_usados(today_used_picks or [])
+    if today_used_picks:
+        print(f"[MULTIPLA] {len(today_used_picks)} pick(s) VIP/Free injetados como bloqueio de mercado")
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         fixtures_formatados=fixtures_formatados,
         desempenho=desempenho,
         picks_anteriores=picks_anteriores,
+        picks_ja_usados=picks_ja_usados,
     )
 
     try:
@@ -608,10 +687,20 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis — sem multipla.")
         return None
 
+    # ── Carrega picks VIP/Free do dia para bloqueio de mercado ───────────────
+    today_used = _get_today_used_picks()
+    used_pairs: set[tuple] = {
+        (p["fixture_id"], p["market_type"])
+        for p in today_used
+        if p.get("fixture_id") and p.get("market_type")
+    }
+    if used_pairs:
+        print(f"[MULTIPLA] {len(used_pairs)} par(es) (fixture_id, market_type) bloqueados do VIP/Free de hoje")
+
     # ── IA: análise completa de todos os jogos ────────────────────────────────
     print(f"[MULTIPLA] Chamando IA com {len(fixtures)} jogo(s)...")
     try:
-        multipla_json = run_multipla_llm(fixtures)
+        multipla_json = run_multipla_llm(fixtures, today_used_picks=today_used)
     except Exception as e:
         print(f"[MULTIPLA] Erro na IA: {e}")
         return None
@@ -643,6 +732,20 @@ def run_multipla_pipeline() -> dict | None:
         removed = len(group.get("games", [])) - len(games_info)
         if removed:
             print(f"[MULTIPLA] {name} — {removed} jogo(s) removido(s) por incoerência mercado↔reasoning")
+
+        # Filtro hard: rejeita legs que repetem (fixture_id, market_type) de picks VIP/Free
+        if used_pairs:
+            before = len(games_info)
+            def _leg_blocked(g: dict) -> bool:
+                fid = g.get("fixture_id")
+                mt  = _classify_market_type(g.get("market", ""))
+                if fid and mt and (fid, mt) in used_pairs:
+                    print(f"[MULTIPLA] {name} — leg fixture_id={fid} market_type={mt} já usado em VIP/Free → bloqueado")
+                    return True
+                return False
+            games_info = [g for g in games_info if not _leg_blocked(g)]
+            if len(games_info) < before:
+                print(f"[MULTIPLA] {name} — {before - len(games_info)} leg(s) bloqueada(s) por duplicação VIP/Free")
 
         valid_fids = [g["fixture_id"] for g in games_info if g.get("fixture_id") in fx_map]
         if len(valid_fids) < 2:
