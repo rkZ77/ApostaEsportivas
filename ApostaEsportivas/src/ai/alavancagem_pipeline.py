@@ -74,9 +74,13 @@ OBJETIVO: ODD COMBINADA entre {odd_min} e {odd_max} (alvo ~{odd_target}).
 Consistencia acima de tudo: 9/10 @ 1.12 > 6/10 @ 1.45. Nenhum pick sem confidence>={conf_min} -> no_bet.
 
 REGRA CRITICA: odd_combined DEVE estar em [{odd_min},{odd_max}]. Nenhuma excecao.
-  Calcule o produto EXPLICITAMENTE antes de emitir o JSON.
+  Calcule o produto EXPLICITAMENTE antes de emitir o JSON: odd_combined = odd_1 × odd_2 (× odd_3).
   Se o produto < {odd_min} ou > {odd_max}: descarte e tente outro combo, ou emita no_bet.
-  Emitir odd_combined fora da faixa e PROIBIDO — o sistema rejeita automaticamente.
+  Emitir odd_combined diferente do produto real e PROIBIDO — o sistema recalcula e rejeita.
+
+REGRA DIVERSIFICACAO (dupla/tripla): picks com mercado IDENTICO sao PROIBIDOS e rejeitados automaticamente.
+  Exemplos invalidos: "Total de Gols Casa Over 1.5" + "Total de Gols Casa Over 1.5" (mesmo mercado).
+  Combine mercados diferentes: ex. gols totais + escanteios, ou gols casa + resultado, etc.
 
 Realize toda a analise INTERNAMENTE. Proibido texto fora do JSON.
 SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
@@ -428,11 +432,27 @@ def save_pick(result: dict) -> bool:
         p3 = None
         tipo = "dupla"
 
-    odd_combined = float(result["odd_combined"])
+    # Recalcula odd_combined a partir das legs (ignora valor declarado pela IA)
+    legs_odds = [float(p1["odd"])]
+    if p2: legs_odds.append(float(p2["odd"]))
+    if p3: legs_odds.append(float(p3["odd"]))
+    odd_combined_real = round(legs_odds[0] * (legs_odds[1] if len(legs_odds) > 1 else 1) * (legs_odds[2] if len(legs_odds) > 2 else 1), 4)
 
-    # Validação hard: rejeita se odd_combined fora da faixa permitida
+    if abs(odd_combined_real - float(result["odd_combined"])) > 0.05:
+        print(f"[ALAVANCAGEM] odd_combined declarada={result['odd_combined']:.2f} ≠ produto real={odd_combined_real:.2f} — usando produto real.")
+    odd_combined = odd_combined_real
+
+    # Validação hard: rejeita se odd_combined real fora da faixa permitida
     if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
-        print(f"[ALAVANCAGEM] REJEITADO — odd_combined={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
+        print(f"[ALAVANCAGEM] REJEITADO — odd_combined real={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
+        return False
+
+    # Rejeita dupla/tripla com mercados idênticos (picks correlacionados sem valor)
+    markets = [p1.get("market", "").lower()]
+    if p2: markets.append(p2.get("market", "").lower())
+    if p3: markets.append(p3.get("market", "").lower())
+    if len(markets) > 1 and len(set(markets)) == 1:
+        print(f"[ALAVANCAGEM] REJEITADO — todas as legs com mercado idêntico: '{markets[0]}'. Picks correlacionados.")
         return False
 
     confidence_media = float(result.get("confidence_media", p1["confidence"]))
