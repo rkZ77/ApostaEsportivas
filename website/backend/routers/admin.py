@@ -201,6 +201,15 @@ _PIPELINE_SCRIPTS = {
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
 }
 
+# Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
+_PIPELINE_TIMEOUTS = {
+    "atualizar_jogos": 900.0,   # 15 min
+    "gerar_vip":       600.0,   # 10 min — múltiplos fixtures com chamadas IA
+    "gerar_multipla":  600.0,   # 10 min — IA + carregamento de contexto
+    "gerar_alavancagem": 600.0, # 10 min
+    "default":         300.0,   # 5 min para os demais
+}
+
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem"]
 
 
@@ -212,6 +221,7 @@ async def _run_and_track(command: str, script: str):
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None}
+    timeout = _PIPELINE_TIMEOUTS.get(command, _PIPELINE_TIMEOUTS["default"])
     try:
         env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
         proc = await asyncio.create_subprocess_exec(
@@ -222,11 +232,11 @@ async def _run_and_track(command: str, script: str):
             env=env,
         )
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=300.0)
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             proc.kill()
             await proc.communicate()
-            raise RuntimeError("Script excedeu o limite de 5 minutos e foi encerrado")
+            raise RuntimeError(f"Script excedeu o limite de {int(timeout // 60)} minutos e foi encerrado")
         returncode = proc.returncode
         out = stdout.decode(errors="replace")[-1500:]
         err = stderr.decode(errors="replace")[-1500:]
