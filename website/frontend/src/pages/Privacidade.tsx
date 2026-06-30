@@ -62,7 +62,7 @@ export default function Privacidade() {
             <ul className="list-disc list-inside space-y-1 text-zinc-400">
               <li><span className="text-zinc-300">MercadoPago:</span> processamento de pagamentos (dados mínimos necessários)</li>
               <li><span className="text-zinc-300">Supabase:</span> armazenamento do banco de dados com criptografia em trânsito e em repouso</li>
-              <li><span className="text-zinc-300">Anthropic:</span> geração de picks por IA (dados anonimizados de partidas, sem dados pessoais)</li>
+              <li><span className="text-zinc-300">Provedor de IA:</span> geração de picks por IA (dados anonimizados de partidas, sem dados pessoais)</li>
             </ul>
           </section>
 

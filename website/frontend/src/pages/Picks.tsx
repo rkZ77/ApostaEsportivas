@@ -641,17 +641,15 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
 // Vazio do Pick Seguro
 function PickSeguroEmpty() {
   const hour = new Date().getHours()
-  const msg = hour < 7
-    ? 'O Pick do Dia é publicado diariamente às 07h.'
-    : hour < 9
-    ? 'O Pick do Dia está sendo gerado pela IA. Volte em instantes.'
+  const msg = hour < 12
+    ? 'O Pick do Dia chega até às 12h (normalmente bem antes).'
     : 'Nenhum Pick do Dia disponível para hoje.'
 
   return (
     <div className="card p-10 text-center border-dashed">
       <p className="text-zinc-500 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
       <p className="text-zinc-600 text-xs">{msg}</p>
-      {hour < 7 && <p className="text-zinc-700 text-xs mt-2">Publicado todos os dias às 07h00</p>}
+      {hour < 12 && <p className="text-zinc-700 text-xs mt-2">Publicado todos os dias até às 12h</p>}
     </div>
   )
 }
@@ -1148,9 +1146,9 @@ function CountdownTo7AM() {
   useEffect(() => {
     const update = () => {
       const brNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      if (brNow.getHours() >= 9) { setTimeLeft(null); return }
+      if (brNow.getHours() >= 12) { setTimeLeft(null); return }
       const target = new Date(brNow)
-      target.setHours(7, 0, 0, 0)
+      target.setHours(12, 0, 0, 0)
       if (brNow >= target) target.setDate(target.getDate() + 1)
       const diff = target.getTime() - brNow.getTime()
       const h = Math.floor(diff / 3600000)
@@ -1167,7 +1165,7 @@ function CountdownTo7AM() {
 
   return (
     <div className="card p-8 text-center border-zinc-800">
-      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-4">Picks chegam às 07h · Brasília</p>
+      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-4">Picks chegam até às 12h · Brasília</p>
       <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
       <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
     </div>
@@ -1866,7 +1864,7 @@ export default function Picks() {
                   ) : (
                     <div className="card p-8 text-center border-dashed">
                       <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Publicada diariamente às 07h.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Publicada diariamente até às 12h.</p>
                     </div>
                   )
                 })()}
@@ -1901,7 +1899,7 @@ export default function Picks() {
                   ) : (
                     <div className="card p-8 text-center border-dashed">
                       <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem ainda não gerado.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Publicado diariamente às 07h.</p>
+                      <p className="text-zinc-600 text-xs mt-1">Publicado diariamente até às 12h.</p>
                     </div>
                   )
                 })()}
@@ -2258,7 +2256,7 @@ export default function Picks() {
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Publicado diariamente às 07h.</p>
+                        <p className="text-zinc-600 text-xs mt-1">Publicado diariamente até às 12h.</p>
                       </div>
                     )}
                   </div>
