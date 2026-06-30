@@ -331,9 +331,13 @@ function RecentResults() {
                 </div>
               ))}
             </div>
-            <div className="px-5 py-4 border-t border-zinc-800 text-center bg-zinc-950/50">
+            <div className="px-5 py-4 border-t border-zinc-800 text-center bg-zinc-950/50 flex items-center justify-center gap-5">
+              <Link to="/resultados" className="text-sm text-zinc-400 hover:text-white font-semibold transition-colors">
+                Ver histórico completo
+              </Link>
+              <span className="text-zinc-700">·</span>
               <Link to="/login" className="text-sm text-green-500 hover:text-green-400 font-bold transition-colors">
-                Ver histórico completo · Criar conta grátis
+                Criar conta grátis
               </Link>
             </div>
           </div>
@@ -377,6 +381,74 @@ function RecentResults() {
             </div>
           )
         })()}
+      </div>
+    </section>
+  )
+}
+
+// ── Leaderboard Teaser ───────────────────────────────────────────────────
+interface LeaderEntry { name: string; avatar_url?: string; total: number; greens: number; win_rate: number; yield_roi: number }
+
+function LeaderboardTeaser() {
+  const [leaders, setLeaders] = useState<LeaderEntry[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    axios.get(`${API_BASE}/api/public/leaderboard`)
+      .then(r => setLeaders(r.data ?? []))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (!loading && leaders.length === 0) return null
+
+  const medals = ['🥇', '🥈', '🥉']
+
+  return (
+    <section className="py-16 bg-black border-y border-zinc-800/60">
+      <div className="max-w-2xl mx-auto px-4">
+        <div className="text-center mb-8">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 mb-2">Ranking de usuários</p>
+          <h2 className="text-2xl font-black text-white">Quem está ganhando mais</h2>
+          <p className="text-zinc-500 text-sm mt-2">Top apostadores da plataforma este mês</p>
+        </div>
+        {loading ? (
+          <div className="flex justify-center py-8">
+            <div className="w-6 h-6 border-2 border-zinc-700 border-t-yellow-400 rounded-full animate-spin" />
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {leaders.slice(0, 3).map((l, i) => (
+              <div key={i} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-5 py-4">
+                <span className="text-xl shrink-0">{medals[i] ?? `#${i + 1}`}</span>
+                <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-400 shrink-0 overflow-hidden">
+                  {l.avatar_url
+                    ? <img src={l.avatar_url} alt={l.name} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                    : l.name[0]?.toUpperCase()}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-bold text-white truncate">{l.name}</p>
+                  <p className="text-[11px] text-zinc-500">{l.total} picks · {l.greens} greens</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className={`text-lg font-black ${l.yield_roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {l.yield_roi >= 0 ? '+' : ''}{l.yield_roi.toFixed(1)}%
+                  </p>
+                  <p className="text-[10px] text-zinc-600">Yield ROI</p>
+                </div>
+                <div className="text-right shrink-0 hidden sm:block">
+                  <p className="text-base font-black text-white">{l.win_rate}%</p>
+                  <p className="text-[10px] text-zinc-600">Win rate</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="text-center mt-6">
+          <Link to="/login" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+            Entre para ver seu ranking
+          </Link>
+        </div>
       </div>
     </section>
   )
@@ -716,6 +788,8 @@ export default function Landing() {
       <PorQueDiferente />
 
       <RecentResults />
+
+      <LeaderboardTeaser />
 
       <section id="como-funciona" className="py-24">
         <div className="max-w-5xl mx-auto px-4">

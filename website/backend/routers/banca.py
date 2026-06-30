@@ -542,7 +542,8 @@ def cashout_pick(pick_id: int, pick_type: str, body: CashoutBody, current_user: 
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, cashout_amount FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
+            "SELECT id, stake_units, actual_odd, cashout_amount FROM user_followed_picks "
+            "WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (user_id, pick_id, pick_type),
         )
         row = cur.fetchone()
@@ -550,6 +551,21 @@ def cashout_pick(pick_id: int, pick_type: str, body: CashoutBody, current_user: 
             raise HTTPException(404, "Aposta não encontrada.")
         if row["cashout_amount"] is not None:
             raise HTTPException(400, "Cashout já registrado para esta aposta.")
+
+        pick = _resolve_pick(cur, pick_id, pick_type)
+        cur.execute("SELECT unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        banca_row  = cur.fetchone()
+        unit_value = float(banca_row["unit_value"]) if banca_row and banca_row["unit_value"] else 1.0
+        odd        = float(row["actual_odd"] or (pick or {}).get("odd") or 1)
+        stake_r    = float(row["stake_units"]) * unit_value
+        max_payout = stake_r * odd
+        if body.cashout_amount > max_payout:
+            raise HTTPException(
+                400,
+                f"Valor de cashout (R${body.cashout_amount:.2f}) excede o retorno máximo possível "
+                f"da aposta (R${max_payout:.2f}). Verifique o valor digitado.",
+            )
+
         cur.execute(
             "UPDATE user_followed_picks SET cashout_amount=%s WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (body.cashout_amount, user_id, pick_id, pick_type),

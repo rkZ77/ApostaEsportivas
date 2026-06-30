@@ -4,6 +4,7 @@ import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket } from '../utils/marketTranslate'
+import { Share2, Check as CheckIcon } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -97,6 +98,7 @@ export default function SuggestionCard({
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [shared, setShared] = useState(false)
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
   //             2) função específica por tipo como fallback
   const stakeSuggestion = (() => {
@@ -121,6 +123,28 @@ export default function SuggestionCard({
     }
     return calcVipStake(prob, odd, ev, banca.bankroll_current, banca.unit_value, s.stake_pct)
   })()
+
+  const handleShare = async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const pickType = (s.pick_type ?? 'vip').replace('multiplas', 'multipla')
+    let refCode = ''
+    try {
+      const r = await api.get('/auth/referral')
+      refCode = r.data?.referral_code ?? ''
+    } catch { /* sem ref code */ }
+    const url = `${window.location.origin}/p/${pickType}/${s.id}${refCode ? `?ref=${refCode}` : ''}`
+    const resultLabel = s.result ? ` · ${s.result}` : ''
+    const text = `Pick IA${resultLabel}: ${s.home_team_name} x ${s.away_team_name} @ ${Number(s.odd).toFixed(2)}`
+    try {
+      if (navigator.share) {
+        await navigator.share({ title: 'Pick IA', text, url })
+      } else {
+        await navigator.clipboard.writeText(url)
+      }
+      setShared(true)
+      setTimeout(() => setShared(false), 2500)
+    } catch { /* usuario cancelou share */ }
+  }
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -347,11 +371,23 @@ export default function SuggestionCard({
             {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        {onClick && (
-          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
-            Ver detalhes
-          </span>
-        )}
+        <div className="flex items-center gap-3 ml-auto">
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors"
+            title="Compartilhar pick"
+          >
+            {shared
+              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Copiado</span></>
+              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
+            }
+          </button>
+          {onClick && (
+            <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">
+              Ver detalhes
+            </span>
+          )}
+        </div>
       </div>
     </div>
 

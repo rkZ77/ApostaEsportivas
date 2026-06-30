@@ -1142,6 +1142,38 @@ function Spinner() {
   )
 }
 
+function CountdownTo7AM() {
+  const [timeLeft, setTimeLeft] = useState<string | null>(null)
+
+  useEffect(() => {
+    const update = () => {
+      const brNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
+      if (brNow.getHours() >= 9) { setTimeLeft(null); return }
+      const target = new Date(brNow)
+      target.setHours(7, 0, 0, 0)
+      if (brNow >= target) target.setDate(target.getDate() + 1)
+      const diff = target.getTime() - brNow.getTime()
+      const h = Math.floor(diff / 3600000)
+      const m = Math.floor((diff % 3600000) / 60000)
+      const s = Math.floor((diff % 60000) / 1000)
+      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
+    }
+    update()
+    const t = setInterval(update, 1000)
+    return () => clearInterval(t)
+  }, [])
+
+  if (timeLeft === null) return null
+
+  return (
+    <div className="card p-8 text-center border-zinc-800">
+      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-4">Picks chegam às 07h · Brasília</p>
+      <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
+      <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
+    </div>
+  )
+}
+
 // Constantes resultado / fonte
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
@@ -1433,6 +1465,7 @@ export default function Picks() {
   const [quickStats, setQuickStats] = useState<any>(null)
   const [recentResults, setRecentResults] = useState<any[]>([])
   const [selectedOffset, setSelectedOffset] = useState(0)
+  const [leagueFilter, setLeagueFilter] = useState<string>('')
 
   function getBrasiliaDate(offset: number): Date {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
@@ -1759,6 +1792,11 @@ export default function Picks() {
                 </div>
               )}
 
+              {/* Countdown quando picks ainda não chegaram */}
+              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && (
+                <CountdownTo7AM />
+              )}
+
               {/* Horário de geração dos picks */}
               {(today?.vip?.[0]?.created_at || today?.dica_do_dia?.created_at) && (() => {
                 const ts = today?.vip?.[0]?.created_at ?? today?.dica_do_dia?.created_at
@@ -1987,18 +2025,39 @@ export default function Picks() {
               />
               {!canSeeVip ? <VipLockOverlay color="yellow" /> : todayLoading ? <Spinner /> : (() => {
                 const vips = today?.vip ?? []
+                const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
+                const filteredVips = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips
                 return (
                   <>
-                    {vips.length > 0 ? (
+                    {leagues.length > 1 && (
+                      <div className="flex gap-2 flex-wrap mb-4">
+                        <button
+                          onClick={() => setLeagueFilter('')}
+                          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${!leagueFilter ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        >
+                          Todas
+                        </button>
+                        {leagues.map(lg => (
+                          <button
+                            key={lg}
+                            onClick={() => setLeagueFilter(lg === leagueFilter ? '' : lg)}
+                            className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${leagueFilter === lg ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                          >
+                            {lg}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                    {filteredVips.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
-                        {vips.map((s: any) => (
+                        {filteredVips.map((s: any) => (
                           <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
                         ))}
                       </div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">Picks VIP do dia ainda não gerados.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Os picks saem pela manhã. Volte mais tarde.</p>
+                        <p className="text-zinc-500 text-sm font-semibold">{leagueFilter ? `Nenhum pick de ${leagueFilter} hoje.` : 'Picks VIP do dia ainda não gerados.'}</p>
+                        <p className="text-zinc-600 text-xs mt-1">{leagueFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
                       </div>
                     )}
                   </>

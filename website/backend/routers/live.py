@@ -3,9 +3,13 @@ import json
 import time
 import logging
 import requests
+from datetime import datetime
+from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from database import get_connection
 from auth_utils import get_current_user
+
+_BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 logger = logging.getLogger(__name__)
 
@@ -204,7 +208,8 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
 
 
 def _pick_status(current: float | None, line_str: str | None,
-                 home_goals: int = 0, away_goals: int = 0) -> str:
+                 home_goals: int = 0, away_goals: int = 0,
+                 home_team: str | None = None, away_team: str | None = None) -> str:
     if current is None:
         return "neutral"
     direction, line_val = _extract_line(line_str)
@@ -213,7 +218,7 @@ def _pick_status(current: float | None, line_str: str | None,
     if direction == "under" and line_val is not None:
         return "winning" if current < line_val else "losing"
     if direction == "result":
-        return _result_pick_status(line_str or "", home_goals, away_goals)
+        return _result_pick_status(line_str or "", home_goals, away_goals, home_team, away_team)
     # BTTS: line é "yes"/"sim" ou "no"/"não" — current=1.0 → ambas marcaram
     if direction in ("yes", "sim"):
         return "winning" if current >= 1.0 else "losing"
@@ -222,17 +227,47 @@ def _pick_status(current: float | None, line_str: str | None,
     return "neutral"
 
 
-def _result_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
+def _result_pick_status(line_str: str, home_goals: int, away_goals: int,
+                        home_team: str | None = None, away_team: str | None = None) -> str:
+    """Determina se um pick de resultado (1x2/dupla chance) está ganhando ou perdendo.
+
+    Aceita linhas em vários formatos: "1"/"2"/"x", "home"/"away"/"draw",
+    nome literal do time (ex: "Fortaleza EC") ou dupla chance combinando
+    qualquer um desses formatos com o time/empate.
+    """
     hg, ag = int(home_goals or 0), int(away_goals or 0)
     cur = "1" if hg > ag else "2" if ag > hg else "x"
     l   = line_str.lower().strip()
+
+    home_n = (home_team or "").lower().strip()
+    away_n = (away_team or "").lower().strip()
+
+    _TOKEN_MAP = {
+        "1": "1", "home": "1", "casa": "1",
+        "2": "2", "away": "2", "fora": "2", "visitante": "2",
+        "x": "x", "draw": "x", "empate": "x",
+    }
+    if home_n and l == home_n:
+        l = "1"
+    elif away_n and l == away_n:
+        l = "2"
+    elif l in _TOKEN_MAP:
+        l = _TOKEN_MAP[l]
+
     if l in ("1", "2", "x"):
         return "winning" if cur == l else "losing"
-    if l in ("1 ou x", "1 ou empate"):
+    if l in ("1 ou x", "1 ou empate", "home ou draw", "casa ou empate"):
         return "winning" if cur in ("1", "x") else "losing"
-    if l in ("x ou 2", "empate ou 2"):
+    if l in ("x ou 2", "empate ou 2", "draw ou away", "empate ou fora"):
         return "winning" if cur in ("x", "2") else "losing"
-    if l == "1 ou 2":
+    if l in ("1 ou 2", "home ou away", "casa ou fora"):
+        return "winning" if cur in ("1", "2") else "losing"
+    # Dupla chance escrita com nome do time, ex: "Fortaleza EC ou Empate"
+    if home_n and "empate" in l and home_n in l:
+        return "winning" if cur in ("1", "x") else "losing"
+    if away_n and "empate" in l and away_n in l:
+        return "winning" if cur in ("2", "x") else "losing"
+    if home_n and away_n and home_n in l and away_n in l:
         return "winning" if cur in ("1", "2") else "losing"
     return "neutral"
 
@@ -250,7 +285,8 @@ def _correct_score_pick_status(line_str: str, home_goals: int, away_goals: int) 
 
 def _calc_result(market: str, line: str, cur_val: float | None,
                  home_goals: int, away_goals: int,
-                 market_type: str | None = None) -> str | None:
+                 market_type: str | None = None,
+                 home_team: str | None = None, away_team: str | None = None) -> str | None:
     """Resultado definitivo de um pick com jogo encerrado.
 
     Suporta handicap asiático quarter-ball (.25 / .75):
@@ -285,7 +321,7 @@ def _calc_result(market: str, line: str, cur_val: float | None,
 
     # ── Resultado / 1x2 / Dupla Chance — não depende de cur_val ──────────────
     if is_result:
-        pst = _result_pick_status(line, home_goals, away_goals)
+        pst = _result_pick_status(line, home_goals, away_goals, home_team, away_team)
         if pst == "winning":  return "GREEN"
         if pst == "losing":   return "RED"
         return None  # "neutral" = linha não reconhecida, não resolve
@@ -355,6 +391,7 @@ def _locked_leg_result(leg: dict) -> str | None:
             leg["market"], leg["line"],
             leg["current_val"], leg["home_goals"], leg["away_goals"],
             market_type=leg.get("market_type"),
+            home_team=leg.get("home_team"), away_team=leg.get("away_team"),
         )
     if leg.get("is_locked"):
         direction, line_val = _extract_line(leg["line"])
@@ -469,8 +506,8 @@ def _enrich_leg(fid: int, market: str, line: str,
         market, line, home_stats, away_stats, home_goals, away_goals, market_type
     )
     _, line_val = _extract_line(line)
-    pst = _pick_status(cur_val, line, home_goals, away_goals) if cur_val is not None \
-          else _result_pick_status(line, home_goals, away_goals) if direction == "result" \
+    pst = _pick_status(cur_val, line, home_goals, away_goals, home_team, away_team) if cur_val is not None \
+          else _result_pick_status(line, home_goals, away_goals, home_team, away_team) if direction == "result" \
           else _correct_score_pick_status(line, home_goals, away_goals) if direction == "correct_score" \
           else "neutral"
 
@@ -570,7 +607,8 @@ def get_fixture_live_stats(fixture_id: int):
 
 @router.get("/my-picks")
 def get_live_my_picks(current_user: dict = Depends(get_current_user)):
-    user_id = current_user["id"]
+    user_id  = current_user["id"]
+    today_br = datetime.now(_BR_TZ).date()
     conn    = get_connection()
     cur     = conn.cursor()
 
@@ -698,7 +736,10 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         # ── VIP / FREE ──────────────────────────────────────────────────────
         if pick_type in ("vip", "free"):
             p = (vip_map if pick_type == "vip" else free_map).get(pick_id)
-            if not p or p["result"] is not None:
+            if not p:
+                continue
+            is_today = (p["match_date"] == today_br)
+            if p["result"] is not None and not is_today:
                 continue
 
             odd = float(p["odd"] or 1)
@@ -709,16 +750,21 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 odd,
                 market_type=p.get("market_type"),
             )
+
+            final_result = p["result"]
             # Auto-save quando jogo encerrou OU resultado já irreversível (early lock)
-            if leg["is_ft"] or leg["is_locked"]:
+            if final_result is None and (leg["is_ft"] or leg["is_locked"]):
                 auto_res = _calc_result(
                     p["market"], p["line"],
                     leg["current_val"], leg["home_goals"], leg["away_goals"],
                     market_type=p.get("market_type"),
+                    home_team=p["home_team"], away_team=p["away_team"],
                 )
                 if auto_res:
                     _save_single_result(pick_id, pick_type, auto_res, odd, conn)
-                    continue
+                    final_result = auto_res
+                    if not is_today:
+                        continue
 
             result.append({
                 "pick_id":        pick_id,
@@ -731,6 +777,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 "cashout_amount": cashout_amt,
                 "is_live":        leg["is_live"],
                 "league_id":      p.get("league_id"),
+                "result":         final_result,
                 **{k: leg[k] for k in (
                     "fixture_id", "home_team", "away_team",
                     "home_team_id", "away_team_id",
@@ -744,7 +791,10 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         # ── MÚLTIPLA ────────────────────────────────────────────────────────
         elif pick_type == "multipla":
             p = multipla_map.get(pick_id)
-            if not p or p["result"] is not None:
+            if not p:
+                continue
+            is_today = (p["match_date"] == today_br)
+            if p["result"] is not None and not is_today:
                 continue
 
             legs_raw = p["games"]
@@ -784,14 +834,18 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 ))
 
             if legs_out:
-                total_odd   = float(p["total_odd"] or 1)
-                leg_results = [_locked_leg_result(l) for l in legs_out]
-                if any(r == "RED" for r in leg_results):
-                    _save_multipla_result(pick_id, ["RED"] * len(legs_out), total_odd, conn)
-                    continue
-                if all(r is not None for r in leg_results):
-                    _save_multipla_result(pick_id, leg_results, total_odd, conn)
-                    continue
+                total_odd    = float(p["total_odd"] or 1)
+                final_result = p["result"]
+                if final_result is None:
+                    leg_results = [_locked_leg_result(l) for l in legs_out]
+                    if any(r == "RED" for r in leg_results):
+                        leg_results = ["RED"] * len(legs_out)
+                    if all(r is not None for r in leg_results):
+                        final_result = _multipla_combined_result(leg_results)
+                        if final_result:
+                            _save_multipla_result(pick_id, leg_results, total_odd, conn)
+                            if not is_today:
+                                continue
 
                 result.append({
                     "pick_id":        pick_id,
@@ -803,13 +857,18 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "stake_units":    stake_u,
                     "cashout_amount": cashout_amt,
                     "is_live":        any(l["is_live"] for l in legs_out),
+                    "status":         "FT" if final_result else None,
+                    "result":         final_result,
                     "legs":           legs_out,
                 })
 
         # ── ALAVANCAGEM ─────────────────────────────────────────────────────
         elif pick_type == "alavancagem":
             p = alavancagem_map.get(pick_id)
-            if not p or p["result"] is not None:
+            if not p:
+                continue
+            is_today = (p["match_date"] == today_br)
+            if p["result"] is not None and not is_today:
                 continue
 
             legs_out = []
@@ -832,13 +891,17 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
             if legs_out:
                 odd_combined = float(p["odd_combined"] or 1)
-                leg_results  = [_locked_leg_result(l) for l in legs_out]
-                if any(r == "RED" for r in leg_results):
-                    _save_alavancagem_result(pick_id, ["RED"] * len(legs_out), odd_combined, conn)
-                    continue
-                if all(r is not None for r in leg_results):
-                    _save_alavancagem_result(pick_id, leg_results, odd_combined, conn)
-                    continue
+                final_result = p["result"]
+                if final_result is None:
+                    leg_results = [_locked_leg_result(l) for l in legs_out]
+                    if any(r == "RED" for r in leg_results):
+                        leg_results = ["RED"] * len(legs_out)
+                    if all(r is not None for r in leg_results):
+                        final_result = _multipla_combined_result(leg_results)
+                        if final_result:
+                            _save_alavancagem_result(pick_id, leg_results, odd_combined, conn)
+                            if not is_today:
+                                continue
 
                 result.append({
                     "pick_id":        pick_id,
@@ -850,6 +913,8 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "stake_units":    stake_u,
                     "cashout_amount": cashout_amt,
                     "is_live":        any(l["is_live"] for l in legs_out),
+                    "status":         "FT" if final_result else None,
+                    "result":         final_result,
                     "legs":           legs_out,
                 })
 
@@ -890,7 +955,8 @@ def resolve_all_pending() -> dict:
                     if leg["is_ft"] or leg["is_locked"]:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"))
+                                           market_type=p.get("market_type"),
+                                           home_team=p["home_team"], away_team=p["away_team"])
                         if res:
                             _save_single_result(p["id"], "vip", res, odd, conn)
                             resolved["vip"] += 1
@@ -916,7 +982,8 @@ def resolve_all_pending() -> dict:
                     if leg["is_ft"] or leg["is_locked"]:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
-                                           market_type=p.get("market_type"))
+                                           market_type=p.get("market_type"),
+                                           home_team=p["home_team"], away_team=p["away_team"])
                         if res:
                             _save_single_result(p["id"], "free", res, odd, conn)
                             resolved["free"] += 1
