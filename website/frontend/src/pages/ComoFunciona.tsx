@@ -11,8 +11,8 @@ const features = [
     badge: 'VIP',
     badgeColor: 'bg-yellow-500/20 text-yellow-400',
     title: 'Picks VIP',
-    desc: 'Picks diários gerados por IA com análise estatística completa. Publicados às 07h com raciocínio detalhado, odd, mercado e sugestão de stake baseado na sua banca.',
-    items: ['Publicados diariamente às 07h', 'Kelly Criterion para gestão de banca', 'Análise de confiança e EV'],
+    desc: 'Picks diários gerados por IA com análise estatística completa. Publicados até às 12h com raciocínio detalhado, odd, mercado e sugestão de stake baseado na sua banca.',
+    items: ['Publicados diariamente até às 12h', 'Kelly Criterion para gestão de banca', 'Análise de confiança e EV'],
   },
   {
     icon: BookOpen,
