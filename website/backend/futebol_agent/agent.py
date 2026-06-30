@@ -16,12 +16,14 @@ from futebol_agent.tools.standings import get_league_standings
 from futebol_agent.tools.head_to_head import (
     get_h2h, get_team_recent_form, get_team_stats_season,
     get_team_historical_stats, get_team_historical_stats_any,
+    get_team_halftime_record,
 )
 from futebol_agent.tools.formatters import (
     fmt_live_matches, fmt_today_matches, fmt_match_stats,
     fmt_odds, fmt_live_odds, fmt_standings, fmt_h2h, fmt_team_form,
     fmt_injuries, fmt_prediction, fmt_team_season_stats, fmt_lineups,
     fmt_team_historical_stats, fmt_player_stats, fmt_team_historical_stats_any,
+    fmt_team_halftime_record,
 )
 
 logger = logging.getLogger(__name__)
@@ -151,6 +153,19 @@ TOOLS: list[dict] = [
         "input_schema": {"type": "object", "properties": {"fixture_id": {"type": "integer"}}, "required": ["fixture_id"]},
     },
     {
+        "name": "get_team_halftime_record",
+        "description": "Conta quantos jogos um time venceu, empatou ou perdeu no intervalo (1º tempo) nos últimos N jogos, com o placar parcial jogo a jogo. Use para perguntas como 'quantos jogos perdeu o primeiro tempo' ou 'em quantos jogos estava ganhando no intervalo'.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "team_name":   {"type": "string"},
+                "league_name": {"type": "string", "description": "Opcional. Se omitido, busca em qualquer competição."},
+                "last":        {"type": "integer"},
+            },
+            "required": ["team_name"],
+        },
+    },
+    {
         "name": "get_team_stats_any_league",
         "description": "Stats reais dos últimos N jogos do time em QUALQUER competição. Use como fallback quando não há dados suficientes na liga do jogo.",
         "input_schema": {
@@ -199,6 +214,10 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> Any:
         return fmt_team_historical_stats(await get_team_historical_stats(
             tool_input["team_name"], tool_input["league_name"],
             tool_input.get("last", 8), tool_input.get("venue", "all"),
+        ))
+    elif tool_name == "get_team_halftime_record":
+        return fmt_team_halftime_record(await get_team_halftime_record(
+            tool_input["team_name"], tool_input.get("league_name"), tool_input.get("last", 10),
         ))
     elif tool_name == "get_team_stats_any_league":
         return fmt_team_historical_stats_any(await get_team_historical_stats_any(

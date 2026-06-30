@@ -305,6 +305,77 @@ async def get_team_historical_stats_any(team_name: str, last: int = 8, venue: st
     }
 
 
+def _ht_result(f: dict, team_id: int) -> str | None:
+    ht = f.get("score", {}).get("halftime", {})
+    h, a = ht.get("home"), ht.get("away")
+    if h is None or a is None:
+        return None
+    is_home = f["teams"]["home"]["id"] == team_id
+    team_goals, opp_goals = (h, a) if is_home else (a, h)
+    if team_goals > opp_goals:
+        return "V"
+    if team_goals < opp_goals:
+        return "D"
+    return "E"
+
+
+async def get_team_halftime_record(team_name: str, league_name: str | None = None, last: int = 10) -> dict:
+    teams = await search_team(team_name)
+    if not teams:
+        return {"error": f"Time '{team_name}' não encontrado."}
+    team_id        = teams[0]["team"]["id"]
+    team_real_name = teams[0]["team"]["name"]
+
+    if league_name:
+        league_key = league_name.lower().replace(" ", "_").replace("ã", "a")
+        league_id = None
+        for key, lid in LEAGUES.items():
+            if league_key in key or key in league_key:
+                league_id = lid
+                break
+        if not league_id:
+            return {"error": f"Liga '{league_name}' não encontrada."}
+        fixtures = await get_team_fixtures_by_league(team_id, league_id, season_for(league_id), last=last)
+    else:
+        fixtures = await get_team_fixtures(team_id, last=last)
+
+    finished = [f for f in fixtures if f["fixture"]["status"]["short"] in ("FT", "AET", "PEN")]
+    if not finished:
+        return {"error": f"Sem jogos finalizados para {team_real_name}."}
+
+    wins = draws = losses = 0
+    rows = []
+    for f in finished:
+        res = _ht_result(f, team_id)
+        if res is None:
+            continue
+        if res == "V":
+            wins += 1
+        elif res == "D":
+            losses += 1
+        else:
+            draws += 1
+        is_home = f["teams"]["home"]["id"] == team_id
+        opp = f["teams"]["away"]["name"] if is_home else f["teams"]["home"]["name"]
+        ht  = f["score"]["halftime"]
+        rows.append({
+            "date":     f["fixture"]["date"][:10],
+            "opponent": opp,
+            "ht_score": f"{ht['home']}x{ht['away']}",
+            "result":   res,
+        })
+
+    total = wins + draws + losses
+    if total == 0:
+        return {"error": f"Sem dados de placar do intervalo para {team_real_name}."}
+
+    return {
+        "team": team_real_name, "games_analyzed": total,
+        "ht_wins": wins, "ht_draws": draws, "ht_losses": losses,
+        "matches": rows,
+    }
+
+
 async def get_team_recent_form(team_name: str, last: int = 5) -> dict:
     teams = await search_team(team_name)
     if not teams:
