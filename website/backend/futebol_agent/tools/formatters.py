@@ -279,6 +279,18 @@ def fmt_team_historical_stats_any(data: dict) -> str:
     return "\n".join(lines)
 
 
+def fmt_team_halftime_record(data: dict) -> str:
+    if "error" in data:
+        return data["error"]
+    lines = [
+        f"Placar no intervalo (1ºT) de {data['team']} | últimos {data['games_analyzed']} jogos:",
+        f"Vencendo no intervalo: {data['ht_wins']} | Empatando: {data['ht_draws']} | Perdendo: {data['ht_losses']}",
+    ]
+    for m in data["matches"]:
+        lines.append(f"  {m['date']} vs {m['opponent']}: {m['ht_score']} [{m['result']}]")
+    return "\n".join(lines)
+
+
 def fmt_team_season_stats(data: dict) -> str:
     if "error" in data:
         return data["error"]
