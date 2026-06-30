@@ -6,6 +6,7 @@ import { NotificationProvider } from './context/NotificationContext'
 import WhatsAppButton from './components/WhatsAppButton'
 import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
+import ErrorToast from './components/ErrorToast'
 
 // Cada página vira chunk separado — só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -101,6 +102,7 @@ export default function App() {
           <WhatsAppButton />
           <CookieBanner />
           <UpdateBanner />
+          <ErrorToast />
           <FirstLoginRedirect />
           <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>

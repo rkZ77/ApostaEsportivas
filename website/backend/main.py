@@ -341,6 +341,25 @@ def _send_banca_reminder(to: str, first_name: str):
         logger.error("[BANCA-REMINDER] Falha ao enviar para %s: %s", to, e)
 
 
+def _send_pipeline_failure_alert(error_msg: str):
+    """Avisa o admin por email quando o pipeline diário de picks falha (sem isso, o erro só ficava no log)."""
+    api_key = os.getenv("RESEND_API_KEY", "")
+    to      = os.getenv("ADMIN_ALERT_EMAIL", "")
+    if not api_key or not to:
+        return
+    from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
+    try:
+        _resend.api_key = api_key
+        _resend.Emails.send({
+            "from":    from_addr,
+            "to":      [to],
+            "subject": "[Pick IA] Pipeline diário falhou",
+            "text":    f"O pipeline diário (00:10 BR) falhou e não publicou os picks de hoje.\n\nErro: {error_msg}",
+        })
+    except Exception as e:
+        logger.error("[PIPELINE-ALERT] Falha ao enviar alerta: %s", e)
+
+
 def _job_banca_reminder():
     """Roda de hora em hora: envia lembrete para quem cadastrou 24h atrás sem configurar banca."""
     from database import get_connection
@@ -550,8 +569,13 @@ def run_migrations():
                 return
             logger.info("[SCHEDULER] Iniciando pipeline diário (00:10 BR)...")
             _asyncio.run(_run_tudo())
+            status = _pipeline_status.get("tudo", {})
+            if status.get("status") == "error":
+                logger.error("[SCHEDULER] Pipeline diário falhou: %s", status.get("error"))
+                _send_pipeline_failure_alert(status.get("error") or "erro desconhecido")
         except Exception as e:
             logger.error("[SCHEDULER] Erro no pipeline diário: %s", e)
+            _send_pipeline_failure_alert(str(e))
 
     # Inicia scheduler de lembretes, resolução automática de picks e pipeline diário
     try:
