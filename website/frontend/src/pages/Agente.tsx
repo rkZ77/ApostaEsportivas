@@ -5,6 +5,7 @@ import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import { useAuth } from '../context/AuthContext'
+import { useCookieBannerVisible } from '../hooks/useCookieBannerVisible'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -60,6 +61,7 @@ export default function Agente() {
   const [statusText, setStatusText] = useState('')
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const cookieBannerVisible = useCookieBannerVisible()
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -270,7 +272,10 @@ export default function Agente() {
       </main>
 
       {/* Input */}
-      <div className="bg-zinc-950 border-t border-zinc-800">
+      {/* Quando o CookieBanner (fixed bottom-0) ainda está visível, ele sobrepõe
+          e bloqueia cliques aqui — reserva espaço extra embaixo pra textarea ficar
+          acima da área coberta pelo banner. */}
+      <div className={`bg-zinc-950 border-t border-zinc-800 ${cookieBannerVisible ? 'pb-24 sm:pb-14' : ''}`}>
         <div className="max-w-3xl mx-auto px-4 py-3 flex gap-2 items-end">
           <textarea
             ref={inputRef}
