@@ -181,7 +181,7 @@ export function EstatisticasContent() {
         {/* Filtros */}
         <div className="card p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
           <div className="flex-1">
-            <label className="text-[10px] text-zinc-600 font-semibold uppercase tracking-widest block mb-1.5">Liga</label>
+            <label className="text-xs text-zinc-500 font-semibold block mb-1.5">Liga</label>
             {leaguesLoading ? (
               <div className="h-9 bg-zinc-800 rounded-lg animate-pulse w-48" />
             ) : (
@@ -206,7 +206,7 @@ export function EstatisticasContent() {
           </div>
 
           <div className="shrink-0">
-            <label className="text-[10px] text-zinc-600 font-semibold uppercase tracking-widest block mb-1.5">Jogos</label>
+            <label className="text-xs text-zinc-500 font-semibold block mb-1.5">Jogos</label>
             <div className="flex gap-1 flex-wrap">
               {LIMIT_OPTIONS.map(({ label, value }) => (
                 <button

@@ -850,7 +850,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                <span className="text-xs font-black text-green-400 uppercase tracking-widest">Ao Vivo</span>
+                <span className="text-sm font-black text-green-400">Ao Vivo</span>
                 <span className="text-[10px] text-green-400/60 bg-green-500/10 px-1.5 py-0.5 rounded-full">{live.length}</span>
               </div>
               <div className="space-y-3">
@@ -863,7 +863,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-zinc-500 rounded-full" />
-                <span className="text-xs font-black text-zinc-400 uppercase tracking-widest">Aguardando</span>
+                <span className="text-sm font-black text-zinc-400">Aguardando</span>
                 <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded-full">{pending.length}</span>
               </div>
               <div className="space-y-3">
@@ -876,7 +876,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
             <div>
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-zinc-600 rounded-full" />
-                <span className="text-xs font-black text-zinc-500 uppercase tracking-widest">Finalizados</span>
+                <span className="text-sm font-black text-zinc-500">Finalizados</span>
                 <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded-full">{finalized.length}</span>
               </div>
               <div className="space-y-3">

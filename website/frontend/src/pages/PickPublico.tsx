@@ -124,7 +124,7 @@ export default function PickPublico() {
           <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
             <div className="flex items-center gap-2">
               <Crown className="w-3.5 h-3.5 text-yellow-400" />
-              <span className="text-[10px] font-black uppercase tracking-widest text-yellow-400">{typeLabel}</span>
+              <span className="text-xs font-black text-yellow-400">{typeLabel}</span>
               {pick.league_name && (
                 <div className="flex items-center gap-1">
                   <LeagueLogo id={pick.league_id} name={pick.league_name} />
