@@ -1950,34 +1950,6 @@ export default function Picks() {
             )}
 
 
-            {/* Histórico recente */}
-            {pfLoaded && pfRows.filter((r: any) => r.result).length > 0 && (
-              <div>
-                <SectionHeader color="bg-zinc-700" label="Últimos picks" />
-                <div className="space-y-2">
-                  {pfRows.filter((r: any) => r.result).slice(0, 8).map((r: any) => {
-                    const isGreen = r.result === 'GREEN'
-                    const isRed   = r.result === 'RED'
-                    const dt = new Date(r.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                    return (
-                      <div key={r.id}
-                        className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700"
-                        onClick={() => openDetail(r.id, 'free')}
-                      >
-                        <span className={`text-xs font-black px-2 py-0.5 rounded ${isGreen ? 'bg-green-500/15 text-green-400' : isRed ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                          {isGreen ? '✓' : isRed ? '✗' : r.result}
-                        </span>
-                        <span className="text-xs text-zinc-500 shrink-0">{dt}</span>
-                        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{r.home_team} vs {r.away_team}</span>
-                        <span className="text-xs text-zinc-500 shrink-0">{r.market?.split(' ').slice(0,2).join(' ')} {r.line ?? ''}</span>
-                        <span className="text-xs font-bold text-green-400 shrink-0">{Number(r.odd).toFixed(2)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
-
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
@@ -2063,34 +2035,6 @@ export default function Picks() {
               })()}
             </div>
 
-
-            {/* Histórico recente VIP */}
-            {vipLoaded && vipRows.filter((r: any) => r.result).length > 0 && (
-              <div>
-                <SectionHeader color="bg-zinc-700" label="Últimos picks VIP" />
-                <div className="space-y-2">
-                  {vipRows.filter((r: any) => r.result).slice(0, 8).map((r: any) => {
-                    const isGreen = r.result === 'GREEN'
-                    const isRed   = r.result === 'RED'
-                    const dt = new Date(r.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                    return (
-                      <div key={r.id}
-                        className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700"
-                        onClick={() => openDetail(r.id, 'vip')}
-                      >
-                        <span className={`text-xs font-black px-2 py-0.5 rounded ${isGreen ? 'bg-green-500/15 text-green-400' : isRed ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                          {isGreen ? '✓' : isRed ? '✗' : r.result}
-                        </span>
-                        <span className="text-xs text-zinc-500 shrink-0">{dt}</span>
-                        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{r.home_team_name ?? r.home_team} vs {r.away_team_name ?? r.away_team}</span>
-                        <span className="text-xs text-zinc-500 shrink-0">{r.market?.split(' ').slice(0,2).join(' ')} {r.line ?? ''}</span>
-                        <span className="text-xs font-bold text-yellow-400 shrink-0">{Number(r.odd).toFixed(2)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
@@ -2386,34 +2330,6 @@ export default function Picks() {
               </>
             )}
 
-
-            {/* Histórico recente Alavancagem */}
-            {alavLoaded && alavancagem.filter((a: any) => a.result).length > 0 && (
-              <div>
-                <SectionHeader color="bg-zinc-700" label="Últimas alavancagens" />
-                <div className="space-y-2">
-                  {alavancagem.filter((a: any) => a.result).slice(0, 6).map((a: any) => {
-                    const isGreen = a.result === 'GREEN'
-                    const isRed   = a.result === 'RED'
-                    const dt = new Date(a.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
-                    return (
-                      <div key={a.id}
-                        className="flex items-center gap-3 px-4 py-2.5 bg-zinc-900/50 border border-zinc-800 rounded-xl cursor-pointer hover:border-zinc-700"
-                        onClick={() => openDetail(a.id, 'alavancagem')}
-                      >
-                        <span className={`text-xs font-black px-2 py-0.5 rounded ${isGreen ? 'bg-green-500/15 text-green-400' : isRed ? 'bg-red-500/15 text-red-400' : 'bg-zinc-800 text-zinc-500'}`}>
-                          {isGreen ? '✓' : isRed ? '✗' : a.result}
-                        </span>
-                        <span className="text-xs text-zinc-500 shrink-0">{dt}</span>
-                        <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{a.home_team_1} vs {a.away_team_1}</span>
-                        <span className="text-xs text-zinc-500 shrink-0">{a.market_1?.split(' ').slice(0,2).join(' ')} {a.line_1 ?? ''}</span>
-                        <span className="text-xs font-bold text-orange-400 shrink-0">{Number(a.odd_combined).toFixed(2)}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-              </div>
-            )}
 
             <button onClick={() => navigate('/results')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
