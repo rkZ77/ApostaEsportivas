@@ -321,9 +321,9 @@ export default function Banca() {
               {[
                 {
                   label: 'Banca atual',
-                  value: fmtBRL(current),
+                  value: fmtSigned(data?.total_pnl ?? 0),
                   color: (data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400',
-                  sub: `${fmtSigned(data?.total_pnl ?? 0)} total`,
+                  sub: `${fmtBRL(current)} banca total`,
                 },
                 {
                   label: 'Yield (tipster)',
