@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { notifyError } from './errorToast'
 
 // withCredentials envia/recebe cookies httpOnly automaticamente
 const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 15000 })
@@ -39,6 +40,15 @@ api.interceptors.response.use(
       }
       await _refreshing
       return api(original)
+    }
+
+    // Falhas de rede/timeout e erros 5xx muitas vezes são engolidos por
+    // `.catch(() => {})` nas telas (polling em background, stats opcionais).
+    // Sem isso o usuário não sabia que algo falhou.
+    if (!err.response) {
+      notifyError('Sem conexão com o servidor. Verifique sua internet.')
+    } else if (err.response.status >= 500) {
+      notifyError('Erro no servidor. Tente novamente em instantes.')
     }
     return Promise.reject(err)
   }

@@ -193,8 +193,8 @@ export default function Leaderboard() {
             )}
 
             {/* Tabela */}
-            <div className="card overflow-hidden">
-              <table className="w-full text-sm">
+            <div className="card overflow-hidden overflow-x-auto">
+              <table className="w-full text-sm min-w-[420px]">
                 <thead>
                   <tr className="border-b border-zinc-800 text-zinc-500 text-xs">
                     <th className="px-4 py-3 text-left font-medium w-10">#</th>
