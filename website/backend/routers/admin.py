@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
-from auth_utils import require_admin, hash_password
+from auth_utils import require_admin, hash_password, get_current_user
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
 
@@ -212,6 +212,15 @@ _PIPELINE_TIMEOUTS = {
 
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem"]
 
+_STEP_LABELS = {
+    "atualizar_jogos":   "Atualizando jogos",
+    "capturar_odds":     "Capturando odds",
+    "gerar_vip":         "Gerando picks VIP",
+    "gerar_free":        "Gerando pick gratuito",
+    "gerar_multipla":    "Gerando múltipla",
+    "gerar_alavancagem": "Gerando alavancagem",
+}
+
 
 class PipelineCommandBody(BaseModel):
     command: str
@@ -270,6 +279,29 @@ async def _run_tudo():
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
+
+
+@router.get("/pipeline-status-public")
+def pipeline_status_public(current_user: dict = Depends(get_current_user)):
+    """Status simplificado do pipeline (sem logs/erros técnicos) para a tela de espera dos usuários."""
+    tudo = _pipeline_status.get("tudo", {})
+    steps = []
+    for key in _TUDO_STEPS:
+        raw = _pipeline_status.get(key, {}).get("status")
+        if raw == "ok":
+            status = "done"
+        elif raw == "running":
+            status = "running"
+        elif raw == "error":
+            status = "error"
+        else:
+            status = "pending"
+        steps.append({"key": key, "label": _STEP_LABELS[key], "status": status})
+    return {
+        "running":  tudo.get("status") == "running",
+        "finished": tudo.get("status") == "ok",
+        "steps":    steps,
+    }
 
 
 @router.post("/run-pipeline")

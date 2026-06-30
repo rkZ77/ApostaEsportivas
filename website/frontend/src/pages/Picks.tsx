@@ -1172,6 +1172,58 @@ function CountdownTo7AM() {
   )
 }
 
+interface PipelineStep { key: string; label: string; status: 'pending' | 'running' | 'done' | 'error' }
+
+// Mostra o progresso da geração dos picks (quando o pipeline diário está rodando),
+// com fallback para o contador regressivo enquanto ele ainda não começou.
+function PipelineStatusCard() {
+  const [status, setStatus] = useState<{ running: boolean; finished: boolean; steps: PipelineStep[] } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const poll = () => {
+      api.get('/admin/pipeline-status-public').then(r => { if (active) setStatus(r.data) }).catch(() => {})
+    }
+    poll()
+    const t = setInterval(poll, 6000)
+    return () => { active = false; clearInterval(t) }
+  }, [])
+
+  if (!status?.running) {
+    return <CountdownTo7AM />
+  }
+
+  return (
+    <div className="card p-8 border-zinc-800">
+      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-1 text-center">Gerando os picks de hoje</p>
+      <p className="text-zinc-500 text-sm mb-6 text-center">A IA está analisando os jogos agora...</p>
+      <div className="space-y-3 max-w-xs mx-auto">
+        {status.steps.map(s => (
+          <div key={s.key} className="flex items-center gap-3">
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-black ${
+              s.status === 'done'    ? 'bg-green-500/15 text-green-400' :
+              s.status === 'running' ? 'bg-yellow-500/15 text-yellow-400' :
+              s.status === 'error'   ? 'bg-zinc-700 text-zinc-500' :
+                                        'bg-zinc-800 text-zinc-600'
+            }`}>
+              {s.status === 'done' ? '✓' : s.status === 'running' ? (
+                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              ) : '·'}
+            </span>
+            <span className={`text-sm ${
+              s.status === 'done'    ? 'text-zinc-400' :
+              s.status === 'running' ? 'text-white font-semibold' :
+                                        'text-zinc-600'
+            }`}>
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Constantes resultado / fonte
 const RESULT_CLS: Record<string, string> = {
   GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
@@ -1790,9 +1842,9 @@ export default function Picks() {
                 </div>
               )}
 
-              {/* Countdown quando picks ainda não chegaram */}
+              {/* Progresso da geração / countdown quando picks ainda não chegaram */}
               {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && (
-                <CountdownTo7AM />
+                <PipelineStatusCard />
               )}
 
               {/* Horário de geração dos picks */}

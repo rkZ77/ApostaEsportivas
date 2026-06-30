@@ -541,14 +541,33 @@ def run_migrations():
         except Exception as e:
             logger.error("[SCHEDULER] Erro em resolve_picks: %s", e)
 
-    # Inicia scheduler de lembretes e resolução automática de picks
+    def _job_run_daily_pipeline():
+        """Roda o pipeline completo (jogos + odds + todos os picks) automaticamente às 00:10 BR."""
+        try:
+            from routers.admin import _run_tudo, _pipeline_status
+            if _pipeline_status.get("tudo", {}).get("status") == "running":
+                logger.info("[SCHEDULER] Pipeline diário já está rodando, ignorando disparo duplicado.")
+                return
+            logger.info("[SCHEDULER] Iniciando pipeline diário (00:10 BR)...")
+            _asyncio.run(_run_tudo())
+        except Exception as e:
+            logger.error("[SCHEDULER] Erro no pipeline diário: %s", e)
+
+    # Inicia scheduler de lembretes, resolução automática de picks e pipeline diário
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
+        from apscheduler.triggers.cron import CronTrigger
         _scheduler = BackgroundScheduler()
         _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
         _scheduler.add_job(_job_resolve_picks, "interval", minutes=5, id="resolve_picks")
+        _scheduler.add_job(
+            _job_run_daily_pipeline,
+            CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
+            id="daily_pipeline",
+            misfire_grace_time=3600,
+        )
         _scheduler.start()
-        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min")
+        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | pipeline diário 00:10")
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
 
