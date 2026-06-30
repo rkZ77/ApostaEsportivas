@@ -197,7 +197,7 @@ export default function SuggestionCard({
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
+          <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
           <span className="badge-vip">VIP</span>
           {s.market_type && s.market_type !== 'unknown' && (() => {
             const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartoes', result:'Resultado' }

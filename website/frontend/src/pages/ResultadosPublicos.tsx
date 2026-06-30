@@ -183,7 +183,7 @@ export default function ResultadosPublicos() {
               {/* Gráfico por dia */}
               {byDay.length > 1 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-8">
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-4">Picks por dia</p>
+                  <p className="text-sm text-zinc-500 font-bold mb-4">Picks por dia</p>
                   <BarChart days={byDay} />
                   <div className="flex items-center gap-4 mt-3">
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500/60" /><span className="text-[10px] text-zinc-600">Mais greens</span></div>

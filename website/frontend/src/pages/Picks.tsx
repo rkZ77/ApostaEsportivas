@@ -10,7 +10,7 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 // Copa do Mundo 2026 — fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
@@ -457,7 +457,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-[10px] font-black uppercase tracking-widest ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
+          <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
           <span className="badge-free">FREE</span>
           {dica.market_type && dica.market_type !== 'unknown' && (() => {
             const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartoes', result:'Resultado' }
@@ -730,7 +730,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2">
-          <span className="text-[10px] font-black text-blue-400 uppercase tracking-widest">Múltipla</span>
+          <span className="text-xs font-black text-blue-400">Múltipla</span>
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-zinc-600">
             {new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
@@ -976,7 +976,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-black text-orange-400 uppercase tracking-widest">Alavancagem</span>
+          <span className="text-xs font-black text-orange-400">Alavancagem</span>
           <span className="badge-vip">VIP</span>
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
@@ -1125,7 +1125,7 @@ function SectionHeader({ color, label, badge }: { color: string; label: string; 
   return (
     <div className="flex items-center gap-3 mb-4">
       <span className={`w-0.5 h-5 ${color} rounded-full block`} />
-      <h2 className="text-xs font-black text-zinc-300 uppercase tracking-widest">{label}</h2>
+      <h2 className="text-sm font-black text-zinc-300">{label}</h2>
       {badge && <span className="badge-vip">{badge}</span>}
     </div>
   )
@@ -1165,9 +1165,69 @@ function CountdownTo7AM() {
 
   return (
     <div className="card p-8 text-center border-zinc-800">
-      <p className="text-[10px] text-zinc-600 uppercase tracking-widest font-bold mb-4">Picks chegam até às 12h · Brasília</p>
+      <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
       <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
       <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
+    </div>
+  )
+}
+
+interface PipelineStep { key: string; label: string; status: 'pending' | 'running' | 'done' | 'error' }
+
+// Mostra o progresso da geração dos picks (quando o pipeline diário está rodando),
+// com fallback para o contador regressivo enquanto ele ainda não começou.
+function PipelineStatusCard() {
+  const [status, setStatus] = useState<{ running: boolean; finished: boolean; steps: PipelineStep[] } | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const poll = () => {
+      api.get('/admin/pipeline-status-public').then(r => { if (active) setStatus(r.data) }).catch(() => {})
+    }
+    poll()
+    const t = setInterval(poll, 6000)
+    return () => { active = false; clearInterval(t) }
+  }, [])
+
+  if (!status?.running) {
+    return <CountdownTo7AM />
+  }
+
+  return (
+    <div className="card p-8 border-zinc-800">
+      <div className="flex flex-col items-center mb-6">
+        <div className="relative mb-4">
+          <span className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
+          <span className="relative flex items-center justify-center w-14 h-14 rounded-full bg-green-500/10 border border-green-500/30">
+            <BrainCircuit className="w-7 h-7 text-green-400" />
+          </span>
+        </div>
+        <p className="text-white font-bold text-base text-center">A IA está montando os picks de hoje</p>
+        <p className="text-zinc-500 text-sm mt-1 text-center">Analisando estatísticas, odds e forma recente dos times</p>
+      </div>
+      <div className="space-y-3 max-w-xs mx-auto">
+        {status.steps.map(s => (
+          <div key={s.key} className="flex items-center gap-3">
+            <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-black ${
+              s.status === 'done'    ? 'bg-green-500/15 text-green-400' :
+              s.status === 'running' ? 'bg-yellow-500/15 text-yellow-400' :
+              s.status === 'error'   ? 'bg-zinc-700 text-zinc-500' :
+                                        'bg-zinc-800 text-zinc-600'
+            }`}>
+              {s.status === 'done' ? '✓' : s.status === 'running' ? (
+                <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
+              ) : '·'}
+            </span>
+            <span className={`text-sm ${
+              s.status === 'done'    ? 'text-zinc-400' :
+              s.status === 'running' ? 'text-white font-semibold' :
+                                        'text-zinc-600'
+            }`}>
+              {s.label}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -1790,9 +1850,9 @@ export default function Picks() {
                 </div>
               )}
 
-              {/* Countdown quando picks ainda não chegaram */}
+              {/* Progresso da geração / countdown quando picks ainda não chegaram */}
               {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && (
-                <CountdownTo7AM />
+                <PipelineStatusCard />
               )}
 
               {/* Horário de geração dos picks */}
@@ -1916,7 +1976,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-green-500/20 bg-green-500/5">
-              <p className="text-xs font-black text-green-400 uppercase tracking-widest mb-3">O que é o Pick do Dia Free?</p>
+              <p className="text-sm font-black text-green-400 mb-3">O que é o Pick do Dia Free?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   Um pick gratuito publicado diariamente pela <span className="text-white font-bold">IA</span>. Analisamos centenas de
@@ -1961,7 +2021,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-yellow-400/20 bg-yellow-400/5">
-              <p className="text-xs font-black text-yellow-400 uppercase tracking-widest mb-3">O que são os Picks VIP?</p>
+              <p className="text-sm font-black text-yellow-400 mb-3">O que são os Picks VIP?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   Picks exclusivos gerados pela <span className="text-white font-bold">IA</span> com análise estatística avançada.
@@ -2047,7 +2107,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-blue-400/20 bg-blue-400/5">
-              <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-3">O que são as Múltiplas VIP?</p>
+              <p className="text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   A IA combina <span className="text-white font-bold">3 a 5 seleções</span> de alta confiança em uma única aposta múltipla,
@@ -2101,7 +2161,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* Como funciona */}
             <div className="card p-5 border-orange-500/20 bg-orange-500/5">
-              <p className="text-xs font-black text-orange-400 uppercase tracking-widest mb-3">Como funciona a Alavancagem?</p>
+              <p className="text-sm font-black text-orange-400 mb-3">Como funciona a Alavancagem?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   A banca começa em <span className="text-white font-bold">R$50</span> e o lucro de cada GREEN é
@@ -2144,7 +2204,7 @@ export default function Picks() {
                 <div className="card p-5 border-orange-500/20">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-xs font-black text-orange-400 uppercase tracking-widest">Banca Copa Alavancagem</p>
+                      <p className="text-sm font-black text-orange-400">Banca Copa Alavancagem</p>
                       <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
                     </div>
                     {userAlavSerie?.configured && (

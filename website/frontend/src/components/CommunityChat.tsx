@@ -188,7 +188,7 @@ export default function CommunityChat({ onLatestId }: { onLatestId?: (id: number
             return (
               <div key={`date-${idx}`} className="flex items-center gap-3 py-1">
                 <div className="flex-1 h-px bg-zinc-800" />
-                <span className="text-[10px] text-zinc-600 font-semibold uppercase tracking-widest shrink-0">
+                <span className="text-[11px] text-zinc-500 font-semibold shrink-0">
                   {item.label}
                 </span>
                 <div className="flex-1 h-px bg-zinc-800" />

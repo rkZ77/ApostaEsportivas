@@ -408,7 +408,7 @@ function LeaderboardTeaser() {
     <section className="py-16 bg-black border-y border-zinc-800/60">
       <div className="max-w-2xl mx-auto px-4">
         <div className="text-center mb-8">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-yellow-400 mb-2">Ranking de usuários</p>
+          <p className="text-sm font-bold text-yellow-400 mb-2">Ranking de usuários</p>
           <h2 className="text-2xl font-black text-white">Quem está ganhando mais</h2>
           <p className="text-zinc-500 text-sm mt-2">Top apostadores da plataforma este mês</p>
         </div>

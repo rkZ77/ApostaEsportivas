@@ -285,7 +285,7 @@ export default function Planos() {
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-xs text-green-500 font-bold uppercase tracking-widest mb-1">Disponível para você</p>
+                <p className="text-sm text-green-500 font-bold mb-1">Disponível para você</p>
                 <h2 className="text-xl font-black text-white mb-1">2 dias de VIP grátis</h2>
                 <p className="text-zinc-400 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
                 <ul className="space-y-1.5 mb-5">
