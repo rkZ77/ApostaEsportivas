@@ -39,7 +39,7 @@ for _var, _desc in _OPTIONAL_VARS.items():
     if not os.getenv(_var):
         logger.warning("[STARTUP] %s não configurada — %s desabilitado", _var, _desc)
 
-from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live
+from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live, notifications
 
 app = FastAPI(title="Pick IA API", version="1.0.0", docs_url=None, redoc_url=None)
 _SERVER_VERSION = str(int(time.time()))
@@ -231,6 +231,7 @@ app.include_router(social.router)
 app.include_router(banca.router)
 app.include_router(leaderboard.router)
 app.include_router(live.router)
+app.include_router(notifications.router)
 
 
 # ── Background: limpa rate stores ────────────────────────────────────────────
@@ -509,6 +510,18 @@ def run_migrations():
               AND f.home_team_id IS NOT NULL;
         """)
         # Novas colunas e índices
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_push_subscriptions (
+                id         SERIAL PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                endpoint   TEXT NOT NULL,
+                p256dh     TEXT NOT NULL,
+                auth       TEXT NOT NULL,
+                created_at TIMESTAMPTZ DEFAULT NOW(),
+                updated_at TIMESTAMPTZ DEFAULT NOW(),
+                UNIQUE (user_id, endpoint)
+            )
+        """)
         cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS probability NUMERIC(5,4);")
         cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS stake_pct NUMERIC(5,4);")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS market_type VARCHAR(20);")
@@ -573,6 +586,16 @@ def run_migrations():
             if status.get("status") == "error":
                 logger.error("[SCHEDULER] Pipeline diário falhou: %s", status.get("error"))
                 _send_pipeline_failure_alert(status.get("error") or "erro desconhecido")
+            else:
+                try:
+                    from routers.notifications import send_push_to_all_vip
+                    send_push_to_all_vip(
+                        title="Picks do dia publicados",
+                        body="Seus picks de hoje estao disponiveis. Confira agora!",
+                        url="/picks",
+                    )
+                except Exception as _push_err:
+                    logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", _push_err)
         except Exception as e:
             logger.error("[SCHEDULER] Erro no pipeline diário: %s", e)
             _send_pipeline_failure_alert(str(e))

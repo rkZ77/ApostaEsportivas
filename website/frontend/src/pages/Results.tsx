@@ -79,7 +79,10 @@ export default function Results() {
   const DAY_PAGE_SIZE = 7
 
   const [showMonthlyClose, setShowMonthlyClose] = useState(false)
-  useEffect(() => { if (shouldShowMonthlyClose()) setShowMonthlyClose(true) }, [])
+  useEffect(() => {
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
+  }, [])
 
   // fetchers
   const fetchSummary = useCallback((p: Period, src: Source, from?: string, to?: string) => {
