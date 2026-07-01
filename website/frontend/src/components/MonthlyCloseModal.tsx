@@ -174,17 +174,22 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
         </div>
 
         {/* Banca início → fim */}
-        <div className="mx-5 mb-3 flex items-center gap-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início do mês</p>
-            <p className="text-sm font-black text-zinc-300 truncate">{fmtBRL(data.bankroll_start)}</p>
-          </div>
-          <div className={`w-6 h-px shrink-0 ${isProfit ? 'bg-green-500/50' : 'bg-red-500/50'}`} />
-          <div className="flex-1 min-w-0 text-right">
-            <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Fim do mês</p>
-            <p className={`text-sm font-black truncate ${accent}`}>{fmtBRL(data.bankroll_current)}</p>
-          </div>
-        </div>
+        {(() => {
+          const bancaNoInicio = data.bankroll_current - data.total_pnl
+          return (
+            <div className="mx-5 mb-3 flex items-center gap-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início do mês</p>
+                <p className="text-sm font-black text-zinc-300 truncate">{fmtBRL(bancaNoInicio)}</p>
+              </div>
+              <div className={`w-6 h-px shrink-0 ${isProfit ? 'bg-green-500/50' : 'bg-red-500/50'}`} />
+              <div className="flex-1 min-w-0 text-right">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Fim do mês</p>
+                <p className={`text-sm font-black truncate ${accent}`}>{fmtBRL(data.bankroll_current)}</p>
+              </div>
+            </div>
+          )
+        })()}
 
         {/* Assinatura paga com lucro */}
         {paidPlan && (
