@@ -5,6 +5,7 @@ import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
+import MonthlyCloseModal, { shouldShowMonthlyClose, dismissMonthlyClose } from '../components/MonthlyCloseModal'
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
 type View    = 'resumo' | 'por_jogo' | 'por_mes'
@@ -77,6 +78,9 @@ export default function Results() {
   const [dayPage,    setDayPage]    = useState(0)
   const DAY_PAGE_SIZE = 7
 
+  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
+  useEffect(() => { if (shouldShowMonthlyClose()) setShowMonthlyClose(true) }, [])
+
   // fetchers
   const fetchSummary = useCallback((p: Period, src: Source, from?: string, to?: string) => {
     setLoading(true)
@@ -140,6 +144,13 @@ export default function Results() {
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
+
+      {showMonthlyClose && (
+        <MonthlyCloseModal
+          onClose={() => setShowMonthlyClose(false)}
+          onOpenSetup={() => { dismissMonthlyClose(); navigate('/banca') }}
+        />
+      )}
 
       {/* Modal de detalhe do pick */}
       {detailPick && (
