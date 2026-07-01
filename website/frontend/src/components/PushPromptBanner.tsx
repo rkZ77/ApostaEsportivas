@@ -18,12 +18,10 @@ export default function PushPromptBanner() {
     if (push.subscribed) return
     if (!push.vapidKey) return
     if (localStorage.getItem(LS_KEY)) return
-    // pequeno delay para não aparecer junto com o modal de fechamento mensal
     const t = setTimeout(() => setVisible(true), 1500)
     return () => clearTimeout(t)
   }, [user, push.supported, push.permission, push.subscribed, push.vapidKey])
 
-  // fecha automaticamente se o usuário ativar pelo Profile enquanto o banner está aberto
   useEffect(() => {
     if (push.subscribed) setVisible(false)
   }, [push.subscribed])
