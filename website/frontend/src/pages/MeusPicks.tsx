@@ -74,8 +74,7 @@ export default function MeusPicks() {
     } catch { /* silently ignore */ }
   }
 
-  type PeriodKey = number | 'thismonth' | 'lastmonth'
-  const [daysBack, setDaysBack] = useState<PeriodKey>(0)
+  const [daysBack, setDaysBack] = useState<number | 'thismonth' | 'lastmonth'>(0)
   const [todayPage, setTodayPage] = useState(0)
   const PAGE_SIZE = 15
 
@@ -195,12 +194,12 @@ export default function MeusPicks() {
             {allEntries.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {([
-                  { label: 'Todos',        value: 0 as PeriodKey },
-                  { label: 'Hoje',         value: -1 as PeriodKey },
-                  { label: 'Semana',       value: 7 as PeriodKey },
-                  { label: 'Este mês',     value: 'thismonth' as PeriodKey },
-                  { label: 'Mês passado',  value: 'lastmonth' as PeriodKey },
-                ] as { label: string; value: PeriodKey }[]).map(({ label, value }) => (
+                  { label: 'Todos',        value: 0 },
+                  { label: 'Hoje',         value: -1 },
+                  { label: 'Semana',       value: 7 },
+                  { label: 'Este mês',     value: 'thismonth' },
+                  { label: 'Mês passado',  value: 'lastmonth' },
+                ] as { label: string; value: number | 'thismonth' | 'lastmonth' }[]).map(({ label, value }) => (
                   <button
                     key={String(value)}
                     onClick={() => { setDaysBack(value); setDayOffset(0); setTodayPage(0) }}
@@ -265,9 +264,11 @@ export default function MeusPicks() {
               }))
               const chartFiltered = daysBack === 0
                 ? allChart
-                : daysBack < 0
+                : (typeof daysBack === 'number' && daysBack < 0)
                 ? allChart.filter((c: any) => c.match_date === todayKey)
-                : allChart.filter((c: any) => c.match_date >= isoDateDaysAgo(daysBack))
+                : typeof daysBack === 'number'
+                ? allChart.filter((c: any) => c.match_date >= isoDateDaysAgo(daysBack))
+                : (() => { const r = monthBounds(daysBack === 'thismonth' ? 0 : -1); return allChart.filter((c: any) => c.match_date >= r.from && c.match_date <= r.to) })()
               if (chartFiltered.length < 2) return null
               const pnl = data?.total_pnl ?? 0
               return (
@@ -323,7 +324,7 @@ export default function MeusPicks() {
             ) : (
               <>
                 {/* Navegação de dia — só aparece quando um filtro de período está ativo */}
-                {daysBack > 0 && uniqueDatesFiltered.length > 1 && (
+                {(typeof daysBack === 'number' ? daysBack > 0 : true) && uniqueDatesFiltered.length > 1 && (
                   <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
                     <button
                       onClick={() => setDayOffset(o => o + 1)}
