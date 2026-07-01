@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, X, RefreshCw, Settings } from 'lucide-react'
+import { TrendingUp, TrendingDown, X, RefreshCw, Settings, BadgeCheck } from 'lucide-react'
 import api from '../services/api'
 
 const PLAN_MONTHLY_REF = 39.90
@@ -189,7 +189,7 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
         {/* Assinatura paga com lucro */}
         {paidPlan && (
           <div className="mx-5 mb-3 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
-            <span className="text-xl shrink-0">✅</span>
+            <BadgeCheck className="w-5 h-5 shrink-0 text-green-400" />
             <p className="text-sm font-black text-green-300 leading-snug">
               Esse mês você já pagou sua assinatura do Pick IA com o lucro
             </p>
