@@ -216,9 +216,10 @@ export default function Banca() {
     load(period)
   }, [period, load])
 
-  // Exibe fechamento mensal 1x por mês quando o usuário visita a banca
+  // Exibe fechamento mensal 1x por mês (ou sempre em modo preview)
   useEffect(() => {
-    if (shouldShowMonthlyClose()) setShowMonthlyClose(true)
+    const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
   }, [])
 
   const handleSave = (start: number, goal: number | null, unitValue: number) => {

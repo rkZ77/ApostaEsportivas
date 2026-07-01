@@ -41,18 +41,37 @@ interface CloseData {
   unit_value: number
 }
 
+const MOCK_DATA: CloseData = {
+  month_label: 'Junho 2026',
+  month_key: '2026-06',
+  total_pnl: 187.50,
+  greens: 14,
+  reds: 6,
+  push: 1,
+  half_wins: 2,
+  half_loss: 1,
+  total_resolved: 24,
+  total_followed: 26,
+  bankroll_start: 500,
+  bankroll_current: 687.50,
+  unit_value: 5,
+}
+
 interface Props {
   onClose: () => void
   onOpenSetup: () => void
 }
 
 export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
-  const [data, setData]       = useState<CloseData | null>(null)
-  const [loading, setLoading] = useState(true)
+  const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+
+  const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
+  const [loading, setLoading] = useState(!isPreview)
   const [updating, setUpdating] = useState(false)
   const [updated, setUpdated]   = useState(false)
 
   useEffect(() => {
+    if (isPreview) return
     api.get('/banca/monthly-close')
       .then(r => setData(r.data))
       .catch(() => { dismissMonthlyClose(); onClose() })
