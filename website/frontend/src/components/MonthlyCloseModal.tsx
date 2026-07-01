@@ -84,18 +84,37 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     if (step === 'edit') setTimeout(() => inputRef.current?.focus(), 100)
   }, [step])
 
-  const handleClose = () => { dismissMonthlyClose(); onClose() }
+  // Fecha automaticamente após mostrar o sucesso
+  useEffect(() => {
+    if (step !== 'success') return
+    const t = setTimeout(() => handleClose(), 2000)
+    return () => clearTimeout(t)
+  }, [step])
 
-  const openEdit = (prefill: number | null) => {
-    setNewBanca(prefill !== null ? String(prefill.toFixed(2)).replace('.', ',') : '')
-    setStep('edit')
-  }
+  const handleClose = () => { dismissMonthlyClose(); onClose() }
 
   const parseBanca = () => {
     const raw = newBanca.replace(/\./g, '').replace(',', '.')
     return parseFloat(raw)
   }
 
+  // Botão 1: salva direto com o valor do fechamento
+  const handleUpdateDirect = async () => {
+    if (!data) return
+    setSaving(true)
+    try {
+      await api.post('/banca/setup', {
+        bankroll_start: data.bankroll_current,
+        bankroll_goal: null,
+        unit_value: data.unit_value,
+      })
+      setSavedValue(data.bankroll_current)
+      setStep('success')
+    } catch { }
+    finally { setSaving(false) }
+  }
+
+  // Botão 2 (edição personalizada)
   const handleSave = async () => {
     if (!data) return
     const value = parseBanca()
@@ -109,7 +128,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
       })
       setSavedValue(value)
       setStep('success')
-    } catch { /* usuário pode tentar pelo setup */ }
+    } catch { }
     finally { setSaving(false) }
   }
 
@@ -271,18 +290,21 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 {copied ? 'Copiado!' : 'Compartilhar resultado'}
               </button>
 
-              {/* Atualizar com o lucro */}
+              {/* Atualizar com o lucro — salva direto */}
               <button
-                onClick={() => openEdit(data.bankroll_current)}
-                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+                onClick={handleUpdateDirect}
+                disabled={saving}
+                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
               >
-                <span className="truncate">Atualizar banca para {fmtBRL(data.bankroll_current)}</span>
-                <ChevronRight className="w-4 h-4 shrink-0" />
+                {saving
+                  ? 'Atualizando...'
+                  : <><span className="truncate">Atualizar banca para {fmtBRL(data.bankroll_current)}</span><ChevronRight className="w-4 h-4 shrink-0" /></>
+                }
               </button>
 
-              {/* Definir outro valor */}
+              {/* Definir outro valor — abre input */}
               <button
-                onClick={() => openEdit(null)}
+                onClick={() => { setNewBanca(''); setStep('edit') }}
                 className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
               >
                 Definir outro valor de banca
@@ -321,16 +343,6 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               />
             </div>
 
-            {/* Atalho: usar valor do fechamento */}
-            {data && (
-              <button
-                onClick={() => setNewBanca(String(data.bankroll_current.toFixed(2)).replace('.', ','))}
-                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
-              >
-                Usar {fmtBRL(data.bankroll_current)} (fechamento do mes)
-              </button>
-            )}
-
             <button
               onClick={handleSave}
               disabled={saving || !newBanca || parseBanca() <= 0}
@@ -350,7 +362,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
 
         {/* ── STEP: SUCCESS ── */}
         {step === 'success' && (
-          <div className="px-5 pb-8 pt-2 flex flex-col items-center text-center gap-4">
+          <div className="px-5 pb-10 pt-2 flex flex-col items-center text-center gap-4">
             <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
               <Check className="w-9 h-9 text-green-400" />
             </div>
@@ -358,12 +370,6 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               <p className="text-white font-black text-2xl mb-1">{fmtBRL(savedValue)}</p>
               <p className="text-zinc-400 text-sm">Nova banca definida com sucesso</p>
             </div>
-            <button
-              onClick={handleClose}
-              className="btn-primary w-full py-3.5 text-sm font-black mt-2"
-            >
-              Fechar
-            </button>
           </div>
         )}
       </div>
