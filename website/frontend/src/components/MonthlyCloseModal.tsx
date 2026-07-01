@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, X, RefreshCw, Settings, BadgeCheck } from 'lucide-react'
+import { TrendingUp, TrendingDown, X, RefreshCw, Settings, BadgeCheck, Share2, Copy, Check } from 'lucide-react'
 import api from '../services/api'
 
 const PLAN_MONTHLY_REF = 39.90
@@ -69,6 +69,7 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
   const [loading, setLoading]   = useState(!isPreview)
   const [updating, setUpdating] = useState(false)
   const [updated, setUpdated]   = useState(false)
+  const [copied, setCopied]     = useState(false)
 
   useEffect(() => {
     if (isPreview) return
@@ -94,6 +95,27 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
 
   const handleClose = () => { dismissMonthlyClose(); onClose() }
   const handleOpenSetup = () => { dismissMonthlyClose(); onOpenSetup() }
+
+  const handleShare = async (data: CloseData) => {
+    const ganhoU  = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
+    const isProfit = data.total_pnl >= 0
+    const sinal    = isProfit ? '+' : '-'
+    const text = [
+      `Fechamento de ${data.month_label} na Pick IA`,
+      `${sinal}${fmtBRL(Math.abs(data.total_pnl))} (${ganhoU >= 0 ? '+' : ''}${ganhoU.toFixed(1)}u)`,
+      `${data.greens}G / ${data.reds}R em ${data.total_resolved} picks`,
+      `Banca: ${fmtBRL(data.bankroll_current - data.total_pnl)} -> ${fmtBRL(data.bankroll_current)}`,
+      '',
+      'pickia.com.br',
+    ].join('\n')
+    if (navigator.share) {
+      try { await navigator.share({ text }) } catch { /* usuário cancelou */ }
+    } else {
+      await navigator.clipboard.writeText(text)
+      setCopied(true)
+      setTimeout(() => setCopied(false), 2500)
+    }
+  }
 
   if (loading) return null
 
@@ -225,6 +247,15 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
 
         {/* Ações */}
         <div className="px-5 pb-6 space-y-2">
+          {/* Compartilhar */}
+          <button
+            onClick={() => handleShare(data)}
+            className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
+          >
+            {copied ? <Check className="w-4 h-4 shrink-0 text-green-400" /> : <Share2 className="w-4 h-4 shrink-0" />}
+            {copied ? 'Copiado!' : 'Compartilhar resultado'}
+          </button>
+
           {updated ? (
             <div className="w-full py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-black text-center">
               Banca atualizada para {fmtBRL(data.bankroll_current)}

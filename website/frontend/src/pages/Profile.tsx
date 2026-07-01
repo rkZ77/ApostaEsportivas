@@ -1,9 +1,11 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Bell, BellOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
+import { usePushNotification } from '../hooks/usePushNotification'
 
 interface ReferralData {
   referral_code: string
@@ -45,6 +47,8 @@ export default function Profile() {
   const [avatarUploading, setAvatarUploading] = useState(false)
   const [avatarPreview, setAvatarPreview]     = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  const push = usePushNotification()
 
   const [referral, setReferral]       = useState<ReferralData | null>(null)
   const [referralLoaded, setReferralLoaded] = useState(false)
@@ -427,6 +431,47 @@ export default function Profile() {
             </div>
           )}
         </div>
+
+        {/* Notificacoes push */}
+        {push.supported && push.vapidKey !== '' && (
+          <div className="card p-5">
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificacoes</p>
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-zinc-800'}`}>
+                  {push.subscribed
+                    ? <Bell className="w-4 h-4 text-green-400" />
+                    : <BellOff className="w-4 h-4 text-zinc-500" />}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-white">
+                    {push.subscribed ? 'Notificacoes ativas' : 'Ativar notificacoes'}
+                  </p>
+                  <p className="text-xs text-zinc-500 truncate">
+                    {push.subscribed
+                      ? 'Aviso quando os picks do dia forem publicados'
+                      : 'Receba aviso quando os picks do dia saírem'}
+                  </p>
+                </div>
+              </div>
+              {push.permission === 'denied' ? (
+                <span className="text-xs text-zinc-600 shrink-0">Bloqueado no navegador</span>
+              ) : (
+                <button
+                  onClick={push.subscribed ? push.unsubscribe : push.subscribe}
+                  disabled={push.loading}
+                  className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40 ${
+                    push.subscribed
+                      ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      : 'bg-green-500 text-black hover:bg-green-400'
+                  }`}
+                >
+                  {push.loading ? '...' : push.subscribed ? 'Desativar' : 'Ativar'}
+                </button>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">

@@ -15,6 +15,31 @@ self.addEventListener('activate', e => {
   self.clients.claim()
 })
 
+self.addEventListener('push', e => {
+  const data = e.data?.json() ?? {}
+  e.waitUntil(
+    self.registration.showNotification(data.title ?? 'Pick IA', {
+      body: data.body ?? '',
+      icon: '/logo.png',
+      badge: '/favicon.png',
+      data: { url: data.url ?? '/picks' },
+      requireInteraction: false,
+    })
+  )
+})
+
+self.addEventListener('notificationclick', e => {
+  e.notification.close()
+  e.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(cs => {
+      const target = e.notification.data?.url ?? '/picks'
+      const found = cs.find(c => 'focus' in c)
+      if (found) { found.focus(); return }
+      return clients.openWindow(target)
+    })
+  )
+})
+
 self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET') return
