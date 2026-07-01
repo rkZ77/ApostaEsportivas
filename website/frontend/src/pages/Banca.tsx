@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
-import MonthlyCloseModal, { shouldShowMonthlyClose } from '../components/MonthlyCloseModal'
 
 // formatação
 const fmtBRL = (v: number) =>
@@ -201,7 +200,6 @@ export default function Banca() {
   const [loading, setLoading] = useState(true)
   const [period,  setPeriod]  = useState(0)
   const [showSetup, setShowSetup]           = useState(false)
-  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
   const load = useCallback((days: number) => {
@@ -215,12 +213,6 @@ export default function Banca() {
   useEffect(() => {
     load(period)
   }, [period, load])
-
-  // Exibe fechamento mensal 1x por mês (ou sempre em modo preview)
-  useEffect(() => {
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
-    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
-  }, [])
 
   const handleSave = (start: number, goal: number | null, unitValue: number) => {
     setShowSetup(false)
@@ -260,13 +252,6 @@ export default function Banca() {
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
-
-      {showMonthlyClose && (
-        <MonthlyCloseModal
-          onClose={() => { setShowMonthlyClose(false); load(period) }}
-          onOpenSetup={() => { setShowMonthlyClose(false); setShowSetup(true) }}
-        />
-      )}
 
       {showSetup && (
         <SetupModal

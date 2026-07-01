@@ -1,8 +1,6 @@
-import { useEffect, useState } from 'react'
-import { TrendingUp, TrendingDown, X, RefreshCw, Settings, BadgeCheck, Share2, Copy, Check } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
-
-const PLAN_MONTHLY_REF = 39.90
 
 const fmtBRL = (v: number) =>
   'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -17,8 +15,7 @@ function getLastMonthKey(): string {
 const LS_KEY = 'pickia_monthly_close'
 
 export function shouldShowMonthlyClose(): boolean {
-  const lastDismissed = localStorage.getItem(LS_KEY)
-  return lastDismissed !== getLastMonthKey()
+  return localStorage.getItem(LS_KEY) !== getLastMonthKey()
 }
 
 export function dismissMonthlyClose() {
@@ -57,19 +54,23 @@ const MOCK_DATA: CloseData = {
   unit_value: 5,
 }
 
+type Step = 'summary' | 'edit' | 'success'
+
 interface Props {
   onClose: () => void
-  onOpenSetup: () => void
 }
 
-export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
+export default function MonthlyCloseModal({ onClose }: Props) {
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
 
-  const [data, setData]         = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
-  const [loading, setLoading]   = useState(!isPreview)
-  const [updating, setUpdating] = useState(false)
-  const [updated, setUpdated]   = useState(false)
-  const [copied, setCopied]     = useState(false)
+  const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
+  const [loading, setLoading] = useState(!isPreview)
+  const [step, setStep]       = useState<Step>('summary')
+  const [newBanca, setNewBanca] = useState('')
+  const [saving, setSaving]   = useState(false)
+  const [savedValue, setSavedValue] = useState(0)
+  const [copied, setCopied]   = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (isPreview) return
@@ -79,37 +80,52 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
       .finally(() => setLoading(false))
   }, [])
 
-  const handleUpdateBanca = async () => {
+  useEffect(() => {
+    if (step === 'edit') setTimeout(() => inputRef.current?.focus(), 100)
+  }, [step])
+
+  const handleClose = () => { dismissMonthlyClose(); onClose() }
+
+  const openEdit = (prefill: number | null) => {
+    setNewBanca(prefill !== null ? String(prefill.toFixed(2)).replace('.', ',') : '')
+    setStep('edit')
+  }
+
+  const parseBanca = () => {
+    const raw = newBanca.replace(/\./g, '').replace(',', '.')
+    return parseFloat(raw)
+  }
+
+  const handleSave = async () => {
     if (!data) return
-    setUpdating(true)
+    const value = parseBanca()
+    if (isNaN(value) || value <= 0) return
+    setSaving(true)
     try {
       await api.post('/banca/setup', {
-        bankroll_start: data.bankroll_current,
+        bankroll_start: value,
         bankroll_goal: null,
         unit_value: data.unit_value,
       })
-      setUpdated(true)
+      setSavedValue(value)
+      setStep('success')
     } catch { /* usuário pode tentar pelo setup */ }
-    finally { setUpdating(false) }
+    finally { setSaving(false) }
   }
 
-  const handleClose = () => { dismissMonthlyClose(); onClose() }
-  const handleOpenSetup = () => { dismissMonthlyClose(); onOpenSetup() }
-
-  const handleShare = async (data: CloseData) => {
-    const ganhoU  = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
-    const isProfit = data.total_pnl >= 0
-    const sinal    = isProfit ? '+' : '-'
+  const handleShare = async (d: CloseData) => {
+    const ganhoU = d.unit_value > 0 ? d.total_pnl / d.unit_value : 0
+    const isProfit = d.total_pnl >= 0
     const text = [
-      `Fechamento de ${data.month_label} na Pick IA`,
-      `${sinal}${fmtBRL(Math.abs(data.total_pnl))} (${ganhoU >= 0 ? '+' : ''}${ganhoU.toFixed(1)}u)`,
-      `${data.greens}G / ${data.reds}R em ${data.total_resolved} picks`,
-      `Banca: ${fmtBRL(data.bankroll_current - data.total_pnl)} -> ${fmtBRL(data.bankroll_current)}`,
+      `Fechamento de ${d.month_label} na Pick IA`,
+      `${isProfit ? '+' : '-'}${fmtBRL(Math.abs(d.total_pnl))} (${ganhoU >= 0 ? '+' : ''}${ganhoU.toFixed(1)}u)`,
+      `${d.greens}G / ${d.reds}R em ${d.total_resolved} picks`,
+      `Banca: ${fmtBRL(d.bankroll_current - d.total_pnl)} -> ${fmtBRL(d.bankroll_current)}`,
       '',
       'pickia.com.br',
     ].join('\n')
     if (navigator.share) {
-      try { await navigator.share({ text }) } catch { /* usuário cancelou */ }
+      try { await navigator.share({ text }) } catch { /* cancelou */ }
     } else {
       await navigator.clipboard.writeText(text)
       setCopied(true)
@@ -125,26 +141,23 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
     return null
   }
 
-  const isProfit   = data.total_pnl >= 0
-  const pnlAbs     = Math.abs(data.total_pnl)
-  const ganhoU     = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
-  const winRate    = data.total_resolved > 0 ? Math.round(data.greens / data.total_resolved * 100) : 0
-  const planMonths = isProfit ? Math.floor(data.total_pnl / PLAN_MONTHLY_REF) : 0
-  const paidPlan   = isProfit && data.total_pnl >= PLAN_MONTHLY_REF
+  const isProfit  = data.total_pnl >= 0
+  const pnlAbs    = Math.abs(data.total_pnl)
+  const ganhoU    = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
+  const winRate   = data.total_resolved > 0 ? Math.round(data.greens / data.total_resolved * 100) : 0
+  const paidPlan  = isProfit && data.total_pnl >= 39.90
+  const accent    = isProfit ? 'text-green-400' : 'text-red-400'
+  const accentBg  = isProfit ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'
+  const bancaInicio = data.bankroll_current - data.total_pnl
 
   const distTotal = data.greens + data.reds + data.push + data.half_wins + data.half_loss
   const distItems = [
-    { label: 'GREEN',  value: data.greens,    color: 'bg-green-500' },
-    { label: 'RED',    value: data.reds,       color: 'bg-red-500'  },
-    { label: '½ WIN',  value: data.half_wins,  color: 'bg-teal-500' },
-    { label: '½ LOSS', value: data.half_loss,  color: 'bg-orange-500' },
-    { label: 'PUSH',   value: data.push,       color: 'bg-zinc-500' },
+    { label: 'GREEN',  value: data.greens,   color: 'bg-green-500' },
+    { label: 'RED',    value: data.reds,      color: 'bg-red-500'  },
+    { label: '½ WIN',  value: data.half_wins, color: 'bg-teal-500' },
+    { label: '½ LOSS', value: data.half_loss, color: 'bg-orange-500' },
+    { label: 'PUSH',   value: data.push,      color: 'bg-zinc-500' },
   ].filter(d => d.value > 0)
-
-  const accent = isProfit ? 'text-green-400' : 'text-red-400'
-  const accentBg = isProfit
-    ? 'bg-green-500/10 border-green-500/20'
-    : 'bg-red-500/10 border-red-500/20'
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center">
@@ -152,57 +165,68 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <div>
-            <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-0.5">
-              Fechamento mensal
-            </p>
-            <h2 className="text-white font-black text-xl">{data.month_label}</h2>
+          <div className="flex items-center gap-2">
+            {step === 'edit' && (
+              <button
+                onClick={() => setStep('summary')}
+                className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </button>
+            )}
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 uppercase tracking-widest mb-0.5">
+                {step === 'edit' ? 'Atualizar banca' : step === 'success' ? 'Banca atualizada' : 'Fechamento mensal'}
+              </p>
+              <h2 className="text-white font-black text-xl">
+                {step === 'success' ? fmtBRL(savedValue) : data.month_label}
+              </h2>
+            </div>
           </div>
-          <button
-            onClick={handleClose}
-            className="w-8 h-8 flex items-center justify-center rounded-full border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors shrink-0"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          {step !== 'edit' && (
+            <button
+              onClick={handleClose}
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          )}
         </div>
 
-        {/* Bloco P&L principal — vertical para não quebrar com números grandes */}
-        <div className={`mx-5 rounded-xl px-4 py-4 mb-3 border ${accentBg}`}>
-          {/* Ícone + R$ */}
-          <div className={`flex items-center gap-2 mb-1 ${accent}`}>
-            {isProfit ? <TrendingUp className="w-5 h-5 shrink-0" /> : <TrendingDown className="w-5 h-5 shrink-0" />}
-            <span className="text-[28px] leading-tight font-black break-all">
-              {isProfit ? '+' : '−'}{fmtBRL(pnlAbs)}
-            </span>
-          </div>
-          {/* Unidades — linha separada, menor */}
-          <p className={`text-sm font-black ml-7 mb-3 ${accent} opacity-75`}>
-            {ganhoU >= 0 ? '+' : ''}{ganhoU.toFixed(1)} unidades
-            <span className="text-zinc-600 font-normal ml-1">(1u = {fmtBRL(data.unit_value)})</span>
-          </p>
-          {/* Linha picks + win rate */}
-          <div className="flex items-center justify-between pt-2 border-t border-white/5">
-            <span className="text-[11px] text-zinc-500">
-              {data.greens}G · {data.reds}R
-              {data.half_wins > 0 ? ` · ${data.half_wins}½W` : ''}
-              {data.half_loss > 0 ? ` · ${data.half_loss}½L` : ''}
-              {data.push > 0 ? ` · ${data.push}P` : ''}
-              {' '}· {data.total_resolved} picks
-            </span>
-            <span className={`text-[11px] font-bold ${winRate >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
-              {winRate}% win rate
-            </span>
-          </div>
-        </div>
+        {/* ── STEP: SUMMARY ── */}
+        {step === 'summary' && (
+          <>
+            {/* Bloco P&L */}
+            <div className={`mx-5 rounded-xl px-4 py-4 mb-3 border ${accentBg}`}>
+              <div className={`flex items-center gap-2 mb-1 ${accent}`}>
+                {isProfit ? <TrendingUp className="w-5 h-5 shrink-0" /> : <TrendingDown className="w-5 h-5 shrink-0" />}
+                <span className="text-[28px] leading-tight font-black break-all">
+                  {isProfit ? '+' : '−'}{fmtBRL(pnlAbs)}
+                </span>
+              </div>
+              <p className={`text-sm font-black ml-7 mb-3 ${accent} opacity-75`}>
+                {ganhoU >= 0 ? '+' : ''}{ganhoU.toFixed(1)} unidades
+                <span className="text-zinc-600 font-normal ml-1">(1u = {fmtBRL(data.unit_value)})</span>
+              </p>
+              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                <span className="text-[11px] text-zinc-500">
+                  {data.greens}G · {data.reds}R
+                  {data.half_wins > 0 ? ` · ${data.half_wins}½W` : ''}
+                  {data.half_loss > 0 ? ` · ${data.half_loss}½L` : ''}
+                  {data.push > 0 ? ` · ${data.push}P` : ''}
+                  {' '}· {data.total_resolved} picks
+                </span>
+                <span className={`text-[11px] font-bold ${winRate >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                  {winRate}% win rate
+                </span>
+              </div>
+            </div>
 
-        {/* Banca início → fim */}
-        {(() => {
-          const bancaNoInicio = data.bankroll_current - data.total_pnl
-          return (
+            {/* Banca início → fim */}
             <div className="mx-5 mb-3 flex items-center gap-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início do mês</p>
-                <p className="text-sm font-black text-zinc-300 truncate">{fmtBRL(bancaNoInicio)}</p>
+                <p className="text-sm font-black text-zinc-300 truncate">{fmtBRL(bancaInicio)}</p>
               </div>
               <div className={`w-6 h-px shrink-0 ${isProfit ? 'bg-green-500/50' : 'bg-red-500/50'}`} />
               <div className="flex-1 min-w-0 text-right">
@@ -210,84 +234,138 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
                 <p className={`text-sm font-black truncate ${accent}`}>{fmtBRL(data.bankroll_current)}</p>
               </div>
             </div>
-          )
-        })()}
 
-        {/* Assinatura paga com lucro */}
-        {paidPlan && (
-          <div className="mx-5 mb-3 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
-            <BadgeCheck className="w-5 h-5 shrink-0 text-green-400" />
-            <p className="text-sm font-black text-green-300 leading-snug">
-              Esse mês você já pagou sua assinatura do Pick IA com o lucro
+            {/* Assinatura paga */}
+            {paidPlan && (
+              <div className="mx-5 mb-3 bg-green-500/10 border border-green-500/20 rounded-xl px-4 py-3 flex items-center gap-3">
+                <BadgeCheck className="w-5 h-5 shrink-0 text-green-400" />
+                <p className="text-sm font-black text-green-300 leading-snug">
+                  Esse mês você já pagou sua assinatura do Pick IA com o lucro
+                </p>
+              </div>
+            )}
+
+            {/* Distribuição */}
+            {distTotal > 0 && (
+              <div className="mx-5 mb-4">
+                <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
+                  {distItems.map(d => (
+                    <div key={d.label} className={d.color} style={{ width: `${Math.round(d.value / distTotal * 100)}%` }} />
+                  ))}
+                </div>
+                <div className="flex gap-3 mt-1.5 flex-wrap">
+                  {distItems.map(d => (
+                    <span key={d.label} className="text-[10px] text-zinc-500 font-semibold">{d.label} {d.value}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Ações */}
+            <div className="px-5 pb-6 space-y-2">
+              <button
+                onClick={() => handleShare(data)}
+                className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
+              >
+                {copied ? <Check className="w-4 h-4 shrink-0 text-green-400" /> : <Share2 className="w-4 h-4 shrink-0" />}
+                {copied ? 'Copiado!' : 'Compartilhar resultado'}
+              </button>
+
+              {/* Atualizar com o lucro */}
+              <button
+                onClick={() => openEdit(data.bankroll_current)}
+                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2"
+              >
+                <span className="truncate">Atualizar banca para {fmtBRL(data.bankroll_current)}</span>
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </button>
+
+              {/* Definir outro valor */}
+              <button
+                onClick={() => openEdit(null)}
+                className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
+              >
+                Definir outro valor de banca
+                <ChevronRight className="w-4 h-4 shrink-0" />
+              </button>
+
+              <button
+                onClick={handleClose}
+                className="w-full py-2.5 text-zinc-600 hover:text-zinc-400 text-sm font-semibold transition-colors"
+              >
+                Fechar sem alterar
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* ── STEP: EDIT ── */}
+        {step === 'edit' && (
+          <div className="px-5 pb-6 pt-1 space-y-3">
+            <p className="text-sm text-zinc-400 leading-snug">
+              Confirme o valor que será a sua nova banca de entrada para o próximo mês.
             </p>
-          </div>
-        )}
 
-        {/* Distribuição */}
-        {distTotal > 0 && (
-          <div className="mx-5 mb-4">
-            <div className="flex h-1.5 rounded-full overflow-hidden gap-px">
-              {distItems.map(d => (
-                <div
-                  key={d.label}
-                  className={d.color}
-                  style={{ width: `${Math.round(d.value / distTotal * 100)}%` }}
-                />
-              ))}
+            {/* Input de valor */}
+            <div className="flex items-center bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3.5 gap-2 focus-within:border-zinc-500 transition-colors">
+              <span className="text-zinc-400 font-black text-lg shrink-0">R$</span>
+              <input
+                ref={inputRef}
+                type="text"
+                inputMode="decimal"
+                placeholder="0,00"
+                value={newBanca}
+                onChange={e => setNewBanca(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSave()}
+                className="flex-1 bg-transparent text-white font-black text-2xl outline-none placeholder:text-zinc-700"
+              />
             </div>
-            <div className="flex gap-3 mt-1.5 flex-wrap">
-              {distItems.map(d => (
-                <span key={d.label} className="text-[10px] text-zinc-500 font-semibold">
-                  {d.label} {d.value}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
 
-        {/* Ações */}
-        <div className="px-5 pb-6 space-y-2">
-          {/* Compartilhar */}
-          <button
-            onClick={() => handleShare(data)}
-            className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
-          >
-            {copied ? <Check className="w-4 h-4 shrink-0 text-green-400" /> : <Share2 className="w-4 h-4 shrink-0" />}
-            {copied ? 'Copiado!' : 'Compartilhar resultado'}
-          </button>
+            {/* Atalho: usar valor do fechamento */}
+            {data && (
+              <button
+                onClick={() => setNewBanca(String(data.bankroll_current.toFixed(2)).replace('.', ','))}
+                className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                Usar {fmtBRL(data.bankroll_current)} (fechamento do mes)
+              </button>
+            )}
 
-          {updated ? (
-            <div className="w-full py-3 rounded-xl bg-green-500/10 border border-green-500/30 text-green-400 text-sm font-black text-center">
-              Banca atualizada para {fmtBRL(data.bankroll_current)}
-            </div>
-          ) : (
             <button
-              onClick={handleUpdateBanca}
-              disabled={updating}
-              className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+              onClick={handleSave}
+              disabled={saving || !newBanca || parseBanca() <= 0}
+              className="btn-primary w-full py-3.5 text-sm font-black disabled:opacity-40"
             >
-              <RefreshCw className="w-4 h-4 shrink-0" />
-              <span className="truncate">
-                {updating ? 'Atualizando...' : `Usar ${fmtBRL(data.bankroll_current)} como nova base`}
-              </span>
+              {saving ? 'Salvando...' : 'Confirmar'}
             </button>
-          )}
 
-          <button
-            onClick={handleOpenSetup}
-            className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
-          >
-            <Settings className="w-4 h-4 shrink-0" />
-            Definir novo valor de banca
-          </button>
+            <button
+              onClick={() => setStep('summary')}
+              className="btn-ghost w-full py-3 text-sm"
+            >
+              Voltar
+            </button>
+          </div>
+        )}
 
-          <button
-            onClick={handleClose}
-            className="w-full py-2.5 text-zinc-600 hover:text-zinc-400 text-sm font-semibold transition-colors"
-          >
-            Fechar sem alterar
-          </button>
-        </div>
+        {/* ── STEP: SUCCESS ── */}
+        {step === 'success' && (
+          <div className="px-5 pb-8 pt-2 flex flex-col items-center text-center gap-4">
+            <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+              <Check className="w-9 h-9 text-green-400" />
+            </div>
+            <div>
+              <p className="text-white font-black text-2xl mb-1">{fmtBRL(savedValue)}</p>
+              <p className="text-zinc-400 text-sm">Nova banca definida com sucesso</p>
+            </div>
+            <button
+              onClick={handleClose}
+              className="btn-primary w-full py-3.5 text-sm font-black mt-2"
+            >
+              Fechar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
