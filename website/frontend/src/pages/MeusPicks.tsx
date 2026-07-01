@@ -74,8 +74,8 @@ export default function MeusPicks() {
     } catch { /* silently ignore */ }
   }
 
-  // daysBack: 0 = Hoje/Tudo (sem filtro), 1 = ontem, 3 = 3 dias, 7 = semana, 15 = 15 dias
-  const [daysBack, setDaysBack] = useState(0)
+  type PeriodKey = number | 'thismonth' | 'lastmonth'
+  const [daysBack, setDaysBack] = useState<PeriodKey>(0)
   const [todayPage, setTodayPage] = useState(0)
   const PAGE_SIZE = 15
 
@@ -90,6 +90,15 @@ export default function MeusPicks() {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
     d.setDate(d.getDate() - n)
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+  }
+
+  function monthBounds(offset: number) {
+    const now = new Date()
+    const y = now.getFullYear(), m = now.getMonth() + offset
+    const from = new Date(y, m, 1)
+    const to   = new Date(y, m + 1, 0)
+    const fmt  = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    return { from: fmt(from), to: fmt(to) }
   }
 
   const allEntries: any[] = data?.entries ?? []
@@ -109,13 +118,17 @@ export default function MeusPicks() {
     : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
   // Entradas filtradas pelo período selecionado (para stats + lista)
-  // daysBack: 0=Todos, -1=Hoje, 1=Ontem, 3/7/15=N dias
   const filteredByPeriod = daysBack === 0
     ? allEntries
     : allEntries.filter((e: any) => {
         if (!e.followed_at) return false
         const dayKey = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-        return daysBack < 0 ? dayKey === todayKey : dayKey >= isoDateDaysAgo(daysBack)
+        if (daysBack === 'thismonth')  { const r = monthBounds(0);  return dayKey >= r.from && dayKey <= r.to }
+        if (daysBack === 'lastmonth') { const r = monthBounds(-1); return dayKey >= r.from && dayKey <= r.to }
+        if (typeof daysBack === 'number') {
+          return daysBack < 0 ? dayKey === todayKey : dayKey >= isoDateDaysAgo(daysBack)
+        }
+        return true
       })
 
   const filteredTabEntries = daysBack === 0 ? tabEntries : filteredByPeriod.filter((e: any) =>
@@ -181,16 +194,15 @@ export default function MeusPicks() {
             {/* Filtros de período — pills */}
             {allEntries.length > 0 && (
               <div className="flex gap-2 flex-wrap">
-                {[
-                  { label: 'Todos', value: 0 },
-                  { label: 'Hoje', value: -1 },
-                  { label: 'Ontem', value: 1 },
-                  { label: '3 dias', value: 3 },
-                  { label: 'Semana', value: 7 },
-                  { label: '15 dias', value: 15 },
-                ].map(({ label, value }) => (
+                {([
+                  { label: 'Todos',        value: 0 as PeriodKey },
+                  { label: 'Hoje',         value: -1 as PeriodKey },
+                  { label: 'Semana',       value: 7 as PeriodKey },
+                  { label: 'Este mês',     value: 'thismonth' as PeriodKey },
+                  { label: 'Mês passado',  value: 'lastmonth' as PeriodKey },
+                ] as { label: string; value: PeriodKey }[]).map(({ label, value }) => (
                   <button
-                    key={value}
+                    key={String(value)}
                     onClick={() => { setDaysBack(value); setDayOffset(0); setTodayPage(0) }}
                     className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
                       daysBack === value
@@ -223,7 +235,9 @@ export default function MeusPicks() {
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">Crescimento {daysBack === 0 ? 'total' : `${daysBack}d`}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">
+                      {daysBack === 0 ? 'Total' : daysBack === 'thismonth' ? 'Este mês' : daysBack === 'lastmonth' ? 'Mês passado' : `Últimos ${daysBack}d`}
+                    </div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{wr}%</div>
