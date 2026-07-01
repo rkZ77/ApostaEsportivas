@@ -147,24 +147,59 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
           </button>
         </div>
 
-        {/* P&L principal */}
-        <div className={`mx-5 rounded-xl px-5 py-5 text-center mb-4 ${
-          isProfit
-            ? 'bg-green-500/10 border border-green-500/20'
-            : 'bg-red-500/10 border border-red-500/20'
-        }`}>
-          <div className={`flex items-center justify-center gap-2 mb-1 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-            {isProfit
-              ? <TrendingUp className="w-5 h-5" />
-              : <TrendingDown className="w-5 h-5" />}
-            <span className="text-3xl font-black">
-              {isProfit ? '+' : '−'}{fmtBRL(pnlAbs)}
-            </span>
-          </div>
-          <p className="text-xs text-zinc-400">
-            {data.greens}G · {data.reds}R em {data.total_resolved} picks resolvidos
-          </p>
-        </div>
+        {/* P&L principal: reais + unidades lado a lado */}
+        {(() => {
+          const ganhoU  = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
+          const winRate = data.total_resolved > 0 ? Math.round(data.greens / data.total_resolved * 100) : 0
+          return (
+            <>
+              <div className={`mx-5 rounded-xl px-4 py-4 mb-3 ${
+                isProfit ? 'bg-green-500/10 border border-green-500/20' : 'bg-red-500/10 border border-red-500/20'
+              }`}>
+                {/* Linha principal: R$ e unidades */}
+                <div className="flex items-end justify-between gap-2 mb-2">
+                  <div>
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Em reais</p>
+                    <div className={`flex items-center gap-1.5 ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                      {isProfit ? <TrendingUp className="w-4 h-4 shrink-0" /> : <TrendingDown className="w-4 h-4 shrink-0" />}
+                      <span className="text-2xl font-black">
+                        {isProfit ? '+' : '−'}{fmtBRL(pnlAbs)}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-[10px] text-zinc-500 uppercase tracking-widest mb-0.5">Em unidades</p>
+                    <span className={`text-2xl font-black ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                      {ganhoU >= 0 ? '+' : ''}{ganhoU.toFixed(1)}u
+                    </span>
+                  </div>
+                </div>
+                {/* Linha info */}
+                <div className="flex items-center justify-between pt-2 border-t border-white/5">
+                  <span className="text-[11px] text-zinc-500">
+                    {data.greens}G · {data.reds}R · {data.total_resolved} picks
+                  </span>
+                  <span className={`text-[11px] font-semibold ${winRate >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                    {winRate}% win rate
+                  </span>
+                </div>
+              </div>
+
+              {/* Linha de contexto: banca início → fim */}
+              <div className="mx-5 mb-3 flex items-center justify-between bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
+                <div className="text-center">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início do mês</p>
+                  <p className="text-sm font-black text-zinc-300">{fmtBRL(data.bankroll_start)}</p>
+                </div>
+                <div className={`flex-1 mx-3 h-px ${isProfit ? 'bg-green-500/40' : 'bg-red-500/40'}`} />
+                <div className="text-center">
+                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Fim do mês</p>
+                  <p className={`text-sm font-black ${isProfit ? 'text-green-400' : 'text-red-400'}`}>{fmtBRL(data.bankroll_current)}</p>
+                </div>
+              </div>
+            </>
+          )
+        })()}
 
         {/* Mensagem de assinatura */}
         {paidPlan && (
@@ -204,13 +239,6 @@ export default function MonthlyCloseModal({ onClose, onOpenSetup }: Props) {
           </div>
         )}
 
-        {/* Banca atual */}
-        <div className="mx-5 mb-5 flex items-center justify-between text-xs text-zinc-500">
-          <span>Banca atual</span>
-          <span className={`font-black ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
-            {fmtBRL(data.bankroll_current)}
-          </span>
-        </div>
 
         {/* Ações */}
         <div className="px-5 pb-5 space-y-2">
