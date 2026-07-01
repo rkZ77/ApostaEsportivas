@@ -182,14 +182,27 @@ function SetupModal({ current, onSave, onClose }: {
   )
 }
 
-// componente principal
-const PERIODS = [
-  { key: 0,  label: 'Tudo' },
-  { key: 1,  label: 'Hoje' },
-  { key: 2,  label: 'Ontem' },
-  { key: 7,  label: '7 dias' },
-  { key: 30, label: '30 dias' },
-  { key: 90, label: '90 dias' },
+function monthRange(offset: number) {
+  // offset 0 = este mes, -1 = mes passado
+  const now = new Date()
+  const y = now.getFullYear()
+  const m = now.getMonth() + 1 + offset
+  const date = new Date(y, m - 1, 1)
+  const from = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
+  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0)
+  const to   = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
+  return { from, to }
+}
+
+type PeriodKey = number | 'thismonth' | 'lastmonth'
+
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: 0,           label: 'Tudo' },
+  { key: 1,           label: 'Hoje' },
+  { key: 7,           label: '7 dias' },
+  { key: 30,          label: '30 dias' },
+  { key: 'thismonth', label: 'Este mês' },
+  { key: 'lastmonth', label: 'Mês passado' },
 ]
 
 export default function Banca() {
@@ -198,13 +211,21 @@ export default function Banca() {
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const [period,  setPeriod]  = useState(0)
+  const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
-  const load = useCallback((days: number) => {
+  const load = useCallback((p: PeriodKey) => {
     setLoading(true)
-    api.get('/banca', { params: days > 0 ? { days } : {} })
+    let params: Record<string, string | number> = {}
+    if (p === 'thismonth') {
+      const r = monthRange(0); params = { from_date: r.from, to_date: r.to }
+    } else if (p === 'lastmonth') {
+      const r = monthRange(-1); params = { from_date: r.from, to_date: r.to }
+    } else if (typeof p === 'number' && p > 0) {
+      params = { days: p }
+    }
+    api.get('/banca', { params })
       .then(r => setData(r.data))
       .catch(() => {})
       .finally(() => setLoading(false))

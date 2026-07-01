@@ -123,7 +123,9 @@ def _compute_streak(resolved: list) -> dict:
 @router.get("")
 def get_banca(
     current_user: dict = Depends(get_current_user),
-    days: int = Query(0, ge=0),  # 0 = tudo
+    days: int = Query(0, ge=0),        # 0 = tudo
+    from_date: Optional[str] = Query(None),  # YYYY-MM-DD
+    to_date:   Optional[str] = Query(None),  # YYYY-MM-DD
 ):
     import json as _json
     user_id = current_user["id"]
@@ -138,7 +140,13 @@ def get_banca(
 
         date_cond = ""
         date_params: list = [user_id]
-        if days > 0:
+        if from_date and to_date:
+            date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN %s AND %s"
+            date_params += [from_date, to_date]
+        elif from_date:
+            date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo')::date >= %s"
+            date_params.append(from_date)
+        elif days > 0:
             date_cond = " AND uf.followed_at >= NOW() - (%s * INTERVAL '1 day')"
             date_params.append(days)
 
