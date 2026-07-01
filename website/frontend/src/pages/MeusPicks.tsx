@@ -6,7 +6,6 @@ import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
-import MonthlyCloseModal, { shouldShowMonthlyClose, dismissMonthlyClose } from '../components/MonthlyCloseModal'
 
 const fmtBRL = (v: number) =>
   'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -47,13 +46,6 @@ export default function MeusPicks() {
   const [detailPick,   setDetailPick]   = useState<{ id: number; pick_type: string } | null>(null)
   const [showRemoved,  setShowRemoved]  = useState(false)
   const [autoSwitched, setAutoSwitched] = useState(false)
-  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
-
-  useEffect(() => {
-    const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
-    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
-  }, [])
-
   const load = useCallback(() => {
     setLoading(true)
     api.get('/banca')
@@ -157,13 +149,6 @@ export default function MeusPicks() {
   return (
     <div className="min-h-screen bg-black">
       <Navbar />
-
-      {showMonthlyClose && (
-        <MonthlyCloseModal
-          onClose={() => setShowMonthlyClose(false)}
-          onOpenSetup={() => { dismissMonthlyClose(); navigate('/banca') }}
-        />
-      )}
 
       {detailPick && (
         <SuggestionDetail

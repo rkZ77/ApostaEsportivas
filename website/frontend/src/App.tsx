@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode, useEffect } from 'react'
+import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
@@ -8,6 +8,7 @@ import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
 import PushPromptBanner from './components/PushPromptBanner'
+import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
 
 // Cada página vira chunk separado — só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -80,6 +81,21 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return <Navigate to="/picks" replace />
 }
 
+function GlobalModals() {
+  const { user } = useAuth()
+  const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
+
+  useEffect(() => {
+    if (!user) return
+    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
+  }, [user?.id])
+
+  return showMonthlyClose
+    ? <MonthlyCloseModal onClose={() => setShowMonthlyClose(false)} />
+    : null
+}
+
 // Redireciona apenas usuários recém-cadastrados para /como-funciona
 function FirstLoginRedirect() {
   const { user } = useAuth()
@@ -105,6 +121,7 @@ export default function App() {
           <UpdateBanner />
           <ErrorToast />
           <PushPromptBanner />
+          <GlobalModals />
           <FirstLoginRedirect />
           <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>
