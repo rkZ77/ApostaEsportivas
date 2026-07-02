@@ -11,6 +11,7 @@ from anthropic import Anthropic, RateLimitError
 
 from utils.db_utils import get_connection
 from services.odds_service import OddsService
+from services.pick_math_service import analyze_fixture_markets, rank_market_candidates, build_reasoning
 from ai.prompts import get_prompt, SYSTEM_PROMPT
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
@@ -159,6 +160,8 @@ def _market_type_from_name(market: str) -> str | None:
     """Classifica market_type a partir do nome. Retorna None quando não reconhecido
     para que o caller use keyword matching no texto em vez de forçar "result"."""
     m = market.lower()
+    if "shot" in m or "chute" in m:
+        return "shots"
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
@@ -511,7 +514,70 @@ HISTÓRICO FORA
         return result
 
     # --------------------------------------------------------
-    # IA — GERA 3 SUGESTÕES
+    # GERA 3 SUGESTÕES — CÁLCULO DETERMINÍSTICO (SEM IA)
+    #
+    # Decisão do usuário (2026-07-02): a IA fazia tanto a leitura de
+    # contexto quanto a matemática (taxa/confidence/edge/EV/escolha de
+    # linha) dentro do prompt, o que causava inconsistência entre
+    # execuções (mesma entrada, contas diferentes). pick_math_service
+    # agora calcula tudo em Python (determinístico, sempre o mesmo
+    # resultado para o mesmo dado) e escolhe os 3 mercados finais +
+    # is_best_pick. Reasoning é gerado por template a partir dos
+    # números calculados — sem chamada de IA nesta etapa.
+    # --------------------------------------------------------
+    def generate_suggestions_math(self, fx, last10_home, last10_away, odds_preloaded=None) -> list:
+        raw_odds = odds_preloaded if odds_preloaded is not None else \
+            self.odds_service.load_odds_structured(fx["fixture_id"])
+        if not raw_odds:
+            print(f"[MATH] Sem odds para fixture {fx['fixture_id']}")
+            return []
+
+        raw_odds_vip = [o for o in raw_odds if VIP_ODD_MIN <= float(o.get("best_odd") or 0) <= VIP_ODD_MAX]
+        if not raw_odds_vip:
+            print(f"[MATH] Nenhuma odd na faixa {VIP_ODD_MIN}-{VIP_ODD_MAX} para fixture {fx['fixture_id']}")
+            return []
+
+        match_dt = fx.get("match_datetime")
+        if isinstance(match_dt, str):
+            match_dt = datetime.fromisoformat(match_dt)
+        reference_date = match_dt.date() if isinstance(match_dt, datetime) else date.today()
+
+        candidates = analyze_fixture_markets(raw_odds_vip, last10_home, last10_away, reference_date=reference_date)
+        picks = rank_market_candidates(candidates)
+
+        if not picks:
+            print(f"[MATH] Nenhum mercado passou nos filtros (taxa>=65%, amostra>=5, confidence>=0.55) "
+                  f"— {fx.get('home_team')} x {fx.get('away_team')}")
+            return []
+
+        suggestions = []
+        for c in picks:
+            suggestions.append({
+                "market_id":    c["market_id"],
+                "market":       c["market_name"],
+                "line":         c["value_label"],
+                "odd":          c["odd"],
+                "bet_house":    c["best_bookmaker"],
+                "confidence":   c["confidence"],
+                "is_best_pick": c.get("is_best_pick", False),
+                "probability":  c["taxa_real"],
+                "edge":         float(c["edge"]),
+                "ev":           float(c["ev"]),
+                "market_type":  c["market_type"],
+                "reasoning":    build_reasoning(c),
+            })
+
+        print(f"\n[MATH] {fx.get('home_team')} x {fx.get('away_team')} — {len(suggestions)} sugestões (determinístico):")
+        for i, p in enumerate(suggestions, 1):
+            marker = " <BEST>" if p["is_best_pick"] else ""
+            print(f"  [{i}] {p['market']} | {p['line']} | odd {p['odd']} "
+                  f"| edge {p['edge']*100:+.1f}% | conf {p['confidence']*100:.0f}%{marker}")
+
+        return suggestions
+
+    # --------------------------------------------------------
+    # IA — GERA 3 SUGESTÕES (legado — não usado mais em generate_and_save,
+    # mantido para referência/comparação manual)
     # --------------------------------------------------------
     def generate_suggestions(
         self,
@@ -832,26 +898,18 @@ HISTÓRICO FORA
         if not odds_map_full:
             odds_map_full = self.odds_service.load_odds_by_fixture(fx["fixture_id"])
 
-        # 2. IA gera 3 sugestões usando o prompt da competição
-        suggestions = self.generate_suggestions(
-            fx, home_stats, away_stats,
-            last10_home, last10_away,
-            total_home, total_away,
-            standings_stats,
-            referee_stats=referee_stats,
-            league_id=league_id,
-            custom_prompt=custom_prompt,
-            performance_str=performance_str,
-            picks_anteriores_str=picks_anteriores_str,
+        # 2. Gera 3 sugestões — cálculo determinístico (pick_math_service),
+        #    sem chamada de IA (decisão do usuário em 2026-07-02).
+        suggestions = self.generate_suggestions_math(
+            fx, last10_home, last10_away,
             odds_preloaded=odds_map_full,
-            web_context=web_context,
         )
 
         if not suggestions:
-            print(f"[RESULT] IA não retornou sugestões — {fx.get('home_team')} x {fx.get('away_team')}")
+            print(f"[RESULT] Nenhum mercado elegível — {fx.get('home_team')} x {fx.get('away_team')}")
             return []
 
-        # 3. IA escolhe o melhor pick (is_best_pick), fallback para maior EV
+        # 3. Lê o is_best_pick já definido por rank_market_candidates (Python), fallback para maior EV
         chosen = self.pick_best(suggestions)
 
         if not chosen:

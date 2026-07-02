@@ -20,6 +20,7 @@ from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE
 from services.national_team_profile_service import NationalTeamProfileService
 from services.ai_performance_service import AIPerformanceService
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, AISuggestionsService
+from services.pick_math_service import analyze_fixture_markets, build_reasoning
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 _performance_svc = AIPerformanceService()
@@ -29,6 +30,8 @@ def _detect_market_type(market: str) -> str | None:
     """Mesma lógica de _market_type_from_name em ai_suggestions_service — mantidas em sync.
     Retorna None para mercados não reconhecidos em vez de 'unknown' ou 'result' errado."""
     m = market.lower()
+    if "shot" in m or "chute" in m:
+        return "shots"
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
@@ -554,7 +557,70 @@ def get_today_dica() -> dict | None:
 
 
 # ============================================================
-# CHAMADA A IA
+# SELEÇÃO DETERMINÍSTICA (pick_math_service) — SEM IA
+#
+# Decisão do usuário (2026-07-02): mesma mudança aplicada ao pipeline VIP.
+# Junta os candidatos de TODOS os fixtures do dia (cada um já filtrado por
+# Smart Safe Line dentro de analyze_fixture_markets) e escolhe o único
+# melhor, respeitando os critérios mais rígidos da Dica do Dia
+# (odd 1.30-1.80, confidence>=0.72, taxa>=65%, amostra>=5).
+# ============================================================
+def select_dica_math(fixtures_with_context: list) -> dict | None:
+    pool = []
+    for fc in fixtures_with_context:
+        fx, ctx = fc["fixture"], fc["context"]
+
+        structured_odds = [o for o in ctx.get("odds", []) if "value_label" in o]
+        if not structured_odds:
+            continue
+
+        match_dt = fx.get("match_datetime")
+        if isinstance(match_dt, str):
+            match_dt = datetime.fromisoformat(match_dt)
+        reference_date = match_dt.date() if isinstance(match_dt, datetime) else date.today()
+
+        candidates = analyze_fixture_markets(
+            structured_odds,
+            ctx.get("last10_home", []),
+            ctx.get("last10_away", []),
+            reference_date=reference_date,
+        )
+        for c in candidates:
+            if not (ODD_MIN <= c["odd"] <= ODD_MAX):
+                continue
+            if c["taxa_real"] < 0.65 or c["amostra"] < 5 or c["confidence"] < CONFIDENCE_MIN:
+                continue
+            pool.append((fx, c))
+
+    if not pool:
+        return None
+
+    pool.sort(key=lambda item: (item[1]["confidence"], item[1]["taxa_real"], item[1]["amostra"]), reverse=True)
+    fx, best = pool[0]
+
+    return {
+        "fixture_id":   fx["fixture_id"],
+        "home_team":    fx["home_team"],
+        "away_team":    fx["away_team"],
+        "home_team_id": fx.get("home_team_id"),
+        "away_team_id": fx.get("away_team_id"),
+        "league_id":    fx["league_id"],
+        "league_name":  fx.get("league_name", ""),
+        "market_id":    best["market_id"],
+        "market":       best["market_name"],
+        "line":         best["value_label"],
+        "odd":          best["odd"],
+        "bet_house":    best["best_bookmaker"],
+        "confidence":   best["confidence"],
+        "prob_real":    best["taxa_real"],
+        "edge":         float(best["edge"]),
+        "reasoning":    build_reasoning(best),
+    }
+
+
+# ============================================================
+# CHAMADA A IA (legado — não usado mais em run_dica_pipeline,
+# mantido para referência/comparação manual)
 # ============================================================
 def run_dica_llm(fixtures_with_context: list) -> dict:
     fixtures_formatados = _format_fixtures_for_llm(fixtures_with_context)
@@ -722,17 +788,12 @@ def run_dica_pipeline() -> dict | None:
         print("❌ Nenhum fixture com dados completos disponivel.")
         return None
 
-    # ── IA: análise completa de todos os fixtures ─────────────────────────────
-    print(f"🤖 Chamando IA com {len(fixtures_with_context)} fixture(s)...")
-    result = run_dica_llm(fixtures_with_context)
+    # ── Cálculo determinístico (pick_math_service) — sem IA ────────────────────
+    print(f"🧮 Calculando picks (determinístico) para {len(fixtures_with_context)} fixture(s)...")
+    pick = select_dica_math(fixtures_with_context)
 
-    if result.get("no_bet"):
-        print(f"[DICA] NO BET — {result.get('motivo', 'criterios nao atingidos')}")
-        return None
-
-    pick = result.get("pick")
     if not pick:
-        print("[DICA] Resposta da IA sem pick valido.")
+        print("[DICA] NO BET — nenhum mercado atendeu odd/taxa/amostra/confidence mínimos.")
         return None
 
     if not is_market_reasoning_coherent(pick.get("market", ""), pick.get("reasoning", "")):
