@@ -760,7 +760,7 @@ HISTÓRICO FORA
             conf = float(ai_pick.get("confidence", 0))
             ev   = round((conf * odd) - 1, 4)
             ai_pick["ev"] = ev
-            print(f"\n[PICK] IA escolheu: {ai_pick.get('market')} | {ai_pick.get('line')} "
+            print(f"\n[PICK] Selecionado: {ai_pick.get('market')} | {ai_pick.get('line')} "
                   f"| odd {odd} | EV {round(ev * 100, 1)}% | conf {round(conf * 100)}%")
             for s in suggestions:
                 if s is not ai_pick:
@@ -959,9 +959,9 @@ HISTÓRICO FORA
 
         if chosen_market_id is None:
             print(
-                f"[REJECT] IA escolheu mercado não encontrado nas odds: "
+                f"[REJECT] Mercado selecionado não encontrado nas odds: "
                 f"'{chosen.get('market')}' linha '{chosen.get('line')}' @ {chosen.get('odd')} — "
-                f"mercado não existe ou foi inventado. Pick descartado."
+                f"pick descartado (não deveria ocorrer no caminho determinístico)."
             )
             return []
 
