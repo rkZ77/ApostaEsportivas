@@ -216,6 +216,82 @@ def _market_taxa(family: str, scope: str, value: str, line_str: str,
     return weighted_rate(pool, hit_fn, reference_date=reference_date)
 
 
+_SCORED_CONCEDED_FIELDS = {
+    "goals":   ("home_goals", "away_goals"),
+    "corners": ("home_corners", "away_corners"),
+    "cards":   ("home_yellow_cards", "away_yellow_cards"),
+}
+
+
+def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str):
+    """Média do que o time FAZ (feitos) e do que CEDE (cedidos) no histórico,
+    no contexto correto (casa/fora). Base da seção 3.1: toda estimativa de
+    total precisa ser validada cruzando feitos de um lado com cedidos do
+    outro, não só olhar se jogos passados bateram a linha."""
+    if not matches or family not in _SCORED_CONCEDED_FIELDS:
+        return None, None
+    home_f, away_f = _SCORED_CONCEDED_FIELDS[family]
+    scored_k, conceded_k = (home_f, away_f) if is_home_ctx else (away_f, home_f)
+    n = len(matches)
+    scored = sum((m.get(scored_k) or 0) for m in matches) / n
+    conceded = sum((m.get(conceded_k) or 0) for m in matches) / n
+    return round(scored, 3), round(conceded, 3)
+
+
+def expected_value_convergence(last10_home: list, last10_away: list, family: str, scope: str):
+    """Réplica da seção 3.1 (FEITOS vs CEDIDOS): duas estimativas
+    independentes do valor esperado para a partida, uma pelo que cada time
+    costuma FAZER, outra pelo que costuma CEDER — se convergem (≤15% de
+    diferença), é sinal forte; se divergem, é motivo pra desconfiar do
+    mercado, não só olhar taxa histórica isolada.
+
+    scope='total' (ex. Gols Mais/Menos): feitos_casa+feitos_fora vs
+      cedidos_casa+cedidos_fora.
+    scope='home' (ex. Total de Gols Casa): feitos do mandante vs cedidos do
+      visitante fora (o adversário específico deste jogo).
+    scope='away': feitos do visitante fora vs cedidos do mandante em casa.
+    """
+    if family not in _SCORED_CONCEDED_FIELDS:
+        return None
+
+    h_scored, h_conceded = scored_conceded_avg(last10_home, True, family)
+    a_scored, a_conceded = scored_conceded_avg(last10_away, False, family)
+    if None in (h_scored, h_conceded, a_scored, a_conceded):
+        return None
+
+    if scope == "home":
+        estimate_feitos, estimate_cedidos = h_scored, a_conceded
+    elif scope == "away":
+        estimate_feitos, estimate_cedidos = a_scored, h_conceded
+    else:
+        estimate_feitos, estimate_cedidos = h_scored + a_scored, h_conceded + a_conceded
+
+    base = max(abs(estimate_feitos), abs(estimate_cedidos), 0.01)
+    diff_pct = abs(estimate_feitos - estimate_cedidos) / base
+
+    return {
+        "estimate_feitos":   round(estimate_feitos, 2),
+        "estimate_cedidos":  round(estimate_cedidos, 2),
+        "expected_value":    round((estimate_feitos + estimate_cedidos) / 2, 2),
+        "converged":         diff_pct <= 0.15,
+        "diff_pct":          round(diff_pct, 3),
+    }
+
+
+def _convergence_adjustment(direction: str, line_val: float | None, convergence: dict | None) -> float:
+    """Delta pra somar no K bruto: a convergência feitos/cedidos concorda com
+    a direção (Over/Under) do pick escolhido -> +0.10 (confirmador extra);
+    diverge da direção OU as duas estimativas nem convergem entre si ->
+    -0.10 (reduz confirmação, igual à regra "declare incerteza, reduza K 1
+    nível" da seção 3.1). Sem dado suficiente -> 0 (neutro)."""
+    if not convergence or line_val is None:
+        return 0.0
+    if not convergence["converged"]:
+        return -0.10
+    implied_direction = "over" if convergence["expected_value"] > line_val else "under"
+    return 0.10 if implied_direction == direction else -0.10
+
+
 def _confirmation_k(amostra: int, bookmakers_count: int) -> float:
     """Aproximacao de K (confirmadores independentes) usando os sinais
     disponiveis nesta camada: tamanho de amostra e consenso entre bookmakers.
@@ -266,6 +342,8 @@ def analyze_fixture_markets(structured_odds: list, last10_home: list, last10_awa
 
     candidates = []
     for (family, scope), entries in groups.items():
+        convergence = expected_value_convergence(last10_home, last10_away, family, scope)
+
         line_candidates = []
         for m in entries:
             best_odd = float(m.get("best_odd") or 0)
@@ -276,6 +354,10 @@ def analyze_fixture_markets(structured_odds: list, last10_home: list, last10_awa
             if not taxa or taxa["taxa_ponderada"] is None:
                 continue
             ev_edge = edge_and_ev(taxa["taxa_ponderada"], best_odd, implied_prob(best_odd))
+            try:
+                line_val = float(m.get("line")) if family != "btts" else None
+            except (TypeError, ValueError):
+                line_val = None
             line_candidates.append({
                 "market_id":        m.get("market_id"),
                 "market_name":      m.get("market_pt") or m.get("market_name"),
@@ -289,6 +371,8 @@ def analyze_fixture_markets(structured_odds: list, last10_home: list, last10_awa
                 "amostra":          taxa["amostra"],
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
+                "_direction":       (m.get("value") or "").strip().lower(),
+                "_line_val":        line_val,
                 **ev_edge,
             })
 
@@ -297,6 +381,8 @@ def analyze_fixture_markets(structured_odds: list, last10_home: list, last10_awa
             continue
 
         K = _confirmation_k(best_line["amostra"], best_line["bookmakers_count"])
+        K += _convergence_adjustment(best_line["_direction"], best_line["_line_val"], convergence)
+        K = round(min(max(K, 0.10), 1.00), 4)
         conf = confidence_score(C=best_line["taxa_real"], Q=best_line["Q"], K=K)
 
         candidates.append({
@@ -304,6 +390,7 @@ def analyze_fixture_markets(structured_odds: list, last10_home: list, last10_awa
             "market_type": "goals" if family == "btts" else family,
             "confidence": conf,
             "risco": risco_from_confidence(conf),
+            "convergence": convergence,
         })
 
     return candidates
@@ -314,11 +401,22 @@ def build_reasoning(candidate: dict) -> str:
     sem chamada de IA. Decisao do usuario (2026-07-02): eliminar a IA do
     calculo/selecao das picks VIP para remover a variancia dia-a-dia."""
     prob_implicita = implied_prob(candidate["odd"])
+    conv = candidate.get("convergence")
+    if conv:
+        status = "CONVERGE" if conv["converged"] else "DIVERGE"
+        conv_txt = (
+            f" VALIDAÇÃO FEITOS×CEDIDOS: feitos={conv['estimate_feitos']} | "
+            f"cedidos={conv['estimate_cedidos']} | esperado={conv['expected_value']} "
+            f"({status}, diff={conv['diff_pct']*100:.1f}%)."
+        )
+    else:
+        conv_txt = " VALIDAÇÃO FEITOS×CEDIDOS: sem dado suficiente."
     return (
         f"[CÁLCULO DETERMINÍSTICO] {candidate['market_name']} {candidate['value_label']} — "
         f"taxa real ponderada (peso por recência + força do adversário) = "
         f"{candidate['taxa_real']*100:.1f}% em {candidate['amostra']} jogos analisados "
-        f"(amostra {candidate.get('amostra_label', '?')}). "
+        f"(amostra {candidate.get('amostra_label', '?')})."
+        f"{conv_txt} "
         f"Probabilidade implícita da odd ({candidate['odd']}) = {prob_implicita*100:.1f}% → "
         f"edge = {candidate['edge']*100:+.1f}% | EV = {candidate['ev']*100:+.1f}%. "
         f"Confidence = {candidate['confidence']*100:.0f}% | RISCO {candidate['risco']}. "
