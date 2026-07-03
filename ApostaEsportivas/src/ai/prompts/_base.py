@@ -40,6 +40,8 @@ JÁ CLASSIFICADO / JÁ ELIMINADO (sem pressão):
 CONFLITO situação vs padrão estatístico:
   → Declare o conflito no reasoning. Reduza confidence se contexto e dados históricos divergirem significativamente.
 
+MÉDIAS OVER/UNDER e PERFIL (seleções): use MÉDIAS RECENTES (over_2_5_pct/btts_pct) e o perfil tático da seleção (se enviado) como confirmador extra — convergência reforça K; conflito declare e reduza K 1 nível.
+
 ## 1. VARREDURA SISTEMÁTICA DE MERCADOS (execute APÓS contexto situacional)
 
 Varre TODOS os mercados disponíveis nas odds. Avalie a consistência estatística de cada um com os dados históricos. Selecione os 3 com maior padrão confirmado de categorias distintas.
@@ -107,7 +109,7 @@ FORMATO DO HISTÓRICO (HISTÓRICO CASA / HISTÓRICO FORA / HISTÓRICO TOTAL):
     Combine os dois vetores para estimar probabilidade de cada desfecho.
   Peso temporal decrescente: mais recente=1.0, anterior=0.85...
 
-2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: Alta=resultado puro/BTTS irregular | Média=handicap/cartões | Baixa=Over 1.5/cantos.
+2.4 Reasoning: cite ≥1 fato numérico. VOLATILIDADE: classifique pelo desvio real nos dados, NUNCA por categoria fixa (nenhum tipo de mercado — gols, cantos ou cartões — ganha "Baixa" automaticamente). Alta=taxa varia >20% entre janelas recentes ou padrão irregular (comum em resultado puro/BTTS, mas também pode ocorrer em cantos/gols). Média=desvio moderado (10-20%). Baixa=desvio ≤10% E amostra RICA — só se os dados realmente confirmarem consistência.
   CARTÕES — volatilidade MÉDIA por padrão: a taxa de amarelos por jogo tem desvio-padrão alto mesmo em times disciplinados. Upgrade para BAIXO apenas se AMBAS as condições forem satisfeitas: (a) árbitro com ≥5 jogos e avg_yellow consistente (desvio ≤0.8) E (b) histórico dos dois times com ≥5 jogos e desvio ≤0.9 amarelos/jogo. Sem esses dados → declare volatilidade MÉDIA.
 
 2.5 ÁRBITRO (games≥3): avg_yellow acima da média → Over cartões; abaixo → Under. Sem dados → declare ausência.
@@ -146,7 +148,7 @@ Ordem: 1º maior confidence → 2º maior taxa → 3º maior amostra.
 
 is_best_pick=true: melhor combinação de confidence + baixa volatilidade + RISCO BAIXO/MÉDIO. NUNCA RISCO ALTO como best pick (exceto se todos forem ALTO).
 DIVERSIDADE OBRIGATÓRIA: Os 3 picks DEVEM cobrir 3 categorias distintas (goals/corners/cards/result). Se os 3 com maior confidence forem todos 'cards', selecione: o melhor 'cards' + o melhor 'goals' + o melhor entre 'corners' e 'result'.
-CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões NÃO pode ser is_best_pick; nesse caso, defina is_best_pick=true no melhor pick de goals ou corners.
+CARTÕES — exija 2 confirmadores INDEPENDENTES para is_best_pick: (1) árbitro com ≥3 jogos na temporada E (2) histórico dos dois times com padrão consistente (taxa ≥60% em ≥5 jogos). Sem esses dois → cartões NÃO pode ser is_best_pick; nesse caso, defina is_best_pick=true no pick de maior confidence entre os 2 restantes (sem categoria preferida — compare os números).
 
 SMART SAFE LINE — SELEÇÃO DE LINHA (aplica a Over/Under de gols, cantos, cartões e qualquer mercado com múltiplas linhas):
   Não escolha automaticamente a linha mais baixa nem a maior odd. Encontre o melhor equilíbrio entre segurança, valor e probabilidade de acerto.
