@@ -22,15 +22,45 @@ def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEF
     return max(pool, key=lambda c: (c["taxa_real"], c["edge"]))
 
 
+# Pesos ativos por fase (renormalizados p/ somar 1.0 entre os modelos ja
+# implementados -- Consenso fica de fora do score, e so log em modo sombra):
+# Fase 1: Dados Estatisticos (35) + Mercado (10) -- ja embutidos no "base"
+#   abaixo via confidence/ev/Q, sem separacao explicita por modelo.
+# Fase 2: + Contexto (20) e Perfil das equipes (15) => total ativo 80.
+# Fase 3: + Noticias (10) => total ativo 90.
+_W_BASE = 0.45 / 0.90      # Dados Estatisticos + Mercado combinados (base pre-Fase2)
+_W_CONTEXT = 0.20 / 0.90
+_W_PROFILE = 0.15 / 0.90
+_W_NEWS = 0.10 / 0.90
+
+
 def final_score(candidate: dict) -> float:
     """Score Final = combinacao de confidence + EV normalizado + qualidade
-    da amostra (Q). Fases 2/3 somam o termo de contexto/matchup/consenso
-    aqui dentro, sem reescrever o resto do modulo de ranking."""
+    da amostra (Q) (Fase 1), somada aos sinais opcionais de Contexto,
+    Perfil das equipes/Matchup (Fase 2) e Noticias/desfalques (Fase 3),
+    quando presentes no candidato (`context_score`/`profile_score`/
+    `news_score` -- ver orchestrator.py). Sem nenhum desses sinais, o
+    resultado e identico ao da Fase 1 (nenhuma pick ja aprovada muda de
+    ordem sem motivo)."""
     ev_norm = min(max(candidate.get("ev", 0.0), -0.5), 1.0)
-    return round(
+    base = round(
         candidate["confidence"] * 0.6
         + ev_norm * 0.25
         + candidate.get("Q", 0.0) * 0.15,
+        4,
+    )
+
+    ctx_score = candidate.get("context_score")
+    profile_score = candidate.get("profile_score")
+    news_score = candidate.get("news_score")
+    if ctx_score is None and profile_score is None and news_score is None:
+        return base
+
+    ctx_score = ctx_score if ctx_score is not None else 0.5
+    profile_score = profile_score if profile_score is not None else 0.5
+    news_score = news_score if news_score is not None else 0.5
+    return round(
+        base * _W_BASE + ctx_score * _W_CONTEXT + profile_score * _W_PROFILE + news_score * _W_NEWS,
         4,
     )
 

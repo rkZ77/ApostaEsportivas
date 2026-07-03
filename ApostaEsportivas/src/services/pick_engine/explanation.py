@@ -49,6 +49,41 @@ def build_explanation(candidate: dict) -> dict:
         note = f"Histórico real do mercado indica ajuste de {cal_delta*100:+.1f}% no confidence"
         (negative_factors if cal_delta < 0 else positive_factors).append(note)
 
+    ctx = candidate.get("context_raw")
+    if ctx:
+        rh, ra = ctx.get("rest_days_home"), ctx.get("rest_days_away")
+        if rh is not None and ra is not None and rh != ra:
+            note = f"Descanso: mandante {rh}d vs visitante {ra}d"
+            (positive_factors if rh > ra else negative_factors).append(note)
+        for side_key, side_label in (("table_pressure_home", "Mandante"), ("table_pressure_away", "Visitante")):
+            pressure = ctx.get(side_key) or {}
+            if pressure.get("label") == "pressao_alta":
+                risks.append(
+                    f"{side_label} em zona de risco na tabela (saldo {pressure.get('goal_diff')}, "
+                    f"aproximação por posição na tabela — não é confirmação de mata-mata)"
+                )
+        venue = ctx.get("venue") or {}
+        if venue.get("is_neutral_venue"):
+            risks.append("Sede neutra — sem vantagem de mando para nenhum dos times")
+
+    matchup = candidate.get("matchup_raw")
+    direction = candidate.get("_direction")
+    if matchup and matchup.get("label") != "neutro" and direction in ("over", "under"):
+        note = f"Matchup de perfis aponta para {matchup['label']} (delta {matchup['delta']:+.2f})"
+        agrees = matchup["label"].lower() == direction
+        (positive_factors if agrees else negative_factors).append(note)
+
+    news = candidate.get("news_raw")
+    if news:
+        for side_key, side_label in (("home", "Mandante"), ("away", "Visitante")):
+            titulares = news.get(side_key, {}).get("titulares_desfalcados", [])
+            if titulares:
+                nomes = ", ".join(t["name"] for t in titulares[:3])
+                risks.append(
+                    f"{side_label} desfalcado de {len(titulares)} titular(es) recente(s) ({nomes}) "
+                    f"— aproximação por cruzamento de nome entre lesões e escalações recentes"
+                )
+
     return {
         "market": candidate["market_name"],
         "line": candidate["value_label"],

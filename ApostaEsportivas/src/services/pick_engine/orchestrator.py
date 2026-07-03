@@ -1,9 +1,11 @@
-"""Ponto de entrada unico do motor de picks. Fases 2/3 adicionam chamadas
-a context_model.py / team_profile_model.py / news_model.py / consensus.py
-aqui dentro, sem tocar nos modulos de Fase 1 (stats_model, market_model,
-confidence, calibration, ranking, explanation)."""
+"""Ponto de entrada unico do motor de picks. `consensus.py` fica fora deste
+fluxo por decisao explicita (modo sombra, roda separado em
+shadow_consensus.py, sem influenciar o calculo de picks aqui)."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
-from services.pick_engine import stats_model, market_model, confidence, calibration, ranking, explanation
+from services.pick_engine import (
+    stats_model, market_model, confidence, calibration, ranking, explanation,
+    context_model, team_profile_model, news_model,
+)
 
 
 def analyze_fixture_markets(
@@ -13,16 +15,27 @@ def analyze_fixture_markets(
     reference_date=None,
     config: PickEngineConfig = DEFAULT_CONFIG,
     calibration_data: dict | None = None,
+    context_data: dict | None = None,
+    matchup_data: dict | None = None,
+    news_data: dict | None = None,
 ) -> list:
     """Calcula taxa/confidence/edge/EV para cada mercado goals/corners/
     cards/btts disponivel nas odds ja estruturadas (services.odds_service.
     OddsService.load_odds_structured), a partir do historico ja carregado.
     Nao cobre 1X2/Dupla Chance/Handicap.
 
+    `context_data` (saida de context_model.build_context), `matchup_data`
+    (saida de team_profile_model.compare_matchup) e `news_data` (saida de
+    news_model.injury_signal) sao opcionais -- Fase 1 continua funcionando
+    identica sem eles (ranking.final_score() so aplica os pesos de
+    Contexto/Perfil/Noticias quando os campos existem no candidato).
+
     Retorna candidatos prontos para ranking.rank_market_candidates().
     """
     if calibration_data is None:
         calibration_data = calibration.get_market_calibration()
+    ctx_score = context_model.context_score(context_data) if context_data else None
+    news_score = news_model.news_score(news_data) if news_data else None
 
     groups: dict[tuple, list] = {}
     for m in structured_odds:
@@ -95,6 +108,12 @@ def analyze_fixture_markets(
             "risco": confidence.risco_from_confidence(conf, config),
             "convergence": convergence,
             "calibration_delta": cal_delta,
+            "context_score": ctx_score,
+            "context_raw": context_data,
+            "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
+            "matchup_raw": matchup_data.get(market_type) if matchup_data else None,
+            "news_score": news_score,
+            "news_raw": news_data,
         })
 
     return candidates
