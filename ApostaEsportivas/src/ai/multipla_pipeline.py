@@ -25,6 +25,8 @@ AI_MODEL_NAME  = os.getenv("AI_MODEL_NAME")
 BANKROLL       = float(os.getenv("BANKROLL", "1000"))
 PICK_ODD_MIN   = 1.00
 PICK_ODD_MAX   = 2.50
+ODD_TOTAL_MIN  = 2.00  # faixa obrigatoria do odd_total da multipla (regra do prompt)
+ODD_TOTAL_MAX  = 3.00
 
 client              = Anthropic()
 fixtures_svc        = FixturesService()
@@ -755,6 +757,17 @@ def run_multipla_pipeline() -> dict | None:
         valid_fids = [g["fixture_id"] for g in games_info if g.get("fixture_id") in fx_map]
         if len(valid_fids) < 2:
             print(f"[MULTIPLA] {name} — fixture_ids invalidos retornados pela IA, pulando.")
+            continue
+
+        # Validação hard: recalcula odd_total real e rejeita se a IA violou a
+        # propria regra (2.00-3.00). A IA as vezes "força" um combo fora da
+        # faixa quando nao acha par valido, em vez de emitir no_bet.
+        odd_total_real = 1.0
+        for g in games_info:
+            odd_total_real *= float(g.get("odd") or 1)
+        if not (ODD_TOTAL_MIN <= odd_total_real <= ODD_TOTAL_MAX):
+            print(f"[MULTIPLA] {name} — REJEITADO: odd_total real={odd_total_real:.2f} "
+                  f"fora da faixa {ODD_TOTAL_MIN}-{ODD_TOTAL_MAX} (IA violou a propria regra).")
             continue
 
         total_odd = save_multipla(name, games_info, fx_map, reasoning, score)
