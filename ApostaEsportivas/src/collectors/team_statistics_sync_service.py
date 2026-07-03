@@ -1,8 +1,7 @@
 ﻿import os
+import psycopg2
 import requests
 from dotenv import load_dotenv, find_dotenv
-
-from utils.db_utils import get_connection
 
 load_dotenv(find_dotenv())
 
@@ -10,8 +9,29 @@ API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida no ambiente")
 
+DB_HOST = os.getenv("DB_HOST")
+DB_PORT = os.getenv("DB_PORT")
+DB_NAME = os.getenv("DB_NAME")
+DB_USER = os.getenv("DB_USER")
+DB_PASS = os.getenv("DB_PASS")
+DB_SSLMODE = os.getenv("DB_SSLMODE")
+
 BASE_URL = "https://v3.football.api-sports.io"
 HEADERS = {"x-apisports-key": API_KEY}
+
+
+# ================================================================
+# Conexão com banco
+# ================================================================
+def get_connection():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=DB_PORT,
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        sslmode=DB_SSLMODE
+    )
 
 
 # ================================================================
