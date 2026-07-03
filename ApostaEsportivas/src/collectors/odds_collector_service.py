@@ -111,6 +111,8 @@ def detect_market_type(bet_id: int, bet_name: str) -> str:
         return MARKET_TYPE_MAP[bet_id]
 
     name = bet_name.lower()
+    if "shot" in name:
+        return "shots"
     if "corner" in name:
         return "corners"
     if "card" in name or "yellow" in name:

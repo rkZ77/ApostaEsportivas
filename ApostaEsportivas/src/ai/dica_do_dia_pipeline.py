@@ -29,6 +29,8 @@ def _detect_market_type(market: str) -> str | None:
     """Mesma lógica de _market_type_from_name em ai_suggestions_service — mantidas em sync.
     Retorna None para mercados não reconhecidos em vez de 'unknown' ou 'result' errado."""
     m = market.lower()
+    if "shot" in m or "chute" in m:
+        return "shots"
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
