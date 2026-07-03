@@ -203,7 +203,7 @@ FEITOS vs CEDIDOS: total/BTTS→feitos_A+feitos_B vs cedidos_A+cedidos_B (diverg
 Mercado de time→feitos do time+cedidos do adversario. Resultado/Handicap→feitos_A vs cedidos_B + feitos_B vs cedidos_A.
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
 
 ETAPA 2 — CORRELACAO ESTRITA:
 Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.
