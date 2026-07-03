@@ -602,6 +602,8 @@ def get_monthly_close(
             year, mo = int(month[:4]), int(month[5:7])
         except Exception:
             raise HTTPException(400, "Formato inválido. Use YYYY-MM.")
+        if not (1 <= mo <= 12):
+            raise HTTPException(400, "Mês inválido. Use um valor entre 01 e 12.")
     else:
         today = date.today()
         first_of_current = today.replace(day=1)
