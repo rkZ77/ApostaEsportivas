@@ -8,6 +8,8 @@ Exclusivo VIP.
 import os
 import json
 import time
+from itertools import combinations as _combinations
+from math import prod as _prod
 from datetime import datetime, date
 from decimal import Decimal
 from dotenv import load_dotenv, find_dotenv
@@ -20,6 +22,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.national_team_profile_service import NationalTeamProfileService
 from services.ai_performance_service import AIPerformanceService
+from services.pick_math_service import analyze_fixture_markets, build_reasoning
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
@@ -352,7 +355,97 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
 
 
 # ============================================================
-# CHAMA A IA
+# SELEÇÃO DETERMINÍSTICA (pick_math_service) — SEM IA
+#
+# Decisão do usuário (2026-07-02): mesma mudança dos outros 3 pipelines.
+# Junta candidatos de todos os fixtures da Copa, testa simples/dupla/tripla
+# (legs podem ser do mesmo jogo, ao contrário da múltipla) e escolhe o combo
+# de maior confidence_media cujo odd_combined caia em
+# [ODD_COMBINED_MIN, ODD_COMBINED_MAX]. Diversificação: dentro de um combo,
+# não repete market_type (mais rígido que a regra original de "mercado
+# idêntico", mas mais seguro para produto com lógica de valor monetário).
+# ============================================================
+def select_alavancagem_math(fixtures: list[dict], preloaded: dict) -> dict | None:
+    legs = []
+    for f in fixtures:
+        fid = f["fixture_id"]
+        ctx = preloaded.get(fid)
+        if not ctx:
+            continue
+        structured_odds = [o for o in ctx.get("odds", []) if "value_label" in o]
+        if not structured_odds:
+            continue
+
+        match_dt = f.get("match_datetime")
+        if isinstance(match_dt, str):
+            match_dt = datetime.fromisoformat(match_dt)
+        reference_date = match_dt.date() if isinstance(match_dt, datetime) else date.today()
+
+        candidates = analyze_fixture_markets(
+            structured_odds, ctx.get("last10_home", []), ctx.get("last10_away", []),
+            reference_date=reference_date,
+        )
+        for c in candidates:
+            if not (ODD_INDIVIDUAL_MIN <= c["odd"] <= ODD_INDIVIDUAL_MAX):
+                continue
+            if c["taxa_real"] < 0.65 or c["amostra"] < 5 or c["confidence"] < CONFIDENCE_MIN:
+                continue
+            legs.append({"fixture_id": fid, "home_team": f["home_team"], "away_team": f["away_team"], "candidate": c})
+
+    if not legs:
+        return None
+
+    def to_pick(leg):
+        c = leg["candidate"]
+        return {
+            "fixture_id": leg["fixture_id"], "home_team": leg["home_team"], "away_team": leg["away_team"],
+            "market_id": c["market_id"], "market": c["market_name"], "line": c["value_label"],
+            "odd": c["odd"], "bet_house": c["best_bookmaker"], "confidence": c["confidence"],
+            "prob_real": c["taxa_real"], "reasoning": build_reasoning(c),
+            "_market_type": c["market_type"],
+        }
+
+    best = None
+
+    def consider(picks):
+        nonlocal best
+        odd_combined = round(_prod(p["odd"] for p in picks), 4)
+        if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
+            return
+        mtypes = [p["_market_type"] for p in picks]
+        if len(mtypes) != len(set(mtypes)):
+            return
+        conf_media = sum(p["confidence"] for p in picks) / len(picks)
+        key = (conf_media, -len(picks))
+        if best is None or key > best[0]:
+            best = (key, picks, odd_combined, conf_media)
+
+    for leg in legs:
+        consider([to_pick(leg)])
+    for leg_a, leg_b in _combinations(legs, 2):
+        consider([to_pick(leg_a), to_pick(leg_b)])
+    for leg_a, leg_b, leg_c in _combinations(legs, 3):
+        consider([to_pick(leg_a), to_pick(leg_b), to_pick(leg_c)])
+
+    if best is None:
+        return None
+
+    _, picks, odd_combined, conf_media = best
+    tipo = {1: "simples", 2: "dupla", 3: "tripla"}[len(picks)]
+
+    return {
+        "tipo": tipo,
+        "pick_1": picks[0],
+        "pick_2": picks[1] if len(picks) > 1 else None,
+        "pick_3": picks[2] if len(picks) > 2 else None,
+        "odd_combined": odd_combined,
+        "confidence_media": conf_media,
+    }
+
+
+# ============================================================
+# CHAMA A IA (legado — não usado mais em run_alavancagem_pipeline,
+# mantido para referência/comparação manual)
 # ============================================================
 def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = None) -> dict:
     """Call 2: análise completa. Usa preloaded_contexts para evitar re-carregamento."""
@@ -554,24 +647,14 @@ def run_alavancagem_pipeline() -> dict | None:
         print("❌ Nenhum fixture com dados carregados.")
         return None
 
-    # ── IA: análise completa com retry se odd sair da faixa ──────────────────
-    MAX_PICK_RETRIES = 2
-    result = None
-    for attempt in range(1, MAX_PICK_RETRIES + 2):
-        print(f"🤖 Chamando IA (tentativa {attempt}/{MAX_PICK_RETRIES + 1})...")
-        result = run_alavancagem_llm(fixtures, preloaded_contexts=preloaded)
+    # ── Cálculo determinístico (pick_math_service) — sem IA ────────────────────
+    print("🧮 Calculando combo (determinístico) simples/dupla/tripla...")
+    result = select_alavancagem_math(fixtures, preloaded)
 
-        if result.get("no_bet"):
-            print(f"⚠️  no_bet: {result.get('motivo')}")
-            return None
-
-        odd_combined = float(result.get("odd_combined", 0))
-        if ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX:
-            break  # IA acertou a faixa — prossegue
-        print(f"[ALAVANCAGEM] Tentativa {attempt}: odd_combined={odd_combined:.2f} fora de {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX} — retentando...")
-        if attempt == MAX_PICK_RETRIES + 1:
-            print(f"[ALAVANCAGEM] IA não convergiu para faixa válida após {attempt} tentativas — abortando.")
-            return None
+    if not result:
+        print(f"⚠️  no_bet: nenhum combo com odd_combined em "
+              f"{ODD_COMBINED_MIN}-{ODD_COMBINED_MAX} e critérios mínimos atendidos.")
+        return None
 
     saved = save_pick(result)
     return result if saved else None

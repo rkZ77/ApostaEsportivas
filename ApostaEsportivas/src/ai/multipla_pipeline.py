@@ -1,5 +1,6 @@
 ﻿import os
 import json
+from itertools import combinations
 from datetime import datetime, date
 from decimal import Decimal
 from dotenv import load_dotenv, find_dotenv
@@ -13,6 +14,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
+from services.pick_math_service import analyze_fixture_markets
 from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
@@ -460,7 +462,122 @@ def get_today_fixtures() -> list:
 
 
 # ============================================================
-# CHAMADA À IA — análise completa
+# SELEÇÃO DETERMINÍSTICA (pick_math_service) — SEM IA
+#
+# Decisão do usuário (2026-07-02): mesma mudança do VIP/Free. Para cada
+# fixture, pega o melhor candidato individual (analyze_fixture_markets);
+# combina pares de FIXTURES DIFERENTES respeitando odd_total 2.00-3.00 e
+# maximizando score_combo (média das confidences).
+#
+# Não reproduz a checagem de correlação "mesmo argumento estatístico" do
+# prompt original (exigiria comparar texto livre gerado por IA) — a defesa
+# aqui é estrutural: as duas legs de uma múltipla vêm sempre de fixtures
+# diferentes, e o bloqueio (fixture_id, market_type) do VIP/Free já é
+# aplicado antes de montar os pares.
+# ============================================================
+def _build_multipla_reasoning(pair: dict) -> str:
+    a, b = pair["a"], pair["b"]
+    return (
+        f"PICK A ({pair['fid_a']}): {a['market_name']} {a['value_label']} — "
+        f"taxa={a['taxa_real']*100:.1f}% ({a['amostra']} jogos, {a['amostra_label']}). "
+        f"[CONF] score_base={a['confidence']*100:.0f}%. | "
+        f"PICK B ({pair['fid_b']}): {b['market_name']} {b['value_label']} — "
+        f"taxa={b['taxa_real']*100:.1f}% ({b['amostra']} jogos, {b['amostra_label']}). "
+        f"[CONF] score_base={b['confidence']*100:.0f}%. | "
+        f"COMBO: score_combo=(A+B)/2={pair['score_combo']*100:.0f}% | odd_total={pair['odd_total']}. "
+        f"INDEPENDÊNCIA: fixtures distintos ({pair['fid_a']} e {pair['fid_b']}), "
+        f"market_types {a['market_type']}/{b['market_type']}. "
+        f"Calculado por pick_math_service (Python), sem intervenção de IA nesta etapa."
+    )
+
+
+def select_multipla_math(fixtures: list, used_pairs: set) -> dict:
+    leg_candidates: list[tuple[int, dict]] = []
+
+    for fx_data in fixtures:
+        fx, ctx = fx_data["fixture"], fx_data["context"]
+        structured_odds = [o for o in ctx.get("odds", []) if "value_label" in o]
+        if not structured_odds:
+            continue
+
+        match_dt = fx.get("match_datetime")
+        if isinstance(match_dt, str):
+            match_dt = datetime.fromisoformat(match_dt)
+        reference_date = match_dt.date() if isinstance(match_dt, datetime) else date.today()
+
+        candidates = analyze_fixture_markets(
+            structured_odds, ctx.get("last10_home", []), ctx.get("last10_away", []),
+            reference_date=reference_date,
+        )
+        for c in candidates:
+            if not (PICK_ODD_MIN <= c["odd"] <= PICK_ODD_MAX):
+                continue
+            if (fx["fixture_id"], c["market_type"]) in used_pairs:
+                continue
+            if c["taxa_real"] < 0.65 or c["amostra"] < 5 or c["confidence"] < 0.50:
+                continue
+            leg_candidates.append((fx["fixture_id"], c))
+
+    # 1 leg por fixture: mantém só o candidato de maior confidence por jogo
+    best_per_fixture: dict[int, dict] = {}
+    for fid, c in leg_candidates:
+        if fid not in best_per_fixture or c["confidence"] > best_per_fixture[fid]["confidence"]:
+            best_per_fixture[fid] = c
+
+    if len(best_per_fixture) < 2:
+        return {}
+
+    pairs = []
+    for fid_a, fid_b in combinations(best_per_fixture.keys(), 2):
+        a, b = best_per_fixture[fid_a], best_per_fixture[fid_b]
+        odd_total = round(a["odd"] * b["odd"], 2)
+        if not (2.00 <= odd_total <= 3.00):
+            continue
+        pairs.append({
+            "fid_a": fid_a, "fid_b": fid_b, "a": a, "b": b,
+            "odd_total": odd_total,
+            "score_combo": round((a["confidence"] + b["confidence"]) / 2, 4),
+        })
+
+    if not pairs:
+        return {}
+
+    pairs.sort(key=lambda p: p["score_combo"], reverse=True)
+
+    resultado = {}
+    m1 = pairs[0]
+    if m1["score_combo"] >= 0.50:
+        resultado["multipla_1"] = m1
+        used_fids = {m1["fid_a"], m1["fid_b"]}
+        remaining = [p for p in pairs[1:] if p["fid_a"] not in used_fids and p["fid_b"] not in used_fids]
+        if remaining and remaining[0]["score_combo"] >= 0.60:
+            resultado["multipla_2"] = remaining[0]
+
+    return resultado
+
+
+def _pairs_to_multipla_json(pairs_result: dict) -> dict:
+    multipla_json = {}
+    for key, pair in pairs_result.items():
+        a, b = pair["a"], pair["b"]
+        multipla_json[key] = {
+            "name": key.upper(),
+            "games": [
+                {"fixture_id": pair["fid_a"], "market_id": a["market_id"], "market": a["market_name"],
+                 "line": a["value_label"], "odd": a["odd"], "score_base": a["confidence"]},
+                {"fixture_id": pair["fid_b"], "market_id": b["market_id"], "market": b["market_name"],
+                 "line": b["value_label"], "odd": b["odd"], "score_base": b["confidence"]},
+            ],
+            "odd_final": pair["odd_total"],
+            "score_combo": pair["score_combo"],
+            "reason": _build_multipla_reasoning(pair),
+        }
+    return multipla_json
+
+
+# ============================================================
+# CHAMADA À IA (legado — não usado mais em run_multipla_pipeline,
+# mantido para referência/comparação manual)
 # ============================================================
 def run_multipla_llm(fixtures: list, today_used_picks: list | None = None) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
@@ -702,18 +819,16 @@ def run_multipla_pipeline() -> dict | None:
     if used_pairs:
         print(f"[MULTIPLA] {len(used_pairs)} par(es) (fixture_id, market_type) bloqueados do VIP/Free de hoje")
 
-    # ── IA: análise completa de todos os jogos ────────────────────────────────
-    print(f"[MULTIPLA] Chamando IA com {len(fixtures)} jogo(s)...")
-    try:
-        multipla_json = run_multipla_llm(fixtures, today_used_picks=today_used)
-    except Exception as e:
-        print(f"[MULTIPLA] Erro na IA: {e}")
+    # ── Cálculo determinístico (pick_math_service) — sem IA ────────────────────
+    print(f"[MULTIPLA] Calculando múltiplas (determinístico) para {len(fixtures)} jogo(s)...")
+    pairs_result = select_multipla_math(fixtures, used_pairs)
+
+    if not pairs_result:
+        print("[MULTIPLA] NO BET — nenhum par de fixtures diferentes passou nos critérios "
+              "(odd_total 2.00-3.00, score_combo>=0.50).")
         return None
 
-    if multipla_json.get("no_bet"):
-        motivo = multipla_json.get("motivo", "criterios nao atingidos")
-        print(f"[MULTIPLA] NO BET — {motivo}")
-        return None
+    multipla_json = _pairs_to_multipla_json(pairs_result)
 
     create_multipla_table()
 
