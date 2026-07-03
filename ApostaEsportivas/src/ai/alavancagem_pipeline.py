@@ -121,7 +121,7 @@ CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e t
 --- FIXTURES COPA DO MUNDO + DADOS ---
 {fixtures_formatados}
 
-QUALIDADE: use "weighted_goals_against" (Copa>Eliminatorias>Amistoso). Declare ponderacao no reasoning.
+QUALIDADE: use "weighted_goals_against" e "weighted_corners_against" (Copa>Eliminatorias>Amistoso) igualmente para gols e cantos. Declare ponderacao no reasoning.
 HISTORICO: home_*/away_* → CASA=mandante, FORA=visitante. FEITOS vs CEDIDOS: feitos_A+feitos_B (primario), cedidos_A+cedidos_B (validacao). Divergencia >15% → reduza Confirmadores.
 CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) | C=taxa_real; Q: RICO(8+)=1.00,MOD(4-7)=0.75,ESC(1-3)=0.45,VAZIO=0.20; K: 3+=1.00,2=0.70,1=0.40,0=0.10.
 SMART SAFE LINE: edge=taxa_real−1/odd | EV=taxa_real×odd−1. Descarte: edge<0.05|EV≤0. Reasoning: "SMART SAFE LINE|Escolhida:[taxa=X%,EV=Z%]".

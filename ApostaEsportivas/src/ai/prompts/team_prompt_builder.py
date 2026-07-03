@@ -162,12 +162,13 @@ class TeamPromptBuilder:
 
         quality = profile.get("quality_breakdown") or {}
         weighted_ga = quality.get("weighted_goals_against", "N/A")
+        weighted_cc = quality.get("weighted_corners_against", "N/A")
 
         return (
             f"{name} ({matches}j analisados)\n"
             f"  Forma: {sequence} V{win_rate}%/E{draw_rate}%/D{loss_rate}%\n"
             f"  Ataque:{goals_pg}gols/j | Defesa:{goals_ag}sofridos/j CS{cs_pct}%\n"
-            f"  Def.ponderada(Copa/Elim/Amist):{weighted_ga}gols sofridos/j\n"
+            f"  Ponderado(Copa/Elim/Amist): {weighted_ga}gols sofridos/j | {weighted_cc}cantos cedidos/j\n"
             f"  Disciplina:{yellows_pg}amarelos/j | Cantos:{corners_pg}/j\n"
             f"  {copa_line}"
         )
@@ -331,14 +332,17 @@ ANÁLISE DETALHADA DAS SELEÇÕES
                         f"  {comp_type}: {q['jogos']}j | "
                         f"Marcados:{q['gols_marcados']}/j "
                         f"Sofridos:{q['gols_sofridos']}/j "
+                        f"Cantos feitos:{q.get('cantos_feitos','N/A')}/j "
+                        f"cedidos:{q.get('cantos_cedidos','N/A')}/j "
                         f"CS:{q['clean_sheet_pct']}% "
                         f"Amarelos:{q['amarelos']}/j"
                     )
             weighted_ga = quality.get("weighted_goals_against")
+            weighted_cc = quality.get("weighted_corners_against")
             if weighted_ga is not None:
                 q_lines.append(
-                    f"  → Média defensiva PONDERADA (Copa>Elim>Amistoso): "
-                    f"{weighted_ga} gols sofridos/j"
+                    f"  → Média PONDERADA (Copa>Elim>Amistoso): "
+                    f"{weighted_ga} gols sofridos/j | {weighted_cc} cantos cedidos/j"
                 )
             quality_text = "\n".join(q_lines)
         else:

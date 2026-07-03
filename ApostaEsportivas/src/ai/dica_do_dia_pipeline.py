@@ -150,7 +150,7 @@ C) CONFIDENCE = (C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
    Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
 
 SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
 Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.

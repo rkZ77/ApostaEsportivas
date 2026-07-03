@@ -388,12 +388,16 @@ class NationalTeamProfileService:
             is_home = m.get("home_team_id") == team_id
             gf = m.get("home_goals", 0) if is_home else m.get("away_goals", 0)
             ga = m.get("away_goals", 0) if is_home else m.get("home_goals", 0)
+            cf = m.get("home_corners", 0) if is_home else m.get("away_corners", 0)
+            cc = m.get("away_corners", 0) if is_home else m.get("home_corners", 0)
             yellows = m.get("home_yellow_cards", 0) if is_home else m.get("away_yellow_cards", 0)
             clean_sheet = 1 if (ga or 0) == 0 else 0
 
             groups[comp_type].append({
                 "gf": gf or 0,
                 "ga": ga or 0,
+                "cf": cf or 0,
+                "cc": cc or 0,
                 "yellows": yellows or 0,
                 "clean_sheet": clean_sheet,
             })
@@ -401,6 +405,7 @@ class NationalTeamProfileService:
         result = {}
         total_weight = 0.0
         weighted_ga  = 0.0
+        weighted_cc  = 0.0
 
         for comp_type, entries in groups.items():
             n = len(entries)
@@ -410,18 +415,24 @@ class NationalTeamProfileService:
                 "jogos":            n,
                 "gols_marcados":    round(sum(e["gf"] for e in entries) / n, 2),
                 "gols_sofridos":    round(sum(e["ga"] for e in entries) / n, 2),
+                "cantos_feitos":    round(sum(e["cf"] for e in entries) / n, 2),
+                "cantos_cedidos":   round(sum(e["cc"] for e in entries) / n, 2),
                 "clean_sheet_pct":  round(sum(e["clean_sheet"] for e in entries) / n * 100, 1),
                 "amarelos":         round(sum(e["yellows"] for e in entries) / n, 2),
             }
             w = WEIGHTS[comp_type]
             avg_ga = sum(e["ga"] for e in entries) / n
+            avg_cc = sum(e["cc"] for e in entries) / n
             weighted_ga  += avg_ga * w * n
+            weighted_cc  += avg_cc * w * n
             total_weight += w * n
 
         if total_weight > 0:
             result["weighted_goals_against"] = round(weighted_ga / total_weight, 2)
+            result["weighted_corners_against"] = round(weighted_cc / total_weight, 2)
         else:
             result["weighted_goals_against"] = None
+            result["weighted_corners_against"] = None
 
         return result
 
