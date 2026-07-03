@@ -36,15 +36,22 @@ def final_score(candidate: dict) -> float:
 
 
 def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
-    """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence,
-    ordena pelo Score Final, no maximo 1 pick por categoria (ate 3 no
-    total), define is_best_pick (nunca RISCO ALTO a menos que todos os
-    escolhidos sejam ALTO)."""
+    """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence
+    / EV<=min_ev, ordena pelo Score Final, no maximo 1 pick por categoria
+    (ate 3 no total), define is_best_pick (nunca RISCO ALTO a menos que
+    todos os escolhidos sejam ALTO).
+
+    EV positivo e criterio obrigatorio de aprovacao (nao so de escolha de
+    linha) -- select_smart_safe_line tem um fallback conservador que pode
+    devolver uma linha com EV negativo quando nenhuma passa no filtro
+    primario; esse fallback e valido pra nao deixar a lista vazia sem
+    motivo, mas NUNCA deve virar uma aposta aprovada."""
     eligible = [
         c for c in candidates
         if c["taxa_real"] >= config.min_taxa
         and c["amostra"] >= config.min_amostra
         and c["confidence"] >= config.min_confidence
+        and c["ev"] > config.min_ev
     ]
     for c in eligible:
         c["final_score"] = final_score(c)

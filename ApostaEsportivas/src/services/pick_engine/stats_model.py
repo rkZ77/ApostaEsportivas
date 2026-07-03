@@ -147,12 +147,23 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     direction = (value or "").strip().lower()
 
     if family == "btts":
+        # Mercados compostos existem na API (ex: "Results/Both Teams Score"
+        # com value "Home/Yes", "Away/No") e batem no classify_market por
+        # conterem "both teams"+"score" no nome -- mas nao sao BTTS puro.
+        # Value precisa ser EXATAMENTE "yes"/"no", senao e um mercado
+        # composto/desconhecido, fora do escopo (retorna None).
+        if direction not in ("yes", "sim", "no", "não", "nao"):
+            return None
         want_btts = direction in ("yes", "sim")
 
         def hit_fn(m):
             occurred = (m.get("home_goals") or 0) > 0 and (m.get("away_goals") or 0) > 0
             return 1 if occurred == want_btts else 0
     else:
+        # Mesma logica: "Total Goals/Both Teams To Score" tem value tipo
+        # "o/yes 2.5" que nao e nem "over" nem "under" puro -- rejeita.
+        if direction not in ("over", "under"):
+            return None
         try:
             line_val = float(line_str)
         except (TypeError, ValueError):

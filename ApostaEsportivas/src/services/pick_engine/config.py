@@ -10,6 +10,7 @@ class PickEngineConfig:
     min_taxa: float = 0.65
     min_amostra: int = 5
     min_confidence: float = 0.55
+    min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta
 
     # Smart Safe Line (escolha de linha)
     min_odd: float = 1.60
