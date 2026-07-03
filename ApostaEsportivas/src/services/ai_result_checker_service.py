@@ -24,7 +24,8 @@ class AIResultCheckerService:
                 home_corners, away_corners, total_corners,
                 home_yellow_cards, away_yellow_cards,
                 home_red_cards, away_red_cards,
-                home_goals_ht, away_goals_ht
+                home_goals_ht, away_goals_ht,
+                status
             FROM match_statistics
             WHERE fixture_id = %s
             LIMIT 1;
@@ -53,6 +54,7 @@ class AIResultCheckerService:
             "away_red":      ar,
             "home_cards":    hy + hr,
             "away_cards":    ay + ar,
+            "status":        row[12],
             "total_cards":   hy + hr + ay + ar,
             "total_yellow":  hy + ay,
             "total_red":     hr + ar,
@@ -329,6 +331,16 @@ class AIResultCheckerService:
         is_ht  = self._is_first_half(market)
         side   = self.detect_side(market, home_team, away_team)
         op, val = self.parse_line(line)
+
+        # Mercados de over/under (gols totais/escanteios/cartões) são
+        # liquidados pelas casas com base no TEMPO NORMAL (90min) -- mas
+        # /fixtures/statistics da API-Football devolve o jogo inteiro
+        # (incluindo prorrogação/pênaltis) sem separar por período. Sem
+        # como recalcular o número certo, anula (PUSH) em vez de arriscar
+        # um RED/GREEN errado. Mercados de 1° tempo não são afetados (HT é
+        # sempre tempo normal, por definição).
+        if mt in ("goals", "corners", "cards") and not is_ht and stats.get("status") in ("AET", "PEN"):
+            return ("PUSH", Decimal("0"))
 
         # Seleciona gols corretos (1° tempo ou jogo completo)
         if is_ht:
