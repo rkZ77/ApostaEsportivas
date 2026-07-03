@@ -16,6 +16,15 @@ class PickEngineConfig:
     min_odd: float = 1.60
     min_edge: float = 0.05
 
+    # Fase 5: escolha de linha -- faixa conservadora de odd (preferencia
+    # suave, nao filtro: uma linha fora da faixa ainda vence se o edge for
+    # claramente maior) + pesos do line_score (taxa+edge+bonus conservador)
+    conservative_odd_low: float = 1.50
+    conservative_odd_high: float = 1.90
+    line_weight_taxa: float = 0.5
+    line_weight_edge: float = 0.3
+    line_weight_conservative: float = 0.2
+
     # Pesos da formula de confidence: C*weight_c + Q*weight_q + K*weight_k
     weight_c: float = 0.45
     weight_q: float = 0.25

@@ -30,6 +30,7 @@ def _candidate_summary(c: dict) -> dict:
         "context_score": c.get("context_score"),
         "profile_score": c.get("profile_score"),
         "news_score": c.get("news_score"),
+        "line_score": c.get("line_score"),
         "final_score": c.get("final_score"),
         "is_best_pick": c.get("is_best_pick", False),
         "eligible": c.get("final_score") is not None,
@@ -80,9 +81,10 @@ def _print_summary(pipeline: str, fixture: dict, candidates_summary: list) -> No
     for c in sorted(candidates_summary, key=lambda x: x.get("final_score") or -1, reverse=True):
         marker = " <== ESCOLHIDO" if c["is_best_pick"] else ""
         if c["eligible"]:
-            print(f"    [{c['market_type']:<8}] {c['line']:<12} taxa={c['taxa_real']*100:5.1f}% "
+            print(f"    [{c['market_type']:<12}] {c['line']:<14} taxa={c['taxa_real']*100:5.1f}% "
                   f"amostra={c['amostra']:<3} conf={c['confidence']*100:4.0f}% ev={c['ev']*100:+6.1f}% "
-                  f"ctx={c['context_score']} perfil={c['profile_score']} score_final={c['final_score']}{marker}")
+                  f"ctx={c['context_score']} perfil={c['profile_score']} line_score={c['line_score']} "
+                  f"score_final={c['final_score']}{marker}")
         else:
-            print(f"    [{c['market_type']:<8}] {c['line']:<12} REJEITADO (não passou nos critérios mínimos: "
+            print(f"    [{c['market_type']:<12}] {c['line']:<14} REJEITADO (não passou nos critérios mínimos: "
                   f"taxa={c['taxa_real']*100:5.1f}% amostra={c['amostra']} conf={c['confidence']*100:4.0f}%)")

@@ -19,10 +19,15 @@ def analyze_fixture_markets(
     matchup_data: dict | None = None,
     news_data: dict | None = None,
 ) -> list:
-    """Calcula taxa/confidence/edge/EV para cada mercado goals/corners/
-    cards/btts disponivel nas odds ja estruturadas (services.odds_service.
-    OddsService.load_odds_structured), a partir do historico ja carregado.
-    Nao cobre 1X2/Dupla Chance/Handicap.
+    """Calcula taxa/confidence/edge/EV para cada mercado suportado
+    (classify_market()) disponivel nas odds ja estruturadas
+    (services.odds_service.OddsService.load_odds_structured), a partir do
+    historico ja carregado. Cobre gols/escanteios/cartoes/ambas marcam/
+    chutes/impedimentos (over-under), 1X2, dupla chance, empate anula
+    aposta, handicap (gols/escanteios/cartoes), par/impar, clean sheet e
+    vitoria sem sofrer gol -- ver stats_model.classify_market() pra lista
+    completa e o que fica de fora (jogador individual, placar exato,
+    1o/2o tempo).
 
     `context_data` (saida de context_model.build_context), `matchup_data`
     (saida de team_profile_model.compare_matchup) e `news_data` (saida de
@@ -53,7 +58,7 @@ def analyze_fixture_markets(
             best_odd = float(m.get("best_odd") or 0)
             if best_odd <= 1.0:
                 continue
-            taxa = stats_model.market_taxa(
+            taxa = stats_model.compute_taxa(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
             )

@@ -83,64 +83,164 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
 
 
 _FAMILY_STAT_FIELDS = {
-    "goals":   {"total": "total_goals",        "home": "home_goals",        "away": "away_goals"},
-    "corners": {"total": "total_corners",      "home": "home_corners",      "away": "away_corners"},
-    "cards":   {"total": "total_yellow_cards", "home": "home_yellow_cards", "away": "away_yellow_cards"},
+    "goals":    {"total": "total_goals",        "home": "home_goals",        "away": "away_goals"},
+    "corners":  {"total": "total_corners",      "home": "home_corners",      "away": "away_corners"},
+    "cards":    {"total": "total_yellow_cards", "home": "home_yellow_cards", "away": "away_yellow_cards"},
+    # shots/offsides nao tem coluna "total_X" pronta (so home/away) --
+    # _extract_stat soma os dois quando scope="total".
+    "shots":    {"total": None, "home": "home_total_shots", "away": "away_total_shots"},
+    "offsides": {"total": None, "home": "home_offsides",    "away": "away_offsides"},
 }
-
-_EXCLUDED_MARKET_KEYWORDS = (
-    "handicap", "winner", "chance", "1x2", "half", "first half", "second half",
-    "shot", "shots", "possession", "offside", "foul", "save",
-)
 
 
 def classify_market(market_name: str):
-    """Deriva (familia, escopo) do nome (ingles, de odds_service) para os
-    mercados cobertos pelo Modelo 1: goals|corners|cards|btts, escopo
-    total|home|away. Mercados de resultado (1X2/Dupla Chance/Handicap) e
-    de meio-tempo ficam fora do escopo (retorna None) -- nao ha dado
-    historico de meio-tempo em last10_home/last10_away hoje."""
+    """Deriva (familia, escopo) do nome (ingles, de odds_service).
+    Familias cobertas hoje: goals|corners|cards|btts|shots|offsides
+    (over/under), outcome (1X2), double_chance, draw_no_bet,
+    handicap_goals|handicap_corners|handicap_cards, odd_even_goals|
+    odd_even_corners, clean_sheet, win_to_nil.
+
+    Fora de escopo (retorna None), por decisao explicita:
+    - Mercados de jogador individual (artilheiro, chutes/cartao/assistencia
+      do jogador) -- nao existe historico por jogador no sistema hoje
+      (existe via API /players, mas exige coletor+tabela novos -- Fase 6).
+    - Placar exato/numero de gols exato -- amostra de ~15 jogos nao
+      sustenta uma distribuicao de placar confiavel.
+    - Mercados de 1o/2o tempo -- o dado (home_goals_ht) existe em
+      match_statistics mas a query de historico agregado nao traz isso.
+    - Mercados exoticos ainda nao modelados (Corners/Shots 1x2 -- e um
+      3-way sobre a contagem, nao sobre o resultado da partida --,
+      Winning Margin, Method of Victory, Race To, Highest Scoring Half,
+      Game Decided After Penalties/Extra Time, etc.) -- ordem dos checks
+      abaixo e do mais especifico pro mais generico; qualquer coisa que
+      nao bater cai em None por padrao (nunca advinha)."""
     name = market_name.lower()
-    if any(kw in name for kw in _EXCLUDED_MARKET_KEYWORDS):
+
+    if "handicap" in name:
+        if "half" in name:
+            return None
+        if "corner" in name:
+            return ("handicap_corners", "total")
+        if "card" in name:
+            return ("handicap_cards", "total")
+        return ("handicap_goals", "total")
+
+    if "odd/even" in name or "odd or even" in name:
+        if "half" in name:
+            return None
+        if "corner" in name:
+            return ("odd_even_corners", "total")
+        return ("odd_even_goals", "total")
+
+    if "double chance" in name:
+        if "half" in name:
+            return None
+        return ("double_chance", "total")
+
+    if "draw no bet" in name:
+        if "half" in name:
+            return None
+        return ("draw_no_bet", "total")
+
+    if "clean sheet" in name:
+        if "home" in name:
+            return ("clean_sheet", "home")
+        if "away" in name:
+            return ("clean_sheet", "away")
         return None
-    if "both teams" in name and "score" in name:
+
+    if "win to nil" in name:
+        return ("win_to_nil", "total")
+
+    if name.strip() in ("match winner", "winner"):
+        return ("outcome", "total")
+
+    if "both teams" in name and "score" in name and "half" not in name:
         return ("btts", "total")
+
+    # Guards contra mercados compostos que contem palavra de familia mas
+    # nao sao over/under simples (ex: "Corners 1x2", "Corners. Total
+    # (Range)", "Corners Race To", "Shots.1x2") -- checa antes dos
+    # fallbacks genericos de corner/card/goal/shot abaixo.
+    if any(kw in name for kw in ("1x2", "race to", "range", "3 way", "highest scoring")):
+        return None
+
     if "corner" in name:
+        if "half" in name:
+            return None
         if "home" in name:
             return ("corners", "home")
         if "away" in name:
             return ("corners", "away")
         return ("corners", "total")
+
     if "card" in name:
+        if "half" in name:
+            return None
         if "home" in name:
             return ("cards", "home")
         if "away" in name:
             return ("cards", "away")
         return ("cards", "total")
+
+    if "offside" in name:
+        if "home" in name:
+            return ("offsides", "home")
+        if "away" in name:
+            return ("offsides", "away")
+        return ("offsides", "total")
+
+    if "shot" in name and "player" not in name and "target" not in name and "on goal" not in name:
+        if "home" in name:
+            return ("shots", "home")
+        if "away" in name:
+            return ("shots", "away")
+        return ("shots", "total")
+
     if "goal" in name:
+        if "half" in name or "method" in name or "scorer" in name or "exact" in name or "number of" in name:
+            return None
         if "home" in name:
             return ("goals", "home")
         if "away" in name:
             return ("goals", "away")
         return ("goals", "total")
+
     return None
+
+
+def _extract_stat(m: dict, family: str, scope: str):
+    """Le o valor real de uma familia/escopo num jogo historico, somando
+    home+away quando a familia nao tem coluna 'total_X' pronta
+    (shots/offsides)."""
+    fields = _FAMILY_STAT_FIELDS[family]
+    if scope in ("home", "away"):
+        return m.get(fields[scope]) or 0
+    total_field = fields.get("total")
+    if total_field:
+        return m.get(total_field) or 0
+    return (m.get(fields["home"]) or 0) + (m.get(fields["away"]) or 0)
 
 
 def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list):
     if family == "btts":
         return last10_home + last10_away, None
-    field = _FAMILY_STAT_FIELDS[family][scope]
     if scope == "home":
-        return last10_home, field
+        return last10_home, None
     if scope == "away":
-        return last10_away, field
-    return last10_home + last10_away, field
+        return last10_away, None
+    return last10_home + last10_away, None
 
 
 def market_taxa(family: str, scope: str, value: str, line_str: str,
                 last10_home: list, last10_away: list, reference_date=None,
                 config: PickEngineConfig = DEFAULT_CONFIG):
-    pool, field = pool_and_field(family, scope, last10_home, last10_away)
+    """Over/under (gols/escanteios/cartoes/chutes/impedimentos) e ambas
+    marcam (btts) -- os mercados 'classicos' ja existiam desde a Fase 1.
+    Mercados novos (1X2/handicap/dupla-chance/etc) tem funcoes proprias
+    abaixo (outcome_taxa, handicap_taxa, ...), despachadas pelo
+    orchestrator via classify_market()."""
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away)
     if not pool:
         return None
 
@@ -171,11 +271,271 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
         is_over = direction == "over"
 
         def hit_fn(m):
-            stat = m.get(field) or 0
+            stat = _extract_stat(m, family, scope)
             over = 1 if stat > line_val else 0
             return over if is_over else 1 - over
 
     return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+
+
+def _combine_two_estimates(rate_a: dict, rate_b: dict, config: PickEngineConfig = DEFAULT_CONFIG):
+    """Combina duas estimativas independentes de weighted_rate() (mesmo
+    espirito de expected_value_convergence: duas leituras do historico,
+    uma por lado, combinadas por media -- soma a amostra de ambas pra Q)."""
+    a = rate_a.get("taxa_ponderada") if rate_a else None
+    b = rate_b.get("taxa_ponderada") if rate_b else None
+    if a is None and b is None:
+        return None
+    combined = b if a is None else (a if b is None else (a + b) / 2)
+    amostra = (rate_a.get("amostra", 0) if rate_a else 0) + (rate_b.get("amostra", 0) if rate_b else 0)
+    quality = sample_quality(amostra, config)
+    return {
+        "taxa_bruta": round(combined, 4),
+        "taxa_ponderada": round(combined, 4),
+        "amostra": amostra,
+        "amostra_label": quality["label"],
+        "Q": quality["Q"],
+    }
+
+
+def outcome_taxa(last10_home: list, last10_away: list, outcome: str,
+                  reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """Taxa ponderada do resultado 1X2 (outcome='home'/'draw'/'away').
+    Mesmo hit_fn aplicado a last10_home (jogos do mandante atual em casa)
+    e last10_away (jogos do visitante atual fora) -- em AMBOS os pools,
+    'home_goals'/'away_goals' se referem ao lado casa/fora DAQUELE jogo
+    historico especifico, entao o mesmo hit_fn mede coisas diferentes mas
+    complementares: no pool casa, a propria tendencia do mandante atual;
+    no pool fora, a tendencia do adversario historico do visitante atual
+    (evidencia indireta, mesmo estilo de expected_value_convergence)."""
+    if outcome not in ("home", "draw", "away"):
+        return None
+
+    def hit_fn(m):
+        h, a = m.get("home_goals") or 0, m.get("away_goals") or 0
+        if outcome == "home":
+            return 1 if h > a else 0
+        if outcome == "draw":
+            return 1 if h == a else 0
+        return 1 if h < a else 0
+
+    rate_home = weighted_rate(last10_home, hit_fn, reference_date, config)
+    rate_away = weighted_rate(last10_away, hit_fn, reference_date, config)
+    return _combine_two_estimates(rate_home, rate_away, config)
+
+
+_DOUBLE_CHANCE_COMBOS = {
+    "home_draw": ("home", "draw"),
+    "draw_away": ("draw", "away"),
+    "home_away": ("home", "away"),
+}
+
+
+def double_chance_taxa(last10_home: list, last10_away: list, combo: str,
+                        reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """P(A ou B) = P(A)+P(B) -- resultados mutuamente exclusivos, soma
+    direta e exata (nao e aproximacao), reaproveitando outcome_taxa."""
+    pair = _DOUBLE_CHANCE_COMBOS.get(combo)
+    if not pair:
+        return None
+    r1 = outcome_taxa(last10_home, last10_away, pair[0], reference_date, config)
+    r2 = outcome_taxa(last10_home, last10_away, pair[1], reference_date, config)
+    if not r1 or not r2:
+        return None
+    combined = min(r1["taxa_ponderada"] + r2["taxa_ponderada"], 1.0)
+    amostra = max(r1["amostra"], r2["amostra"])
+    quality = sample_quality(amostra, config)
+    return {"taxa_bruta": round(combined, 4), "taxa_ponderada": round(combined, 4),
+            "amostra": amostra, "amostra_label": quality["label"], "Q": quality["Q"]}
+
+
+def draw_no_bet_taxa(last10_home: list, last10_away: list, side: str,
+                      reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """side='home'/'away' -- taxa condicionada a nao-empate (remove
+    empate do universo, renormaliza win/loss entre as duas opcoes)."""
+    if side not in ("home", "away"):
+        return None
+    r_home = outcome_taxa(last10_home, last10_away, "home", reference_date, config)
+    r_away = outcome_taxa(last10_home, last10_away, "away", reference_date, config)
+    if not r_home or not r_away:
+        return None
+    total = r_home["taxa_ponderada"] + r_away["taxa_ponderada"]
+    if total <= 0:
+        return None
+    taxa = r_home["taxa_ponderada"] / total if side == "home" else r_away["taxa_ponderada"] / total
+    amostra = max(r_home["amostra"], r_away["amostra"])
+    quality = sample_quality(amostra, config)
+    return {"taxa_bruta": round(taxa, 4), "taxa_ponderada": round(taxa, 4),
+            "amostra": amostra, "amostra_label": quality["label"], "Q": quality["Q"]}
+
+
+def handicap_taxa(family: str, side: str, handicap: float, last10_home: list, last10_away: list,
+                   reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """side='home'/'away' com handicap aplicado (ex: 'Home -1' cobre se
+    home_stat-1 > away_stat, i.e. mandante vence por 2+). Aplica ao valor
+    real de cada jogo historico (gols/escanteios/cartoes -- so troca o
+    field) e combina os dois pools do mesmo jeito de outcome_taxa: o
+    mesmo hit_fn mede, no pool casa, a tendencia do mandante atual, e no
+    pool fora, a tendencia do adversario historico do visitante atual."""
+    if family not in _FAMILY_STAT_FIELDS or side not in ("home", "away"):
+        return None
+    fields = _FAMILY_STAT_FIELDS[family]
+    home_f, away_f = fields["home"], fields["away"]
+    if not home_f or not away_f:
+        return None
+
+    def hit_fn(m):
+        h = m.get(home_f) or 0
+        a = m.get(away_f) or 0
+        if side == "home":
+            return 1 if (h + handicap) > a else 0
+        return 1 if (a + handicap) > h else 0
+
+    rate_home = weighted_rate(last10_home, hit_fn, reference_date, config)
+    rate_away = weighted_rate(last10_away, hit_fn, reference_date, config)
+    return _combine_two_estimates(rate_home, rate_away, config)
+
+
+def odd_even_taxa(family: str, want: str, last10_home: list, last10_away: list,
+                   reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """want='odd'/'even' -- paridade do total da familia (gols/escanteios)."""
+    if family not in _FAMILY_STAT_FIELDS or want not in ("odd", "even"):
+        return None
+    pool = last10_home + last10_away
+    if not pool:
+        return None
+    want_odd = want == "odd"
+
+    def hit_fn(m):
+        stat = _extract_stat(m, family, "total")
+        is_odd = int(stat) % 2 == 1
+        return 1 if is_odd == want_odd else 0
+
+    return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+
+
+def clean_sheet_taxa(side: str, last10_home: list, last10_away: list,
+                      reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """side='home'/'away' -- taxa ponderada de terminar sem sofrer gol,
+    no proprio contexto (casa/fora) do time. Mesmo conceito de
+    team_profile_model.py::defensive_stats, exposto como taxa ponderada
+    (nao media simples) pra alimentar o motor de picks."""
+    if side not in ("home", "away"):
+        return None
+    pool = last10_home if side == "home" else last10_away
+    against_f = "away_goals" if side == "home" else "home_goals"
+
+    def hit_fn(m):
+        return 1 if (m.get(against_f) or 0) == 0 else 0
+
+    return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+
+
+def win_to_nil_taxa(side: str, last10_home: list, last10_away: list,
+                     reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG):
+    """side='home'/'away' -- vence E nao sofre gol."""
+    if side not in ("home", "away"):
+        return None
+    pool = last10_home if side == "home" else last10_away
+    for_f = "home_goals" if side == "home" else "away_goals"
+    against_f = "away_goals" if side == "home" else "home_goals"
+
+    def hit_fn(m):
+        scored = m.get(for_f) or 0
+        conceded = m.get(against_f) or 0
+        return 1 if (scored > conceded and conceded == 0) else 0
+
+    return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+
+
+def _parse_side_handicap(value: str):
+    """Parseia 'Home -1', 'Away +0.25', 'Draw -3' -> (side, handicap).
+    side em minusculo. Retorna (None, None) se nao reconhecer o formato."""
+    if not value:
+        return None, None
+    parts = value.strip().split()
+    if len(parts) < 2:
+        return None, None
+    side = parts[0].strip().lower()
+    if side not in ("home", "away", "draw"):
+        return None, None
+    try:
+        handicap = float(parts[1].replace("+", ""))
+    except ValueError:
+        return None, None
+    return side, handicap
+
+
+_DOUBLE_CHANCE_VALUE_MAP = {
+    "home/draw": "home_draw", "draw/home": "home_draw",
+    "draw/away": "draw_away", "away/draw": "draw_away",
+    "home/away": "home_away", "away/home": "home_away",
+}
+
+
+def compute_taxa(family: str, scope: str, value: str, line_str: str,
+                  last10_home: list, last10_away: list, reference_date=None,
+                  config: PickEngineConfig = DEFAULT_CONFIG):
+    """Ponto de entrada unico do Modelo 1 -- despacha pra funcao de taxa
+    certa conforme a familia (classify_market() ja devolveu family/scope).
+    Mercados 'classicos' (goals/corners/cards/btts/shots/offsides) usam
+    market_taxa() (over/under ou yes/no); os demais tem parsing de value
+    proprio (3-way, side+handicap, odd/even)."""
+    direction = (value or "").strip().lower()
+
+    if family in ("goals", "corners", "cards", "btts", "shots", "offsides"):
+        return market_taxa(family, scope, value, line_str, last10_home, last10_away, reference_date, config)
+
+    if family == "outcome":
+        if direction not in ("home", "draw", "away"):
+            return None
+        return outcome_taxa(last10_home, last10_away, direction, reference_date, config)
+
+    if family == "double_chance":
+        combo = _DOUBLE_CHANCE_VALUE_MAP.get(direction)
+        if not combo:
+            return None
+        return double_chance_taxa(last10_home, last10_away, combo, reference_date, config)
+
+    if family == "draw_no_bet":
+        if direction not in ("home", "away"):
+            return None
+        return draw_no_bet_taxa(last10_home, last10_away, direction, reference_date, config)
+
+    if family in ("handicap_goals", "handicap_corners", "handicap_cards"):
+        side, handicap = _parse_side_handicap(value)
+        if side not in ("home", "away") or handicap is None:
+            return None
+        base_family = family.replace("handicap_", "")
+        return handicap_taxa(base_family, side, handicap, last10_home, last10_away, reference_date, config)
+
+    if family in ("odd_even_goals", "odd_even_corners"):
+        if direction not in ("odd", "even"):
+            return None
+        base_family = family.replace("odd_even_", "")
+        return odd_even_taxa(base_family, direction, last10_home, last10_away, reference_date, config)
+
+    if family == "clean_sheet":
+        if direction not in ("yes", "sim", "no", "não", "nao"):
+            return None
+        taxa = clean_sheet_taxa(scope, last10_home, last10_away, reference_date, config)
+        if not taxa or taxa["taxa_ponderada"] is None:
+            return None
+        want_yes = direction in ("yes", "sim")
+        if want_yes:
+            return taxa
+        # "No" (nao faz clean sheet) -- inverte a taxa ponderada
+        inverted = dict(taxa)
+        inverted["taxa_bruta"] = round(1 - taxa["taxa_bruta"], 4)
+        inverted["taxa_ponderada"] = round(1 - taxa["taxa_ponderada"], 4)
+        return inverted
+
+    if family == "win_to_nil":
+        if direction not in ("home", "away"):
+            return None
+        return win_to_nil_taxa(direction, last10_home, last10_away, reference_date, config)
+
+    return None
 
 
 _SCORED_CONCEDED_FIELDS = {
