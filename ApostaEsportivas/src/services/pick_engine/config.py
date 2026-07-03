@@ -15,6 +15,12 @@ class PickEngineConfig:
     # Smart Safe Line (escolha de linha)
     min_odd: float = 1.60
     min_edge: float = 0.05
+    # Teto de sanidade: odds muito extremas (>15) geralmente refletem
+    # mercado ilíquido/raramente cotado, não valor real -- visto na pratica
+    # com um handicap a odd 51.0 gerando EV de +3839% (taxa historica
+    # provavelmente nao reflete o risco real que o mercado ilíquido
+    # precifica). Aplica tanto no filtro principal quanto no fallback.
+    max_odd: float = 15.0
 
     # Fase 5: escolha de linha -- faixa conservadora de odd (preferencia
     # suave, nao filtro: uma linha fora da faixa ainda vence se o edge for

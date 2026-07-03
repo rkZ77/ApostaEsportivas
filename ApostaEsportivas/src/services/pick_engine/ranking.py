@@ -34,18 +34,20 @@ def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> f
 
 
 def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> dict | None:
-    """Descarta odd<min_odd, edge<min_edge, EV<=0; entre as que sobram
+    """Descarta odd<min_odd, odd>max_odd (mercado iliquido/raramente
+    cotado, nao valor real), edge<min_edge, EV<=0; entre as que sobram
     escolhe a de maior line_score (taxa+edge+faixa conservadora de odd).
-    Sem candidato aprovado, cai pra qualquer linha com odd>=1.01 (fallback
-    conservador, nunca forca uma linha ruim silenciosamente)."""
+    Sem candidato aprovado, cai pra qualquer linha com odd entre 1.01 e
+    max_odd (fallback conservador, nunca forca uma linha ruim ou um
+    outlier de mercado ilíquido silenciosamente)."""
     if not line_candidates:
         return None
 
     passed = [
         c for c in line_candidates
-        if c["odd"] >= config.min_odd and c["edge"] >= config.min_edge and c["ev"] > 0
+        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= config.min_edge and c["ev"] > 0
     ]
-    pool = passed or [c for c in line_candidates if c["odd"] >= 1.01]
+    pool = passed or [c for c in line_candidates if 1.01 <= c["odd"] <= config.max_odd]
     if not pool:
         return None
 
