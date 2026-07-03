@@ -14,6 +14,7 @@ from services.pick_engine import analyze_fixture_markets, rank_market_candidates
 from services.pick_engine.config import DICA_CONFIG
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from engine_pipelines.decision_log import log_decision
 
 WC_LEAGUE_ID = 1
 ODD_MIN = 1.30
@@ -105,6 +106,7 @@ def _best_candidate_across_fixtures(fixtures: list) -> tuple | None:
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
+        log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
         if not picks:
             continue
 

@@ -14,6 +14,7 @@ from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from engine_pipelines.decision_log import log_decision
 
 WC_LEAGUE_ID = 1
 ODD_COMBINED_MIN = 1.45
@@ -123,6 +124,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
                 context_data=context_data, matchup_data=matchup,
             )
             picks = rank_market_candidates(candidates)
+            log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
 
             for p in picks:
                 if not (ODD_INDIVIDUAL_MIN <= p["odd"] <= ODD_INDIVIDUAL_MAX):

@@ -14,6 +14,7 @@ from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod 
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from engine_pipelines.decision_log import log_decision
 
 
 def _require_dev():
@@ -108,6 +109,7 @@ def run_vip_engine():
                 context_data=context_data, matchup_data=matchup,
             )
             picks = rank_market_candidates(candidates)
+            log_decision("VIP_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
             if not picks:
                 continue
 

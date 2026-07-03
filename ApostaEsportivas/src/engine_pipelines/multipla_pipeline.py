@@ -19,6 +19,7 @@ from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from engine_pipelines.decision_log import log_decision
 
 ODD_TOTAL_MIN = 2.00
 ODD_TOTAL_MAX = 3.00
@@ -114,6 +115,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 context_data=context_data, matchup_data=matchup,
             )
             picks = rank_market_candidates(candidates)
+            log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
 
             for p in picks:
                 if (fixture["fixture_id"], p["market_type"]) in used_pairs:

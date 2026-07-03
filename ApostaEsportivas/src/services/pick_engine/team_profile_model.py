@@ -355,11 +355,21 @@ def profile_score_for_market(matchup: dict | None, market_type: str) -> float | 
     """Reduz o delta de compare_matchup (para a familia de mercado do
     candidato) a um score 0-1 (0.5=neutro) para uso no Score Final
     (ranking.py::final_score). Delta tipico fica entre -2 e +2; escala
-    suave para nao dominar o score."""
+    suave para nao dominar o score.
+
+    O delta e clampado em [-2, 2] ANTES de escalar -- sem isso, um
+    baseline de familia mal calibrado pra um tipo de time (ex: selecoes
+    nacionais fazem bem menos escanteios que o baseline de futebol de
+    clube, _CORNERS_BASELINE=9.5) produz delta muito mais extremo que
+    gols/cartoes pro mesmo jogo, satura o score no piso/teto (0.0/1.0) e
+    passa a dominar sistematicamente o Score Final -- nao por ter sinal
+    mais forte, so por causa do descompasso de baseline. Bug real
+    encontrado via decision_log.py: escanteios com EV +73% e confidence
+    86% perdendo pra cartoes com EV +57%/80% so por causa disso."""
     if not matchup:
         return None
     entry = matchup.get(market_type)
     if not entry:
         return 0.5
-    delta = entry.get("delta", 0.0)
+    delta = max(min(entry.get("delta", 0.0), 2.0), -2.0)
     return round(max(min(0.5 + delta * 0.15, 1.0), 0.0), 4)
