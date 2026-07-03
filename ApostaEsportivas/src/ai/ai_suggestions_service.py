@@ -152,13 +152,15 @@ def translate_market(market: str) -> str:
 _COHERENCE_KEYWORDS: dict[str, list[str]] = {
     "cards":   ["cartão", "cartões", "card", "amarelo", "yellow", "vermelho", "red card", "disciplin"],
     "corners": ["escanteio", "canto", "corner"],
-    "goals":   ["gol", "goal", "marcar", "score", "btts", "over", "under"],
+    "goals":   ["gol", "goal", "marcar", "score", "btts"],
 }
 
 def _market_type_from_name(market: str) -> str | None:
     """Classifica market_type a partir do nome. Retorna None quando não reconhecido
     para que o caller use keyword matching no texto em vez de forçar "result"."""
     m = market.lower()
+    if "shot" in m or "chute" in m:
+        return "shots"
     if "corner" in m or "escanteio" in m:
         return "corners"
     if "card" in m or "cartão" in m or "cartões" in m:
@@ -642,7 +644,7 @@ HISTÓRICO FORA
     _MARKET_KEYWORDS: dict[str, list[str]] = {
         "cards":   ["cartão", "cartões", "card", "amarelo", "yellow", "vermelho", "red card", "disciplin"],
         "corners": ["escanteio", "canto", "corner"],
-        "goals":   ["gol", "goal", "marcar", "score", "btts", "over", "under"],
+        "goals":   ["gol", "goal", "marcar", "score", "btts"],
     }
 
     def _check_market_reasoning_match(self, pick: dict) -> bool:
