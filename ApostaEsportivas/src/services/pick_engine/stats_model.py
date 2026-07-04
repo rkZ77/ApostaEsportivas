@@ -86,17 +86,25 @@ _FAMILY_STAT_FIELDS = {
     "goals":    {"total": "total_goals",        "home": "home_goals",        "away": "away_goals"},
     "corners":  {"total": "total_corners",      "home": "home_corners",      "away": "away_corners"},
     "cards":    {"total": "total_yellow_cards", "home": "home_yellow_cards", "away": "away_yellow_cards"},
-    # shots/offsides nao tem coluna "total_X" pronta (so home/away) --
-    # _extract_stat soma os dois quando scope="total".
-    "shots":    {"total": None, "home": "home_total_shots", "away": "away_total_shots"},
-    "offsides": {"total": None, "home": "home_offsides",    "away": "away_offsides"},
+    # shots/shots_on_target/offsides nao tem coluna "total_X" pronta (so
+    # home/away) -- _extract_stat soma os dois quando scope="total".
+    # IMPORTANTE: "shots" (chutes totais/tentativas) e "shots_on_target"
+    # (chutes NO ALVO) sao familias DIFERENTES com linhas bem diferentes
+    # (chutes totais ~20-25/jogo, chutes no alvo ~8-10/jogo) -- misturar
+    # os dois faz a taxa parecer quase perfeita (bug real encontrado
+    # rodando contra fixture real: "Total ShotOnGoal" caindo na familia
+    # errada, taxa saindo 98.7% por comparar chutes-no-alvo com o campo
+    # de chutes totais).
+    "shots":            {"total": None, "home": "home_total_shots", "away": "away_total_shots"},
+    "shots_on_target":  {"total": None, "home": "home_shots_on",    "away": "away_shots_on"},
+    "offsides":         {"total": None, "home": "home_offsides",    "away": "away_offsides"},
 }
 
 
 def classify_market(market_name: str):
     """Deriva (familia, escopo) do nome (ingles, de odds_service).
-    Familias cobertas hoje: goals|corners|cards|btts|shots|offsides
-    (over/under), outcome (1X2), double_chance, draw_no_bet,
+    Familias cobertas hoje: goals|corners|cards|btts|shots|shots_on_target|
+    offsides (over/under), outcome (1X2), double_chance, draw_no_bet,
     handicap_goals|handicap_corners|handicap_cards, odd_even_goals|
     odd_even_corners, clean_sheet, win_to_nil.
 
@@ -190,7 +198,24 @@ def classify_market(market_name: str):
             return ("offsides", "away")
         return ("offsides", "total")
 
-    if "shot" in name and "player" not in name and "target" not in name and "on goal" not in name:
+    if "shot" in name and "player" not in name and "half" not in name:
+        # "Total ShotOnGoal"/"Shot On Target"/"ShotsOnTarget" etc -- variantes
+        # com e sem espaco, e com "goal" ou "target" -- sao chutes NO ALVO
+        # (linha ~8-10/jogo), MUITO diferente de chutes totais (linha ~20-25).
+        # Checa sem espaco nenhum pra pegar "ShotOnGoal" (uma palavra so, o
+        # "on goal" com espaco nao bate nessa string e caia no fallback
+        # errado -- bug real encontrado com dado de producao).
+        name_nospace = name.replace(" ", "")
+        if "shotontarget" in name_nospace or "shotongoal" in name_nospace or "shotsontarget" in name_nospace:
+            if "home" in name:
+                return ("shots_on_target", "home")
+            if "away" in name:
+                return ("shots_on_target", "away")
+            return ("shots_on_target", "total")
+
+        if "target" in name or "on goal" in name:
+            return None  # variante nao reconhecida de chute no alvo -- nao adivinha
+
         if "home" in name:
             return ("shots", "home")
         if "away" in name:
@@ -478,12 +503,12 @@ def compute_taxa(family: str, scope: str, value: str, line_str: str,
                   config: PickEngineConfig = DEFAULT_CONFIG):
     """Ponto de entrada unico do Modelo 1 -- despacha pra funcao de taxa
     certa conforme a familia (classify_market() ja devolveu family/scope).
-    Mercados 'classicos' (goals/corners/cards/btts/shots/offsides) usam
-    market_taxa() (over/under ou yes/no); os demais tem parsing de value
-    proprio (3-way, side+handicap, odd/even)."""
+    Mercados 'classicos' (goals/corners/cards/btts/shots/shots_on_target/
+    offsides) usam market_taxa() (over/under ou yes/no); os demais tem
+    parsing de value proprio (3-way, side+handicap, odd/even)."""
     direction = (value or "").strip().lower()
 
-    if family in ("goals", "corners", "cards", "btts", "shots", "offsides"):
+    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides"):
         return market_taxa(family, scope, value, line_str, last10_home, last10_away, reference_date, config)
 
     if family == "outcome":

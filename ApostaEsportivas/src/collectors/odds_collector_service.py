@@ -72,7 +72,7 @@ BET_ID_PT_MAP: dict[int, str] = {
     1:   "Resultado Final (1X2)",
     12:  "Dupla Chance",
     13:  "Vencedor do 1º Tempo",
-    4:   "Ambas as Equipes Marcam",
+    4:   "Handicap Asiático",
     8:   "Ambas as Equipes Marcam",
     34:  "Ambas Marcam - 1º Tempo",
     5:   "Gols Mais/Menos",
