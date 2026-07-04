@@ -6,6 +6,7 @@ from services.ai_result_checker_multiplas import AIMultiplasCheckerService
 from services.ai_result_checker_alavancagem import AIResultCheckerAlavancagem
 from services.ai_result_checker_free import AIResultCheckerFree
 from collectors.match_statistics_sync_service import MatchStatisticsSyncService
+from services.picks_ledger_sync_service import sync as sync_picks_ledger
 
 
 class AIUpdateResultsMain:
@@ -51,6 +52,14 @@ class AIUpdateResultsMain:
             f"[AI_UPDATE_MAIN] VIP: {updated_vip} | Free: {updated_free} | "
             f"Multiplas: {updated_multiplas} | Alavancagem: {updated_alav}"
         )
+
+        # Sincroniza a tabela unificada (picks_ledger) -- nunca escreve nas
+        # 4 tabelas acima, so le delas. Falha aqui nunca derruba a checagem
+        # de resultado em si (ja concluida nas linhas anteriores).
+        try:
+            sync_picks_ledger()
+        except Exception as e:
+            print(f"[AI_UPDATE_MAIN] Aviso: falha ao sincronizar picks_ledger (nao afeta resultados): {e}")
 
 
 if __name__ == "__main__":
