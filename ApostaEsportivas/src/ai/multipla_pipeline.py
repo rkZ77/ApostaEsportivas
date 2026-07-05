@@ -664,6 +664,14 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures disponiveis — sem multipla.")
         return None
 
+    # ── Carrega picks VIP/Free do dia ANTES do corte, para priorizar jogos livres ──
+    today_used = _get_today_used_picks()
+    used_fixture_ids = {p["fixture_id"] for p in today_used if p.get("fixture_id")}
+
+    # Jogos sem nenhum pick VIP/Free vão primeiro — mais chance de mercado livre.
+    # Ordenação estável preserva o horário dentro de cada grupo.
+    fixtures_raw.sort(key=lambda fx: fx["fixture_id"] in used_fixture_ids)
+
     fixtures_raw = fixtures_raw[:4]  # máx 4 fixtures por chamada
     print(f"[MULTIPLA] Carregando dados para {len(fixtures_raw)} fixture(s)...")
     fixtures = []
@@ -692,8 +700,7 @@ def run_multipla_pipeline() -> dict | None:
         print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis — sem multipla.")
         return None
 
-    # ── Carrega picks VIP/Free do dia para bloqueio de mercado ───────────────
-    today_used = _get_today_used_picks()
+    # ── Pares (fixture_id, market_type) já usados por VIP/Free, para bloqueio de mercado ──
     used_pairs: set[tuple] = {
         (p["fixture_id"], p["market_type"])
         for p in today_used
