@@ -38,3 +38,12 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   multiplas: '#60a5fa',
   alavancagem: '#fb923c',
 }
+
+/** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */
+export const PICK_TYPE_CLS: Record<string, string> = {
+  vip:         'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
+  free:        'text-green-400 bg-green-500/10 border-green-500/20',
+  multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  multiplas:   'text-blue-400 bg-blue-400/10 border-blue-400/20',
+  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+}

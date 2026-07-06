@@ -1,49 +1,11 @@
 import { useEffect, useState } from 'react'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
-import axios from 'axios'
+import { Helmet } from 'react-helmet-async'
 import { Lock, Crown, TrendingUp } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-
-const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
-const LEAGUE_LOGO = (id?: number) =>
-  id ? (LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`) : null
-
-const RESULT_STYLE: Record<string, { bg: string; border: string; text: string; label: string; emoji: string }> = {
-  GREEN:      { bg: 'bg-green-500/15',  border: 'border-green-500/40',  text: 'text-green-400',  label: 'GREEN',   emoji: '✓' },
-  RED:        { bg: 'bg-red-500/15',    border: 'border-red-500/40',    text: 'text-red-400',    label: 'RED',     emoji: '✗' },
-  PUSH:       { bg: 'bg-zinc-700/40',   border: 'border-zinc-600',      text: 'text-zinc-300',   label: 'PUSH',    emoji: '↔' },
-  'HALF-WIN': { bg: 'bg-teal-500/15',   border: 'border-teal-500/40',   text: 'text-teal-400',   label: '½ WIN',   emoji: '½' },
-  'HALF-LOSS':{ bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-400', label: '½ LOSS',  emoji: '½' },
-}
-
-const TYPE_LABEL: Record<string, string> = {
-  vip: 'VIP',
-  free: 'Free',
-  multipla: 'Múltipla',
-  alavancagem: 'Alavancagem',
-}
-
-function TeamLogo({ id, name }: { id?: number; name: string }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={28} height={28}
-      className="object-contain shrink-0"
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
-
-function LeagueLogo({ id, name }: { id?: number; name?: string }) {
-  const src = LEAGUE_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name ?? ''} width={16} height={16}
-      className="w-4 h-4 object-contain opacity-70"
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
+import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
+import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 
 export default function PickPublico() {
   const { pick_type, pick_id } = useParams<{ pick_type: string; pick_id: string }>()
@@ -61,7 +23,7 @@ export default function PickPublico() {
 
   useEffect(() => {
     if (!pick_type || !pick_id) return
-    axios.get(`/api/public/pick/${pick_type}/${pick_id}`)
+    api.get(`/public/pick/${pick_type}/${pick_id}`)
       .then(r => setPick(r.data))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false))
@@ -94,13 +56,19 @@ export default function PickPublico() {
     )
   }
 
-  const rs = pick.result ? RESULT_STYLE[pick.result] : null
+  const rs = getResultStyle(pick.result)
   const profit = pick.profit != null ? Number(pick.profit) : null
   const odd    = pick.odd != null ? Number(pick.odd) : null
-  const typeLabel = TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
+  const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
+  const resultLabel = pick.result ? ` · ${pick.result}` : ''
+  const pageTitle = `${pick.home_team_name ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
+      <Helmet>
+        <title>{pageTitle}</title>
+        <meta name="description" content={`Odd ${odd?.toFixed(2) ?? '-'} · ${typeLabel} · Análise de IA para apostas esportivas.`} />
+      </Helmet>
       {/* Topo */}
       <div className="px-4 pt-5 pb-3 flex items-center justify-between">
         <Link to="/" className="flex items-center gap-1.5">
@@ -151,13 +119,13 @@ export default function PickPublico() {
               </div>
             ) : (
               <div className="flex items-center gap-3">
-                <TeamLogo id={pick.home_team_id} name={pick.home_team_name ?? ''} />
+                <TeamLogo id={pick.home_team_id} name={pick.home_team_name ?? ''} size={28} />
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-bold text-white truncate">{pick.home_team_name}</p>
                   <p className="text-[11px] text-zinc-500">vs</p>
                   <p className="text-sm font-bold text-white truncate">{pick.away_team_name}</p>
                 </div>
-                <TeamLogo id={pick.away_team_id} name={pick.away_team_name ?? ''} />
+                <TeamLogo id={pick.away_team_id} name={pick.away_team_name ?? ''} size={28} />
               </div>
             )}
             {pick.match_date && (

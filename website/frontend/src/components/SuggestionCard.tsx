@@ -6,6 +6,7 @@ import ApostaModal from './ApostaModal'
 import { translateMarket } from '../utils/marketTranslate'
 import { getResultStyle } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
@@ -24,11 +25,6 @@ function wcPhase(dateStr?: string): string | null {
   }
   return null
 }
-
-const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
-const LEAGUE_LOGO = (id?: number) =>
-  id ? (LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`) : null
 
 interface Suggestion {
   id: number
@@ -58,26 +54,6 @@ interface Suggestion {
   user_bet_house?: string | null
   stake_pct?: number | null
   suggested_stake_units?: number | null
-}
-
-function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
-  const src = TEAM_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name} width={size} height={size}
-      className="object-contain shrink-0" style={{ width: size, height: size }}
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
-}
-
-function LeagueLogo({ id, name }: { id?: number; name?: string }) {
-  const src = LEAGUE_LOGO(id)
-  if (!src) return null
-  return (
-    <img src={src} alt={name ?? ''} width={16} height={16}
-      className="w-4 h-4 object-contain shrink-0 opacity-70"
-      onError={e => (e.currentTarget.style.display = 'none')} />
-  )
 }
 
 /** Extrai só o trecho "FATO: ..." ou as primeiras ~120 chars do reasoning */

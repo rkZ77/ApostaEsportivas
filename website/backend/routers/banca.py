@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from database import get_connection
 from auth_utils import get_current_user
@@ -17,7 +17,7 @@ class FollowPick(BaseModel):
     pick_id: int
     pick_type: str
     stake_units: float = 1.0
-    actual_odd: Optional[float] = None
+    actual_odd: Optional[float] = Field(default=None, gt=1, le=1000)
     bet_house: Optional[str] = None
 
 
@@ -31,8 +31,11 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             SELECT pv.result, pv.profit,
                    pv.home_team_name, pv.away_team_name,
                    pv.home_team_id, pv.away_team_id,
-                   pv.market, pv.line, pv.odd
-            FROM picks_vip pv WHERE pv.id = %s
+                   pv.market, pv.line, pv.odd,
+                   f.match_datetime
+            FROM picks_vip pv
+            LEFT JOIN fixtures f ON f.fixture_id = pv.fixture_id
+            WHERE pv.id = %s
         """, (pick_id,))
     elif pick_type == "free":
         cur.execute("""
@@ -40,7 +43,8 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
-                   pf.market, pf.line, pf.odd
+                   pf.market, pf.line, pf.odd,
+                   f.match_datetime
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.id = %s
@@ -53,7 +57,8 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    NULL AS market, NULL AS line,
                    total_odd AS odd,
                    games AS legs_json,
-                   score_combo AS confidence
+                   score_combo AS confidence,
+                   NULL AS match_datetime
             FROM picks_multiplas WHERE id = %s
         """, (pick_id,))
     elif pick_type == "alavancagem":
@@ -62,7 +67,8 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    pa.home_team_1 AS home_team_name, pa.away_team_1 AS away_team_name,
                    f1.home_team_id, f1.away_team_id,
                    pa.market_1 AS market, pa.line_1 AS line,
-                   pa.odd_combined AS odd
+                   pa.odd_combined AS odd,
+                   f1.match_datetime
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.id = %s
@@ -73,7 +79,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if not row:
         return None
     d = dict(row)
-    # Para múltipla: extrai primeiro time dos legs
+    # Para múltipla: extrai primeiro time dos legs + kickoff mais cedo entre as pernas
     if pick_type == "multipla" and d.get("legs_json"):
         import json as _json
         try:
@@ -86,6 +92,11 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             d["away_team_name"] = first.get("away") or first.get("away_team")
             d["home_team_id"]   = first.get("home_team_id")
             d["away_team_id"]   = first.get("away_team_id")
+            fixture_ids = [leg["fixture_id"] for leg in legs if leg.get("fixture_id")]
+            if fixture_ids:
+                cur.execute("SELECT MIN(match_datetime) AS md FROM fixtures WHERE fixture_id = ANY(%s)", (fixture_ids,))
+                md_row = cur.fetchone()
+                d["match_datetime"] = md_row["md"] if md_row else None
         d["market"] = f"Múltipla · {len(legs)} seleções"
         del d["legs_json"]
     return d
@@ -401,6 +412,13 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
             raise HTTPException(404, "Pick não encontrado.")
         if pick.get("result"):
             raise HTTPException(400, "Não é possível registrar aposta após o resultado.")
+        kickoff = pick.get("match_datetime")
+        if kickoff:
+            from datetime import datetime, timezone
+            if kickoff.tzinfo is None:
+                kickoff = kickoff.replace(tzinfo=timezone.utc)
+            if datetime.now(timezone.utc) >= kickoff:
+                raise HTTPException(400, "Não é possível registrar aposta após o início da partida.")
         cur.execute(
             "SELECT id FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (user_id, body.pick_id, body.pick_type),
@@ -464,11 +482,15 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
         conn.close()
 
 
+class AlavancagemInit(BaseModel):
+    bankroll_init: float
+
+
 @router.put("/alavancagem-init")
-def set_alavancagem_init(body: dict, current_user: dict = Depends(get_current_user)):
-    bankroll_init = body.get("bankroll_init")
-    if not bankroll_init or float(bankroll_init) <= 0:
+def set_alavancagem_init(body: AlavancagemInit, current_user: dict = Depends(get_current_user)):
+    if body.bankroll_init <= 0:
         raise HTTPException(400, "Valor deve ser maior que zero.")
+    bankroll_init = body.bankroll_init
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()

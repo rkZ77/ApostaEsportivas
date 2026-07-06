@@ -1,10 +1,11 @@
 import { useEffect, useState, useRef } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
+import BackButton from '../components/BackButton'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -148,7 +149,6 @@ interface LiveStats {
 type PageTab = 'jogos' | 'estatistica'
 
 export default function Fixtures() {
-  const navigate                   = useNavigate()
   const { isVip, isAdmin, user }   = useAuth()
   const canSeeStats = isVip || isAdmin || user?.plan === 'trial'
   const [pageTab, setPageTab]      = useState<PageTab>('jogos')
@@ -232,7 +232,7 @@ export default function Fixtures() {
           {/* Título + badges */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
-              <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+              <BackButton />
               <div>
                 <h1 className="text-base font-black text-white">Jogos</h1>
                 <p className="text-zinc-500 text-xs mt-0.5 capitalize">{dateLabel}</p>

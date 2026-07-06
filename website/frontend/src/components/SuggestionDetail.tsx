@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
-import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
+import { getResultStyle } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
@@ -30,14 +32,6 @@ const resultColor: Record<string, string> = {
   W: 'bg-green-500 text-black',
   D: 'bg-zinc-600 text-white',
   L: 'bg-red-500 text-white',
-}
-
-const pickResultStyle: Record<string, { bg: string; text: string; border: string; label: string }> = {
-  GREEN:      { bg: 'bg-green-500/10', text: 'text-green-400', border: 'border-green-500/30', label: 'GREEN ✓' },
-  RED:        { bg: 'bg-red-500/10',   text: 'text-red-400',   border: 'border-red-500/30',   label: 'RED ✗' },
-  PUSH:       { bg: 'bg-zinc-800',     text: 'text-zinc-300',  border: 'border-zinc-700',     label: 'PUSH' },
-  'HALF-WIN': { bg: 'bg-teal-500/10',  text: 'text-teal-400',  border: 'border-teal-500/30',  label: '½ WIN' },
-  'HALF-LOSS':{ bg: 'bg-orange-500/10',text: 'text-orange-400',border: 'border-orange-500/30',label: '½ LOSS' },
 }
 
 function FormBadge({ r }: { r: string }) {
@@ -82,12 +76,13 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const [standingsLoading, setStandingsLoading] = useState(false)
   const [caminho, setCaminho] = useState<any[]>([])
   const [caminhoLoading, setCaminhoLoading] = useState(false)
+  const [locked, setLocked] = useState(false)
 
   useEffect(() => {
-    setLoading(true); setData(null); setTab('ia'); setStandings(null); setCaminho([])
+    setLoading(true); setData(null); setLocked(false); setTab('ia'); setStandings(null); setCaminho([])
     api.get(`/suggestions/${id}/detail`, { params: { pick_type: pickType } })
       .then(r => setData(r.data))
-      .catch(() => setData(null))
+      .catch(err => { if (err?.response?.status === 403) setLocked(true) })
       .finally(() => setLoading(false))
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', onKey)
@@ -132,7 +127,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const s = data?.suggestion
   const homeLogo = TEAM_LOGO(s?.home_team_id)
   const awayLogo = TEAM_LOGO(s?.away_team_id)
-  const resultStyle = s?.result ? pickResultStyle[s.result] : null
+  const resultStyle = getResultStyle(s?.result)
   const confidence = Math.round((s?.confidence ?? 0) * 100)
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
 
@@ -217,7 +212,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div className="text-center shrink-0">
                   {resultStyle ? (
                     <span className={`text-xs font-black px-2 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.text} ${resultStyle.border}`}>
-                      {resultStyle.label}
+                      {resultStyle.label} {resultStyle.emoji}
                     </span>
                   ) : (
                     <span className="text-zinc-600 text-xs font-bold">VS</span>
@@ -290,6 +285,19 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             <div className="flex items-center justify-center h-40">
               <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
             </div>
+          ) : locked ? (
+            <div className="flex flex-col items-center text-center py-10 gap-3">
+              <Lock className="w-6 h-6 text-yellow-400" />
+              <p className="text-zinc-300 text-sm max-w-xs">
+                A análise completa da IA fica disponível só para assinantes VIP.
+              </p>
+              <Link
+                to="/planos"
+                className="mt-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors"
+              >
+                Assinar VIP
+              </Link>
+            </div>
           ) : !data ? (
             <p className="text-zinc-500 text-center py-10">Erro ao carregar dados.</p>
           ) : (
@@ -338,7 +346,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     <div className={`rounded-xl p-4 border flex items-center justify-between ${resultStyle.bg} ${resultStyle.border}`}>
                       <div>
                         <div className="text-xs text-zinc-500 mb-0.5">Resultado</div>
-                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label}</div>
+                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label} {resultStyle.emoji}</div>
                       </div>
                       <div className={`text-2xl font-black ${s.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {s.profit >= 0 ? '+' : ''}{Number(s.profit).toFixed(2)}u

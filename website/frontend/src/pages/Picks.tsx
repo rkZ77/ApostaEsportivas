@@ -12,6 +12,7 @@ import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 // Copa do Mundo 2026 — fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -40,7 +41,7 @@ function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: n
   const src = TEAM_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name} width={size} height={size}
+    <img src={src} alt={name} width={size} height={size} loading="lazy"
       className="object-contain shrink-0" style={{ width: size, height: size }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
@@ -50,7 +51,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
   const src = LEAGUE_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name ?? ''} width={size} height={size}
+    <img src={src} alt={name ?? ''} width={size} height={size} loading="lazy"
       className="object-contain shrink-0 opacity-80" style={{ width: size, height: size }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
@@ -441,10 +442,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   }
 
   const isCopa = dica.league_id === 1
-  const resultStyle =
-    dica.result === 'GREEN' ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
-    : dica.result === 'RED' ? { bg: 'bg-red-500/10',   border: 'border-red-500/30',   text: 'text-red-400',   label: 'RED ✗' }
-    : null
+  const resultStyle = getResultStyle(dica.result)
 
   return (
   <>
@@ -482,7 +480,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         </div>
         {resultStyle ? (
           <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
+            {resultStyle.label} {resultStyle.emoji}
           </span>
         ) : (
           <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
@@ -712,11 +710,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     }
   }
 
-  const resultStyle = m.result === 'GREEN'
-    ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
-    : m.result === 'RED'
-    ? { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'RED ✗' }
-    : null
+  const resultStyle = getResultStyle(m.result)
 
   return (
   <>
@@ -744,7 +738,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
         </div>
         {resultStyle ? (
           <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
+            {resultStyle.label} {resultStyle.emoji}
           </span>
         ) : (
           <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
@@ -959,11 +953,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2 })
   if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3 })
 
-  const resultStyle = pick.result === 'GREEN'
-    ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
-    : pick.result === 'RED'
-    ? { bg: 'bg-red-500/10', border: 'border-red-500/30', text: 'text-red-400', label: 'RED ✗' }
-    : null
+  const resultStyle = getResultStyle(pick.result)
 
   return (
   <>
@@ -982,7 +972,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
         </div>
         {resultStyle ? (
           <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
+            {resultStyle.label} {resultStyle.emoji}
           </span>
         ) : (
           <span className="text-[10px] text-yellow-500 border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
@@ -1233,22 +1223,6 @@ function PipelineStatusCard() {
 }
 
 // Constantes resultado / fonte
-const RESULT_CLS: Record<string, string> = {
-  GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
-  RED:         'bg-red-500/10 text-red-400 border border-red-500/30',
-  PUSH:        'bg-zinc-700/50 text-zinc-400 border border-zinc-700',
-  'HALF-WIN':  'bg-teal-500/10 text-teal-400 border border-teal-500/30',
-  'HALF-LOSS': 'bg-orange-500/10 text-orange-400 border border-orange-500/30',
-}
-const RESULT_LBL: Record<string, string> = {
-  GREEN: 'GREEN', RED: 'RED', PUSH: 'PUSH', 'HALF-WIN': '½ WIN', 'HALF-LOSS': '½ LOSS',
-}
-const SOURCE_CLS: Record<string, string> = {
-  vip:         'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-  free:        'text-green-400 bg-green-500/10 border-green-500/20',
-  multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-}
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
 }
@@ -1343,8 +1317,6 @@ function PicksTable({
         {rows.map(row => {
           const pt = showSource ? (row.pick_type ?? pickType) : pickType
           const p  = normalizePickRow(row, pt)
-          const homeSrc = p.homeId ? `/api/proxy/team/${p.homeId}.png` : null
-          const awaySrc = p.awayId ? `/api/proxy/team/${p.awayId}.png` : null
           return (
             <button
               key={`${pt}-${p.id}`}
@@ -1360,17 +1332,17 @@ function PicksTable({
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                   {showSource && (
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[pt] ?? ''}`}>
+                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[pt] ?? ''}`}>
                       {SOURCE_LBL[pt] ?? pt}
                     </span>
                   )}
-                  {homeSrc && <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display = 'none')} />}
+                  <TeamLogo id={p.homeId} name={p.homeName} size={16} />
                   <span className="text-sm font-semibold text-white truncate">{p.homeName}</span>
                   {p.awayName && (
                     <>
                       <span className="text-zinc-600 text-xs shrink-0">vs</span>
                       <span className="text-sm font-semibold text-white truncate">{p.awayName}</span>
-                      {awaySrc && <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display = 'none')} />}
+                      <TeamLogo id={p.awayId} name={p.awayName} size={16} />
                     </>
                   )}
                 </div>
@@ -1382,11 +1354,14 @@ function PicksTable({
               </div>
 
               <div className="flex items-center gap-2 shrink-0">
-                {p.result ? (
-                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[p.result] ?? 'text-zinc-500'}`}>
-                    {RESULT_LBL[p.result] ?? p.result}
-                  </span>
-                ) : (
+                {p.result ? (() => {
+                  const rs = getResultStyle(p.result)
+                  return (
+                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                      {rs ? rs.label : p.result}
+                    </span>
+                  )
+                })() : (
                   <span className="text-xs font-black px-2 py-0.5 rounded-lg text-yellow-400 bg-yellow-400/10 border border-yellow-400/20">
                     Pendente
                   </span>
@@ -1517,6 +1492,7 @@ export default function Picks() {
   const [userAlavSerie, setUserAlavSerie] = useState<{ configured: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
+  const [alavInitError, setAlavInitError] = useState('')
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
   const [showBancaModal, setShowBancaModal] = useState(false)
 
@@ -1630,13 +1606,14 @@ export default function Picks() {
     const val = parseFloat(alavInitInput)
     if (!val || val <= 0) return
     setAlavInitSaving(true)
+    setAlavInitError('')
     try {
       await api.put('/banca/alavancagem-init', { bankroll_init: val })
       const r = await api.get('/banca/alavancagem-serie')
       setUserAlavSerie(r.data)
       setAlavInitInput('')
     } catch (e: any) {
-      alert(e.response?.data?.detail || 'Erro ao salvar')
+      setAlavInitError(e.response?.data?.detail || 'Erro ao salvar. Tente novamente.')
     } finally {
       setAlavInitSaving(false)
     }
@@ -2243,6 +2220,9 @@ export default function Picks() {
                     >
                       Alterar valor inicial
                     </button>
+                  )}
+                  {alavInitError && (
+                    <p className="text-xs text-red-400 mt-2">{alavInitError}</p>
                   )}
                 </div>
 

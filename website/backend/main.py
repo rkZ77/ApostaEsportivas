@@ -94,15 +94,22 @@ _forgot_store: dict[str, list[float]] = defaultdict(list)
 FORGOT_LIMIT  = 3
 FORGOT_WINDOW = 900
 
+_TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "false").lower() in ("1", "true", "yes")
+
+
 def _get_real_ip(request: Request) -> str:
     # CF-Connecting-IP é setado pelo Cloudflare e não pode ser forjado pelo visitante.
-    # X-Forwarded-For pode ser manipulado se alguém bater direto na origem.
     cf_ip = request.headers.get("CF-Connecting-IP")
     if cf_ip:
         return cf_ip.strip()
-    forwarded = request.headers.get("X-Forwarded-For")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
+    # X-Forwarded-For é um header enviado pelo próprio cliente e forjável por quem
+    # bater direto na origem (fora do Cloudflare) — só confiar nele se o deploy
+    # estiver atrás de um proxy reverso confiável que o sobrescreve (configurar
+    # TRUST_X_FORWARDED_FOR=true nesse caso). Sem isso, cai pro IP real da conexão.
+    if _TRUST_XFF:
+        forwarded = request.headers.get("X-Forwarded-For")
+        if forwarded:
+            return forwarded.split(",")[0].strip()
     return request.client.host if request.client else "unknown"
 
 

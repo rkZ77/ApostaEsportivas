@@ -149,7 +149,7 @@ export default function CommunityChat({ onLatestId }: { onLatestId?: (id: number
   })
 
   return (
-    <div className="flex flex-col h-[600px] bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden">
+    <div className="flex flex-col h-[70vh] max-h-[600px] bg-zinc-950 rounded-2xl border border-zinc-800 overflow-hidden">
 
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-800 shrink-0">
@@ -245,6 +245,7 @@ export default function CommunityChat({ onLatestId }: { onLatestId?: (id: number
                         onClick={() => deleteMsg(m.id)}
                         className="text-zinc-700 hover:text-red-400 transition-colors text-xs leading-none px-1 opacity-0 group-hover:opacity-100"
                         title={isMe ? 'Apagar minha mensagem' : 'Deletar mensagem'}
+                        aria-label={isMe ? 'Apagar minha mensagem' : 'Deletar mensagem'}
                       >
                         ×
                       </button>
@@ -275,6 +276,7 @@ export default function CommunityChat({ onLatestId }: { onLatestId?: (id: number
           <button
             onClick={sendMessage}
             disabled={!input.trim() || sending}
+            aria-label="Enviar mensagem"
             className="w-10 h-10 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
           >
             {sending ? (

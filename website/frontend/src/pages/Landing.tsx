@@ -1,11 +1,11 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Menu, X as XIcon, UserPlus, Zap, TrendingUp } from 'lucide-react'
-import axios from 'axios'
+import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy } from 'lucide-react'
+import api from '../services/api'
 import Footer from '../components/Footer'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 
-const API_BASE = ''
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
 const LEAGUE_LOGO = (id: number) =>
@@ -59,22 +59,6 @@ interface PublicData {
 }
 
 // Helpers
-const RESULT_CLS: Record<string, string> = {
-  GREEN:      'bg-green-500/10 text-green-400 border-green-500/30',
-  RED:        'bg-red-500/10 text-red-400 border-red-500/30',
-  PUSH:       'bg-zinc-700/50 text-zinc-400 border-zinc-700',
-  'HALF-WIN': 'bg-teal-500/10 text-teal-400 border-teal-500/30',
-  'HALF-LOSS':'bg-orange-500/10 text-orange-400 border-orange-500/30',
-}
-const RESULT_LBL: Record<string, string> = {
-  GREEN: 'GREEN', RED: 'RED', PUSH: 'PUSH', 'HALF-WIN': '½ WIN', 'HALF-LOSS': '½ LOSS',
-}
-const SRC_CLS: Record<string, string> = {
-  vip: 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-  free: 'text-green-400 bg-green-500/10 border-green-500/20',
-  multiplas: 'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-}
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
 // Social proof stats — bloco de 4 métricas em tempo real
@@ -82,7 +66,7 @@ function SocialProofStats() {
   const [summary, setSummary] = useState<{ total: number; greens: number; profit: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
-    axios.get(`${API_BASE}/api/public/results`)
+    api.get('/public/results')
       .then(r => { setSummary(r.data?.summary ?? null); setLoaded(true) })
       .catch(() => setLoaded(true))
   }, [])
@@ -184,7 +168,7 @@ function ActiveLeagues() {
   const [leagues, setLeagues] = useState<League[]>([])
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/public/leagues`)
+    api.get('/public/leagues')
       .then(r => setLeagues(r.data))
       .catch(() => {})
   }, [])
@@ -229,7 +213,7 @@ function TeamLogo({ id, name }: { id?: number | null; name: string }) {
   const src = TEAM_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name} width={18} height={18}
+    <img src={src} alt={name} width={18} height={18} loading="lazy"
       className="w-4.5 h-4.5 object-contain shrink-0"
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
@@ -241,7 +225,7 @@ function RecentResults() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/public/results`)
+    api.get('/public/results')
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoading(false))
@@ -304,7 +288,7 @@ function RecentResults() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-1 mb-0.5 flex-wrap">
-                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SRC_CLS[tip.source] ?? ''}`}>
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                         {SRC_LBL[tip.source] ?? tip.source}
                       </span>
                       <TeamLogo id={tip.home_team_id} name={tip.home_team_name} />
@@ -324,9 +308,14 @@ function RecentResults() {
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${RESULT_CLS[tip.result] ?? 'text-zinc-500'}`}>
-                      {RESULT_LBL[tip.result] ?? tip.result}
-                    </span>
+                    {(() => {
+                      const rs = getResultStyle(tip.result)
+                      return (
+                        <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                          {rs ? rs.label : tip.result}
+                        </span>
+                      )
+                    })()}
                   </div>
                 </div>
               ))}
@@ -394,7 +383,7 @@ function LeaderboardTeaser() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/public/leaderboard`)
+    api.get('/public/leaderboard')
       .then(r => setLeaders(r.data ?? []))
       .catch(() => {})
       .finally(() => setLoading(false))
@@ -402,13 +391,15 @@ function LeaderboardTeaser() {
 
   if (!loading && leaders.length === 0) return null
 
-  const medals = ['🥇', '🥈', '🥉']
+  const rankCls = ['bg-yellow-400 text-black', 'bg-zinc-300 text-black', 'bg-orange-400 text-black']
 
   return (
     <section className="py-16 bg-black border-y border-zinc-800/60">
       <div className="max-w-2xl mx-auto px-4">
         <div className="text-center mb-8">
-          <p className="text-sm font-bold text-yellow-400 mb-2">Ranking de usuários</p>
+          <p className="text-sm font-bold text-yellow-400 mb-2 flex items-center justify-center gap-1.5">
+            <Trophy className="w-4 h-4" /> Ranking de usuários
+          </p>
           <h2 className="text-2xl font-black text-white">Quem está ganhando mais</h2>
           <p className="text-zinc-500 text-sm mt-2">Top apostadores da plataforma este mês</p>
         </div>
@@ -420,7 +411,9 @@ function LeaderboardTeaser() {
           <div className="space-y-3">
             {leaders.slice(0, 3).map((l, i) => (
               <div key={i} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-5 py-4">
-                <span className="text-xl shrink-0">{medals[i] ?? `#${i + 1}`}</span>
+                <span className={`text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-zinc-800 text-zinc-400'}`}>
+                  {i + 1}
+                </span>
                 <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-400 shrink-0 overflow-hidden">
                   {l.avatar_url
                     ? <img src={l.avatar_url} alt={l.name} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
@@ -469,7 +462,7 @@ function ActivityTicker() {
   const [fade, setFade] = useState(true)
 
   useEffect(() => {
-    axios.get(`${API_BASE}/api/public/activity`)
+    api.get('/public/activity')
       .then(r => {
         if (r.data?.events?.length) {
           setEvents(r.data.events)

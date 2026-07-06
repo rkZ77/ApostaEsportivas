@@ -131,7 +131,8 @@ export default function ApostaModal({
                   <button
                     type="button"
                     onClick={() => setUnits(u => Math.max(1, u - 1))}
-                    className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
+                    aria-label="Diminuir unidades"
+                    className="w-11 h-11 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
                   >−</button>
                   <input
                     type="number" min="1" max={maxUnits} step="1" value={units}
@@ -141,7 +142,8 @@ export default function ApostaModal({
                   <button
                     type="button"
                     onClick={() => setUnits(u => Math.min(maxUnits, u + 1))}
-                    className="w-9 h-9 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center"
+                    aria-label="Aumentar unidades"
+                    className="w-11 h-11 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
                   >+</button>
                 </div>
                 {exceedsSuggested && !exceedsMax && (

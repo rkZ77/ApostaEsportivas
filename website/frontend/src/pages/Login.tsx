@@ -2,6 +2,7 @@ import { useState, FormEvent, useEffect } from 'react'
 import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { maskPhone } from '../utils/format'
 
 function getPasswordStrength(pwd: string): { score: number; checks: { label: string; ok: boolean }[] } {
   const checks = [
@@ -37,14 +38,6 @@ function validateCPF(cpf: string): boolean {
 
 function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
-}
-
-function maskPhone(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2)  return d.length ? `(${d}` : ''
-  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`
-  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
 }
 
 type LoginMethod = 'username' | 'email' | 'cpf'
@@ -259,7 +252,7 @@ export default function Login() {
             {mode === 'login' && (
               <>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-2 font-medium">Login ID</label>
+                  <label htmlFor="login-identifier" className="block text-sm text-zinc-400 mb-2 font-medium">Login ID</label>
                   {/* Tabs estilo Betano */}
                   <div className="flex rounded-xl overflow-hidden border border-zinc-700 mb-3">
                     {loginTabs.map(tab => (
@@ -279,19 +272,19 @@ export default function Login() {
                   </div>
 
                   {loginMethod === 'username' && (
-                    <input type="text" value={loginUsername}
+                    <input id="login-identifier" type="text" value={loginUsername}
                       onChange={e => setLoginUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       required className="input w-full" placeholder="seu_usuario"
                       autoComplete="username" maxLength={20} autoFocus />
                   )}
                   {loginMethod === 'email' && (
-                    <input type="email" value={loginEmail}
+                    <input id="login-identifier" type="email" value={loginEmail}
                       onChange={e => setLoginEmail(e.target.value)}
                       required className="input w-full" placeholder="seu@email.com"
                       autoComplete="email" autoFocus />
                   )}
                   {loginMethod === 'cpf' && (
-                    <input type="text" value={loginCpf}
+                    <input id="login-identifier" type="text" value={loginCpf}
                       onChange={e => handleLoginCpf(e.target.value)}
                       required className="input w-full" placeholder="000.000.000-00"
                       inputMode="numeric" autoComplete="off" autoFocus />
@@ -303,38 +296,38 @@ export default function Login() {
             {mode === 'register' && (
               <>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Nome completo</label>
-                  <input type="text" value={name}
+                  <label htmlFor="reg-name" className="block text-sm text-zinc-400 mb-1.5 font-medium">Nome completo</label>
+                  <input id="reg-name" type="text" value={name}
                     onChange={e => setName(e.target.value)}
                     required className="input" placeholder="Nome e sobrenome"
                     autoComplete="name" />
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Usuário</label>
-                  <input type="text" value={username}
+                  <label htmlFor="reg-username" className="block text-sm text-zinc-400 mb-1.5 font-medium">Usuário</label>
+                  <input id="reg-username" type="text" value={username}
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     required className="input" placeholder="seu_usuario"
                     autoComplete="username" maxLength={20} />
                   <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras minúsculas, números e _.</p>
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
-                  <input type="email" value={email}
+                  <label htmlFor="reg-email" className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
+                  <input id="reg-email" type="email" value={email}
                     onChange={e => setEmail(e.target.value)}
                     required className="input" placeholder="seu@email.com"
                     autoComplete="email" />
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
-                  <input type="text" value={cpf}
+                  <label htmlFor="reg-cpf" className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
+                  <input id="reg-cpf" type="text" value={cpf}
                     onChange={e => handleRegCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
                     inputMode="numeric" autoComplete="off" />
                   <p className="text-xs text-zinc-600 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
                 </div>
                 <div>
-                  <label className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp</label>
-                  <input type="tel" value={phone}
+                  <label htmlFor="reg-phone" className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp</label>
+                  <input id="reg-phone" type="tel" value={phone}
                     onChange={e => setPhone(maskPhone(e.target.value))}
                     required className="input" placeholder="(11) 99999-9999"
                     inputMode="numeric" autoComplete="tel" />
@@ -344,14 +337,15 @@ export default function Login() {
 
             {/* Senha — comum aos dois modos */}
             <div>
-              <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
+              <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
               <div className="relative">
-                <input type={showPassword ? 'text' : 'password'} value={password}
+                <input id="password" type={showPassword ? 'text' : 'password'} value={password}
                   onChange={e => setPassword(e.target.value)}
                   required className="input pr-10"
                   placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
                   autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
                 <button type="button" onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
                   className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -387,13 +381,14 @@ export default function Login() {
 
             {mode === 'register' && (
               <div>
-                <label className="block text-sm text-zinc-400 mb-1.5 font-medium">Confirmar senha</label>
+                <label htmlFor="password-confirm" className="block text-sm text-zinc-400 mb-1.5 font-medium">Confirmar senha</label>
                 <div className="relative">
-                  <input type={showConfirm ? 'text' : 'password'} value={confirm}
+                  <input id="password-confirm" type={showConfirm ? 'text' : 'password'} value={confirm}
                     onChange={e => setConfirm(e.target.value)}
                     required className="input pr-10" placeholder="Repita a senha"
                     autoComplete="new-password" />
                   <button type="button" onClick={() => setShowConfirm(v => !v)}
+                    aria-label={showConfirm ? 'Ocultar senha' : 'Mostrar senha'}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>

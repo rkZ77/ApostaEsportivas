@@ -1,9 +1,9 @@
 import { useState, useRef, useEffect } from 'react'
 import { Zap } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
+import BackButton from '../components/BackButton'
 import { useAuth } from '../context/AuthContext'
 import { useCookieBannerVisible } from '../hooks/useCookieBannerVisible'
 
@@ -54,7 +54,6 @@ function AgentMessage({ content, loading, statusText }: { content: string; loadi
 
 export default function Agente() {
   const { user, isVip, isAdmin } = useAuth()
-  const navigate = useNavigate()
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
@@ -194,7 +193,7 @@ export default function Agente() {
       {/* Header */}
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <BackButton />
           <div className="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
             <span className="text-green-400 text-sm font-bold">AI</span>
           </div>

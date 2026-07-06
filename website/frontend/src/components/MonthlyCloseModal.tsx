@@ -1,9 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
-
-const fmtBRL = (v: number) =>
-  'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+import { fmtBRL } from '../utils/format'
 
 function getLastMonthKey(): string {
   const now = new Date()
