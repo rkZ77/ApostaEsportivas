@@ -10,9 +10,10 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { useShareStoryImage } from '../hooks/useShareStoryImage'
 // Copa do Mundo 2026 — fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -402,6 +403,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
   // Prioridade: suggested_stake_units do backend → calcFreeStake fallback (max 2%)
   const stakeSuggestion = (() => {
     if (!banca) return null
@@ -418,6 +420,25 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     )
   })()
   const fato = shortReasoning(dica.reasoning)
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    shareStory({
+      pickId: dica.id,
+      pickTypeRoute: 'free',
+      homeTeamName: dica.home_team,
+      awayTeamName: dica.away_team,
+      homeTeamId: dica.home_team_id,
+      awayTeamId: dica.away_team_id,
+      leagueName: dica.league_name,
+      pickType: 'free',
+      market: dica.market,
+      line: dica.line,
+      odd: Number(dica.odd),
+      result: dica.result,
+      profit: dica.result ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? stakeSuggestion?.units ?? 1, dica.user_actual_odd) : null,
+    })
+  }
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -608,11 +629,26 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
             {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        {onClick && (
-          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors ml-auto">
-            Ver detalhes
-          </span>
-        )}
+        <div className="flex items-center gap-3 ml-auto">
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-60"
+            title="Compartilhar pick"
+          >
+            {sharing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
+              : shared
+              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
+              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
+            }
+          </button>
+          {onClick && (
+            <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">
+              Ver detalhes
+            </span>
+          )}
+        </div>
       </div>
     </div>
     {showModal && (
@@ -664,6 +700,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
   // Prioridade: suggested_stake_units do backend → calcMultiplaStake fallback (max 2.5%)
   const stakeSuggestion = (() => {
     if (!banca) return null
@@ -681,6 +718,21 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const potReturn = stakeSuggestion
     ? (stakeSuggestion.amountR * Number(m.total_odd)).toFixed(2)
     : null
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    shareStory({
+      pickId: m.id,
+      pickTypeRoute: 'multipla',
+      homeTeamName: legs[0]?.home ?? legs[0]?.home_team ?? 'Múltipla',
+      awayTeamName: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : undefined,
+      pickType: 'multipla',
+      market: `Múltipla · ${legs.length} seleções`,
+      odd: Number(m.total_odd),
+      result: m.result,
+      profit: m.result ? calcProfitUnits(m.result, Number(m.total_odd), m.user_stake_units ?? stakeSuggestion?.units ?? 1, m.user_actual_odd) : null,
+    })
+  }
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -881,7 +933,22 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+        <div className="flex items-center gap-3 ml-auto">
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-60"
+            title="Compartilhar pick"
+          >
+            {sharing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
+              : shared
+              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
+              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
+            }
+          </button>
+          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+        </div>
       </div>
     </div>
     {showModal && (
@@ -925,6 +992,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
 
   const handleFollow = (e: React.MouseEvent) => {
     e.stopPropagation()
@@ -952,6 +1020,22 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   if (pick.home_team_1) legs.push({ home: pick.home_team_1, away: pick.away_team_1, homeId: pick.home_team_id_1, awayId: pick.away_team_id_1, market: pick.market_1, line: pick.line_1, odd: pick.odd_1, house: pick.bet_house_1 })
   if (isCombo && pick.home_team_2) legs.push({ home: pick.home_team_2, away: pick.away_team_2, homeId: pick.home_team_id_2, awayId: pick.away_team_id_2, market: pick.market_2, line: pick.line_2, odd: pick.odd_2, house: pick.bet_house_2 })
   if (pick.home_team_3) legs.push({ home: pick.home_team_3, away: pick.away_team_3, homeId: pick.home_team_id_3, awayId: pick.away_team_id_3, market: pick.market_3, line: pick.line_3, odd: pick.odd_3, house: pick.bet_house_3 })
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    shareStory({
+      pickId: pick.id,
+      pickTypeRoute: 'alavancagem',
+      homeTeamName: legs[0]?.home ?? 'Alavancagem',
+      awayTeamName: legs[0]?.away,
+      pickType: 'alavancagem',
+      market: isCombo ? `${comboLabel} · ${legs.length} jogos` : translateMarket(legs[0]?.market),
+      line: legs[0]?.line,
+      odd: oddCombined,
+      result: pick.result,
+      profit: pick.result === 'GREEN' ? (oddCombined - 1) : pick.result === 'RED' ? -1 : null,
+    })
+  }
 
   const resultStyle = getResultStyle(pick.result)
 
@@ -1087,7 +1171,22 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
             {following ? '...' : followed ? 'Registrado' : userBankroll != null ? 'Apostar' : 'Configurar banca'}
           </button>
         ) : <span />}
-        <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+        <div className="flex items-center gap-3 ml-auto">
+          <button
+            onClick={handleShare}
+            disabled={sharing}
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-60"
+            title="Compartilhar pick"
+          >
+            {sharing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
+              : shared
+              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
+              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
+            }
+          </button>
+          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+        </div>
       </div>
     </div>
     {showModal && (
