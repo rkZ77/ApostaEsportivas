@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import api from '../services/api'
 import { buildStoryImage, StoryImageInput } from '../utils/shareStoryImage'
+import { winRate as calcWinRate } from '../utils/format'
 
 export type SharePickInput = Omit<StoryImageInput, 'shareUrl'> & {
   pickId: number
@@ -28,14 +29,16 @@ export function useShareStoryImage() {
     setSharing(true)
     setError(null)
     try {
-      let refCode = ''
-      try {
-        const r = await api.get('/auth/referral')
-        refCode = r.data?.referral_code ?? ''
-      } catch { /* sem ref code */ }
+      const [refResult, statsResult] = await Promise.allSettled([
+        api.get('/auth/referral'),
+        api.get('/public/results'),
+      ])
+      const refCode = refResult.status === 'fulfilled' ? (refResult.value.data?.referral_code ?? '') : ''
+      const summary = statsResult.status === 'fulfilled' ? statsResult.value.data?.summary : null
+      const winRatePct = summary ? calcWinRate(summary.greens ?? 0, summary.total ?? 0) : null
 
       const shareUrl = `${window.location.origin}/p/${input.pickTypeRoute}/${input.pickId}${refCode ? `?ref=${refCode}` : ''}`
-      const blob = await buildStoryImage({ ...input, shareUrl })
+      const blob = await buildStoryImage({ ...input, shareUrl, winRatePct })
       const file = new File([blob], 'pick-ia.png', { type: 'image/png' })
       const resultLabel = input.result ? ` · ${input.result}` : ''
       const text = `Pick IA${resultLabel}: ${input.homeTeamName}${input.awayTeamName ? ` x ${input.awayTeamName}` : ''} @ ${input.odd.toFixed(2)}`
