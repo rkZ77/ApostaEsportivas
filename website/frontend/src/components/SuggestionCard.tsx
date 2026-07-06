@@ -4,7 +4,9 @@ import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket } from '../utils/marketTranslate'
-import { Share2, Check as CheckIcon } from 'lucide-react'
+import { getResultStyle } from '../utils/resultStyle'
+import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -98,7 +100,7 @@ export default function SuggestionCard({
   const [showModal, setShowModal] = useState(false)
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const [shared, setShared] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
   //             2) função específica por tipo como fallback
   const stakeSuggestion = (() => {
@@ -124,26 +126,24 @@ export default function SuggestionCard({
     return calcVipStake(prob, odd, ev, banca.bankroll_current, banca.unit_value, s.stake_pct)
   })()
 
-  const handleShare = async (e: React.MouseEvent) => {
+  const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
-    const pickType = (s.pick_type ?? 'vip').replace('multiplas', 'multipla')
-    let refCode = ''
-    try {
-      const r = await api.get('/auth/referral')
-      refCode = r.data?.referral_code ?? ''
-    } catch { /* sem ref code */ }
-    const url = `${window.location.origin}/p/${pickType}/${s.id}${refCode ? `?ref=${refCode}` : ''}`
-    const resultLabel = s.result ? ` · ${s.result}` : ''
-    const text = `Pick IA${resultLabel}: ${s.home_team_name} x ${s.away_team_name} @ ${Number(s.odd).toFixed(2)}`
-    try {
-      if (navigator.share) {
-        await navigator.share({ title: 'Pick IA', text, url })
-      } else {
-        await navigator.clipboard.writeText(url)
-      }
-      setShared(true)
-      setTimeout(() => setShared(false), 2500)
-    } catch { /* usuario cancelou share */ }
+    const pickTypeRoute = (s.pick_type ?? 'vip').replace('multiplas', 'multipla')
+    shareStory({
+      pickId: s.id,
+      pickTypeRoute,
+      homeTeamName: s.home_team_name,
+      awayTeamName: s.away_team_name,
+      homeTeamId: s.home_team_id,
+      awayTeamId: s.away_team_id,
+      leagueName: s.league_name,
+      pickType: pickTypeRoute,
+      market: s.market ? translateMarket(s.market) : undefined,
+      line: s.line,
+      odd: Number(s.odd),
+      result: s.result,
+      profit: s.result ? calcProfitUnits(s.result, Number(s.odd), s.user_stake_units ?? stakeSuggestion?.units ?? 1, s.user_actual_odd) : null,
+    })
   }
 
   const handleFollow = (e: React.MouseEvent) => {
@@ -174,13 +174,8 @@ export default function SuggestionCard({
     }
   }
 
-  const resultStyle =
-    s.result === 'GREEN' ? { bg: 'bg-green-500/10', border: 'border-green-500/30', text: 'text-green-400', label: 'GREEN ✓' }
-    : s.result === 'RED' ? { bg: 'bg-red-500/10',   border: 'border-red-500/30',   text: 'text-red-400',   label: 'RED ✗' }
-    : s.result === 'PUSH' ? { bg: 'bg-zinc-700/30', border: 'border-zinc-600',     text: 'text-zinc-300',  label: 'PUSH' }
-    : s.result === 'HALF-WIN'  ? { bg: 'bg-teal-500/10',   border: 'border-teal-500/30',   text: 'text-teal-400',   label: '½ WIN' }
-    : s.result === 'HALF-LOSS' ? { bg: 'bg-orange-500/10', border: 'border-orange-500/30', text: 'text-orange-400', label: '½ LOSS' }
-    : null
+  const rs = getResultStyle(s.result)
+  const resultStyle = rs ? { bg: rs.bg, border: rs.border, text: rs.text, label: `${rs.label} ${rs.emoji}` } : null
 
   const fato   = shortReasoning(s.reasoning)
   const isCopa = s.league_id === 1
@@ -374,11 +369,14 @@ export default function SuggestionCard({
         <div className="flex items-center gap-3 ml-auto">
           <button
             onClick={handleShare}
-            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors"
+            disabled={sharing}
+            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
-            {shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Copiado</span></>
+            {sharing
+              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
+              : shared
+              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>

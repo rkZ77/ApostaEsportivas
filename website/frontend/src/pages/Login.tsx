@@ -80,6 +80,11 @@ export default function Login() {
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm]   = useState(false)
 
+  const redirectTo = (() => {
+    const r = searchParams.get('redirect')
+    return r && r.startsWith('/') && !r.startsWith('//') ? r : null
+  })()
+
   useEffect(() => {
     const ref = searchParams.get('ref')
     if (ref) {
@@ -139,11 +144,11 @@ export default function Login() {
     try {
       if (mode === 'login') {
         await login(getIdentifier(), password)
-        navigate('/picks')
+        navigate(redirectTo ?? '/picks')
       } else {
         await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms)
         localStorage.removeItem('ref_code')
-        navigate('/picks#guia')
+        navigate(redirectTo ?? '/picks#guia')
       }
     } catch (err: any) {
       const detail = err.response?.data?.detail
