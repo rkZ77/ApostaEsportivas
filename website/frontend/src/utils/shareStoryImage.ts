@@ -1,4 +1,3 @@
-import QRCode from 'qrcode'
 import { getResultStyle, PICK_TYPE_LABEL, PICK_TYPE_HEX } from './resultStyle'
 
 const W = 1080
@@ -48,23 +47,6 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
   return t + '…'
 }
 
-function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let current = ''
-  for (const word of words) {
-    const test = current ? `${current} ${word}` : word
-    if (current && ctx.measureText(test).width > maxWidth) {
-      lines.push(current)
-      current = word
-    } else {
-      current = test
-    }
-  }
-  if (current) lines.push(current)
-  return lines
-}
-
 function drawCircularLogo(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, cx: number, cy: number, size: number) {
   if (!img) return
   const r = size / 2
@@ -105,10 +87,10 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   // Logo
   const logoImg = await loadImage('/logo.png')
   if (logoImg) {
-    ctx.drawImage(logoImg, W / 2 - 70, 90, 140, 140)
+    ctx.drawImage(logoImg, W / 2 - 70, 100, 140, 140)
   }
-  const brandY = logoImg ? 280 : 160
-  ctx.font = '900 56px system-ui, -apple-system, sans-serif'
+  const brandY = logoImg ? 290 : 170
+  ctx.font = '900 58px system-ui, -apple-system, sans-serif'
   const pickW = ctx.measureText('Pick').width
   const iaW = ctx.measureText('IA').width
   ctx.textAlign = 'left'
@@ -124,7 +106,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   ctx.font = '800 30px system-ui, -apple-system, sans-serif'
   const badgeTextW = ctx.measureText(typeLabel.toUpperCase()).width
   const badgeW = badgeTextW + 80
-  const badgeY = brandY + 50
+  const badgeY = brandY + 56
   drawRoundedRect(ctx, W / 2 - badgeW / 2, badgeY, badgeW, 64, 32)
   ctx.fillStyle = `${typeHex}22`
   ctx.fill()
@@ -137,169 +119,137 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   let cursorY = badgeY + 64
 
   if (input.leagueName) {
-    cursorY += 56
+    cursorY += 58
     ctx.font = '600 28px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#71717a'
     ctx.fillText(fitText(ctx, input.leagueName, W - 160), W / 2, cursorY)
   }
 
   // Times
-  cursorY += 130
+  cursorY += 160
   const [homeLogo, awayLogo] = await Promise.all([
     input.homeTeamId ? loadImage(`/api/proxy/team/${input.homeTeamId}.png`) : Promise.resolve(null),
     input.awayTeamId ? loadImage(`/api/proxy/team/${input.awayTeamId}.png`) : Promise.resolve(null),
   ])
 
-  const logoSize = 110
-  drawCircularLogo(ctx, homeLogo, W / 2 - 250, cursorY, logoSize)
-  drawCircularLogo(ctx, awayLogo, W / 2 + 250, cursorY, logoSize)
+  const logoSize = 116
+  drawCircularLogo(ctx, homeLogo, W / 2 - 260, cursorY, logoSize)
+  drawCircularLogo(ctx, awayLogo, W / 2 + 260, cursorY, logoSize)
 
-  ctx.font = '900 44px system-ui, -apple-system, sans-serif'
+  ctx.font = '900 46px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = '#ffffff'
-  ctx.fillText(fitText(ctx, input.homeTeamName, 340), W / 2, cursorY - 84)
-  ctx.font = '700 28px system-ui, -apple-system, sans-serif'
+  ctx.fillText(fitText(ctx, input.homeTeamName, 340), W / 2, cursorY - 88)
+  ctx.font = '700 30px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = '#52525b'
-  ctx.fillText('vs', W / 2, cursorY + 12)
+  ctx.fillText('vs', W / 2, cursorY + 14)
   if (input.awayTeamName) {
-    ctx.font = '900 44px system-ui, -apple-system, sans-serif'
+    ctx.font = '900 46px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitText(ctx, input.awayTeamName, 340), W / 2, cursorY + 104)
+    ctx.fillText(fitText(ctx, input.awayTeamName, 340), W / 2, cursorY + 110)
   }
 
-  cursorY += 150
+  cursorY += 190
 
   if (input.market) {
-    ctx.font = '600 27px system-ui, -apple-system, sans-serif'
+    ctx.font = '600 28px system-ui, -apple-system, sans-serif'
     ctx.fillStyle = '#a1a1aa'
     const marketText = input.line ? `${input.market} · ${input.line}` : input.market
     ctx.fillText(fitText(ctx, marketText, W - 160), W / 2, cursorY)
-    cursorY += 52
+    cursorY += 56
   }
 
   // Selo de resultado
-  cursorY += 34
+  cursorY += 44
   const resultLabel = rs ? `${rs.label} ${rs.emoji}` : 'A CONFIRMAR'
-  ctx.font = '900 68px system-ui, -apple-system, sans-serif'
+  ctx.font = '900 72px system-ui, -apple-system, sans-serif'
   const resultTextW = ctx.measureText(resultLabel).width
-  const resultBoxW = resultTextW + 110
-  drawRoundedRect(ctx, W / 2 - resultBoxW / 2, cursorY, resultBoxW, 114, 24)
+  const resultBoxW = resultTextW + 120
+  drawRoundedRect(ctx, W / 2 - resultBoxW / 2, cursorY, resultBoxW, 122, 26)
   ctx.fillStyle = `${accentHex}22`
   ctx.fill()
   ctx.strokeStyle = `${accentHex}88`
   ctx.lineWidth = 3
   ctx.stroke()
   ctx.fillStyle = accentHex
-  ctx.fillText(resultLabel, W / 2, cursorY + 83)
-  cursorY += 114
+  ctx.fillText(resultLabel, W / 2, cursorY + 88)
+  cursorY += 122
 
-  // Odd + Lucro
-  cursorY += 64
-  const colW = 320
-  const gap = 40
-  const statsTotalW = colW * 2 + gap
-  const statsX = W / 2 - statsTotalW / 2
-
-  const drawStat = (x: number, label: string, value: string, color: string) => {
-    ctx.font = '700 25px system-ui, -apple-system, sans-serif'
-    ctx.fillStyle = '#71717a'
-    ctx.fillText(label, x + colW / 2, cursorY)
-    ctx.font = '900 54px system-ui, -apple-system, sans-serif'
-    ctx.fillStyle = color
-    ctx.fillText(value, x + colW / 2, cursorY + 58)
-  }
-
-  drawStat(statsX, 'ODD', input.odd.toFixed(2), '#4ade80')
+  // Estatísticas: odd, lucro e (se disponível) acerto geral do site
+  cursorY += 90
+  const hasWinRate = input.winRatePct != null
   const profitText = input.profit != null
     ? `${input.profit >= 0 ? '+' : ''}${input.profit.toFixed(2)}u`
     : `+${(input.odd - 1).toFixed(2)}u`
   const profitColor = input.profit != null ? (input.profit >= 0 ? '#4ade80' : '#f87171') : '#a1a1aa'
-  drawStat(statsX + colW + gap, input.profit != null ? 'LUCRO' : 'LUCRO POT.', profitText, profitColor)
 
-  cursorY += 118
+  const stats = [
+    { label: 'ODD', value: input.odd.toFixed(2), color: '#4ade80' },
+    { label: input.profit != null ? 'LUCRO' : 'LUCRO POT.', value: profitText, color: profitColor },
+    ...(hasWinRate ? [{ label: 'ACERTO 30D', value: `${Math.round(input.winRatePct!)}%`, color: '#facc15' }] : []),
+  ]
+  const totalW = W - 200
+  const colW = totalW / stats.length
+  const statsX = W / 2 - totalW / 2
+  stats.forEach((s, i) => {
+    const cx = statsX + colW * i + colW / 2
+    ctx.font = '700 24px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(s.label, cx, cursorY)
+    ctx.font = '900 52px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = s.color
+    ctx.fillText(s.value, cx, cursorY + 58)
+  })
 
-  // ── Painel de chamada: prova social + oferta de trial ───────────────────
-  cursorY += 50
-  const panelW = W - 160
-  const panelX = W / 2 - panelW / 2
-  const panelPadX = 56
+  cursorY += 150
 
+  // ── Oferta + link (compacto — sem QR: quem vê o Story está no mesmo
+  //    celular, então não dá pra escanear; um link grande e memorável
+  //    funciona melhor, e deixa espaço livre pra pessoa colar o sticker
+  //    de link do Instagram por cima) ─────────────────────────────────
   const pillLabel = '2 DIAS DE VIP GRÁTIS'
-  ctx.font = '800 26px system-ui, -apple-system, sans-serif'
-  const pillW = ctx.measureText(pillLabel).width + 56
-
-  ctx.font = '800 36px system-ui, -apple-system, sans-serif'
-  const headline = 'Quer receber picks assim antes do jogo começar?'
-  const headlineLines = wrapText(ctx, headline, panelW - panelPadX * 2)
-
-  const hasWinRate = input.winRatePct != null
-  let panelH = 40 + 52 + 28 + headlineLines.length * 46 + 20
-  if (hasWinRate) panelH += 40
-  panelH += 32
-
-  drawRoundedRect(ctx, panelX, cursorY, panelW, panelH, 28)
-  ctx.fillStyle = 'rgba(255,255,255,0.04)'
-  ctx.fill()
-  ctx.strokeStyle = `${accentHex}55`
-  ctx.lineWidth = 2
-  ctx.stroke()
-
-  let panelCursor = cursorY + 40
-
-  // Pill do trial
-  drawRoundedRect(ctx, W / 2 - pillW / 2, panelCursor, pillW, 52, 26)
+  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
+  const pillW = ctx.measureText(pillLabel).width + 64
+  drawRoundedRect(ctx, W / 2 - pillW / 2, cursorY, pillW, 58, 29)
   ctx.fillStyle = '#00CC00'
   ctx.fill()
-  ctx.font = '800 26px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = '#04140a'
-  ctx.fillText(pillLabel, W / 2, panelCursor + 35)
-  panelCursor += 52 + 28
+  ctx.fillText(pillLabel, W / 2, cursorY + 39)
+  cursorY += 58 + 48
 
-  // Headline
-  ctx.font = '800 36px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#ffffff'
-  for (const line of headlineLines) {
-    ctx.fillText(line, W / 2, panelCursor)
-    panelCursor += 46
-  }
-
-  // Prova social (win rate real do site, se disponível)
-  if (hasWinRate) {
-    panelCursor += 6
-    ctx.font = '700 27px system-ui, -apple-system, sans-serif'
-    ctx.fillStyle = '#a1a1aa'
-    ctx.fillText(`${Math.round(input.winRatePct!)}% de acerto nos últimos 30 dias`, W / 2, panelCursor)
-  }
-
-  cursorY += panelH + 56
-
-  // QR code
-  const qrSize = 260
-  const qrCanvas = document.createElement('canvas')
-  await QRCode.toCanvas(qrCanvas, input.shareUrl, {
-    width: qrSize,
-    margin: 1,
-    color: { dark: '#000000ff', light: '#ffffffff' },
-  })
-  const qrX = W / 2 - qrSize / 2
-  const qrY = cursorY
-  drawRoundedRect(ctx, qrX - 20, qrY - 20, qrSize + 40, qrSize + 40, 20)
-  ctx.fillStyle = '#ffffff'
+  // Mostra só o domínio (limpo, memorizável) — o link completo com ?ref= já
+  // vai junto no navigator.share/clipboard, não precisa aparecer na imagem
+  const displayDomain = (() => {
+    try { return new URL(input.shareUrl).hostname.replace(/^www\./, '') }
+    catch { return input.shareUrl.replace(/^https?:\/\//, '').split('/')[0] }
+  })()
+  const linkText = fitText(ctx, displayDomain, W - 320)
+  ctx.font = '900 48px system-ui, -apple-system, sans-serif'
+  const linkTextW = ctx.measureText(linkText).width
+  const arrowGap = 28
+  const arrowW = ctx.measureText('→').width
+  const btnPadX = 56
+  const btnW = linkTextW + arrowGap + arrowW + btnPadX * 2
+  const btnH = 112
+  drawRoundedRect(ctx, W / 2 - btnW / 2, cursorY, btnW, btnH, btnH / 2)
+  ctx.fillStyle = 'rgba(255,255,255,0.06)'
   ctx.fill()
-  ctx.drawImage(qrCanvas, qrX, qrY, qrSize, qrSize)
+  ctx.strokeStyle = '#ffffff'
+  ctx.lineWidth = 2.5
+  ctx.stroke()
 
-  cursorY = qrY + qrSize + 62
-  ctx.font = '700 25px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#d4d4d8'
-  ctx.fillText('Escaneie e comece agora', W / 2, cursorY)
-  cursorY += 40
-  ctx.font = '600 23px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#52525b'
-  ctx.fillText(fitText(ctx, input.shareUrl.replace(/^https?:\/\//, ''), W - 120), W / 2, cursorY)
+  ctx.textAlign = 'left'
+  const textX = W / 2 - btnW / 2 + btnPadX
+  const textY = cursorY + btnH / 2 + 17
+  ctx.fillStyle = '#ffffff'
+  ctx.fillText(linkText, textX, textY)
+  ctx.fillStyle = accentHex
+  ctx.fillText('→', textX + linkTextW + arrowGap, textY)
+  ctx.textAlign = 'center'
 
   // Rodapé
   ctx.font = '600 23px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = '#3f3f46'
-  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, H - 50)
+  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, H - 60)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
