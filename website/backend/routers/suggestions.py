@@ -590,8 +590,8 @@ def get_suggestion_detail(
             if not row:
                 raise HTTPException(404, "Múltipla não encontrada")
             d = dict(row)
-            if not is_vip and not d.get("result"):
-                raise HTTPException(403, "Acesso VIP necessário para picks pendentes")
+            if not is_vip:
+                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
             try:
                 legs = _json.loads(d["legs"]) if isinstance(d["legs"], str) else (d["legs"] or [])
             except Exception:
@@ -676,8 +676,8 @@ def get_suggestion_detail(
             if not row:
                 raise HTTPException(404, "Alavancagem não encontrada")
             d = dict(row)
-            if not is_vip and not d.get("result"):
-                raise HTTPException(403, "Acesso VIP necessário para picks pendentes")
+            if not is_vip:
+                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
             legs = []
             if d.get("home_team_1"):
                 legs.append({
@@ -816,8 +816,8 @@ def get_suggestion_detail(
             if not row:
                 raise HTTPException(404, "Sugestão não encontrada")
             suggestion = dict(row)
-            if not is_vip and not suggestion.get("result"):
-                raise HTTPException(403, "Acesso VIP necessário para picks pendentes")
+            if not is_vip:
+                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
 
         home_id = suggestion.get("home_team_id")
         away_id = suggestion.get("away_team_id")
@@ -1029,8 +1029,10 @@ def get_recent_results(
     limit: int = Query(15, ge=1, le=50),
     current_user: dict = Depends(get_current_user),
 ):
-    """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem."""
-    is_vip = current_user.get("plan") in ("vip", "admin", "trial")
+    """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem.
+    Não expõe reasoning (nenhuma das queries abaixo seleciona essa coluna) — só
+    market/odd/result/profit, o mesmo nível de dado que /api/public/results já
+    mostra sem login."""
     conn = get_connection()
     cur = conn.cursor()
     try:

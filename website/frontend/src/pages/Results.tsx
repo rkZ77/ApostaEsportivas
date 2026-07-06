@@ -1,10 +1,13 @@
 import { useEffect, useState, useCallback } from 'react'
-import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { winRate as calcWinRate } from '../utils/format'
+import { TeamLogo } from '../components/TeamLogo'
+import BackButton from '../components/BackButton'
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
 type View    = 'resumo' | 'por_jogo' | 'por_mes'
@@ -18,13 +21,6 @@ const SOURCES: { key: Source; label: string; cls: string }[] = [
   { key: 'alavancagem', label: 'Alavancagem',cls: 'border-orange-500/40 text-orange-400 hover:border-orange-500' },
 ]
 
-const SOURCE_BADGE: Record<string, string> = {
-  vip:         'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-  free:        'text-green-400 bg-green-500/10 border-green-500/20',
-  multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-}
-
 const PERIODS: { key: Period; label: string; days?: number }[] = [
   { key: '7d',     label: '7 dias',  days: 7 },
   { key: '30d',    label: '30 dias', days: 30 },
@@ -32,14 +28,6 @@ const PERIODS: { key: Period; label: string; days?: number }[] = [
   { key: 'all',    label: 'Tudo' },
   { key: 'custom', label: 'Personalizado' },
 ]
-
-const RESULT_BADGE: Record<string, string> = {
-  GREEN:      'bg-green-500/15 text-green-400 border-green-500/20',
-  RED:        'bg-red-500/15 text-red-400 border-red-500/20',
-  PUSH:       'bg-zinc-700/50 text-zinc-400 border-zinc-700',
-  'HALF-WIN': 'bg-teal-500/15 text-teal-400 border-teal-500/20',
-  'HALF-LOSS':'bg-orange-500/15 text-orange-400 border-orange-500/20',
-}
 
 function buildParams(p: Period, from?: string, to?: string): Record<string, string | number> {
   if (p === 'custom' && from && to) return { date_from: from, date_to: to }
@@ -49,7 +37,6 @@ function buildParams(p: Period, from?: string, to?: string): Record<string, stri
 }
 
 export default function Results() {
-  const navigate = useNavigate()
   const [view,       setView]       = useState<View>('resumo')
   const [period,     setPeriod]     = useState<Period>('30d')
   const [customFrom, setCustomFrom] = useState('')
@@ -82,6 +69,7 @@ export default function Results() {
     setLoading(true)
     api.get('/suggestions/results', { params: { ...buildParams(p, from, to), source: src } })
       .then(r => setStats(r.data))
+      .catch(() => setStats(null))
       .finally(() => setLoading(false))
   }, [])
 
@@ -91,6 +79,7 @@ export default function Results() {
     if (resultado !== 'all') params.resultado = resultado
     api.get('/suggestions/results/games', { params })
       .then(r => { setGames(r.data.items); setGamesTotal(r.data.total) })
+      .catch(() => { setGames([]); setGamesTotal(0) })
       .finally(() => setGamesLoading(false))
   }, [])
 
@@ -98,6 +87,7 @@ export default function Results() {
     setMonthLoad(true)
     api.get('/suggestions/results/monthly', { params: { source: src } })
       .then(r => setMonthly(r.data))
+      .catch(() => setMonthly([]))
       .finally(() => setMonthLoad(false))
   }, [])
 
@@ -134,7 +124,7 @@ export default function Results() {
   const greens  = stats?.greens ?? 0
   const profit  = Number(stats?.profit_total ?? 0)
   const stake   = Number(stats?.stake_total ?? 0)
-  const winRate = total > 0 ? Math.round((greens / total) * 100) : 0
+  const winRate = calcWinRate(greens, total) ?? 0
 
   // render
   return (
@@ -152,7 +142,7 @@ export default function Results() {
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <BackButton />
           <div>
             <h1 className="text-base font-black text-white">Resultados da IA</h1>
             <p className="text-zinc-500 text-xs mt-0.5">Performance histórica da IA · não inclui resultados pessoais da sua banca</p>
@@ -296,7 +286,7 @@ export default function Results() {
                         </thead>
                         <tbody>
                           {daySlice.map((d: any) => {
-                            const wr   = d.total > 0 ? Math.round((d.greens / d.total) * 100) : 0
+                            const wr   = calcWinRate(d.greens, d.total) ?? 0
                             const reds = d.reds ?? (d.total - d.greens - (d.push ?? 0) - (d.half_wins ?? 0) - (d.half_losses ?? 0))
                             return (
                               <tr key={d.match_date} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
@@ -365,7 +355,8 @@ export default function Results() {
                 <div className="card overflow-hidden">
                   <div className="divide-y divide-zinc-800/60">
                     {games.map(g => {
-                      const badge = RESULT_BADGE[g.result] ?? 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
+                      const rs = getResultStyle(g.result)
+                      const badge = rs ? `${rs.bg} ${rs.text} ${rs.border}` : 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
                       return (
                         <div key={g.id}
                           className="flex items-center gap-2 px-3 sm:px-5 py-3 sm:py-3.5 hover:bg-zinc-900/50 transition-colors cursor-pointer"
@@ -381,23 +372,17 @@ export default function Results() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
                               {g.pick_type && source === 'all' && (
-                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_BADGE[g.pick_type] ?? ''}`}>
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[g.pick_type] ?? ''}`}>
                                   {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type.toUpperCase()}
                                 </span>
                               )}
-                              {g.home_team_id && (
-                                <img src={`/api/proxy/team/${g.home_team_id}.png`}
-                                  className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display='none')} />
-                              )}
+                              <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
                               <span className="text-sm font-semibold text-white truncate">{g.home_team_name}</span>
                               {g.away_team_name && g.pick_type !== 'multipla' && (
                                 <>
                                   <span className="text-zinc-600 text-xs shrink-0">vs</span>
                                   <span className="text-sm font-semibold text-white truncate">{g.away_team_name}</span>
-                                  {g.away_team_id && (
-                                    <img src={`/api/proxy/team/${g.away_team_id}.png`}
-                                      className="w-4 h-4 object-contain shrink-0" onError={e => (e.currentTarget.style.display='none')} />
-                                  )}
+                                  <TeamLogo id={g.away_team_id} name={g.away_team_name} size={16} />
                                 </>
                               )}
                             </div>
@@ -411,7 +396,7 @@ export default function Results() {
                           <div className="flex items-center shrink-0">
                             {g.result ? (
                               <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${badge}`}>
-                                {g.result === 'HALF-WIN' ? '½ WIN' : g.result === 'HALF-LOSS' ? '½ LOSS' : g.result}
+                                {rs ? rs.label : g.result}
                               </span>
                             ) : (
                               <span className="text-zinc-600 text-xs">Pendente</span>
@@ -483,7 +468,7 @@ export default function Results() {
                   </thead>
                   <tbody>
                     {monthly.map(m => {
-                      const wr   = m.win_rate ?? 0
+                      const wr   = m.win_rate ?? calcWinRate(m.greens, m.total) ?? 0
                       const reds = m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))
                       const [year, month] = (m.month ?? '').split('-')
                       const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
@@ -509,7 +494,7 @@ export default function Results() {
                       const totT  = monthly.reduce((a, m) => a + (m.total ?? 0), 0)
                       const totG  = monthly.reduce((a, m) => a + (m.greens ?? 0), 0)
                       const totR  = monthly.reduce((a, m) => a + (m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))), 0)
-                      const avgWR = totT > 0 ? Math.round(totG / totT * 100) : 0
+                      const avgWR = calcWinRate(totG, totT) ?? 0
                       return (
                         <tr className="bg-zinc-900 border-t border-zinc-700">
                           <td className="px-3 sm:px-5 py-3 text-zinc-400 font-bold text-xs uppercase">Total</td>

@@ -170,7 +170,7 @@ export default function Navbar() {
               Confirme seu e-mail para garantir acesso à recuperação de senha.{' '}
               <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil</Link>
             </span>
-            <button onClick={() => setEmailBannerDismissed(true)} className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-sm font-black transition-colors">×</button>
+            <button onClick={() => setEmailBannerDismissed(true)} aria-label="Dispensar aviso" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-sm font-black transition-colors">×</button>
           </div>
         )}
 
@@ -184,7 +184,7 @@ export default function Navbar() {
               {' '}
               <Link to="/checkout" className="underline hover:text-yellow-300">Renovar</Link>
             </span>
-            <button onClick={() => setExpiryDismissed(true)} className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 text-sm font-black transition-colors">×</button>
+            <button onClick={() => setExpiryDismissed(true)} aria-label="Dispensar aviso" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 text-sm font-black transition-colors">×</button>
           </div>
         )}
 
@@ -212,7 +212,7 @@ export default function Navbar() {
             <span className="text-white font-black text-lg tracking-tight">Pick</span>
             <span className="text-green-500 font-black text-lg">IA</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} className="text-zinc-400 hover:text-white p-1">
+          <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-zinc-400 hover:text-white p-1">
             <X className="w-5 h-5" />
           </button>
         </div>

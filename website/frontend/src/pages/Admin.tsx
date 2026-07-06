@@ -4,6 +4,8 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import BackButton from '../components/BackButton'
+import { fmtBRL } from '../utils/format'
 
 interface User {
   id: number
@@ -269,7 +271,7 @@ export default function Admin() {
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/picks')} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <BackButton to="/picks" />
             <div>
               <h1 className="text-xl font-black text-white">Painel Admin</h1>
               <p className="text-zinc-500 text-sm">Gerenciar usuários e planos</p>
@@ -424,9 +426,9 @@ export default function Admin() {
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {[
-                { label: 'Receita Total',    value: `R$${revenue.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-green-400' },
-                { label: 'Assinaturas',      value: String(revenue.count),                                                        color: 'text-white'    },
-                { label: 'Ticket Médio',     value: `R$${revenue.avg_ticket.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`, color: 'text-blue-400' },
+                { label: 'Receita Total',    value: fmtBRL(revenue.total),        color: 'text-green-400' },
+                { label: 'Assinaturas',      value: String(revenue.count),        color: 'text-white'    },
+                { label: 'Ticket Médio',     value: fmtBRL(revenue.avg_ticket),   color: 'text-blue-400' },
                 { label: 'VIPs Ativos Agora',value: String(revenue.active_vip),                                                   color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-4">
@@ -466,7 +468,7 @@ export default function Admin() {
                               <tr key={m.month} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
                                 <td className="px-4 py-2.5 text-zinc-300 font-medium capitalize">{label}</td>
                                 <td className="px-4 py-2.5 text-green-400 font-semibold">
-                                  R${m.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                  {fmtBRL(m.total)}
                                 </td>
                                 <td className="px-4 py-2.5 text-zinc-400">{m.count}</td>
                                 <td className="px-4 py-2.5">
@@ -507,7 +509,7 @@ export default function Admin() {
                             <div className="flex items-center justify-between mb-1">
                               <span className={`text-xs font-bold capitalize ${color}`}>{p.plan}</span>
                               <div className="text-right">
-                                <span className="text-xs text-white font-semibold">R${p.total.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                <span className="text-xs text-white font-semibold">{fmtBRL(p.total)}</span>
                                 <span className="text-[10px] text-zinc-600 ml-1">({p.count}x)</span>
                               </div>
                             </div>

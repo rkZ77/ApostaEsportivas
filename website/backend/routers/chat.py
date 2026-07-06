@@ -58,16 +58,26 @@ def _get_site_context(user_id: int) -> str:
                 lines.append(f"Banca principal: R${banca['bankroll_start']:.2f} | Unidade: R${banca['unit_value']:.2f}")
 
             # ── Série de alavancagem do usuário ─────────────────────────────
-            cur.execute("""
-                SELECT initial_bankroll, current_bankroll, configured
-                FROM user_alav_serie WHERE user_id = %s
-            """, (user_id,))
-            alav_serie = cur.fetchone()
-            if alav_serie and alav_serie["configured"]:
-                alav_serie = dict(alav_serie)
-                gain = alav_serie["current_bankroll"] - alav_serie["initial_bankroll"]
+            cur.execute("SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+            alav_row = cur.fetchone()
+            if alav_row and alav_row["alav_bankroll_init"] is not None:
+                alav_initial = float(alav_row["alav_bankroll_init"])
+                alav_current = alav_initial
+                cur.execute("""
+                    SELECT pa.result, pa.odd_combined
+                    FROM user_followed_picks uf
+                    JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+                    WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem' AND pa.result IS NOT NULL
+                    ORDER BY pa.match_date ASC
+                """, (user_id,))
+                for pick in cur.fetchall():
+                    if pick["result"] == "GREEN":
+                        alav_current = round(alav_current * float(pick["odd_combined"] or 1), 2)
+                    elif pick["result"] == "RED":
+                        alav_current = alav_initial
+                gain = alav_current - alav_initial
                 sign = "+" if gain >= 0 else ""
-                lines.append(f"Banca alavancagem: R${alav_serie['current_bankroll']:.2f} (inicial: R${alav_serie['initial_bankroll']:.2f} | ganho: {sign}R${gain:.2f})")
+                lines.append(f"Banca alavancagem: R${alav_current:.2f} (inicial: R${alav_initial:.2f} | ganho: {sign}R${gain:.2f})")
 
             # ── Desempenho VIP: mês atual + últimos 7 dias ──────────────────
             cur.execute("""

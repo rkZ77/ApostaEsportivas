@@ -6,6 +6,8 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import { usePushNotification } from '../hooks/usePushNotification'
+import { maskPhone } from '../utils/format'
+import BackButton from '../components/BackButton'
 
 interface ReferralData {
   referral_code: string
@@ -13,14 +15,6 @@ interface ReferralData {
   total_indicated: number
   total_converted: number
   days_earned: number
-}
-
-function maskPhone(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2)  return d.length ? `(${d}` : ''
-  if (d.length <= 6)  return `(${d.slice(0,2)}) ${d.slice(2)}`
-  if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
-  return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
 }
 
 function displayPhone(raw: string): string {
@@ -211,7 +205,7 @@ export default function Profile() {
       <Navbar />
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+          <BackButton />
           <div>
             <h1 className="text-base font-black text-white">Meu Perfil</h1>
             <p className="text-zinc-500 text-xs mt-0.5">Gerencie suas informações e preferências</p>
@@ -534,8 +528,8 @@ export default function Profile() {
         </div>
       </main>
 
-      {/* Copa do Mundo 2026 — canto inferior direito */}
-      <div className="fixed bottom-6 right-6 flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity pointer-events-none select-none">
+      {/* Copa do Mundo 2026 — canto inferior esquerdo (direito é ocupado pelo botão do WhatsApp) */}
+      <div className="fixed bottom-6 left-6 flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity pointer-events-none select-none">
         <img src="/logo-copa-mundo.png" alt="Copa do Mundo 2026" className="w-14 h-14 object-contain drop-shadow-lg" />
         <span className="text-zinc-500 text-[10px] font-semibold tracking-wide">Copa 2026</span>
       </div>

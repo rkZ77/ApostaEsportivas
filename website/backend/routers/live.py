@@ -556,7 +556,7 @@ def _enrich_leg(fid: int, market: str, line: str,
 
 
 @router.get("/fixture/{fixture_id}/live-stats")
-def get_fixture_live_stats(fixture_id: int):
+def get_fixture_live_stats(fixture_id: int, current_user: dict = Depends(get_current_user)):
     """Retorna estatísticas ao vivo de um jogo (escanteios, chutes, cartões, posse)."""
     data = _fetch_fixture(fixture_id)
     if not data:

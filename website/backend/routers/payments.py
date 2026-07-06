@@ -181,20 +181,21 @@ async def webhook(request: Request):
     except Exception:
         raise HTTPException(400, "Payload inválido")
 
-    # Verificação de assinatura HMAC do MercadoPago (obrigatória)
+    # Verificação de assinatura HMAC do MercadoPago (obrigatória em qualquer ambiente —
+    # sem o secret configurado, o webhook fica sem autenticação nenhuma, então falha
+    # fechado sempre, independente de APP_ENV)
     webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
-    _is_prod = os.getenv("APP_ENV", "production").lower() in ("production", "prod")
-    if webhook_secret:
-        x_signature  = request.headers.get("x-signature", "")
-        x_request_id = request.headers.get("x-request-id", "")
-        data_id      = str(data.get("data", {}).get("id", ""))
-        if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
-            logger.warning("[WEBHOOK] Assinatura inválida — rejeitando requisição de %s",
-                           request.client.host if request.client else "unknown")
-            raise HTTPException(403, "Assinatura inválida")
-    elif _is_prod:
-        logger.error("[WEBHOOK] MERCADOPAGO_WEBHOOK_SECRET não configurado — bloqueando em produção")
+    if not webhook_secret:
+        logger.error("[WEBHOOK] MERCADOPAGO_WEBHOOK_SECRET não configurado — bloqueando requisição")
         raise HTTPException(500, "Webhook não configurado")
+
+    x_signature  = request.headers.get("x-signature", "")
+    x_request_id = request.headers.get("x-request-id", "")
+    data_id      = str(data.get("data", {}).get("id", ""))
+    if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
+        logger.warning("[WEBHOOK] Assinatura inválida — rejeitando requisição de %s",
+                       request.client.host if request.client else "unknown")
+        raise HTTPException(403, "Assinatura inválida")
 
     event_type = data.get("type")
     logger.info("[WEBHOOK] Evento recebido: type=%s data=%s", event_type, data.get("data"))

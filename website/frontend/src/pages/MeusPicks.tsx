@@ -6,29 +6,11 @@ import Navbar from '../components/Navbar'
 import { translateMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
+import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { TeamLogo } from '../components/TeamLogo'
+import BackButton from '../components/BackButton'
 
-const fmtBRL = (v: number) =>
-  'R$ ' + Math.abs(v).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-const fmtSigned = (v: number) =>
-  (v >= 0 ? '+' : '−') + fmtBRL(v)
-
-
-const RESULT_CLS: Record<string, string> = {
-  GREEN:       'bg-green-500/10 text-green-400 border border-green-500/30',
-  RED:         'bg-red-500/10 text-red-400 border border-red-500/30',
-  PUSH:        'bg-zinc-700/50 text-zinc-400 border border-zinc-700',
-  'HALF-WIN':  'bg-teal-500/10 text-teal-400 border border-teal-500/30',
-  'HALF-LOSS': 'bg-orange-500/10 text-orange-400 border border-orange-500/30',
-}
-const RESULT_LBL: Record<string, string> = {
-  GREEN: 'GREEN', RED: 'RED', PUSH: 'PUSH', 'HALF-WIN': '½ WIN', 'HALF-LOSS': '½ LOSS',
-}
-const SOURCE_CLS: Record<string, string> = {
-  vip:         'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
-  free:        'text-green-400 bg-green-500/10 border-green-500/20',
-  multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
-  alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
-}
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
 }
@@ -173,7 +155,7 @@ export default function MeusPicks() {
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="flex items-center justify-center w-8 h-8 rounded-full border border-zinc-800 text-zinc-500 hover:border-zinc-600 hover:text-white transition-colors shrink-0"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+            <BackButton />
             <div>
               <h1 className="text-base font-black text-white">Meus Picks</h1>
               <p className="text-zinc-500 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
@@ -224,7 +206,7 @@ export default function MeusPicks() {
               const pnl = daysBack === 0
                 ? (data?.total_pnl ?? 0)
                 : resolved.reduce((acc: number, e: any) => acc + (Number(e.pnl) || 0), 0)
-              const wr = resolved.length > 0 ? Math.round(greenCount / resolved.length * 100) : 0
+              const wr = calcWinRate(greenCount, resolved.length) ?? 0
               const pnlStr = pnl === 0 ? 'R$ 0' : fmtSigned(pnl)
               return (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
@@ -366,8 +348,6 @@ export default function MeusPicks() {
                   <div className="card overflow-hidden">
                     <div className="divide-y divide-zinc-800/60">
                       {displayItems.map((e: any) => {
-                        const homeSrc = e.home_team_id ? `/api/proxy/team/${e.home_team_id}.png` : null
-                        const awaySrc = e.away_team_id ? `/api/proxy/team/${e.away_team_id}.png` : null
                         return (
                           <button
                             key={e.id}
@@ -376,13 +356,10 @@ export default function MeusPicks() {
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${SOURCE_CLS[e.pick_type] ?? ''}`}>
+                                <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[e.pick_type] ?? ''}`}>
                                   {SOURCE_LBL[e.pick_type] ?? e.pick_type}
                                 </span>
-                                {homeSrc && (
-                                  <img src={homeSrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                    onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                )}
+                                <TeamLogo id={e.home_team_id} name={e.home_team_name ?? ''} size={16} />
                                 <span className="text-sm font-semibold text-white truncate">
                                   {e.home_team_name
                                     ? e.home_team_name
@@ -395,10 +372,7 @@ export default function MeusPicks() {
                                 {e.away_team_name && (
                                   <>
                                     <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                                    {awaySrc && (
-                                      <img src={awaySrc} alt="" className="w-4 h-4 object-contain shrink-0"
-                                        onError={ev => (ev.currentTarget.style.display = 'none')} />
-                                    )}
+                                    <TeamLogo id={e.away_team_id} name={e.away_team_name} size={16} />
                                     <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
                                   </>
                                 )}
@@ -413,11 +387,14 @@ export default function MeusPicks() {
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
-                              {e.result ? (
-                                <span className={`text-xs font-black px-2 py-0.5 rounded-lg ${RESULT_CLS[e.result] ?? 'text-zinc-500'}`}>
-                                  {RESULT_LBL[e.result] ?? e.result}
-                                </span>
-                              ) : (
+                              {e.result ? (() => {
+                                const rs = getResultStyle(e.result)
+                                return (
+                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                                    {rs ? rs.label : e.result}
+                                  </span>
+                                )
+                              })() : (
                                 <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded-lg font-bold">
                                   Pendente
                                 </span>

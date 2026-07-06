@@ -209,6 +209,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
                         onClick={() => deleteComment(c.id)}
                         className="text-zinc-700 hover:text-red-400 transition-colors text-sm ml-1 leading-none"
                         title="Deletar comentário"
+                        aria-label="Deletar comentário"
                       >
                         ×
                       </button>

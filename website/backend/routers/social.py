@@ -149,8 +149,6 @@ def delete_chat(msg_id: int, current_user: dict = Depends(get_current_user)):
         return {"ok": True}
     except HTTPException:
         raise
-    except HTTPException:
-        raise
     except Exception as e:
         conn.rollback()
         import logging; logging.getLogger(__name__).error("social error: %s", e, exc_info=True)

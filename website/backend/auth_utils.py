@@ -115,6 +115,11 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Não autenticado")
     payload = decode_token(token)
 
+    # Um refresh token nunca deve ser aceito como access token (evita que um refresh
+    # vazado sirva de credencial de API por 30 dias em vez das 12h do access token)
+    if payload.get("type") != "access":
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
+
     # Verifica usuário ativo e sessão única
     conn = get_connection()
     cur = conn.cursor()
