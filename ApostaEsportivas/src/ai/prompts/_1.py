@@ -4,10 +4,15 @@ from ai.prompts._base import build_prompt
 LEAGUE_CONTEXT = """\
 CONTEXTO — COPA DO MUNDO FIFA 2026 (league_id=1)
 
-SEDE NEUTRA (regra específica Copa — prevalece sobre contexto geral):
+SEDE NEUTRA (regra específica Copa — prevalece sobre contexto geral e sobre a regra
+"HISTÓRICO CASA=mandante" da seção 3 — para esta competição ela NÃO se aplica):
   Copa do Mundo é disputada em campo neutro. Não existe vantagem de mando para nenhuma seleção.
-  Para mercados de time específico: use os dados TOTAIS da seleção (casa e fora combinados) — não filtre por mando.
-  A distinção casa/fora NÃO se aplica a esta competição. Trate ambas as seleções com dados totais.
+  Os blocos de dados desta partida NÃO usam os rótulos CASA/FORA — usam o nome de cada seleção
+  (ex.: "ESTATÍSTICAS BRASIL", "HISTÓRICO ARGENTINA"). Isso já é o sinal de sede neutra: trate
+  os números como pertencentes à seleção nomeada, com mando misto (casa e fora combinados),
+  nunca como se um lado tivesse vantagem de campo.
+  PROIBIDO no reasoning: as palavras "mandante", "visitante", "em casa", "fora de casa", ou usar
+  home/away como justificativa de vantagem para qualquer seleção nesta partida.
   Declare no reasoning: "Copa: sede neutra — dados totais usados para ambas as seleções."
 
 BASELINE Copa 2026 (referência estatística — não use como confirmador isolado):
@@ -17,8 +22,19 @@ BASELINE Copa 2026 (referência estatística — não use como confirmador isola
 
 PONDERAÇÃO POR COMPETIÇÃO (OBRIGATÓRIO para seleções nacionais):
   Pesos: Copa do Mundo=3x | Eliminatórias Competitivas=2x | Amistoso/Outra=0.5x
-  O campo "quality_breakdown" no perfil de cada seleção já mostra stats por tipo de competição.
-  Use a média PONDERADA (weighted_goals_against, etc.) em vez da média bruta.
+  Motivo dos pesos (declare se perguntado, mas não precisa repetir a cada reasoning): jogos de
+  Copa refletem melhor o nível de intensidade e escalação titular do jogo que está sendo
+  analisado (também Copa); eliminatórias competitivas têm pressão real mas nível abaixo da Copa;
+  amistosos frequentemente têm escalação alternativa e ritmo reduzido, por isso pesam menos —
+  não são "zero" porque ainda são jogos oficiais da seleção.
+  O campo "quality_breakdown" no perfil de cada seleção já mostra stats por tipo de competição,
+  incluindo "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/
+  "weighted_corners_against" (ambos os lados — ataque E defesa — já ponderados, use os dois).
+  Use a média PONDERADA em vez da média bruta.
+  O campo "amostra_suficiente_para_alta_confianca" (true/false) e "amostra_grupo_maior_peso"
+  já indicam se a amostra é grande o bastante (≥15 jogos totais E ≥5 no grupo Copa) para
+  sustentar confiança alta. Se false, aplique o fator de desconto de amostra pequena em K
+  (seção CONFIDENCE) e declare a limitação no reasoning.
   Declare no reasoning qual % dos dados veio de jogos Copa/Eliminatórias vs amistosos.
   Ex: "Morocco: bruto 0.36 gols sofridos/j (15j) → ponderado 0.48 (8j Elim + 2j Copa + 5j amistosos)"
 

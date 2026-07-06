@@ -121,9 +121,18 @@ CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e t
 --- FIXTURES COPA DO MUNDO + DADOS ---
 {fixtures_formatados}
 
-QUALIDADE: use "weighted_goals_against" e "weighted_corners_against" (Copa>Eliminatorias>Amistoso) igualmente para gols e cantos. Declare ponderacao no reasoning.
-HISTORICO: home_*/away_* → CASA=mandante, FORA=visitante. FEITOS vs CEDIDOS: feitos_A+feitos_B (primario), cedidos_A+cedidos_B (validacao). Divergencia >15% → reduza Confirmadores.
+SEDE NEUTRA: esta pipeline e 100% Copa do Mundo — nao existe vantagem de mando para nenhuma
+selecao em nenhum jogo. Proibido usar "mandante"/"visitante"/"em casa"/"fora" como justificativa
+no reasoning. Se os blocos de dados vierem nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em
+vez de CASA/FORA, use os dados totais de cada selecao (mando misto).
+QUALIDADE: use "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/"weighted_corners_against" (Copa>Eliminatorias>Amistoso) — ataque E defesa, ambos ja ponderados. Declare ponderacao no reasoning. Se "amostra_suficiente_para_alta_confianca"=false, declare limitacao e nao eleve Q acima de MODERADO.
+FEITOS vs CEDIDOS (conceitos DIFERENTES — nunca apresente lado a lado sem combinar):
+  Formula obrigatoria: valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
+  Calcule uma unica vez; nunca troque o numero depois no reasoning ("recalibrando"/"corrigindo").
+  Divergencia feitos vs cedidos >15% → declare e reduza Confirmadores 1 nivel.
 CONFIDENCE=(C×0.45)+(Q×0.25)+(K×0.30) | C=taxa_real; Q: RICO(8+)=1.00,MOD(4-7)=0.75,ESC(1-3)=0.45,VAZIO=0.20; K: 3+=1.00,2=0.70,1=0.40,0=0.10.
+  Desconto em K (reduza 1 nivel cada): mata-mata+sede neutra, escalacao incerta, amostra do grupo Copa <5 jogos.
+CONTRAPONTO: antes de concluir cada pick, declare 1 fato que enfraquece a tese (ou "sem contraponto relevante").
 SMART SAFE LINE: edge=taxa_real−1/odd | EV=taxa_real×odd−1. Descarte: edge<0.05|EV≤0. Reasoning: "SMART SAFE LINE|Escolhida:[taxa=X%,EV=Z%]".
 SELECAO: maior confidence_media. Empate → SIMPLES. Sem candidato valido com criterios: no_bet.
 VERIFICACAO (interna): odd_combined={odd_min}..{odd_max}. Fora da faixa → tente outro combo ou no_bet.

@@ -183,6 +183,9 @@ FORMATO DAS ODDS (quando disponivel):
 FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
   HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
   HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
+  SEDE NEUTRA (Copa do Mundo, league_id=1): nao existe vantagem de mando. Se os blocos vierem
+  nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em vez de CASA/FORA, use dados totais e
+  NUNCA escreva "mandante"/"visitante"/"em casa"/"fora" no reasoning para essa selecao.
 
 Calcule a taxa de ocorrencia real com base nos dados historicos. Descarte mercados com taxa < 65% ou amostra < 5 jogos.
 Selecione mercados com taxa >= 65% e padrao confirmado por >=2 indicadores.
@@ -199,11 +202,16 @@ SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=t
 Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.
 Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
-FEITOS vs CEDIDOS: total/BTTS→feitos_A+feitos_B vs cedidos_A+cedidos_B (divergencia>15%→reduza K).
-Mercado de time→feitos do time+cedidos do adversario. Resultado/Handicap→feitos_A vs cedidos_B + feitos_B vs cedidos_A.
+FEITOS vs CEDIDOS (conceitos DIFERENTES — nunca apresente lado a lado sem combinar):
+  Formula obrigatoria: valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
+  Calcule uma unica vez; nunca troque o numero depois no reasoning ("recalibrando"/"corrigindo").
+  Divergencia feitos vs cedidos >15% → declare e reduza K 1 nivel.
+  Resultado/Handicap: combine feitos_A×0.5+cedidos_B×0.5 vs feitos_B×0.5+cedidos_A×0.5.
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_for/against e weighted_corners_for/against (ataque E defesa, ja ponderados); "amostra_suficiente_para_alta_confianca"=false → declare limitacao e nao eleve Q acima de MODERADO.
+
+CONTRAPONTO: antes de fechar cada leg, declare 1 fato que enfraquece a tese (ou "sem contraponto relevante").
 
 ETAPA 2 — CORRELACAO ESTRITA:
 Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.

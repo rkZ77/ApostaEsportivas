@@ -16,6 +16,11 @@ from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MA
 
 load_dotenv(find_dotenv())
 
+# Competições disputadas em sede neutra (nenhuma seleção/time tem vantagem de mando real).
+# Usado para trocar os rótulos "CASA"/"FORA" nos blocos de dados por nomes dos times —
+# evita que a IA trate mando administrativo como se fosse vantagem de campo real.
+NEUTRAL_VENUE_LEAGUES = {1}  # Copa do Mundo FIFA
+
 
 # ============================================================
 # CONTEXTO WEB — busca informações sobre o jogo via Tavily
@@ -364,23 +369,54 @@ class AISuggestionsService:
         standings_stats,
         odds_map,
         referee_stats,
+        neutral_venue: bool = False,
     ) -> str:
         def to_json(obj):
             return json.dumps(sanitize(obj), ensure_ascii=False, separators=(',', ':'))
 
         referee_block = to_json(referee_stats) if referee_stats else '"Arbitro nao identificado ou sem historico na temporada"'
 
-        # Histórico total só é enviado quando o venue-específico é insuficiente (< 10 jogos)
-        include_total_home = len(last10_home) < 10
-        include_total_away = len(last10_away) < 10
+        if neutral_venue:
+            # Sede neutra (ex.: Copa do Mundo): não existe vantagem de mando real. Os blocos
+            # usam o NOME do time em vez de CASA/FORA — isso evita que a IA confunda a
+            # identificação administrativa do fixture (quem é "home_team_id") com vantagem
+            # de campo de verdade, que é exatamente a contradição que gerava reasoning
+            # baseado em "away_corners"/"home_corners" mesmo declarando sede neutra.
+            home_name = (fx.get("home_team") or "SELEÇÃO A").upper()
+            away_name = (fx.get("away_team") or "SELEÇÃO B").upper()
+            stats_home_label = f"ESTATÍSTICAS {home_name} (sede neutra — sem mando)"
+            stats_away_label = f"ESTATÍSTICAS {away_name} (sede neutra — sem mando)"
+            hist_total_home_label = f"HISTÓRICO {home_name} (mando misto, sede neutra)"
+            hist_total_away_label = f"HISTÓRICO {away_name} (mando misto, sede neutra)"
+            avgs_home_label = f"MÉDIAS {home_name} (feitas/cedidas, mando misto)"
+            avgs_away_label = f"MÉDIAS {away_name} (feitas/cedidas, mando misto)"
+            hist_venue_section = ""  # não existe "HISTÓRICO CASA/FORA" em sede neutra
+            include_total_home = True
+            include_total_away = True
+        else:
+            stats_home_label = "ESTATÍSTICAS CASA"
+            stats_away_label = "ESTATÍSTICAS FORA"
+            hist_total_home_label = "HISTÓRICO TOTAL CASA"
+            hist_total_away_label = "HISTÓRICO TOTAL FORA"
+            avgs_home_label = "MÉDIAS RECENTES CASA (feitas/cedidas)"
+            avgs_away_label = "MÉDIAS RECENTES FORA (feitas/cedidas)"
+            hist_venue_section = f"""
+HISTÓRICO CASA
+{format_last10(last10_home[:10])}
 
-        total_home_block = f"\nHISTÓRICO TOTAL CASA\n{format_last10(total_home[:10])}" if include_total_home else ""
-        total_away_block = f"\nHISTÓRICO TOTAL FORA\n{format_last10(total_away[:10])}" if include_total_away else ""
+HISTÓRICO FORA
+{format_last10(last10_away[:10])}"""
+            # Histórico total só é enviado quando o venue-específico é insuficiente (< 10 jogos)
+            include_total_home = len(last10_home) < 10
+            include_total_away = len(last10_away) < 10
+
+        total_home_block = f"\n{hist_total_home_label}\n{format_last10(total_home[:10])}" if include_total_home else ""
+        total_away_block = f"\n{hist_total_away_label}\n{format_last10(total_away[:10])}" if include_total_away else ""
 
         home_avgs = self._compute_avgs(last10_home, is_home_ctx=True)
         away_avgs = self._compute_avgs(last10_away, is_home_ctx=False)
-        avgs_home_block = f"\nMÉDIAS RECENTES CASA (feitas/cedidas)\n{to_json(home_avgs)}" if home_avgs else ""
-        avgs_away_block = f"\nMÉDIAS RECENTES FORA (feitas/cedidas)\n{to_json(away_avgs)}" if away_avgs else ""
+        avgs_home_block = f"\n{avgs_home_label}\n{to_json(home_avgs)}" if home_avgs else ""
+        avgs_away_block = f"\n{avgs_away_label}\n{to_json(away_avgs)}" if away_avgs else ""
 
         # Campos do fixture relevantes para análise (remove IDs e metadados)
         fx_slim = {k: v for k, v in sanitize(fx).items()
@@ -396,19 +432,14 @@ CLASSIFICAÇÃO
 MERCADOS E ODDS
 {to_json(odds_map)}
 
-ESTATÍSTICAS CASA
+{stats_home_label}
 {to_json(home_stats)}
 
-ESTATÍSTICAS FORA
+{stats_away_label}
 {to_json(away_stats)}
 {avgs_home_block}
 {avgs_away_block}
-
-HISTÓRICO CASA
-{format_last10(last10_home[:10])}
-
-HISTÓRICO FORA
-{format_last10(last10_away[:10])}
+{hist_venue_section}
 {total_home_block}
 {total_away_block}
 ÁRBITRO
@@ -578,6 +609,7 @@ HISTÓRICO FORA
             total_home, total_away,
             standings_stats, odds_map,
             referee_stats,
+            neutral_venue=league_id in NEUTRAL_VENUE_LEAGUES,
         )
         
         # Busca contexto web se não fornecido externamente

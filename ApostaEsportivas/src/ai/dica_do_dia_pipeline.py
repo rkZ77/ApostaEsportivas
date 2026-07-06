@@ -98,6 +98,7 @@ Retorne APENAS o objeto JSON final. Proibido qualquer caractere antes ou depois 
 USER_PROMPT_TEMPLATE = """\
 Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
 Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); use historico total (ultimos 15 jogos, todos competicoes) + stats especificas da Copa. Amostra>=5 no historico global.
+SEDE NEUTRA (Copa): nao existe vantagem de mando. Proibido usar "mandante"/"visitante"/"em casa"/"fora de casa" como justificativa no reasoning para qualquer selecao nesta competicao — use so o nome das selecoes.
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado):
 Leia a classificacao (standings) e determine a situacao de cada time:
@@ -136,21 +137,26 @@ FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_c
   HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
 
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte.
-   FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
-     Estimativa primaria: feitos_A_contexto + feitos_B_contexto.
-     Validacao cruzada:   cedidos_A_contexto + cedidos_B_contexto.
-     Divergencia >15% → reduza Confirmadores 1 nivel.
-     Mercado de time: feitos do time no contexto + cedidos do adversario.
-     Resultado/Handicap: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
+   FEITOS vs CEDIDOS (conceitos DIFERENTES — nunca apresente lado a lado sem combinar):
+     Formula obrigatoria para todo mercado de total (gols/cantos/cartoes/BTTS) e de time:
+       valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
+     Calcule esse valor UMA UNICA VEZ; nunca mostre um numero preliminar e troque por outro
+     depois no reasoning (proibido "recalibrando"/"corrigindo" com valor diferente).
+     Divergencia feitos vs cedidos >15% → declare e reduza Confirmadores 1 nivel.
+     Resultado/Handicap: combine feitos_A×0.5+cedidos_B×0.5 vs feitos_B×0.5+cedidos_A×0.5.
 B) Taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings.
 C) CONFIDENCE = (C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
    C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
    Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+      Taxa alta (ex. 80%+) baseada em <15 jogos totais → trate Q como MODERADO no maximo, declare amostra pequena.
    K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
    Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
+   Desconto: sede neutra+mata-mata, escalacao incerta, ou amostra do grupo Copa <5 jogos → reduza K 1 nivel cada, declare no reasoning.
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_for/against e weighted_corners_for/against (ataque E defesa, ambos ja ponderados); "amostra_suficiente_para_alta_confianca"=false → declare limitacao.
+
+CONTRAPONTO: antes de concluir, declare 1 fato que enfraquece a tese (ou "sem contraponto relevante") e por que a tese ainda se sustenta.
 
 SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
 Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.

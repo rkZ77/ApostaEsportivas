@@ -161,14 +161,22 @@ class TeamPromptBuilder:
             copa_line = "Copa: sem jogos nesta edição ainda"
 
         quality = profile.get("quality_breakdown") or {}
+        weighted_gf = quality.get("weighted_goals_for", "N/A")
         weighted_ga = quality.get("weighted_goals_against", "N/A")
+        weighted_cf = quality.get("weighted_corners_for", "N/A")
         weighted_cc = quality.get("weighted_corners_against", "N/A")
+        amostra_ok = quality.get("amostra_suficiente_para_alta_confianca")
+        amostra_line = "" if amostra_ok is None else (
+            "" if amostra_ok else "  AMOSTRA PEQUENA — nao eleve confianca acima de MODERADO.\n"
+        )
 
         return (
             f"{name} ({matches}j analisados)\n"
             f"  Forma: {sequence} V{win_rate}%/E{draw_rate}%/D{loss_rate}%\n"
             f"  Ataque:{goals_pg}gols/j | Defesa:{goals_ag}sofridos/j CS{cs_pct}%\n"
-            f"  Ponderado(Copa/Elim/Amist): {weighted_ga}gols sofridos/j | {weighted_cc}cantos cedidos/j\n"
+            f"  Ponderado(Copa/Elim/Amist) ataque: {weighted_gf}gols feitos/j | {weighted_cf}cantos feitos/j\n"
+            f"  Ponderado(Copa/Elim/Amist) defesa: {weighted_ga}gols sofridos/j | {weighted_cc}cantos cedidos/j\n"
+            f"{amostra_line}"
             f"  Disciplina:{yellows_pg}amarelos/j | Cantos:{corners_pg}/j\n"
             f"  {copa_line}"
         )
@@ -337,12 +345,26 @@ ANÁLISE DETALHADA DAS SELEÇÕES
                         f"CS:{q['clean_sheet_pct']}% "
                         f"Amarelos:{q['amarelos']}/j"
                     )
+            weighted_gf = quality.get("weighted_goals_for")
             weighted_ga = quality.get("weighted_goals_against")
+            weighted_cf = quality.get("weighted_corners_for")
             weighted_cc = quality.get("weighted_corners_against")
             if weighted_ga is not None:
                 q_lines.append(
-                    f"  → Média PONDERADA (Copa>Elim>Amistoso): "
+                    f"  → Média PONDERADA (Copa>Elim>Amistoso) ataque: "
+                    f"{weighted_gf} gols feitos/j | {weighted_cf} cantos feitos/j"
+                )
+                q_lines.append(
+                    f"  → Média PONDERADA (Copa>Elim>Amistoso) defesa: "
                     f"{weighted_ga} gols sofridos/j | {weighted_cc} cantos cedidos/j"
+                )
+            amostra_ok = quality.get("amostra_suficiente_para_alta_confianca")
+            if amostra_ok is False:
+                grupo = quality.get("amostra_grupo_maior_peso", {})
+                q_lines.append(
+                    f"  AMOSTRA PEQUENA (total={quality.get('amostra_total','?')}j, "
+                    f"grupo de maior peso={grupo.get('tipo','?')} com {grupo.get('jogos','?')}j) — "
+                    f"nao sustenta confianca alta, declare limitacao."
                 )
             quality_text = "\n".join(q_lines)
         else:
