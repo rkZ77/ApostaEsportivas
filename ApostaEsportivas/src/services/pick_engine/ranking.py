@@ -97,11 +97,15 @@ def final_score(candidate: dict) -> float:
     )
 
 
-def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
+def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, top_n: int = 10) -> list:
     """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence
-    / EV<=min_ev, ordena pelo Score Final, no maximo 1 pick por categoria
-    (ate 3 no total), define is_best_pick (nunca RISCO ALTO a menos que
-    todos os escolhidos sejam ALTO).
+    / EV<=min_ev, ordena pelo Score Final e devolve os top_n melhores --
+    SEM cortar por categoria (Fase 6: o corte "1 por categoria, max 3"
+    acontecia aqui antes de qualquer interpretacao; agora fica em
+    select_final_picks(), chamado DEPOIS que o pool mais rico foi visto
+    -- pela IA em Fase 4, ou pelo caller em modo sombra/determinístico).
+    `market_type` continua em cada candidato (metadado pra quem for
+    escolher depois), so nao filtra mais aqui.
 
     EV positivo e criterio obrigatorio de aprovacao (nao so de escolha de
     linha) -- select_smart_safe_line tem um fallback conservador que pode
@@ -118,15 +122,23 @@ def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_
     for c in eligible:
         c["final_score"] = final_score(c)
     eligible.sort(key=lambda c: c["final_score"], reverse=True)
+    return eligible[:top_n]
 
+
+def select_final_picks(ranked_candidates: list, max_picks: int = 3) -> list:
+    """Recebe um pool ja ranqueado (saida de rank_all_candidates) e aplica
+    o corte final: no maximo 1 pick por categoria, ate max_picks no total,
+    define is_best_pick (nunca RISCO ALTO a menos que todos os escolhidos
+    sejam ALTO). Assume que ranked_candidates ja vem ordenado por
+    final_score (rank_all_candidates garante isso)."""
     picked, used_categories = [], set()
-    for c in eligible:
+    for c in ranked_candidates:
         cat = c["market_type"]
         if cat in used_categories:
             continue
         picked.append(c)
         used_categories.add(cat)
-        if len(picked) == 3:
+        if len(picked) == max_picks:
             break
 
     if not picked:
@@ -139,3 +151,12 @@ def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_
         c["is_best_pick"] = c is best
 
     return picked
+
+
+def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
+    """Compatibilidade com os chamadores atuais (shadow/engine_pipelines):
+    equivalente a select_final_picks(rank_all_candidates(...)) com os
+    limites padrao (top_n=10, max_picks=3). Codigo novo que quer ver o pool
+    mais rico antes do corte final (ex.: a interpretacao da IA na Fase 4)
+    deve chamar rank_all_candidates() diretamente."""
+    return select_final_picks(rank_all_candidates(candidates, config))

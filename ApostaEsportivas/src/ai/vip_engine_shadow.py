@@ -47,7 +47,7 @@ from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.odds_service import OddsService
-from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine import analyze_fixture_markets, rank_all_candidates, select_final_picks, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -125,7 +125,8 @@ def _process_fixture(
         structured_odds, last10_home, last10_away,
         context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
     )
-    engine_picks = rank_market_candidates(candidates)
+    ranked_pool = rank_all_candidates(candidates)
+    engine_picks = select_final_picks(ranked_pool)
     engine_best = next((p for p in engine_picks if p.get("is_best_pick")), None)
 
     record = {
@@ -149,9 +150,17 @@ def _process_fixture(
             "poisson_probability": engine_best.get("poisson_probability"),
             "model_fit_adjustment": engine_best.get("model_fit_adjustment"),
         } if engine_best else None,
+        "ranked_pool_top10": [
+            {
+                "market_name": c["market_name"], "value_label": c["value_label"],
+                "market_type": c["market_type"], "odd": c["odd"],
+                "confidence": c["confidence"], "final_score": c["final_score"],
+            }
+            for c in ranked_pool
+        ],
         "team_strength": team_strength_data,
         "engine_candidates_count": len(candidates),
-        "engine_eligible_count": len(engine_picks),
+        "engine_eligible_count": len(ranked_pool),
         "reasoning_preview": explain(engine_best)[:200] if engine_best else None,
     }
 
