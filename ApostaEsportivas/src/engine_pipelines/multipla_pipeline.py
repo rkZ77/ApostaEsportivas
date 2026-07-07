@@ -14,11 +14,14 @@ from datetime import datetime
 
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
-from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
+from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from services.pick_engine import team_strength as ts
+from services.pick_engine import data_validation as dv
+from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
 ODD_TOTAL_MIN = 2.00
@@ -78,7 +81,7 @@ def _today_used_pairs(cur) -> set:
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
-    if league_id in NATIONAL_TEAM_LEAGUE_IDS:
+    if cp.is_national_team_league(league_id):
         return match_stats.get_last_n_all_competitions(team_id)
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
@@ -102,17 +105,32 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             if not last10_home or not last10_away:
                 continue
 
+            hist_home_val = dv.validate_history(last10_home)
+            hist_away_val = dv.validate_history(last10_away)
+            if not hist_home_val["passed"] or not hist_away_val["passed"]:
+                continue
+
             profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
             profile_away = tpm.build_profile(last10_away, fixture["away_team_id"])
             matchup = tpm.compare_matchup(profile_home, profile_away)
             context_data = ctx.build_context(
                 last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
-                None, None, fixture["league_id"],
+                None, None, fixture["league_id"], round_str=fixture.get("round"),
+            )
+            team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+
+            coverage_val = dv.validate_coverage(
+                structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+                context_data=context_data,
+            )
+            quality = dv.data_quality_score(
+                {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
             )
 
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
-                context_data=context_data, matchup_data=matchup,
+                context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
+                data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -234,7 +252,7 @@ def run_multipla_engine():
     used_pairs = _today_used_pairs(cur)
     legs = _gather_leg_candidates(fixtures, used_pairs)
     if len(legs) < 2:
-        print(f"[MULTIPLA_ENGINE] Só {len(legs)} candidato(s) elegível(is) — insuficiente pra combinar.")
+        print(f"[MULTIPLA_ENGINE] Só {len(legs)} candidato(s) elegível(is) · insuficiente pra combinar.")
         cur.close()
         conn.close()
         return

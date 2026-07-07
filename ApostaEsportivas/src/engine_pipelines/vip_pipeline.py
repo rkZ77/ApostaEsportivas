@@ -7,13 +7,16 @@ import os
 
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
-from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
+from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.standings_service import StandingsService
 from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from services.pick_engine import team_strength as ts
+from services.pick_engine import data_validation as dv
+from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
 
@@ -24,22 +27,23 @@ def _require_dev():
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
-    if league_id in NATIONAL_TEAM_LEAGUE_IDS:
+    if cp.is_national_team_league(league_id):
         return match_stats.get_last_n_all_competitions(team_id)
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
 
-def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id):
-    """Contexto + perfil/matchup (sem noticias -- exigiria chamada HTTP por
-    fixture, fora de escopo nesta primeira versao)."""
+def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id, round_str=None):
+    """Contexto + perfil/matchup/team_strength (sem noticias -- exigiria
+    chamada HTTP por fixture, fora de escopo nesta primeira versao)."""
     profile_home = tpm.build_profile(last10_home, home_team_id)
     profile_away = tpm.build_profile(last10_away, away_team_id)
     matchup = tpm.compare_matchup(profile_home, profile_away)
     context_data = ctx.build_context(
         last10_home, last10_away, home_team_id, away_team_id,
-        None, None, league_id,
+        None, None, league_id, round_str=round_str,
     )
-    return context_data, matchup
+    team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+    return context_data, matchup, team_strength_data
 
 
 def _save_pick(cur, fixture: dict, pick: dict) -> bool:
@@ -101,12 +105,31 @@ def run_vip_engine():
             if not last10_home or not last10_away:
                 continue
 
-            context_data, matchup = _build_signals(
-                last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"], fixture["league_id"])
+            # Data Validation Engine -- roda ANTES de qualquer analise de
+            # mercado; historico insuficiente de qualquer time aborta a
+            # fixture inteira (mesmo padrao ja validado em vip_engine_shadow.py).
+            hist_home_val = dv.validate_history(last10_home)
+            hist_away_val = dv.validate_history(last10_away)
+            if not hist_home_val["passed"] or not hist_away_val["passed"]:
+                continue
+
+            context_data, matchup, team_strength_data = _build_signals(
+                last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], round_str=fixture.get("round"),
+            )
+
+            coverage_val = dv.validate_coverage(
+                structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+                context_data=context_data,
+            )
+            quality = dv.data_quality_score(
+                {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
+            )
 
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
-                context_data=context_data, matchup_data=matchup,
+                context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
+                data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("VIP_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)

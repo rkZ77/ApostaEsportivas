@@ -7,13 +7,16 @@ import os
 
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
-from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
+from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.config import DICA_CONFIG
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from services.pick_engine import team_strength as ts
+from services.pick_engine import data_validation as dv
+from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
 WC_LEAGUE_ID = 1
@@ -46,7 +49,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
-            f.match_datetime, f.status
+            f.match_datetime, f.status, f.round
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         WHERE DATE(f.match_datetime) = CURRENT_DATE
@@ -60,7 +63,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
             "fixture_id": r[0], "league_id": r[1], "season": r[2],
             "home_team_id": r[3], "away_team_id": r[4],
             "home_team": r[5], "away_team": r[6],
-            "match_datetime": r[7], "status": r[8],
+            "match_datetime": r[7], "status": r[8], "round": r[9],
         }
         for r in rows
     ]
@@ -69,7 +72,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
-    if league_id in NATIONAL_TEAM_LEAGUE_IDS:
+    if cp.is_national_team_league(league_id):
         return match_stats.get_last_n_all_competitions(team_id)
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
@@ -93,17 +96,32 @@ def _best_candidate_across_fixtures(fixtures: list) -> tuple | None:
         if not last10_home or not last10_away:
             continue
 
+        hist_home_val = dv.validate_history(last10_home)
+        hist_away_val = dv.validate_history(last10_away)
+        if not hist_home_val["passed"] or not hist_away_val["passed"]:
+            continue
+
         profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
         profile_away = tpm.build_profile(last10_away, fixture["away_team_id"])
         matchup = tpm.compare_matchup(profile_home, profile_away)
         context_data = ctx.build_context(
             last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
-            None, None, fixture["league_id"],
+            None, None, fixture["league_id"], round_str=fixture.get("round"),
+        )
+        team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+
+        coverage_val = dv.validate_coverage(
+            structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+            context_data=context_data,
+        )
+        quality = dv.data_quality_score(
+            {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
         )
 
         candidates = analyze_fixture_markets(
             structured_odds, last10_home, last10_away,
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
+            team_strength_data=team_strength_data, data_quality_score=quality["score"],
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -197,7 +215,7 @@ def run_dica_engine():
     cur.close()
     conn.close()
 
-    print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} — "
+    print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} · "
           f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "
           f"(confidence={pick['confidence']*100:.0f}%, ev={pick['ev']*100:+.1f}%)")
 
