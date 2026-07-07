@@ -607,6 +607,28 @@ def run_migrations():
             logger.error("[SCHEDULER] Erro no pipeline diário: %s", e)
             _send_pipeline_failure_alert(str(e))
 
+    def _job_run_dev_pipeline():
+        """Motor deterministico + homologacao (ver plano de validacao antes
+        de promover pra producao) -- coleta jogos/odds e roda os 4
+        engine_pipelines + os 4 scripts de homologacao contra DEV, todos
+        os dias as 00:10 BR (mesmo horario do pipeline de IA, job
+        separado). Nunca chama IA -- sem custo de API. So registrado
+        quando DB_HOST_DEV existe neste ambiente (ver _dev_env em
+        routers/admin.py); sem alerta de falha pro usuario final, e' um
+        pipeline interno de teste, nao um produto publicado."""
+        try:
+            from routers.admin import _run_dev_pipeline, _pipeline_status
+            if _pipeline_status.get("dev_tudo", {}).get("status") == "running":
+                logger.info("[SCHEDULER] Pipeline DEV já está rodando, ignorando disparo duplicado.")
+                return
+            logger.info("[SCHEDULER] Iniciando pipeline DEV (00:10 BR)...")
+            _asyncio.run(_run_dev_pipeline())
+            status = _pipeline_status.get("dev_tudo", {})
+            if status.get("status") == "error":
+                logger.error("[SCHEDULER] Pipeline DEV falhou: %s", status.get("error"))
+        except Exception as e:
+            logger.error("[SCHEDULER] Erro no pipeline DEV: %s", e)
+
     # Inicia scheduler de lembretes, resolução automática de picks e pipeline diário
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
@@ -615,16 +637,33 @@ def run_migrations():
         _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
         _scheduler.add_job(_job_resolve_picks, "interval", minutes=5, id="resolve_picks")
         # DESATIVADO TEMPORARIAMENTE (2026-07-07) — pipeline diario de geracao de picks
-        # pausado a pedido enquanto o motor de decisao esta sendo revisado. Reativar
-        # descomentando o add_job abaixo quando o pipeline puder rodar novamente.
+        # (via IA, custa API) pausado a pedido enquanto o motor de decisao esta sendo
+        # revisado. Reativar descomentando o add_job abaixo quando o pipeline puder
+        # rodar novamente.
         # _scheduler.add_job(
         #     _job_run_daily_pipeline,
         #     CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
         #     id="daily_pipeline",
         #     misfire_grace_time=3600,
         # )
+        # Pipeline DEV (motor deterministico + homologacao, sem IA/sem custo de API) --
+        # so ativa quando este ambiente tem DB_HOST_DEV configurado (nunca roda por
+        # engano num deploy que so tem credenciais de producao, ver _dev_env em
+        # routers/admin.py). Job SEPARADO do pipeline de IA acima, que continua pausado.
+        dev_pipeline_enabled = bool(os.getenv("DB_HOST_DEV"))
+        if dev_pipeline_enabled:
+            _scheduler.add_job(
+                _job_run_dev_pipeline,
+                CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
+                id="dev_daily_pipeline",
+                misfire_grace_time=3600,
+            )
         _scheduler.start()
-        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | pipeline diário DESATIVADO")
+        logger.info(
+            "[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | "
+            "pipeline diário (IA) DESATIVADO | pipeline DEV (motor) %s",
+            "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativado (sem DB_HOST_DEV)",
+        )
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
 
