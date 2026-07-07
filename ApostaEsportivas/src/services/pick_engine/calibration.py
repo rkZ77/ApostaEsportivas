@@ -32,6 +32,18 @@ def get_market_calibration(days: int = 60) -> dict:
     return summary.get("por_mercado", {})
 
 
+def get_prior(market_type: str, calibration: dict) -> float | None:
+    """Hit-rate real historico do market_type, pra uso como prior no
+    encolhimento Bayesiano (bayesian_model.shrink_taxa) -- MESMO limiar de
+    confianca que calibration_adjustment ja usa (_MIN_N_FOR_ADJUSTMENT),
+    nao um segundo criterio. None quando a amostra historica nao sustenta
+    um prior confiavel (nunca inventa)."""
+    stats = calibration.get(market_type)
+    if not stats or stats.get("n", 0) < _MIN_N_FOR_ADJUSTMENT:
+        return None
+    return stats.get("hit")
+
+
 def calibration_adjustment(market_type: str, calibration: dict) -> float:
     """Delta deterministico pra somar ao confidence bruto, baseado no
     historico real desse market_type. Sempre 0 se amostra insuficiente

@@ -5,7 +5,7 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
-    data_validation,
+    data_validation, bayesian_model,
 )
 
 _OPPOSITE_VALUE = {
@@ -97,6 +97,11 @@ def analyze_fixture_markets(
     candidates = []
     for (family, scope), entries in groups.items():
         convergence = stats_model.expected_value_convergence(last10_home, last10_away, family, scope)
+        market_type = "goals" if family == "btts" else family
+        # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
+        # -- MESMA fonte que calibration_adjustment ja usa (hit-rate real
+        # historico do market_type), nao um numero novo/inventado.
+        bayes_prior = calibration.get_prior(market_type, calibration_data)
 
         line_candidates = []
         for m in entries:
@@ -111,6 +116,13 @@ def analyze_fixture_markets(
             )
             if not taxa or taxa["taxa_ponderada"] is None:
                 continue
+            # Encolhimento Bayesiano: puxa a taxa em direcao ao prior
+            # proporcional a quao pequena e' a amostra (n<<10 -> quase todo
+            # peso vai pro prior; n>>10 -> quase nao muda). taxa_bruta_raw
+            # preserva o valor original pra transparencia/debug -- taxa_real
+            # (usado daqui pra frente em edge/EV/confidence) e' o ajustado.
+            taxa_bruta_raw = taxa["taxa_ponderada"]
+            taxa_ajustada = bayesian_model.shrink_taxa(taxa_bruta_raw, taxa["amostra"], bayes_prior)
             # No-vig quando o par complementar (Over/Under, Yes/No) tiver
             # 2+ bookmakers dos dois lados -- probabilidade real de mercado
             # sem a margem da casa embutida, mais precisa que 1/odd puro
@@ -120,7 +132,7 @@ def analyze_fixture_markets(
             sibling = _find_sibling(m, entries)
             prob_baseline = market_model.resolve_prob_baseline(m, sibling)
             ev_edge = market_model.edge_and_ev(
-                taxa["taxa_ponderada"], best_odd, prob_baseline["prob"]
+                taxa_ajustada, best_odd, prob_baseline["prob"]
             )
             try:
                 line_val = float(m.get("line")) if family != "btts" else None
@@ -142,7 +154,8 @@ def analyze_fixture_markets(
                 "odd":              best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
-                "taxa_real":        taxa["taxa_ponderada"],
+                "taxa_real":        taxa_ajustada,
+                "taxa_bruta_pre_bayes": taxa_bruta_raw,
                 "amostra":          taxa["amostra"],
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
@@ -157,7 +170,6 @@ def analyze_fixture_markets(
         if not best_line:
             continue
 
-        market_type = "goals" if family == "btts" else family
         is_poisson_fam = probability_model.is_poisson_family(family)
         # BTTS tem Poisson proprio (Prioridade 5): P(ambas marcam) =
         # P(casa marca)xP(fora marca), com um lambda por LADO (nao um
