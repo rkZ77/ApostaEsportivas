@@ -656,11 +656,11 @@ MERCADOS E ODDS
             return []
 
         before = len(data)
-        data = [s for s in data if 1.01 <= float(s.get("odd", 0)) <= 2.00]
+        data = [s for s in data if VIP_ODD_MIN <= float(s.get("odd", 0)) <= VIP_ODD_MAX]
         if len(data) < before:
-            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de 1.01-2.00")
+            print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por odd fora de {VIP_ODD_MIN}-{VIP_ODD_MAX}")
         if not data:
-            print(f"[AI] Nenhuma sugestao com odd entre 1.01-2.00 para fixture {fx['fixture_id']}")
+            print(f"[AI] Nenhuma sugestao com odd entre {VIP_ODD_MIN}-{VIP_ODD_MAX} para fixture {fx['fixture_id']}")
             return []
 
         # Rejeita picks com reasoning inconsistente com o mercado (ex: cartões falando de gols)
