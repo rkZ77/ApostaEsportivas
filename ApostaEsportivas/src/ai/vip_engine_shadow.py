@@ -67,13 +67,13 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
 
-def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id):
+def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id, round_str=None):
     profile_home = tpm.build_profile(last10_home, home_team_id)
     profile_away = tpm.build_profile(last10_away, away_team_id)
     matchup = tpm.compare_matchup(profile_home, profile_away)
     context_data = ctx.build_context(
         last10_home, last10_away, home_team_id, away_team_id,
-        None, None, league_id,
+        None, None, league_id, round_str=round_str,
     )
     team_strength_data = ts.compare_team_strength(profile_home, profile_away)
     return context_data, matchup, team_strength_data
@@ -108,7 +108,7 @@ def _process_fixture(
     fixture_id, league_id, season, home_team_id, away_team_id,
     home_team_name, away_team_name, match_date,
     match_stats: MatchStatsService, odds_service: OddsService,
-    ai_pick: dict | None,
+    ai_pick: dict | None, round_str=None,
 ) -> dict | None:
     """Roda o motor pra 1 fixture e monta o registro de log. Retorna None
     se nao houver dado suficiente (odds ou historico) pra analisar."""
@@ -133,7 +133,7 @@ def _process_fixture(
         return None
 
     context_data, matchup, team_strength_data = _build_signals(
-        last10_home, last10_away, home_team_id, away_team_id, league_id
+        last10_home, last10_away, home_team_id, away_team_id, league_id, round_str=round_str,
     )
 
     coverage_val = dv.validate_coverage(
@@ -258,7 +258,7 @@ def run_shadow(dias: int = 7):
                     fx["fixture_id"], fx["league_id"], fx["season"],
                     fx["home_team_id"], fx["away_team_id"],
                     fx["home_team"], fx["away_team"], fx.get("match_datetime"),
-                    match_stats, odds_service, ai_pick=None,
+                    match_stats, odds_service, ai_pick=None, round_str=fx.get("round"),
                 )
             except Exception as e:
                 print(f"[VIP_SHADOW] Erro no fixture {fx['fixture_id']}, pulando: {e}")

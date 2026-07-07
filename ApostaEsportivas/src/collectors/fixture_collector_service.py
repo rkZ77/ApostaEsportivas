@@ -173,6 +173,7 @@ class FixtureCollectorService:
                 "match_datetime": dt_local,
                 "status":         status,
                 "referee":        fixture.get("referee"),
+                "round":          league.get("round"),
             })
 
         print(f"📊 Jogos NS válidos encontrados: {len(fixtures)}")
@@ -271,6 +272,7 @@ class FixtureCollectorService:
                             match_datetime  = %s,
                             status          = %s,
                             referee         = COALESCE(%s, referee),
+                            round           = COALESCE(%s, round),
                             last_updated    = NOW()
                         WHERE fixture_id = %s;
                     """, (
@@ -283,6 +285,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                         fid,
                     ))
                     updates += 1
@@ -292,10 +295,10 @@ class FixtureCollectorService:
                             fixture_id, league_id, season,
                             home_team_id, away_team_id,
                             home_team, away_team,
-                            match_datetime, status, referee,
+                            match_datetime, status, referee, round,
                             created_at, last_updated
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
                     """, (
                         fid,
                         f["league_id"],
@@ -307,6 +310,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                     ))
                     inserts += 1
 

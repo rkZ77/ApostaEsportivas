@@ -110,3 +110,34 @@ def classify_competition_weight_group(league_id) -> str:
     Fallback identico ao original: liga sem grupo de peso definido cai em
     'Amistoso/Outra'."""
     return competition_weight_group(league_id) or "Amistoso/Outra"
+
+
+# ============================================================
+# Prioridade 4: fase da partida a partir do campo round da API-Football
+# (fixtures.round, coletado por fixture_collector_service -- so existe pra
+# jogos NS, a tabela fixtures e efemera). Isso e por FIXTURE, nao por liga --
+# uma mesma competicao tem GROUP_STAGE e KNOCKOUT_* em partes diferentes do
+# calendario, por isso fica fora do CompetitionProfile (que e estatico por
+# league_id) e vira uma funcao separada que le o texto do round.
+_KNOCKOUT_SINGLE_KEYWORDS = (
+    "round of", "quarter", "semi", "final", "play-off", "playoff", "third place",
+)
+
+
+def classify_round_phase(round_str: str | None) -> str | None:
+    """GROUP_STAGE | KNOCKOUT_SINGLE | KNOCKOUT_TWO_LEGS a partir do texto
+    round da API-Football (ex.: "Group Stage - 3", "Round of 16", "Semi-
+    finals", "Final - 1st Leg"). "leg" e checado ANTES de knockout-single
+    pra cobrir finais/semis de ida-e-volta corretamente (ex.: "Final - 1st
+    Leg" nao pode cair em KNOCKOUT_SINGLE). None quando o texto nao bate em
+    nenhum padrao conhecido -- nunca advinha."""
+    if not round_str:
+        return None
+    name = round_str.strip().lower()
+    if "leg" in name:
+        return "KNOCKOUT_TWO_LEGS"
+    if "group" in name:
+        return "GROUP_STAGE"
+    if any(kw in name for kw in _KNOCKOUT_SINGLE_KEYWORDS):
+        return "KNOCKOUT_SINGLE"
+    return None
