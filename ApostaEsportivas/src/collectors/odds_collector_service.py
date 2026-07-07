@@ -300,7 +300,7 @@ class OddsCollectorService:
                         # Assim cada linha é um registro único pelo conflict key (market_row_id, value_name).
                         # line_value vem só do campo handicap quando disponível.
                         value_name = raw_value
-                        line_value = handicap if handicap else None
+                        line_value = handicap if handicap else ""
 
                         values_batch.append((
                             market_row_id,

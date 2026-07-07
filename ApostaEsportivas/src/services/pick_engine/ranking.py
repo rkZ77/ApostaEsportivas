@@ -5,6 +5,34 @@ LINHA dentro do mercado ja vencedor (select_smart_safe_line/line_score),
 preferindo uma faixa conservadora de odd sem travar nela."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
+# Grupo de correlacao (familia raiz) por market_type -- mercados do mesmo
+# grupo compartilham a MESMA fonte de dado bruto (contagem de gols/
+# escanteios/cartoes do jogo), mesmo sendo estruturas de aposta diferentes
+# (over/under vs handicap vs par/impar vs clean sheet). Prioridade 3 do
+# plano de refatoracao: select_final_picks() usava market_type puro pra
+# "1 pick por categoria" -- "cards" e "handicap_cards" contavam como
+# categorias DIFERENTES, entao o corte final podia aprovar os dois ao
+# mesmo tempo como se fossem confirmadores independentes, quando na
+# verdade vem do mesmo historico de cartoes do time.
+_CORRELATION_GROUP_OVERRIDES = {
+    "clean_sheet": "goals",     # depende do placar (gols sofridos = 0)
+    "win_to_nil": "goals",      # depende do placar (vence e nao sofre gol)
+    "outcome": "result",
+    "double_chance": "result",
+    "draw_no_bet": "result",
+    "shots_on_target": "shots",  # chutes no alvo e chutes totais sao o mesmo sinal de volume ofensivo
+}
+
+
+def correlation_group(market_type: str) -> str:
+    """Familia raiz de um market_type, pra agrupar mercados correlacionados
+    (mesma fonte de dado bruto) mesmo quando o market_type e' tecnicamente
+    diferente."""
+    for prefix in ("handicap_", "odd_even_"):
+        if market_type.startswith(prefix):
+            return market_type[len(prefix):]
+    return _CORRELATION_GROUP_OVERRIDES.get(market_type, market_type)
+
 
 def _conservative_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """1.0 dentro de [conservative_odd_low, conservative_odd_high]; cai
@@ -18,34 +46,76 @@ def _conservative_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -
     return round(max(0.0, 1.0 - dist * 0.5), 4)
 
 
+def _bookmakers_bonus(bookmakers_count: int, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
+    """0-1, satura em bookmakers_bonus_saturation casas -- mais consenso de
+    preco = mais confiavel que a odd reflete valor real, nao erro de 1
+    casa isolada (min_bookmakers_count ja exige >=2 pra entrar como
+    candidato; isso aqui recompensa GRADUALMENTE mais consenso ainda)."""
+    return round(min(bookmakers_count / config.bookmakers_bonus_saturation, 1.0), 4)
+
+
+def _stability_bonus(candidate: dict) -> float:
+    """1.0 = taxa identica entre metade recente e metade antiga do
+    historico (estavel); cai conforme diverge. 0.5 (neutro) quando nao ha
+    dado de estabilidade (mercado fora do escopo de line_stability, ex.
+    handicap/outcome, ou amostra pequena demais pra dividir ao meio) --
+    nem premia nem pune por falta de informacao."""
+    stability = candidate.get("stability")
+    if not stability:
+        return 0.5
+    return round(max(0.0, 1.0 - stability["instability"]), 4)
+
+
 def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """Pontuacao de linha (dentro de um mercado ja escolhido por
-    estatistica): taxa real + edge (normalizado) + bonus da faixa
-    conservadora de odd. E aqui, e so aqui, que a odd participa da
-    decisao -- final_score() (escolha do MERCADO) nao usa EV/odd."""
+    estatistica): taxa real + edge + faixa conservadora de odd + consenso
+    de bookmakers + estabilidade historica da linha. E aqui, e so aqui,
+    que a odd participa da decisao -- final_score() (escolha do MERCADO)
+    nao usa EV/odd.
+
+    Variancia e Data Quality Score deliberadamente NAO entram aqui --
+    sao constantes pra todos os candidatos do mesmo mercado/fixture
+    (nao ajudam a escolher ENTRE linhas), ver config.py."""
     edge_norm = min(max(candidate.get("edge", 0.0), 0.0), 0.5) / 0.5
-    bonus = _conservative_bonus(candidate["odd"], config)
+    conservative = _conservative_bonus(candidate["odd"], config)
+    bookmakers = _bookmakers_bonus(candidate.get("bookmakers_count", 1), config)
+    stability = _stability_bonus(candidate)
     return round(
         candidate["taxa_real"] * config.line_weight_taxa
         + edge_norm * config.line_weight_edge
-        + bonus * config.line_weight_conservative,
+        + conservative * config.line_weight_conservative
+        + bookmakers * config.line_weight_bookmakers
+        + stability * config.line_weight_stability,
         4,
     )
 
 
-def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> dict | None:
+def select_smart_safe_line(
+    line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, data_quality_score: float | None = None,
+) -> dict | None:
     """Descarta odd<min_odd, odd>max_odd (mercado iliquido/raramente
-    cotado, nao valor real), edge<min_edge, EV<=0; entre as que sobram
-    escolhe a de maior line_score (taxa+edge+faixa conservadora de odd).
-    Sem candidato aprovado, cai pra qualquer linha com odd entre 1.01 e
-    max_odd (fallback conservador, nunca forca uma linha ruim ou um
-    outlier de mercado ilíquido silenciosamente)."""
+    cotado, nao valor real), edge<min_edge_efetivo, EV<=0; entre as que
+    sobram escolhe a de maior line_score (taxa+edge+odd conservadora+
+    bookmakers+estabilidade). Sem candidato aprovado, cai pra qualquer
+    linha com odd entre 1.01 e max_odd (fallback conservador, nunca forca
+    uma linha ruim ou um outlier de mercado ilíquido silenciosamente).
+
+    data_quality_score (0-100, de data_validation.data_quality_score)
+    ajusta o min_edge exigido pra cima quando o dado da fixture e' ruim --
+    fixture com cobertura/integridade fraca precisa de uma margem de
+    seguranca maior pra aprovar uma linha, em vez do mesmo limiar fixo
+    de sempre. None (caller nao calculou DQS ainda) -> sem ajuste."""
     if not line_candidates:
         return None
 
+    effective_min_edge = config.min_edge
+    if data_quality_score is not None and data_quality_score < config.dqs_baseline:
+        deficit = (config.dqs_baseline - data_quality_score) / 100
+        effective_min_edge = config.min_edge * (1 + deficit * config.dqs_min_edge_scale)
+
     passed = [
         c for c in line_candidates
-        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= config.min_edge and c["ev"] > 0
+        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= effective_min_edge and c["ev"] > 0
     ]
     pool = passed or [c for c in line_candidates if 1.01 <= c["odd"] <= config.max_odd]
     if not pool:
@@ -53,6 +123,7 @@ def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEF
 
     best = max(pool, key=lambda c: _line_score(c, config))
     best["line_score"] = _line_score(best, config)
+    best["effective_min_edge"] = round(effective_min_edge, 4)
     return best
 
 
@@ -97,11 +168,15 @@ def final_score(candidate: dict) -> float:
     )
 
 
-def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
+def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, top_n: int = 10) -> list:
     """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence
-    / EV<=min_ev, ordena pelo Score Final, no maximo 1 pick por categoria
-    (ate 3 no total), define is_best_pick (nunca RISCO ALTO a menos que
-    todos os escolhidos sejam ALTO).
+    / EV<=min_ev, ordena pelo Score Final e devolve os top_n melhores --
+    SEM cortar por categoria (Fase 6: o corte "1 por categoria, max 3"
+    acontecia aqui antes de qualquer interpretacao; agora fica em
+    select_final_picks(), chamado DEPOIS que o pool mais rico foi visto
+    -- pela IA em Fase 4, ou pelo caller em modo sombra/determinístico).
+    `market_type` continua em cada candidato (metadado pra quem for
+    escolher depois), so nao filtra mais aqui.
 
     EV positivo e criterio obrigatorio de aprovacao (nao so de escolha de
     linha) -- select_smart_safe_line tem um fallback conservador que pode
@@ -118,15 +193,25 @@ def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_
     for c in eligible:
         c["final_score"] = final_score(c)
     eligible.sort(key=lambda c: c["final_score"], reverse=True)
+    return eligible[:top_n]
 
-    picked, used_categories = [], set()
-    for c in eligible:
-        cat = c["market_type"]
-        if cat in used_categories:
+
+def select_final_picks(ranked_candidates: list, max_picks: int = 3) -> list:
+    """Recebe um pool ja ranqueado (saida de rank_all_candidates) e aplica
+    o corte final: no maximo 1 pick por GRUPO DE CORRELACAO (nao
+    market_type puro -- ver correlation_group(), evita aprovar "cards" e
+    "handicap_cards" juntos como se fossem confirmadores independentes),
+    ate max_picks no total, define is_best_pick (nunca RISCO ALTO a menos
+    que todos os escolhidos sejam ALTO). Assume que ranked_candidates ja
+    vem ordenado por final_score (rank_all_candidates garante isso)."""
+    picked, used_groups = [], set()
+    for c in ranked_candidates:
+        group = correlation_group(c["market_type"])
+        if group in used_groups:
             continue
         picked.append(c)
-        used_categories.add(cat)
-        if len(picked) == 3:
+        used_groups.add(group)
+        if len(picked) == max_picks:
             break
 
     if not picked:
@@ -139,3 +224,12 @@ def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_
         c["is_best_pick"] = c is best
 
     return picked
+
+
+def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
+    """Compatibilidade com os chamadores atuais (shadow/engine_pipelines):
+    equivalente a select_final_picks(rank_all_candidates(...)) com os
+    limites padrao (top_n=10, max_picks=3). Codigo novo que quer ver o pool
+    mais rico antes do corte final (ex.: a interpretacao da IA na Fase 4)
+    deve chamar rank_all_candidates() diretamente."""
+    return select_final_picks(rank_all_candidates(candidates, config))

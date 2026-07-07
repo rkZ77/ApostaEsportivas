@@ -44,6 +44,24 @@ def convergence_adjustment(direction: str, line_val: float | None, convergence: 
     return 0.10 if implied_direction == direction else -0.10
 
 
+def model_fit_adjustment(model_fit_diff: float | None) -> float:
+    """Delta pra somar no confidence (termo M): quanto a probabilidade do
+    modelo Poisson (probability_model) concorda com a taxa empirica bruta
+    (stats_model) pra MESMA linha -- duas estimativas independentes
+    concordando e sinal de que o padrao e real, nao ajuste por acaso.
+    Diferenca pequena (<=10 pontos percentuais) -> +0.05 (confirmador
+    extra). Diferenca grande (>=30pp) -> -0.05 (os dois modelos discordam,
+    desconfie). Entre os dois, ou sem dado (familia sem leitura Poisson) ->
+    0 (neutro)."""
+    if model_fit_diff is None:
+        return 0.0
+    if model_fit_diff <= 0.10:
+        return 0.05
+    if model_fit_diff >= 0.30:
+        return -0.05
+    return 0.0
+
+
 def risco_from_confidence(conf: float, config: PickEngineConfig = DEFAULT_CONFIG) -> str:
     if conf >= config.risco_baixo_min:
         return "BAIXO"

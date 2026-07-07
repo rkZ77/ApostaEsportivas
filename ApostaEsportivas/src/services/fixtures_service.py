@@ -158,6 +158,7 @@ class FixturesService:
             "match_datetime": r["match_datetime"],
             "status": r["status"],
             "referee": r.get("referee"),
+            "round": r.get("round"),
         }
 
     ##########################################################################

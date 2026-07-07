@@ -13,6 +13,7 @@ from datetime import datetime
 from utils.db_utils import get_connection
 from services.historical_api_fetcher import HistoricalApiFetcher
 from services.world_cup_squad_service import WorldCupSquadService
+from services.pick_engine.competition_profile import classify_competition_weight_group
 
 
 class NationalTeamProfileService:
@@ -361,12 +362,11 @@ class NationalTeamProfileService:
         return matches
     
     def _classify_competition(self, league_id: int) -> str:
-        """Classifica o tipo de competição pelo league_id."""
-        if league_id == 1:
-            return "Copa do Mundo"
-        if league_id in (31, 32, 33, 34, 35, 36, 37, 38, 39, 882, 780):
-            return "Eliminatórias"
-        return "Amistoso/Outra"
+        """Classifica o tipo de competição pelo league_id. Fonte única:
+        services/pick_engine/competition_profile.py (Prioridade 1 do plano
+        de refatoração — antes essa classificação era mantida em paralelo
+        aqui)."""
+        return classify_competition_weight_group(league_id)
 
     def _calculate_quality_breakdown(self, matches: list, team_id: int) -> dict:
         """
@@ -404,13 +404,17 @@ class NationalTeamProfileService:
 
         result = {}
         total_weight = 0.0
+        weighted_gf  = 0.0
         weighted_ga  = 0.0
+        weighted_cf  = 0.0
         weighted_cc  = 0.0
+        total_jogos  = 0
 
         for comp_type, entries in groups.items():
             n = len(entries)
             if n == 0:
                 continue
+            total_jogos += n
             result[comp_type] = {
                 "jogos":            n,
                 "gols_marcados":    round(sum(e["gf"] for e in entries) / n, 2),
@@ -421,18 +425,38 @@ class NationalTeamProfileService:
                 "amarelos":         round(sum(e["yellows"] for e in entries) / n, 2),
             }
             w = WEIGHTS[comp_type]
+            avg_gf = sum(e["gf"] for e in entries) / n
             avg_ga = sum(e["ga"] for e in entries) / n
+            avg_cf = sum(e["cf"] for e in entries) / n
             avg_cc = sum(e["cc"] for e in entries) / n
+            weighted_gf  += avg_gf * w * n
             weighted_ga  += avg_ga * w * n
+            weighted_cf  += avg_cf * w * n
             weighted_cc  += avg_cc * w * n
             total_weight += w * n
 
         if total_weight > 0:
+            # "_for" = feito pelo próprio time (ataque) | "_against" = cedido ao adversário (defesa)
+            # Ambos os lados são ponderados pelo mesmo peso de competição — sem isso, o modelo
+            # de "ataque vs defesa" (attack_for x opponent_against) ficaria assimétrico.
+            result["weighted_goals_for"] = round(weighted_gf / total_weight, 2)
             result["weighted_goals_against"] = round(weighted_ga / total_weight, 2)
+            result["weighted_corners_for"] = round(weighted_cf / total_weight, 2)
             result["weighted_corners_against"] = round(weighted_cc / total_weight, 2)
         else:
+            result["weighted_goals_for"] = None
             result["weighted_goals_against"] = None
+            result["weighted_corners_for"] = None
             result["weighted_corners_against"] = None
+
+        # Sinalização estrutural de amostra (não depende da IA declarar isso corretamente sozinha):
+        # o grupo de MAIOR peso (Copa) é o que mais influencia a média ponderada, então é o que
+        # mais precisa de amostra mínima antes de sustentar alta confiança.
+        maior_peso_tipo = max(WEIGHTS, key=lambda k: WEIGHTS[k])
+        jogos_maior_peso = result.get(maior_peso_tipo, {}).get("jogos", 0)
+        result["amostra_total"] = total_jogos
+        result["amostra_grupo_maior_peso"] = {"tipo": maior_peso_tipo, "jogos": jogos_maior_peso}
+        result["amostra_suficiente_para_alta_confianca"] = total_jogos >= 15 and jogos_maior_peso >= 5
 
         return result
 

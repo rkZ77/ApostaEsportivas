@@ -257,6 +257,41 @@ def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list
     return last10_home + last10_away, None
 
 
+def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
+    """Constroi o hit_fn (jogo -> 0/1) pra um mercado 'classico' (over/under
+    ou btts) -- extraido de market_taxa() pra ser reaproveitado por
+    line_stability() sem duplicar a logica de parsing/validacao de
+    value/line. Retorna None se o value/line nao forem reconhecidos
+    (mesmos casos que market_taxa ja rejeitava)."""
+    direction = (value or "").strip().lower()
+
+    if family == "btts":
+        if direction not in ("yes", "sim", "no", "não", "nao"):
+            return None
+        want_btts = direction in ("yes", "sim")
+
+        def hit_fn(m):
+            occurred = (m.get("home_goals") or 0) > 0 and (m.get("away_goals") or 0) > 0
+            return 1 if occurred == want_btts else 0
+
+        return hit_fn
+
+    if direction not in ("over", "under"):
+        return None
+    try:
+        line_val = float(line_str)
+    except (TypeError, ValueError):
+        return None
+    is_over = direction == "over"
+
+    def hit_fn(m):
+        stat = _extract_stat(m, family, scope)
+        over = 1 if stat > line_val else 0
+        return over if is_over else 1 - over
+
+    return hit_fn
+
+
 def market_taxa(family: str, scope: str, value: str, line_str: str,
                 last10_home: list, last10_away: list, reference_date=None,
                 config: PickEngineConfig = DEFAULT_CONFIG):
@@ -269,38 +304,57 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     if not pool:
         return None
 
-    direction = (value or "").strip().lower()
-
-    if family == "btts":
-        # Mercados compostos existem na API (ex: "Results/Both Teams Score"
-        # com value "Home/Yes", "Away/No") e batem no classify_market por
-        # conterem "both teams"+"score" no nome -- mas nao sao BTTS puro.
-        # Value precisa ser EXATAMENTE "yes"/"no", senao e um mercado
-        # composto/desconhecido, fora do escopo (retorna None).
-        if direction not in ("yes", "sim", "no", "não", "nao"):
-            return None
-        want_btts = direction in ("yes", "sim")
-
-        def hit_fn(m):
-            occurred = (m.get("home_goals") or 0) > 0 and (m.get("away_goals") or 0) > 0
-            return 1 if occurred == want_btts else 0
-    else:
-        # Mesma logica: "Total Goals/Both Teams To Score" tem value tipo
-        # "o/yes 2.5" que nao e nem "over" nem "under" puro -- rejeita.
-        if direction not in ("over", "under"):
-            return None
-        try:
-            line_val = float(line_str)
-        except (TypeError, ValueError):
-            return None
-        is_over = direction == "over"
-
-        def hit_fn(m):
-            stat = _extract_stat(m, family, scope)
-            over = 1 if stat > line_val else 0
-            return over if is_over else 1 - over
+    hit_fn = _build_market_hit_fn(family, scope, value, line_str)
+    if hit_fn is None:
+        return None
 
     return weighted_rate(pool, hit_fn, reference_date=reference_date, config=config)
+
+
+_MIN_MATCHES_PER_HALF_STABILITY = 2
+
+
+def line_stability(family: str, scope: str, value: str, line_str: str,
+                    last10_home: list, last10_away: list) -> dict | None:
+    """Compara a taxa BRUTA (nao ponderada) da linha na metade mais
+    recente do historico vs a metade mais antiga -- diferente da media
+    agregada (que pode esconder uma linha que so comecou a bater
+    recentemente, ou que parou de bater e a media agregada ainda nao
+    refletiu isso). Divergencia grande = padrao instavel/recente demais
+    pra confiar tanto quanto a taxa agregada sugere.
+
+    So cobre mercados 'classicos' (over/under/btts, mesmo escopo de
+    market_taxa) -- amostra minima de 2 jogos por metade (4 no total),
+    senao a comparacao vira ruido puro. None quando nao aplicavel."""
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away)
+    if not pool or len(pool) < _MIN_MATCHES_PER_HALF_STABILITY * 2:
+        return None
+
+    hit_fn = _build_market_hit_fn(family, scope, value, line_str)
+    if hit_fn is None:
+        return None
+
+    def _match_date(m):
+        d = m.get("match_date")
+        if isinstance(d, str):
+            d = datetime.fromisoformat(d.replace("Z", "+00:00"))
+        return d or datetime.min
+
+    sorted_pool = sorted(pool, key=_match_date, reverse=True)
+    mid = len(sorted_pool) // 2
+    recent_half, older_half = sorted_pool[:mid], sorted_pool[mid:]
+
+    recent_rate = sum(hit_fn(m) for m in recent_half) / len(recent_half)
+    older_rate = sum(hit_fn(m) for m in older_half) / len(older_half)
+    instability = round(abs(recent_rate - older_rate), 4)
+
+    return {
+        "recent_rate": round(recent_rate, 4),
+        "older_rate": round(older_rate, 4),
+        "instability": instability,
+        "recent_n": len(recent_half),
+        "older_n": len(older_half),
+    }
 
 
 def _combine_two_estimates(rate_a: dict, rate_b: dict, config: PickEngineConfig = DEFAULT_CONFIG):
@@ -625,33 +679,49 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
     }
 
 
-def offensive_efficiency(matches: list, is_home_ctx: bool) -> dict | None:
-    """NOVO na Fase 1: eficiencia ofensiva usando chutes no alvo e posse
-    (dados que ja existem no banco -- match_statistics.home_shots_on/
-    home_possession -- mas nunca chegavam ao calculo de picks ate agora,
-    so eram usados no perfil tatico de selecoes). Sinal secundario para
-    mercados de gols/BTTS -- nao substitui a taxa historica, complementa."""
+def offensive_efficiency(matches: list, team_id: int) -> dict | None:
+    """Eficiencia ofensiva usando chutes no alvo e posse (dados que ja
+    existem no banco -- match_statistics.home_shots_on/home_possession).
+    Mede QUALIDADE de finalizacao (gols por chute-no-alvo), nao QUANTIDADE
+    de gols -- sinal mais independente da taxa historica de gols do que
+    uma segunda media de gols/jogo seria (usado por
+    team_profile_model.compare_matchup() no lugar de combined_goals_avg,
+    ver Prioridade 1.3 do plano de refatoracao).
+
+    Contexto (casa/fora) resolvido POR PARTIDA via home_team_id==team_id --
+    correto tanto para pool de um so lado (clubes) quanto pool de mando
+    misto (selecoes, sede neutra). Antes recebia um unico is_home_ctx pra
+    lista inteira -- bug real: em mando misto isso lia o campo errado
+    (home_shots_on de um jogo onde o time era visitante, por exemplo) pra
+    parte dos jogos. Nunca foi chamada em producao com esse bug (funcao
+    nao estava conectada a nada), corrigido antes de conectar."""
     if not matches:
         return None
-    shots_on_k = "home_shots_on" if is_home_ctx else "away_shots_on"
-    goals_k = "home_goals" if is_home_ctx else "away_goals"
-    possession_k = "home_possession" if is_home_ctx else "away_possession"
 
-    with_shots = [m for m in matches if m.get(shots_on_k) is not None]
+    with_shots = [
+        m for m in matches
+        if m.get("home_shots_on" if m.get("home_team_id") == team_id else "away_shots_on") is not None
+    ]
     if not with_shots:
         return None
 
-    n = len(with_shots)
-    total_shots_on = sum((m.get(shots_on_k) or 0) for m in with_shots)
-    total_goals = sum((m.get(goals_k) or 0) for m in with_shots)
+    n = total_shots_on = total_goals = 0
+    total_possession = possession_n = 0
+    for m in with_shots:
+        is_home = m.get("home_team_id") == team_id
+        shots_on = m.get("home_shots_on" if is_home else "away_shots_on") or 0
+        goals = m.get("home_goals" if is_home else "away_goals") or 0
+        possession = m.get("home_possession" if is_home else "away_possession")
+        total_shots_on += shots_on
+        total_goals += goals
+        n += 1
+        if possession is not None:
+            total_possession += possession
+            possession_n += 1
+
     avg_shots_on = round(total_shots_on / n, 2)
     conversion = round(total_goals / total_shots_on, 3) if total_shots_on > 0 else None
-
-    with_possession = [m for m in with_shots if m.get(possession_k) is not None]
-    avg_possession = (
-        round(sum((m.get(possession_k) or 0) for m in with_possession) / len(with_possession), 1)
-        if with_possession else None
-    )
+    avg_possession = round(total_possession / possession_n, 1) if possession_n else None
 
     return {
         "amostra": n,

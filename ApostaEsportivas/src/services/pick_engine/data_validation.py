@@ -1,0 +1,271 @@
+"""Data Validation Engine: camada que valida os dados ANTES de qualquer
+analise de mercado -- historico suficiente, cobertura das fontes,
+integridade dos valores e outliers. Gera um Data Quality Score (0-100)
+que acompanha a analise, em vez de deixar dado ruim silenciosamente
+degradar taxa/confidence sem ninguem perceber a causa.
+
+Nao recalcula o que ja existe: reaproveita stats_model.sample_quality()
+(amostra -> Q) e variance_model.variance_stats() (media/desvio) em vez de
+duplicar essa matematica."""
+from services.pick_engine import stats_model, variance_model
+
+
+# ============================================================
+# 1. HISTORICO
+# ============================================================
+def validate_history(matches: list, min_games: int = 5) -> dict:
+    """Amostra minima pra uma analise ter algum valor -- reaproveita
+    stats_model.sample_quality() (mesmos tiers RICO/MODERADO/ESCASSO/VAZIO
+    ja usados no resto do motor, nao um limite novo e desalinhado)."""
+    n = len(matches)
+    quality = stats_model.sample_quality(n)
+    reasons = []
+    if n == 0:
+        reasons.append("Nenhum jogo no historico")
+    elif n < min_games:
+        reasons.append(f"Amostra abaixo do minimo ({n} de {min_games} jogos)")
+
+    return {
+        "passed": n >= min_games,
+        "amostra": n,
+        "label": quality["label"],
+        "Q": quality["Q"],
+        "reasons": reasons,
+    }
+
+
+def validate_market_sample(family: str, scope: str, last10_home: list, last10_away: list,
+                            min_games: int = 5) -> dict:
+    """Amostra minima ESPECIFICA da familia de mercado, nao do time em
+    geral -- um time pode ter historico geral rico (validate_history
+    passa) mas o campo bruto desta familia (ex.: home_corners) ausente em
+    parte dos jogos. stats_model._extract_stat() trata campo ausente como
+    0 no calculo de taxa hoje (`m.get(field) or 0`) em vez de excluir o
+    jogo da amostra -- isso e' uma decisao de calculo separada (mudaria
+    taxa_real/confidence, fora de escopo desta validacao) -- aqui so
+    reporta quantos jogos do pool realmente TEM o dado, pra essa lacuna
+    nao ficar invisivel."""
+    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away)
+    if not pool:
+        return {"passed": False, "amostra_total": 0, "amostra_com_dado": 0, "reasons": ["Sem jogos no pool desta familia"]}
+
+    fields = stats_model._FAMILY_STAT_FIELDS.get(family)
+    if not fields:
+        # Familia sem campo bruto dedicado (ex.: btts usa home_goals/
+        # away_goals, sempre presentes p/ jogos com status FT) -- sem gap
+        # conhecido de cobertura pra checar aqui.
+        return {"passed": len(pool) >= min_games, "amostra_total": len(pool), "amostra_com_dado": len(pool), "reasons": []}
+
+    def _has_data(m):
+        if scope in ("home", "away"):
+            return m.get(fields[scope]) is not None
+        total_field = fields.get("total")
+        if total_field:
+            return m.get(total_field) is not None
+        return m.get(fields["home"]) is not None or m.get(fields["away"]) is not None
+
+    com_dado = sum(1 for m in pool if _has_data(m))
+    reasons = []
+    if com_dado < len(pool):
+        reasons.append(
+            f"{len(pool) - com_dado} de {len(pool)} jogos sem o campo desta familia preenchido "
+            f"(tratados como 0 no calculo de taxa hoje)"
+        )
+    if com_dado < min_games:
+        reasons.append(f"Amostra real com dado ({com_dado}) abaixo do minimo ({min_games})")
+
+    return {
+        "passed": com_dado >= min_games,
+        "amostra_total": len(pool),
+        "amostra_com_dado": com_dado,
+        "reasons": reasons,
+    }
+
+
+# ============================================================
+# 2. COBERTURA
+# ============================================================
+def validate_coverage(
+    structured_odds: list | None,
+    last10_home: list | None,
+    last10_away: list | None,
+    standings_home: dict | None = None,
+    standings_away: dict | None = None,
+    referee_stats: dict | None = None,
+    context_data: dict | None = None,
+    h2h: list | None = None,
+) -> dict:
+    """Verifica existencia de cada fonte de dado pra esta partida. H2H nao
+    tem coletor hoje (ver plano de coleta nova) -- sempre marcado ausente,
+    nao conta como falha (e um gap conhecido, nao um erro desta partida
+    especifica) mas fica visivel no relatorio pra nao mascarar a lacuna."""
+    sources = {
+        "odds":            bool(structured_odds),
+        "history_home":    bool(last10_home),
+        "history_away":    bool(last10_away),
+        "standings_home":  bool(standings_home),
+        "standings_away":  bool(standings_away),
+        "referee":         bool(referee_stats),
+        "context":         bool(context_data),
+        "h2h":             bool(h2h),
+    }
+    # H2H fora do calculo de score por enquanto -- gap de coleta conhecido,
+    # nao penaliza partida por partida (ver Paralelo no plano de refatoracao).
+    scored_sources = {k: v for k, v in sources.items() if k != "h2h"}
+    present = sum(1 for v in scored_sources.values() if v)
+    total = len(scored_sources)
+    missing = [k for k, v in sources.items() if not v]
+
+    return {
+        "score": round(present / total * 100, 1) if total else 0.0,
+        "sources": sources,
+        "missing": missing,
+    }
+
+
+# ============================================================
+# 3. INTEGRIDADE
+# ============================================================
+_NON_NEGATIVE_FIELDS = (
+    "home_goals", "away_goals", "home_corners", "away_corners",
+    "home_yellow_cards", "away_yellow_cards", "home_red_cards", "away_red_cards",
+    "home_fouls", "away_fouls", "home_shots_on", "away_shots_on",
+    "home_total_shots", "away_total_shots", "home_offsides", "away_offsides",
+)
+_TOTAL_PAIRS = (
+    ("total_goals", "home_goals", "away_goals"),
+    ("total_corners", "home_corners", "away_corners"),
+    ("total_yellow_cards", "home_yellow_cards", "away_yellow_cards"),
+)
+
+
+def validate_statistics_integrity(matches: list) -> dict:
+    """Verifica campos negativos e inconsistencia entre total_X e
+    home_X+away_X (quando os dois existem no mesmo jogo -- alguns
+    historicos so tem um dos dois, o que e normal, nao um erro)."""
+    issues = []
+    for i, m in enumerate(matches):
+        for field in _NON_NEGATIVE_FIELDS:
+            val = m.get(field)
+            if val is not None and val < 0:
+                issues.append(f"jogo {i} ({m.get('match_date')}): {field}={val} (negativo)")
+
+        for total_field, home_field, away_field in _TOTAL_PAIRS:
+            total = m.get(total_field)
+            home = m.get(home_field)
+            away = m.get(away_field)
+            if total is not None and home is not None and away is not None and total != home + away:
+                issues.append(
+                    f"jogo {i} ({m.get('match_date')}): {total_field}={total} "
+                    f"mas {home_field}+{away_field}={home + away}"
+                )
+
+    return {
+        "valid": len(issues) == 0,
+        "issues": issues,
+        "issue_count": len(issues),
+        "matches_checked": len(matches),
+    }
+
+
+# ============================================================
+# 4. OUTLIERS
+# ============================================================
+# Modified z-score via mediana + MAD (Iglewicz & Hoaglin) em vez de
+# media+desvio-padrao: media/desvio sao PUXADOS pelo proprio outlier que
+# se quer detectar (efeito "masking" -- um unico jogo bizarro numa amostra
+# pequena de ~15 jogos infla o desvio o bastante pra se esconder do
+# proprio z-score). Mediana e MAD sao resistentes a isso -- e o metodo
+# padrao recomendado pra deteccao de outlier em amostras pequenas.
+_MODIFIED_Z_THRESHOLD_DEFAULT = 3.5
+_MAD_CONSTANT = 0.6745
+
+
+def _median(values: list) -> float:
+    s = sorted(values)
+    n = len(s)
+    mid = n // 2
+    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
+
+
+def detect_outliers(family: str, scope: str, last10_home: list, last10_away: list,
+                     z_threshold: float = _MODIFIED_Z_THRESHOLD_DEFAULT) -> dict:
+    """Marca jogos cujo valor bruto foge muito da mediana do proprio pool
+    (modified z-score via MAD > z_threshold). Amostra pequena (<2) ou
+    familia sem leitura de valor bruto -> sem deteccao possivel, retorna
+    vazio (nao e erro)."""
+    if family not in variance_model._VALUE_FAMILIES:
+        return {"outliers": [], "outlier_count": 0, "checked": 0}
+
+    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away)
+    if not pool or len(pool) < 2:
+        return {"outliers": [], "outlier_count": 0, "checked": len(pool)}
+
+    values = [stats_model._extract_stat(m, family, scope) for m in pool]
+    median = _median(values)
+    mad = _median([abs(v - median) for v in values])
+
+    outliers = []
+    if mad > 0:
+        for m, value in zip(pool, values):
+            modified_z = _MAD_CONSTANT * (value - median) / mad
+            if abs(modified_z) > z_threshold:
+                outliers.append({
+                    "match_date": m.get("match_date"),
+                    "value": value,
+                    "median": median,
+                    "modified_z_score": round(modified_z, 2),
+                })
+
+    return {
+        "outliers": outliers,
+        "outlier_count": len(outliers),
+        "checked": len(pool),
+    }
+
+
+# ============================================================
+# 5. DATA QUALITY SCORE (0-100)
+# ============================================================
+_W_HISTORY = 0.40
+_W_COVERAGE = 0.35
+_W_INTEGRITY = 0.15
+_W_OUTLIER = 0.10
+
+
+def data_quality_score(history_validation: dict, coverage_validation: dict,
+                        integrity_validation: dict | None = None,
+                        outlier_info: dict | None = None) -> dict:
+    """Combina os 4 validadores num score 0-100 -- cada componente exposto
+    separadamente (nunca um numero opaco). Integridade/outlier sao
+    opcionais (nem todo caller roda os 4 -- ex.: outlier so faz sentido
+    por familia de mercado, nao por fixture inteiro de uma vez)."""
+    history_component = history_validation["Q"] * 100
+    coverage_component = coverage_validation["score"]
+
+    if integrity_validation is not None:
+        checked = integrity_validation["matches_checked"] or 1
+        integrity_component = max(0.0, 100 - (integrity_validation["issue_count"] / checked * 100))
+    else:
+        integrity_component = 100.0
+
+    if outlier_info is not None and outlier_info["checked"] > 0:
+        outlier_ratio = outlier_info["outlier_count"] / outlier_info["checked"]
+        outlier_component = max(0.0, 100 - outlier_ratio * 200)
+    else:
+        outlier_component = 100.0
+
+    total = (
+        history_component * _W_HISTORY + coverage_component * _W_COVERAGE
+        + integrity_component * _W_INTEGRITY + outlier_component * _W_OUTLIER
+    )
+
+    return {
+        "score": round(total, 1),
+        "components": {
+            "history": round(history_component, 1),
+            "coverage": round(coverage_component, 1),
+            "integrity": round(integrity_component, 1),
+            "outlier": round(outlier_component, 1),
+        },
+    }

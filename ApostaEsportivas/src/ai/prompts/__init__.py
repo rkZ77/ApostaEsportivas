@@ -1,4 +1,4 @@
-from ai.prompts._base import SYSTEM_PROMPT  # noqa: F401 — re-exportado para uso externo
+from ai.prompts._base import SYSTEM_PROMPT, REGRAS_BASE_DYNAMIC  # noqa: F401 — re-exportado para uso externo
 
 # Mapeamento: league_id → módulo com PROMPT específico
 # Adicione novas ligas aqui conforme necessário.

@@ -1,10 +1,9 @@
 ﻿import os
+import psycopg2
 import requests
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv, find_dotenv
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
-
-from utils.db_utils import get_connection
 
 load_dotenv(find_dotenv())
 
@@ -14,6 +13,13 @@ load_dotenv(find_dotenv())
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
     raise RuntimeError("API_FOOTBALL_KEY não definida no .env")
+
+DB_HOST    = os.getenv("DB_HOST")
+DB_PORT    = os.getenv("DB_PORT")
+DB_NAME    = os.getenv("DB_NAME")
+DB_USER    = os.getenv("DB_USER")
+DB_PASS    = os.getenv("DB_PASS")
+DB_SSLMODE = os.getenv("DB_SSLMODE", "require")
 
 API_URL = "https://v3.football.api-sports.io/fixtures"
 HEADERS = {"x-apisports-key": API_KEY}
@@ -35,6 +41,20 @@ def convert_utc_to_br_naive(dt_str: str) -> datetime:
     dt_utc   = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
     dt_local = dt_utc.astimezone(TZ_LOCAL)
     return dt_local.replace(tzinfo=None)
+
+
+# ============================================================
+# BANCO
+# ============================================================
+def get_connection():
+    return psycopg2.connect(
+        host=DB_HOST,
+        port=int(DB_PORT),
+        dbname=DB_NAME,
+        user=DB_USER,
+        password=DB_PASS,
+        sslmode=DB_SSLMODE,
+    )
 
 
 # ============================================================
@@ -153,6 +173,7 @@ class FixtureCollectorService:
                 "match_datetime": dt_local,
                 "status":         status,
                 "referee":        fixture.get("referee"),
+                "round":          league.get("round"),
             })
 
         print(f"📊 Jogos NS válidos encontrados: {len(fixtures)}")
@@ -251,6 +272,7 @@ class FixtureCollectorService:
                             match_datetime  = %s,
                             status          = %s,
                             referee         = COALESCE(%s, referee),
+                            round           = COALESCE(%s, round),
                             last_updated    = NOW()
                         WHERE fixture_id = %s;
                     """, (
@@ -263,6 +285,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                         fid,
                     ))
                     updates += 1
@@ -272,10 +295,10 @@ class FixtureCollectorService:
                             fixture_id, league_id, season,
                             home_team_id, away_team_id,
                             home_team, away_team,
-                            match_datetime, status, referee,
+                            match_datetime, status, referee, round,
                             created_at, last_updated
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
                     """, (
                         fid,
                         f["league_id"],
@@ -287,6 +310,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                     ))
                     inserts += 1
 

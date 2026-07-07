@@ -6,13 +6,7 @@ nao e possivel hoje (ver plano Fase 2). Nunca declarar "must_win" ou
 "mata-mata" a partir daqui -- so um sinal de pressao, sempre com os
 numeros brutos (rank/saldo/pontos) expostos junto."""
 from datetime import datetime, date
-
-# Copa do Mundo FIFA e disputada em sede neutra -- regra ja usada no prompt
-# da Copa (ai/prompts/_1.py). Eliminatorias/amistosos de selecao continuam
-# tendo mando de campo normal (jogam nos seus proprios paises), por isso
-# NAO reusa o conjunto NATIONAL_TEAM_LEAGUE_IDS (que agrupa dados para fins
-# de historico, nao de sede).
-COPA_DO_MUNDO_LEAGUE_ID = 1
+from services.pick_engine.competition_profile import is_neutral_venue, classify_round_phase
 
 _PRESSURE_LABELS = {
     "briga_topo": "Disputando posicoes de topo da tabela",
@@ -82,9 +76,10 @@ def table_pressure(standings_row: dict | None) -> dict:
 
 
 def home_advantage_context(league_id) -> dict:
-    """Mando de campo normal, exceto Copa do Mundo (sede neutra -- regra ja
-    existente no prompt da Copa, aqui tornada dado estruturado)."""
-    is_neutral = league_id == COPA_DO_MUNDO_LEAGUE_ID
+    """Mando de campo normal, exceto competicoes de sede neutra (Copa do
+    Mundo hoje -- ver services.pick_engine.competition_profile, fonte unica
+    de verdade pra isso)."""
+    is_neutral = is_neutral_venue(league_id)
     return {
         "is_neutral_venue": is_neutral,
         "note": (
@@ -96,7 +91,7 @@ def home_advantage_context(league_id) -> dict:
 
 def build_context(home_matches: list, away_matches: list, home_team_id: int, away_team_id: int,
                    home_standing: dict | None, away_standing: dict | None,
-                   league_id, reference_date=None) -> dict:
+                   league_id, reference_date=None, round_str: str | None = None) -> dict:
     reference_date = reference_date or date.today()
     return {
         "rest_days_home": rest_days(home_matches, home_team_id, reference_date),
@@ -104,13 +99,21 @@ def build_context(home_matches: list, away_matches: list, home_team_id: int, awa
         "table_pressure_home": table_pressure(home_standing),
         "table_pressure_away": table_pressure(away_standing),
         "venue": home_advantage_context(league_id),
+        "round_phase": classify_round_phase(round_str),
     }
 
 
 def context_score(context: dict) -> float:
     """Reduz o contexto a um score numerico (0-1, neutro=0.5) para somar no
     Score Final -- ajustes pequenos e limitados, nunca uma certeza. Toda
-    parcela e rastreavel a um campo do context dict."""
+    parcela e rastreavel a um campo do context dict.
+
+    Prioridade 4: o bonus de table_pressure so e aplicado em GROUP_STAGE (ou
+    quando round_phase e desconhecido, mesmo comportamento de sempre) --
+    "pressao_alta" vem da classificacao/saldo de gols da fase de LIGA; numa
+    fase de mata-mata essa classificacao ja deixou de valer (a fase de
+    grupos acabou), entao aplicar o bonus seria usar um sinal que nao
+    reflete mais a realidade da partida atual."""
     score = 0.5
 
     rh, ra = context.get("rest_days_home"), context.get("rest_days_away")
@@ -118,8 +121,11 @@ def context_score(context: dict) -> float:
         diff = rh - ra
         score += max(min(diff / 3 * 0.05, 0.10), -0.10)
 
-    for side in ("table_pressure_home", "table_pressure_away"):
-        if context.get(side, {}).get("label") == "pressao_alta":
-            score += 0.03
+    round_phase = context.get("round_phase")
+    is_knockout = round_phase in ("KNOCKOUT_SINGLE", "KNOCKOUT_TWO_LEGS")
+    if not is_knockout:
+        for side in ("table_pressure_home", "table_pressure_away"):
+            if context.get(side, {}).get("label") == "pressao_alta":
+                score += 0.03
 
     return round(max(min(score, 1.0), 0.0), 4)
