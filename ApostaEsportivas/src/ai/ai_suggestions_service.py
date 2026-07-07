@@ -384,8 +384,8 @@ class AISuggestionsService:
             # baseado em "away_corners"/"home_corners" mesmo declarando sede neutra.
             home_name = (fx.get("home_team") or "SELEÇÃO A").upper()
             away_name = (fx.get("away_team") or "SELEÇÃO B").upper()
-            stats_home_label = f"ESTATÍSTICAS {home_name} (sede neutra — sem mando)"
-            stats_away_label = f"ESTATÍSTICAS {away_name} (sede neutra — sem mando)"
+            stats_home_label = f"ESTATÍSTICAS {home_name} (sede neutra · sem mando)"
+            stats_away_label = f"ESTATÍSTICAS {away_name} (sede neutra · sem mando)"
             hist_total_home_label = f"HISTÓRICO {home_name} (mando misto, sede neutra)"
             hist_total_away_label = f"HISTÓRICO {away_name} (mando misto, sede neutra)"
             avgs_home_label = f"MÉDIAS {home_name} (feitas/cedidas, mando misto)"
