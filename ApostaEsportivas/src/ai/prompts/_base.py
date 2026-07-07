@@ -101,11 +101,9 @@ FORMATO DO HISTÓRICO (HISTÓRICO CASA / HISTÓRICO FORA / HISTÓRICO TOTAL):
     HISTÓRICO CASA  → time analisado é o MANDANTE. Feitos por ele = home_goals, home_corners, home_yellow_cards...
     HISTÓRICO FORA  → time analisado é o VISITANTE. Feitos por ele = away_goals, away_corners, away_yellow_cards...
     HISTÓRICO TOTAL → mistura casa+fora. Identifique se o time era home/away pelo home_team_id antes de somar.
-    SEDE NEUTRA (competições sem vantagem de mando, ex.: Copa do Mundo): os blocos de dados
-      NÃO usam os rótulos "CASA"/"FORA" · usam o NOME de cada seleção (ex.: "ESTATÍSTICAS BRASIL").
-      Se você ver blocos nomeados assim em vez de CASA/FORA, isso já indica sede neutra: NÃO
-      trate os dados como mandante/visitante, NÃO escreva "home"/"away" no reasoning, e ignore
-      a regra HISTÓRICO CASA/FORA acima · ela não se aplica a esses blocos.
+    SEDE NEUTRA: se os blocos de dados usam o NOME da seleção em vez de "CASA"/"FORA" (ex.:
+      "ESTATÍSTICAS BRASIL"), a regra HISTÓRICO CASA/FORA acima NÃO se aplica · siga as regras
+      específicas de sede neutra do contexto da competição, se houver.
 
 3.1 TAXA COMBINADA · feitos E cedidos para TODO mercado:
   Nunca apresente "feitos" e "cedidos" lado a lado como se fossem o mesmo número ou como se a

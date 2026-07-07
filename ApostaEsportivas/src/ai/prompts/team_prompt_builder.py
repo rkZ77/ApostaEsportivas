@@ -312,16 +312,10 @@ ANÁLISE DETALHADA DAS SELEÇÕES
         else:
             standing_text = "Classificação não disponível (execute Stage 3)"
 
-        # Copa desta edição
+        # Copa desta edição (gols/cantos/amarelos já aparecem em QUALIDADE DOS ADVERSÁRIOS · Copa do Mundo)
         copa_stats = profile.get("copa_stats") or {}
         if copa_stats:
-            copa_text = (
-                f"Jogos: {copa_stats['jogos']} | Resultado: {copa_stats['resultado']}\n"
-                f"  Gols: {copa_stats['gols_marcados']} marcados / {copa_stats['gols_sofridos']} sofridos"
-                f" ({copa_stats['media_gols_marcados']}/jogo)"
-                f" | Escanteios: {copa_stats['media_cantos']}/jogo"
-                f" | Amarelos: {copa_stats['media_amarelos']}/jogo"
-            )
+            copa_text = f"Jogos: {copa_stats['jogos']} | Resultado: {copa_stats['resultado']}"
         else:
             copa_text = "Sem jogos desta Copa no banco ainda"
 
