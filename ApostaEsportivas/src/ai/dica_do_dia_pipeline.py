@@ -1,5 +1,5 @@
 ﻿"""
-DICA DO DIA — Pipeline de Alta Acertividade
+DICA DO DIA · Pipeline de Alta Acertividade
 Objetivo: 1 pick diario com odd 1.39-1.60, maximo de consistencia estatistica.
 Fallback: qualquer liga com dados suficientes e padrao claro.
 """
@@ -26,7 +26,7 @@ _performance_svc = AIPerformanceService()
 
 
 def _detect_market_type(market: str) -> str | None:
-    """Mesma lógica de _market_type_from_name em ai_suggestions_service — mantidas em sync.
+    """Mesma lógica de _market_type_from_name em ai_suggestions_service · mantidas em sync.
     Retorna None para mercados não reconhecidos em vez de 'unknown' ou 'result' errado."""
     m = market.lower()
     if "shot" in m or "chute" in m:
@@ -86,9 +86,11 @@ def _clean(obj):
 SYSTEM_PROMPT = """\
 Voce e QUANTBET-DICA, especializado em selecionar o pick MAIS SEGURO do dia com base em padrao estatistico consistente.
 
-OBJETIVO: acertividade maxima. Nao busque o maior EV nem a odd mais atrativa — busque o padrao mais repetivel e confirmado pelos dados.
+OBJETIVO: acertividade maxima. Nao busque o maior EV nem a odd mais atrativa · busque o padrao mais repetivel e confirmado pelos dados.
 Consistencia vale mais que EV: prefira 8/10 jogos confirmando @ 1.25 do que 5/10 @ 1.60.
 Odd entre 1.30 e 1.80. Confidence >= 0.72. Se nenhum pick atender → no_bet. Prefira no_bet a um pick fraco.
+
+ESTILO: PROIBIDO usar travessao (—) em qualquer campo de texto do JSON (reasoning, motivo). Use ponto, virgula, dois-pontos ou "·" no lugar.
 
 Realize toda a analise INTERNAMENTE. NÃO escreva texto, markdown, raciocinio ou comentario fora do JSON.
 Retorne APENAS o objeto JSON final. Proibido qualquer caractere antes ou depois do JSON. Comeca com {{ e termina com }}.\
@@ -96,8 +98,9 @@ Retorne APENAS o objeto JSON final. Proibido qualquer caractere antes ou depois 
 
 
 USER_PROMPT_TEMPLATE = """\
-Selecione EXATAMENTE 1 pick (DICA DO DIA) — o mais seguro e consistente.
-Prioridade: Copa do Mundo (league_id=1) — venue NAO se aplica (sede neutra); use historico total (ultimos 15 jogos, todos competicoes) + stats especificas da Copa. Amostra>=5 no historico global.
+Selecione EXATAMENTE 1 pick (DICA DO DIA) · o mais seguro e consistente.
+Prioridade: Copa do Mundo (league_id=1) · venue NAO se aplica (sede neutra); use historico total (ultimos 15 jogos, todos competicoes) + stats especificas da Copa. Amostra>=5 no historico global.
+SEDE NEUTRA (Copa): nao existe vantagem de mando. Proibido usar "mandante"/"visitante"/"em casa"/"fora de casa" como justificativa no reasoning para qualquer selecao nesta competicao · use so o nome das selecoes.
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer mercado):
 Leia a classificacao (standings) e determine a situacao de cada time:
@@ -107,14 +110,14 @@ Leia a classificacao (standings) e determine a situacao de cada time:
   CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
 
 Avalie TODOS os mercados das odds: gols (Over/Under, BTTS, asiático), escanteios, cartoes, Dupla Chance, Handicap Asiático.
-Nao existe mercado preferido — escolha o com maior consistencia estatistica nos dados.
+Nao existe mercado preferido · escolha o com maior consistencia estatistica nos dados.
 Criterios obrigatorios: odd {odd_min}-{odd_max} | amostra>=5 (Copa: historico total; outros: venue correto) | taxa>=65% | >=2 confirmadores | confidence>={conf_min}
 
-CARTÕES — regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → nao use cartoes como dica.
+CARTÕES · regra especial: volatilidade MÉDIA (taxa jogo-a-jogo tem alta variância). Só selecione cartões como dica se AMBAS as condições forem satisfeitas: (a) árbitro com >=3 jogos na temporada E (b) histórico dos dois times com >=5 jogos e taxa >=60% no venue. Sem esses dois dados confirmados → nao use cartoes como dica.
 
 --- PICKS ANTERIORES (calibracao por time) ---
 Ultimos picks gerados para os times destes fixtures (todos os pipelines).
-Use para identificar padroes de acerto/erro por time e mercado — nao como substituto da analise estatistica.
+Use para identificar padroes de acerto/erro por time e mercado · nao como substituto da analise estatistica.
 resultado: GREEN=acertou | RED=errou | pendente=sem resultado ainda.
 {picks_anteriores}
 
@@ -136,21 +139,26 @@ FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_c
   HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
 
 A) Taxa=confirmados/total_amostra (>=0.65). Amostra: 10+→1.0 | 5-9→0.7 | <5→descarte.
-   FEITOS vs CEDIDOS: para todo mercado de total (gols/cantos/cartoes/BTTS):
-     Estimativa primaria: feitos_A_contexto + feitos_B_contexto.
-     Validacao cruzada:   cedidos_A_contexto + cedidos_B_contexto.
-     Divergencia >15% → reduza Confirmadores 1 nivel.
-     Mercado de time: feitos do time no contexto + cedidos do adversario.
-     Resultado/Handicap: feitos_A vs cedidos_B + feitos_B vs cedidos_A.
+   FEITOS vs CEDIDOS (conceitos DIFERENTES · nunca apresente lado a lado sem combinar):
+     Formula obrigatoria para todo mercado de total (gols/cantos/cartoes/BTTS) e de time:
+       valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
+     Calcule esse valor UMA UNICA VEZ; nunca mostre um numero preliminar e troque por outro
+     depois no reasoning (proibido "recalibrando"/"corrigindo" com valor diferente).
+     Divergencia feitos vs cedidos >15% → declare e reduza Confirmadores 1 nivel.
+     Resultado/Handicap: combine feitos_A×0.5+cedidos_B×0.5 vs feitos_B×0.5+cedidos_A×0.5.
 B) Taxa ponderada temporalmente (recente=1.0, 0.9, 0.8...) + home/away_stats + standings.
-C) CONFIDENCE = (C×0.45)+(Q×0.25)+(K×0.30) — MESMA FORMULA DO VIP
+C) CONFIDENCE = (C×0.45)+(Q×0.25)+(K×0.30) · MESMA FORMULA DO VIP
    C (Consistencia): taxa historica real; VAZIO→0.40; ESCASSO→max 0.65
    Q (Amostra): RICO(8+)=1.00 | MODERADO(4-7)=0.75 | ESCASSO(1-3)=0.45 | VAZIO=0.20
+      Taxa alta (ex. 80%+) baseada em <15 jogos totais → trate Q como MODERADO no maximo, declare amostra pequena.
    K (Confirmadores): 3+=1.00 | 2=0.70 | 1=0.40 | 0=0.10
    Bonus: bookmakers_count>=3 → K +0.05 | bookmakers_count=1 → K −0.05
+   Desconto: sede neutra+mata-mata, escalacao incerta, ou amostra do grupo Copa <5 jogos → reduza K 1 nivel cada, declare no reasoning.
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_for/against e weighted_corners_for/against (ataque E defesa, ambos ja ponderados); "amostra_suficiente_para_alta_confianca"=false → declare limitacao.
+
+CONTRAPONTO: antes de concluir, declare 1 fato que enfraquece a tese (ou "sem contraponto relevante") e por que a tese ainda se sustenta.
 
 SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=taxa_real×odd−1.
 Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.
@@ -247,7 +255,7 @@ def _load_fixture_context(
 
 
 # ============================================================
-# FORMATA FIXTURES PARA O PROMPT (CALL 2 — análise completa)
+# FORMATA FIXTURES PARA O PROMPT (CALL 2 · análise completa)
 # ============================================================
 def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
     lines = []
@@ -256,7 +264,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
         ctx = item["context"]
 
         is_wc   = fx["league_id"] == WC_LEAGUE_ID
-        wc_tag  = " — COPA DO MUNDO FIFA" if is_wc else ""
+        wc_tag  = " · COPA DO MUNDO FIFA" if is_wc else ""
 
         lines.append("=" * 60)
         lines.append(f"FIXTURE #{i}  (fixture_id: {fx['fixture_id']}){wc_tag}")
@@ -319,7 +327,7 @@ def _format_fixtures_for_llm(fixtures_with_context: list) -> str:
 
 
 # ============================================================
-# DB — BUSCA FIXTURES COM ODDS NA FAIXA
+# DB · BUSCA FIXTURES COM ODDS NA FAIXA
 # ============================================================
 def get_fixtures_with_odds_in_range() -> list:
     """Fixtures de hoje com pelo menos 1 odd entre ODD_MIN e ODD_MAX. Ligas mais atrativas primeiro."""
@@ -390,7 +398,7 @@ def get_fixtures_with_odds_in_range() -> list:
 
 
 # ============================================================
-# DB — VERIFICACAO / CRIACAO / SALVAMENTO
+# DB · VERIFICACAO / CRIACAO / SALVAMENTO
 # ============================================================
 def has_today_dica() -> bool:
     conn  = get_connection()
@@ -591,8 +599,8 @@ def run_dica_llm(fixtures_with_context: list) -> dict:
             break
         except RateLimitError:
             if attempt == MAX_RETRIES:
-                raise Exception(f"[DICA] Rate limit após {MAX_RETRIES} tentativas — abortando.")
-            print(f"[DICA] Rate limit (tentativa {attempt}/{MAX_RETRIES}) — aguardando {RATE_LIMIT_WAIT}s...")
+                raise Exception(f"[DICA] Rate limit após {MAX_RETRIES} tentativas · abortando.")
+            print(f"[DICA] Rate limit (tentativa {attempt}/{MAX_RETRIES}) · aguardando {RATE_LIMIT_WAIT}s...")
             time.sleep(RATE_LIMIT_WAIT)
         except Exception as e:
             raise Exception(f"[DICA] Erro na API Anthropic: {e}")
@@ -626,7 +634,7 @@ def generate_dica_message(pick: dict) -> str:
     )
 
     return (
-        f"🎯 <b>DICA DO DIA — HPS TIPSTER</b>\n"
+        f"🎯 <b>DICA DO DIA · HPS TIPSTER</b>\n"
         f"{sep}\n"
         f"📅 {today}\n"
         f"{liga_tag}\n"
@@ -729,7 +737,7 @@ def run_dica_pipeline() -> dict | None:
     result = run_dica_llm(fixtures_with_context)
 
     if result.get("no_bet"):
-        print(f"[DICA] NO BET — {result.get('motivo', 'criterios nao atingidos')}")
+        print(f"[DICA] NO BET · {result.get('motivo', 'criterios nao atingidos')}")
         return None
 
     pick = result.get("pick")
@@ -738,7 +746,7 @@ def run_dica_pipeline() -> dict | None:
         return None
 
     if not is_market_reasoning_coherent(pick.get("market", ""), pick.get("reasoning", "")):
-        print(f"[DICA] REJEITADO — reasoning incoerente com mercado '{pick.get('market')}'. Retornando no_bet.")
+        print(f"[DICA] REJEITADO · reasoning incoerente com mercado '{pick.get('market')}'. Retornando no_bet.")
         return None
 
     # Enriquecer pick com IDs de time e market_id
@@ -770,11 +778,11 @@ def run_dica_pipeline() -> dict | None:
     confidence = float(pick.get("confidence", 0))
 
     if not (ODD_MIN <= odd <= ODD_MAX):
-        print(f"[DICA] WARN: IA retornou odd {odd} fora da faixa {ODD_MIN}-{ODD_MAX} — descartado.")
+        print(f"[DICA] WARN: IA retornou odd {odd} fora da faixa {ODD_MIN}-{ODD_MAX} · descartado.")
         return None
 
     if confidence < CONFIDENCE_MIN:
-        print(f"[DICA] WARN: IA retornou confidence {confidence:.2f} abaixo do minimo {CONFIDENCE_MIN} — descartado.")
+        print(f"[DICA] WARN: IA retornou confidence {confidence:.2f} abaixo do minimo {CONFIDENCE_MIN} · descartado.")
         return None
 
     league_tag = "COPA DO MUNDO" if pick.get("league_id") == WC_LEAGUE_ID else pick.get("league_name", "")

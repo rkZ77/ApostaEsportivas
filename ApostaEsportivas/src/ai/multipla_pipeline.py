@@ -60,24 +60,26 @@ SYSTEM_PROMPT = """Você é um analista quantitativo especializado em apostas m�
 PRINCÍPIOS INEGOCIÁVEIS:
 - Prefira picks com score_base >= 0.65. Se o bloqueio de mercado dos picks VIP/Free do dia eliminar
   os melhores candidatos e não houver par residual >=0.65, monte com o melhor par residual disponível
-  (score_base >= 0.50) em vez de cancelar — desde que passe nas regras de correlação/independência.
+  (score_base >= 0.50) em vez de cancelar · desde que passe nas regras de correlação/independência.
   Só use no_bet se não houver NENHUM par de jogos diferentes com mercados independentes, mesmo abaixo de 0.50.
 - Correlação é o maior inimigo. Cada pick deve ser de jogo DIFERENTE e mercado INDEPENDENTE.
-  Teste: "Se A ganhar, B fica mais fácil ou mais difícil?" — qualquer influência = DESCARTE.
+  Teste: "Se A ganhar, B fica mais fácil ou mais difícil?" · qualquer influência = DESCARTE.
 - Odd individual: 1.00–2.50. Odd total: 2.00–3.00. Fora dessas faixas = inválido.
-- Avalie TODOS os mercados — gols, escanteios, cartões, Dupla Chance, Handicap. Escolha por consistência estatística.
+- Avalie TODOS os mercados · gols, escanteios, cartões, Dupla Chance, Handicap. Escolha por consistência estatística.
 - Cartões: só use se árbitro (>=3 jogos) E histórico dos times (>=5 jogos, >=60%) confirmarem. Sem ambos → nao use cartoes nesta multipla.
-- Odd copiada dos dados — nunca inventar. Match Winner (1X2 direto) proibido.
+- Odd copiada dos dados · nunca inventar. Match Winner (1X2 direto) proibido.
 
 COMBINAÇÕES IDEAIS: mercados de categorias diferentes + jogos de ligas sem relação estatística.
 Os detalhes de execução (varredura, score, correlação, montagem, conflitos proibidos) estão no prompt do usuário.
+
+ESTILO: PROIBIDO usar travessão (—) em qualquer campo de texto do JSON (reason, motivo). Use ponto, vírgula, dois-pontos ou "·" no lugar.
 
 SAÍDA OBRIGATÓRIA: realize toda a análise INTERNAMENTE. NÃO escreva texto, markdown, títulos ou raciocínio fora do JSON.
 Sua resposta começa com { e termina com }. Nenhum caractere antes ou depois do JSON."""
 
 
 # ============================================================
-# PICKS JA USADOS HOJE — carrega VIP + Free do banco
+# PICKS JA USADOS HOJE · carrega VIP + Free do banco
 # ============================================================
 def _get_today_used_picks() -> list[dict]:
     """Retorna picks VIP e Free já gerados hoje com fixture_id e market_type."""
@@ -173,8 +175,8 @@ Leia a classificacao (standings) e determine a situacao de cada time:
   CONFLITO situacao vs padrao estatistico → declare no reasoning, reduza confidence se contexto e dados divergirem.
   Em multipla: se os dois picks forem de jogos com contexto situacional oposto, verifique se nao ha correlacao indireta.
 
-ETAPA 1 — VARREDURA E MELHOR MERCADO POR JOGO:
-Avalie TODOS os mercados das odds — gols, cantos, cartões, dupla chance, handicap.
+ETAPA 1 · VARREDURA E MELHOR MERCADO POR JOGO:
+Avalie TODOS os mercados das odds · gols, cantos, cartões, dupla chance, handicap.
 Nao existe mercado preferido: o vencedor e o de MAIOR CONSISTENCIA ESTATISTICA, independente do tipo.
 
 FORMATO DAS ODDS (quando disponivel):
@@ -183,6 +185,9 @@ FORMATO DAS ODDS (quando disponivel):
 FORMATO DO HISTORICO: cada jogo contem home_goals/away_goals/home_corners/away_corners/home_yellow_cards/away_yellow_cards/opponent_rank.
   HISTORICO CASA → time analisado e mandante: feitos = home_goals, home_corners, home_yellow_cards...
   HISTORICO FORA → time analisado e visitante: feitos = away_goals, away_corners, away_yellow_cards...
+  SEDE NEUTRA (Copa do Mundo, league_id=1): nao existe vantagem de mando. Se os blocos vierem
+  nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em vez de CASA/FORA, use dados totais e
+  NUNCA escreva "mandante"/"visitante"/"em casa"/"fora" no reasoning para essa selecao.
 
 Calcule a taxa de ocorrencia real com base nos dados historicos. Descarte mercados com taxa < 65% ou amostra < 5 jogos.
 Selecione mercados com taxa >= 65% e padrao confirmado por >=2 indicadores.
@@ -199,27 +204,32 @@ SMART SAFE LINE (Over/Under com multiplas linhas): edge=taxa_real−1/odd | EV=t
 Descarte: odd<1.60 | edge<0.05 | EV≤0. Escolha maior taxa_real. Sem aprovada: fallback odd>=1.01.
 Reasoning: "SMART SAFE LINE|Linhas:[...]|Rejeitadas:[motivo]|Escolhida:[taxa=X%,edge=Y%,EV=Z%]"
 
-FEITOS vs CEDIDOS: total/BTTS→feitos_A+feitos_B vs cedidos_A+cedidos_B (divergencia>15%→reduza K).
-Mercado de time→feitos do time+cedidos do adversario. Resultado/Handicap→feitos_A vs cedidos_B + feitos_B vs cedidos_A.
+FEITOS vs CEDIDOS (conceitos DIFERENTES · nunca apresente lado a lado sem combinar):
+  Formula obrigatoria: valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
+  Calcule uma unica vez; nunca troque o numero depois no reasoning ("recalibrando"/"corrigindo").
+  Divergencia feitos vs cedidos >15% → declare e reduza K 1 nivel.
+  Resultado/Handicap: combine feitos_A×0.5+cedidos_B×0.5 vs feitos_B×0.5+cedidos_A×0.5.
 
 QUALIDADE DO ADVERSARIO: opponent_rank top(1-6)→peso 2.0 | mid(7-12)→1.0 | fraco(13+)→0.5 | null→1.0.
-Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_against e weighted_corners_against.
+Taxa real=soma(stat×peso)/soma(pesos). Declare: "taxa bruta X%→ponderada Y%". Copa: use weighted_goals_for/against e weighted_corners_for/against (ataque E defesa, ja ponderados); "amostra_suficiente_para_alta_confianca"=false → declare limitacao e nao eleve Q acima de MODERADO.
 
-ETAPA 2 — CORRELACAO ESTRITA:
+CONTRAPONTO: antes de fechar cada leg, declare 1 fato que enfraquece a tese (ou "sem contraponto relevante").
+
+ETAPA 2 · CORRELACAO ESTRITA:
 Antes de montar, responda: "Se A ganhar, B fica mais difícil?" → Sim = DESCARTE.
-PROIBIDO — Tipo A (mesmo jogo, logicamente impossíveis):
+PROIBIDO · Tipo A (mesmo jogo, logicamente impossíveis):
   - Mesmo fixture_id em qualquer seleção
   - Over + Under do MESMO market_type no MESMO jogo
   - BTTS Sim + Under 2.5 (mesmo jogo): BTTS implica ≥2 gols, sabota Under
   - BTTS Sim + Under 1.5 (mesmo jogo): impossível
   - Handicap/Resultado (vitória por margem) + Under gols (mesmo jogo): contradição
-PROIBIDO — Tipo B (jogos diferentes, estatisticamente correlacionados):
-  - Dois Over de gols em que o argumento é idêntico ("defesas fracas da liga") — sem histórico individual independente
+PROIBIDO · Tipo B (jogos diferentes, estatisticamente correlacionados):
+  - Dois Over de gols em que o argumento é idêntico ("defesas fracas da liga") · sem histórico individual independente
   - Dois picks com o MESMO árbitro como único confirmador
 IDEAL: categorias completamente diferentes (ex: escanteios + cartões) + jogos sem relação estatística.
 Se restar dúvida sobre independência → NO BET.
 
-ETAPA 3 — MONTAGEM:
+ETAPA 3 · MONTAGEM:
 CALCULO OBRIGATORIO (mostre no reason):
   score_base_A = C_A×0.45 + Q_A×0.25 + K_A×0.30  (substitua pelos valores reais calculados na ETAPA 1)
   score_base_B = C_B×0.45 + Q_B×0.25 + K_B×0.30
@@ -241,9 +251,9 @@ Verificacao final: odd individual 1.00-2.50? odd_total 2.00-3.00? market_types d
 Se QUALQUER par passar todas as verificacoes → emita JSON de multipla (nao no_bet), mesmo que o score esteja no piso de 0.50 por causa do bloqueio VIP/Free.
 
 REGRA DE OUTPUT CRITICA:
-- Realize TODA a analise internamente — nao escreva texto, markdown ou raciocinio fora do JSON.
+- Realize TODA a analise internamente · nao escreva texto, markdown ou raciocinio fora do JSON.
 - Sua resposta e APENAS o JSON. Comeca com {{ e termina com }}. Nenhum caractere antes ou depois.
-- no_bet so se nenhum par de jogos diferentes com mercados independentes existir, mesmo no piso de score_base>=0.50. Bloqueio de mercado VIP/Free reduzindo as opcoes NAO e motivo valido de no_bet por si so — monte com o melhor par residual.
+- no_bet so se nenhum par de jogos diferentes com mercados independentes existir, mesmo no piso de score_base>=0.50. Bloqueio de mercado VIP/Free reduzindo as opcoes NAO e motivo valido de no_bet por si so · monte com o melhor par residual.
 - O campo "motivo" do no_bet deve ser UMA frase curta (ex: "Nenhum par independente disponivel mesmo no piso de score 0.50"). Nao use motivo como rascunho de analise.
 
 SAIDA JSON:
@@ -258,7 +268,7 @@ Com multiplas:
     ],
     "odd_final":0.00,
     "score_combo":0.00,
-    "reason":"PICK A (Jogo X): mercado escolhido por taxa=XX% em N jogos — FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | PICK B (Jogo Y): mercado escolhido por taxa=XX% em N jogos — FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | COMBO: score_combo=(A+B)/2=0.XX. INDEPENDENCIA: picks de jogos distintos e mercados diferentes — sem correlacao estatistica."
+    "reason":"PICK A (Jogo X): mercado escolhido por taxa=XX% em N jogos · FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | PICK B (Jogo Y): mercado escolhido por taxa=XX% em N jogos · FATO: dado estatistico concreto. [CONF] C=0.XX Q=0.XX K=0.XX → score_base=0.XX. | COMBO: score_combo=(A+B)/2=0.XX. INDEPENDENCIA: picks de jogos distintos e mercados diferentes · sem correlacao estatistica."
   }},
   "multipla_2":{{
     "name":"MULTIPLA_2",
@@ -271,14 +281,14 @@ Com multiplas:
     "reason":"PICK A: ... [CONF] ... | PICK B: ... [CONF] ... | COMBO: score_combo=0.XX. INDEPENDENCIA: ..."
   }}
 }}
-multipla_2 OPCIONAL — inclua so se score_combo>=0.60.
-O campo score_base em cada game DEVE conter o valor real calculado (nao 0). O score_combo DEVE ser (score_base_A + score_base_B)/2 calculado — nao use 0.
+multipla_2 OPCIONAL · inclua so se score_combo>=0.60.
+O campo score_base em cada game DEVE conter o valor real calculado (nao 0). O score_combo DEVE ser (score_base_A + score_base_B)/2 calculado · nao use 0.
 """
 
 
 # ============================================================
 # CARREGA DADOS BRUTOS COMPLETOS DO FIXTURE
-# 9 blocos — mesmo padrão do ai_suggestions_service
+# 9 blocos · mesmo padrão do ai_suggestions_service
 # ============================================================
 def load_fixture_context(
     fixture_id: int,
@@ -440,7 +450,7 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 
 
 # ============================================================
-# CHECK — JÁ TEM MÚLTIPLA HOJE?
+# CHECK · JÁ TEM MÚLTIPLA HOJE?
 # ============================================================
 def has_today_multipla() -> bool:
     conn = get_connection()
@@ -460,7 +470,7 @@ def get_today_fixtures() -> list:
 
 
 # ============================================================
-# CHAMADA À IA — análise completa
+# CHAMADA À IA · análise completa
 # ============================================================
 def run_multipla_llm(fixtures: list, today_used_picks: list | None = None) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
@@ -533,7 +543,7 @@ def create_multipla_table():
 
 
 # ============================================================
-# STAKE PARA MÚLTIPLAS (conservador — max 3u)
+# STAKE PARA MÚLTIPLAS (conservador · max 3u)
 # ============================================================
 def calculate_multipla_stake(score_combo: float) -> tuple[float, int]:
     if score_combo >= 0.80:
@@ -661,14 +671,14 @@ def run_multipla_pipeline() -> dict | None:
     fixtures_raw = get_today_fixtures()
 
     if len(fixtures_raw) < 2:
-        print("[MULTIPLA] Menos de 2 fixtures disponiveis — sem multipla.")
+        print("[MULTIPLA] Menos de 2 fixtures disponiveis · sem multipla.")
         return None
 
     # ── Carrega picks VIP/Free do dia ANTES do corte, para priorizar jogos livres ──
     today_used = _get_today_used_picks()
     used_fixture_ids = {p["fixture_id"] for p in today_used if p.get("fixture_id")}
 
-    # Jogos sem nenhum pick VIP/Free vão primeiro — mais chance de mercado livre.
+    # Jogos sem nenhum pick VIP/Free vão primeiro · mais chance de mercado livre.
     # Ordenação estável preserva o horário dentro de cada grupo.
     fixtures_raw.sort(key=lambda fx: fx["fixture_id"] in used_fixture_ids)
 
@@ -687,7 +697,7 @@ def run_multipla_pipeline() -> dict | None:
                 fx["season"],
             )
             if not ctx.get("odds"):
-                print(f"  [SKIP] Sem odds para {fx['home_team']} x {fx['away_team']} — ignorando.")
+                print(f"  [SKIP] Sem odds para {fx['home_team']} x {fx['away_team']} · ignorando.")
                 continue
 
             fixtures.append({"fixture": fx, "context": ctx})
@@ -697,7 +707,7 @@ def run_multipla_pipeline() -> dict | None:
             print(f"  [WARN] Erro ao carregar {fx['fixture_id']}: {e}")
 
     if len(fixtures) < 2:
-        print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis — sem multipla.")
+        print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis · sem multipla.")
         return None
 
     # ── Pares (fixture_id, market_type) já usados por VIP/Free, para bloqueio de mercado ──
@@ -719,7 +729,7 @@ def run_multipla_pipeline() -> dict | None:
 
     if multipla_json.get("no_bet"):
         motivo = multipla_json.get("motivo", "criterios nao atingidos")
-        print(f"[MULTIPLA] NO BET — {motivo}")
+        print(f"[MULTIPLA] NO BET · {motivo}")
         return None
 
     create_multipla_table()
@@ -743,7 +753,7 @@ def run_multipla_pipeline() -> dict | None:
         ]
         removed = len(group.get("games", [])) - len(games_info)
         if removed:
-            print(f"[MULTIPLA] {name} — {removed} jogo(s) removido(s) por incoerência mercado↔reasoning")
+            print(f"[MULTIPLA] {name} · {removed} jogo(s) removido(s) por incoerência mercado↔reasoning")
 
         # Filtro hard: rejeita legs que repetem (fixture_id, market_type) de picks VIP/Free
         if used_pairs:
@@ -752,16 +762,16 @@ def run_multipla_pipeline() -> dict | None:
                 fid = g.get("fixture_id")
                 mt  = _classify_market_type(g.get("market", ""))
                 if fid and mt and (fid, mt) in used_pairs:
-                    print(f"[MULTIPLA] {name} — leg fixture_id={fid} market_type={mt} já usado em VIP/Free → bloqueado")
+                    print(f"[MULTIPLA] {name} · leg fixture_id={fid} market_type={mt} já usado em VIP/Free → bloqueado")
                     return True
                 return False
             games_info = [g for g in games_info if not _leg_blocked(g)]
             if len(games_info) < before:
-                print(f"[MULTIPLA] {name} — {before - len(games_info)} leg(s) bloqueada(s) por duplicação VIP/Free")
+                print(f"[MULTIPLA] {name} · {before - len(games_info)} leg(s) bloqueada(s) por duplicação VIP/Free")
 
         valid_fids = [g["fixture_id"] for g in games_info if g.get("fixture_id") in fx_map]
         if len(valid_fids) < 2:
-            print(f"[MULTIPLA] {name} — fixture_ids invalidos retornados pela IA, pulando.")
+            print(f"[MULTIPLA] {name} · fixture_ids invalidos retornados pela IA, pulando.")
             continue
 
         total_odd = save_multipla(name, games_info, fx_map, reasoning, score)
