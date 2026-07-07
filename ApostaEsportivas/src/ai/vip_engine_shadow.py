@@ -154,6 +154,7 @@ def _process_fixture(
     candidates = analyze_fixture_markets(
         structured_odds, last10_home, last10_away,
         context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
+        data_quality_score=quality["score"],
     )
     ranked_pool = rank_all_candidates(candidates)
     engine_picks = select_final_picks(ranked_pool)

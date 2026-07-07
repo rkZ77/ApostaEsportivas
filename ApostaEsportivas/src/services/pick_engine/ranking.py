@@ -18,34 +18,76 @@ def _conservative_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -
     return round(max(0.0, 1.0 - dist * 0.5), 4)
 
 
+def _bookmakers_bonus(bookmakers_count: int, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
+    """0-1, satura em bookmakers_bonus_saturation casas -- mais consenso de
+    preco = mais confiavel que a odd reflete valor real, nao erro de 1
+    casa isolada (min_bookmakers_count ja exige >=2 pra entrar como
+    candidato; isso aqui recompensa GRADUALMENTE mais consenso ainda)."""
+    return round(min(bookmakers_count / config.bookmakers_bonus_saturation, 1.0), 4)
+
+
+def _stability_bonus(candidate: dict) -> float:
+    """1.0 = taxa identica entre metade recente e metade antiga do
+    historico (estavel); cai conforme diverge. 0.5 (neutro) quando nao ha
+    dado de estabilidade (mercado fora do escopo de line_stability, ex.
+    handicap/outcome, ou amostra pequena demais pra dividir ao meio) --
+    nem premia nem pune por falta de informacao."""
+    stability = candidate.get("stability")
+    if not stability:
+        return 0.5
+    return round(max(0.0, 1.0 - stability["instability"]), 4)
+
+
 def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """Pontuacao de linha (dentro de um mercado ja escolhido por
-    estatistica): taxa real + edge (normalizado) + bonus da faixa
-    conservadora de odd. E aqui, e so aqui, que a odd participa da
-    decisao -- final_score() (escolha do MERCADO) nao usa EV/odd."""
+    estatistica): taxa real + edge + faixa conservadora de odd + consenso
+    de bookmakers + estabilidade historica da linha. E aqui, e so aqui,
+    que a odd participa da decisao -- final_score() (escolha do MERCADO)
+    nao usa EV/odd.
+
+    Variancia e Data Quality Score deliberadamente NAO entram aqui --
+    sao constantes pra todos os candidatos do mesmo mercado/fixture
+    (nao ajudam a escolher ENTRE linhas), ver config.py."""
     edge_norm = min(max(candidate.get("edge", 0.0), 0.0), 0.5) / 0.5
-    bonus = _conservative_bonus(candidate["odd"], config)
+    conservative = _conservative_bonus(candidate["odd"], config)
+    bookmakers = _bookmakers_bonus(candidate.get("bookmakers_count", 1), config)
+    stability = _stability_bonus(candidate)
     return round(
         candidate["taxa_real"] * config.line_weight_taxa
         + edge_norm * config.line_weight_edge
-        + bonus * config.line_weight_conservative,
+        + conservative * config.line_weight_conservative
+        + bookmakers * config.line_weight_bookmakers
+        + stability * config.line_weight_stability,
         4,
     )
 
 
-def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> dict | None:
+def select_smart_safe_line(
+    line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, data_quality_score: float | None = None,
+) -> dict | None:
     """Descarta odd<min_odd, odd>max_odd (mercado iliquido/raramente
-    cotado, nao valor real), edge<min_edge, EV<=0; entre as que sobram
-    escolhe a de maior line_score (taxa+edge+faixa conservadora de odd).
-    Sem candidato aprovado, cai pra qualquer linha com odd entre 1.01 e
-    max_odd (fallback conservador, nunca forca uma linha ruim ou um
-    outlier de mercado ilíquido silenciosamente)."""
+    cotado, nao valor real), edge<min_edge_efetivo, EV<=0; entre as que
+    sobram escolhe a de maior line_score (taxa+edge+odd conservadora+
+    bookmakers+estabilidade). Sem candidato aprovado, cai pra qualquer
+    linha com odd entre 1.01 e max_odd (fallback conservador, nunca forca
+    uma linha ruim ou um outlier de mercado ilíquido silenciosamente).
+
+    data_quality_score (0-100, de data_validation.data_quality_score)
+    ajusta o min_edge exigido pra cima quando o dado da fixture e' ruim --
+    fixture com cobertura/integridade fraca precisa de uma margem de
+    seguranca maior pra aprovar uma linha, em vez do mesmo limiar fixo
+    de sempre. None (caller nao calculou DQS ainda) -> sem ajuste."""
     if not line_candidates:
         return None
 
+    effective_min_edge = config.min_edge
+    if data_quality_score is not None and data_quality_score < config.dqs_baseline:
+        deficit = (config.dqs_baseline - data_quality_score) / 100
+        effective_min_edge = config.min_edge * (1 + deficit * config.dqs_min_edge_scale)
+
     passed = [
         c for c in line_candidates
-        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= config.min_edge and c["ev"] > 0
+        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= effective_min_edge and c["ev"] > 0
     ]
     pool = passed or [c for c in line_candidates if 1.01 <= c["odd"] <= config.max_odd]
     if not pool:
@@ -53,6 +95,7 @@ def select_smart_safe_line(line_candidates: list, config: PickEngineConfig = DEF
 
     best = max(pool, key=lambda c: _line_score(c, config))
     best["line_score"] = _line_score(best, config)
+    best["effective_min_edge"] = round(effective_min_edge, 4)
     return best
 
 

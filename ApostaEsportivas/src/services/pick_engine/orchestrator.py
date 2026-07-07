@@ -43,6 +43,7 @@ def analyze_fixture_markets(
     matchup_data: dict | None = None,
     news_data: dict | None = None,
     team_strength_data: dict | None = None,
+    data_quality_score: float | None = None,
 ) -> list:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
     (classify_market()) disponivel nas odds ja estruturadas
@@ -62,6 +63,11 @@ def analyze_fixture_markets(
     de Contexto/Perfil/Noticias quando os campos existem no candidato;
     team_strength_data e so informativo por enquanto, anexado a cada
     candidato mas ainda nao pesado no confidence -- ver Fase 2b).
+
+    `data_quality_score` (0-100, saida de
+    data_validation.data_quality_score) e opcional -- quando presente,
+    ranking.select_smart_safe_line() exige mais edge pra aprovar uma
+    linha em fixtures com dado ruim (Prioridade 2 do plano de refatoracao).
 
     Fase 2b (Statistical Engine): pra familias com decomposicao feitos/
     cedidos (goals/corners/cards, ver stats_model._SCORED_CONCEDED_FIELDS),
@@ -119,6 +125,13 @@ def analyze_fixture_markets(
                 line_val = float(m.get("line")) if family != "btts" else None
             except (TypeError, ValueError):
                 line_val = None
+            # Estabilidade da linha especifica ao longo do tempo (nao so a
+            # media agregada) -- entra no line_score via ranking._stability_bonus.
+            # So cobre mercados classicos (over/under/btts); None pros
+            # demais (handicap/outcome/etc), tratado como neutro no score.
+            stability = stats_model.line_stability(
+                family, scope, m.get("value", ""), m.get("line", ""), last10_home, last10_away,
+            )
             line_candidates.append({
                 "market_id":        m.get("market_id"),
                 "market_name":      m.get("market_pt") or m.get("market_name"),
@@ -133,12 +146,13 @@ def analyze_fixture_markets(
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
                 "prob_baseline_source": prob_baseline["source"],
+                "stability":        stability,
                 "_direction":       (m.get("value") or "").strip().lower(),
                 "_line_val":        line_val,
                 **ev_edge,
             })
 
-        best_line = ranking.select_smart_safe_line(line_candidates, config)
+        best_line = ranking.select_smart_safe_line(line_candidates, config, data_quality_score=data_quality_score)
         if not best_line:
             continue
 
