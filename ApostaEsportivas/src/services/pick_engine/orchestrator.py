@@ -143,9 +143,19 @@ def analyze_fixture_markets(
             continue
 
         market_type = "goals" if family == "btts" else family
+        is_poisson_fam = probability_model.is_poisson_family(family)
 
+        # K: para familias SEM Poisson (btts/shots/outcome/handicap/etc),
+        # convergence_adjustment continua sendo o unico sinal de "o
+        # feitos/cedidos concorda com a direcao do pick". Para familias COM
+        # Poisson (goals/corners/cards), esse bonus/penalidade sai daqui --
+        # M abaixo usa o MESMO convergence["expected_value"] pra fazer a
+        # mesma pergunta de forma mais precisa (probabilidade completa, nao
+        # so direcao); manter os dois seria confirmar a mesma evidencia
+        # duas vezes (Prioridade 1.3 do plano de refatoracao).
         K = confidence.confirmation_k(best_line["amostra"], best_line["bookmakers_count"])
-        K += confidence.convergence_adjustment(best_line["_direction"], best_line["_line_val"], convergence)
+        if not is_poisson_fam:
+            K += confidence.convergence_adjustment(best_line["_direction"], best_line["_line_val"], convergence)
         K = round(min(max(K, 0.10), 1.00), 4)
         conf = confidence.confidence_score(C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
 
@@ -161,16 +171,17 @@ def analyze_fixture_markets(
         )
 
         # M (model-fit): concordancia entre a taxa empirica (contagem direta)
-        # e a probabilidade do modelo Poisson pra MESMA linha -- so existe
-        # pra familias com decomposicao feitos/cedidos (goals/corners/cards).
+        # e a probabilidade do modelo Poisson pra MESMA linha -- substitui
+        # convergence_adjustment (K) pra familias Poisson, ver comentario
+        # acima. So existe pra goals/corners/cards.
         poisson_prob = None
         model_fit_diff = None
-        if convergence and probability_model.is_poisson_family(family) and best_line["_line_val"] is not None:
+        if is_poisson_fam and convergence and best_line["_line_val"] is not None:
             poisson_prob = probability_model.poisson_prob_for_line(
                 convergence["expected_value"], best_line["_line_val"], best_line["_direction"]
             )
             model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
-        m_adjustment = confidence.model_fit_adjustment(model_fit_diff)
+        m_adjustment = confidence.model_fit_adjustment(model_fit_diff) if is_poisson_fam else 0.0
 
         total_delta = (cal_delta or 0) - v_penalty + m_adjustment
         if total_delta:

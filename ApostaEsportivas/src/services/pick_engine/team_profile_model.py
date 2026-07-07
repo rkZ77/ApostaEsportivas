@@ -4,6 +4,7 @@ de national_team_profile_service.py (que ja eram estruturalmente
 independentes de qualquer logica especifica de Copa do Mundo). Aqui viram
 funcoes puras (matches, team_id) -> dict, reutilizaveis tanto para selecoes
 quanto para clubes -- national_team_profile_service.py nao e alterado."""
+from services.pick_engine.stats_model import offensive_efficiency
 
 
 def tactical_patterns(matches: list, team_id: int) -> dict:
@@ -260,6 +261,7 @@ def build_profile(matches: list, team_id: int) -> dict:
     defensive = defensive_stats(matches, team_id)
     discipline = discipline_stats(matches, team_id)
     set_pieces = set_pieces_stats(matches, team_id)
+    efficiency = offensive_efficiency(matches, team_id)
     strengths, weaknesses = strengths_weaknesses({
         "offensive": offensive, "defensive": defensive,
         "tactical": tactical, "form": form,
@@ -274,48 +276,73 @@ def build_profile(matches: list, team_id: int) -> dict:
         "defensive_stats": defensive,
         "discipline_stats": discipline,
         "set_pieces_stats": set_pieces,
+        "offensive_efficiency": efficiency,
         "strengths": strengths,
         "weaknesses": weaknesses,
     }
 
 
 _PRESSING_SCORE = {"Alta": 2, "Média-Alta": 1, "Média": 0, "Baixa": -1, "Desconhecida": 0}
+_POSSESSION_PRESSURE = {
+    "Posse de bola dominante": 1.0,
+    "Posse de bola + Contra-ataque": 0.5,
+    "Ataque direto e intenso": 0.5,
+}
 
-# Baselines de referencia (media tipica de futebol profissional) usados so
-# como ponto zero do delta -- nao sao "ajuste" arbitrario, so o centro da
-# escala pra decidir se o delta pende pra Over ou Under.
-_CORNERS_BASELINE = 9.5
-_CARDS_BASELINE = 20.0
+# Baseline de conversao (gols por chute no alvo) tipica do futebol
+# profissional -- mesmo espirito de referencia que _CORNERS_BASELINE/
+# _CARDS_BASELINE ja usavam (ponto zero do delta, nao "ajuste" arbitrario).
+# Nao calibrado contra resultado real ainda -- revisar com o log de sombra
+# (Prioridade 4 do plano: Calibration Engine) quando houver volume.
+_CONVERSION_BASELINE = 0.30
+_MIN_EFFICIENCY_AMOSTRA = 3
+
+
+def _possession_pressure_score(tactical: dict) -> float:
+    return _POSSESSION_PRESSURE.get(tactical.get("style"), 0.0)
 
 
 def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
     """Compara os perfis de casa e fora e devolve deltas numericos por
     familia de mercado (goals/corners/cards). Cada delta e soma de
     componentes explicitos (sempre expostos em 'components'), nunca um
-    numero ajustado sem conta rastreavel."""
-    off_h, off_a = profile_home.get("offensive_stats", {}), profile_away.get("offensive_stats", {})
-    def_h, def_a = profile_home.get("defensive_stats", {}), profile_away.get("defensive_stats", {})
+    numero ajustado sem conta rastreavel.
+
+    Prioridade 1.3 do plano de refatoracao (double-counting): as versoes
+    anteriores de goals_delta/corners_delta/cards_delta usavam medias
+    brutas (gols/jogo, escanteios/jogo, faltas/jogo) que sao os MESMOS
+    campos brutos que ja alimentam taxa_real/confidence em outro lugar do
+    motor (stats_model.compute_taxa/expected_value_convergence) -- somado
+    de novo aqui no Score Final, isso confirmava a mesma evidencia duas
+    vezes. Agora cada delta usa APENAS sinais que nao vem de contar o
+    proprio evento historico: eficiencia de finalizacao (chutes no alvo ->
+    gol, nao contagem de gols), estilo de posse (categorico, nao contagem
+    de escanteios) e intensidade de pressao (categorico, nao contagem de
+    faltas). Efeito colateral: cada delta agora so discrimina na direcao
+    onde ha sinal tatico independente -- goals/corners tem sinal mais
+    forte pra Over (falta um sinal tatico igualmente forte pra "por que
+    seria Under" com os dados disponiveis hoje) enquanto cards ja e'
+    simetrico (pressing_score vai de -2 a +4)."""
     tac_h, tac_a = profile_home.get("tactical_profile", {}), profile_away.get("tactical_profile", {})
-    disc_h, disc_a = profile_home.get("discipline_stats", {}), profile_away.get("discipline_stats", {})
-    sp_h, sp_a = profile_home.get("set_pieces_stats", {}), profile_away.get("set_pieces_stats", {})
+    eff_h, eff_a = profile_home.get("offensive_efficiency") or {}, profile_away.get("offensive_efficiency") or {}
 
-    combined_goals_avg = round((off_h.get("goals_per_game", 0) + off_a.get("goals_per_game", 0)), 2)
-    combined_defense_solidity = round(
-        (def_h.get("clean_sheets_pct", 0) + def_a.get("clean_sheets_pct", 0)) / 2, 2
-    )
-    goals_delta = round(combined_goals_avg - combined_defense_solidity * 2.5, 2)
+    conv_h, conv_a = eff_h.get("conversion_rate"), eff_a.get("conversion_rate")
+    n_h, n_a = eff_h.get("amostra", 0), eff_a.get("amostra", 0)
+    if conv_h is not None and conv_a is not None and n_h >= _MIN_EFFICIENCY_AMOSTRA and n_a >= _MIN_EFFICIENCY_AMOSTRA:
+        combined_conversion = round((conv_h + conv_a) / 2, 3)
+        goals_delta = round((combined_conversion - _CONVERSION_BASELINE) * 3, 2)
+    else:
+        combined_conversion = None
+        goals_delta = 0.0  # amostra insuficiente pra eficiencia -- neutro, nao inventa
 
-    combined_corners_avg = round(sp_h.get("corners_per_game", 0) + sp_a.get("corners_per_game", 0), 2)
-    possession_styles = {tac_h.get("style"), tac_a.get("style")}
-    possession_bonus = 1.0 if "Posse de bola dominante" in possession_styles else 0.0
-    corners_delta = round(combined_corners_avg + possession_bonus - _CORNERS_BASELINE, 2)
+    possession_pressure = round(_possession_pressure_score(tac_h) + _possession_pressure_score(tac_a), 2)
+    corners_delta = round(possession_pressure * 0.3, 2)
 
-    combined_fouls_avg = round(disc_h.get("fouls_per_game", 0) + disc_a.get("fouls_per_game", 0), 2)
     pressing_score = (
         _PRESSING_SCORE.get(tac_h.get("pressing_intensity"), 0)
         + _PRESSING_SCORE.get(tac_a.get("pressing_intensity"), 0)
     )
-    cards_delta = round((combined_fouls_avg - _CARDS_BASELINE) / 10 + pressing_score * 0.15, 2)
+    cards_delta = round(pressing_score * 0.15, 2)
 
     def label(delta):
         if delta > 0.15:
@@ -328,24 +355,26 @@ def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
         "goals": {
             "delta": goals_delta, "label": label(goals_delta),
             "components": {
-                "combined_goals_per_game": combined_goals_avg,
-                "combined_defense_solidity_pct": combined_defense_solidity,
+                "conversion_rate_home": conv_h,
+                "conversion_rate_away": conv_a,
+                "combined_conversion_rate": combined_conversion,
+                "baseline": _CONVERSION_BASELINE,
             },
         },
         "corners": {
             "delta": corners_delta, "label": label(corners_delta),
             "components": {
-                "combined_corners_per_game": combined_corners_avg,
-                "possession_dominant_bonus": possession_bonus,
-                "baseline": _CORNERS_BASELINE,
+                "possession_pressure_score": possession_pressure,
+                "style_home": tac_h.get("style"),
+                "style_away": tac_a.get("style"),
             },
         },
         "cards": {
             "delta": cards_delta, "label": label(cards_delta),
             "components": {
-                "combined_fouls_per_game": combined_fouls_avg,
                 "pressing_score": pressing_score,
-                "baseline": _CARDS_BASELINE,
+                "pressing_intensity_home": tac_h.get("pressing_intensity"),
+                "pressing_intensity_away": tac_a.get("pressing_intensity"),
             },
         },
     }

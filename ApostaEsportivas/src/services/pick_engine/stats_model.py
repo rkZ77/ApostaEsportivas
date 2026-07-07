@@ -625,33 +625,49 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
     }
 
 
-def offensive_efficiency(matches: list, is_home_ctx: bool) -> dict | None:
-    """NOVO na Fase 1: eficiencia ofensiva usando chutes no alvo e posse
-    (dados que ja existem no banco -- match_statistics.home_shots_on/
-    home_possession -- mas nunca chegavam ao calculo de picks ate agora,
-    so eram usados no perfil tatico de selecoes). Sinal secundario para
-    mercados de gols/BTTS -- nao substitui a taxa historica, complementa."""
+def offensive_efficiency(matches: list, team_id: int) -> dict | None:
+    """Eficiencia ofensiva usando chutes no alvo e posse (dados que ja
+    existem no banco -- match_statistics.home_shots_on/home_possession).
+    Mede QUALIDADE de finalizacao (gols por chute-no-alvo), nao QUANTIDADE
+    de gols -- sinal mais independente da taxa historica de gols do que
+    uma segunda media de gols/jogo seria (usado por
+    team_profile_model.compare_matchup() no lugar de combined_goals_avg,
+    ver Prioridade 1.3 do plano de refatoracao).
+
+    Contexto (casa/fora) resolvido POR PARTIDA via home_team_id==team_id --
+    correto tanto para pool de um so lado (clubes) quanto pool de mando
+    misto (selecoes, sede neutra). Antes recebia um unico is_home_ctx pra
+    lista inteira -- bug real: em mando misto isso lia o campo errado
+    (home_shots_on de um jogo onde o time era visitante, por exemplo) pra
+    parte dos jogos. Nunca foi chamada em producao com esse bug (funcao
+    nao estava conectada a nada), corrigido antes de conectar."""
     if not matches:
         return None
-    shots_on_k = "home_shots_on" if is_home_ctx else "away_shots_on"
-    goals_k = "home_goals" if is_home_ctx else "away_goals"
-    possession_k = "home_possession" if is_home_ctx else "away_possession"
 
-    with_shots = [m for m in matches if m.get(shots_on_k) is not None]
+    with_shots = [
+        m for m in matches
+        if m.get("home_shots_on" if m.get("home_team_id") == team_id else "away_shots_on") is not None
+    ]
     if not with_shots:
         return None
 
-    n = len(with_shots)
-    total_shots_on = sum((m.get(shots_on_k) or 0) for m in with_shots)
-    total_goals = sum((m.get(goals_k) or 0) for m in with_shots)
+    n = total_shots_on = total_goals = 0
+    total_possession = possession_n = 0
+    for m in with_shots:
+        is_home = m.get("home_team_id") == team_id
+        shots_on = m.get("home_shots_on" if is_home else "away_shots_on") or 0
+        goals = m.get("home_goals" if is_home else "away_goals") or 0
+        possession = m.get("home_possession" if is_home else "away_possession")
+        total_shots_on += shots_on
+        total_goals += goals
+        n += 1
+        if possession is not None:
+            total_possession += possession
+            possession_n += 1
+
     avg_shots_on = round(total_shots_on / n, 2)
     conversion = round(total_goals / total_shots_on, 3) if total_shots_on > 0 else None
-
-    with_possession = [m for m in with_shots if m.get(possession_k) is not None]
-    avg_possession = (
-        round(sum((m.get(possession_k) or 0) for m in with_possession) / len(with_possession), 1)
-        if with_possession else None
-    )
+    avg_possession = round(total_possession / possession_n, 1) if possession_n else None
 
     return {
         "amostra": n,
