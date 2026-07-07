@@ -5,6 +5,34 @@ LINHA dentro do mercado ja vencedor (select_smart_safe_line/line_score),
 preferindo uma faixa conservadora de odd sem travar nela."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
+# Grupo de correlacao (familia raiz) por market_type -- mercados do mesmo
+# grupo compartilham a MESMA fonte de dado bruto (contagem de gols/
+# escanteios/cartoes do jogo), mesmo sendo estruturas de aposta diferentes
+# (over/under vs handicap vs par/impar vs clean sheet). Prioridade 3 do
+# plano de refatoracao: select_final_picks() usava market_type puro pra
+# "1 pick por categoria" -- "cards" e "handicap_cards" contavam como
+# categorias DIFERENTES, entao o corte final podia aprovar os dois ao
+# mesmo tempo como se fossem confirmadores independentes, quando na
+# verdade vem do mesmo historico de cartoes do time.
+_CORRELATION_GROUP_OVERRIDES = {
+    "clean_sheet": "goals",     # depende do placar (gols sofridos = 0)
+    "win_to_nil": "goals",      # depende do placar (vence e nao sofre gol)
+    "outcome": "result",
+    "double_chance": "result",
+    "draw_no_bet": "result",
+    "shots_on_target": "shots",  # chutes no alvo e chutes totais sao o mesmo sinal de volume ofensivo
+}
+
+
+def correlation_group(market_type: str) -> str:
+    """Familia raiz de um market_type, pra agrupar mercados correlacionados
+    (mesma fonte de dado bruto) mesmo quando o market_type e' tecnicamente
+    diferente."""
+    for prefix in ("handicap_", "odd_even_"):
+        if market_type.startswith(prefix):
+            return market_type[len(prefix):]
+    return _CORRELATION_GROUP_OVERRIDES.get(market_type, market_type)
+
 
 def _conservative_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """1.0 dentro de [conservative_odd_low, conservative_odd_high]; cai
@@ -170,17 +198,19 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
 
 def select_final_picks(ranked_candidates: list, max_picks: int = 3) -> list:
     """Recebe um pool ja ranqueado (saida de rank_all_candidates) e aplica
-    o corte final: no maximo 1 pick por categoria, ate max_picks no total,
-    define is_best_pick (nunca RISCO ALTO a menos que todos os escolhidos
-    sejam ALTO). Assume que ranked_candidates ja vem ordenado por
-    final_score (rank_all_candidates garante isso)."""
-    picked, used_categories = [], set()
+    o corte final: no maximo 1 pick por GRUPO DE CORRELACAO (nao
+    market_type puro -- ver correlation_group(), evita aprovar "cards" e
+    "handicap_cards" juntos como se fossem confirmadores independentes),
+    ate max_picks no total, define is_best_pick (nunca RISCO ALTO a menos
+    que todos os escolhidos sejam ALTO). Assume que ranked_candidates ja
+    vem ordenado por final_score (rank_all_candidates garante isso)."""
+    picked, used_groups = [], set()
     for c in ranked_candidates:
-        cat = c["market_type"]
-        if cat in used_categories:
+        group = correlation_group(c["market_type"])
+        if group in used_groups:
             continue
         picked.append(c)
-        used_categories.add(cat)
+        used_groups.add(group)
         if len(picked) == max_picks:
             break
 

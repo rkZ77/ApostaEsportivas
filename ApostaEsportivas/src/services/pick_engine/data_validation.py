@@ -34,6 +34,54 @@ def validate_history(matches: list, min_games: int = 5) -> dict:
     }
 
 
+def validate_market_sample(family: str, scope: str, last10_home: list, last10_away: list,
+                            min_games: int = 5) -> dict:
+    """Amostra minima ESPECIFICA da familia de mercado, nao do time em
+    geral -- um time pode ter historico geral rico (validate_history
+    passa) mas o campo bruto desta familia (ex.: home_corners) ausente em
+    parte dos jogos. stats_model._extract_stat() trata campo ausente como
+    0 no calculo de taxa hoje (`m.get(field) or 0`) em vez de excluir o
+    jogo da amostra -- isso e' uma decisao de calculo separada (mudaria
+    taxa_real/confidence, fora de escopo desta validacao) -- aqui so
+    reporta quantos jogos do pool realmente TEM o dado, pra essa lacuna
+    nao ficar invisivel."""
+    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away)
+    if not pool:
+        return {"passed": False, "amostra_total": 0, "amostra_com_dado": 0, "reasons": ["Sem jogos no pool desta familia"]}
+
+    fields = stats_model._FAMILY_STAT_FIELDS.get(family)
+    if not fields:
+        # Familia sem campo bruto dedicado (ex.: btts usa home_goals/
+        # away_goals, sempre presentes p/ jogos com status FT) -- sem gap
+        # conhecido de cobertura pra checar aqui.
+        return {"passed": len(pool) >= min_games, "amostra_total": len(pool), "amostra_com_dado": len(pool), "reasons": []}
+
+    def _has_data(m):
+        if scope in ("home", "away"):
+            return m.get(fields[scope]) is not None
+        total_field = fields.get("total")
+        if total_field:
+            return m.get(total_field) is not None
+        return m.get(fields["home"]) is not None or m.get(fields["away"]) is not None
+
+    com_dado = sum(1 for m in pool if _has_data(m))
+    reasons = []
+    if com_dado < len(pool):
+        reasons.append(
+            f"{len(pool) - com_dado} de {len(pool)} jogos sem o campo desta familia preenchido "
+            f"(tratados como 0 no calculo de taxa hoje)"
+        )
+    if com_dado < min_games:
+        reasons.append(f"Amostra real com dado ({com_dado}) abaixo do minimo ({min_games})")
+
+    return {
+        "passed": com_dado >= min_games,
+        "amostra_total": len(pool),
+        "amostra_com_dado": com_dado,
+        "reasons": reasons,
+    }
+
+
 # ============================================================
 # 2. COBERTURA
 # ============================================================

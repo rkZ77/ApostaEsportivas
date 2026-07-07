@@ -5,6 +5,7 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
+    data_validation,
 )
 
 _OPPOSITE_VALUE = {
@@ -184,6 +185,14 @@ def analyze_fixture_markets(
             var_stats["coefficient_of_variation"] if var_stats else None
         )
 
+        # Amostra especifica desta familia (Prioridade 3) -- so exposto/
+        # logado por enquanto, NAO usado como filtro/penalidade ainda: a
+        # correcao completa exigiria mudar _extract_stat() pra excluir
+        # jogos sem o campo em vez de tratar como 0, o que mudaria
+        # taxa_real/confidence pra qualquer familia com gap de cobertura --
+        # decisao separada, fora do escopo desta revisao.
+        market_sample = data_validation.validate_market_sample(family, scope, last10_home, last10_away)
+
         # M (model-fit): concordancia entre a taxa empirica (contagem direta)
         # e a probabilidade do modelo Poisson pra MESMA linha -- substitui
         # convergence_adjustment (K) pra familias Poisson, ver comentario
@@ -212,6 +221,7 @@ def analyze_fixture_markets(
             "calibration_delta": cal_delta,
             "variance": var_stats,
             "variance_penalty": v_penalty,
+            "market_sample": market_sample,
             "poisson_probability": poisson_prob,
             "model_fit_diff": model_fit_diff,
             "model_fit_adjustment": m_adjustment,
