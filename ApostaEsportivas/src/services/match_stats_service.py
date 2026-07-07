@@ -126,6 +126,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -175,6 +181,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 NULL::text    AS opponent_name,
                 NULL::integer AS opponent_rank
             FROM match_statistics ms
