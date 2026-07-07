@@ -246,6 +246,14 @@ NOMENCLATURA · copie exatamente de "market_name":
   vantagem, e usa os nomes dos times?
 [V15] Contraponto (evidência contrária à tese) foi declarado no reasoning?
 Falha → corrija antes de retornar.
+"""
+
+
+# Bloco dinâmico: contém os placeholders preenchidos por fixture (desempenho, picks
+# anteriores, contexto web, dados do jogo) · NUNCA é identico entre chamadas, por isso
+# fica fora do bloco cacheado (REGRAS_BASE) e é enviado como um segundo content block,
+# sem cache_control, na chamada à API (ver ai_suggestions_service.py::_call_api).
+REGRAS_BASE_DYNAMIC = """\
 
 ## CALIBRAÇÃO · DESEMPENHO HISTÓRICO PRÓPRIO
 
@@ -298,5 +306,7 @@ Retorne exatamente este formato · nada antes, nada depois:
 
 
 def build_prompt(league_context: str) -> str:
-    """Monta o prompt final injetando o contexto da liga antes das regras."""
+    """Monta o bloco ESTÁTICO (contexto da liga + regras) · cacheável, nunca muda entre
+    fixtures. O bloco dinâmico (dados do jogo etc.) é REGRAS_BASE_DYNAMIC, formatado à
+    parte e enviado como content block separado, sem cache_control."""
     return league_context + "\n" + REGRAS_BASE

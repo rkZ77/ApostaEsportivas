@@ -11,7 +11,7 @@ from anthropic import Anthropic, RateLimitError
 
 from utils.db_utils import get_connection
 from services.odds_service import OddsService
-from ai.prompts import get_prompt, SYSTEM_PROMPT
+from ai.prompts import get_prompt, SYSTEM_PROMPT, REGRAS_BASE_DYNAMIC
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
 load_dotenv(find_dotenv())
@@ -452,7 +452,7 @@ MERCADOS E ODDS
     # --------------------------------------------------------
     # CHAMA A API (com retry em caso de JSON inválido)
     # --------------------------------------------------------
-    def _call_api(self, user_prompt: str, fixture_id: int) -> list:
+    def _call_api(self, user_prompt: str | list, fixture_id: int) -> list:
         messages = [{"role": "user", "content": user_prompt}]
         RATE_LIMIT_WAIT = 65   # segundos de espera ao receber 429
         MAX_RATE_RETRIES = 3   # tentativas após rate limit
@@ -637,11 +637,18 @@ MERCADOS E ODDS
             )
             print(f"[AI] Usando prompt PERSONALIZADO para fixture {fx['fixture_id']}")
         else:
-            prompt_template = get_prompt(league_id)
-            user_prompt = prompt_template.format(
+            # Bloco estático (contexto da liga + regras) é idêntico para qualquer fixture desta
+            # liga · cacheado via cache_control para não recobrar o texto fixo em toda chamada.
+            # Só o bloco dinâmico (dados deste jogo) muda a cada fixture.
+            static_prefix = get_prompt(league_id)
+            dynamic_tail = REGRAS_BASE_DYNAMIC.format(
                 dados=dados, desempenho=desempenho,
                 contexto_web=web_context, picks_anteriores=picks_anteriores,
             )
+            user_prompt = [
+                {"type": "text", "text": static_prefix, "cache_control": {"type": "ephemeral"}},
+                {"type": "text", "text": dynamic_tail},
+            ]
             print(f"[AI] Usando prompt liga {league_id} -> fixture {fx['fixture_id']}")
 
         data = self._call_api(user_prompt, fx["fixture_id"])
