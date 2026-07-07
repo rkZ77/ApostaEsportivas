@@ -11,6 +11,13 @@ class PickEngineConfig:
     min_amostra: int = 5
     min_confidence: float = 0.55
     min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta
+    # Mercado com 1 so bookmaker nao tem consenso pra checar contra erro de
+    # precificacao -- visto na pratica: "Cards Asian Handicap Away +1.5" a
+    # odd 4.50 (bookmakers_count=1) dando EV=+303%, enquanto a linha irmã
+    # do mesmo mercado ("Home +1.5") tava a odd 1.18 -- inconsistencia que
+    # so um segundo bookmaker cotando permitiria detectar. Exclui a odd
+    # inteira da analise antes mesmo de virar candidato (nao so desconta K).
+    min_bookmakers_count: int = 2
 
     # Smart Safe Line (escolha de linha)
     min_odd: float = 1.60

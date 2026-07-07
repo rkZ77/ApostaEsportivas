@@ -72,6 +72,8 @@ def analyze_fixture_markets(
             best_odd = float(m.get("best_odd") or 0)
             if best_odd <= 1.0:
                 continue
+            if m.get("bookmakers_count", 1) < config.min_bookmakers_count:
+                continue
             taxa = stats_model.compute_taxa(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
