@@ -159,17 +159,23 @@ def analyze_fixture_markets(
 
         market_type = "goals" if family == "btts" else family
         is_poisson_fam = probability_model.is_poisson_family(family)
+        # BTTS tem Poisson proprio (Prioridade 5): P(ambas marcam) =
+        # P(casa marca)xP(fora marca), com um lambda por LADO (nao um
+        # lambda combinado do jogo inteiro como goals/corners/cards usam)
+        # -- por isso fica fora de is_poisson_family, tratado a parte
+        # abaixo, mas conta igual pra decidir se K cede lugar a M.
+        has_poisson_signal = is_poisson_fam or family == "btts"
 
-        # K: para familias SEM Poisson (btts/shots/outcome/handicap/etc),
+        # K: para familias SEM Poisson (shots/outcome/handicap/etc),
         # convergence_adjustment continua sendo o unico sinal de "o
         # feitos/cedidos concorda com a direcao do pick". Para familias COM
-        # Poisson (goals/corners/cards), esse bonus/penalidade sai daqui --
-        # M abaixo usa o MESMO convergence["expected_value"] pra fazer a
-        # mesma pergunta de forma mais precisa (probabilidade completa, nao
-        # so direcao); manter os dois seria confirmar a mesma evidencia
-        # duas vezes (Prioridade 1.3 do plano de refatoracao).
+        # Poisson (goals/corners/cards/btts), esse bonus/penalidade sai
+        # daqui -- M abaixo usa a MESMA base estatistica pra fazer a mesma
+        # pergunta de forma mais precisa (probabilidade completa, nao so
+        # direcao); manter os dois seria confirmar a mesma evidencia duas
+        # vezes (Prioridade 1.3 do plano de refatoracao).
         K = confidence.confirmation_k(best_line["amostra"], best_line["bookmakers_count"])
-        if not is_poisson_fam:
+        if not has_poisson_signal:
             K += confidence.convergence_adjustment(best_line["_direction"], best_line["_line_val"], convergence)
         K = round(min(max(K, 0.10), 1.00), 4)
         conf = confidence.confidence_score(C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
@@ -195,8 +201,8 @@ def analyze_fixture_markets(
 
         # M (model-fit): concordancia entre a taxa empirica (contagem direta)
         # e a probabilidade do modelo Poisson pra MESMA linha -- substitui
-        # convergence_adjustment (K) pra familias Poisson, ver comentario
-        # acima. So existe pra goals/corners/cards.
+        # convergence_adjustment (K) pra familias com sinal Poisson, ver
+        # comentario acima.
         poisson_prob = None
         model_fit_diff = None
         if is_poisson_fam and convergence and best_line["_line_val"] is not None:
@@ -204,7 +210,20 @@ def analyze_fixture_markets(
                 convergence["expected_value"], best_line["_line_val"], best_line["_direction"]
             )
             model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
-        m_adjustment = confidence.model_fit_adjustment(model_fit_diff) if is_poisson_fam else 0.0
+        elif family == "btts":
+            # Lambda por lado (nao o convergence combinado do loop, que e'
+            # scope='total') -- feitos do time x cedido pelo adversario,
+            # em cada lado separadamente.
+            home_conv = stats_model.expected_value_convergence(last10_home, last10_away, "goals", "home")
+            away_conv = stats_model.expected_value_convergence(last10_home, last10_away, "goals", "away")
+            if home_conv and away_conv:
+                btts_prob = probability_model.btts_probability(
+                    home_conv["expected_value"], away_conv["expected_value"]
+                )
+                want_yes = best_line["_direction"] in ("yes", "sim")
+                poisson_prob = btts_prob if want_yes else round(1 - btts_prob, 4) if btts_prob is not None else None
+                model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
+        m_adjustment = confidence.model_fit_adjustment(model_fit_diff) if has_poisson_signal else 0.0
 
         total_delta = (cal_delta or 0) - v_penalty + m_adjustment
         if total_delta:
