@@ -45,7 +45,8 @@ def analyze_fixture_markets(
     news_data: dict | None = None,
     team_strength_data: dict | None = None,
     data_quality_score: float | None = None,
-) -> list:
+    debug: bool = False,
+) -> list | dict:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
     (classify_market()) disponivel nas odds ja estruturadas
     (services.odds_service.OddsService.load_odds_structured), a partir do
@@ -81,7 +82,19 @@ def analyze_fixture_markets(
     irregulares) perdem confidence mesmo com taxa boa.
 
     Retorna candidatos prontos para ranking.rank_market_candidates().
+
+    `debug=True` (fase de homologacao, ver services/pick_engine/homologation.py
+    e o plano de validacao antes de promover o motor pra producao): retorno
+    muda de list pra dict {"candidates": [...], "eliminated_markets": [...],
+    "entries_dropped": [...]} -- captura tambem os `continue` silenciosos
+    (odd invalida, poucos bookmakers, taxa sem dado) que hoje descartam uma
+    entrada ANTES dela virar line_candidate, e familias inteiras eliminadas
+    (sem best_line). `debug=False` (default, usado por toda a producao/
+    pipelines atuais) mantem o retorno IDENTICO ao de sempre -- nao muda
+    nenhuma decisao, so nao expoe o rastro extra.
     """
+    entries_dropped = []
+    eliminated_markets = []
     if calibration_data is None:
         calibration_data = calibration.get_market_calibration()
     ctx_score = context_model.context_score(context_data) if context_data else None
@@ -107,14 +120,30 @@ def analyze_fixture_markets(
         for m in entries:
             best_odd = float(m.get("best_odd") or 0)
             if best_odd <= 1.0:
+                if debug:
+                    entries_dropped.append({
+                        "market_name": m.get("market_pt") or m.get("market_name"),
+                        "family": family, "scope": scope, "reason": "odd invalida ou ausente",
+                    })
                 continue
             if m.get("bookmakers_count", 1) < config.min_bookmakers_count:
+                if debug:
+                    entries_dropped.append({
+                        "market_name": m.get("market_pt") or m.get("market_name"),
+                        "family": family, "scope": scope,
+                        "reason": f"poucos bookmakers ({m.get('bookmakers_count', 1)} < {config.min_bookmakers_count})",
+                    })
                 continue
             taxa = stats_model.compute_taxa(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
             )
             if not taxa or taxa["taxa_ponderada"] is None:
+                if debug:
+                    entries_dropped.append({
+                        "market_name": m.get("market_pt") or m.get("market_name"),
+                        "family": family, "scope": scope, "reason": "sem taxa calculavel (amostra insuficiente)",
+                    })
                 continue
             # Encolhimento Bayesiano: puxa a taxa em direcao ao prior
             # proporcional a quao pequena e' a amostra (n<<10 -> quase todo
@@ -168,6 +197,12 @@ def analyze_fixture_markets(
 
         best_line = ranking.select_smart_safe_line(line_candidates, config, data_quality_score=data_quality_score)
         if not best_line:
+            if debug and line_candidates:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": market_type,
+                    "reason": "nenhuma linha aprovada (nem via fallback conservador)",
+                    "all_lines": ranking.evaluate_all_lines(line_candidates, config, data_quality_score),
+                })
             continue
 
         is_poisson_fam = probability_model.is_poisson_family(family)
@@ -243,7 +278,7 @@ def analyze_fixture_markets(
                 min(max(conf + total_delta, config.confidence_min_clamp), config.confidence_max_clamp), 4
             )
 
-        candidates.append({
+        candidate = {
             **best_line,
             "market_type": market_type,
             "confidence": conf,
@@ -263,8 +298,13 @@ def analyze_fixture_markets(
             "news_score": news_score,
             "news_raw": news_data,
             "team_strength": team_strength_data,
-        })
+        }
+        if debug:
+            candidate["_all_lines"] = ranking.evaluate_all_lines(line_candidates, config, data_quality_score)
+        candidates.append(candidate)
 
+    if debug:
+        return {"candidates": candidates, "eliminated_markets": eliminated_markets, "entries_dropped": entries_dropped}
     return candidates
 
 

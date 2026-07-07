@@ -90,6 +90,50 @@ def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> f
     )
 
 
+def evaluate_all_lines(
+    line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, data_quality_score: float | None = None,
+) -> list:
+    """Avalia TODAS as linhas candidatas (nao so a vencedora) -- extraido de
+    select_smart_safe_line() pra alimentar tanto a escolha real quanto o
+    relatorio de homologacao (fase de validacao antes de promover o motor
+    pra producao, ver plano). Cada linha recebe line_score + reject_reason
+    (None = passou no filtro primario; senao um motivo especifico -- odd
+    abaixo do minimo/acima do teto, edge insuficiente, EV<=0). Constroi
+    dicts NOVOS (nunca muta line_candidates), pra o modo debug nao vazar
+    campos extras no caminho normal.
+
+    data_quality_score (0-100, de data_validation.data_quality_score)
+    ajusta o min_edge exigido pra cima quando o dado da fixture e' ruim --
+    fixture com cobertura/integridade fraca precisa de uma margem de
+    seguranca maior pra aprovar uma linha, em vez do mesmo limiar fixo
+    de sempre. None (caller nao calculou DQS ainda) -> sem ajuste."""
+    effective_min_edge = config.min_edge
+    if data_quality_score is not None and data_quality_score < config.dqs_baseline:
+        deficit = (config.dqs_baseline - data_quality_score) / 100
+        effective_min_edge = config.min_edge * (1 + deficit * config.dqs_min_edge_scale)
+    effective_min_edge = round(effective_min_edge, 4)
+
+    evaluated = []
+    for c in line_candidates:
+        if c["odd"] < config.min_odd:
+            reason = "odd abaixo do minimo"
+        elif c["odd"] > config.max_odd:
+            reason = "odd acima do teto de sanidade"
+        elif c["edge"] < effective_min_edge:
+            reason = "edge abaixo do minimo efetivo"
+        elif c["ev"] <= 0:
+            reason = "EV nao positivo"
+        else:
+            reason = None
+        evaluated.append({
+            **c,
+            "line_score": _line_score(c, config),
+            "effective_min_edge": effective_min_edge,
+            "reject_reason": reason,
+        })
+    return evaluated
+
+
 def select_smart_safe_line(
     line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, data_quality_score: float | None = None,
 ) -> dict | None:
@@ -98,32 +142,23 @@ def select_smart_safe_line(
     sobram escolhe a de maior line_score (taxa+edge+odd conservadora+
     bookmakers+estabilidade). Sem candidato aprovado, cai pra qualquer
     linha com odd entre 1.01 e max_odd (fallback conservador, nunca forca
-    uma linha ruim ou um outlier de mercado ilíquido silenciosamente).
-
-    data_quality_score (0-100, de data_validation.data_quality_score)
-    ajusta o min_edge exigido pra cima quando o dado da fixture e' ruim --
-    fixture com cobertura/integridade fraca precisa de uma margem de
-    seguranca maior pra aprovar uma linha, em vez do mesmo limiar fixo
-    de sempre. None (caller nao calculou DQS ainda) -> sem ajuste."""
+    uma linha ruim ou um outlier de mercado ilíquido silenciosamente) --
+    nesse caso chosen_via_fallback=True, o vencedor pode ele mesmo carregar
+    um reject_reason (nao passou no filtro primario, so nao havia nada
+    melhor); ver services/pick_engine/homologation.py pra como isso e'
+    reportado na fase de validacao."""
     if not line_candidates:
         return None
 
-    effective_min_edge = config.min_edge
-    if data_quality_score is not None and data_quality_score < config.dqs_baseline:
-        deficit = (config.dqs_baseline - data_quality_score) / 100
-        effective_min_edge = config.min_edge * (1 + deficit * config.dqs_min_edge_scale)
-
-    passed = [
-        c for c in line_candidates
-        if config.min_odd <= c["odd"] <= config.max_odd and c["edge"] >= effective_min_edge and c["ev"] > 0
-    ]
-    pool = passed or [c for c in line_candidates if 1.01 <= c["odd"] <= config.max_odd]
+    evaluated = evaluate_all_lines(line_candidates, config, data_quality_score)
+    passed = [c for c in evaluated if c["reject_reason"] is None]
+    chosen_via_fallback = not passed
+    pool = passed or [c for c in evaluated if 1.01 <= c["odd"] <= config.max_odd]
     if not pool:
         return None
 
-    best = max(pool, key=lambda c: _line_score(c, config))
-    best["line_score"] = _line_score(best, config)
-    best["effective_min_edge"] = round(effective_min_edge, 4)
+    best = max(pool, key=lambda c: c["line_score"])
+    best = {**best, "chosen_via_fallback": chosen_via_fallback}
     return best
 
 
@@ -196,6 +231,36 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
     return eligible[:top_n]
 
 
+def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, top_n: int = 10) -> tuple:
+    """Mesmos 4 gates de rank_all_candidates(), mas SEM short-circuit --
+    todo candidato reprovado carrega discard_reasons (pode ter mais de um
+    motivo ao mesmo tempo) e ainda ganha final_score calculado (util pra
+    homologacao: "esse mercado pontuou 0.61, teria entrado no top-3 se nao
+    fosse a amostra"). Constroi dicts NOVOS, nunca muta `candidates` --
+    caminho de debug, nunca usado pela producao. Retorna (eligible, discarded),
+    eligible ja ordenado e cortado em top_n como rank_all_candidates()."""
+    eligible, discarded = [], []
+    for c in candidates:
+        reasons = []
+        if c["taxa_real"] < config.min_taxa:
+            reasons.append(f"taxa abaixo do minimo ({c['taxa_real']*100:.1f}% < {config.min_taxa*100:.0f}%)")
+        if c["amostra"] < config.min_amostra:
+            reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
+        if c["confidence"] < config.min_confidence:
+            reasons.append(f"confidence abaixo do minimo ({c['confidence']*100:.1f}% < {config.min_confidence*100:.0f}%)")
+        if c["ev"] <= config.min_ev:
+            reasons.append(f"EV nao positivo ({c['ev']*100:+.1f}%)")
+
+        scored = {**c, "final_score": final_score(c)}
+        if reasons:
+            discarded.append({**scored, "discard_reasons": reasons})
+        else:
+            eligible.append(scored)
+
+    eligible.sort(key=lambda c: c["final_score"], reverse=True)
+    return eligible[:top_n], discarded
+
+
 def select_final_picks(ranked_candidates: list, max_picks: int = 3) -> list:
     """Recebe um pool ja ranqueado (saida de rank_all_candidates) e aplica
     o corte final: no maximo 1 pick por GRUPO DE CORRELACAO (nao
@@ -224,6 +289,37 @@ def select_final_picks(ranked_candidates: list, max_picks: int = 3) -> list:
         c["is_best_pick"] = c is best
 
     return picked
+
+
+def select_final_picks_debug(ranked_eligible: list, max_picks: int = 3) -> tuple:
+    """Mesma logica de select_final_picks(), mas sem o `break` antecipado --
+    todo candidato depois do corte final continua sendo visitado, pra poder
+    ser tagueado com o motivo exato de exclusao (homologacao). Recebe so o
+    pool ELEGIVEL (saida de rank_all_candidates_debug()[0]) -- candidatos
+    ja descartados pelos gates nao sao re-julgados aqui. Retorna
+    (picked, excluded), mesmo `picked`/is_best_pick que select_final_picks()."""
+    picked, excluded, used_groups = [], [], set()
+    for c in ranked_eligible:
+        group = correlation_group(c["market_type"])
+        if len(picked) >= max_picks:
+            excluded.append({**c, "exclude_reason": "fora_do_top_n"})
+        elif group in used_groups:
+            winner = next(p for p in picked if correlation_group(p["market_type"]) == group)
+            excluded.append({**c, "exclude_reason": f"correlacionado_com:{winner['market_type']}"})
+        else:
+            picked.append(c)
+            used_groups.add(group)
+
+    if not picked:
+        return [], excluded
+
+    non_high_risk = [c for c in picked if c.get("risco") != "ALTO"]
+    best_pool = non_high_risk or picked
+    best = max(best_pool, key=lambda c: c["final_score"])
+    for c in picked:
+        c["is_best_pick"] = c is best
+
+    return picked, excluded
 
 
 def rank_market_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG) -> list:
