@@ -9,7 +9,7 @@ from services.pick_engine.ranking import rank_market_candidates, rank_all_candid
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG, DICA_CONFIG
 from services.pick_engine import (
     context_model, team_profile_model, competition_profile,
-    probability_model, variance_model, team_strength,
+    probability_model, variance_model, team_strength, data_validation,
 )
 
 __all__ = [
@@ -27,4 +27,5 @@ __all__ = [
     "probability_model",
     "variance_model",
     "team_strength",
+    "data_validation",
 ]

@@ -51,6 +51,7 @@ from services.pick_engine import analyze_fixture_markets, rank_all_candidates, s
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
+from services.pick_engine import data_validation as dv
 
 _LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "vip_engine_shadow.jsonl")
 
@@ -113,12 +114,36 @@ def _process_fixture(
 
     last10_home = _load_history(match_stats, home_team_id, season, league_id)
     last10_away = _load_history(match_stats, away_team_id, season, league_id)
-    if not last10_home or not last10_away:
-        print(f"[VIP_SHADOW] Fixture {fixture_id}: sem historico suficiente, pulando.")
+
+    # Data Validation Engine -- roda ANTES de qualquer analise de mercado.
+    # Historico insuficiente de qualquer um dos dois times aborta a
+    # fixture inteira (nao so um pick isolado); os outros validadores
+    # (cobertura/integridade) sao informativos e entram no Data Quality
+    # Score, sem bloquear sozinhos.
+    hist_home_val = dv.validate_history(last10_home)
+    hist_away_val = dv.validate_history(last10_away)
+    if not hist_home_val["passed"] or not hist_away_val["passed"]:
+        print(f"[VIP_SHADOW] Fixture {fixture_id}: historico insuficiente "
+              f"(casa={hist_home_val['amostra']}j, fora={hist_away_val['amostra']}j), pulando.")
         return None
 
     context_data, matchup, team_strength_data = _build_signals(
         last10_home, last10_away, home_team_id, away_team_id, league_id
+    )
+
+    coverage_val = dv.validate_coverage(
+        structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+        context_data=context_data,
+    )
+    integrity_home = dv.validate_statistics_integrity(last10_home)
+    integrity_away = dv.validate_statistics_integrity(last10_away)
+    integrity_val = {
+        "valid": integrity_home["valid"] and integrity_away["valid"],
+        "issue_count": integrity_home["issue_count"] + integrity_away["issue_count"],
+        "matches_checked": integrity_home["matches_checked"] + integrity_away["matches_checked"],
+    }
+    quality = dv.data_quality_score(
+        {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val, integrity_val,
     )
 
     candidates = analyze_fixture_markets(
@@ -136,6 +161,7 @@ def _process_fixture(
         "away_team": away_team_name,
         "league_id": league_id,
         "match_datetime": match_date.isoformat() if match_date else None,
+        "data_quality": quality,
         "ai_pick": ai_pick,
         "engine_best_pick": {
             "market_name":  engine_best["market_name"],
