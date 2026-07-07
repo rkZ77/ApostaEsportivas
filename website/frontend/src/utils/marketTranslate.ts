@@ -47,6 +47,8 @@ const MARKET_PT: Record<string, string> = {
   'anytime goalscorer': 'Marcar a Qualquer Tempo',
   'result': 'Resultado',
   'home/away': '1X2',
+  'to qualify': 'Classificação',
+  'to qualify - extra time': 'Classificação (Prorrogação)',
 }
 
 export function translateMarket(m?: string): string {
@@ -57,4 +59,20 @@ export function translateMarket(m?: string): string {
     if (key.includes(k)) return v
   }
   return m
+}
+
+const LINE_PT: Record<string, string> = {
+  'home': 'Casa',
+  'away': 'Visitante',
+  'draw': 'Empate',
+  'yes': 'Sim',
+  'no': 'Não',
+}
+
+// Só traduz quando a linha inteira é uma palavra conhecida (ex.: "Away").
+// Linhas numéricas/handicap (ex.: "Over 2.5") permanecem como estão.
+export function translateLine(line?: string): string {
+  if (!line) return ''
+  const key = line.trim().toLowerCase()
+  return LINE_PT[key] ?? line
 }

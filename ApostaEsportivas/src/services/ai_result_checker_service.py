@@ -137,6 +137,10 @@ class AIResultCheckerService:
         if any(w in name for w in dc_kws):
             return "double_chance"
 
+        # Classificação (mata-mata) — quem avança de fase (90min + prorrogação + pênaltis)
+        if any(w in name for w in ["classificaç", "classificacao", "to qualify", "qualify", "passagem de fase"]):
+            return "to_qualify"
+
         # Resultado / 1X2
         if any(w in name for w in ["resultado", "1x2", "vencedor", "moneyline",
                                     "match winner", "full time result"]):
@@ -375,6 +379,21 @@ class AIResultCheckerService:
                 result, factor = ("RED", Decimal("-1")) if both else ("GREEN", Decimal("1"))
             else:
                 return (None, Decimal("0"))  # linha BTTS não reconhecida → não resolve
+
+        elif mt == "to_qualify":
+            # Lado vem do campo line ("Casa"/"Visitante"/"Home"/"Away"), não do nome do mercado.
+            # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis —
+            # essa informação não é capturada em match_statistics hoje, então não arriscamos
+            # um GREEN/RED errado e deixamos pendente para conferência manual.
+            side_line = (str(line) or "").strip().lower()
+            if hg == ag:
+                return (None, Decimal("0"))
+            if side_line in ("casa", "home", "mandante"):
+                result, factor = ("GREEN", Decimal("1")) if hg > ag else ("RED", Decimal("-1"))
+            elif side_line in ("visitante", "away", "fora"):
+                result, factor = ("GREEN", Decimal("1")) if ag > hg else ("RED", Decimal("-1"))
+            else:
+                return (None, Decimal("0"))
 
         elif mt in ("result_1x2", "double_chance"):
             result, factor = self.evaluate_result_1x2(hg, ag, line, market)

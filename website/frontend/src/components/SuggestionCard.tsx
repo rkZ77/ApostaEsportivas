@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
-import { translateMarket } from '../utils/marketTranslate'
+import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { getResultStyle } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -299,7 +299,7 @@ export default function SuggestionCard({
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <span className="font-semibold text-zinc-300">{translateMarket(s.market)}</span>
-          {s.line && <><span>·</span><span>{s.line}</span></>}
+          {s.line && <><span>·</span><span>{translateLine(s.line)}</span></>}
         </div>
       </div>
 
