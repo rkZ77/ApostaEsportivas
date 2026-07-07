@@ -83,7 +83,7 @@ class TeamPromptBuilder:
         em qualquer pipeline que receba jogos da Copa do Mundo.
         """
         phase = _wc_phase(match_date)
-        phase_header = f"{'='*68}\nCOPA DO MUNDO 2026 — {phase}\n{'='*68}\n"
+        phase_header = f"{'='*68}\nCOPA DO MUNDO 2026 · {phase}\n{'='*68}\n"
         teams_section = self._format_teams_section(home_profile, away_profile)
         h2h_section = self._format_head_to_head(
             home_profile["team_id"],
@@ -110,13 +110,13 @@ class TeamPromptBuilder:
         group_section = ""
         if home_st:
             group_section = (
-                f"\nCLASSIFICAÇÃO — {home_st['group']}:\n"
+                f"\nCLASSIFICAÇÃO · {home_st['group']}:\n"
                 + self._format_group_table(home_st["group"], home_profile["team_name"])
             )
 
         tendencias = self._format_league_tendencias(league_id=1, limit=15)
         base = (
-            f"COPA DO MUNDO 2026 — {phase}\n"
+            f"COPA DO MUNDO 2026 · {phase}\n"
             f"{'─'*60}\n"
             f"{home_text}\n"
             f"{'─'*60}\n"
@@ -167,7 +167,7 @@ class TeamPromptBuilder:
         weighted_cc = quality.get("weighted_corners_against", "N/A")
         amostra_ok = quality.get("amostra_suficiente_para_alta_confianca")
         amostra_line = "" if amostra_ok is None else (
-            "" if amostra_ok else "  AMOSTRA PEQUENA — nao eleve confianca acima de MODERADO.\n"
+            "" if amostra_ok else "  AMOSTRA PEQUENA · nao eleve confianca acima de MODERADO.\n"
         )
 
         return (
@@ -301,7 +301,7 @@ ANÁLISE DETALHADA DAS SELEÇÕES
         if standing:
             group_table = self._format_group_table(standing["group"], profile["team_name"])
             standing_text = (
-                f"{standing['group']} — {standing['rank']}º lugar | "
+                f"{standing['group']} · {standing['rank']}º lugar | "
                 f"{standing['points']}pts | "
                 f"{standing['played']}J {standing['win']}V {standing['draw']}E {standing['lose']}D | "
                 f"GF{standing['goals_for']} GA{standing['goals_against']} GD{standing['goals_diff']:+d} | "
@@ -363,7 +363,7 @@ ANÁLISE DETALHADA DAS SELEÇÕES
                 grupo = quality.get("amostra_grupo_maior_peso", {})
                 q_lines.append(
                     f"  AMOSTRA PEQUENA (total={quality.get('amostra_total','?')}j, "
-                    f"grupo de maior peso={grupo.get('tipo','?')} com {grupo.get('jogos','?')}j) — "
+                    f"grupo de maior peso={grupo.get('tipo','?')} com {grupo.get('jogos','?')}j) · "
                     f"nao sustenta confianca alta, declare limitacao."
                 )
             quality_text = "\n".join(q_lines)

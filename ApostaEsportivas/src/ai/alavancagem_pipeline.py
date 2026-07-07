@@ -1,5 +1,5 @@
 """
-ALAVANCAGEM — Pipeline multi-liga
+ALAVANCAGEM · Pipeline multi-liga
 Objetivo: 1 pick diario (simples, dupla ou tripla) com odd combinada 1.45-1.55.
 Busca mercados de qualquer liga disponivel no dia.
 Exclusivo VIP.
@@ -28,7 +28,7 @@ _performance_svc = AIPerformanceService()
 load_dotenv(find_dotenv())
 
 AI_MODEL_NAME      = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
-WC_LEAGUE_ID       = 1          # Copa do Mundo — mantido para enriquecimento de contexto
+WC_LEAGUE_ID       = 1          # Copa do Mundo · mantido para enriquecimento de contexto
 ODD_COMBINED_MIN   = 1.45       # odd combinada mínima (produto final)
 ODD_COMBINED_MAX   = 1.55       # odd combinada máxima (produto final)
 ODD_TARGET         = 1.50       # alvo ideal
@@ -76,11 +76,13 @@ Consistencia acima de tudo: 9/10 @ 1.12 > 6/10 @ 1.45. Nenhum pick sem confidenc
 REGRA CRITICA: odd_combined DEVE estar em [{odd_min},{odd_max}]. Nenhuma excecao.
   Calcule o produto EXPLICITAMENTE antes de emitir o JSON: odd_combined = odd_1 × odd_2 (× odd_3).
   Se o produto < {odd_min} ou > {odd_max}: descarte e tente outro combo, ou emita no_bet.
-  Emitir odd_combined diferente do produto real e PROIBIDO — o sistema recalcula e rejeita.
+  Emitir odd_combined diferente do produto real e PROIBIDO · o sistema recalcula e rejeita.
 
 REGRA DIVERSIFICACAO (dupla/tripla): picks com mercado IDENTICO sao PROIBIDOS e rejeitados automaticamente.
   Exemplos invalidos: "Total de Gols Casa Over 1.5" + "Total de Gols Casa Over 1.5" (mesmo mercado).
   Combine mercados diferentes: ex. gols totais + escanteios, ou gols casa + resultado, etc.
+
+ESTILO: PROIBIDO usar travessao (—) em qualquer campo de texto do JSON (reasoning). Use ponto, virgula, dois-pontos ou "·" no lugar.
 
 Realize toda a analise INTERNAMENTE. Proibido texto fora do JSON.
 SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
@@ -88,7 +90,7 @@ SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM Copa do Mundo — pick mais seguro do dia para alavancar banca.
+ALAVANCAGEM Copa do Mundo · pick mais seguro do dia para alavancar banca.
 ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
 --- PICKS ANTERIORES (calibracao por time) ---
@@ -121,12 +123,12 @@ CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e t
 --- FIXTURES COPA DO MUNDO + DADOS ---
 {fixtures_formatados}
 
-SEDE NEUTRA: esta pipeline e 100% Copa do Mundo — nao existe vantagem de mando para nenhuma
+SEDE NEUTRA: esta pipeline e 100% Copa do Mundo · nao existe vantagem de mando para nenhuma
 selecao em nenhum jogo. Proibido usar "mandante"/"visitante"/"em casa"/"fora" como justificativa
 no reasoning. Se os blocos de dados vierem nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em
 vez de CASA/FORA, use os dados totais de cada selecao (mando misto).
-QUALIDADE: use "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/"weighted_corners_against" (Copa>Eliminatorias>Amistoso) — ataque E defesa, ambos ja ponderados. Declare ponderacao no reasoning. Se "amostra_suficiente_para_alta_confianca"=false, declare limitacao e nao eleve Q acima de MODERADO.
-FEITOS vs CEDIDOS (conceitos DIFERENTES — nunca apresente lado a lado sem combinar):
+QUALIDADE: use "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/"weighted_corners_against" (Copa>Eliminatorias>Amistoso) · ataque E defesa, ambos ja ponderados. Declare ponderacao no reasoning. Se "amostra_suficiente_para_alta_confianca"=false, declare limitacao e nao eleve Q acima de MODERADO.
+FEITOS vs CEDIDOS (conceitos DIFERENTES · nunca apresente lado a lado sem combinar):
   Formula obrigatoria: valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
   Calcule uma unica vez; nunca troque o numero depois no reasoning ("recalibrando"/"corrigindo").
   Divergencia feitos vs cedidos >15% → declare e reduza Confirmadores 1 nivel.
@@ -305,7 +307,7 @@ _ODDS_MAX_ITEMS = 80  # limite de itens de odds por fixture enviados à IA
 
 
 # ============================================================
-# PERFIL DE SELEÇÕES (Copa) — versão compacta para alavancagem
+# PERFIL DE SELEÇÕES (Copa) · versão compacta para alavancagem
 # ============================================================
 def _get_copa_profiles_text(fixture_id: int, home_team_id: int, away_team_id: int, season: int) -> str:
     try:
@@ -398,8 +400,8 @@ def run_alavancagem_llm(fixtures: list[dict], preloaded_contexts: dict | None = 
             break
         except RateLimitError:
             if attempt == MAX_RETRIES:
-                raise Exception(f"[ALAVANCAGEM] Rate limit após {MAX_RETRIES} tentativas — abortando.")
-            print(f"[ALAVANCAGEM] Rate limit (tentativa {attempt}/{MAX_RETRIES}) — aguardando {RATE_LIMIT_WAIT}s...")
+                raise Exception(f"[ALAVANCAGEM] Rate limit após {MAX_RETRIES} tentativas · abortando.")
+            print(f"[ALAVANCAGEM] Rate limit (tentativa {attempt}/{MAX_RETRIES}) · aguardando {RATE_LIMIT_WAIT}s...")
             time.sleep(RATE_LIMIT_WAIT)
         except Exception as e:
             raise Exception(f"[ALAVANCAGEM] Erro na API Anthropic: {e}")
@@ -430,14 +432,14 @@ def save_pick(result: dict) -> bool:
 
     # Valida coerência mercado↔reasoning
     if not is_market_reasoning_coherent(p1.get("market", ""), p1.get("reasoning", "")):
-        print(f"[ALAVANCAGEM] REJEITADO pick_1 — reasoning incoerente com mercado '{p1.get('market')}'")
+        print(f"[ALAVANCAGEM] REJEITADO pick_1 · reasoning incoerente com mercado '{p1.get('market')}'")
         return False
     if p2 and not is_market_reasoning_coherent(p2.get("market", ""), p2.get("reasoning", "")):
-        print(f"[ALAVANCAGEM] pick_2 removido — reasoning incoerente. Downgrade para simples.")
+        print(f"[ALAVANCAGEM] pick_2 removido · reasoning incoerente. Downgrade para simples.")
         p2 = None; p3 = None; tipo = "simples"
         result["odd_combined"] = p1.get("odd", result["odd_combined"])
     if p3 and not is_market_reasoning_coherent(p3.get("market", ""), p3.get("reasoning", "")):
-        print(f"[ALAVANCAGEM] pick_3 removido — reasoning incoerente. Downgrade para dupla.")
+        print(f"[ALAVANCAGEM] pick_3 removido · reasoning incoerente. Downgrade para dupla.")
         p3 = None
         tipo = "dupla"
 
@@ -448,12 +450,12 @@ def save_pick(result: dict) -> bool:
     odd_combined_real = round(legs_odds[0] * (legs_odds[1] if len(legs_odds) > 1 else 1) * (legs_odds[2] if len(legs_odds) > 2 else 1), 4)
 
     if abs(odd_combined_real - float(result["odd_combined"])) > 0.05:
-        print(f"[ALAVANCAGEM] odd_combined declarada={result['odd_combined']:.2f} ≠ produto real={odd_combined_real:.2f} — usando produto real.")
+        print(f"[ALAVANCAGEM] odd_combined declarada={result['odd_combined']:.2f} ≠ produto real={odd_combined_real:.2f} · usando produto real.")
     odd_combined = odd_combined_real
 
     # Validação hard: rejeita se odd_combined real fora da faixa permitida
     if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
-        print(f"[ALAVANCAGEM] REJEITADO — odd_combined real={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
+        print(f"[ALAVANCAGEM] REJEITADO · odd_combined real={odd_combined:.2f} fora da faixa {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX}.")
         return False
 
     # Rejeita dupla/tripla com mercados idênticos (picks correlacionados sem valor)
@@ -461,7 +463,7 @@ def save_pick(result: dict) -> bool:
     if p2: markets.append(p2.get("market", "").lower())
     if p3: markets.append(p3.get("market", "").lower())
     if len(markets) > 1 and len(set(markets)) == 1:
-        print(f"[ALAVANCAGEM] REJEITADO — todas as legs com mercado idêntico: '{markets[0]}'. Picks correlacionados.")
+        print(f"[ALAVANCAGEM] REJEITADO · todas as legs com mercado idêntico: '{markets[0]}'. Picks correlacionados.")
         return False
 
     confidence_media = float(result.get("confidence_media", p1["confidence"]))
@@ -576,10 +578,10 @@ def run_alavancagem_pipeline() -> dict | None:
 
         odd_combined = float(result.get("odd_combined", 0))
         if ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX:
-            break  # IA acertou a faixa — prossegue
-        print(f"[ALAVANCAGEM] Tentativa {attempt}: odd_combined={odd_combined:.2f} fora de {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX} — retentando...")
+            break  # IA acertou a faixa · prossegue
+        print(f"[ALAVANCAGEM] Tentativa {attempt}: odd_combined={odd_combined:.2f} fora de {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX} · retentando...")
         if attempt == MAX_PICK_RETRIES + 1:
-            print(f"[ALAVANCAGEM] IA não convergiu para faixa válida após {attempt} tentativas — abortando.")
+            print(f"[ALAVANCAGEM] IA não convergiu para faixa válida após {attempt} tentativas · abortando.")
             return None
 
     saved = save_pick(result)
