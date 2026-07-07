@@ -50,6 +50,7 @@ from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
+from services.pick_engine import team_strength as ts
 
 _LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "vip_engine_shadow.jsonl")
 
@@ -68,7 +69,8 @@ def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_
         last10_home, last10_away, home_team_id, away_team_id,
         None, None, league_id,
     )
-    return context_data, matchup
+    team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+    return context_data, matchup, team_strength_data
 
 
 def _fetch_recent_vip_picks(cur, dias: int) -> list[dict]:
@@ -115,11 +117,13 @@ def _process_fixture(
         print(f"[VIP_SHADOW] Fixture {fixture_id}: sem historico suficiente, pulando.")
         return None
 
-    context_data, matchup = _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id)
+    context_data, matchup, team_strength_data = _build_signals(
+        last10_home, last10_away, home_team_id, away_team_id, league_id
+    )
 
     candidates = analyze_fixture_markets(
         structured_odds, last10_home, last10_away,
-        context_data=context_data, matchup_data=matchup,
+        context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
     )
     engine_picks = rank_market_candidates(candidates)
     engine_best = next((p for p in engine_picks if p.get("is_best_pick")), None)
@@ -141,7 +145,11 @@ def _process_fixture(
             "taxa_real":    engine_best["taxa_real"],
             "risco":        engine_best["risco"],
             "market_type":  engine_best["market_type"],
+            "variance_penalty": engine_best.get("variance_penalty"),
+            "poisson_probability": engine_best.get("poisson_probability"),
+            "model_fit_adjustment": engine_best.get("model_fit_adjustment"),
         } if engine_best else None,
+        "team_strength": team_strength_data,
         "engine_candidates_count": len(candidates),
         "engine_eligible_count": len(engine_picks),
         "reasoning_preview": explain(engine_best)[:200] if engine_best else None,

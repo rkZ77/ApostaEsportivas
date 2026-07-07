@@ -49,6 +49,25 @@ def build_explanation(candidate: dict) -> dict:
         note = f"Histórico real do mercado indica ajuste de {cal_delta*100:+.1f}% no confidence"
         (negative_factors if cal_delta < 0 else positive_factors).append(note)
 
+    var_stats = candidate.get("variance")
+    v_penalty = candidate.get("variance_penalty") or 0
+    if v_penalty:
+        negative_factors.append(
+            f"Dispersão alta no histórico (coeficiente de variação {var_stats['coefficient_of_variation']:.2f}) "
+            f"— resultado menos previsível mesmo com a taxa observada"
+        )
+
+    poisson_prob = candidate.get("poisson_probability")
+    if poisson_prob is not None:
+        note = f"Modelo Poisson estima {poisson_prob*100:.1f}% de probabilidade para esta linha"
+        m_adj = candidate.get("model_fit_adjustment") or 0
+        if m_adj > 0:
+            positive_factors.append(f"{note} — concorda com a taxa empírica")
+        elif m_adj < 0:
+            negative_factors.append(f"{note} — diverge da taxa empírica, desconfie")
+        else:
+            positive_factors.append(note)
+
     ctx = candidate.get("context_raw")
     if ctx:
         rh, ra = ctx.get("rest_days_home"), ctx.get("rest_days_away")

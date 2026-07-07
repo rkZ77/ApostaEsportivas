@@ -7,7 +7,10 @@ modulos existentes."""
 from services.pick_engine.orchestrator import analyze_fixture_markets, explain
 from services.pick_engine.ranking import rank_market_candidates
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG, DICA_CONFIG
-from services.pick_engine import context_model, team_profile_model, competition_profile
+from services.pick_engine import (
+    context_model, team_profile_model, competition_profile,
+    probability_model, variance_model, team_strength,
+)
 
 __all__ = [
     "analyze_fixture_markets",
@@ -19,4 +22,7 @@ __all__ = [
     "context_model",
     "team_profile_model",
     "competition_profile",
+    "probability_model",
+    "variance_model",
+    "team_strength",
 ]

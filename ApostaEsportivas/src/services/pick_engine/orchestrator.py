@@ -4,7 +4,7 @@ shadow_consensus.py, sem influenciar o calculo de picks aqui)."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
-    context_model, team_profile_model, news_model,
+    context_model, team_profile_model, news_model, probability_model, variance_model,
 )
 
 
@@ -18,6 +18,7 @@ def analyze_fixture_markets(
     context_data: dict | None = None,
     matchup_data: dict | None = None,
     news_data: dict | None = None,
+    team_strength_data: dict | None = None,
 ) -> list:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
     (classify_market()) disponivel nas odds ja estruturadas
@@ -30,10 +31,23 @@ def analyze_fixture_markets(
     1o/2o tempo).
 
     `context_data` (saida de context_model.build_context), `matchup_data`
-    (saida de team_profile_model.compare_matchup) e `news_data` (saida de
-    news_model.injury_signal) sao opcionais -- Fase 1 continua funcionando
-    identica sem eles (ranking.final_score() so aplica os pesos de
-    Contexto/Perfil/Noticias quando os campos existem no candidato).
+    (saida de team_profile_model.compare_matchup), `news_data` (saida de
+    news_model.injury_signal) e `team_strength_data` (saida de
+    team_strength.compare_team_strength) sao opcionais -- Fase 1 continua
+    funcionando identica sem eles (ranking.final_score() so aplica os pesos
+    de Contexto/Perfil/Noticias quando os campos existem no candidato;
+    team_strength_data e so informativo por enquanto, anexado a cada
+    candidato mas ainda nao pesado no confidence -- ver Fase 2b).
+
+    Fase 2b (Statistical Engine): pra familias com decomposicao feitos/
+    cedidos (goals/corners/cards, ver stats_model._SCORED_CONCEDED_FIELDS),
+    alem da taxa empirica bruta agora tambem calcula P(linha) via Poisson
+    (probability_model, lambda = expected_value_convergence) e usa a
+    concordancia entre as duas estimativas como termo M no confidence
+    (confidence.model_fit_adjustment); e a variancia/coeficiente de
+    variacao do historico bruto como termo V (variance_model.variance_penalty)
+    -- mercados com dispersao alta (mesma media, resultados muito
+    irregulares) perdem confidence mesmo com taxa boa.
 
     Retorna candidatos prontos para ranking.rank_market_candidates().
     """
@@ -101,9 +115,32 @@ def analyze_fixture_markets(
         conf = confidence.confidence_score(C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
 
         cal_delta = calibration.calibration_adjustment(market_type, calibration_data)
-        if cal_delta:
+
+        # V (variancia): mesma media, dispersao real -> menos previsivel,
+        # perde confidence mesmo com taxa boa (nao aplica a familias sem
+        # leitura de valor bruto, ex. btts/outcome -- variance_stats retorna
+        # None e a penalidade fica 0).
+        var_stats = variance_model.variance_stats(family, scope, last10_home, last10_away)
+        v_penalty = variance_model.variance_penalty(
+            var_stats["coefficient_of_variation"] if var_stats else None
+        )
+
+        # M (model-fit): concordancia entre a taxa empirica (contagem direta)
+        # e a probabilidade do modelo Poisson pra MESMA linha -- so existe
+        # pra familias com decomposicao feitos/cedidos (goals/corners/cards).
+        poisson_prob = None
+        model_fit_diff = None
+        if convergence and probability_model.is_poisson_family(family) and best_line["_line_val"] is not None:
+            poisson_prob = probability_model.poisson_prob_for_line(
+                convergence["expected_value"], best_line["_line_val"], best_line["_direction"]
+            )
+            model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
+        m_adjustment = confidence.model_fit_adjustment(model_fit_diff)
+
+        total_delta = (cal_delta or 0) - v_penalty + m_adjustment
+        if total_delta:
             conf = round(
-                min(max(conf + cal_delta, config.confidence_min_clamp), config.confidence_max_clamp), 4
+                min(max(conf + total_delta, config.confidence_min_clamp), config.confidence_max_clamp), 4
             )
 
         candidates.append({
@@ -113,12 +150,18 @@ def analyze_fixture_markets(
             "risco": confidence.risco_from_confidence(conf, config),
             "convergence": convergence,
             "calibration_delta": cal_delta,
+            "variance": var_stats,
+            "variance_penalty": v_penalty,
+            "poisson_probability": poisson_prob,
+            "model_fit_diff": model_fit_diff,
+            "model_fit_adjustment": m_adjustment,
             "context_score": ctx_score,
             "context_raw": context_data,
             "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
             "matchup_raw": matchup_data.get(market_type) if matchup_data else None,
             "news_score": news_score,
             "news_raw": news_data,
+            "team_strength": team_strength_data,
         })
 
     return candidates
