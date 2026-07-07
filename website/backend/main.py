@@ -614,14 +614,17 @@ def run_migrations():
         _scheduler = BackgroundScheduler()
         _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
         _scheduler.add_job(_job_resolve_picks, "interval", minutes=5, id="resolve_picks")
-        _scheduler.add_job(
-            _job_run_daily_pipeline,
-            CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
-            id="daily_pipeline",
-            misfire_grace_time=3600,
-        )
+        # DESATIVADO TEMPORARIAMENTE (2026-07-07) — pipeline diario de geracao de picks
+        # pausado a pedido enquanto o motor de decisao esta sendo revisado. Reativar
+        # descomentando o add_job abaixo quando o pipeline puder rodar novamente.
+        # _scheduler.add_job(
+        #     _job_run_daily_pipeline,
+        #     CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
+        #     id="daily_pipeline",
+        #     misfire_grace_time=3600,
+        # )
         _scheduler.start()
-        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | pipeline diário 00:10")
+        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | pipeline diário DESATIVADO")
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
 
