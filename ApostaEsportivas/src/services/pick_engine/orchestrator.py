@@ -7,6 +7,30 @@ from services.pick_engine import (
     context_model, team_profile_model, news_model, probability_model, variance_model,
 )
 
+_OPPOSITE_VALUE = {
+    "over": "under", "under": "over",
+    "yes": "no", "no": "yes", "sim": "não", "não": "sim", "nao": "sim",
+}
+
+
+def _find_sibling(entry: dict, entries: list) -> dict | None:
+    """Acha a entrada complementar (Over/Under ou Yes/No do MESMO
+    market_id+line) pra calculo de probabilidade no-vig -- None se nao
+    houver par (mercado sem contraparte, ex.: handicap/outcome de 3 vias)."""
+    opposite = _OPPOSITE_VALUE.get((entry.get("value") or "").strip().lower())
+    if not opposite:
+        return None
+    for other in entries:
+        if other is entry:
+            continue
+        if (
+            other.get("market_id") == entry.get("market_id")
+            and other.get("line") == entry.get("line")
+            and (other.get("value") or "").strip().lower() == opposite
+        ):
+            return other
+    return None
+
 
 def analyze_fixture_markets(
     structured_odds: list,
@@ -80,8 +104,16 @@ def analyze_fixture_markets(
             )
             if not taxa or taxa["taxa_ponderada"] is None:
                 continue
+            # No-vig quando o par complementar (Over/Under, Yes/No) tiver
+            # 2+ bookmakers dos dois lados -- probabilidade real de mercado
+            # sem a margem da casa embutida, mais precisa que 1/odd puro
+            # (que ja tinha essa peca pronta em market_model desde a Fase 1
+            # e nunca era chamada). Cai pra implied_prob automaticamente
+            # via resolve_prob_baseline quando nao ha par ou nao ha consenso.
+            sibling = _find_sibling(m, entries)
+            prob_baseline = market_model.resolve_prob_baseline(m, sibling)
             ev_edge = market_model.edge_and_ev(
-                taxa["taxa_ponderada"], best_odd, market_model.implied_prob(best_odd)
+                taxa["taxa_ponderada"], best_odd, prob_baseline["prob"]
             )
             try:
                 line_val = float(m.get("line")) if family != "btts" else None
@@ -100,6 +132,7 @@ def analyze_fixture_markets(
                 "amostra":          taxa["amostra"],
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
+                "prob_baseline_source": prob_baseline["source"],
                 "_direction":       (m.get("value") or "").strip().lower(),
                 "_line_val":        line_val,
                 **ev_edge,
