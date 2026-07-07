@@ -123,6 +123,9 @@ _MARKET_MAP = {
     "away team total cards":                "Total de Cartões Visitante",
     "home team cards":                      "Total de Cartões Casa",
     "away team cards":                      "Total de Cartões Visitante",
+    # Classificação (mata-mata)
+    "to qualify":                           "Classificação",
+    "to qualify - extra time":              "Classificação (Prorrogação)",
 }
 
 # Padrões para mercados com nome de time: "[Time] - Goals Over/Under" → "[Time] - Gols Mais/Menos"

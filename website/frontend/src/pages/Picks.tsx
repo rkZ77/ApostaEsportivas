@@ -108,6 +108,8 @@ const MARKET_PT: Record<string, string> = {
   'anytime goalscorer': 'Marcar a Qualquer Tempo',
   'result': 'Resultado',
   'home/away': '1X2',
+  'to qualify': 'Classificação',
+  'to qualify - extra time': 'Classificação (Prorrogação)',
 }
 const translateMarket = (m?: string): string => {
   if (!m) return ''
@@ -118,6 +120,12 @@ const translateMarket = (m?: string): string => {
     if (key.includes(k)) return v
   }
   return m
+}
+const LINE_PT: Record<string, string> = { home: 'Casa', away: 'Visitante', draw: 'Empate', yes: 'Sim', no: 'Não' }
+// Só traduz quando a linha inteira é uma palavra conhecida (ex.: "Away"); linhas numéricas/handicap ficam como estão.
+const translateLine = (line?: string): string => {
+  if (!line) return ''
+  return LINE_PT[line.trim().toLowerCase()] ?? line
 }
 
 // Tipos
@@ -890,7 +898,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs">
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{leg.line}</span></>}
+              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
             </div>
           </div>
           )
@@ -1124,7 +1132,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs">
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{leg.line}</span></>}
+              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
               {leg.house && <><span className="text-zinc-600">·</span><span className="text-zinc-500">{leg.house}</span></>}
             </div>
           </div>
@@ -1942,19 +1950,19 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Pick Seguro — visível para todos */}
-              <section>
-                <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
-                {today?.dica_do_dia
-                  ? <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                  : <PickSeguroEmpty />
-                }
-              </section>
+              {/* Pick Seguro — visível para todos; some se não houver dica hoje */}
+              {today?.dica_do_dia && (
+                <section>
+                  <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
+                  <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                </section>
+              )}
 
-              {/* PICKS VIP DO DIA — free vê lock */}
+              {/* PICKS VIP DO DIA — free vê lock; some se vazio pra quem já tem acesso */}
               {(() => {
                 const vips = today?.vip ?? []
                 const pending = vips.filter((s: any) => !s.result)
+                if (canSeeVip && vips.length === 0) return null
                 return (
                   <section>
                     <SectionHeader
@@ -1962,7 +1970,7 @@ export default function Picks() {
                       label="Picks VIP do Dia"
                       badge={canSeeVip && pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
-                    {!canSeeVip ? <VipLockOverlay color="yellow" /> : vips.length > 0 ? (
+                    {!canSeeVip ? <VipLockOverlay color="yellow" /> : (
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
                           {vips.slice(0, 4).map((s: any) => (
@@ -1978,39 +1986,32 @@ export default function Picks() {
                           </button>
                         )}
                       </>
-                    ) : (
-                      <div className="card p-8 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">Picks VIP ainda não gerados.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Os picks saem pela manhã. Volte mais tarde.</p>
+                    )}
+                  </section>
+                )
+              })()}
+
+              {/* Múltipla do Dia — free vê lock; some se vazia pra quem já tem acesso */}
+              {(() => {
+                const multiplas = today?.multiplas ?? []
+                if (canSeeVip && multiplas.length === 0) return null
+                return (
+                  <section>
+                    <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
+                    {!canSeeVip ? <VipLockOverlay color="blue" /> : (
+                      <div className="grid gap-4 md:grid-cols-2">
+                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
                       </div>
                     )}
                   </section>
                 )
               })()}
 
-              {/* Múltipla do Dia — free vê lock */}
-              <section>
-                <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
-                {!canSeeVip ? <VipLockOverlay color="blue" /> : (() => {
-                  const multiplas = today?.multiplas ?? []
-                  return multiplas.length > 0 ? (
-                    <div className="grid gap-4 md:grid-cols-2">
-                      {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
-                    </div>
-                  ) : (
-                    <div className="card p-8 text-center border-dashed">
-                      <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Publicada diariamente até às 12h.</p>
-                    </div>
-                  )
-                })()}
-              </section>
-
-              {/* Alavancagem Copa — free vê lock */}
-              <section>
-                <SectionHeader color="bg-orange-400" label="Alavancagem Copa" />
-                {!canSeeVip ? <VipLockOverlay color="orange" /> : (() => {
-                  return today?.alavancagem ? (
+              {/* Alavancagem Copa — free vê lock; some se não houver pick pra quem já tem acesso */}
+              {(canSeeVip ? !!today?.alavancagem : true) && (
+                <section>
+                  <SectionHeader color="bg-orange-400" label="Alavancagem Copa" />
+                  {!canSeeVip ? <VipLockOverlay color="orange" /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
                         <p className="text-xs text-zinc-400 leading-relaxed">
@@ -2032,14 +2033,9 @@ export default function Picks() {
                         Ver histórico da série
                       </button>
                     </>
-                  ) : (
-                    <div className="card p-8 text-center border-dashed">
-                      <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem ainda não gerado.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Publicado diariamente até às 12h.</p>
-                    </div>
-                  )
-                })()}
-              </section>
+                  )}
+                </section>
+              )}
 
 
             </div>
