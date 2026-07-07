@@ -45,19 +45,24 @@ os.environ["DB_ENV"] = "prod"
 
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
-from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
+from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_all_candidates, select_final_picks, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
+from services.pick_engine import competition_profile as cp
 
 _LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "vip_engine_shadow.jsonl")
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
-    if league_id in NATIONAL_TEAM_LEAGUE_IDS:
+    # Fonte unica de verdade: competition_profile (Prioridade 1 do plano de
+    # refatoracao) -- achado real: este script antes lia
+    # match_stats_service.NATIONAL_TEAM_LEAGUE_IDS diretamente, uma segunda
+    # fonte de verdade fora do Competition Profile Engine.
+    if cp.is_national_team_league(league_id):
         return match_stats.get_last_n_all_competitions(team_id)
     return match_stats.get_all_matches_full(team_id, season, league_id)
 

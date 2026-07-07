@@ -13,6 +13,7 @@ from datetime import datetime
 from utils.db_utils import get_connection
 from services.historical_api_fetcher import HistoricalApiFetcher
 from services.world_cup_squad_service import WorldCupSquadService
+from services.pick_engine.competition_profile import classify_competition_weight_group
 
 
 class NationalTeamProfileService:
@@ -361,12 +362,11 @@ class NationalTeamProfileService:
         return matches
     
     def _classify_competition(self, league_id: int) -> str:
-        """Classifica o tipo de competição pelo league_id."""
-        if league_id == 1:
-            return "Copa do Mundo"
-        if league_id in (31, 32, 33, 34, 35, 36, 37, 38, 39, 882, 780):
-            return "Eliminatórias"
-        return "Amistoso/Outra"
+        """Classifica o tipo de competição pelo league_id. Fonte única:
+        services/pick_engine/competition_profile.py (Prioridade 1 do plano
+        de refatoração — antes essa classificação era mantida em paralelo
+        aqui)."""
+        return classify_competition_weight_group(league_id)
 
     def _calculate_quality_breakdown(self, matches: list, team_id: int) -> dict:
         """

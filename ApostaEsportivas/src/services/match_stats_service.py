@@ -2,21 +2,14 @@ from utils.db_utils import get_connection
 import psycopg2.extras
 from datetime import datetime, date
 from decimal import Decimal
+from services.pick_engine.competition_profile import national_team_league_ids
 
 # Competições de seleções nacionais (API-Football IDs).
 # Para esses torneios, o histórico deve cruzar TODAS as competições
 # (Copa + Eliminatórias + Amistosos) — não só a liga atual.
-NATIONAL_TEAM_LEAGUE_IDS: frozenset = frozenset({
-    1,    # Copa do Mundo FIFA
-    9,    # Copa América
-    10,   # Amistosos Internacionais
-    4,    # Eurocopa (UEFA)
-    14,   # Copa Africana de Nações (AFCON)
-    23,   # Copa Asiática (AFC)
-    11,   # Eliminatórias Copa América (CONMEBOL)
-    31, 32, 33, 34, 35, 36, 37, 38, 39,  # Eliminatórias Copa do Mundo
-    882, 780,                              # Outros qualificatórios
-})
+# Fonte única: services/pick_engine/competition_profile.py (Prioridade 1 do
+# plano de refatoração — antes essa lista era mantida em paralelo aqui).
+NATIONAL_TEAM_LEAGUE_IDS: frozenset = national_team_league_ids()
 
 
 ###############################################################################

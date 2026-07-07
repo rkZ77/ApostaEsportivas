@@ -11,6 +11,7 @@ from anthropic import Anthropic, RateLimitError
 
 from utils.db_utils import get_connection
 from services.odds_service import OddsService
+from services.pick_engine.competition_profile import neutral_venue_league_ids
 from ai.prompts import get_prompt, SYSTEM_PROMPT, REGRAS_BASE_DYNAMIC
 from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MAP
 
@@ -19,7 +20,9 @@ load_dotenv(find_dotenv())
 # Competições disputadas em sede neutra (nenhuma seleção/time tem vantagem de mando real).
 # Usado para trocar os rótulos "CASA"/"FORA" nos blocos de dados por nomes dos times —
 # evita que a IA trate mando administrativo como se fosse vantagem de campo real.
-NEUTRAL_VENUE_LEAGUES = {1}  # Copa do Mundo FIFA
+# Fonte única: services/pick_engine/competition_profile.py (Prioridade 1 do
+# plano de refatoração — antes essa lista era mantida em paralelo aqui).
+NEUTRAL_VENUE_LEAGUES = neutral_venue_league_ids()
 
 
 # ============================================================
