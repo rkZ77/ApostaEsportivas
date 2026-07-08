@@ -298,9 +298,10 @@ class OddsCollectorService:
 
                         # Guarda o value completo da API (ex: "Over 1.5", "Under 0.5").
                         # Assim cada linha é um registro único pelo conflict key (market_row_id, value_name).
-                        # line_value vem só do campo handicap quando disponível.
+                        # line_value vem só do campo handicap quando disponível -- coluna e' numeric,
+                        # None vira NULL; string vazia quebra o insert (regressao ja documentada antes).
                         value_name = raw_value
-                        line_value = handicap if handicap else ""
+                        line_value = handicap if handicap else None
 
                         values_batch.append((
                             market_row_id,
