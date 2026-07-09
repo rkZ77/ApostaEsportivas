@@ -240,9 +240,9 @@ export default function Login() {
               </p>
               <p className="text-zinc-400 mt-2">
                 Se não foi você,{' '}
-                <a href="/reset-password" className="text-yellow-400 underline hover:text-yellow-300">
+                <Link to="/forgot-password" className="text-yellow-400 underline hover:text-yellow-300">
                   redefina sua senha
-                </a>.
+                </Link>.
               </p>
             </div>
           )}
