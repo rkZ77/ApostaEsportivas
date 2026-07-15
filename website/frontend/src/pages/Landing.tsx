@@ -113,7 +113,7 @@ function SocialProofStats() {
 // 3 passos — jornada do usuário
 function ThreeSteps() {
   return (
-    <section className="py-16 bg-black border-b border-zinc-800/60">
+    <section id="como-funciona" className="py-16 bg-black border-b border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
         <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
         <div className="grid md:grid-cols-3 gap-5">
@@ -748,15 +748,6 @@ export default function Landing() {
                       <div className="h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full" style={{ width: '74%' }} />
                     </div>
                   </div>
-                  {/* Stats rápidas */}
-                  <div className="grid grid-cols-3 gap-2 text-center">
-                    {[['68%', 'Win Rate'], ['+47u', 'Lucro Mês'], ['1.82', 'Odd Média']].map(([v, l]) => (
-                      <div key={l} className="bg-zinc-900 rounded-xl p-2.5">
-                        <div className="text-sm font-black text-green-400">{v}</div>
-                        <div className="text-[10px] text-zinc-600 mt-0.5">{l}</div>
-                      </div>
-                    ))}
-                  </div>
                   {/* Múltiplas de hoje */}
                   <div className="bg-zinc-900 border border-blue-400/20 rounded-xl p-3">
                     <div className="flex items-center justify-between mb-1.5">
@@ -788,7 +779,7 @@ export default function Landing() {
 
       <LeaderboardTeaser />
 
-      <section id="como-funciona" className="py-24">
+      <section className="py-24">
         <div className="max-w-5xl mx-auto px-4">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             {/* Texto */}
@@ -904,7 +895,7 @@ export default function Landing() {
             <p className="text-xs text-zinc-500 font-medium mb-4">Mercados analisados</p>
             <div className="flex flex-wrap gap-2">
               {['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios',
-                'Cartões', 'Gols 1º Tempo', 'Múltiplas', 'Alavancagem'].map(m => (
+                'Cartões', 'Gols 1º Tempo'].map(m => (
                 <span key={m} className="bg-zinc-800 border border-zinc-700/60 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-lg">
                   {m}
                 </span>
@@ -1037,10 +1028,14 @@ export default function Landing() {
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
-              <h2 className="text-3xl font-black">Copa 2026 ao vivo, cobertura completa</h2>
+              <h2 className="text-3xl font-black">
+                {COPA_ENDED ? 'Copa 2026: cobertura completa do torneio' : 'Copa 2026 ao vivo, cobertura completa'}
+              </h2>
             </div>
             <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-              Do grupo às finais, a IA analisa cada jogo antes de acontecer e entrega os melhores picks do torneio.
+              {COPA_ENDED
+                ? 'Do grupo à final, a IA analisou cada jogo do torneio antes de acontecer e entregou os melhores picks.'
+                : 'Do grupo às finais, a IA analisa cada jogo antes de acontecer e entrega os melhores picks do torneio.'}
             </p>
           </div>
           <div className="grid md:grid-cols-4 gap-4">
