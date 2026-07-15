@@ -191,9 +191,21 @@ class DataCollectorMain:
     def run_new_league(self):
         print("\n========== NOVA LIGA — RESET + COLETA COMPLETA ==========\n")
         self.run_reset()
-        self.run_all()
+        self.run_all(mode="full", wc_mode="full")
 
-    def run_all(self):
+    def run_all(self, mode=None, wc_mode=None, days=None):
+        """
+        mode/wc_mode/days podem ser passados explicitamente (ex: run_new_league)
+        ou controlados via variável de ambiente, pra permitir um backfill pontual
+        sem editar este arquivo (e sem risco de esquecer o "full" ligado depois):
+          ATUALIZAR_JOGOS_MODE=custom (padrão, diário) → últimos ATUALIZAR_JOGOS_DAYS dias (7)
+          ATUALIZAR_JOGOS_MODE=fast                    → últimos 3 dias (default do serviço)
+          ATUALIZAR_JOGOS_MODE=full                    → temporada inteira (liga nova)
+          ATUALIZAR_JOGOS_WC_MODE=fast (padrão) | full → copa nova (30 jogos/seleção)
+
+        Ex. backfill pontual sem editar código:
+          ATUALIZAR_JOGOS_MODE=full ATUALIZAR_JOGOS_WC_MODE=full python atualizar_jogos.py
+        """
         print("\n========== DATA COLLECTOR ==========\n")
 
         self.run_stage_0()
@@ -201,20 +213,13 @@ class DataCollectorMain:
         self.run_stage_2()
         self.run_stage_3()
 
-        # ---------------------------------------------------------
-        # Ligas de clube — escolhe um:
-        #self.run_stage_4(mode="fast")                # padrão diário
-        #self.run_stage_4(mode="full")               # liga nova (temporada inteira)
-        self.run_stage_4(mode="custom", days=7)     # personalizado
+        mode = mode or os.getenv("ATUALIZAR_JOGOS_MODE", "custom")
+        wc_mode = wc_mode or os.getenv("ATUALIZAR_JOGOS_WC_MODE", "fast")
+        days = days if days is not None else int(os.getenv("ATUALIZAR_JOGOS_DAYS", "7"))
+        wc_last_n = 30 if wc_mode == "full" else 15
 
-        # Copa do Mundo — adiciona wc_mode:
-        # wc_mode="fast"  → padrão (15 jogos/seleção)  ← default acima
-        # wc_mode="full"  → nova copa (30 jogos/seleção, primeira vez)
-        #self.run_stage_4(mode="fast", wc_mode="full")   # só copa nova
-        #self.run_stage_4(mode="full", wc_mode="full")   # liga nova + copa nova
-        # ---------------------------------------------------------
-
-        self.run_stage_5()
+        self.run_stage_4(mode=mode, days=days, wc_mode=wc_mode)
+        self.run_stage_5(mode="full" if mode == "full" else "recent", days=days, wc_last_n=wc_last_n)
 
         print("\n========== DATA COLLECTOR FINALIZADO ==========\n")
 
