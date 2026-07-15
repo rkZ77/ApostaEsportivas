@@ -5,6 +5,7 @@ import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy } from 'lucide-reac
 import api from '../services/api'
 import Footer from '../components/Footer'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { COPA_ENDED } from '../utils/format'
 
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
@@ -118,7 +119,7 @@ function ThreeSteps() {
         <div className="grid md:grid-cols-3 gap-5">
           {([
             { n: '1', Icon: UserPlus, title: 'Cria sua conta', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
-            { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem Copa.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
+            { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
             <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>
@@ -149,7 +150,9 @@ function StickyMobileCTA() {
     <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/98 backdrop-blur-md border-t border-zinc-800 px-4 py-3 flex items-center gap-3 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
       <div className="flex-1 min-w-0">
         <p className="text-white text-xs font-black leading-none">Começar teste VIP</p>
-        <p className="text-green-500 text-[10px] font-semibold mt-0.5">2 dias grátis · Copa ao vivo</p>
+        <p className="text-green-500 text-[10px] font-semibold mt-0.5">
+          {COPA_ENDED ? '2 dias grátis · Brasileirão + Premier League' : '2 dias grátis · Copa ao vivo'}
+        </p>
       </div>
       <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
         Criar conta
@@ -595,14 +598,14 @@ export default function Landing() {
   const chatMessages = [
     { q: 'Qual o melhor pick para hoje na Copa?', a: 'Analisando os 64 jogos da Copa do Mundo 2026... Brasil x Croácia: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambas as seleções marcaram em 80% dos confrontos recentes.' },
     { q: 'Como está a forma do Brasil nos últimos 5 jogos?', a: 'Brasil: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da Copa. Pick recomendado: Gols Over 1.5.' },
-    { q: 'Explica a Alavancagem Copa', a: 'A Alavancagem começa com R$50 e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 greens transforma R$50 em +R$300. Reset automático no RED.' },
+    { q: 'Explica a Alavancagem', a: 'A Alavancagem começa com R$50 e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 greens transforma R$50 em +R$300. Reset automático no RED.' },
   ]
 
   return (
     <>
     <Helmet>
       <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
-      <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. VIP, múltiplas, alavancagem e picks gratuitos. Copa do Mundo 2026. Teste grátis por 2 dias." />
+      <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura de Copa do Mundo, Premier League e Brasileirão. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
       <link rel="canonical" href="https://pickia.com.br/" />
     </Helmet>
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
@@ -882,7 +885,7 @@ export default function Landing() {
               {
                 n: '03', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20',
                 title: 'Geração de picks',
-                desc: 'Apenas recomendações com EV positivo e confiança mínima entram no sistema. Picks VIP, Múltiplas e Alavancagem Copa gerados automaticamente todo dia.',
+                desc: 'Apenas recomendações com EV positivo e confiança mínima entram no sistema. Picks VIP, Múltiplas e Alavancagem gerados automaticamente todo dia.',
               },
             ].map(({ n, color, bg, title, desc }) => (
               <div key={n} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
@@ -934,7 +937,7 @@ export default function Landing() {
                   [true,  'Detalhes de picks resolvidos'],
                   [false, 'Picks VIP (10–20/dia)'],
                   [false, 'Múltiplas geradas por IA'],
-                  [false, 'Alavancagem Copa'],
+                  [false, 'Alavancagem'],
                   [false, 'Agente IA de futebol'],
                 ].map(([ok, t]) => (
                   <div key={t as string} className="flex items-center gap-2.5">
@@ -963,7 +966,7 @@ export default function Landing() {
                 {[
                   'Pick Free + todos os Picks VIP',
                   'Múltiplas geradas pela IA',
-                  'Alavancagem Copa do Mundo',
+                  'Alavancagem',
                   'Agente IA de futebol',
                   'Histórico completo com filtros',
                   'Análise estatística de cada jogo',
@@ -1007,6 +1010,24 @@ export default function Landing() {
                 Ver planos VIP
               </Link>
             </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="py-16 bg-black border-t border-zinc-800/60">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="bg-zinc-900 border border-green-500/20 rounded-2xl p-8 text-center">
+            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-2xl mb-4">
+              <UserPlus className="w-6 h-6 text-green-500" />
+            </div>
+            <h2 className="text-2xl font-black text-white mb-2">Indique e ganhe dias de VIP grátis</h2>
+            <p className="text-zinc-400 text-sm max-w-md mx-auto mb-6">
+              Cada amigo que criar conta pela sua indicação te dá +1 dia de VIP. Se ele virar assinante,
+              você ganha +2 dias extras. Sem limite de indicações.
+            </p>
+            <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+              Criar conta e começar a indicar
+            </Link>
           </div>
         </div>
       </section>
@@ -1076,7 +1097,7 @@ export default function Landing() {
                 a: 'Não. Nenhum pick em apostas esportivas é garantido. A IA analisa dados estatísticos e encontra apostas com valor esperado positivo (EV+), mas resultados passados não garantem resultados futuros. Aposte com responsabilidade.',
               },
               {
-                q: 'O que é a Alavancagem Copa?',
+                q: 'O que é a Alavancagem?',
                 a: 'Uma estratégia que começa com um valor fixo (ex: R$50) e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 acertos pode multiplicar o valor várias vezes. Em caso de RED, recomeça do início.',
               },
               {
@@ -1110,20 +1131,26 @@ export default function Landing() {
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
         <div className="max-w-2xl mx-auto px-4 text-center relative">
           <div className="flex items-center justify-center gap-3 mb-6">
-            <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
+            {COPA_ENDED
+              ? <Trophy className="w-9 h-9 text-yellow-400" />
+              : <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />}
           </div>
           <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full mb-6">
             <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-            Copa em andamento
+            {COPA_ENDED ? 'Brasileirão e Premier League ao vivo' : 'Copa em andamento'}
           </div>
           <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
-            A Copa está acontecendo.
-            <br />
-            <span className="text-green-500">Não fique de fora.</span>
+            {COPA_ENDED ? (
+              <>Todo round tem valor.<br /><span className="text-green-500">Não fique de fora.</span></>
+            ) : (
+              <>A Copa está acontecendo.<br /><span className="text-green-500">Não fique de fora.</span></>
+            )}
           </h2>
           <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
             Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span>
-            Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.
+            {COPA_ENDED
+              ? ' Picks de Brasileirão, Premier League, agente IA e muito mais.'
+              : ' Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.'}
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/login?mode=register"
