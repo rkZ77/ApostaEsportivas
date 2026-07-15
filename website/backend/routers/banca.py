@@ -1,16 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 from database import get_connection
 from auth_utils import get_current_user
+from routers.payments import PLANS
 
 router = APIRouter(prefix="/api/banca", tags=["banca"])
+
+BR_TZ = ZoneInfo("America/Sao_Paulo")
 
 
 class BancaSetup(BaseModel):
     bankroll_start: float
     bankroll_goal: Optional[float] = None
     unit_value: Optional[float] = None  # R$ por unidade; None = manter atual
+    monthly_close_month_key: Optional[str] = None  # 'YYYY-MM'; presente quando vem do fechamento mensal
 
 
 class FollowPick(BaseModel):
@@ -131,6 +137,141 @@ def _compute_streak(resolved: list) -> dict:
     return {"streak": streak, "streak_type": streak_type, "best_streak": best}
 
 
+def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
+    """
+    P&L de um pick seguido, em unidades e em R$. Cashout sempre sobrepõe o
+    resultado oficial. Usa actual_odd (odd que o usuário realmente pegou) se
+    informado, senão cai pra odd oficial do pick.
+    Retorna (result_label, profit_units, pnl_reais) ou (None, None, None)
+    se ainda não resolvido e sem cashout.
+    """
+    cashout_amount = float(follow["cashout_amount"]) if follow.get("cashout_amount") is not None else None
+    stake_units = float(follow["stake_units"])
+
+    if cashout_amount is not None:
+        stake_r = stake_units * unit_value
+        pnl_r = cashout_amount - stake_r
+        profit_u = pnl_r / unit_value if unit_value else 0.0
+        return "CASHOUT", profit_u, pnl_r
+
+    result = pick.get("result")
+    if result not in ("GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS"):
+        return None, None, None
+
+    actual_odd = float(follow["actual_odd"]) if follow.get("actual_odd") else None
+    odd = actual_odd or float(pick.get("odd") or 1)
+
+    if result == "GREEN":
+        profit_u = odd - 1
+    elif result == "RED":
+        profit_u = -1.0
+    elif result == "PUSH":
+        profit_u = 0.0
+    elif result == "HALF-WIN":
+        profit_u = (odd - 1) / 2
+    else:  # HALF-LOSS
+        profit_u = -0.5
+
+    pnl_r = profit_u * stake_units * unit_value
+    return result, profit_u, pnl_r
+
+
+def _get_bankroll_epoch(cur, user_id: int) -> Optional[str]:
+    """
+    Data-limite (exclusiva, 'YYYY-MM-DD') até onde o P&L do usuário já foi
+    "rolado" pro bankroll_start no último fechamento mensal — ou None se nunca
+    fechou (nesse caso a banca conta desde o início, comportamento anterior).
+
+    Usa o fim do mês fechado (month_key), não o instante em que o usuário
+    confirmou (closed_at): o usuário pode confirmar o fechamento de junho já em
+    julho, e picks seguidos nesse intervalo (ex: 1-2 de julho, antes da
+    confirmação) são de julho e não podem ficar de fora da banca atual até o
+    fechamento seguinte.
+    """
+    cur.execute("SELECT MAX(month_key) AS last_month FROM banca_monthly_closes WHERE user_id = %s", (user_id,))
+    row = cur.fetchone()
+    last_month = row["last_month"] if row else None
+    if not last_month:
+        return None
+    _, _, _, month_end = _month_bounds(last_month)
+    return month_end
+
+
+def _month_bounds(month_key: str):
+    """A partir de 'YYYY-MM', retorna (year, mo, month_start, month_end) como strings YYYY-MM-DD."""
+    try:
+        year, mo = int(month_key[:4]), int(month_key[5:7])
+    except Exception:
+        raise HTTPException(400, "Formato de mês inválido. Use YYYY-MM.")
+    if not (1 <= mo <= 12):
+        raise HTTPException(400, "Mês inválido. Use um valor entre 01 e 12.")
+    month_start = f"{year:04d}-{mo:02d}-01"
+    month_end = f"{year+1:04d}-01-01" if mo == 12 else f"{year:04d}-{mo+1:02d}-01"
+    return year, mo, month_start, month_end
+
+
+def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, unit_value: float) -> dict:
+    """P&L e contagem de resultados (vip/free/multipla) de um usuário dentro de [month_start, month_end)."""
+    cur.execute("""
+        SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units,
+               uf.actual_odd, uf.cashout_amount
+        FROM user_followed_picks uf
+        WHERE uf.user_id = %s
+          AND uf.pick_type != 'alavancagem'
+          AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
+          AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+        ORDER BY uf.followed_at ASC
+    """, (user_id, month_start, month_end))
+    followed = [dict(r) for r in cur.fetchall()]
+
+    stats = {
+        "total_pnl": 0.0, "greens": 0, "reds": 0, "push": 0,
+        "half_wins": 0, "half_loss": 0, "total_resolved": 0,
+        "total_followed": len(followed),
+    }
+    if not followed:
+        return stats
+
+    vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
+    free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
+    multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+
+    vip_map: dict = {}
+    if vip_ids:
+        cur.execute("SELECT id, result, odd FROM picks_vip WHERE id = ANY(%s)", (vip_ids,))
+        for r in cur.fetchall(): vip_map[r["id"]] = dict(r)
+
+    free_map: dict = {}
+    if free_ids:
+        cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
+        for r in cur.fetchall(): free_map[r["id"]] = dict(r)
+
+    multipla_map: dict = {}
+    if multipla_ids:
+        cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
+        for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
+
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+
+    for f in followed:
+        pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
+        if not pick:
+            continue
+        result, _profit_u, pnl_r = _compute_follow_pnl(pick, f, unit_value)
+        if result is None:
+            continue
+        stats["total_pnl"] += pnl_r
+        stats["total_resolved"] += 1
+        if result == "GREEN": stats["greens"] += 1
+        elif result == "RED": stats["reds"] += 1
+        elif result == "PUSH": stats["push"] += 1
+        elif result == "HALF-WIN": stats["half_wins"] += 1
+        elif result == "HALF-LOSS": stats["half_loss"] += 1
+
+    stats["total_pnl"] = round(stats["total_pnl"], 2)
+    return stats
+
+
 @router.get("")
 def get_banca(
     current_user: dict = Depends(get_current_user),
@@ -160,6 +301,13 @@ def get_banca(
         elif days > 0:
             date_cond = " AND uf.followed_at >= NOW() - (%s * INTERVAL '1 day')"
             date_params.append(days)
+        else:
+            # "Tudo" sem filtro explícito = desde o último fechamento mensal (se houver).
+            # Evita contar de novo o P&L de meses já fechados/rolados pro bankroll_start.
+            epoch = _get_bankroll_epoch(cur, user_id)
+            if epoch is not None:
+                date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s"
+                date_params.append(epoch)
 
         cur.execute(f"""
             SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units, uf.followed_at,
@@ -233,22 +381,8 @@ def get_banca(
                 pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
                 if not pick:
                     continue
-                cashout_amount = float(f["cashout_amount"]) if f.get("cashout_amount") is not None else None
-                result     = pick.get("result")
                 actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
-                # Cashout sobrepõe resultado oficial
-                if cashout_amount is not None:
-                    result = "CASHOUT"
-                    stake_r = float(f["stake_units"]) * unit_value
-                    pnl_r = cashout_amount - stake_r
-                    profit_u = pnl_r / unit_value if unit_value else 0
-                elif result in ("GREEN", "RED", "PUSH"):
-                    _odd = actual_odd or float(pick.get("odd") or 1)
-                    profit_u = (_odd - 1) if result == "GREEN" else (0.0 if result == "PUSH" else -1.0)
-                    pnl_r = profit_u * float(f["stake_units"]) * unit_value
-                else:
-                    profit_u = None
-                    pnl_r = None
+                result, profit_u, pnl_r = _compute_follow_pnl(pick, f, unit_value)
                 if pnl_r is not None:
                     running += pnl_r
 
@@ -372,6 +506,42 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
     conn = get_connection()
     cur = conn.cursor()
     try:
+        if body.monthly_close_month_key:
+            # Registra o fechamento (banca antes -> depois + estatísticas do mês) antes
+            # de sobrescrever o bankroll_start. É esse registro que marca o "epoch" pra
+            # não somar de novo o P&L desse mês nos cálculos futuros de banca atual.
+            cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+            prev = cur.fetchone()
+            prev_start = float(prev["bankroll_start"]) if prev else 100.0
+            prev_unit  = float(prev["unit_value"]) if prev and prev["unit_value"] else 1.0
+
+            _year, _mo, month_start, month_end = _month_bounds(body.monthly_close_month_key)
+            stats = _compute_month_stats(cur, user_id, month_start, month_end, prev_unit)
+
+            cur.execute("""
+                INSERT INTO banca_monthly_closes
+                    (user_id, month_key, bankroll_start, bankroll_end, total_pnl,
+                     greens, reds, push, half_wins, half_loss, total_resolved, total_followed, unit_value)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                ON CONFLICT (user_id, month_key) DO UPDATE
+                    SET bankroll_start = EXCLUDED.bankroll_start,
+                        bankroll_end   = EXCLUDED.bankroll_end,
+                        total_pnl      = EXCLUDED.total_pnl,
+                        greens         = EXCLUDED.greens,
+                        reds           = EXCLUDED.reds,
+                        push           = EXCLUDED.push,
+                        half_wins      = EXCLUDED.half_wins,
+                        half_loss      = EXCLUDED.half_loss,
+                        total_resolved = EXCLUDED.total_resolved,
+                        total_followed = EXCLUDED.total_followed,
+                        unit_value     = EXCLUDED.unit_value,
+                        closed_at      = NOW()
+            """, (
+                user_id, body.monthly_close_month_key, prev_start, body.bankroll_start, stats["total_pnl"],
+                stats["greens"], stats["reds"], stats["push"], stats["half_wins"], stats["half_loss"],
+                stats["total_resolved"], stats["total_followed"], prev_unit,
+            ))
+
         cur.execute("""
             INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value)
             VALUES (%s, %s, %s, %s)
@@ -524,34 +694,49 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         bankroll_start = float(row["bankroll_start"])
         unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
 
-        # P&L acumulado — cashout sobrepõe resultado oficial
-        cur.execute("""
-            SELECT COALESCE(SUM(
-                CASE
-                    WHEN uf.cashout_amount IS NOT NULL
-                        THEN uf.cashout_amount - uf.stake_units * %s
-                    WHEN uf.pick_type = 'vip'      AND pv.result IS NOT NULL
-                        THEN COALESCE(pv.profit, 0) * uf.stake_units * %s
-                    WHEN uf.pick_type = 'free'     AND pf.result IS NOT NULL
-                        THEN COALESCE(pf.profit, 0) * uf.stake_units * %s
-                    WHEN uf.pick_type = 'multipla' AND pm.result IS NOT NULL
-                        THEN CASE pm.result
-                            WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %s
-                            WHEN 'RED'   THEN -1.0 * uf.stake_units * %s
-                            WHEN 'PUSH'  THEN 0.0
-                            ELSE 0.0
-                        END
-                    ELSE 0
-                END
-            ), 0) AS total_pnl
+        # "Tudo" = desde o último fechamento mensal (se houver), senão desde o início —
+        # mesmo criterio usado em GET /banca e /monthly-close (evita contar 2x o P&L
+        # de meses já fechados/rolados pro bankroll_start).
+        epoch = _get_bankroll_epoch(cur, user_id)
+        date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
+        params = [user_id] + ([epoch] if epoch is not None else [])
+
+        cur.execute(f"""
+            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
             FROM user_followed_picks uf
-            LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
-            LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
-            LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
-            WHERE uf.user_id = %s
-        """, (unit_value, unit_value, unit_value, unit_value, unit_value, user_id))
-        pnl_row = cur.fetchone()
-        pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
+            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {date_cond}
+        """, params)
+        followed = [dict(r) for r in cur.fetchall()]
+
+        pnl = 0.0
+        if followed:
+            vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
+            free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
+            multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+
+            vip_map: dict = {}
+            if vip_ids:
+                cur.execute("SELECT id, result, odd FROM picks_vip WHERE id = ANY(%s)", (vip_ids,))
+                for r in cur.fetchall(): vip_map[r["id"]] = dict(r)
+
+            free_map: dict = {}
+            if free_ids:
+                cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
+                for r in cur.fetchall(): free_map[r["id"]] = dict(r)
+
+            multipla_map: dict = {}
+            if multipla_ids:
+                cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
+                for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
+
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+            for f in followed:
+                pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
+                if not pick:
+                    continue
+                _result, _profit_u, pnl_r = _compute_follow_pnl(pick, f, unit_value)
+                if pnl_r is not None:
+                    pnl += pnl_r
 
         return {
             "has_banca": True,
@@ -607,6 +792,55 @@ def cashout_pick(pick_id: int, pick_type: str, body: CashoutBody, current_user: 
         conn.close()
 
 
+MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
+               "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
+
+
+def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end: str) -> Optional[dict]:
+    """Progressão completa da série de alavancagem (banca atual da série) + quantos
+    passos GREEN/RED aconteceram dentro do mês alvo. None se o usuário nunca configurou."""
+    cur.execute("SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+    row = cur.fetchone()
+    if not row or row["alav_bankroll_init"] is None:
+        return None
+
+    initial = float(row["alav_bankroll_init"])
+    bankroll = initial
+
+    cur.execute("""
+        SELECT pa.result, pa.odd_combined,
+               ((uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
+                AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') < %s) AS in_month
+        FROM user_followed_picks uf
+        JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+        WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem' AND pa.result IS NOT NULL
+        ORDER BY pa.match_date ASC
+    """, (month_start, month_end, user_id))
+
+    month_greens = month_reds = 0
+    busted_this_month = False
+    for pick in cur.fetchall():
+        result = pick["result"]
+        odd = float(pick["odd_combined"] or 1)
+        if result == "GREEN":
+            bankroll = round(bankroll * odd, 2)
+            if pick["in_month"]: month_greens += 1
+        elif result == "RED":
+            bankroll = initial
+            if pick["in_month"]:
+                month_reds += 1
+                busted_this_month = True
+
+    return {
+        "configured":         True,
+        "current_bankroll":   round(bankroll, 2),
+        "initial_bankroll":   initial,
+        "greens_this_month":  month_greens,
+        "reds_this_month":    month_reds,
+        "busted_this_month":  busted_this_month,
+    }
+
+
 @router.get("/monthly-close")
 def get_monthly_close(
     current_user: dict = Depends(get_current_user),
@@ -615,31 +849,17 @@ def get_monthly_close(
     """
     Retorna P&L do mês anterior (ou do mês especificado) para o fechamento mensal.
     """
-    import json as _json
-    from datetime import date, timedelta
-
-    # Determina o mês alvo
     if month:
-        try:
-            year, mo = int(month[:4]), int(month[5:7])
-        except Exception:
-            raise HTTPException(400, "Formato inválido. Use YYYY-MM.")
-        if not (1 <= mo <= 12):
-            raise HTTPException(400, "Mês inválido. Use um valor entre 01 e 12.")
+        year, mo, month_start, month_end = _month_bounds(month)
     else:
-        today = date.today()
-        first_of_current = today.replace(day=1)
-        last_month_last  = first_of_current - timedelta(days=1)
+        # Fuso de Brasília, não o do servidor — evita a virada de mês ficar
+        # ~3h fora de sincronia se o processo rodar em UTC.
+        today = datetime.now(BR_TZ).date()
+        last_month_last = today.replace(day=1) - timedelta(days=1)
         year, mo = last_month_last.year, last_month_last.month
+        month_start = f"{year:04d}-{mo:02d}-01"
+        month_end = f"{year+1:04d}-01-01" if mo == 12 else f"{year:04d}-{mo+1:02d}-01"
 
-    month_start = f"{year:04d}-{mo:02d}-01"
-    if mo == 12:
-        month_end = f"{year+1:04d}-01-01"
-    else:
-        month_end = f"{year:04d}-{mo+1:02d}-01"
-
-    MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
-                   "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
     month_label = f"{MONTH_NAMES[mo-1]} {year}"
     month_key   = f"{year:04d}-{mo:02d}"
 
@@ -652,8 +872,13 @@ def get_monthly_close(
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
         unit_value     = float(row["unit_value"])     if row and row["unit_value"] else 1.0
 
-        # Total P&L acumulado (todas as datas) para saber banca atual
-        cur.execute("""
+        # Banca atual = bankroll_start + P&L desde o último fechamento mensal (ou desde
+        # sempre, se nunca fechou). Sem esse corte, todo fechamento aceito soma de novo
+        # o lucro/prejuízo de meses que já foram "rolados" pro bankroll_start.
+        epoch = _get_bankroll_epoch(cur, user_id)
+        epoch_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
+        epoch_params = [unit_value] * 5 + [user_id] + ([epoch] if epoch is not None else [])
+        cur.execute(f"""
             SELECT COALESCE(SUM(
                 CASE
                     WHEN uf.cashout_amount IS NOT NULL
@@ -673,108 +898,31 @@ def get_monthly_close(
             LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
             LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
             LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
-            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem'
-        """, (unit_value, unit_value, unit_value, unit_value, unit_value, user_id))
+            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {epoch_cond}
+        """, epoch_params)
         pnl_all = float((cur.fetchone() or {}).get("total_pnl") or 0)
         bankroll_current = round(bankroll_start + pnl_all, 2)
 
-        # Picks do mês alvo (filtra por followed_at no fuso BR)
-        cur.execute("""
-            SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units,
-                   uf.actual_odd, uf.cashout_amount
-            FROM user_followed_picks uf
-            WHERE uf.user_id = %s
-              AND uf.pick_type != 'alavancagem'
-              AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
-              AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') <  %s
-            ORDER BY uf.followed_at ASC
-        """, (user_id, month_start, month_end))
-        followed = [dict(r) for r in cur.fetchall()]
-
-        if not followed:
-            return {
-                "month_label":      month_label,
-                "month_key":        month_key,
-                "total_pnl":        0.0,
-                "greens":           0,
-                "reds":             0,
-                "push":             0,
-                "half_wins":        0,
-                "half_loss":        0,
-                "total_resolved":   0,
-                "total_followed":   0,
-                "bankroll_start":   bankroll_start,
-                "bankroll_current": bankroll_current,
-                "unit_value":       unit_value,
-            }
-
-        vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
-        free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
-        multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
-
-        vip_map: dict = {}
-        if vip_ids:
-            cur.execute("SELECT id, result, profit, odd FROM picks_vip WHERE id = ANY(%s)", (vip_ids,))
-            for r in cur.fetchall(): vip_map[r["id"]] = dict(r)
-
-        free_map: dict = {}
-        if free_ids:
-            cur.execute("SELECT id, result, profit, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
-            for r in cur.fetchall(): free_map[r["id"]] = dict(r)
-
-        multipla_map: dict = {}
-        if multipla_ids:
-            cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
-            for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-
-        type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
-
-        greens = reds = push = half_wins = half_loss = 0
-        total_pnl = 0.0
-        total_resolved = 0
-
-        for f in followed:
-            pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
-            if not pick:
-                continue
-            cashout_amount = float(f["cashout_amount"]) if f.get("cashout_amount") is not None else None
-            result     = pick.get("result")
-            actual_odd = float(f["actual_odd"]) if f.get("actual_odd") else None
-
-            if cashout_amount is not None:
-                stake_r = float(f["stake_units"]) * unit_value
-                pnl_r   = cashout_amount - stake_r
-                total_pnl += pnl_r
-                total_resolved += 1
-            elif result in ("GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS"):
-                _odd = actual_odd or float(pick.get("odd") or 1)
-                if result == "GREEN":
-                    profit_u = _odd - 1; greens += 1
-                elif result == "RED":
-                    profit_u = -1.0; reds += 1
-                elif result == "PUSH":
-                    profit_u = 0.0; push += 1
-                elif result == "HALF-WIN":
-                    profit_u = (_odd - 1) / 2; half_wins += 1
-                else:  # HALF-LOSS
-                    profit_u = -0.5; half_loss += 1
-                total_pnl += profit_u * float(f["stake_units"]) * unit_value
-                total_resolved += 1
+        stats = _compute_month_stats(cur, user_id, month_start, month_end, unit_value)
+        alav = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
+        plan_price = PLANS["mensal"]["price"]
 
         return {
             "month_label":      month_label,
             "month_key":        month_key,
-            "total_pnl":        round(total_pnl, 2),
-            "greens":           greens,
-            "reds":             reds,
-            "push":             push,
-            "half_wins":        half_wins,
-            "half_loss":        half_loss,
-            "total_resolved":   total_resolved,
-            "total_followed":   len(followed),
+            "total_pnl":        stats["total_pnl"],
+            "greens":           stats["greens"],
+            "reds":             stats["reds"],
+            "push":             stats["push"],
+            "half_wins":        stats["half_wins"],
+            "half_loss":        stats["half_loss"],
+            "total_resolved":   stats["total_resolved"],
+            "total_followed":   stats["total_followed"],
             "bankroll_start":   bankroll_start,
             "bankroll_current": bankroll_current,
             "unit_value":       unit_value,
+            "paid_plan":        stats["total_pnl"] >= plan_price,
+            "alavancagem":      alav,
         }
     finally:
         cur.close()
