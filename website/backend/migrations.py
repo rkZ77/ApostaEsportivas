@@ -168,6 +168,27 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             WHERE uf.pick_type = 'alavancagem' AND uf.pick_id = pa.id
               AND pa.result IS NOT NULL AND uf.result IS NULL
         """)
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS banca_monthly_closes (
+                id              SERIAL PRIMARY KEY,
+                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                month_key       VARCHAR(7) NOT NULL,
+                bankroll_start  NUMERIC(10,2) NOT NULL,
+                bankroll_end    NUMERIC(10,2) NOT NULL,
+                total_pnl       NUMERIC(10,2) NOT NULL DEFAULT 0,
+                greens          INTEGER NOT NULL DEFAULT 0,
+                reds            INTEGER NOT NULL DEFAULT 0,
+                push            INTEGER NOT NULL DEFAULT 0,
+                half_wins       INTEGER NOT NULL DEFAULT 0,
+                half_loss       INTEGER NOT NULL DEFAULT 0,
+                total_resolved  INTEGER NOT NULL DEFAULT 0,
+                total_followed  INTEGER NOT NULL DEFAULT 0,
+                unit_value      NUMERIC(10,2),
+                closed_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, month_key)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_monthly_closes_user ON banca_monthly_closes(user_id, closed_at DESC);")
         conn.commit()
         return True
     except Exception as e:
