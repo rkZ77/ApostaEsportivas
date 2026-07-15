@@ -20,6 +20,15 @@ export function dismissMonthlyClose() {
   localStorage.setItem(LS_KEY, getLastMonthKey())
 }
 
+interface AlavancagemMonthData {
+  configured: boolean
+  current_bankroll: number
+  initial_bankroll: number
+  greens_this_month: number
+  reds_this_month: number
+  busted_this_month: boolean
+}
+
 interface CloseData {
   month_label: string
   month_key: string
@@ -34,6 +43,8 @@ interface CloseData {
   bankroll_start: number
   bankroll_current: number
   unit_value: number
+  paid_plan: boolean
+  alavancagem: AlavancagemMonthData | null
 }
 
 const MOCK_DATA: CloseData = {
@@ -50,6 +61,15 @@ const MOCK_DATA: CloseData = {
   bankroll_start: 500,
   bankroll_current: 687.50,
   unit_value: 5,
+  paid_plan: true,
+  alavancagem: {
+    configured: true,
+    current_bankroll: 320,
+    initial_bankroll: 100,
+    greens_this_month: 3,
+    reds_this_month: 1,
+    busted_this_month: true,
+  },
 }
 
 type Step = 'summary' | 'edit' | 'success'
@@ -105,6 +125,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
         bankroll_start: data.bankroll_current,
         bankroll_goal: null,
         unit_value: data.unit_value,
+        monthly_close_month_key: data.month_key,
       })
       setSavedValue(data.bankroll_current)
       setStep('success')
@@ -123,6 +144,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
         bankroll_start: value,
         bankroll_goal: null,
         unit_value: data.unit_value,
+        monthly_close_month_key: data.month_key,
       })
       setSavedValue(value)
       setStep('success')
@@ -152,7 +174,8 @@ export default function MonthlyCloseModal({ onClose }: Props) {
 
   if (loading) return null
 
-  if (!data || data.total_followed === 0) {
+  const hasAlavActivity = !!data?.alavancagem && (data.alavancagem.greens_this_month > 0 || data.alavancagem.reds_this_month > 0)
+  if (!data || (data.total_followed === 0 && !hasAlavActivity)) {
     dismissMonthlyClose()
     onClose()
     return null
@@ -162,7 +185,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   const pnlAbs    = Math.abs(data.total_pnl)
   const ganhoU    = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
   const winRate   = data.total_resolved > 0 ? Math.round(data.greens / data.total_resolved * 100) : 0
-  const paidPlan  = isProfit && data.total_pnl >= 39.90
+  const paidPlan  = data.paid_plan
   const accent    = isProfit ? 'text-green-400' : 'text-red-400'
   const accentBg  = isProfit ? 'bg-green-500/10 border-green-500/20' : 'bg-red-500/10 border-red-500/20'
   const bancaInicio = data.bankroll_current - data.total_pnl
@@ -259,6 +282,24 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 <p className="text-sm font-black text-green-300 leading-snug">
                   Esse mês você já pagou sua assinatura do Pick IA com o lucro
                 </p>
+              </div>
+            )}
+
+            {/* Alavancagem — série é composta, não entra na banca de unidades acima */}
+            {data.alavancagem?.configured && (
+              <div className="mx-5 mb-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
+                <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Série de alavancagem</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-black text-white">{fmtBRL(data.alavancagem.current_bankroll)}</span>
+                  <span className="text-[11px] text-zinc-500">
+                    {data.alavancagem.greens_this_month}G · {data.alavancagem.reds_this_month}R no mês
+                  </span>
+                </div>
+                {data.alavancagem.busted_this_month && (
+                  <p className="text-[11px] text-orange-400 font-semibold mt-1">
+                    Série resetou pra {fmtBRL(data.alavancagem.initial_bankroll)} esse mês
+                  </p>
+                )}
               </div>
             )}
 
