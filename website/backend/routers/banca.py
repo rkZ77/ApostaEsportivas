@@ -524,8 +524,10 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                      greens, reds, push, half_wins, half_loss, total_resolved, total_followed, unit_value)
                 VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 ON CONFLICT (user_id, month_key) DO UPDATE
-                    SET bankroll_start = EXCLUDED.bankroll_start,
-                        bankroll_end   = EXCLUDED.bankroll_end,
+                    -- bankroll_start NAO entra aqui de proposito: e o valor historico de
+                    -- "banca no inicio desse mes", nao pode mudar numa reconfirmacao (ex:
+                    -- usuario ja fechou no celular e o popup reaparece em outro aparelho).
+                    SET bankroll_end   = EXCLUDED.bankroll_end,
                         total_pnl      = EXCLUDED.total_pnl,
                         greens         = EXCLUDED.greens,
                         reds           = EXCLUDED.reds,
@@ -584,10 +586,10 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
             raise HTTPException(400, "Não é possível registrar aposta após o resultado.")
         kickoff = pick.get("match_datetime")
         if kickoff:
-            from datetime import datetime, timezone
-            if kickoff.tzinfo is None:
-                kickoff = kickoff.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) >= kickoff:
+            # match_datetime e gravado pelo coletor de fixtures como horario de Brasilia
+            # "naive" (convert_utc_to_br_naive) -- comparar direto com "agora" em BR, sem
+            # tratar como UTC (isso fazia o bloqueio disparar ~3h antes do jogo comecar).
+            if datetime.now(BR_TZ).replace(tzinfo=None) >= kickoff:
                 raise HTTPException(400, "Não é possível registrar aposta após o início da partida.")
         cur.execute(
             "SELECT id FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
@@ -907,6 +909,14 @@ def get_monthly_close(
         alav = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
         plan_price = PLANS["mensal"]["price"]
 
+        # Já fechado (em qualquer dispositivo)? Evita reabrir o popup e sobrescrever
+        # o registro histórico se o usuário já confirmou em outro aparelho no mesmo mês.
+        cur.execute(
+            "SELECT 1 FROM banca_monthly_closes WHERE user_id = %s AND month_key = %s",
+            (user_id, month_key),
+        )
+        already_closed = cur.fetchone() is not None
+
         return {
             "month_label":      month_label,
             "month_key":        month_key,
@@ -923,6 +933,7 @@ def get_monthly_close(
             "unit_value":       unit_value,
             "paid_plan":        stats["total_pnl"] >= plan_price,
             "alavancagem":      alav,
+            "already_closed":   already_closed,
         }
     finally:
         cur.close()

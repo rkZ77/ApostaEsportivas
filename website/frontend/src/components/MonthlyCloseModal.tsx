@@ -45,6 +45,7 @@ interface CloseData {
   unit_value: number
   paid_plan: boolean
   alavancagem: AlavancagemMonthData | null
+  already_closed: boolean
 }
 
 const MOCK_DATA: CloseData = {
@@ -70,6 +71,7 @@ const MOCK_DATA: CloseData = {
     reds_this_month: 1,
     busted_this_month: true,
   },
+  already_closed: false,
 }
 
 type Step = 'summary' | 'edit' | 'success'
@@ -93,7 +95,12 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   useEffect(() => {
     if (isPreview) return
     api.get('/banca/monthly-close')
-      .then(r => setData(r.data))
+      .then(r => {
+        // Já fechado em outro dispositivo/sessão neste mês — não reabre o popup
+        // nem arrisca sobrescrever o registro histórico com uma nova confirmação.
+        if (r.data.already_closed) { dismissMonthlyClose(); onClose(); return }
+        setData(r.data)
+      })
       .catch(() => { dismissMonthlyClose(); onClose() })
       .finally(() => setLoading(false))
   }, [])
