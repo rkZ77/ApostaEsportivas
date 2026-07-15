@@ -88,6 +88,9 @@ export default function Login() {
       const stored = localStorage.getItem('ref_code')
       if (stored) setRefCode(stored)
     }
+    // CTAs de "criar conta" na landing linkam pra cá com ?mode=register,
+    // pra abrir direto no formulário de cadastro em vez do de login
+    if (searchParams.get('mode') === 'register') setMode('register')
     // Sessão encerrada por novo login em outro dispositivo
     if (searchParams.get('kicked') === '1') {
       const device = localStorage.getItem('session_kicked_device') ?? 'outro dispositivo'

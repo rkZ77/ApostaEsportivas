@@ -9,7 +9,7 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
 const LEAGUE_LOGO = (id: number) =>
-  id === 1 ? '/logo-copa-mundo.png' : `https://media.api-sports.io/football/leagues/${id}.png`
+  id === 1 ? '/logo-copa-mundo.png' : `/api/proxy/league/${id}.png`
 
 // Ícone genérico de liga (fallback quando logo da API não carrega)
 function LeagueIcon({ className }: { className?: string }) {
@@ -132,7 +132,7 @@ function ThreeSteps() {
           ))}
         </div>
         <div className="text-center mt-8">
-          <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+          <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
             Começar agora
           </Link>
         </div>
@@ -151,7 +151,7 @@ function StickyMobileCTA() {
         <p className="text-white text-xs font-black leading-none">Começar teste VIP</p>
         <p className="text-green-500 text-[10px] font-semibold mt-0.5">2 dias grátis · Copa ao vivo</p>
       </div>
-      <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
+      <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
         Criar conta
       </Link>
       <button onClick={() => setDismissed(true)} className="text-zinc-600 hover:text-zinc-400 p-1 shrink-0" aria-label="Fechar">
@@ -325,7 +325,7 @@ function RecentResults() {
                 Ver histórico completo
               </Link>
               <span className="text-zinc-700">·</span>
-              <Link to="/login" className="text-sm text-green-500 hover:text-green-400 font-bold transition-colors">
+              <Link to="/login?mode=register" className="text-sm text-green-500 hover:text-green-400 font-bold transition-colors">
                 Criar conta grátis
               </Link>
             </div>
@@ -530,7 +530,7 @@ function PorQueDiferente() {
           </div>
         </div>
         <div className="text-center mt-8">
-          <Link to="/login" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+          <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
             Testar 2 dias grátis
           </Link>
         </div>
@@ -614,7 +614,7 @@ export default function Landing() {
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
             <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-              Copa 2026 ao vivo
+              Copa 2026 · Premier League · Brasileirão
             </span>
           </div>
           <div className="flex items-center gap-5">
@@ -622,11 +622,11 @@ export default function Landing() {
             <a href="#como-funciona" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
             <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
             <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
-            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors hidden sm:block">
+            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors hidden sm:block">
               Criar conta grátis
             </Link>
             {/* Mobile: CTA + hambúrguer */}
-            <Link to="/login" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors sm:hidden">
+            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors sm:hidden">
               Grátis 2 dias
             </Link>
             <button
@@ -687,7 +687,7 @@ export default function Landing() {
               </div>
 
               <h1 className="text-4xl md:text-5xl font-black leading-[1.1] mb-5 tracking-tight">
-                Picks da Copa 2026
+                Picks de futebol
                 <br />
                 <span className="text-green-500">gerados por IA,</span>
                 <br />
@@ -695,12 +695,13 @@ export default function Landing() {
               </h1>
 
               <p className="text-zinc-400 text-base leading-relaxed mb-8">
-                A IA analisa cada jogo com dados reais de estatísticas, forma recente e odds de mercado.
-                Você recebe os melhores picks com edge positivo toda manhã. De graça pra começar.
+                A IA analisa cada jogo da Copa do Mundo 2026, Premier League e Brasileirão com dados reais de
+                estatísticas, forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
+                toda manhã. De graça pra começar.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                <Link to="/login"
+                <Link to="/login?mode=register"
                   className="bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
                   Criar conta · 2 dias VIP grátis
                 </Link>
@@ -811,7 +812,7 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link to="/login" className="inline-block bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 font-bold px-6 py-3 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="inline-block bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 font-bold px-6 py-3 rounded-xl text-sm transition-colors">
                 Experimentar o agente IA
               </Link>
             </div>
@@ -942,7 +943,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/login" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
                 Criar conta grátis
               </Link>
             </div>
@@ -975,7 +976,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/login" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-xl text-sm transition-colors">
                 Ativar teste gratuito
               </Link>
             </div>
@@ -994,7 +995,7 @@ export default function Landing() {
                   'Sem limite de período',
                   'Suporte prioritário',
                   'Copa do Mundo 2026 completa',
-                  'Temporadas europeias (em breve)',
+                  'Premier League e Brasileirão Série A/B',
                 ].map(t => (
                   <div key={t} className="flex items-center gap-2.5">
                     <Check />
@@ -1015,7 +1016,7 @@ export default function Landing() {
           <div className="text-center mb-12">
             <div className="flex items-center justify-center gap-3 mb-4">
               <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
-              <h2 className="text-3xl font-black">Cobertura total da Copa 2026</h2>
+              <h2 className="text-3xl font-black">Copa 2026 ao vivo, cobertura completa</h2>
             </div>
             <p className="text-zinc-400 text-sm max-w-lg mx-auto">
               Do grupo às finais, a IA analisa cada jogo antes de acontecer e entrega os melhores picks do torneio.
@@ -1037,11 +1038,12 @@ export default function Landing() {
           </div>
           <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
             <p className="text-sm text-zinc-400 mb-1">
-              <span className="text-white font-bold">Após a Copa 2026:</span> Temporadas europeias entram no sistema
+              <span className="text-white font-bold">Além da Copa:</span> Premier League e Brasileirão Série A e B já estão prontos no sistema
             </p>
-            <div className="flex items-center justify-center gap-6 mt-4">
-              {[2, 39, 140, 78, 135].map(id => (
-                <img key={id} src={LEAGUE_LOGO(id)} alt="" className="w-8 h-8 object-contain opacity-50"
+            <p className="text-xs text-zinc-600 mb-4">Os picks começam automaticamente assim que a temporada de cada liga estiver rolando</p>
+            <div className="flex items-center justify-center gap-6">
+              {[39, 71, 72].map(id => (
+                <img key={id} src={LEAGUE_LOGO(id)} alt="" className="w-8 h-8 object-contain opacity-70"
                   onError={e => (e.currentTarget.style.display='none')} />
               ))}
               <span className="text-xs text-zinc-600 font-semibold">e mais...</span>
@@ -1083,7 +1085,7 @@ export default function Landing() {
               },
               {
                 q: 'Quais ligas são cobertas?',
-                a: 'Focamos na Copa do Mundo 2026 com cobertura dos 64 jogos. Após a Copa, as principais ligas europeias (Champions, Premier League, La Liga, Serie A, Bundesliga) entram no sistema.',
+                a: 'A Copa do Mundo 2026 está ao vivo agora, com cobertura dos 64 jogos. Premier League e Brasileirão Série A e B já estão configurados no sistema e entram automaticamente assim que a temporada de cada um estiver rolando (o Brasileirão volta em breve). Mais ligas entram conforme o calendário avança.',
               },
             ].map(({ q, a }, i) => (
               <div key={i} className="border border-zinc-800 rounded-xl overflow-hidden">
@@ -1124,7 +1126,7 @@ export default function Landing() {
             Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/login"
+            <Link to="/login?mode=register"
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto">
               Criar conta · 2 dias VIP grátis
             </Link>
