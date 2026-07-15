@@ -1,15 +1,23 @@
-import os
-import time
+import asyncio
 import logging
+import os
+import pathlib
+import time
 from collections import defaultdict
+
+import httpx
+from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, FileResponse
-from dotenv import load_dotenv, find_dotenv
+from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 
 load_dotenv(find_dotenv())
 
-# ── Logging centralizado ──────────────────────────────────────────────────────
+from migrations import run_startup_migrations
+from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, public, social, suggestions
+from scheduler import start_background_scheduler, start_expire_plans_task
+
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
 logging.basicConfig(
     level=_log_level,
@@ -18,33 +26,28 @@ logging.basicConfig(
 )
 logger = logging.getLogger("main")
 
-# ── Validação de variáveis obrigatórias no startup ───────────────────────────
 _REQUIRED_VARS = ["JWT_SECRET"]
 _OPTIONAL_VARS = {
     "MERCADOPAGO_ACCESS_TOKEN": "pagamentos",
-    "ANTHROPIC_API_KEY":        "IA / picks",
-    "RESEND_API_KEY":           "envio de emails",
+    "ANTHROPIC_API_KEY": "IA / picks",
+    "RESEND_API_KEY": "envio de emails",
 }
 
 _missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
 if _missing_required:
-    logger.critical("[STARTUP] Variáveis obrigatórias ausentes: %s — servidor não irá funcionar!", _missing_required)
+    logger.critical("[STARTUP] Variaveis obrigatorias ausentes: %s - servidor nao ira funcionar!", _missing_required)
 
-# Banco: aceita DATABASE_URL ou variáveis individuais DB_HOST / DB_HOST_PROD
 _has_db = os.getenv("DATABASE_URL") or os.getenv("DB_HOST") or os.getenv("DB_HOST_PROD")
 if not _has_db:
-    logger.warning("[STARTUP] Nenhuma variável de banco configurada (DATABASE_URL, DB_HOST ou DB_HOST_PROD)")
+    logger.warning("[STARTUP] Nenhuma variavel de banco configurada (DATABASE_URL, DB_HOST ou DB_HOST_PROD)")
 
 for _var, _desc in _OPTIONAL_VARS.items():
     if not os.getenv(_var):
-        logger.warning("[STARTUP] %s não configurada — %s desabilitado", _var, _desc)
-
-from routers import auth, suggestions, admin, fixtures, public, chat, payments, social, banca, leaderboard, live, notifications
+        logger.warning("[STARTUP] %s nao configurada - %s desabilitado", _var, _desc)
 
 app = FastAPI(title="Pick IA API", version="1.0.0", docs_url=None, redoc_url=None)
 _SERVER_VERSION = str(int(time.time()))
 
-# ── CORS ─────────────────────────────────────────────────────────────────────
 _origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
 _allow_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
 
@@ -57,17 +60,16 @@ app.add_middleware(
     max_age=600,
 )
 
-# ── Security headers ──────────────────────────────────────────────────────────
+
 @app.middleware("http")
 async def security_headers(request: Request, call_next):
     response = await call_next(request)
-    response.headers["X-Content-Type-Options"]   = "nosniff"
-    response.headers["X-Frame-Options"]           = "DENY"
-    response.headers["X-XSS-Protection"]          = "1; mode=block"
-    response.headers["Referrer-Policy"]            = "strict-origin-when-cross-origin"
-    response.headers["Permissions-Policy"]         = "geolocation=(), microphone=(), camera=()"
-    # HSTS omitido aqui — Cloudflare já injeta esse header no edge (evita duplicata).
-    response.headers["Content-Security-Policy"]   = (
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
         "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
@@ -78,34 +80,30 @@ async def security_headers(request: Request, call_next):
     )
     return response
 
-# ── Rate limiting em memória (por IP) ────────────────────────────────────────
-# Estrutura: { ip: [(timestamp, endpoint), ...] }
-_rate_store: dict[str, list[float]] = defaultdict(list)
-RATE_LIMIT   = 120  # requisições
-RATE_WINDOW  = 60   # segundos
 
-# Bloqueio de login por IP após falhas
+_rate_store: dict[str, list[float]] = defaultdict(list)
+RATE_LIMIT = 120
+RATE_WINDOW = 60
+
 _login_failures: dict[str, list[float]] = defaultdict(list)
 LOGIN_MAX_FAILURES = 10
-LOGIN_LOCKOUT_SECS = 900  # 15 minutos
+LOGIN_LOCKOUT_SECS = 900
 
-# Limite estrito para forgot-password (evita spam de emails): 3 tentativas / 15 min
 _forgot_store: dict[str, list[float]] = defaultdict(list)
-FORGOT_LIMIT  = 3
+FORGOT_LIMIT = 3
 FORGOT_WINDOW = 900
+
+_reset_store: dict[str, list[float]] = defaultdict(list)
+RESET_LIMIT = 5
+RESET_WINDOW = 900
 
 _TRUST_XFF = os.getenv("TRUST_X_FORWARDED_FOR", "false").lower() in ("1", "true", "yes")
 
 
 def _get_real_ip(request: Request) -> str:
-    # CF-Connecting-IP é setado pelo Cloudflare e não pode ser forjado pelo visitante.
     cf_ip = request.headers.get("CF-Connecting-IP")
     if cf_ip:
         return cf_ip.strip()
-    # X-Forwarded-For é um header enviado pelo próprio cliente e forjável por quem
-    # bater direto na origem (fora do Cloudflare) — só confiar nele se o deploy
-    # estiver atrás de um proxy reverso confiável que o sobrescreve (configurar
-    # TRUST_X_FORWARDED_FOR=true nesse caso). Sem isso, cai pro IP real da conexão.
     if _TRUST_XFF:
         forwarded = request.headers.get("X-Forwarded-For")
         if forwarded:
@@ -113,24 +111,16 @@ def _get_real_ip(request: Request) -> str:
     return request.client.host if request.client else "unknown"
 
 
-# Proteção contra brute-force no reset de senha: 5 tentativas / 15 min
-_reset_store: dict[str, list[float]] = defaultdict(list)
-RESET_LIMIT  = 5
-RESET_WINDOW = 900
-
-
 @app.middleware("http")
 async def rate_limiter(request: Request, call_next):
     ip = _get_real_ip(request)
     now = time.time()
 
-    # Rate limit geral
     _rate_store[ip] = [t for t in _rate_store[ip] if now - t < RATE_WINDOW]
     if len(_rate_store[ip]) >= RATE_LIMIT:
-        return JSONResponse({"detail": "Muitas requisições. Tente novamente em breve."}, status_code=429)
+        return JSONResponse({"detail": "Muitas requisicoes. Tente novamente em breve."}, status_code=429)
     _rate_store[ip].append(now)
 
-    # Bloqueio específico de login/register
     if request.url.path in ("/api/auth/login", "/api/auth/register"):
         _login_failures[ip] = [t for t in _login_failures[ip] if now - t < LOGIN_LOCKOUT_SECS]
         if len(_login_failures[ip]) >= LOGIN_MAX_FAILURES:
@@ -140,92 +130,83 @@ async def rate_limiter(request: Request, call_next):
                 status_code=429,
             )
 
-    # Rate limit estrito para forgot-password: 3 por 15 min (evita spam de email)
     if request.url.path == "/api/auth/forgot-password":
         _forgot_store[ip] = [t for t in _forgot_store[ip] if now - t < FORGOT_WINDOW]
         if len(_forgot_store[ip]) >= FORGOT_LIMIT:
-            return JSONResponse(
-                {"detail": "Muitas tentativas de redefinição. Aguarde 15 minutos."},
-                status_code=429,
-            )
+            return JSONResponse({"detail": "Muitas tentativas de redefinicao. Aguarde 15 minutos."}, status_code=429)
         _forgot_store[ip].append(now)
 
-    # Proteção contra brute-force no reset de senha
     if request.url.path == "/api/auth/reset-password":
         _reset_store[ip] = [t for t in _reset_store[ip] if now - t < RESET_WINDOW]
         if len(_reset_store[ip]) >= RESET_LIMIT:
-            return JSONResponse(
-                {"detail": "Muitas tentativas de reset. Aguarde 15 minutos."},
-                status_code=429,
-            )
+            return JSONResponse({"detail": "Muitas tentativas de reset. Aguarde 15 minutos."}, status_code=429)
         _reset_store[ip].append(now)
 
     response = await call_next(request)
 
-    # Conta falha de autenticação (401/403 em rotas de auth)
     if request.url.path == "/api/auth/login" and response.status_code in (401, 403):
         _login_failures[ip].append(now)
 
     return response
 
 
-import asyncio as _asyncio
-
-
 async def _cleanup_rate_stores():
-    """Remove IPs sem entradas recentes das stores em memória a cada 10 min."""
     while True:
-        await _asyncio.sleep(600)
+        await asyncio.sleep(600)
         now = time.time()
         for store, window in (
-            (_rate_store,     RATE_WINDOW),
+            (_rate_store, RATE_WINDOW),
             (_login_failures, LOGIN_LOCKOUT_SECS),
-            (_forgot_store,   FORGOT_WINDOW),
-            (_reset_store,    RESET_WINDOW),
+            (_forgot_store, FORGOT_WINDOW),
+            (_reset_store, RESET_WINDOW),
         ):
             stale = [ip for ip, ts in list(store.items()) if not any(now - t < window for t in ts)]
             for ip in stale:
                 store.pop(ip, None)
 
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import Response as _Response
-import httpx as _httpx
-import pathlib as _pathlib
-_avatars_dir = _pathlib.Path(__file__).parent / "static" / "avatars"
+
+_base_dir = pathlib.Path(__file__).parent
+_static_dir = _base_dir / "static"
+_avatars_dir = _static_dir / "avatars"
 _avatars_dir.mkdir(parents=True, exist_ok=True)
-app.mount("/static", StaticFiles(directory=str(_pathlib.Path(__file__).parent / "static")), name="static")
+app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 _LOGO_BASE = "https://media.api-sports.io/football"
 _LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=86400"}
-_logo_disk_cache = _pathlib.Path("/tmp/pickia_logos")
+_logo_disk_cache = pathlib.Path("/tmp/pickia_logos")
 _logo_disk_cache.mkdir(parents=True, exist_ok=True)
 
-async def _serve_logo(kind: str, item_id: int) -> _Response:
+
+async def _serve_logo(kind: str, item_id: int) -> Response:
     cache_path = _logo_disk_cache / f"{kind}_{item_id}.png"
     if cache_path.exists():
-        return _Response(cache_path.read_bytes(), media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+        return Response(cache_path.read_bytes(), media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+
     url = f"{_LOGO_BASE}/{kind}s/{item_id}.png"
     try:
-        async with _httpx.AsyncClient(timeout=8.0) as client:
+        async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(url)
             if r.status_code == 200 and r.content:
                 cache_path.write_bytes(r.content)
-                return _Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+                return Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
     except Exception:
         pass
-    return _Response(status_code=404)
+    return Response(status_code=404)
+
 
 @app.get("/api/proxy/team/{team_id}.png", include_in_schema=False)
 async def proxy_team_logo(team_id: int):
     if not (1 <= team_id <= 999999):
-        return _Response(status_code=400)
+        return Response(status_code=400)
     return await _serve_logo("team", team_id)
+
 
 @app.get("/api/proxy/league/{league_id}.png", include_in_schema=False)
 async def proxy_league_logo(league_id: int):
     if not (1 <= league_id <= 999999):
-        return _Response(status_code=400)
+        return Response(status_code=400)
     return await _serve_logo("league", league_id)
+
 
 app.include_router(auth.router)
 app.include_router(suggestions.router)
@@ -241,392 +222,20 @@ app.include_router(live.router)
 app.include_router(notifications.router)
 
 
-# ── Background: limpa rate stores ────────────────────────────────────────────
 @app.on_event("startup")
 async def start_rate_store_cleanup():
-    _asyncio.create_task(_cleanup_rate_stores())
-
-
-# ── Background: expira planos VIP/trial vencidos a cada hora ─────────────────
-async def _job_expire_plans():
-    while True:
-        await _asyncio.sleep(3600)
-        try:
-            from database import get_connection
-            conn = get_connection()
-            cur = conn.cursor()
-            cur.execute(
-                "UPDATE users SET plan='free', expires_at=NULL "
-                "WHERE plan IN ('vip','trial') AND expires_at IS NOT NULL AND expires_at < NOW()"
-            )
-            affected = cur.rowcount
-            conn.commit()
-            cur.close(); conn.close()
-            if affected:
-                logger.info("[EXPIRE-PLANS] %d plano(s) expirado(s) → free", affected)
-        except Exception as e:
-            logger.error("[EXPIRE-PLANS] Erro: %s", e)
+    asyncio.create_task(_cleanup_rate_stores())
 
 
 @app.on_event("startup")
 async def start_expire_plans():
-    _asyncio.create_task(_job_expire_plans())
-
-
-# ── Email de lembrete: configurar banca ──────────────────────────────────────
-import resend as _resend
-
-def _send_banca_reminder(to: str, first_name: str):
-    api_key   = os.getenv("RESEND_API_KEY", "")
-    from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
-    site_url  = os.getenv("SITE_URL", "https://pickia.com.br")
-    if not api_key:
-        return
-    html = f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
-        <tr><td style="background:linear-gradient(135deg,#ca8a04,#a16207);padding:36px 40px;text-align:center;">
-          <h1 style="margin:0;color:#fff;font-size:26px;font-weight:900;">💰 Falta só 1 passo!</h1>
-          <p style="margin:8px 0 0;color:#fef9c3;font-size:14px;">Configure sua banca e comece a lucrar</p>
-        </td></tr>
-        <tr><td style="padding:36px 40px;">
-          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Olá,</p>
-          <h2 style="margin:0 0 20px;color:#fff;font-size:20px;font-weight:800;">{first_name}!</h2>
-          <p style="margin:0 0 24px;color:#a1a1aa;font-size:15px;line-height:1.6;">
-            Você criou sua conta no <strong style="color:#fff;">Pick IA</strong> mas ainda não configurou sua banca.
-            Sem ela, você perde as melhores funcionalidades:
-          </p>
-          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr>
-              <td style="background:#1a1a1a;border:1px solid #262626;border-radius:10px;padding:14px;vertical-align:top;width:48%;">
-                <div style="color:#22c55e;font-weight:900;font-size:18px;margin-bottom:6px;">✓</div>
-                <div style="color:#fff;font-size:13px;font-weight:700;">Sugestão de stake</div>
-                <div style="color:#71717a;font-size:12px;margin-top:3px;">Quanto apostar em cada pick, calculado pela sua banca.</div>
-              </td>
-              <td style="width:4%;"></td>
-              <td style="background:#1a1a1a;border:1px solid #262626;border-radius:10px;padding:14px;vertical-align:top;width:48%;">
-                <div style="color:#f59e0b;font-weight:900;font-size:18px;margin-bottom:6px;">📈</div>
-                <div style="color:#fff;font-size:13px;font-weight:700;">Lucro acumulado</div>
-                <div style="color:#71717a;font-size:12px;margin-top:3px;">Acompanhe seu ROI e evolução da banca em tempo real.</div>
-              </td>
-            </tr>
-          </table>
-          <p style="margin:0 0 24px;color:#a1a1aa;font-size:14px;line-height:1.6;">
-            Leva menos de <strong style="color:#fff;">30 segundos</strong>. É só informar quanto você tem disponível para apostar.
-          </p>
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td align="center">
-              <a href="{site_url}/banca"
-                 style="display:inline-block;background:#ca8a04;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;">
-                Configurar minha banca agora →
-              </a>
-            </td></tr>
-          </table>
-        </td></tr>
-        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
-          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
-    try:
-        _resend.api_key = api_key
-        _resend.Emails.send({
-            "from":    from_addr,
-            "to":      [to],
-            "subject": "Como acompanhar seus picks no Pick IA",
-            "text":    f"Olá {first_name}, configure sua banca em {site_url}/banca",
-            "html":    html,
-        })
-        logger.info("[BANCA-REMINDER] Email enviado para %s", to)
-    except Exception as e:
-        logger.error("[BANCA-REMINDER] Falha ao enviar para %s: %s", to, e)
-
-
-def _send_pipeline_failure_alert(error_msg: str):
-    """Avisa o admin por email quando o pipeline diário de picks falha (sem isso, o erro só ficava no log)."""
-    api_key = os.getenv("RESEND_API_KEY", "")
-    to      = os.getenv("ADMIN_ALERT_EMAIL", "")
-    if not api_key or not to:
-        return
-    from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
-    try:
-        _resend.api_key = api_key
-        _resend.Emails.send({
-            "from":    from_addr,
-            "to":      [to],
-            "subject": "[Pick IA] Pipeline diário falhou",
-            "text":    f"O pipeline diário (00:10 BR) falhou e não publicou os picks de hoje.\n\nErro: {error_msg}",
-        })
-    except Exception as e:
-        logger.error("[PIPELINE-ALERT] Falha ao enviar alerta: %s", e)
-
-
-def _job_banca_reminder():
-    """Roda de hora em hora: envia lembrete para quem cadastrou 24h atrás sem configurar banca."""
-    from database import get_connection
-    try:
-        conn = get_connection()
-        cur  = conn.cursor()
-        cur.execute("""
-            SELECT u.email, u.name
-            FROM users u
-            LEFT JOIN user_banca ub ON ub.user_id = u.id
-            WHERE ub.user_id IS NULL
-              AND u.active = TRUE
-              AND u.created_at BETWEEN NOW() - INTERVAL '25 hours' AND NOW() - INTERVAL '23 hours'
-        """)
-        rows = cur.fetchall()
-        cur.close()
-        conn.close()
-        for row in rows:
-            first_name = row["name"].split()[0]
-            _send_banca_reminder(row["email"], first_name)
-    except Exception as e:
-        logger.error("[BANCA-REMINDER] Erro ao buscar usuários: %s", e)
+    start_expire_plans_task(logger)
 
 
 @app.on_event("startup")
-def run_migrations():
-    """Migrations não-destrutivas: ADD COLUMN IF NOT EXISTS."""
-    from database import get_connection
-    try:
-        conn = get_connection()
-    except Exception as e:
-        logger.error("[MIGRATION] DB indisponível no startup: %s — pulando migration", e)
-        return
-    cur = conn.cursor()
-    try:
-        cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;")
-        cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS away_team_id INTEGER;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30) UNIQUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS cpf VARCHAR(14) UNIQUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referral_code VARCHAR(10) UNIQUE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS referred_by INTEGER REFERENCES users(id) ON DELETE SET NULL;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token VARCHAR(100);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS reset_token_expires_at TIMESTAMP;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified BOOLEAN DEFAULT FALSE;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(100);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP;")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_ip VARCHAR(45);")
-        cur.execute("ALTER TABLE picks_alavancagem DROP COLUMN IF EXISTS bankroll_after;")
-        cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
-        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")
-        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS bet_house VARCHAR(100);")
-        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS cashout_amount NUMERIC(10,2);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS session_token VARCHAR(64);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_device VARCHAR(60);")
-        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;")
-        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS home_goals_ht INTEGER;")
-        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS away_goals_ht INTEGER;")
-        # Invalida tokens plaintext antigos (novos são SHA-256 de 64 chars)
-        cur.execute("UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64")
-        cur.execute("UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64")
-        # Normaliza phones para E.164 (+55XXXXXXXXXXX)
-        cur.execute("UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS payments (
-                id                SERIAL PRIMARY KEY,
-                user_id           INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                mp_payment_id     VARCHAR(50) UNIQUE NOT NULL,
-                plan_key          VARCHAR(20) NOT NULL,
-                amount            NUMERIC(10,2) NOT NULL,
-                status            VARCHAR(20) NOT NULL DEFAULT 'approved',
-                expires_at        TIMESTAMP NOT NULL,
-                payment_method    VARCHAR(50),
-                created_at        TIMESTAMP DEFAULT NOW()
-            )
-        """)
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_banca (
-                user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
-                bankroll_start NUMERIC(10,2) NOT NULL DEFAULT 100,
-                bankroll_goal  NUMERIC(10,2),
-                updated_at     TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS bankroll_goal NUMERIC(10,2);")
-        cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2);")
-        cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS alav_bankroll_init NUMERIC(10,2);")
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_followed_picks (
-                id          SERIAL PRIMARY KEY,
-                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                pick_id     INTEGER NOT NULL,
-                pick_type   VARCHAR(20) NOT NULL,
-                stake_units NUMERIC(5,2) NOT NULL DEFAULT 1,
-                followed_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE (user_id, pick_id, pick_type)
-            )
-        """)
-
-        # Social tables
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS pick_reactions (
-                id         SERIAL PRIMARY KEY,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                pick_id    INTEGER NOT NULL,
-                pick_type  VARCHAR(20) NOT NULL,
-                reaction   VARCHAR(20) NOT NULL,
-                created_at TIMESTAMP DEFAULT NOW(),
-                UNIQUE (user_id, pick_id, pick_type, reaction)
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS pick_comments (
-                id              SERIAL PRIMARY KEY,
-                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                user_name       TEXT NOT NULL,
-                user_plan       TEXT NOT NULL DEFAULT 'free',
-                user_avatar_url TEXT,
-                pick_id         INTEGER NOT NULL,
-                pick_type       VARCHAR(20) NOT NULL,
-                content         TEXT NOT NULL,
-                created_at      TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS chat_messages (
-                id              SERIAL PRIMARY KEY,
-                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                user_name       TEXT NOT NULL,
-                user_plan       TEXT NOT NULL DEFAULT 'free',
-                user_avatar_url TEXT,
-                content         TEXT NOT NULL,
-                created_at      TIMESTAMP DEFAULT NOW()
-            )
-        """)
-        # Backfill registros existentes que têm fixture_id mas não têm team IDs
-        cur.execute("""
-            UPDATE picks_free pf
-            SET home_team_id = f.home_team_id,
-                away_team_id = f.away_team_id
-            FROM fixtures f
-            WHERE f.fixture_id = pf.fixture_id
-              AND pf.home_team_id IS NULL
-              AND f.home_team_id IS NOT NULL;
-        """)
-        # Novas colunas e índices
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_push_subscriptions (
-                id         SERIAL PRIMARY KEY,
-                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-                endpoint   TEXT NOT NULL,
-                p256dh     TEXT NOT NULL,
-                auth       TEXT NOT NULL,
-                created_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at TIMESTAMPTZ DEFAULT NOW(),
-                UNIQUE (user_id, endpoint)
-            )
-        """)
-        cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS probability NUMERIC(5,4);")
-        cur.execute("ALTER TABLE picks_vip ADD COLUMN IF NOT EXISTS stake_pct NUMERIC(5,4);")
-        cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS market_type VARCHAR(20);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_vip_date ON picks_vip(match_date DESC);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_free_date ON picks_free(match_date DESC);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_alav_date ON picks_alavancagem(match_date DESC);")
-        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_multi_date ON picks_multiplas(match_date DESC);")
-        cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS result VARCHAR(20);")
-        # Backfill resultado para registros existentes
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pv.result
-            FROM picks_vip pv
-            WHERE uf.pick_type = 'vip' AND uf.pick_id = pv.id
-              AND pv.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pf.result
-            FROM picks_free pf
-            WHERE uf.pick_type = 'free' AND uf.pick_id = pf.id
-              AND pf.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pm.result
-            FROM picks_multiplas pm
-            WHERE uf.pick_type = 'multipla' AND uf.pick_id = pm.id
-              AND pm.result IS NOT NULL AND uf.result IS NULL
-        """)
-        cur.execute("""
-            UPDATE user_followed_picks uf SET result = pa.result
-            FROM picks_alavancagem pa
-            WHERE uf.pick_type = 'alavancagem' AND uf.pick_id = pa.id
-              AND pa.result IS NOT NULL AND uf.result IS NULL
-        """)
-        conn.commit()
-    except Exception as e:
-        logger.error("[MIGRATION] Erro: %s", e)
-        conn.rollback()
-    finally:
-        cur.close()
-        conn.close()
-
-    def _job_resolve_picks():
-        """Resolve picks pendentes automaticamente a cada 5 min via API ao vivo."""
-        try:
-            from routers.live import resolve_all_pending
-            resolved = resolve_all_pending()
-            if any(v > 0 for v in resolved.values()):
-                logger.info("[SCHEDULER] Picks resolvidos: %s", resolved)
-        except Exception as e:
-            logger.error("[SCHEDULER] Erro em resolve_picks: %s", e)
-
-    def _job_run_daily_pipeline():
-        """Roda o pipeline completo (jogos + odds + todos os picks) automaticamente às 00:10 BR."""
-        try:
-            from routers.admin import _run_tudo, _pipeline_status
-            if _pipeline_status.get("tudo", {}).get("status") == "running":
-                logger.info("[SCHEDULER] Pipeline diário já está rodando, ignorando disparo duplicado.")
-                return
-            logger.info("[SCHEDULER] Iniciando pipeline diário (00:10 BR)...")
-            _asyncio.run(_run_tudo())
-            status = _pipeline_status.get("tudo", {})
-            if status.get("status") == "error":
-                logger.error("[SCHEDULER] Pipeline diário falhou: %s", status.get("error"))
-                _send_pipeline_failure_alert(status.get("error") or "erro desconhecido")
-            else:
-                try:
-                    from routers.notifications import send_push_to_all_vip
-                    send_push_to_all_vip(
-                        title="Picks do dia publicados",
-                        body="Seus picks de hoje estao disponiveis. Confira agora!",
-                        url="/picks",
-                    )
-                except Exception as _push_err:
-                    logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", _push_err)
-        except Exception as e:
-            logger.error("[SCHEDULER] Erro no pipeline diário: %s", e)
-            _send_pipeline_failure_alert(str(e))
-
-    # Inicia scheduler de lembretes, resolução automática de picks e pipeline diário
-    try:
-        from apscheduler.schedulers.background import BackgroundScheduler
-        from apscheduler.triggers.cron import CronTrigger
-        _scheduler = BackgroundScheduler()
-        _scheduler.add_job(_job_banca_reminder, "interval", hours=1, id="banca_reminder")
-        _scheduler.add_job(_job_resolve_picks, "interval", minutes=5, id="resolve_picks")
-        # DESATIVADO TEMPORARIAMENTE (2026-07-07) — pipeline diario de geracao de picks
-        # pausado a pedido enquanto o motor de decisao esta sendo revisado. Reativar
-        # descomentando o add_job abaixo quando o pipeline puder rodar novamente.
-        # _scheduler.add_job(
-        #     _job_run_daily_pipeline,
-        #     CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
-        #     id="daily_pipeline",
-        #     misfire_grace_time=3600,
-        # )
-        _scheduler.start()
-        logger.info("[SCHEDULER] Iniciado — lembrete banca 1h | resolve picks 5min | pipeline diário DESATIVADO")
-    except Exception as e:
-        logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
+def run_migrations_and_scheduler():
+    if run_startup_migrations(logger):
+        start_background_scheduler(logger)
 
 
 @app.get("/api/health")
@@ -639,9 +248,9 @@ def get_version():
     return {"v": _SERVER_VERSION}
 
 
-# Serve React SPA (deve ficar por último — só ativo se o build existir)
-_dist = _pathlib.Path(__file__).parent / "dist"
+_dist = _base_dir / "dist"
 if _dist.exists():
+
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
         file_path = _dist / full_path
