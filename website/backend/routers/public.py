@@ -30,7 +30,10 @@ def public_leagues():
                 "season":    r["season"],
                 "logo_url":  LOCAL_LOGOS.get(
                     r["league_id"],
-                    f"https://media.api-sports.io/football/leagues/{r['league_id']}.png"
+                    # Proxy do backend (main.py:/api/proxy/league) baixa e cacheia em disco --
+                    # hotlink direto pro CDN da API-Sports no browser costuma cair no fallback
+                    # genérico (hotlink protection/rate limit do lado deles).
+                    f"/api/proxy/league/{r['league_id']}.png"
                 ),
             }
             for r in rows
