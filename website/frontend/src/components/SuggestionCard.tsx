@@ -346,7 +346,7 @@ export default function SuggestionCard({
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1 text-xs text-zinc-600 hover:text-zinc-300 transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
