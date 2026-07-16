@@ -147,7 +147,7 @@ export default function App() {
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/termos" element={<Termos />} />
                 <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />
-                <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
+                <Route path="/como-funciona" element={<ComoFunciona />} />
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
                 <Route path="/resultados" element={<ResultadosPublicos />} />
                 <Route path="*" element={<NotFound />} />

@@ -3,7 +3,17 @@ import { Bell, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePushNotification } from '../hooks/usePushNotification'
 
-const LS_KEY = 'pickia_push_dismissed'
+const LS_KEY = 'pickia_push_dismissed_at'
+const RESNOOZE_DAYS = 14
+
+function isSnoozed(): boolean {
+  const raw = localStorage.getItem(LS_KEY)
+  if (!raw) return false
+  const dismissedAt = Number(raw)
+  if (!dismissedAt) return false
+  const elapsedDays = (Date.now() - dismissedAt) / (1000 * 60 * 60 * 24)
+  return elapsedDays < RESNOOZE_DAYS
+}
 
 export default function PushPromptBanner() {
   const { user } = useAuth()
@@ -17,7 +27,10 @@ export default function PushPromptBanner() {
     if (push.permission === 'denied') return
     if (push.subscribed) return
     if (!push.vapidKey) return
-    if (localStorage.getItem(LS_KEY)) return
+    // Convite reaparece a cada RESNOOZE_DAYS se ainda nao ativou -- antes sumia
+    // pra sempre no primeiro "fechar", perdendo qualquer segunda chance de
+    // reduzir a friccao de precisar abrir o app todo dia pra ver os picks.
+    if (isSnoozed()) return
     const t = setTimeout(() => setVisible(true), 1500)
     return () => clearTimeout(t)
   }, [user, push.supported, push.permission, push.subscribed, push.vapidKey])
@@ -34,7 +47,7 @@ export default function PushPromptBanner() {
   }
 
   const dismiss = () => {
-    localStorage.setItem(LS_KEY, '1')
+    localStorage.setItem(LS_KEY, String(Date.now()))
     setVisible(false)
   }
 
