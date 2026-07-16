@@ -28,14 +28,14 @@ _performance_svc = AIPerformanceService()
 load_dotenv(find_dotenv())
 
 AI_MODEL_NAME      = os.getenv("AI_MODEL_ALAVANCAGEM", os.getenv("AI_MODEL_NAME"))
-WC_LEAGUE_ID       = 1          # Copa do Mundo · mantido para enriquecimento de contexto
-ODD_COMBINED_MIN   = 1.45       # odd combinada mínima (produto final)
+WC_LEAGUE_ID       = 1          # Copa do Mundo/selecoes · usado so pra identificar jogos de sede neutra
+ODD_COMBINED_MIN   = 1.48       # odd combinada mínima (produto final)
 ODD_COMBINED_MAX   = 1.55       # odd combinada máxima (produto final)
-ODD_TARGET         = 1.50       # alvo ideal
+ODD_TARGET         = 1.51       # alvo ideal
 ODD_INDIVIDUAL_MIN = 1.05       # mínimo por pick individual (para combos)
 ODD_INDIVIDUAL_MAX = 1.55       # máximo por pick individual (simples)
 CONFIDENCE_MIN     = 0.72
-MAX_FIXTURES       = 15
+MAX_FIXTURES       = 15         # teto de fixtures por chamada · controla tokens (nao mudou ao virar multi-liga)
 
 client               = Anthropic()
 odds_svc             = OddsService()
@@ -90,7 +90,7 @@ SAIDA: apenas JSON valido. Comeca com {{ e termina com }}.\
 
 
 USER_PROMPT_TEMPLATE = """\
-ALAVANCAGEM Copa do Mundo · pick mais seguro do dia para alavancar banca.
+ALAVANCAGEM multi-liga · pick mais seguro do dia para alavancar banca.
 ODD COMBINADA obrigatoria: {odd_min}-{odd_max} | Alvo: ~{odd_target}
 
 --- PICKS ANTERIORES (calibracao por time) ---
@@ -111,7 +111,7 @@ FAIXAS DE ODD INDIVIDUAL (para produto cair em {odd_min}-{odd_max}):
   Regra: calcule o produto EXPLICITAMENTE antes de confirmar. Fora de {odd_min}-{odd_max} → INVALIDO.
 
 CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
-  Leia standings e determine a situacao de cada selecao:
+  Leia standings e determine a situacao de cada time (clube ou selecao):
   PRECISA GANHAR → jogo aberto, mais pressao, mais atividade esperada.
   EMPATE BASTA → pode fechar defensivamente, menos atividade esperada.
   JA CLASSIFICADO/ELIMINADO → possivel rotacao → reduza peso da amostra, declare no reasoning.
@@ -120,14 +120,14 @@ CONTEXTO SITUACIONAL (analise ANTES de qualquer pick):
 CRITERIOS POR PICK: amostra>=5 | taxa_real>=65% | confidence>={conf_min}
 CARTOES: so use se arbitro com >=3 jogos E historico dos times com >=5 jogos e taxa>=60%.
 
---- FIXTURES COPA DO MUNDO + DADOS ---
+--- FIXTURES DO DIA + DADOS ---
 {fixtures_formatados}
 
-SEDE NEUTRA: esta pipeline e 100% Copa do Mundo · nao existe vantagem de mando para nenhuma
-selecao em nenhum jogo. Proibido usar "mandante"/"visitante"/"em casa"/"fora" como justificativa
-no reasoning. Se os blocos de dados vierem nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em
-vez de CASA/FORA, use os dados totais de cada selecao (mando misto).
-QUALIDADE: use "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/"weighted_corners_against" (Copa>Eliminatorias>Amistoso) · ataque E defesa, ambos ja ponderados. Declare ponderacao no reasoning. Se "amostra_suficiente_para_alta_confianca"=false, declare limitacao e nao eleve Q acima de MODERADO.
+MANDO DE CAMPO: jogos de clube (ligas normais) tem vantagem de mando normal · considere-a na analise.
+SEDE NEUTRA (selecoes, league_id=1): nao existe vantagem de mando para essas selecoes. Se os blocos de
+dados vierem nomeados pela selecao (ex: "ESTATISTICAS BRASIL") em vez de CASA/FORA, use os dados totais
+dessa selecao (mando misto) e PROIBIDO usar "mandante"/"visitante"/"em casa"/"fora" no reasoning para ela.
+QUALIDADE (selecoes): use "weighted_goals_for"/"weighted_goals_against" e "weighted_corners_for"/"weighted_corners_against" (Copa>Eliminatorias>Amistoso) · ataque E defesa, ambos ja ponderados. Declare ponderacao no reasoning. Se "amostra_suficiente_para_alta_confianca"=false, declare limitacao e nao eleve Q acima de MODERADO.
 FEITOS vs CEDIDOS (conceitos DIFERENTES · nunca apresente lado a lado sem combinar):
   Formula obrigatoria: valor_esperado = (feitos_do_time × 0.5) + (cedido_pelo_adversario × 0.5)
   Calcule uma unica vez; nunca troque o numero depois no reasoning ("recalibrando"/"corrigindo").
@@ -229,25 +229,29 @@ def has_today_pick() -> bool:
 
 
 # ============================================================
-# BUSCA FIXTURES DA COPA COM ODDS NA FAIXA INDIVIDUAL
+# BUSCA FIXTURES DO DIA (TODAS AS LIGAS) COM ODDS NA FAIXA INDIVIDUAL
 # ============================================================
-def get_wc_fixtures_with_odds() -> list[dict]:
-    """Busca fixtures da Copa de hoje com ao menos uma odd na faixa individual válida para combos."""
+def get_today_fixtures_with_odds() -> list[dict]:
+    """Busca fixtures de hoje de QUALQUER liga cadastrada com ao menos uma odd
+    na faixa individual valida para combos. LIMIT continua em MAX_FIXTURES
+    (controle de tokens da chamada) -- antes so via Copa, agora pode vir de
+    varias ligas simultaneamente, entao o teto importa ainda mais."""
     conn = get_connection()
     cur  = conn.cursor()
     cur.execute("""
         SELECT DISTINCT f.fixture_id, f.home_team_id, f.away_team_id,
-               f.home_team, f.away_team, f.season,
+               f.home_team, f.away_team, f.season, f.league_id,
+               COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
                f.match_datetime
         FROM fixtures f
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE f.league_id = %s
-          AND f.match_datetime::date = CURRENT_DATE
+        LEFT JOIN leagues l ON l.league_id = f.league_id
+        WHERE f.match_datetime::date = CURRENT_DATE
           AND f.status = 'NS'
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
         LIMIT %s
-    """, (WC_LEAGUE_ID, ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX + 0.10, MAX_FIXTURES))
+    """, (ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX + 0.10, MAX_FIXTURES))
     rows = cur.fetchall()
     cur.close()
     conn.close()
@@ -258,9 +262,10 @@ def get_wc_fixtures_with_odds() -> list[dict]:
             "away_team_id":   r[2],
             "home_team":      r[3],
             "away_team":      r[4],
-            "league_id":      WC_LEAGUE_ID,
             "season":         r[5],
-            "match_datetime": str(r[6]),
+            "league_id":      r[6],
+            "league_name":    r[7],
+            "match_datetime": str(r[8]),
         }
         for r in rows
     ]
@@ -269,22 +274,24 @@ def get_wc_fixtures_with_odds() -> list[dict]:
 # ============================================================
 # CARREGA CONTEXTO DO FIXTURE
 # ============================================================
-def _load_fixture_context(fixture_id, home_team_id, away_team_id, season) -> dict:
+def _load_fixture_context(fixture_id, home_team_id, away_team_id, league_id, season) -> dict:
+    is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
+    stats_league_id = WC_LEAGUE_ID if is_national else league_id
     ctx = {}
     try:
-        ctx["home_standing"] = standings_svc.get_team_standing(home_team_id, WC_LEAGUE_ID, season)
+        ctx["home_standing"] = standings_svc.get_team_standing(home_team_id, stats_league_id, season)
     except Exception:
         ctx["home_standing"] = None
     try:
-        ctx["away_standing"] = standings_svc.get_team_standing(away_team_id, WC_LEAGUE_ID, season)
+        ctx["away_standing"] = standings_svc.get_team_standing(away_team_id, stats_league_id, season)
     except Exception:
         ctx["away_standing"] = None
     try:
-        ctx["home_stats"] = team_stats_svc.get_stats(home_team_id, WC_LEAGUE_ID, season, "HOME")
+        ctx["home_stats"] = team_stats_svc.get_stats(home_team_id, stats_league_id, season, "HOME")
     except Exception:
         ctx["home_stats"] = None
     try:
-        ctx["away_stats"] = team_stats_svc.get_stats(away_team_id, WC_LEAGUE_ID, season, "AWAY")
+        ctx["away_stats"] = team_stats_svc.get_stats(away_team_id, stats_league_id, season, "AWAY")
     except Exception:
         ctx["away_stats"] = None
     # Histórico cross-competition: últimos 15 jogos em qualquer competição
@@ -329,12 +336,17 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
     parts = []
     for f in fixtures:
         fid = f["fixture_id"]
+        league_id = f.get("league_id", WC_LEAGUE_ID)
+        is_national = league_id in NATIONAL_TEAM_LEAGUE_IDS
         if preloaded_contexts and fid in preloaded_contexts:
             import copy as _copy
             ctx = _copy.deepcopy(preloaded_contexts[fid])
         else:
-            ctx = _load_fixture_context(fid, f["home_team_id"], f["away_team_id"], f["season"])
-        profiles_text = _get_copa_profiles_text(fid, f["home_team_id"], f["away_team_id"], f["season"])
+            ctx = _load_fixture_context(fid, f["home_team_id"], f["away_team_id"], league_id, f["season"])
+        profiles_text = (
+            _get_copa_profiles_text(fid, f["home_team_id"], f["away_team_id"], f["season"])
+            if is_national else ""
+        )
 
         all_odds = ctx.pop("odds", [])
         filtered_odds = [
@@ -350,7 +362,8 @@ def _format_fixtures(fixtures: list[dict], preloaded_contexts: dict | None = Non
             "fixture_id":     f["fixture_id"],
             "home_team":      f["home_team"],
             "away_team":      f["away_team"],
-            "league_id":      WC_LEAGUE_ID,
+            "league_id":      league_id,
+            "league_name":    f.get("league_name", ""),
             "match_datetime": f["match_datetime"],
             **ctx_trimmed,
         }), ensure_ascii=False, separators=(',', ':'))
@@ -542,11 +555,11 @@ def run_alavancagem_pipeline() -> dict | None:
         print("✅ Pick de alavancagem já existe para hoje.")
         return None
 
-    print(f"🔍 Buscando jogos da Copa do Mundo (odd combinada alvo {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX})...")
-    fixtures = get_wc_fixtures_with_odds()
+    print(f"🔍 Buscando jogos do dia em todas as ligas (odd combinada alvo {ODD_COMBINED_MIN}-{ODD_COMBINED_MAX})...")
+    fixtures = get_today_fixtures_with_odds()
 
     if not fixtures:
-        print("❌ Nenhum jogo da Copa do Mundo encontrado hoje.")
+        print("❌ Nenhum jogo encontrado hoje com odds na faixa individual.")
         return None
 
     print(f"⚽ {len(fixtures)} jogo(s) encontrado(s)")
@@ -556,7 +569,7 @@ def run_alavancagem_pipeline() -> dict | None:
     preloaded: dict[int, dict] = {}
     for f in fixtures:
         try:
-            ctx = _load_fixture_context(f["fixture_id"], f["home_team_id"], f["away_team_id"], f["season"])
+            ctx = _load_fixture_context(f["fixture_id"], f["home_team_id"], f["away_team_id"], f["league_id"], f["season"])
             preloaded[f["fixture_id"]] = ctx
         except Exception as e:
             print(f"  [WARN] Erro ao carregar fixture {f['fixture_id']}: {e}")
