@@ -966,51 +966,6 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-20 bg-zinc-950 border-t border-zinc-800/60">
-        <div className="max-w-4xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <div className="flex items-center justify-center gap-3 mb-4">
-              <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />
-              <h2 className="text-3xl font-black">
-                {COPA_ENDED ? 'Copa 2026: cobertura completa do torneio' : 'Copa 2026 ao vivo, cobertura completa'}
-              </h2>
-            </div>
-            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-              {COPA_ENDED
-                ? 'Do grupo à final, a IA analisou cada jogo do torneio antes de acontecer e entregou os melhores picks.'
-                : 'Do grupo às finais, a IA analisa cada jogo antes de acontecer e entrega os melhores picks do torneio.'}
-            </p>
-          </div>
-          <div className="grid md:grid-cols-4 gap-4">
-            {[
-              { fase: 'Fase de Grupos', jogos: '48 jogos', detalhe: '6 grupos · 4 seleções cada', cor: 'text-green-400', border: 'border-green-500/20 bg-green-500/5' },
-              { fase: 'Oitavas', jogos: '8 jogos', detalhe: 'Eliminatória simples', cor: 'text-blue-400', border: 'border-blue-400/20 bg-blue-400/5' },
-              { fase: 'Quartas e Semis', jogos: '6 jogos', detalhe: 'Odds mais altas · Mais valor', cor: 'text-yellow-400', border: 'border-yellow-400/20 bg-yellow-400/5' },
-              { fase: 'Final', jogos: '1 jogo', detalhe: 'O maior evento do futebol', cor: 'text-orange-400', border: 'border-orange-400/20 bg-orange-400/5' },
-            ].map(({ fase, jogos, detalhe, cor, border }) => (
-              <div key={fase} className={`rounded-2xl p-5 border text-center ${border}`}>
-                <div className={`text-2xl font-black mb-1 ${cor}`}>{jogos}</div>
-                <div className="text-sm font-bold text-white mb-1">{fase}</div>
-                <div className="text-xs text-zinc-500">{detalhe}</div>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8 bg-zinc-900 border border-zinc-800 rounded-2xl p-6 text-center">
-            <p className="text-sm text-zinc-400 mb-1">
-              <span className="text-white font-bold">Além da Copa:</span> Premier League e Brasileirão Série A e B já estão prontos no sistema
-            </p>
-            <p className="text-xs text-zinc-600 mb-4">Os picks começam automaticamente assim que a temporada de cada liga estiver rolando</p>
-            <div className="flex items-center justify-center gap-6">
-              {[39, 71, 72].map(id => (
-                <img key={id} src={LEAGUE_LOGO(id)} alt="" className="w-8 h-8 object-contain opacity-70"
-                  onError={e => (e.currentTarget.style.display='none')} />
-              ))}
-              <span className="text-xs text-zinc-600 font-semibold">e mais...</span>
-            </div>
-          </div>
-        </div>
-      </section>
-
       <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-12">
