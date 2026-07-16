@@ -1,4 +1,4 @@
-﻿import os
+import os
 import json
 from datetime import datetime, date
 from decimal import Decimal
@@ -150,7 +150,7 @@ def _format_picks_ja_usados(picks: list[dict]) -> str:
 # USER PROMPT
 # ============================================================
 USER_PROMPT_TEMPLATE = """
-CALIBRACAO: {desempenho}
+{contexto_liga}CALIBRACAO: {desempenho}
 gap>+0.10 n>=10→reduza score_base | hit<0.50 n>=15→score_base max 0.60 | n<10→ignore | multiplas.hit<0.35→score_combo>=0.70
 
 --- PICKS SIMPLES JA GERADOS HOJE (VIP + Free) ---
@@ -454,14 +454,54 @@ def format_fixtures_for_llm(fixtures: list) -> str:
 # ============================================================
 # CHECK · JÁ TEM MÚLTIPLA HOJE?
 # ============================================================
-def has_today_multipla() -> bool:
+def has_today_multipla(league_id: int | None = None) -> bool:
+    """league_id=None checa a multipla MISTA do dia (jogos de ligas diferentes);
+    um league_id especifico checa a multipla MONO-LIGA daquela liga -- permite
+    gerar uma multipla por liga elegivel no mesmo dia sem se bloquearem."""
     conn = get_connection()
     cur = conn.cursor()
-    cur.execute("SELECT COUNT(*) FROM picks_multiplas WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'")
+    if league_id is None:
+        cur.execute("""
+            SELECT COUNT(*) FROM picks_multiplas
+            WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'
+              AND league_id IS NULL
+        """)
+    else:
+        cur.execute("""
+            SELECT COUNT(*) FROM picks_multiplas
+            WHERE DATE(created_at AT TIME ZONE 'America/Sao_Paulo') = CURRENT_DATE AT TIME ZONE 'America/Sao_Paulo'
+              AND league_id = %s
+        """, (league_id,))
     count = cur.fetchone()[0]
     cur.close()
     conn.close()
     return count >= 1
+
+
+# ============================================================
+# AGRUPA FIXTURES POR LIGA
+# ============================================================
+# Regra: liga com 2+ jogos no dia -> multipla mono-liga (so daquela liga).
+# Ligas com so 1 jogo no dia sobram pra um pool misto (comportamento antigo:
+# combina jogos de ligas diferentes, reduz risco de correlacao "mesma liga").
+MIN_FIXTURES_PER_LEAGUE = 2
+
+
+def group_fixtures_by_league(fixtures: list) -> dict[int, list]:
+    groups: dict[int, list] = {}
+    for fx in fixtures:
+        groups.setdefault(fx["league_id"], []).append(fx)
+    return groups
+
+
+def split_eligible_and_leftover(fixtures: list) -> tuple[dict[int, list], list]:
+    """Retorna (ligas_elegiveis, sobra_mista):
+    - ligas_elegiveis: {league_id: [fixtures]} com >= MIN_FIXTURES_PER_LEAGUE jogos hoje.
+    - sobra_mista: fixtures de ligas que nao bateram o minimo, agrupados pro pool misto."""
+    groups = group_fixtures_by_league(fixtures)
+    eligible = {lid: fxs for lid, fxs in groups.items() if len(fxs) >= MIN_FIXTURES_PER_LEAGUE}
+    leftover = [fx for lid, fxs in groups.items() if lid not in eligible for fx in fxs]
+    return eligible, leftover
 
 
 # ============================================================
@@ -474,7 +514,8 @@ def get_today_fixtures() -> list:
 # ============================================================
 # CHAMADA À IA · análise completa
 # ============================================================
-def run_multipla_llm(fixtures: list, today_used_picks: list | None = None) -> dict:
+def run_multipla_llm(fixtures: list, today_used_picks: list | None = None,
+                      mono_league: bool = False, league_name: str | None = None) -> dict:
     fixtures_formatados = format_fixtures_for_llm(fixtures)
     desempenho = performance_svc.format_for_prompt()
 
@@ -487,11 +528,24 @@ def run_multipla_llm(fixtures: list, today_used_picks: list | None = None) -> di
     if today_used_picks:
         print(f"[MULTIPLA] {len(today_used_picks)} pick(s) VIP/Free injetados como bloqueio de mercado")
 
+    if mono_league:
+        contexto_liga = (
+            f"CONTEXTO DESTA RODADA: todos os jogos abaixo sao da mesma liga ({league_name}), "
+            f"DE PROPOSITO -- essa liga teve {MIN_FIXTURES_PER_LEAGUE}+ jogos hoje e foi escolhida pra "
+            f"montar uma multipla so dela. ISSO SUBSTITUI, so pra esta rodada, a sugestao do system prompt "
+            f"de \"jogos de ligas sem relacao estatistica\": aqui a independencia que importa e por TIME e "
+            f"por MERCADO (times diferentes, argumento de mercado diferente, sem depender do mesmo "
+            f"confirmador tipo arbitro) -- nao rejeite um par so por serem da mesma liga.\n\n"
+        )
+    else:
+        contexto_liga = ""
+
     user_prompt = USER_PROMPT_TEMPLATE.format(
         fixtures_formatados=fixtures_formatados,
         desempenho=desempenho,
         picks_anteriores=picks_anteriores,
         picks_ja_usados=picks_ja_usados,
+        contexto_liga=contexto_liga,
     )
 
     try:
@@ -539,6 +593,11 @@ def create_multipla_table():
         );
     """)
     cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS score_combo NUMERIC;")
+    # league_id/league_name: NULL = multipla mista (jogos de ligas diferentes,
+    # comportamento antigo). Preenchido = multipla mono-liga (todas as pernas
+    # da mesma liga, ex: Brasileirao) -- ver run_multipla_pipeline().
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS league_id INTEGER;")
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS league_name TEXT;")
     conn.commit()
     cur.close()
     conn.close()
@@ -559,7 +618,8 @@ def calculate_multipla_stake(score_combo: float) -> tuple[float, int]:
 # ============================================================
 # SALVA MÚLTIPLA NO BANCO
 # ============================================================
-def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, score_combo: float):
+def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, score_combo: float,
+                   league_id: int | None = None, league_name: str | None = None):
     conn = get_connection()
     cur = conn.cursor()
 
@@ -601,8 +661,8 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
 
     cur.execute("""
         INSERT INTO picks_multiplas
-        (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning, league_id, league_name)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """, (
         name,
         json.dumps(games_info, default=str),
@@ -612,6 +672,8 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
         round(score_combo, 4),
         match_date,
         reasoning,
+        league_id,
+        league_name,
     ))
 
     conn.commit()
@@ -660,81 +722,53 @@ def generate_multipla_message(resultados: dict, fx_map: dict) -> str:
 
 
 # ============================================================
-# PIPELINE COMPLETO
+# UMA RODADA (uma chamada de IA) · mono-liga ou mista
 # ============================================================
-def run_multipla_pipeline() -> dict | None:
-    print("[MULTIPLA] Verificando multiplas do dia...")
-
-    if has_today_multipla():
-        print("[MULTIPLA] Multipla de hoje ja existe. Nada a fazer.")
-        return None
-
-    print("[MULTIPLA] Buscando fixtures do dia...")
-    fixtures_raw = get_today_fixtures()
-
-    if len(fixtures_raw) < 2:
-        print("[MULTIPLA] Menos de 2 fixtures disponiveis · sem multipla.")
-        return None
-
-    # ── Carrega picks VIP/Free do dia ANTES do corte, para priorizar jogos livres ──
-    today_used = _get_today_used_picks()
+def _run_round(fixtures_raw: list, today_used: list, used_pairs: set,
+                league_id: int | None, league_name: str | None, name_prefix: str) -> dict:
+    mono_league = league_id is not None
     used_fixture_ids = {p["fixture_id"] for p in today_used if p.get("fixture_id")}
 
     # Jogos sem nenhum pick VIP/Free vão primeiro · mais chance de mercado livre.
-    # Ordenação estável preserva o horário dentro de cada grupo.
-    fixtures_raw.sort(key=lambda fx: fx["fixture_id"] in used_fixture_ids)
+    fixtures_sorted = sorted(fixtures_raw, key=lambda fx: fx["fixture_id"] in used_fixture_ids)
+    fixtures_sorted = fixtures_sorted[:4]  # máx 4 fixtures por chamada
 
-    fixtures_raw = fixtures_raw[:4]  # máx 4 fixtures por chamada
-    print(f"[MULTIPLA] Carregando dados para {len(fixtures_raw)} fixture(s)...")
+    print(f"[MULTIPLA] [{name_prefix}] Carregando dados para {len(fixtures_sorted)} fixture(s)...")
     fixtures = []
-    fx_map   = {}
+    fx_map: dict = {}
 
-    for fx in fixtures_raw:
+    for fx in fixtures_sorted:
         try:
             ctx = load_fixture_context(
-                fx["fixture_id"],
-                fx["home_team_id"],
-                fx["away_team_id"],
-                fx["league_id"],
-                fx["season"],
+                fx["fixture_id"], fx["home_team_id"], fx["away_team_id"],
+                fx["league_id"], fx["season"],
             )
             if not ctx.get("odds"):
                 print(f"  [SKIP] Sem odds para {fx['home_team']} x {fx['away_team']} · ignorando.")
                 continue
-
             fixtures.append({"fixture": fx, "context": ctx})
             fx_map[fx["fixture_id"]] = fx
-
         except Exception as e:
             print(f"  [WARN] Erro ao carregar {fx['fixture_id']}: {e}")
 
     if len(fixtures) < 2:
-        print("[MULTIPLA] Menos de 2 fixtures com odds disponiveis · sem multipla.")
-        return None
+        print(f"[MULTIPLA] [{name_prefix}] Menos de 2 fixtures com odds disponiveis · sem multipla.")
+        return {}
 
-    # ── Pares (fixture_id, market_type) já usados por VIP/Free, para bloqueio de mercado ──
-    used_pairs: set[tuple] = {
-        (p["fixture_id"], p["market_type"])
-        for p in today_used
-        if p.get("fixture_id") and p.get("market_type")
-    }
-    if used_pairs:
-        print(f"[MULTIPLA] {len(used_pairs)} par(es) (fixture_id, market_type) bloqueados do VIP/Free de hoje")
-
-    # ── IA: análise completa de todos os jogos ────────────────────────────────
-    print(f"[MULTIPLA] Chamando IA com {len(fixtures)} jogo(s)...")
+    print(f"[MULTIPLA] [{name_prefix}] Chamando IA com {len(fixtures)} jogo(s)...")
     try:
-        multipla_json = run_multipla_llm(fixtures, today_used_picks=today_used)
+        multipla_json = run_multipla_llm(
+            fixtures, today_used_picks=today_used,
+            mono_league=mono_league, league_name=league_name,
+        )
     except Exception as e:
-        print(f"[MULTIPLA] Erro na IA: {e}")
-        return None
+        print(f"[MULTIPLA] [{name_prefix}] Erro na IA: {e}")
+        return {}
 
     if multipla_json.get("no_bet"):
         motivo = multipla_json.get("motivo", "criterios nao atingidos")
-        print(f"[MULTIPLA] NO BET · {motivo}")
-        return None
-
-    create_multipla_table()
+        print(f"[MULTIPLA] [{name_prefix}] NO BET · {motivo}")
+        return {}
 
     resultados = {}
 
@@ -743,7 +777,7 @@ def run_multipla_pipeline() -> dict | None:
             continue
 
         group      = multipla_json[key]
-        name       = group["name"]
+        name       = f"{name_prefix}_{group['name']}"
         reasoning  = group.get("reason", "")
         score      = float(group.get("score_combo", 0))
         games_info = group.get("games", [])
@@ -787,7 +821,8 @@ def run_multipla_pipeline() -> dict | None:
                   f"fora da faixa {ODD_TOTAL_MIN}-{ODD_TOTAL_MAX} (IA violou a propria regra).")
             continue
 
-        total_odd = save_multipla(name, games_info, fx_map, reasoning, score)
+        total_odd = save_multipla(name, games_info, fx_map, reasoning, score,
+                                   league_id=league_id, league_name=league_name)
 
         resultados[name] = {
             "odd":      total_odd,
@@ -795,18 +830,85 @@ def run_multipla_pipeline() -> dict | None:
             "games_data": games_info,
         }
 
-    if not resultados:
-        print("[MULTIPLA] Nenhuma multipla valida salva.")
+    return resultados
+
+
+# ============================================================
+# PIPELINE COMPLETO
+# ============================================================
+def run_multipla_pipeline() -> dict | None:
+    print("[MULTIPLA] Verificando multiplas do dia...")
+
+    create_multipla_table()
+
+    print("[MULTIPLA] Buscando fixtures do dia...")
+    fixtures_raw = get_today_fixtures()
+
+    if len(fixtures_raw) < 2:
+        print("[MULTIPLA] Menos de 2 fixtures disponiveis · sem multipla.")
+        return None
+
+    # ── Carrega picks VIP/Free do dia, para priorizar jogos livres e bloquear mercado ──
+    today_used = _get_today_used_picks()
+    used_pairs: set[tuple] = {
+        (p["fixture_id"], p["market_type"])
+        for p in today_used
+        if p.get("fixture_id") and p.get("market_type")
+    }
+    if used_pairs:
+        print(f"[MULTIPLA] {len(used_pairs)} par(es) (fixture_id, market_type) bloqueados do VIP/Free de hoje")
+
+    # ── Agrupa por liga: liga com 2+ jogos hoje ganha multipla so dela;
+    #    o resto (ligas com so 1 jogo) cai no pool misto (comportamento antigo) ──
+    eligible_leagues, leftover = split_eligible_and_leftover(fixtures_raw)
+    if eligible_leagues:
+        resumo = ", ".join(f"{fxs[0].get('league_name') or lid} ({len(fxs)})" for lid, fxs in eligible_leagues.items())
+        print(f"[MULTIPLA] Ligas elegiveis (mono-liga): {resumo}")
+
+    all_resultados: dict = {}
+    all_fx_map: dict = {}
+
+    for league_id, league_fixtures in eligible_leagues.items():
+        if has_today_multipla(league_id=league_id):
+            print(f"[MULTIPLA] Liga {league_id} ja tem multipla hoje. Pulando.")
+            continue
+        league_name = league_fixtures[0].get("league_name") or f"Liga {league_id}"
+        name_prefix = league_name.upper().replace(" ", "_")
+        print(f"[MULTIPLA] === Rodada mono-liga: {league_name} ({len(league_fixtures)} jogos) ===")
+        resultados = _run_round(
+            league_fixtures, today_used, used_pairs,
+            league_id=league_id, league_name=league_name, name_prefix=name_prefix,
+        )
+        all_resultados.update(resultados)
+        all_fx_map.update({fx["fixture_id"]: fx for fx in league_fixtures})
+
+    if len(leftover) >= 2:
+        if has_today_multipla(league_id=None):
+            print("[MULTIPLA] Multipla mista de hoje ja existe. Pulando.")
+        else:
+            print(f"[MULTIPLA] === Rodada mista: {len(leftover)} jogo(s) de liga(s) com < {MIN_FIXTURES_PER_LEAGUE} jogos hoje ===")
+            resultados = _run_round(
+                leftover, today_used, used_pairs,
+                league_id=None, league_name=None, name_prefix="MISTA",
+            )
+            all_resultados.update(resultados)
+            all_fx_map.update({fx["fixture_id"]: fx for fx in leftover})
+    elif leftover:
+        print(f"[MULTIPLA] {len(leftover)} jogo(s) avulso(s) de liga(s) com < {MIN_FIXTURES_PER_LEAGUE} jogos, "
+              f"insuficiente pro pool misto tambem.")
+
+    if not all_resultados:
+        print("[MULTIPLA] Nenhuma multipla valida gerada hoje.")
         return None
 
     print("\n[MULTIPLA] Mensagem para o grupo:")
     print("-" * 40)
-    msg = generate_multipla_message(resultados, fx_map)
+    msg = generate_multipla_message(all_resultados, all_fx_map)
     print(msg)
     print("-" * 40)
 
-    print("[MULTIPLA] Pipeline concluido!")
-    return resultados
+    print(f"[MULTIPLA] Pipeline concluido! {len(all_resultados)} multipla(s) gerada(s).")
+    return all_resultados
 
 
 # ============================================================
