@@ -235,7 +235,6 @@ function RecentResults() {
   }, [])
 
   const s = data?.summary
-  const winRate = s && s.total > 0 ? ((s.greens / s.total) * 100).toFixed(0) : null
   const recent6 = (data?.recent ?? []).slice(0, 6)
 
   return (
@@ -247,28 +246,6 @@ function RecentResults() {
             Todos os picks ficam registrados. Win rate auditável, qualquer pessoa pode conferir.
           </p>
         </div>
-
-        {/* Stats */}
-        {s && s.total > 0 && (
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-10 max-w-2xl mx-auto">
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
-              <div className="text-2xl sm:text-3xl font-black text-green-500">{winRate}%</div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Win Rate</div>
-            </div>
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-4 sm:p-5 text-center">
-              <div className="text-2xl sm:text-3xl font-black text-white">{s.total}</div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Total Picks</div>
-            </div>
-            <div className="bg-zinc-900 border border-green-500/20 rounded-2xl p-4 sm:p-5 text-center">
-              <div className="text-2xl sm:text-3xl font-black text-green-400">{s.greens}</div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Greens</div>
-            </div>
-            <div className="bg-zinc-900 border border-red-500/20 rounded-2xl p-4 sm:p-5 text-center">
-              <div className="text-2xl sm:text-3xl font-black text-red-400">{(s.total - s.greens)}</div>
-              <div className="text-[10px] sm:text-xs text-zinc-500 uppercase tracking-wider mt-1">Reds</div>
-            </div>
-          </div>
-        )}
 
         {/* Lista */}
         {loading ? (
@@ -379,7 +356,15 @@ function RecentResults() {
 }
 
 // ── Dica do Dia gratis (teaser publico, sem login) ────────────────────────
-interface FreePickToday { id: number; home_team_name: string; away_team_name: string; odd: number; result: string | null }
+interface FreePickToday {
+  id: number
+  home_team_name: string
+  away_team_name: string
+  home_team_id?: number | null
+  away_team_id?: number | null
+  odd: number
+  result: string | null
+}
 
 function FreePickTeaser() {
   const [pick, setPick] = useState<FreePickToday | null>(null)
@@ -402,8 +387,10 @@ function FreePickTeaser() {
             <Gift className="w-3.5 h-3.5 text-green-400" />
             <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
           </div>
-          <p className="text-lg sm:text-xl font-black text-white mb-1">
+          <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
+            <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
             {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
+            <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
           </p>
           <p className="text-zinc-500 text-xs mb-6">
             Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
@@ -720,49 +707,12 @@ export default function Landing() {
               <SocialProofStats />
             </div>
 
-            {/* Card de destaque Copa */}
+            {/* Engine rodando ao vivo -- real, nao mockado */}
             <div className="hidden md:block">
               <div className="relative">
                 <div className="absolute -inset-4 bg-gradient-to-br from-green-500/10 to-yellow-400/10 rounded-3xl blur-xl" />
-                <div className="relative bg-zinc-950 border border-zinc-800 rounded-2xl p-6 space-y-4">
-                  {/* Header */}
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                      <span className="text-xs font-semibold text-green-500">Pick do dia · Copa 2026</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-[10px] text-zinc-500 bg-zinc-800 border border-zinc-700 px-2 py-0.5 rounded font-bold uppercase tracking-wider">Exemplo</span>
-                      <span className="text-xs text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2 py-0.5 rounded font-bold">VIP</span>
-                    </div>
-                  </div>
-                  {/* Mock pick card */}
-                  <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-5 h-5 object-contain" />
-                      <span className="text-xs text-zinc-500">Copa do Mundo 2026 · Fase de Grupos</span>
-                    </div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="font-black text-white text-sm">Brasil × Croácia</span>
-                      <span className="text-xs text-green-400 bg-green-500/10 border border-green-500/20 px-2 py-0.5 rounded font-bold">74% conf.</span>
-                    </div>
-                    <p className="text-xs text-zinc-400 mb-3">Gols Over 2.5 · Odd 1.82 · Bet365</p>
-                    <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
-                      <div className="h-full bg-gradient-to-r from-green-600 to-green-400 rounded-full" style={{ width: '74%' }} />
-                    </div>
-                  </div>
-                  {/* Múltiplas de hoje */}
-                  <div className="bg-zinc-900 border border-blue-400/20 rounded-xl p-3">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-xs font-bold text-blue-400">Múltipla do Dia</span>
-                      <span className="text-xs text-zinc-500">Odd 4.20</span>
-                    </div>
-                    <p className="text-xs text-zinc-400">3 seleções · Brasil + Argentina + França Over</p>
-                  </div>
-                  {/* Nota exemplo */}
-                  <p className="text-center text-[10px] text-zinc-700 border-t border-zinc-800/60 pt-3">
-                    Exemplo ilustrativo. Picks reais gerados diariamente pela IA.
-                  </p>
+                <div className="relative">
+                  <BastidoresAnimation />
                 </div>
               </div>
             </div>
@@ -850,59 +800,6 @@ export default function Landing() {
                   </div>
                 </div>
               </div>
-            </div>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-20 bg-zinc-950 border-y border-zinc-800/60">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-black mb-3">Como a IA gera os picks</h2>
-            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-              Não é palpite. É processamento de dados em escala, análise estatística e modelos
-              treinados para o mercado de apostas esportivas.
-            </p>
-          </div>
-          <div className="grid md:grid-cols-3 gap-5">
-            {[
-              {
-                n: '01', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/20',
-                title: 'Coleta de dados',
-                desc: 'Estatísticas completas de cada jogo: gols, escanteios, cartões, posse, forma recente e confrontos diretos. Todas as 48 seleções da Copa analisadas continuamente.',
-              },
-              {
-                n: '02', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20',
-                title: 'Análise estatística',
-                desc: 'A IA calcula médias por contexto (casa/fora), tendências recentes, força ofensiva e defensiva. Compara probabilidades reais com as odds do mercado para encontrar edge.',
-              },
-              {
-                n: '03', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20',
-                title: 'Geração de picks',
-                desc: 'Apenas recomendações com EV positivo e confiança mínima entram no sistema. Picks VIP, Múltiplas e Alavancagem gerados automaticamente todo dia.',
-              },
-            ].map(({ n, color, bg, title, desc }) => (
-              <div key={n} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 relative overflow-hidden">
-                <div className={`absolute -top-3 -right-3 text-7xl font-black opacity-5 ${color}`}>{n}</div>
-                <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border text-sm font-black mb-4 ${bg} ${color}`}>{n}</div>
-                <h3 className="text-base font-black text-white mb-2">{title}</h3>
-                <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-8">
-            <BastidoresAnimation />
-          </div>
-
-          <div className="mt-4 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-xs text-zinc-500 font-medium mb-4">Mercados analisados</p>
-            <div className="flex flex-wrap gap-2">
-              {['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios',
-                'Cartões', 'Gols 1º Tempo'].map(m => (
-                <span key={m} className="bg-zinc-800 border border-zinc-700/60 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-lg">
-                  {m}
-                </span>
-              ))}
             </div>
           </div>
         </div>

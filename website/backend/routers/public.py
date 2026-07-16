@@ -400,8 +400,11 @@ def public_free_pick_today():
         cur.execute("""
             SELECT pf.id, pf.match_date,
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                   COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
+                   COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
                    pf.odd, pf.result
             FROM picks_free pf
+            LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
             WHERE pf.match_date = CURRENT_DATE
             ORDER BY pf.created_at DESC
             LIMIT 1
