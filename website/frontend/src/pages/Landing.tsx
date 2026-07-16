@@ -379,29 +379,42 @@ function FreePickTeaser() {
 
   if (loading || !pick) return null
 
+  const rs = getResultStyle(pick.result)
+
   return (
     <section className="py-14">
       <div className="max-w-2xl mx-auto px-4">
-        <div className="bg-zinc-950 border border-green-500/20 rounded-2xl p-6 sm:p-8 text-center">
-          <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5">
-            <Gift className="w-3.5 h-3.5 text-green-400" />
-            <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
+        <div className="relative">
+          <div className="absolute -inset-3 bg-gradient-to-br from-green-500/15 to-yellow-400/10 rounded-3xl blur-xl" />
+          <div className="relative bg-zinc-950 border border-green-500/30 rounded-2xl p-6 sm:p-8 text-center">
+            <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5 flex-wrap justify-center">
+              <Gift className="w-3.5 h-3.5 text-green-400" />
+              <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
+              {rs && (
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${rs.bg} ${rs.border} ${rs.text}`}>
+                  {rs.label} {rs.emoji}
+                </span>
+              )}
+            </div>
+            <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
+              <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
+              {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
+              <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
+            </p>
+            <p className="text-zinc-500 text-xs mb-6">
+              Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
+            </p>
+            <Link
+              to={`/p/free/${pick.id}`}
+              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
+            >
+              Ver a análise completa
+              <ArrowRight className="w-4 h-4" />
+            </Link>
+            <p className="text-[11px] text-zinc-600 mt-3">
+              Crie sua conta grátis em segundos pra ver o mercado e a análise completa da IA
+            </p>
           </div>
-          <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
-            <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
-            {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
-            <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
-          </p>
-          <p className="text-zinc-500 text-xs mb-6">
-            Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
-          </p>
-          <Link
-            to={`/p/free/${pick.id}`}
-            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
-          >
-            Ver a análise completa
-            <ArrowRight className="w-4 h-4" />
-          </Link>
         </div>
       </div>
     </section>
@@ -666,7 +679,7 @@ export default function Landing() {
         <div className="absolute inset-0 bg-gradient-to-br from-green-500/6 via-transparent to-transparent" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
-          <div className="grid md:grid-cols-2 gap-12 items-center">
+          <div className="grid md:grid-cols-2 gap-12 items-start">
 
             {/* Texto */}
             <div>
