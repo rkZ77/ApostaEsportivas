@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy } from 'lucide-react'
+import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy, Gift, ArrowRight } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -373,6 +373,49 @@ function RecentResults() {
             </div>
           )
         })()}
+      </div>
+    </section>
+  )
+}
+
+// ── Dica do Dia gratis (teaser publico, sem login) ────────────────────────
+interface FreePickToday { id: number; home_team_name: string; away_team_name: string; odd: number; result: string | null }
+
+function FreePickTeaser() {
+  const [pick, setPick] = useState<FreePickToday | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    api.get('/public/free-pick-today')
+      .then(r => setPick(r.data ?? null))
+      .catch(() => {})
+      .finally(() => setLoading(false))
+  }, [])
+
+  if (loading || !pick) return null
+
+  return (
+    <section className="py-14">
+      <div className="max-w-2xl mx-auto px-4">
+        <div className="bg-zinc-950 border border-green-500/20 rounded-2xl p-6 sm:p-8 text-center">
+          <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5">
+            <Gift className="w-3.5 h-3.5 text-green-400" />
+            <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
+          </div>
+          <p className="text-lg sm:text-xl font-black text-white mb-1">
+            {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
+          </p>
+          <p className="text-zinc-500 text-xs mb-6">
+            Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
+          </p>
+          <Link
+            to={`/p/free/${pick.id}`}
+            className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
+          >
+            Ver a análise completa
+            <ArrowRight className="w-4 h-4" />
+          </Link>
+        </div>
       </div>
     </section>
   )
@@ -766,6 +809,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <FreePickTeaser />
 
       <ActivityTicker />
 

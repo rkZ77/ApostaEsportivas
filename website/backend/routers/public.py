@@ -389,6 +389,35 @@ def public_pick(pick_type: str, pick_id: int):
         conn.close()
 
 
+@router.get("/free-pick-today")
+def public_free_pick_today():
+    """Teaser da Dica do Dia (free) de hoje, sem autenticacao -- usado pra
+    dar um gostinho do produto pra quem ainda nao tem conta. Nao expoe
+    mercado/linha/reasoning, so o suficiente pra linkar pra /p/free/{id}."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT pf.id, pf.match_date,
+                   pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                   pf.odd, pf.result
+            FROM picks_free pf
+            WHERE pf.match_date = CURRENT_DATE
+            ORDER BY pf.created_at DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
+            d["match_date"] = d["match_date"].isoformat()
+        return d
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/leaderboard")
 def public_leaderboard():
     """Top 5 usuarios por yield ROI — anonimizados para landing page (min 5 picks resolvidos)."""
