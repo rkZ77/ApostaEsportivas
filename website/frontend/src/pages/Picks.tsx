@@ -409,6 +409,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [modalOdd, setModalOdd] = useState(Number(dica.odd))
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
@@ -448,9 +449,24 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     })
   }
 
-  const handleFollow = (e: React.MouseEvent) => {
+  const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
+    let odd = Number(dica.odd)
+    if (dica.fixture_id) {
+      setFollowing(true)
+      try {
+        const { data } = await api.get('/live/pick-odd', {
+          params: { fixture_id: dica.fixture_id, market_type: dica.market_type ?? '', line: dica.line ?? '' },
+        })
+        if (data?.odd) odd = Number(data.odd)
+      } catch {
+        // sem odd atualizada · segue com a odd ja salva no pick
+      } finally {
+        setFollowing(false)
+      }
+    }
+    setModalOdd(odd)
     setShowModal(true)
   }
 
@@ -661,7 +677,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     </div>
     {showModal && (
       <ApostaModal
-        pickOdd={Number(dica.odd)}
+        pickOdd={modalOdd}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={dica.bet_house}
         maxUnits={Math.max(6, stakeSuggestion?.units ?? 6)}

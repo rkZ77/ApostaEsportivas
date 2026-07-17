@@ -28,6 +28,7 @@ function wcPhase(dateStr?: string): string | null {
 
 interface Suggestion {
   id: number
+  fixture_id?: number
   home_team_name: string
   away_team_name: string
   home_team_id?: number
@@ -74,6 +75,7 @@ export default function SuggestionCard({
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [modalOdd, setModalOdd]   = useState(Number(s.odd))
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
@@ -122,9 +124,24 @@ export default function SuggestionCard({
     })
   }
 
-  const handleFollow = (e: React.MouseEvent) => {
+  const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
+    let odd = Number(s.odd)
+    if (s.fixture_id && s.pick_type !== 'multipla') {
+      setFollowing(true)
+      try {
+        const { data } = await api.get('/live/pick-odd', {
+          params: { fixture_id: s.fixture_id, market_type: s.market_type ?? '', line: s.line ?? '' },
+        })
+        if (data?.odd) odd = Number(data.odd)
+      } catch {
+        // sem odd atualizada · segue com a odd ja salva no pick
+      } finally {
+        setFollowing(false)
+      }
+    }
+    setModalOdd(odd)
     setShowModal(true)
   }
 
@@ -367,7 +384,7 @@ export default function SuggestionCard({
 
     {showModal && (
       <ApostaModal
-        pickOdd={Number(s.odd)}
+        pickOdd={modalOdd}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={s.bet_house}
         maxUnits={s.pick_type === 'multipla' ? 3 : Math.max(10, stakeSuggestion?.units ?? 10)}
