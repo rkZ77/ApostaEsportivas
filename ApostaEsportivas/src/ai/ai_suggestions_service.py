@@ -804,21 +804,35 @@ MERCADOS E ODDS
         return best
 
     # --------------------------------------------------------
-    # CÁLCULO DE STAKE · ½ Kelly fracionado
+    # CÁLCULO DE STAKE · Kelly fracionado
     #
-    # Retorna (stake_pct, stake_units_ref)
-    #   stake_pct      → fração da banca a apostar (0.01–0.05)
-    #   stake_units_ref→ unidades de referência (escala 1–5u)
+    # Espelha EXATAMENTE website/backend/routers/suggestions.py::
+    # _compute_suggested_stake_units (e o frontend, stakeUtils.ts, que
+    # replica o backend) -- unica fonte real de stake que o site usa pra
+    # decidir quanto sugerir ao usuario. Antes este metodo usava tetos mais
+    # generosos pra VIP/Free (escalados por max_units: 10%/8%/5% pra VIP)
+    # que o backend sempre re-cortava pra baixo via min(); pra Multipla
+    # nem era usado (cada pipeline tinha sua propria formula, simples
+    # lookup por score_combo, nunca conferida contra o backend). Corrigido
+    # pra calcular direto no teto real do site, sem depender de corte
+    # posterior nem duplicar a formula em cada pipeline.
     #
-    # Faixas por nível de confiança + EV:
-    #   ≥ 80% conf e EV > 10% → até 5% / 5u
-    #   ≥ 72% conf e EV > 5%  → até 4% / 4u
-    #   demais positivos       → até 3% / 2-3u
-    #   stat_strong (EV ≤ 0)  → 1% / 1u
+    # Retorna (stake_pct, stake_units_ref) -- stake_units_ref assume a
+    # mesma convencao 1u=1% de banca que o site usa como base antes de
+    # converter pro valor de unidade real do usuario.
+    #
+    # pick_type:
+    #   'vip'      → tiers por confidence+EV: ≥80%+EV>10% até 5%/10u,
+    #                ≥72%+EV>5% até 4%/7u, demais até 3%/5u. Kelly 1/2.
+    #   'free'     → teto fixo 2%/6u. Kelly 1/2.
+    #   'multipla' → teto fixo 2.5%/3u. Kelly 1/4. Unico tipo que NAO
+    #                usa EV (o pipeline passa confidence=score_combo,
+    #                que ja resume a forca do combo).
     # --------------------------------------------------------
     @staticmethod
-    def calculate_stake(confidence: float, odd: float, ev: float = 0.0, stat_strong: bool = False, max_units: int = 10) -> tuple[float, int]:
-        if stat_strong or ev <= 0:
+    def calculate_stake(confidence: float, odd: float, ev: float = 0.0,
+                         stat_strong: bool = False, pick_type: str = "vip") -> tuple[float, int]:
+        if stat_strong or (ev <= 0 and pick_type != "multipla"):
             return 0.01, 1
 
         b = float(odd) - 1.0
@@ -832,23 +846,21 @@ MERCADOS E ODDS
         if kelly <= 0:
             return 0.01, 1
 
-        half_kelly = kelly * 0.5
-
-        # Cap por nível de confiança · escala com max_units (VIP=10u, Free=5u)
-        cap_high = round(max_units * 0.01, 4)                       # 10% p/ VIP, 5% p/ Free
-        cap_mid  = round(max_units * 0.008, 4)                      # 8%  p/ VIP, 4% p/ Free
-        cap_low  = round(max(0.03, max_units * 0.005), 4)           # 5%  p/ VIP, 3% p/ Free
-
-        if confidence >= 0.80 and ev > 0.10:
-            cap = cap_high
-        elif confidence >= 0.72 and ev > 0.05:
-            cap = cap_mid
+        if pick_type == "vip":
+            if confidence >= 0.80 and ev > 0.10:
+                cap, max_units = 0.05, 10
+            elif confidence >= 0.72 and ev > 0.05:
+                cap, max_units = 0.04, 7
+            else:
+                cap, max_units = 0.03, 5
+            stake_pct = round(max(0.01, min(cap, kelly * 0.50)), 4)
         else:
-            cap = cap_low
+            cap, kelly_frac, max_units = {
+                "free":     (0.02, 0.50, 6),
+                "multipla": (0.025, 0.25, 3),
+            }.get(pick_type, (0.03, 0.50, 5))
+            stake_pct = round(max(0.005, min(cap, kelly * kelly_frac)), 4)
 
-        stake_pct = round(max(0.01, min(cap, half_kelly)), 4)
-
-        # Unidades de referência (1u = 1% da banca)
         ref_units = max(1, min(max_units, round(stake_pct / 0.01)))
 
         return stake_pct, ref_units

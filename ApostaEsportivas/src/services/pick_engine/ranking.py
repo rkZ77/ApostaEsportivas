@@ -217,13 +217,22 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
     linha) -- select_smart_safe_line tem um fallback conservador que pode
     devolver uma linha com EV negativo quando nenhuma passa no filtro
     primario; esse fallback e valido pra nao deixar a lista vazia sem
-    motivo, mas NUNCA deve virar uma aposta aprovada."""
+    motivo, mas NUNCA deve virar uma aposta aprovada.
+
+    odd>=min_odd tambem e reforcado aqui pelo mesmo motivo: o fallback de
+    select_smart_safe_line pode escolher a MELHOR linha disponivel de um
+    mercado mesmo com odd abaixo de min_odd (ex.: Dupla Chance com odd 1.23
+    quando nao ha outra linha do mercado pra competir) -- sem este gate,
+    esse candidato ainda concorreria por final_score (que nao usa odd) e
+    podia virar o pick final com odd baixa demais para VIP/Free (achado
+    real rodando o motor contra jogos ao vivo)."""
     eligible = [
         c for c in candidates
         if c["taxa_real"] >= config.min_taxa
         and c["amostra"] >= config.min_amostra
         and c["confidence"] >= config.min_confidence
         and c["ev"] > config.min_ev
+        and c["odd"] >= config.min_odd
     ]
     for c in eligible:
         c["final_score"] = final_score(c)
@@ -250,6 +259,8 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
             reasons.append(f"confidence abaixo do minimo ({c['confidence']*100:.1f}% < {config.min_confidence*100:.0f}%)")
         if c["ev"] <= config.min_ev:
             reasons.append(f"EV nao positivo ({c['ev']*100:+.1f}%)")
+        if c["odd"] < config.min_odd:
+            reasons.append(f"odd abaixo do minimo ({c['odd']} < {config.min_odd})")
 
         scored = {**c, "final_score": final_score(c)}
         if reasons:
