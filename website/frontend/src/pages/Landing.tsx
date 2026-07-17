@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy, Gift, ArrowRight } from 'lucide-react'
+import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -98,16 +98,38 @@ function SocialProofStats() {
   )
 }
 
-// 3 passos · jornada do usuário
+// 3 passos · jornada do usuário, com ênfase na análise real da IA
 function ThreeSteps() {
   return (
-    <section id="como-funciona" className="py-16 bg-black border-b border-zinc-800/60">
+    <section id="como-funciona" className="py-20 bg-black border-b border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
-        <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
+        <div className="text-center mb-5">
+          <span className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full">
+            <BrainCircuit className="w-3.5 h-3.5" />
+            Como a IA decide cada pick
+          </span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-black text-center mb-4 leading-tight">
+          Nada de achismo. <span className="text-green-500">Só dado real e matemática.</span>
+        </h2>
+        <p className="text-center text-zinc-400 text-sm max-w-2xl mx-auto mb-8 leading-relaxed">
+          Antes de qualquer pick, a IA cruza forma recente, confronto direto, força do adversário
+          e odds de mercado · milhares de dados por rodada. Só entra quando encontra valor esperado
+          (EV) positivo, sem achismo e auditável do início ao fim.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
+          {['Forma recente', 'Confronto direto', 'Odds de mercado', 'Valor esperado (EV)', 'Confiança mínima ≥ 60%'].map(t => (
+            <span key={t} className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
+              {t}
+            </span>
+          ))}
+        </div>
+
         <div className="grid md:grid-cols-3 gap-5">
           {([
             { n: '1', Icon: UserPlus, title: 'Cria sua conta', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
-            { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
+            { n: '2', Icon: BrainCircuit, title: 'A IA faz a análise pesada', desc: 'Estatística real de forma, confronto direto e odds de mercado, a IA só recomenda quando o valor esperado é positivo. Chega pronto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
             <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>

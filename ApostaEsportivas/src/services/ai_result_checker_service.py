@@ -25,7 +25,8 @@ class AIResultCheckerService:
                 home_yellow_cards, away_yellow_cards,
                 home_red_cards, away_red_cards,
                 home_goals_ht, away_goals_ht,
-                status
+                status,
+                home_offsides, away_offsides
             FROM match_statistics
             WHERE fixture_id = %s
             LIMIT 1;
@@ -40,6 +41,7 @@ class AIResultCheckerService:
         ay, ar = (row[7] or 0), (row[9] or 0)
         hg_ht  = row[10]
         ag_ht  = row[11]
+        h_off, a_off = row[13], row[14]
 
         return {
             "home_goals":    row[0] or 0,
@@ -61,6 +63,9 @@ class AIResultCheckerService:
             "home_goals_ht": hg_ht,
             "away_goals_ht": ag_ht,
             "total_goals_ht": (hg_ht or 0) + (ag_ht or 0) if hg_ht is not None else None,
+            "home_offsides": h_off or 0,
+            "away_offsides": a_off or 0,
+            "total_offsides": (h_off or 0) + (a_off or 0),
         }
 
     ##########################################################################
@@ -130,6 +135,13 @@ class AIResultCheckerService:
         # Gols
         if any(w in name for w in ["gol", "goal", "total de gol"]):
             return "goals"
+
+        # Impedimentos (achado rodando o motor deterministico contra jogos
+        # reais: o motor sugere esse mercado -- pick_engine.classify_market()
+        # ja suporta -- mas nada aqui sabia resolver o resultado real, o pick
+        # ficava pra sempre com result=NULL)
+        if any(w in name for w in ["impediment", "offside"]):
+            return "offsides"
 
         # Dupla Chance  (1X / X2 / 12 / "Casa ou Empate" etc.)
         dc_kws = ["dupla chance", "double chance",
@@ -243,13 +255,20 @@ class AIResultCheckerService:
         elif hg == ag: actual = "x"
         else:          actual = "2"
 
-        # Dupla chance dentro do evaluate_result_1x2
+        # Dupla chance dentro do evaluate_result_1x2. As chaves "home/away" etc
+        # cobrem o value_name cru que a API-Football devolve pro mercado Double
+        # Chance ("Home/Away", "Home/Draw", "Draw/Away") -- achado rodando o
+        # motor deterministico contra jogos reais: esse pick nunca resolvia
+        # GREEN/RED porque so' as variantes PT-BR/compactas existiam aqui.
         combos = {
             "1x": {"1", "x"}, "x1": {"1", "x"},
             "12": {"1", "2"}, "21": {"1", "2"},
             "x2": {"x", "2"}, "2x": {"x", "2"},
             "casaempate": {"1", "x"}, "empatevisitante": {"x", "2"},
             "casavisitante": {"1", "2"},
+            "home/away": {"1", "2"}, "away/home": {"1", "2"},
+            "home/draw": {"1", "x"}, "draw/home": {"1", "x"},
+            "draw/away": {"x", "2"}, "away/draw": {"x", "2"},
         }
         for key, valid in combos.items():
             if key in ln or key in mkt.replace(" ", ""):
@@ -324,6 +343,12 @@ class AIResultCheckerService:
                 stats["away_cards"] if side == "away" else
                 stats["total_cards"]
             )
+        if mt == "offsides":
+            return (
+                stats["home_offsides"] if side == "home" else
+                stats["away_offsides"] if side == "away" else
+                stats["total_offsides"]
+            )
         return None
 
     ##########################################################################
@@ -343,7 +368,7 @@ class AIResultCheckerService:
         # como recalcular o número certo, anula (PUSH) em vez de arriscar
         # um RED/GREEN errado. Mercados de 1° tempo não são afetados (HT é
         # sempre tempo normal, por definição).
-        if mt in ("goals", "corners", "cards") and not is_ht and stats.get("status") in ("AET", "PEN"):
+        if mt in ("goals", "corners", "cards", "offsides") and not is_ht and stats.get("status") in ("AET", "PEN"):
             return ("PUSH", Decimal("0"))
 
         # Seleciona gols corretos (1° tempo ou jogo completo)
@@ -381,6 +406,12 @@ class AIResultCheckerService:
                 stat_val = stats["away_yellow"] if is_yellow else stats["away_cards"]
             else:
                 stat_val = stats["total_yellow"] if is_yellow else stats["total_cards"]
+            result, factor = self.evaluate_asian(stat_val, val, op)
+
+        elif mt == "offsides":
+            stat_val = self._resolve_overunder(stats, mt, side, is_ht)
+            if stat_val is None or val is None:
+                return (None, Decimal("0"))
             result, factor = self.evaluate_asian(stat_val, val, op)
 
         elif mt == "btts":
