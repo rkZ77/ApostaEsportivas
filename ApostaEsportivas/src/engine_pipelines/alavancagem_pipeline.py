@@ -1,11 +1,13 @@
-"""Alavancagem via motor deterministico (pick_engine) -- so roda quando
-DB_ENV=dev. Reimplementa localmente a busca de fixtures/checagem de "ja
-rodou hoje" (nao importa de ai/alavancagem_pipeline.py -- esse modulo
-instancia Anthropic() no nivel de modulo). Mesmo algoritmo guloso da
-multipla, adaptado: aceita fixtures de QUALQUER liga cadastrada (nao mais
-restrito a Copa do Mundo -- ver atualizacao abaixo), permite pernas do
-mesmo fixture ou de fixtures diferentes (regra original), tenta simples ->
-dupla -> tripla ate bater [1.45, 1.55] de odd combinada.
+"""Alavancagem via motor deterministico (pick_engine) -- unico gerador de
+picks_alavancagem desde 2026-07-17 (decisao do usuario de cortar IA em
+producao tambem, nao so em dev). Reimplementa localmente a busca de
+fixtures/checagem de "ja rodou hoje" (nao importa de
+ai/alavancagem_pipeline.py -- esse modulo instancia Anthropic() no nivel
+de modulo). Mesmo algoritmo guloso da multipla, adaptado: aceita fixtures
+de QUALQUER liga cadastrada (nao mais restrito a Copa do Mundo -- ver
+atualizacao abaixo), permite pernas do mesmo fixture ou de fixtures
+diferentes (regra original), tenta simples -> dupla -> tripla ate bater
+[1.45, 1.55] de odd combinada.
 
 Atualizacao: pipeline nasceu restrito a WC_LEAGUE_ID (so fixtures da Copa
 do Mundo, torneio concentrado que facilitava achar combos no mesmo dia).
@@ -13,7 +15,6 @@ Com o torneio acabando (semifinal sabado, final domingo), passou a aceitar
 fixtures de QUALQUER liga cadastrada em `leagues`, mesmo criterio de
 selecao de fixture-do-dia que VIP/Dica/Multipla ja usam -- so 1 alavancagem
 por dia, escolhida entre todos os candidatos elegiveis de todas as ligas."""
-import os
 import itertools
 
 from utils.db_utils import get_connection
@@ -36,11 +37,6 @@ MAX_CANDIDATES_FOR_COMBO = 12
 
 _TIPO_POR_TAMANHO = {1: "simples", 2: "dupla", 3: "tripla"}
 
-
-def _require_dev():
-    if os.getenv("DB_ENV", "").lower() != "dev":
-        raise RuntimeError(
-            "run_alavancagem_engine() so pode rodar com DB_ENV=dev -- producao continua com IA.")
 
 
 def _create_table_if_needed(cur):
@@ -224,8 +220,6 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
 
 
 def run_alavancagem_engine():
-    _require_dev()
-
     conn = get_connection()
     cur = conn.cursor()
     _create_table_if_needed(cur)

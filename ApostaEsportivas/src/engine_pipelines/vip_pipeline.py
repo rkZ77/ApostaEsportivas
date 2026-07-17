@@ -1,10 +1,8 @@
-"""VIP via motor deterministico (pick_engine) -- so roda quando DB_ENV=dev
-(guard explicito abaixo, mesmo se chamado direto por engano). Espelha
-gerar_sugestao_vip.py + ai_suggestions_service.py na estrutura de dados
-salva em picks_vip, mas sem IA: mercado/linha/confidence/EV/probability
-vem do pick_engine, reasoning vem de pick_engine.explain()."""
-import os
-
+"""VIP via motor deterministico (pick_engine) -- unico gerador de picks_vip
+desde 2026-07-17 (decisao do usuario de cortar IA em producao tambem, nao
+so em dev). Espelha gerar_sugestao_vip.py + ai_suggestions_service.py na
+estrutura de dados salva em picks_vip, mas sem IA: mercado/linha/confidence/
+EV/probability vem do pick_engine, reasoning vem de pick_engine.explain()."""
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -18,12 +16,6 @@ from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
-
-
-def _require_dev():
-    if os.getenv("DB_ENV", "").lower() != "dev":
-        raise RuntimeError(
-            "run_vip_engine() so pode rodar com DB_ENV=dev -- producao continua com IA.")
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
@@ -77,8 +69,6 @@ def _save_pick(cur, fixture: dict, pick: dict) -> bool:
 
 
 def run_vip_engine():
-    _require_dev()
-
     fixtures_service = FixturesService()
     match_stats = MatchStatsService()
     odds_service = OddsService()

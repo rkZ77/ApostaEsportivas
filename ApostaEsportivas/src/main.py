@@ -83,52 +83,28 @@ def cmd_odds():
 
 
 def cmd_vip():
-    if os.getenv("DB_ENV", "").lower() == "dev":
-        from engine_pipelines.vip_pipeline import run_vip_engine
-        run_vip_engine()
-        return
-    from gerar_sugestao_vip import AIVipSuggestionsMain
-    AIVipSuggestionsMain().generate_vip_suggestions()
+    # Motor deterministico (pick_engine) -- decisao explicita do usuario
+    # (2026-07-17) de cortar a geracao de picks pra IA em produção tambem,
+    # nao so em dev. Pipelines de IA (gerar_sugestao_vip.py) ficam no
+    # disco, sem uso, pra reverter rapido se precisar -- ja aconteceu
+    # antes (ver memoria de projeto).
+    from engine_pipelines.vip_pipeline import run_vip_engine
+    run_vip_engine()
 
 
 def cmd_dica():
-    if os.getenv("DB_ENV", "").lower() == "dev":
-        from engine_pipelines.dica_pipeline import run_dica_engine
-        run_dica_engine()
-        return
-    from ai.dica_do_dia_pipeline import run_dica_pipeline
-    result = run_dica_pipeline()
-    if result is None:
-        print("[MAIN] Nenhuma dica gerada hoje.")
-    else:
-        print(f"[MAIN] Dica: {result.get('home_team')} x {result.get('away_team')} | "
-              f"{result.get('market')} {result.get('line')} @ {result.get('odd')}")
+    from engine_pipelines.dica_pipeline import run_dica_engine
+    run_dica_engine()
 
 
 def cmd_multiplas():
-    if os.getenv("DB_ENV", "").lower() == "dev":
-        from engine_pipelines.multipla_pipeline import run_multipla_engine
-        run_multipla_engine()
-        return
-    from ai.multipla_pipeline import run_multipla_pipeline
-    result = run_multipla_pipeline()
-    if result is None:
-        print("[MAIN] Nenhuma múltipla gerada hoje.")
-    else:
-        print("[MAIN] Múltipla gerada com sucesso.")
+    from engine_pipelines.multipla_pipeline import run_multipla_engine
+    run_multipla_engine()
 
 
 def cmd_alavancagem():
-    if os.getenv("DB_ENV", "").lower() == "dev":
-        from engine_pipelines.alavancagem_pipeline import run_alavancagem_engine
-        run_alavancagem_engine()
-        return
-    from ai.alavancagem_pipeline import run_alavancagem_pipeline
-    result = run_alavancagem_pipeline()
-    if result:
-        print("[MAIN] Pick de alavancagem gerado.")
-    else:
-        print("[MAIN] Nenhum pick de alavancagem gerado.")
+    from engine_pipelines.alavancagem_pipeline import run_alavancagem_engine
+    run_alavancagem_engine()
 
 
 def cmd_resultados():

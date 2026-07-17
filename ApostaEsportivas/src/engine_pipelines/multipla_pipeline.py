@@ -1,13 +1,13 @@
-"""Multipla via motor deterministico (pick_engine) -- so roda quando
-DB_ENV=dev. Reimplementa localmente selecao de fixtures/checagem de
-"ja rodou hoje"/bloqueio de pares ja usados (nao importa de
-ai/multipla_pipeline.py -- esse modulo instancia Anthropic() no nivel de
-modulo). O algoritmo de escolha de pernas (2-3 jogos ate bater a odd
-total exigida) nao existe hoje em lugar nenhum -- aqui e um guloso
-deterministico: ordena candidatos elegiveis por Score Final, testa
+"""Multipla via motor deterministico (pick_engine) -- unico gerador de
+picks_multiplas desde 2026-07-17 (decisao do usuario de cortar IA em
+producao tambem, nao so em dev). Reimplementa localmente selecao de
+fixtures/checagem de "ja rodou hoje"/bloqueio de pares ja usados (nao
+importa de ai/multipla_pipeline.py -- esse modulo instancia Anthropic()
+no nivel de modulo). O algoritmo de escolha de pernas (2-3 jogos ate
+bater a odd total exigida) nao existe hoje em lugar nenhum -- aqui e um
+guloso deterministico: ordena candidatos elegiveis por Score Final, testa
 combinacoes de fixtures diferentes ate achar uma cujo produto real das
 odds (nunca um valor "esperado") caia na faixa exigida."""
-import os
 import json
 import itertools
 from datetime import datetime
@@ -29,12 +29,6 @@ ODD_TOTAL_MIN = 2.00
 ODD_TOTAL_MAX = 3.00
 MAX_FIXTURES = 4
 MAX_CANDIDATES_FOR_COMBO = 12  # limita o espaco de busca das combinacoes
-
-
-def _require_dev():
-    if os.getenv("DB_ENV", "").lower() != "dev":
-        raise RuntimeError(
-            "run_multipla_engine() so pode rodar com DB_ENV=dev -- producao continua com IA.")
 
 
 def _create_table_if_needed(cur):
@@ -223,8 +217,6 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
 
 
 def run_multipla_engine():
-    _require_dev()
-
     conn = get_connection()
     cur = conn.cursor()
     _create_table_if_needed(cur)
