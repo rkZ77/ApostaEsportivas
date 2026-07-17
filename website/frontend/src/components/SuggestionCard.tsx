@@ -171,7 +171,7 @@ export default function SuggestionCard({
           <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
           <span className="badge-vip">VIP</span>
           {s.market_type && s.market_type !== 'unknown' && (() => {
-            const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartoes', result:'Resultado' }
+            const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartões', result:'Resultado' }
             const mtCls: Record<string,string> = {
               goals:  'text-green-400 border-green-700/50 bg-green-900/20',
               corners:'text-blue-400 border-blue-700/50 bg-blue-900/20',
