@@ -269,6 +269,7 @@ def dynamic_sitemap():
         (f"{_SITEMAP_BASE}/planos", "weekly", "0.9"),
         (f"{_SITEMAP_BASE}/como-funciona", "monthly", "0.7"),
         (f"{_SITEMAP_BASE}/resultados", "daily", "0.8"),
+        (f"{_SITEMAP_BASE}/ligas", "weekly", "0.6"),
         (f"{_SITEMAP_BASE}/login", "monthly", "0.6"),
         (f"{_SITEMAP_BASE}/termos", "yearly", "0.3"),
         (f"{_SITEMAP_BASE}/privacidade", "yearly", "0.3"),
