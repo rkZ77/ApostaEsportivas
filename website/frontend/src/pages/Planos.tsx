@@ -459,7 +459,7 @@ export default function Planos() {
             <div className="flex-1">
               <p className="text-white font-bold text-sm">Solicitar cancelamento ou reembolso</p>
               <p className="text-zinc-500 text-xs mt-0.5">
-                Pelo CDC você tem 7 dias de arrependimento em compras digitais. Reembolso integral garantido
+                Pelo CDC você tem 7 dias de arrependimento em compras digitais. Reembolso integral garantido.
               </p>
             </div>
             <a

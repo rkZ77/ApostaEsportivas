@@ -429,7 +429,7 @@ export default function Profile() {
         {/* Notificacoes push */}
         {push.supported && push.vapidKey !== '' && (
           <div className="card p-5">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificacoes</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificações</p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-zinc-800'}`}>
@@ -439,7 +439,7 @@ export default function Profile() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    {push.subscribed ? 'Notificacoes ativas' : 'Ativar notificacoes'}
+                    {push.subscribed ? 'Notificações ativas' : 'Ativar notificações'}
                   </p>
                   <p className="text-xs text-zinc-500 truncate">
                     {push.subscribed

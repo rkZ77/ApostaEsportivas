@@ -60,7 +60,7 @@ export default function PushPromptBanner() {
           <Bell className="w-4 h-4 text-green-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-black text-white leading-snug">Ativar notificacoes</p>
+          <p className="text-sm font-black text-white leading-snug">Ativar notificações</p>
           <p className="text-xs text-zinc-500 truncate">Aviso quando os picks do dia saírem</p>
         </div>
         <div className="flex items-center gap-2 shrink-0">

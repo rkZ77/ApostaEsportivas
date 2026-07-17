@@ -414,14 +414,14 @@ export default function Banca() {
 
               {/* Streak pessoal */}
               <div className="card p-5">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-4">Sequencia pessoal</p>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-4">Sequência pessoal</p>
                 <div className="flex items-center justify-around">
                   <div className="text-center">
                     <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-green-500' : data?.streak_type === 'red' ? 'text-red-400' : 'text-zinc-600'}`}>
                       {data?.streak > 0 ? data.streak : ''}
                     </div>
                     <div className="text-xs text-zinc-500 mt-1">
-                      {data?.streak_type === 'green' ? 'Greens seguidos' : data?.streak_type === 'red' ? 'Reds seguidos' : 'Sequencia atual'}
+                      {data?.streak_type === 'green' ? 'Greens seguidos' : data?.streak_type === 'red' ? 'Reds seguidos' : 'Sequência atual'}
                     </div>
                   </div>
                   <div className="w-px h-12 bg-zinc-800" />
@@ -429,14 +429,14 @@ export default function Banca() {
                     <div className="text-4xl font-black text-yellow-400">
                       {data?.best_streak > 0 ? data.best_streak : ''}
                     </div>
-                    <div className="text-xs text-zinc-500 mt-1">Melhor sequencia</div>
+                    <div className="text-xs text-zinc-500 mt-1">Melhor sequência</div>
                   </div>
                 </div>
               </div>
 
               {/* Distribuição de resultados */}
               <div className="card p-5">
-                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-4">Distribuicao de resultados</p>
+                <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-4">Distribuição de resultados</p>
                 {distTotal === 0 ? (
                   <p className="text-zinc-600 text-xs text-center py-4">Sem picks resolvidos ainda.</p>
                 ) : (
