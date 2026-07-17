@@ -298,43 +298,6 @@ function RecentResults() {
         ) : (
           <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
         )}
-
-        {/* Simulação de lucro */}
-        {s && s.profit > 1 && (() => {
-          const unidade = 10
-          const inicial = 600
-          const ganho = Math.round(s.profit * unidade)
-          const final_ = inicial + ganho
-          const pct = ((ganho / inicial) * 100).toFixed(0)
-          return (
-            <div className="mt-8 bg-zinc-900 border border-green-500/20 rounded-2xl p-5">
-              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-                <div>
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Simulação · R$10 por unidade</p>
-                  <p className="text-[10px] text-zinc-700 mt-0.5">Seguindo todos os picks desde o início</p>
-                </div>
-                <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-full shrink-0">
-                  Atualizado automaticamente
-                </span>
-              </div>
-              <div className="flex items-center gap-3 sm:gap-6">
-                <div className="text-center shrink-0">
-                  <p className="text-xl sm:text-2xl font-black text-zinc-400">R${inicial}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">banca inicial</p>
-                </div>
-                <div className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-green-400 text-sm font-black">+R${ganho}</span>
-                  <div className="w-full border-t-2 border-dashed border-green-500/30" />
-                  <span className="text-zinc-600 text-[10px]">{s.total} picks · +{pct}%</span>
-                </div>
-                <div className="text-center shrink-0">
-                  <p className="text-xl sm:text-2xl font-black text-green-400">R${final_}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">banca atual</p>
-                </div>
-              </div>
-            </div>
-          )
-        })()}
       </div>
     </section>
   )
@@ -862,24 +825,6 @@ export default function Landing() {
       </section>
 
       <LeaderboardTeaser />
-
-      <section className="py-16 bg-black border-t border-zinc-800/60">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="bg-zinc-900 border border-green-500/20 rounded-2xl p-8 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-2xl mb-4">
-              <UserPlus className="w-6 h-6 text-green-500" />
-            </div>
-            <h2 className="text-2xl font-black text-white mb-2">Indique e ganhe dias de VIP grátis</h2>
-            <p className="text-zinc-400 text-sm max-w-md mx-auto mb-6">
-              Cada amigo que criar conta pela sua indicação te dá +1 dia de VIP. Se ele virar assinante,
-              você ganha +2 dias extras. Sem limite de indicações.
-            </p>
-            <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
-              Criar conta e começar a indicar
-            </Link>
-          </div>
-        </div>
-      </section>
 
       <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4">
