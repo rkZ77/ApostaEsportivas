@@ -5,7 +5,6 @@ import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy, Gift, ArrowRight }
 import api from '../services/api'
 import Footer from '../components/Footer'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
-import { COPA_ENDED } from '../utils/format'
 
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
@@ -140,7 +139,7 @@ function StickyMobileCTA() {
       <div className="flex-1 min-w-0">
         <p className="text-white text-xs font-black leading-none">Começar teste VIP</p>
         <p className="text-green-500 text-[10px] font-semibold mt-0.5">
-          {COPA_ENDED ? '2 dias grátis · Brasileirão + Premier League' : '2 dias grátis · Copa ao vivo'}
+          2 dias grátis · Brasileirão + Premier League
         </p>
       </div>
       <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
@@ -348,7 +347,7 @@ interface FreePickToday {
   result: string | null
 }
 
-function FreePickTeaser() {
+function FreePickTeaserCard() {
   const [pick, setPick] = useState<FreePickToday | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -364,40 +363,50 @@ function FreePickTeaser() {
   const rs = getResultStyle(pick.result)
 
   return (
-    <section className="py-14">
-      <div className="max-w-2xl mx-auto px-4">
-        <div className="relative">
-          <div className="absolute -inset-3 bg-gradient-to-br from-green-500/15 to-yellow-400/10 rounded-3xl blur-xl" />
-          <div className="relative bg-zinc-950 border border-green-500/30 rounded-2xl p-6 sm:p-8 text-center">
-            <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5 flex-wrap justify-center">
-              <Gift className="w-3.5 h-3.5 text-green-400" />
-              <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
-              {rs && (
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${rs.bg} ${rs.border} ${rs.text}`}>
-                  {rs.label} {rs.emoji}
-                </span>
-              )}
-            </div>
-            <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
-              <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
-              {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
-              <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
-            </p>
-            <p className="text-zinc-500 text-xs mb-6">
-              Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
-            </p>
-            <Link
-              to={`/p/free/${pick.id}`}
-              className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
-            >
-              Ver a análise completa
-              <ArrowRight className="w-4 h-4" />
-            </Link>
-            <p className="text-[11px] text-zinc-600 mt-3">
-              Crie sua conta grátis em segundos pra ver o mercado e a análise completa da IA
-            </p>
-          </div>
+    <div className="relative">
+      <div className="absolute -inset-3 bg-gradient-to-br from-green-500/15 to-yellow-400/10 rounded-3xl blur-xl" />
+      <div className="relative bg-zinc-950 border border-green-500/30 rounded-2xl p-6 sm:p-8 text-center">
+        <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5 flex-wrap justify-center">
+          <Gift className="w-3.5 h-3.5 text-green-400" />
+          <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
+          {rs && (
+            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${rs.bg} ${rs.border} ${rs.text}`}>
+              {rs.label} {rs.emoji}
+            </span>
+          )}
         </div>
+        <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
+          <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
+          {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
+          <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
+        </p>
+        <p className="text-zinc-500 text-xs mb-6">
+          Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
+        </p>
+        <Link
+          to={`/p/free/${pick.id}`}
+          className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
+        >
+          Ver a análise completa
+          <ArrowRight className="w-4 h-4" />
+        </Link>
+        <p className="text-[11px] text-zinc-600 mt-3">
+          Crie sua conta grátis em segundos pra ver o mercado e a análise completa da IA
+        </p>
+      </div>
+    </div>
+  )
+}
+
+// No desktop o card entra dentro do hero (embaixo dos Bastidores da IA,
+// preenchendo o espaco vazio que sobrava ali). No mobile a maioria dos
+// usuarios acessa (Android/Safari web) o hero e so texto -- essa versao
+// em secao cheia garante que o pick gratis apareca pra eles tambem.
+function FreePickTeaser() {
+  return (
+    <section className="py-14 md:hidden">
+      <div className="max-w-2xl mx-auto px-4">
+        <FreePickTeaserCard />
       </div>
     </section>
   )
@@ -702,14 +711,18 @@ export default function Landing() {
               <SocialProofStats />
             </div>
 
-            {/* Engine rodando ao vivo -- real, nao mockado */}
-            <div className="hidden md:block">
+            {/* Engine rodando ao vivo + Dica do Dia real -- preenche a coluna,
+                nao mockado. So desktop; no mobile o FreePickTeaser (secao cheia
+                logo abaixo do hero) cobre o mesmo conteudo pra quem acessa
+                por Android/Safari web. */}
+            <div className="hidden md:flex md:flex-col md:gap-6">
               <div className="relative">
                 <div className="absolute -inset-4 bg-gradient-to-br from-green-500/10 to-yellow-400/10 rounded-3xl blur-xl" />
                 <div className="relative">
                   <BastidoresAnimation />
                 </div>
               </div>
+              <FreePickTeaserCard />
             </div>
           </div>
         </div>
@@ -976,26 +989,18 @@ export default function Landing() {
         <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
         <div className="max-w-2xl mx-auto px-4 text-center relative">
           <div className="flex items-center justify-center gap-3 mb-6">
-            {COPA_ENDED
-              ? <Trophy className="w-9 h-9 text-yellow-400" />
-              : <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-10 h-10 object-contain" />}
+            <Trophy className="w-9 h-9 text-yellow-400" />
           </div>
           <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full mb-6">
             <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-            {COPA_ENDED ? 'Brasileirão e Premier League ao vivo' : 'Copa em andamento'}
+            Brasileirão e Premier League ao vivo
           </div>
           <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
-            {COPA_ENDED ? (
-              <>Todo round tem valor.<br /><span className="text-green-500">Não fique de fora.</span></>
-            ) : (
-              <>A Copa está acontecendo.<br /><span className="text-green-500">Não fique de fora.</span></>
-            )}
+            Todo round tem valor.<br /><span className="text-green-500">Não fique de fora.</span>
           </h2>
           <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
             Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span>
-            {COPA_ENDED
-              ? ' Picks de Brasileirão, Premier League, agente IA e muito mais.'
-              : ' Picks de todos os jogos da Copa do Mundo 2026, agente IA e muito mais.'}
+            {' '}Picks de Brasileirão, Premier League, agente IA e muito mais.
           </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link to="/login?mode=register"
