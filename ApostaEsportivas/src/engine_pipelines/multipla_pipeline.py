@@ -16,6 +16,7 @@ from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
@@ -180,14 +181,6 @@ def _find_combo(legs: list) -> tuple | None:
     return None
 
 
-def _calculate_multipla_stake(score_combo: float) -> tuple:
-    if score_combo >= 0.80:
-        return 0.03, 3
-    if score_combo >= 0.70:
-        return 0.02, 2
-    return 0.01, 1
-
-
 def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
     games_info = []
     for p in legs:
@@ -209,7 +202,9 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
 
     match_date = min(p["_fixture"]["match_datetime"] for p in legs).date()
     reasoning = " | ".join(explain(p) for p in legs)
-    stake_pct, stake_units = _calculate_multipla_stake(score_combo)
+    stake_pct, stake_units = AISuggestionsService.calculate_stake(
+        confidence=score_combo, odd=odd_total, pick_type="multipla",
+    )
 
     cur.execute("""
         INSERT INTO picks_multiplas

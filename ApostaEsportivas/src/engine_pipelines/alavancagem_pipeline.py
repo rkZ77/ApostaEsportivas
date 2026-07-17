@@ -1,10 +1,18 @@
 """Alavancagem via motor deterministico (pick_engine) -- so roda quando
-DB_ENV=dev. Reimplementa localmente a busca de fixtures da Copa/checagem
-de "ja rodou hoje" (nao importa de ai/alavancagem_pipeline.py -- esse
-modulo instancia Anthropic() no nivel de modulo). Mesmo algoritmo guloso
-da multipla, adaptado: so fixtures da Copa, permite pernas do mesmo
-fixture ou de fixtures diferentes (regra original), tenta simples ->
-dupla -> tripla ate bater [1.45, 1.55] de odd combinada."""
+DB_ENV=dev. Reimplementa localmente a busca de fixtures/checagem de "ja
+rodou hoje" (nao importa de ai/alavancagem_pipeline.py -- esse modulo
+instancia Anthropic() no nivel de modulo). Mesmo algoritmo guloso da
+multipla, adaptado: aceita fixtures de QUALQUER liga cadastrada (nao mais
+restrito a Copa do Mundo -- ver atualizacao abaixo), permite pernas do
+mesmo fixture ou de fixtures diferentes (regra original), tenta simples ->
+dupla -> tripla ate bater [1.45, 1.55] de odd combinada.
+
+Atualizacao: pipeline nasceu restrito a WC_LEAGUE_ID (so fixtures da Copa
+do Mundo, torneio concentrado que facilitava achar combos no mesmo dia).
+Com o torneio acabando (semifinal sabado, final domingo), passou a aceitar
+fixtures de QUALQUER liga cadastrada em `leagues`, mesmo criterio de
+selecao de fixture-do-dia que VIP/Dica/Multipla ja usam -- so 1 alavancagem
+por dia, escolhida entre todos os candidatos elegiveis de todas as ligas."""
 import os
 import itertools
 
@@ -19,7 +27,6 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
-WC_LEAGUE_ID = 1
 ODD_COMBINED_MIN = 1.45
 ODD_COMBINED_MAX = 1.55
 ODD_INDIVIDUAL_MIN = 1.05
@@ -66,19 +73,21 @@ def _has_today_pick(cur) -> bool:
     return cur.fetchone()[0] >= 1
 
 
-def _wc_fixtures_with_odds(cur) -> list:
+def _fixtures_with_odds_today(cur) -> list:
+    """Fixtures de hoje, de qualquer liga cadastrada, com pelo menos 1 odd
+    na faixa individual -- antes restrito a WC_LEAGUE_ID, ver docstring do
+    modulo."""
     cur.execute("""
         SELECT DISTINCT f.fixture_id, f.home_team_id, f.away_team_id,
                f.home_team, f.away_team, f.season, f.match_datetime, f.league_id, f.round
         FROM fixtures f
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE f.league_id = %s
-          AND f.match_datetime::date = CURRENT_DATE
+        WHERE f.match_datetime::date = CURRENT_DATE
           AND f.status = 'NS'
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
         LIMIT %s
-    """, (WC_LEAGUE_ID, ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX, MAX_FIXTURES))
+    """, (ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX, MAX_FIXTURES))
 
     return [
         {
@@ -228,9 +237,9 @@ def run_alavancagem_engine():
         conn.close()
         return
 
-    fixtures = _wc_fixtures_with_odds(cur)
+    fixtures = _fixtures_with_odds_today(cur)
     if not fixtures:
-        print("[ALAVANCAGEM_ENGINE] Nenhum fixture da Copa com odd na faixa individual hoje.")
+        print("[ALAVANCAGEM_ENGINE] Nenhum fixture com odd na faixa individual hoje.")
         cur.close()
         conn.close()
         return

@@ -139,7 +139,7 @@ def _best_candidate_across_fixtures(fixtures: list) -> tuple | None:
 
 def _save_pick(cur, fixture: dict, pick: dict):
     stake_pct, stake_units = AISuggestionsService.calculate_stake(
-        confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], max_units=5,
+        confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="free",
     )
     reasoning = explain(pick)
 

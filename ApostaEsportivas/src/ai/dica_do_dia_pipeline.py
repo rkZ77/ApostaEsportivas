@@ -455,7 +455,7 @@ def save_dica(pick: dict) -> None:
     # Fallback: se a IA não retornou edge, deriva do EV (conf × odd - 1)
     if ev <= 0 and conf > 0 and odd > 1:
         ev = max(0.0, conf * odd - 1.0)
-    stake_pct, stake_units = AISuggestionsService.calculate_stake(conf, odd, ev, max_units=5)
+    stake_pct, stake_units = AISuggestionsService.calculate_stake(conf, odd, ev, pick_type="free")
 
     conn = get_connection()
     cur  = conn.cursor()

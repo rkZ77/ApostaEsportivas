@@ -19,8 +19,14 @@ class PickEngineConfig:
     # inteira da analise antes mesmo de virar candidato (nao so desconta K).
     min_bookmakers_count: int = 2
 
-    # Smart Safe Line (escolha de linha)
-    min_odd: float = 1.60
+    # Smart Safe Line (escolha de linha). min_odd=1.39: piso pedido pelo
+    # usuario pra VIP -- abaixo disso o retorno nao compensa o risco de uma
+    # unidade presa numa pick de baixo valor, mesmo com confidence alta
+    # (ex.: Dupla Chance quase certa mas odd 1.23). Nao ha teto preferencial
+    # aqui (so o teto de sanidade max_odd=15.0 abaixo) -- odd mais alta que
+    # o ideal (~2.00) e' bem-vinda, so precisa de menos unidades de stake
+    # (calculate_stake ja usa Kelly, que naturalmente pondera por odd).
+    min_odd: float = 1.39
     min_edge: float = 0.05
     # Teto de sanidade: odds muito extremas (>15) geralmente refletem
     # mercado ilíquido/raramente cotado, não valor real -- visto na pratica

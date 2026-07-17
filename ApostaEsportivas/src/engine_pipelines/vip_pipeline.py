@@ -48,7 +48,7 @@ def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_
 
 def _save_pick(cur, fixture: dict, pick: dict) -> bool:
     stake_pct, stake_units = AISuggestionsService.calculate_stake(
-        confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], max_units=10,
+        confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="vip",
     )
     reasoning = explain(pick)
 
