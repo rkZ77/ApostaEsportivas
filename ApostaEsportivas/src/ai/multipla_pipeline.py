@@ -13,7 +13,7 @@ from services.team_stats_service import TeamStatsService
 from services.match_stats_service import MatchStatsService, NATIONAL_TEAM_LEAGUE_IDS
 from services.ai_performance_service import AIPerformanceService
 from services.national_team_profile_service import NationalTeamProfileService
-from ai.ai_suggestions_service import translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
+from ai.ai_suggestions_service import AISuggestionsService, translate_market, is_market_reasoning_coherent, dedup_odds, normalize_structured_odds, _market_type_from_name as _classify_market_type
 from ai.prompts.team_prompt_builder import TeamPromptBuilder
 
 load_dotenv(find_dotenv())
@@ -604,18 +604,6 @@ def create_multipla_table():
 
 
 # ============================================================
-# STAKE PARA MÚLTIPLAS (conservador · max 3u)
-# ============================================================
-def calculate_multipla_stake(score_combo: float) -> tuple[float, int]:
-    if score_combo >= 0.80:
-        return 0.03, 3
-    elif score_combo >= 0.70:
-        return 0.02, 2
-    else:
-        return 0.01, 1
-
-
-# ============================================================
 # SALVA MÚLTIPLA NO BANCO
 # ============================================================
 def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, score_combo: float,
@@ -657,7 +645,9 @@ def save_multipla(name: str, games_info: list, fx_map: dict, reasoning: str, sco
                 match_date = dt.date()
             break
 
-    stake_pct, stake_units = calculate_multipla_stake(score_combo)
+    stake_pct, stake_units = AISuggestionsService.calculate_stake(
+        confidence=score_combo, odd=total_odd, pick_type="multipla",
+    )
 
     cur.execute("""
         INSERT INTO picks_multiplas
