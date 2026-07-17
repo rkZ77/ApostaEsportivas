@@ -542,7 +542,7 @@ function ActivityTicker() {
 
 // ── Bastidores da IA ─────────────────────────────────────────────────────
 const BAST = [
-  { text: 'Coletando dados dos jogos...', val: '64 jogos Copa 2026' },
+  { text: 'Coletando dados dos jogos...', val: 'jogos do dia' },
   { text: 'Analisando estatísticas...', val: '18.412 dados' },
   { text: 'Calculando valor esperado (EV)...', val: 'edge positivo' },
   { text: 'Validando confiança mínima...', val: '≥ 60%' },
@@ -594,8 +594,8 @@ export default function Landing() {
   }, [])
 
   const chatMessages = [
-    { q: 'Qual o melhor pick para hoje na Copa?', a: 'Analisando os 64 jogos da Copa do Mundo 2026... Brasil x Croácia: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambas as seleções marcaram em 80% dos confrontos recentes.' },
-    { q: 'Como está a forma do Brasil nos últimos 5 jogos?', a: 'Brasil: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da Copa. Pick recomendado: Gols Over 1.5.' },
+    { q: 'Qual o melhor pick para hoje no Brasileirão?', a: 'Analisando os jogos do Brasileirão de hoje... Flamengo x Palmeiras: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambos os times marcaram em 80% dos confrontos recentes.' },
+    { q: 'Como está a forma do Flamengo nos últimos 5 jogos?', a: 'Flamengo: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da liga. Pick recomendado: Gols Over 1.5.' },
     { q: 'Explica a Alavancagem', a: 'A Alavancagem começa com R$50 e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 greens transforma R$50 em +R$300. Reset automático no RED.' },
   ]
 
@@ -603,7 +603,7 @@ export default function Landing() {
     <>
     <Helmet>
       <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
-      <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura de Copa do Mundo, Premier League e Brasileirão. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
+      <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura de Brasileirão e Premier League. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
       <link rel="canonical" href="https://pickia.com.br/" />
     </Helmet>
     <div className="min-h-screen bg-black text-white overflow-x-hidden">
@@ -615,7 +615,7 @@ export default function Landing() {
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
             <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-              Copa 2026 · Premier League · Brasileirão
+              Brasileirão · Premier League
             </span>
           </div>
           <div className="flex items-center gap-5">
@@ -678,12 +678,12 @@ export default function Landing() {
 
             {/* Texto */}
             <div>
-              {/* Badge Copa AO VIVO */}
+              {/* Badge AO VIVO */}
               <div className="inline-flex items-center gap-2 mb-6">
-                <img src="/logo-copa-mundo.png" alt="Copa 2026" className="w-8 h-8 object-contain" />
+                <Trophy className="w-6 h-6 text-yellow-400" />
                 <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full inline-flex items-center gap-1.5">
                   <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-                  Copa 2026 ao vivo
+                  Brasileirão e Premier League ao vivo
                 </span>
               </div>
 
@@ -696,7 +696,7 @@ export default function Landing() {
               </h1>
 
               <p className="text-zinc-400 text-base leading-relaxed mb-8">
-                A IA analisa cada jogo da Copa do Mundo 2026, Premier League e Brasileirão com dados reais de
+                A IA analisa cada jogo do Brasileirão e da Premier League com dados reais de
                 estatísticas, forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
                 toda manhã. De graça pra começar.
               </p>
@@ -762,7 +762,7 @@ export default function Landing() {
                   'Analisa picks do dia sob demanda',
                   'Explica cada mercado e odd recomendada',
                   'Compara times com estatísticas reais',
-                  'Sugere estratégias de banca para a Copa',
+                  'Sugere estratégias de gestão de banca',
                   'Disponível 24/7, resposta em segundos',
                 ].map(t => (
                   <li key={t} className="flex items-center gap-3 text-sm text-zinc-300">
@@ -783,7 +783,7 @@ export default function Landing() {
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                   <span className="text-sm font-black text-white">Agente PickIA</span>
                 </div>
-                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">Futebol · Copa 2026</span>
+                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">Futebol · IA</span>
               </div>
               <div className="p-4 space-y-3 min-h-[260px]">
                 <div className="flex justify-end">
@@ -900,8 +900,8 @@ export default function Landing() {
                   'Acesso permanente sem expiração',
                   'Sem limite de período',
                   'Suporte prioritário',
-                  'Copa do Mundo 2026 completa',
-                  'Premier League e Brasileirão Série A/B',
+                  'Brasileirão Série A e B completos',
+                  'Premier League completa',
                 ].map(t => (
                   <div key={t} className="flex items-center gap-2.5">
                     <Check />
@@ -968,7 +968,7 @@ export default function Landing() {
               },
               {
                 q: 'Quais ligas são cobertas?',
-                a: 'A Copa do Mundo 2026 está ao vivo agora, com cobertura dos 64 jogos. Premier League e Brasileirão Série A e B já estão configurados no sistema e entram automaticamente assim que a temporada de cada um estiver rolando (o Brasileirão volta em breve). Mais ligas entram conforme o calendário avança.',
+                a: 'Brasileirão Série A e B e Premier League estão ao vivo agora. A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando. Mais ligas e torneios entram conforme o calendário avança.',
               },
             ].map(({ q, a }, i) => (
               <div key={i} className="border border-zinc-800 rounded-xl overflow-hidden">
