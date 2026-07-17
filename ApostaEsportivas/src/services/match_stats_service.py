@@ -121,8 +121,14 @@ class MatchStatsService:
     # Últimos 10 jogos (CASA + FORA) da liga + temporada
     # Inclui opponent_name e opponent_rank via join com league_standings
     ##########################################################################
-    def get_all_matches_full(self, team_id, season, league_id):
-        return self._query("""
+    def get_all_matches_full(self, team_id, season, league_id, before_date=None):
+        """before_date (opcional): só jogos com match_date < before_date --
+        usado por backtests pra evitar vazar resultado futuro no histórico
+        de um fixture já encerrado. None (padrão) preserva o comportamento
+        atual (últimos 15 jogos existentes no banco)."""
+        date_filter = "AND ms.match_date < %s" if before_date else ""
+        params = (team_id, team_id, team_id, season, league_id) + ((before_date,) if before_date else ())
+        return self._query(f"""
             SELECT
                 ms.match_date,
                 ms.home_team_id, ms.away_team_id,
@@ -150,9 +156,10 @@ class MatchStatsService:
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.season = %s
               AND ms.league_id = %s
+              {date_filter}
             ORDER BY ms.match_date DESC
             LIMIT 15;
-        """, (team_id, team_id, team_id, season, league_id))
+        """, params)
 
     ##########################################################################
     # Interface unificada padrão (já existente)
@@ -175,8 +182,14 @@ class MatchStatsService:
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################
-    def get_last_n_all_competitions(self, team_id, limit=15):
-        return self._query("""
+    def get_last_n_all_competitions(self, team_id, limit=15, before_date=None):
+        """before_date (opcional): só jogos com match_date < before_date --
+        usado por backtests pra evitar vazar resultado futuro no histórico
+        de um fixture já encerrado. None (padrão) preserva o comportamento
+        atual (últimos N jogos existentes no banco)."""
+        date_filter = "AND ms.match_date < %s" if before_date else ""
+        params = (team_id, team_id) + ((before_date,) if before_date else ()) + (limit,)
+        return self._query(f"""
             SELECT
                 ms.match_date,
                 ms.league_id,
@@ -197,9 +210,10 @@ class MatchStatsService:
             FROM match_statistics ms
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status = 'FT'
+              {date_filter}
             ORDER BY ms.match_date DESC
             LIMIT %s;
-        """, (team_id, team_id, limit))
+        """, params)
 
     ##########################################################################
     # Ponderação por qualidade do adversário
