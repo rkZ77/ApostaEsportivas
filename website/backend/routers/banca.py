@@ -584,13 +584,10 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
             raise HTTPException(404, "Pick não encontrado.")
         if pick.get("result"):
             raise HTTPException(400, "Não é possível registrar aposta após o resultado.")
-        kickoff = pick.get("match_datetime")
-        if kickoff:
-            # match_datetime e gravado pelo coletor de fixtures como horario de Brasilia
-            # "naive" (convert_utc_to_br_naive) -- comparar direto com "agora" em BR, sem
-            # tratar como UTC (isso fazia o bloqueio disparar ~3h antes do jogo comecar).
-            if datetime.now(BR_TZ).replace(tzinfo=None) >= kickoff:
-                raise HTTPException(400, "Não é possível registrar aposta após o início da partida.")
+        # Decisao do usuario (2026-07-17): permitir registrar aposta mesmo
+        # depois do jogo ja ter comecado (odd atualizada na hora via
+        # GET /api/live/pick-odd, buscada pelo frontend antes de abrir o
+        # modal) -- so bloqueia quando ja existe resultado (acima).
         cur.execute(
             "SELECT id FROM user_followed_picks WHERE user_id=%s AND pick_id=%s AND pick_type=%s",
             (user_id, body.pick_id, body.pick_type),
