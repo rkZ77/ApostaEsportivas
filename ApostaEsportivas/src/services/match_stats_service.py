@@ -6,9 +6,9 @@ from services.pick_engine.competition_profile import national_team_league_ids
 
 # Competições de seleções nacionais (API-Football IDs).
 # Para esses torneios, o histórico deve cruzar TODAS as competições
-# (Copa + Eliminatórias + Amistosos) — não só a liga atual.
+# (Copa + Eliminatórias + Amistosos) · não só a liga atual.
 # Fonte única: services/pick_engine/competition_profile.py (Prioridade 1 do
-# plano de refatoração — antes essa lista era mantida em paralelo aqui).
+# plano de refatoração · antes essa lista era mantida em paralelo aqui).
 NATIONAL_TEAM_LEAGUE_IDS: frozenset = national_team_league_ids()
 
 
@@ -171,7 +171,7 @@ class MatchStatsService:
         return self.get_all_matches_full(team_id, season, league_id)
 
     ##########################################################################
-    # SELEÇÕES — Últimos N jogos em QUALQUER competição (sem filtro de liga)
+    # SELEÇÕES · Últimos N jogos em QUALQUER competição (sem filtro de liga)
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################

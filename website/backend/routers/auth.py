@@ -42,7 +42,7 @@ _LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
 
 
 def _hash_token(token: str) -> str:
-    """SHA-256 hex digest de um token — nunca armazena plaintext no DB."""
+    """SHA-256 hex digest de um token · nunca armazena plaintext no DB."""
     return hashlib.sha256(token.encode()).hexdigest()
 
 def _logo_data_uri() -> str:
@@ -168,7 +168,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
     from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
 
     if not api_key:
-        logger.warning("[EMAIL] RESEND_API_KEY não configurado — email para %s ignorado", to)
+        logger.warning("[EMAIL] RESEND_API_KEY não configurado · email para %s ignorado", to)
         return
 
     resend.api_key = api_key
@@ -183,7 +183,7 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
 
     try:
         resend.Emails.send(params)
-        logger.info("[EMAIL] Enviado para %s — assunto: %s", to, subject)
+        logger.info("[EMAIL] Enviado para %s · assunto: %s", to, subject)
     except Exception as e:
         logger.error("[EMAIL] Falha ao enviar para %s: %s", to, e)
 
@@ -420,7 +420,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
             (' '.join(w.capitalize() for w in body.name.strip().split()), body.email, hash_password(body.password), phone_e164, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
         )
         user = dict(cur.fetchone())
-        # Trial gratuito de 2 dias — apenas para usuários que forneceram CPF no cadastro
+        # Trial gratuito de 2 dias · apenas para usuários que forneceram CPF no cadastro
         plan_final = "free"
         expires_final = None
         if cpf_digits:

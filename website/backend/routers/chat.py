@@ -201,7 +201,7 @@ def _get_site_context(user_id: int) -> str:
                     for p in preview:
                         lines.append(f"  • {p['home_team_name']} x {p['away_team_name']}: {p['market']} | {p.get('result') or 'pendente'}")
 
-            # Pick Seguro (gratuito — sempre visível)
+            # Pick Seguro (gratuito · sempre visível)
             cur.execute("""
                 SELECT home_team, away_team, market, line, odd, result
                 FROM picks_free WHERE match_date = CURRENT_DATE ORDER BY created_at DESC LIMIT 1

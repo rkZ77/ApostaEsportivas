@@ -139,7 +139,7 @@ class AIResultCheckerService:
         if any(w in name for w in dc_kws):
             return "double_chance"
 
-        # Classificação (mata-mata) — quem avança de fase (90min + prorrogação + pênaltis)
+        # Classificação (mata-mata) · quem avança de fase (90min + prorrogação + pênaltis)
         if any(w in name for w in ["classificaç", "classificacao", "to qualify", "qualify", "passagem de fase"]):
             return "to_qualify"
 
@@ -394,7 +394,7 @@ class AIResultCheckerService:
 
         elif mt == "to_qualify":
             # Lado vem do campo line ("Casa"/"Visitante"/"Home"/"Away"), não do nome do mercado.
-            # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis —
+            # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis ·
             # essa informação não é capturada em match_statistics hoje, então não arriscamos
             # um GREEN/RED errado e deixamos pendente para conferência manual.
             side_line = (str(line) or "").strip().lower()
@@ -464,7 +464,7 @@ class AIResultCheckerService:
 
             stats = self.get_fixture_result(fixture_id, cur)
             if not stats:
-                print(f"[CHECKER] Sem stats para fixture_id={fixture_id} (id={sid}) — aguardando sync.")
+                print(f"[CHECKER] Sem stats para fixture_id={fixture_id} (id={sid}) · aguardando sync.")
                 continue
 
             result, factor = self.evaluate_pick(market, line, float(odd), stats,
@@ -490,7 +490,7 @@ class AIResultCheckerService:
                 """, (result, profit, sid))
                 conn.commit()
             except Exception as e:
-                print(f"[CHECKER] Erro ao salvar id={sid}: {e} — reconectando...")
+                print(f"[CHECKER] Erro ao salvar id={sid}: {e} · reconectando...")
                 try: conn.rollback()
                 except Exception: pass
                 conn = get_connection()

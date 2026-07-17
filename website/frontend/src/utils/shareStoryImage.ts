@@ -202,7 +202,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   cursorY += 150
 
-  // ── Oferta + link (compacto — sem QR: quem vê o Story está no mesmo
+  // ── Oferta + link (compacto · sem QR: quem vê o Story está no mesmo
   //    celular, então não dá pra escanear; um link grande e memorável
   //    funciona melhor, e deixa espaço livre pra pessoa colar o sticker
   //    de link do Instagram por cima) ─────────────────────────────────
@@ -216,7 +216,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   ctx.fillText(pillLabel, W / 2, cursorY + 39)
   cursorY += 58 + 48
 
-  // Mostra só o domínio (limpo, memorizável) — o link completo com ?ref= já
+  // Mostra só o domínio (limpo, memorizável) · o link completo com ?ref= já
   // vai junto no navigator.share/clipboard, não precisa aparecer na imagem
   const displayDomain = (() => {
     try { return new URL(input.shareUrl).hostname.replace(/^www\./, '') }

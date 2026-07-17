@@ -215,8 +215,8 @@ _DEV_PIPELINE_STEPS = [
 # Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
 _PIPELINE_TIMEOUTS = {
     "atualizar_jogos": 900.0,   # 15 min
-    "gerar_vip":       600.0,   # 10 min — múltiplos fixtures com chamadas IA
-    "gerar_multipla":  600.0,   # 10 min — IA + carregamento de contexto
+    "gerar_vip":       600.0,   # 10 min · múltiplos fixtures com chamadas IA
+    "gerar_multipla":  600.0,   # 10 min · IA + carregamento de contexto
     "gerar_alavancagem": 600.0, # 10 min
     "default":         300.0,   # 5 min para os demais
 }
@@ -386,7 +386,7 @@ class SyncPaymentBody(BaseModel):
 
 @router.post("/sync-payment")
 async def sync_payment(body: SyncPaymentBody, current_user: dict = Depends(require_admin)):
-    """Reprocessa um pagamento do MercadoPago pelo ID — ativa VIP manualmente se aprovado."""
+    """Reprocessa um pagamento do MercadoPago pelo ID · ativa VIP manualmente se aprovado."""
     import mercadopago as _mp
     from datetime import timedelta, timezone
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")

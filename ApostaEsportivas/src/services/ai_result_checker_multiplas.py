@@ -29,7 +29,7 @@ class AIMultiplasCheckerService:
 
         stats = self._engine.get_fixture_result(fixture_id, cur)
         if not stats:
-            return None  # jogo ainda sem resultado — não validar
+            return None  # jogo ainda sem resultado · não validar
 
         result, factor = self._engine.evaluate_pick(
             market, line, float(odd), stats, home_team, away_team
@@ -37,13 +37,13 @@ class AIMultiplasCheckerService:
 
         if result is None:
             return None  # dados ausentes → leg ainda pendente
-        # Múltipla exige acerto pleno — HALF e PUSH viram RED
+        # Múltipla exige acerto pleno · HALF e PUSH viram RED
         if result not in ("GREEN", "RED"):
             return "RED"
         return result
 
     ##########################################################################
-    # MAIN — só valida quando TODOS os jogos tiverem stats
+    # MAIN · só valida quando TODOS os jogos tiverem stats
     ##########################################################################
     def check_all_results(self):
 
@@ -88,7 +88,7 @@ class AIMultiplasCheckerService:
                 r = self.evaluate_leg(leg, cur)
                 if r is None:
                     fid = leg.get("fixture_id", "?")
-                    print(f"[CHECKER MULTIPLAS] id={mid}: sem stats para fixture_id={fid} — aguardando.")
+                    print(f"[CHECKER MULTIPLAS] id={mid}: sem stats para fixture_id={fid} · aguardando.")
                     leg_results.append(None)
                 else:
                     leg["result"] = r  # anota resultado parcial na perna
@@ -140,7 +140,7 @@ class AIMultiplasCheckerService:
                 """, (final_result, profit, json.dumps(games), mid))
                 conn.commit()
             except Exception as e:
-                print(f"[CHECKER MULTIPLAS] Erro ao salvar id={mid}: {e} — reconectando...")
+                print(f"[CHECKER MULTIPLAS] Erro ao salvar id={mid}: {e} · reconectando...")
                 try: conn.rollback()
                 except Exception: pass
                 conn = get_connection()

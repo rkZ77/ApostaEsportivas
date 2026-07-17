@@ -18,15 +18,15 @@ from collectors.odds_collector_service import MARKET_TYPE_MAP as _BET_ID_TYPE_MA
 load_dotenv(find_dotenv())
 
 # Competições disputadas em sede neutra (nenhuma seleção/time tem vantagem de mando real).
-# Usado para trocar os rótulos "CASA"/"FORA" nos blocos de dados por nomes dos times —
+# Usado para trocar os rótulos "CASA"/"FORA" nos blocos de dados por nomes dos times ·
 # evita que a IA trate mando administrativo como se fosse vantagem de campo real.
 # Fonte única: services/pick_engine/competition_profile.py (Prioridade 1 do
-# plano de refatoração — antes essa lista era mantida em paralelo aqui).
+# plano de refatoração · antes essa lista era mantida em paralelo aqui).
 NEUTRAL_VENUE_LEAGUES = neutral_venue_league_ids()
 
 
 # ============================================================
-# CONTEXTO WEB — busca informações sobre o jogo via Tavily
+# CONTEXTO WEB · busca informações sobre o jogo via Tavily
 # ============================================================
 def fetch_web_context(home_team: str, away_team: str, competition: str, match_date: str) -> str:
     """Busca contexto externo sobre o jogo via Tavily API (opcional).
@@ -185,7 +185,7 @@ def _market_type_from_name(market: str) -> str | None:
     if any(x in m for x in ["1x2", "resultado", "winner", "vencedor",
                               "dupla chance", "handicap", "match winner"]):
         return "result"
-    return None  # desconhecido — não force "result", deixa keyword matching agir
+    return None  # desconhecido · não force "result", deixa keyword matching agir
 
 def normalize_structured_odds(odds: list) -> list:
     """Combina value_name + line_value em um campo 'line' unificado.
@@ -384,7 +384,7 @@ class AISuggestionsService:
 
         if neutral_venue:
             # Sede neutra (ex.: Copa do Mundo): não existe vantagem de mando real. Os blocos
-            # usam o NOME do time em vez de CASA/FORA — isso evita que a IA confunda a
+            # usam o NOME do time em vez de CASA/FORA · isso evita que a IA confunda a
             # identificação administrativa do fixture (quem é "home_team_id") com vantagem
             # de campo de verdade, que é exatamente a contradição que gerava reasoning
             # baseado em "away_corners"/"home_corners" mesmo declarando sede neutra.
@@ -474,10 +474,10 @@ MERCADOS E ODDS
                 except RateLimitError as e:
                     rate_retries += 1
                     if rate_retries > MAX_RATE_RETRIES:
-                        print(f"[AI API ERROR] Rate limit após {MAX_RATE_RETRIES} tentativas — abortando fixture {fixture_id}")
+                        print(f"[AI API ERROR] Rate limit após {MAX_RATE_RETRIES} tentativas · abortando fixture {fixture_id}")
                         return []
                     print(f"[AI RATE LIMIT] Rate limit atingido (tentativa {rate_retries}/{MAX_RATE_RETRIES}) "
-                          f"— aguardando {RATE_LIMIT_WAIT}s...")
+                          f"· aguardando {RATE_LIMIT_WAIT}s...")
                     time.sleep(RATE_LIMIT_WAIT)
                 except Exception as e:
                     print(f"[AI API ERROR] tentativa {attempt}: {e}")
@@ -508,7 +508,7 @@ MERCADOS E ODDS
     # --------------------------------------------------------
     def _format_structured_odds_for_ai(self, structured_odds: list[dict]) -> list[dict]:
         """Converte odds estruturadas para o formato que a IA recebe na Call 2 (análise).
-        Sem filtro de odd — cada prompt define o range permitido. Bloqueia só Match Winner."""
+        Sem filtro de odd · cada prompt define o range permitido. Bloqueia só Match Winner."""
         _BLOCKED = {
             "match winner", "resultado final (1x2)", "1x2",
             "first half winner", "vencedor do 1º tempo",
@@ -550,7 +550,7 @@ MERCADOS E ODDS
         return result
 
     # --------------------------------------------------------
-    # IA — GERA 3 SUGESTÕES
+    # IA · GERA 3 SUGESTÕES
     # --------------------------------------------------------
     def generate_suggestions(
         self,
@@ -672,7 +672,7 @@ MERCADOS E ODDS
         if len(data) < before:
             print(f"[AI] {before - len(data)} sugestao(es) descartada(s) por incoerência mercado↔reasoning")
 
-        print(f"\n[AI] {fx.get('home_team')} x {fx.get('away_team')} — {len(data)} sugestões geradas:")
+        print(f"\n[AI] {fx.get('home_team')} x {fx.get('away_team')} · {len(data)} sugestões geradas:")
         for i, p in enumerate(data, 1):
             print(
                 f"  [{i}] {p.get('market', '?')} | linha: {p.get('line', '?')} "
@@ -699,7 +699,7 @@ MERCADOS E ODDS
         mtype = self.detect_market_type(market)
 
         if mtype not in self._MARKET_KEYWORDS:
-            return True  # mercado desconhecido — não rejeita
+            return True  # mercado desconhecido · não rejeita
 
         own_kws   = self._MARKET_KEYWORDS[mtype]
         other_kws = [kw for t, kws in self._MARKET_KEYWORDS.items() if t != mtype for kw in kws]
@@ -708,7 +708,7 @@ MERCADOS E ODDS
         has_other = any(kw in reasoning for kw in other_kws)
 
         if has_other and not has_own:
-            print(f"[AI VALIDATE] Rejeitando pick '{pick.get('market')}' — reasoning fala de outro mercado (mtype={mtype})")
+            print(f"[AI VALIDATE] Rejeitando pick '{pick.get('market')}' · reasoning fala de outro mercado (mtype={mtype})")
             return False
         return True
 
@@ -720,7 +720,7 @@ MERCADOS E ODDS
 
     @staticmethod
     def _is_stat_strong(ev: float, conf: float) -> bool:
-        """Pick sem EV mas com base estatística sólida — apostar menos."""
+        """Pick sem EV mas com base estatística sólida · apostar menos."""
         return (ev <= 0
                 and ev > AISuggestionsService._EV_STAT_STRONG_FLOOR
                 and conf >= AISuggestionsService._STAT_STRONG_CONF)
@@ -764,20 +764,20 @@ MERCADOS E ODDS
                 if positive:
                     best_ev, best_conf, best = positive[0]
                     best["ev"] = best_ev
-                    print(f"[PICK] EV negativo no is_best_pick — alternativa EV>0: "
+                    print(f"[PICK] EV negativo no is_best_pick · alternativa EV>0: "
                           f"{best.get('market')} | {best.get('line')} | EV {round(best_ev*100,1)}%")
                     return best
 
                 # Sem alternativa positiva: aceita se for stat_strong
                 if self._is_stat_strong(ev, conf):
                     ai_pick["stat_strong"] = True
-                    print(f"[PICK] STAT-STRONG: EV {round(ev*100,1)}% negativo mas conf {round(conf*100)}% ≥ 72% — stake reduzido")
+                    print(f"[PICK] STAT-STRONG: EV {round(ev*100,1)}% negativo mas conf {round(conf*100)}% ≥ 72% · stake reduzido")
                     return ai_pick
 
             return ai_pick
 
         # Fallback: campo ausente → Python escolhe por maior EV
-        print("[PICK] is_best_pick ausente — fallback para maior EV")
+        print("[PICK] is_best_pick ausente · fallback para maior EV")
         scored = []
         for s in suggestions:
             try:
@@ -804,7 +804,7 @@ MERCADOS E ODDS
         return best
 
     # --------------------------------------------------------
-    # CÁLCULO DE STAKE — ½ Kelly fracionado
+    # CÁLCULO DE STAKE · ½ Kelly fracionado
     #
     # Retorna (stake_pct, stake_units_ref)
     #   stake_pct      → fração da banca a apostar (0.01–0.05)
@@ -834,7 +834,7 @@ MERCADOS E ODDS
 
         half_kelly = kelly * 0.5
 
-        # Cap por nível de confiança — escala com max_units (VIP=10u, Free=5u)
+        # Cap por nível de confiança · escala com max_units (VIP=10u, Free=5u)
         cap_high = round(max_units * 0.01, 4)                       # 10% p/ VIP, 5% p/ Free
         cap_mid  = round(max_units * 0.008, 4)                      # 8%  p/ VIP, 4% p/ Free
         cap_low  = round(max(0.03, max_units * 0.005), 4)           # 5%  p/ VIP, 3% p/ Free
@@ -895,14 +895,14 @@ MERCADOS E ODDS
         )
 
         if not suggestions:
-            print(f"[RESULT] IA não retornou sugestões — {fx.get('home_team')} x {fx.get('away_team')}")
+            print(f"[RESULT] IA não retornou sugestões · {fx.get('home_team')} x {fx.get('away_team')}")
             return []
 
         # 3. IA escolhe o melhor pick (is_best_pick), fallback para maior EV
         chosen = self.pick_best(suggestions)
 
         if not chosen:
-            print(f"[RESULT] Nenhuma sugestão válida após pick — {fx.get('home_team')} x {fx.get('away_team')}")
+            print(f"[RESULT] Nenhuma sugestão válida após pick · {fx.get('home_team')} x {fx.get('away_team')}")
             return []
 
         ev_val   = float(chosen.get("ev", 0))
@@ -925,7 +925,7 @@ MERCADOS E ODDS
                         and o_market == market_n):
                     return o.get("market_id")
 
-            # 2ª tentativa: apenas linha + odd (comportamento original — menos preciso)
+            # 2ª tentativa: apenas linha + odd (comportamento original · menos preciso)
             for o in om_full:
                 o_odd  = float(o.get("best_odd", 0) or o.get("odd", 0))
                 o_line = str(o.get("line", "") or o.get("line_value", "")).strip().lower()
@@ -949,7 +949,7 @@ MERCADOS E ODDS
         if chosen_market_id is None:
             print(
                 f"[REJECT] IA escolheu mercado não encontrado nas odds: "
-                f"'{chosen.get('market')}' linha '{chosen.get('line')}' @ {chosen.get('odd')} — "
+                f"'{chosen.get('market')}' linha '{chosen.get('line')}' @ {chosen.get('odd')} · "
                 f"mercado não existe ou foi inventado. Pick descartado."
             )
             return []
@@ -971,7 +971,7 @@ MERCADOS E ODDS
             f"conf {round(conf * 100)}% | EV {ev} | stake {stake_pct*100:.1f}% ({stake_units}u)"
         )
 
-        # 3. Salva no banco — ON CONFLICT ignora duplicata do mesmo fixture
+        # 3. Salva no banco · ON CONFLICT ignora duplicata do mesmo fixture
         conn = get_connection()
         cur  = conn.cursor()
 

@@ -11,7 +11,7 @@ import PushPromptBanner from './components/PushPromptBanner'
 import PostCopaBanner from './components/PostCopaBanner'
 import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
 
-// Cada página vira chunk separado — só baixa quando o usuário navega para ela
+// Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
 const Results        = lazy(() => import('./pages/Results'))

@@ -72,14 +72,14 @@ class AIResultCheckerAlavancagem:
 
             r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur, home1, away1)
             if r1 is None:
-                print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_1={fid1} — aguardando.")
+                print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_1={fid1} · aguardando.")
                 continue
 
             r2 = None
             if tipo == "combinacao" and fid2 is not None:
                 r2 = self._check_pick(fid2, mkt2, ln2, float(odd2), cur, home2, away2)
                 if r2 is None:
-                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_2={fid2} — aguardando.")
+                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_2={fid2} · aguardando.")
                     continue
 
             if tipo == "combinacao":

@@ -145,7 +145,7 @@ export default function VerifyEmail() {
               <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique também o spam.</p>
             )}
 
-            {/* CTA principal — acessar o site sem verificar */}
+            {/* CTA principal · acessar o site sem verificar */}
             <button
               onClick={() => navigate('/picks')}
               className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors mb-3"

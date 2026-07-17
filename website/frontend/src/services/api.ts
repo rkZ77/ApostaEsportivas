@@ -7,12 +7,12 @@ const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 1500
 let _refreshing: Promise<unknown> | null = null
 
 // Sessão deslizante: renova o access token silenciosamente via refresh cookie.
-// O refresh token dura 7 dias a partir do login e NÃO é renovado — após 7 dias, precisa logar de novo.
+// O refresh token dura 7 dias a partir do login e NÃO é renovado · após 7 dias, precisa logar de novo.
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config
-    // Never retry auth endpoints — surface errors directly to the caller
+    // Never retry auth endpoints · surface errors directly to the caller
     if (original.url?.includes('/auth/')) {
       return Promise.reject(err)
     }

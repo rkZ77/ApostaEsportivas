@@ -143,7 +143,7 @@ def delete_chat(msg_id: int, current_user: dict = Depends(get_current_user)):
         if not is_admin and not is_owner:
             raise HTTPException(403, "Sem permissão para apagar esta mensagem")
 
-        # Soft delete — mantém no banco, oculta para todos
+        # Soft delete · mantém no banco, oculta para todos
         cur.execute("UPDATE chat_messages SET deleted_at = NOW() WHERE id = %s", (msg_id,))
         conn.commit()
         return {"ok": True}

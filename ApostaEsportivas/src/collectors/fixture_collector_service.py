@@ -35,7 +35,7 @@ except ZoneInfoNotFoundError:
 
 
 # ============================================================
-# CONVERSÃO UTC -> BR (NAIVE — sem tzinfo, para salvar no banco)
+# CONVERSÃO UTC -> BR (NAIVE · sem tzinfo, para salvar no banco)
 # ============================================================
 def convert_utc_to_br_naive(dt_str: str) -> datetime:
     dt_utc   = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -116,7 +116,7 @@ class FixtureCollectorService:
             return []
 
         if not valid_team_ids:
-            print("[WARN] Tabela 'teams' está vazia — nenhum jogo será coletado.")
+            print("[WARN] Tabela 'teams' está vazia · nenhum jogo será coletado.")
             print("[WARN] Execute o Stage 1 (sync de times) primeiro.")
             return []
 
@@ -217,7 +217,7 @@ class FixtureCollectorService:
 
         # Inclui:
         # 1. Jogos de hoje (BRT)
-        # 2. Jogos de 00:00–02:59 BRT do próximo dia — captura virada da meia-noite
+        # 2. Jogos de 00:00–02:59 BRT do próximo dia · captura virada da meia-noite
         def is_target(f: dict) -> bool:
             d = f["match_datetime"].date()
             h = f["match_datetime"].hour

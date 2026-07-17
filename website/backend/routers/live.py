@@ -20,9 +20,9 @@ LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
 FT_STATUSES   = {"FT", "AET", "PEN"}
 
 # TTL adaptativo: jogos ao vivo → curto; não iniciados → médio; encerrados → longo
-_TTL_LIVE = 10   # segundos — atualiza depressa durante o jogo
-_TTL_NS   = 60   # segundos — jogo ainda não começou
-_TTL_FT   = 300  # segundos — encerrado, dados não mudam
+_TTL_LIVE = 10   # segundos · atualiza depressa durante o jogo
+_TTL_NS   = 60   # segundos · jogo ainda não começou
+_TTL_FT   = 300  # segundos · encerrado, dados não mudam
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
@@ -219,7 +219,7 @@ def _pick_status(current: float | None, line_str: str | None,
         return "winning" if current < line_val else "losing"
     if direction == "result":
         return _result_pick_status(line_str or "", home_goals, away_goals, home_team, away_team)
-    # BTTS: line é "yes"/"sim" ou "no"/"não" — current=1.0 → ambas marcaram
+    # BTTS: line é "yes"/"sim" ou "no"/"não" · current=1.0 → ambas marcaram
     if direction in ("yes", "sim"):
         return "winning" if current >= 1.0 else "losing"
     if direction in ("no", "não", "nao"):
@@ -273,7 +273,7 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int,
 
 
 def _correct_score_pick_status(line_str: str, home_goals: int, away_goals: int) -> str:
-    """Status ao vivo do placar exato — verifica se o placar atual bate com o previsto."""
+    """Status ao vivo do placar exato · verifica se o placar atual bate com o previsto."""
     try:
         parts = line_str.strip().replace("-", ":").split(":")
         ph, pa = int(parts[0]), int(parts[1])
@@ -309,7 +309,7 @@ def _calc_result(market: str, line: str, cur_val: float | None,
                 any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"])
     is_btts   = mtype == "btts"  or any(k in m for k in ["ambas", "btts", "ambos"])
 
-    # ── Placar Exato — compara placar real com previsto (ex: "3:0") ───────────
+    # ── Placar Exato · compara placar real com previsto (ex: "3:0") ───────────
     if mtype == "correct_score" or "placar exato" in m:
         try:
             parts = (line or "").strip().replace("-", ":").split(":")
@@ -319,14 +319,14 @@ def _calc_result(market: str, line: str, cur_val: float | None,
         hg, ag = int(home_goals or 0), int(away_goals or 0)
         return "GREEN" if (hg == ph and ag == pa) else "RED"
 
-    # ── Resultado / 1x2 / Dupla Chance — não depende de cur_val ──────────────
+    # ── Resultado / 1x2 / Dupla Chance · não depende de cur_val ──────────────
     if is_result:
         pst = _result_pick_status(line, home_goals, away_goals, home_team, away_team)
         if pst == "winning":  return "GREEN"
         if pst == "losing":   return "RED"
         return None  # "neutral" = linha não reconhecida, não resolve
 
-    # ── BTTS — usa cur_val (1.0 = ambas marcaram, 0.0 = não) ─────────────────
+    # ── BTTS · usa cur_val (1.0 = ambas marcaram, 0.0 = não) ─────────────────
     if is_btts:
         if cur_val is None:
             return None

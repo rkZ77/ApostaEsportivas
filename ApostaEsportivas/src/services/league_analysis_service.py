@@ -34,7 +34,7 @@ Analise exclusivamente:
 
 FORMATO OBRIGATÓRIO:
 
-• <NOME DA LIGA> (<QUANTIDADE DE JOGOS>) — Season <ANO>
+• <NOME DA LIGA> (<QUANTIDADE DE JOGOS>) · Season <ANO>
   – Descrição geral.
   – Tendência de gols.
   – Tendência de BTTS.

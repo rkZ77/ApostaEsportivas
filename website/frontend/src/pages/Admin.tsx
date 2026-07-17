@@ -371,7 +371,7 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Stats — usuários */}
+        {/* Stats · usuários */}
         {stats && (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
@@ -763,7 +763,7 @@ export default function Admin() {
           <span className="text-zinc-600 text-xs self-center whitespace-nowrap">{filtered.length} usuário(s)</span>
         </div>
 
-        {/* Tabela — desktop */}
+        {/* Tabela · desktop */}
         <div className="card overflow-hidden hidden md:block">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -892,7 +892,7 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Cards — mobile */}
+        {/* Cards · mobile */}
         <div className="flex flex-col gap-3 md:hidden">
           {filtered.length === 0 && (
             <p className="text-center text-zinc-600 text-sm py-8">Nenhum usuário encontrado.</p>

@@ -35,7 +35,7 @@ class AIResultCheckerFree:
 
             stats = self._engine.get_fixture_result(fixture_id, cur)
             if not stats:
-                print(f"[CHECKER-FREE] id={pk_id}: sem stats para fixture_id={fixture_id} — aguardando.")
+                print(f"[CHECKER-FREE] id={pk_id}: sem stats para fixture_id={fixture_id} · aguardando.")
                 continue
 
             result, factor = self._engine.evaluate_pick(

@@ -181,19 +181,19 @@ async def webhook(request: Request):
     except Exception:
         raise HTTPException(400, "Payload inválido")
 
-    # Verificação de assinatura HMAC do MercadoPago (obrigatória em qualquer ambiente —
+    # Verificação de assinatura HMAC do MercadoPago (obrigatória em qualquer ambiente ·
     # sem o secret configurado, o webhook fica sem autenticação nenhuma, então falha
     # fechado sempre, independente de APP_ENV)
     webhook_secret = os.getenv("MERCADOPAGO_WEBHOOK_SECRET", "")
     if not webhook_secret:
-        logger.error("[WEBHOOK] MERCADOPAGO_WEBHOOK_SECRET não configurado — bloqueando requisição")
+        logger.error("[WEBHOOK] MERCADOPAGO_WEBHOOK_SECRET não configurado · bloqueando requisição")
         raise HTTPException(500, "Webhook não configurado")
 
     x_signature  = request.headers.get("x-signature", "")
     x_request_id = request.headers.get("x-request-id", "")
     data_id      = str(data.get("data", {}).get("id", ""))
     if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
-        logger.warning("[WEBHOOK] Assinatura inválida — rejeitando requisição de %s",
+        logger.warning("[WEBHOOK] Assinatura inválida · rejeitando requisição de %s",
                        request.client.host if request.client else "unknown")
         raise HTTPException(403, "Assinatura inválida")
 
@@ -252,12 +252,12 @@ async def webhook(request: Request):
         cur.execute("SELECT name, email FROM users WHERE id = %s", (int(user_id),))
         row = cur.fetchone()
         if not row:
-            logger.error("[WEBHOOK] user_id=%s não encontrado no banco — pagamento %s ignorado", user_id, payment_id)
+            logger.error("[WEBHOOK] user_id=%s não encontrado no banco · pagamento %s ignorado", user_id, payment_id)
             return {"status": "error", "detail": "user not found"}
         user_name  = row["name"]
         user_email = row["email"]
 
-        # Registra pagamento ANTES do UPDATE — garante idempotência real
+        # Registra pagamento ANTES do UPDATE · garante idempotência real
         # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
         cur.execute(
             """
@@ -268,7 +268,7 @@ async def webhook(request: Request):
             (int(user_id), str(payment_id), plan_key, amount, expires_at, payment_method),
         )
         if cur.rowcount == 0:
-            logger.info("[WEBHOOK] Pagamento %s já processado anteriormente — ignorando", payment_id)
+            logger.info("[WEBHOOK] Pagamento %s já processado anteriormente · ignorando", payment_id)
             return {"status": "ok", "detail": "already processed"}
 
         cur.execute(
