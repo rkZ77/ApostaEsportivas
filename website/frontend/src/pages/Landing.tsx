@@ -12,17 +12,6 @@ const TEAM_LOGO = (id?: number | null) =>
 const LEAGUE_LOGO = (id: number) =>
   id === 1 ? '/logo-copa-mundo.png' : `/api/proxy/league/${id}.png`
 
-// Ícone genérico de liga (fallback quando logo da API não carrega)
-function LeagueIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5}>
-      <circle cx="12" cy="12" r="10" strokeOpacity={0.5}/>
-      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" strokeOpacity={0.5}/>
-      <path d="M2 12h20" strokeOpacity={0.5}/>
-    </svg>
-  )
-}
-
 // Ícones
 function Check() {
   return (
@@ -164,49 +153,17 @@ function StickyMobileCTA() {
   )
 }
 
-// Ligas ativas (do banco)
-interface League { league_id: number; name: string; season: number; logo_url: string }
-
-function ActiveLeagues() {
-  const [leagues, setLeagues] = useState<League[]>([])
-
-  useEffect(() => {
-    api.get('/public/leagues')
-      .then(r => setLeagues(r.data))
-      .catch(() => {})
-  }, [])
-
-  if (!leagues.length) return null
-
+// Link curto pra pagina dedicada de ligas -- antes essa secao mostrava a
+// grade de logos aqui, que repetia menções a Copa/Premier/Brasileirão
+// ja presentes em varios outros pontos da home.
+function ActiveLeaguesLink() {
   return (
-    <section className="border-y border-zinc-800/60 bg-zinc-950">
-      <div className="max-w-5xl mx-auto px-4 py-10">
-        <p className="text-center text-sm text-zinc-500 font-medium mb-8">Ligas &amp; torneios cobertos</p>
-        <div className="flex flex-wrap items-center justify-center gap-8">
-          {leagues.map(({ league_id, name, logo_url }) => (
-            <div key={league_id} className="flex flex-col items-center gap-2">
-              <div className="w-10 h-10 relative flex items-center justify-center">
-                <img
-                  src={logo_url}
-                  alt={name}
-                  className="w-10 h-10 object-contain"
-                  onError={e => {
-                    e.currentTarget.style.display = 'none'
-                    const fb = e.currentTarget.nextElementSibling as HTMLElement
-                    if (fb) fb.style.display = 'flex'
-                  }}
-                />
-                <div className="absolute inset-0 items-center justify-center hidden">
-                  <LeagueIcon className="w-8 h-8 text-zinc-600" />
-                </div>
-              </div>
-              <div className="text-center">
-                <p className="text-xs font-semibold text-zinc-300 leading-tight">{name}</p>
-                <p className="text-[10px] text-green-500 font-bold">Ativo</p>
-              </div>
-            </div>
-          ))}
-        </div>
+    <section className="border-y border-zinc-800/60 bg-zinc-950 py-6">
+      <div className="max-w-5xl mx-auto px-4 flex items-center justify-center">
+        <Link to="/ligas" className="text-sm text-zinc-400 hover:text-white font-medium transition-colors inline-flex items-center gap-1.5">
+          Ver todas as ligas e torneios cobertos
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
     </section>
   )
@@ -777,7 +734,7 @@ export default function Landing() {
 
       <ActivityTicker />
 
-      <ActiveLeagues />
+      <ActiveLeaguesLink />
 
       <ThreeSteps />
 
