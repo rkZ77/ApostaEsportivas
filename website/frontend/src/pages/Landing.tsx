@@ -153,13 +153,38 @@ function StickyMobileCTA() {
   )
 }
 
-// Link curto pra pagina dedicada de ligas -- antes essa secao mostrava a
-// grade de logos aqui, que repetia menções a Copa/Premier/Brasileirão
-// ja presentes em varios outros pontos da home.
-function ActiveLeaguesLink() {
+// Teaser compacto de ligas -- antes essa secao mostrava a grade completa
+// de logos aqui, que repetia mencoes a Copa/Premier/Brasileirao ja
+// presentes em varios outros pontos da home. Agora so uma amostra +
+// link pra pagina dedicada (/ligas) com a lista completa.
+interface LeagueTeaser { league_id: number; name: string; logo_url: string }
+
+function ActiveLeaguesTeaser() {
+  const [leagues, setLeagues] = useState<LeagueTeaser[]>([])
+
+  useEffect(() => {
+    api.get('/public/leagues')
+      .then(r => setLeagues(r.data ?? []))
+      .catch(() => {})
+  }, [])
+
   return (
-    <section className="border-y border-zinc-800/60 bg-zinc-950 py-6">
-      <div className="max-w-5xl mx-auto px-4 flex items-center justify-center">
+    <section className="border-y border-zinc-800/60 bg-zinc-950 py-8">
+      <div className="max-w-5xl mx-auto px-4 flex flex-col items-center gap-4">
+        {leagues.length > 0 && (
+          <div className="flex items-center gap-4">
+            {leagues.slice(0, 5).map(({ league_id, name, logo_url }) => (
+              <img
+                key={league_id}
+                src={logo_url}
+                alt={name}
+                title={name}
+                className="w-8 h-8 object-contain opacity-80"
+                onError={e => (e.currentTarget.style.display = 'none')}
+              />
+            ))}
+          </div>
+        )}
         <Link to="/ligas" className="text-sm text-zinc-400 hover:text-white font-medium transition-colors inline-flex items-center gap-1.5">
           Ver todas as ligas e torneios cobertos
           <ArrowRight className="w-3.5 h-3.5" />
@@ -694,7 +719,7 @@ export default function Landing() {
 
       <ActivityTicker />
 
-      <ActiveLeaguesLink />
+      <ActiveLeaguesTeaser />
 
       <ThreeSteps />
 
