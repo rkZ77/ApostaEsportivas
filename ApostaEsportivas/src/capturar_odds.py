@@ -103,7 +103,7 @@ class OddsMain:
                     break
                 except Exception as e:
                     if "deadlock" in str(e).lower() and attempt < 3:
-                        print(f"[ODDS] Deadlock — tentativa {attempt}/3, aguardando 3s...")
+                        print(f"[ODDS] Deadlock · tentativa {attempt}/3, aguardando 3s...")
                         time.sleep(3)
                     else:
                         print(f"[ODDS] Erro ao salvar fixture {fixture_id}: {e}")

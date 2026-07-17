@@ -1,5 +1,5 @@
 """
-main.py — Orquestrador único do ApostaEsportivas (sem website).
+main.py · Orquestrador único do ApostaEsportivas (sem website).
 
 Uso:
   python main.py dados            # Atualiza jogos, stats e classificação
@@ -131,7 +131,7 @@ def cmd_tudo(mode: str = "fast"):
     """Pipeline completo diário na ordem correta."""
     t0 = time.perf_counter()
     print("\n" + "="*60)
-    print("PIPELINE COMPLETO — ApostaEsportivas")
+    print("PIPELINE COMPLETO · ApostaEsportivas")
     print("="*60 + "\n")
 
     print("─── [1/7] DADOS ────────────────────────────────────────")

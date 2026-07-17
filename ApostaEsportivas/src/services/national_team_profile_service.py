@@ -132,7 +132,7 @@ class NationalTeamProfileService:
     # ========================================================================
     def _fetch_copa_matches(self, team_id: int, season: int) -> list:
         """Busca jogos finalizados desta Copa no banco.
-        Usa ms.league_id diretamente — sem JOIN com fixtures, que só contém jogos NS/futuros.
+        Usa ms.league_id diretamente · sem JOIN com fixtures, que só contém jogos NS/futuros.
         """
         try:
             conn = get_connection()
@@ -364,7 +364,7 @@ class NationalTeamProfileService:
     def _classify_competition(self, league_id: int) -> str:
         """Classifica o tipo de competição pelo league_id. Fonte única:
         services/pick_engine/competition_profile.py (Prioridade 1 do plano
-        de refatoração — antes essa classificação era mantida em paralelo
+        de refatoração · antes essa classificação era mantida em paralelo
         aqui)."""
         return classify_competition_weight_group(league_id)
 
@@ -437,7 +437,7 @@ class NationalTeamProfileService:
 
         if total_weight > 0:
             # "_for" = feito pelo próprio time (ataque) | "_against" = cedido ao adversário (defesa)
-            # Ambos os lados são ponderados pelo mesmo peso de competição — sem isso, o modelo
+            # Ambos os lados são ponderados pelo mesmo peso de competição · sem isso, o modelo
             # de "ataque vs defesa" (attack_for x opponent_against) ficaria assimétrico.
             result["weighted_goals_for"] = round(weighted_gf / total_weight, 2)
             result["weighted_goals_against"] = round(weighted_ga / total_weight, 2)

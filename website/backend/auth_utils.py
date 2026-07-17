@@ -133,7 +133,7 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
 
     # Sessão única: session_token no JWT deve bater com o hash guardado no banco
-    # Admin fica isento — pode acessar de múltiplos dispositivos simultaneamente
+    # Admin fica isento · pode acessar de múltiplos dispositivos simultaneamente
     if payload.get("plan") != "admin":
         session_id = payload.get("session_id")
         if row["session_token"] and session_id:

@@ -15,7 +15,7 @@ LOCAL_LOGOS: dict[int, str] = {
 
 @router.get("/leagues")
 def public_leagues():
-    """Ligas ativas cadastradas no sistema — sem autenticação."""
+    """Ligas ativas cadastradas no sistema · sem autenticação."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -154,7 +154,7 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
 
 @router.get("/results")
 def public_results(
-    month:  Optional[str] = Query(None, description="YYYY-MM — filtra por mês"),
+    month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem"),
 ):
     """Resultados públicos consolidados para a Landing page."""
@@ -282,7 +282,7 @@ _ACTIVITY_VERBS = [
 
 @router.get("/activity")
 def public_activity():
-    """Últimas ações de usuários reais — anonimizadas — para o ticker da landing."""
+    """Últimas ações de usuários reais · anonimizadas · para o ticker da landing."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -456,7 +456,7 @@ def public_free_pick_today():
 
 @router.get("/leaderboard")
 def public_leaderboard():
-    """Top 5 usuarios por yield ROI — anonimizados para landing page (min 5 picks resolvidos)."""
+    """Top 5 usuarios por yield ROI · anonimizados para landing page (min 5 picks resolvidos)."""
     conn = get_connection()
     cur  = conn.cursor()
     try:

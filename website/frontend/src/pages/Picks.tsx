@@ -14,7 +14,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, Br
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
-// Copa do Mundo 2026 — fase pelo match_date
+// Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
   const d = new Date(dateStr)
@@ -1754,7 +1754,7 @@ export default function Picks() {
     <div className="min-h-screen bg-black">
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
 
-      {/* Modal de boas-vindas — configura banca */}
+      {/* Modal de boas-vindas · configura banca */}
       {showBancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
@@ -1954,7 +1954,7 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Pick Seguro — visível para todos; some se não houver dica hoje */}
+              {/* Pick Seguro · visível para todos; some se não houver dica hoje */}
               {today?.dica_do_dia && (
                 <section>
                   <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
@@ -1962,7 +1962,7 @@ export default function Picks() {
                 </section>
               )}
 
-              {/* PICKS VIP DO DIA — free vê lock; some se vazio pra quem já tem acesso */}
+              {/* PICKS VIP DO DIA · free vê lock; some se vazio pra quem já tem acesso */}
               {(() => {
                 const vips = today?.vip ?? []
                 const pending = vips.filter((s: any) => !s.result)
@@ -1995,7 +1995,7 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Múltipla do Dia — free vê lock; some se vazia pra quem já tem acesso */}
+              {/* Múltipla do Dia · free vê lock; some se vazia pra quem já tem acesso */}
               {(() => {
                 const multiplas = today?.multiplas ?? []
                 if (canSeeVip && multiplas.length === 0) return null
@@ -2011,7 +2011,7 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Alavancagem Copa — free vê lock; some se não houver pick pra quem já tem acesso */}
+              {/* Alavancagem Copa · free vê lock; some se não houver pick pra quem já tem acesso */}
               {(canSeeVip ? !!today?.alavancagem : true) && (
                 <section>
                   <SectionHeader color="bg-orange-400" label="Alavancagem Copa" />

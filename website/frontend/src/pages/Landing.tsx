@@ -50,7 +50,7 @@ interface PublicData {
 // Helpers
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
-// Social proof stats — bloco de 4 métricas em tempo real
+// Social proof stats · bloco de 4 métricas em tempo real
 function SocialProofStats() {
   const [summary, setSummary] = useState<{ total: number; greens: number; profit: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -98,7 +98,7 @@ function SocialProofStats() {
   )
 }
 
-// 3 passos — jornada do usuário
+// 3 passos · jornada do usuário
 function ThreeSteps() {
   return (
     <section id="como-funciona" className="py-16 bg-black border-b border-zinc-800/60">
@@ -172,7 +172,7 @@ function ActiveLeagues() {
         <div className="text-center mb-8">
           <h2 className="text-2xl font-black mb-2">Ligas e torneios cobertos</h2>
           <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-            A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando —
+            A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando ·
             hoje a IA já analisa:
           </p>
         </div>
@@ -855,7 +855,7 @@ export default function Landing() {
               </Link>
             </div>
 
-            {/* Trial — destaque */}
+            {/* Trial · destaque */}
             <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-7 overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
               <div className="absolute top-3.5 right-4">

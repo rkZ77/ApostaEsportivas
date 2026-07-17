@@ -81,7 +81,7 @@ class MatchStatisticsSyncService:
         valid_team_ids = {row[0] for row in self.cur.fetchall()}
 
         if not valid_team_ids:
-            print("[MATCH_STATS] AVISO: tabela 'teams' está vazia ou sem times para as ligas cadastradas — nenhum jogo será carregado.")
+            print("[MATCH_STATS] AVISO: tabela 'teams' está vazia ou sem times para as ligas cadastradas · nenhum jogo será carregado.")
             print("[MATCH_STATS] Execute o Stage 1 (sync de times) antes do Stage 4.")
 
         fixtures = []
@@ -376,7 +376,7 @@ class MatchStatisticsSyncService:
 
     # ---------------------------------------------------------
     # SYNC DIRETO POR FIXTURE_ID (para pendentes em picks_vip)
-    # Não depende da tabela teams — busca tudo via API por ID.
+    # Não depende da tabela teams · busca tudo via API por ID.
     # ---------------------------------------------------------
     def sync_pending_fixtures(self):
         print("[MATCH_STATS] Sincronizando fixtures pendentes das sugestões...")
@@ -426,7 +426,7 @@ class MatchStatisticsSyncService:
             self._close()
             return
 
-        print(f"[MATCH_STATS] {len(pending_ids)} fixture(s) sem stats — buscando na API...")
+        print(f"[MATCH_STATS] {len(pending_ids)} fixture(s) sem stats · buscando na API...")
 
         FINISHED = {"FT", "AET", "PEN"}
         referee_batch = set()
@@ -446,7 +446,7 @@ class MatchStatisticsSyncService:
                 status = fixture_info["status"]["short"]
 
                 if status not in FINISHED:
-                    print(f"[MATCH_STATS] fixture_id={fixture_id} status={status} — jogo ainda não finalizado.")
+                    print(f"[MATCH_STATS] fixture_id={fixture_id} status={status} · jogo ainda não finalizado.")
                     continue
 
                 league_id = item["league"]["id"]

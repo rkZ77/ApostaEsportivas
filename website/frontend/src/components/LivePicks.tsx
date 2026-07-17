@@ -65,7 +65,7 @@ function calcLiveProb(pick: any): number | null {
   const remaining   = elapsed != null ? Math.max(0, totalMins - elapsed) : null
   const remainRatio = remaining != null ? remaining / totalMins : null
 
-  // Over/Under — Poisson sobre gols/eventos restantes
+  // Over/Under · Poisson sobre gols/eventos restantes
   if ((isOver || isUnder) && pick.current_val != null && pick.line_val != null && elapsed != null && remainRatio != null) {
     if (isOver) {
       const needed = Math.ceil(pick.line_val) - Math.floor(Number(pick.current_val))
@@ -83,7 +83,7 @@ function calcLiveProb(pick: any): number | null {
     }
   }
 
-  // Ambas as Equipes Marcam (BTTS) — Poisson independente por equipe
+  // Ambas as Equipes Marcam (BTTS) · Poisson independente por equipe
   if (isBTTS && pick.home_goals != null && pick.away_goals != null && elapsed != null && remainRatio != null) {
     const scoredHome = Number(pick.home_goals) > 0
     const scoredAway = Number(pick.away_goals) > 0
@@ -105,7 +105,7 @@ function calcLiveProb(pick: any): number | null {
     }
   }
 
-  // Match Winner / Dupla Chance — ajuste dinâmico por placar e tempo
+  // Match Winner / Dupla Chance · ajuste dinâmico por placar e tempo
   if (elapsed != null && remainRatio != null && pick.home_goals != null && pick.away_goals != null && pick.pick_status) {
     const progress = elapsed / totalMins
     if (pick.pick_status === 'winning') {
@@ -341,16 +341,16 @@ function isEarlyLocked(pick: any): boolean {
   const lineVal  = Number(pick.line_val)
   if (pick.current_val == null) return false
 
-  // Ambas as Equipes Marcam — uma vez que ambas marcaram, é irreversível
+  // Ambas as Equipes Marcam · uma vez que ambas marcaram, é irreversível
   if (marketLc.includes('both teams') || marketLc.includes('ambas') || marketLc.includes('btts')) {
     return cur >= 1
   }
   if (!pick.line_val) return false
-  // Over X.5 — gols não são descontados
+  // Over X.5 · gols não são descontados
   if (lineLc.startsWith('over') || lineLc.startsWith('mais')) {
     return cur > lineVal
   }
-  // Under X.5 — já passou do limite, pick perdido para sempre
+  // Under X.5 · já passou do limite, pick perdido para sempre
   if (lineLc.startsWith('under') || lineLc.startsWith('menos')) {
     return cur >= Math.ceil(lineVal)
   }
@@ -612,7 +612,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   )
 }
 
-const REFRESH_LIVE = 5_000 // 5s — polling quando tem pick ao vivo
+const REFRESH_LIVE = 5_000 // 5s · polling quando tem pick ao vivo
 
 function LiveSkeleton() {
   return (
@@ -682,9 +682,9 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
     return <LiveSkeleton />
   }
 
-  // DEV MOCK — só injeta em desenvolvimento (import.meta.env.DEV = false em prod)
+  // DEV MOCK · só injeta em desenvolvimento (import.meta.env.DEV = false em prod)
   const DEV_MOCK: any[] = !import.meta.env.DEV ? [] : [
-    // 1. VIP ao vivo — Over perdendo, cashout disponível
+    // 1. VIP ao vivo · Over perdendo, cashout disponível
     {
       pick_id: 9001, pick_type: 'vip', match_date: '2026-06-26',
       odd: 1.87, actual_odd: 1.87, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,
@@ -696,7 +696,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       stat_label: 'Gols', current_val: 2, line_val: 2.5,
       pick_status: 'losing', is_locked: false, result: null,
     },
-    // 2. VIP ao vivo — Under ganhando, cashout disponível
+    // 2. VIP ao vivo · Under ganhando, cashout disponível
     {
       pick_id: 9002, pick_type: 'vip', match_date: '2026-06-26',
       odd: 2.10, actual_odd: 2.10, stake_units: 3, bet_house: 'Sportingbet', cashout_amount: null,
@@ -708,7 +708,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       stat_label: 'Gols', current_val: 0, line_val: 1.5,
       pick_status: 'winning', is_locked: false, result: null,
     },
-    // 3. Múltipla ao vivo — 2 legs, uma ganhando, outra em aberto
+    // 3. Múltipla ao vivo · 2 legs, uma ganhando, outra em aberto
     {
       pick_id: 9003, pick_type: 'multipla', match_date: '2026-06-26',
       odd: 3.19, actual_odd: 3.19, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,
@@ -760,7 +760,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       stat_label: 'Gols', current_val: 2, line_val: 1.5,
       pick_status: 'winning', is_locked: true, result: 'GREEN',
     },
-    // 6. Múltipla finalizada RED — leg 1 GREEN, leg 2 RED
+    // 6. Múltipla finalizada RED · leg 1 GREEN, leg 2 RED
     {
       pick_id: 9006, pick_type: 'multipla', match_date: '2026-06-25',
       odd: 3.19, actual_odd: 3.19, stake_units: 5, bet_house: 'Bet365', cashout_amount: null,

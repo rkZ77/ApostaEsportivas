@@ -137,7 +137,7 @@ class FixturesService:
         return self._format_fixtures(rows)
 
     ##########################################################################
-    # 5. Helpers — Formatação padronizada (agora com dict)
+    # 5. Helpers · Formatação padronizada (agora com dict)
     ##########################################################################
     def _format_fixtures(self, rows):
         fixtures = []
@@ -188,7 +188,7 @@ class FixturesService:
         return self._format_fixtures(rows)
 
     ##########################################################################
-    # 7. NOVO — Buscar TODOS os fixtures NS que ainda NÃO têm sugestão
+    # 7. NOVO · Buscar TODOS os fixtures NS que ainda NÃO têm sugestão
     ##########################################################################
     def get_ns_without_suggestions(self):
         rows = self._query("""

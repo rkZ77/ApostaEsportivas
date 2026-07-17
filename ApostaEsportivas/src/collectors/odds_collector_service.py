@@ -135,7 +135,7 @@ class OddsCollectorService:
         self.api_url = "https://v3.football.api-sports.io/odds"
 
     # --------------------------------------------------------
-    # BUSCA ODDS NA API — uma chamada por bookmaker BR
+    # BUSCA ODDS NA API · uma chamada por bookmaker BR
     # --------------------------------------------------------
     def fetch_odds_by_fixture(self, fixture_id: int) -> dict | None:
         merged: list[dict] = []
@@ -195,7 +195,7 @@ class OddsCollectorService:
 
             row = cur.fetchone()
             if not row:
-                print(f"[ODDS] Fixture {fixture_id} não encontrado no banco — pulando.")
+                print(f"[ODDS] Fixture {fixture_id} não encontrado no banco · pulando.")
                 return
 
             league_id, season, match_datetime, home_id, home_name, away_id, away_name = row
@@ -327,7 +327,7 @@ class OddsCollectorService:
                         ))
 
             if values_batch:
-                print(f"[ODDS] Fixture {fixture_id} — inserindo {len(values_batch)} odds...")
+                print(f"[ODDS] Fixture {fixture_id} · inserindo {len(values_batch)} odds...")
 
                 execute_batch(cur, """
                     INSERT INTO odds_values (
@@ -354,9 +354,9 @@ class OddsCollectorService:
                         updated_at = NOW();
                 """, values_batch, page_size=500)
 
-                print(f"[ODDS] Fixture {fixture_id} salvo com sucesso — {len(values_batch)} valores.")
+                print(f"[ODDS] Fixture {fixture_id} salvo com sucesso · {len(values_batch)} valores.")
             else:
-                print(f"[ODDS] Fixture {fixture_id} — nenhuma odd encontrada para salvar.")
+                print(f"[ODDS] Fixture {fixture_id} · nenhuma odd encontrada para salvar.")
 
             conn.commit()
 
@@ -388,17 +388,17 @@ class OddsCollectorService:
         # Filtra só as casas permitidas antes de processar
         br_bookmakers = [bk for bk in bookmakers if bk["id"] in BR_BOOKMAKERS]
         if not br_bookmakers:
-            print(f"[ODDS] Fixture {fixture_id} — nenhuma casa BR disponível (Bet365/Sportingbet/Betano).")
+            print(f"[ODDS] Fixture {fixture_id} · nenhuma casa BR disponível (Bet365/Sportingbet/Betano).")
             return
 
-        print(f"[ODDS] Processando fixture {fixture_id} — {len(br_bookmakers)} casa(s) encontrada(s).")
+        print(f"[ODDS] Processando fixture {fixture_id} · {len(br_bookmakers)} casa(s) encontrada(s).")
         for attempt in range(1, _retry + 1):
             try:
                 self.save_odds(fixture_id, bookmakers)
                 break
             except Exception as e:
                 if "deadlock" in str(e).lower() and attempt < _retry:
-                    print(f"[ODDS] Deadlock fixture {fixture_id} — tentativa {attempt}/{_retry}, aguardando 2s...")
+                    print(f"[ODDS] Deadlock fixture {fixture_id} · tentativa {attempt}/{_retry}, aguardando 2s...")
                     _time.sleep(2)
                 else:
                     raise
@@ -422,4 +422,4 @@ class OddsCollectorService:
                 print(f"[ODDS] Erro no fixture {fid}: {e}")
                 failed += 1
 
-        print(f"\n[ODDS] Concluído — ✅ {success} sucesso(s) | ❌ {failed} erro(s)")
+        print(f"\n[ODDS] Concluído · ✅ {success} sucesso(s) | ❌ {failed} erro(s)")

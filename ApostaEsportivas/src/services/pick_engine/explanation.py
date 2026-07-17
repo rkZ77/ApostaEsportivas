@@ -39,7 +39,7 @@ def build_explanation(candidate: dict) -> dict:
         risks.append("Sem dado suficiente para validação feitos×cedidos")
 
     if candidate.get("amostra_label") in ("ESCASSO", "VAZIO"):
-        risks.append(f"Amostra {candidate['amostra_label'].lower()} — confiança limitada")
+        risks.append(f"Amostra {candidate['amostra_label'].lower()} · confiança limitada")
 
     if candidate.get("bookmakers_count", 1) < 2:
         risks.append("Consenso de apenas 1 casa de apostas")
@@ -54,7 +54,7 @@ def build_explanation(candidate: dict) -> dict:
     if v_penalty:
         negative_factors.append(
             f"Dispersão alta no histórico (coeficiente de variação {var_stats['coefficient_of_variation']:.2f}) "
-            f"— resultado menos previsível mesmo com a taxa observada"
+            f"· resultado menos previsível mesmo com a taxa observada"
         )
 
     poisson_prob = candidate.get("poisson_probability")
@@ -62,9 +62,9 @@ def build_explanation(candidate: dict) -> dict:
         note = f"Modelo Poisson estima {poisson_prob*100:.1f}% de probabilidade para esta linha"
         m_adj = candidate.get("model_fit_adjustment") or 0
         if m_adj > 0:
-            positive_factors.append(f"{note} — concorda com a taxa empírica")
+            positive_factors.append(f"{note} · concorda com a taxa empírica")
         elif m_adj < 0:
-            negative_factors.append(f"{note} — diverge da taxa empírica, desconfie")
+            negative_factors.append(f"{note} · diverge da taxa empírica, desconfie")
         else:
             positive_factors.append(note)
 
@@ -79,11 +79,11 @@ def build_explanation(candidate: dict) -> dict:
             if pressure.get("label") == "pressao_alta":
                 risks.append(
                     f"{side_label} em zona de risco na tabela (saldo {pressure.get('goal_diff')}, "
-                    f"aproximação por posição na tabela — não é confirmação de mata-mata)"
+                    f"aproximação por posição na tabela · não é confirmação de mata-mata)"
                 )
         venue = ctx.get("venue") or {}
         if venue.get("is_neutral_venue"):
-            risks.append("Sede neutra — sem vantagem de mando para nenhum dos times")
+            risks.append("Sede neutra · sem vantagem de mando para nenhum dos times")
 
     matchup = candidate.get("matchup_raw")
     direction = candidate.get("_direction")
@@ -100,7 +100,7 @@ def build_explanation(candidate: dict) -> dict:
                 nomes = ", ".join(t["name"] for t in titulares[:3])
                 risks.append(
                     f"{side_label} desfalcado de {len(titulares)} titular(es) recente(s) ({nomes}) "
-                    f"— aproximação por cruzamento de nome entre lesões e escalações recentes"
+                    f"· aproximação por cruzamento de nome entre lesões e escalações recentes"
                 )
 
     return {

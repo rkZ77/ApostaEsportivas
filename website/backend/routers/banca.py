@@ -179,7 +179,7 @@ def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
 def _get_bankroll_epoch(cur, user_id: int) -> Optional[str]:
     """
     Data-limite (exclusiva, 'YYYY-MM-DD') até onde o P&L do usuário já foi
-    "rolado" pro bankroll_start no último fechamento mensal — ou None se nunca
+    "rolado" pro bankroll_start no último fechamento mensal · ou None se nunca
     fechou (nesse caso a banca conta desde o início, comportamento anterior).
 
     Usa o fim do mês fechado (month_key), não o instante em que o usuário
@@ -499,7 +499,7 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                 400,
                 f"Unidade muito alta para sua banca. "
                 f"Com R${body.bankroll_start:.2f} de banca e R${body.unit_value:.2f} por unidade "
-                f"você teria apenas {total_units:.0f} unidades — alto risco de ruína. "
+                f"você teria apenas {total_units:.0f} unidades · alto risco de ruína. "
                 f"Reduza a unidade para no máximo R${max_unit:.2f} (20 unidades mínimas)."
             )
     user_id = current_user["id"]
@@ -564,7 +564,7 @@ STAKE_LIMITS = {
     "vip":        (1, 20),
     "free":       (1, 6),
     "multipla":   (1, 5),
-    "alavancagem":(1, 9999),  # sem limite fixo — banca composta progressiva
+    "alavancagem":(1, 9999),  # sem limite fixo · banca composta progressiva
 }
 
 @router.post("/follow")
@@ -696,7 +696,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         bankroll_start = float(row["bankroll_start"])
         unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
 
-        # "Tudo" = desde o último fechamento mensal (se houver), senão desde o início —
+        # "Tudo" = desde o último fechamento mensal (se houver), senão desde o início ·
         # mesmo criterio usado em GET /banca e /monthly-close (evita contar 2x o P&L
         # de meses já fechados/rolados pro bankroll_start).
         epoch = _get_bankroll_epoch(cur, user_id)
@@ -854,7 +854,7 @@ def get_monthly_close(
     if month:
         year, mo, month_start, month_end = _month_bounds(month)
     else:
-        # Fuso de Brasília, não o do servidor — evita a virada de mês ficar
+        # Fuso de Brasília, não o do servidor · evita a virada de mês ficar
         # ~3h fora de sincronia se o processo rodar em UTC.
         today = datetime.now(BR_TZ).date()
         last_month_last = today.replace(day=1) - timedelta(days=1)

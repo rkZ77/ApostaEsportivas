@@ -15,7 +15,7 @@ FINISHED = {"FT", "AET", "PEN"}
 class HistoricalApiFetcher:
     """
     Busca histórico recente de um time direto na API (qualquer competição).
-    Usado como fallback quando não há jogos no banco — ex: início de Copa,
+    Usado como fallback quando não há jogos no banco · ex: início de Copa,
     amistosos de seleções, primeiro jogo de uma competição nova.
     """
 
@@ -61,7 +61,7 @@ class HistoricalApiFetcher:
                 "home_goals":   home_goals,
                 "away_goals":   away_goals,
                 "total_goals":  home_goals + away_goals,
-                # corners/cards/fouls precisam de chamada extra — ver get_recent_with_stats()
+                # corners/cards/fouls precisam de chamada extra · ver get_recent_with_stats()
                 "home_corners": None,
                 "away_corners": None,
                 "total_corners": None,
@@ -79,7 +79,7 @@ class HistoricalApiFetcher:
 
     # --------------------------------------------------------
     # VERSÃO COMPLETA: busca stats de cada jogo (corners, cards, fouls)
-    # CUIDADO: faz 1 chamada de API por jogo — use só quando necessário
+    # CUIDADO: faz 1 chamada de API por jogo · use só quando necessário
     # --------------------------------------------------------
     def get_recent_with_stats(self, team_id: int, n: int = 15) -> list[dict]:
         matches = self.get_recent_matches(team_id, n)

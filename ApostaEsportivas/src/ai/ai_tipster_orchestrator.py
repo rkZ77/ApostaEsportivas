@@ -46,7 +46,7 @@ class AITipsterOrchestrator:
             # =============================================================
 
             # =====================
-            # CLASSIFICAÇÃO (opcional — não bloqueia a análise)
+            # CLASSIFICAÇÃO (opcional · não bloqueia a análise)
             # =====================
             try:
                 home_standing = self.standings.get_team_standing(
@@ -82,7 +82,7 @@ class AITipsterOrchestrator:
                 }
             else:
                 standings_stats = {}
-                print(f"[TIPSTER] Sem standings para {fixture_id} — IA usará apenas stats e histórico")
+                print(f"[TIPSTER] Sem standings para {fixture_id} · IA usará apenas stats e histórico")
 
             # =====================
             # MÉDIAS (contexto)
@@ -110,7 +110,7 @@ class AITipsterOrchestrator:
                 return None
 
             # =============================
-            # HISTÓRICO — seleções usam cross-competition (último 15 de qualquer liga)
+            # HISTÓRICO · seleções usam cross-competition (último 15 de qualquer liga)
             # =============================
 
             if is_national:
@@ -137,13 +137,13 @@ class AITipsterOrchestrator:
             # → busca últimos 8 jogos na API (amistosos, outras comps.)
             # =============================
             if not home_matches and not total_home_matches:
-                print(f"[TIPSTER] Sem historico no banco para home {home_id} — buscando na API...")
+                print(f"[TIPSTER] Sem historico no banco para home {home_id} · buscando na API...")
                 total_home_matches = self.historical_api.get_recent_with_stats(home_id, n=8)
                 if total_home_matches:
                     print(f"[TIPSTER] {len(total_home_matches)} jogo(s) externos carregados para home {home_id}")
 
             if not away_matches and not total_away_matches:
-                print(f"[TIPSTER] Sem historico no banco para away {away_id} — buscando na API...")
+                print(f"[TIPSTER] Sem historico no banco para away {away_id} · buscando na API...")
                 total_away_matches = self.historical_api.get_recent_with_stats(away_id, n=8)
                 if total_away_matches:
                     print(f"[TIPSTER] {len(total_away_matches)} jogo(s) externos carregados para away {away_id}")
@@ -194,7 +194,7 @@ class AITipsterOrchestrator:
             return None
 
     ##########################################################################
-    # Processa fixture da Copa do Mundo — mesmo formato do VIP regular
+    # Processa fixture da Copa do Mundo · mesmo formato do VIP regular
     ##########################################################################
     @staticmethod
     def _compute_copa_team_avgs(matches: list, team_id: int) -> dict:
@@ -226,7 +226,7 @@ class AITipsterOrchestrator:
         }
 
     def _process_world_cup_fixture(self, fx, performance_str: str | None = None, picks_anteriores_str: str | None = None):
-        """Copa do Mundo — mesmo pipeline de dados que ligas regulares.
+        """Copa do Mundo · mesmo pipeline de dados que ligas regulares.
         Envia últimos 10 jogos da seleção (com competition_type) como histórico total,
         e médias feitas/cedidas pré-calculadas nos blocos de estatísticas.
         """
@@ -274,7 +274,7 @@ class AITipsterOrchestrator:
                 "weaknesses":        away_profile.get("weaknesses", []),
             }
 
-            # Classificação — grupo + situação + Copa stats
+            # Classificação · grupo + situação + Copa stats
             try:
                 home_standing = self.standings.get_team_standing(home_id, league_id, season)
             except Exception:

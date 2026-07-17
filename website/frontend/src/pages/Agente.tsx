@@ -272,7 +272,7 @@ export default function Agente() {
 
       {/* Input */}
       {/* Quando o CookieBanner (fixed bottom-0) ainda está visível, ele sobrepõe
-          e bloqueia cliques aqui — reserva espaço extra embaixo pra textarea ficar
+          e bloqueia cliques aqui · reserva espaço extra embaixo pra textarea ficar
           acima da área coberta pelo banner. */}
       <div className={`bg-zinc-950 border-t border-zinc-800 ${cookieBannerVisible ? 'pb-24 sm:pb-14' : ''}`}>
         <div className="max-w-3xl mx-auto px-4 py-3 flex gap-2 items-end">

@@ -260,7 +260,7 @@ export default function Results() {
                 ))}
               </div>
 
-              {/* Por dia — com paginação */}
+              {/* Por dia · com paginação */}
               {stats?.by_day?.length > 0 && (() => {
                 const sorted = [...stats.by_day].sort((a: any, b: any) => b.match_date.localeCompare(a.match_date))
                 const totalDayPages = Math.ceil(sorted.length / DAY_PAGE_SIZE)

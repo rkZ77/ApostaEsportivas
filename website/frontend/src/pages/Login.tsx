@@ -179,7 +179,7 @@ export default function Login() {
   return (
     <div className="min-h-screen bg-black flex items-stretch">
 
-      {/* Left panel — branding */}
+      {/* Left panel · branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-zinc-950 border-r border-zinc-800">
         <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
@@ -218,7 +218,7 @@ export default function Login() {
         </div>
       </div>
 
-      {/* Right panel — form */}
+      {/* Right panel · form */}
       <div className="flex-1 flex items-center justify-center px-6 py-12 overflow-y-auto">
         <div className="w-full max-w-sm">
 
@@ -338,7 +338,7 @@ export default function Login() {
               </>
             )}
 
-            {/* Senha — comum aos dois modos */}
+            {/* Senha · comum aos dois modos */}
             <div>
               <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
               <div className="relative">

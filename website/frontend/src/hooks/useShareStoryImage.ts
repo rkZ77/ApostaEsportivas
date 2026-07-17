@@ -9,7 +9,7 @@ import { winRate as calcWinRate } from '../utils/format'
 
 export type SharePickInput = Omit<StoryImageInput, 'shareUrl'> & {
   pickId: number
-  /** vip | free | multipla | alavancagem — normalizado para a rota pública /p/:tipo/:id */
+  /** vip | free | multipla | alavancagem · normalizado para a rota pública /p/:tipo/:id */
   pickTypeRoute: string
 }
 
