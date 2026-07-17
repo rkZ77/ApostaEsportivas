@@ -26,6 +26,7 @@ _TTL_FT   = 300  # segundos · encerrado, dados não mudam
 
 _fix_cache:   dict[int, tuple[float, dict]] = {}
 _stats_cache: dict[int, tuple[float, list]] = {}
+_odds_live_cache: dict[int, tuple[float, list]] = {}
 
 
 def _cache_ttl(status: str) -> int:
@@ -74,6 +75,129 @@ def _fetch_stats(fid: int, status: str) -> list:
         data = _stats_cache.get(fid, (0, []))[1]  # mantém cache antigo em caso de erro
     _stats_cache[fid] = (now, data)
     return data
+
+
+def _fetch_live_odds(fid: int) -> list:
+    """Odds ao vivo (repreçadas em tempo real pela API conforme o jogo
+    evolui) via /odds/live -- usado só no momento em que o usuário abre o
+    modal de aposta pra um jogo já em andamento. Cache curto (mesmo TTL de
+    stats ao vivo, sempre _TTL_LIVE aqui pois só é chamado pra jogos já
+    confirmados como ao vivo)."""
+    now = time.time()
+    if fid in _odds_live_cache:
+        ts, cached = _odds_live_cache[fid]
+        if now - ts < _TTL_LIVE:
+            return cached
+    try:
+        r = requests.get(f"{API_BASE}/odds/live", headers=_headers(),
+                         params={"fixture": fid}, timeout=10)
+        items = r.json().get("response", [])
+        data = items[0].get("odds", []) if items else []
+    except Exception as e:
+        logger.error("[LIVE ODDS] fixture %s: %s", fid, e)
+        data = _odds_live_cache.get(fid, (0, []))[1]  # mantém cache antigo em caso de erro
+    _odds_live_cache[fid] = (now, data)
+    return data
+
+
+# Nomes de mercado ao vivo (API-Football) por market_type salvo no pick --
+# só as familias que o motor de picks realmente gera hoje (goals/corners/
+# cards over-under). Familias sem equivalente claro ao vivo (handicap,
+# shots, offsides) nao entram aqui -- _find_live_odd devolve None pra elas,
+# e o front cai pra odd ja salva (mesmo comportamento de antes desta feature).
+_LIVE_OVERUNDER_NAMES = {
+    "goals":   {"match goals", "over/under line", "goals over/under"},
+    "corners": {"total corners", "match corners"},
+    "cards":   {"total cards"},
+}
+
+
+def _find_live_odd(market_type: str | None, line: str | None, odds_markets: list) -> float | None:
+    """Acha a melhor odd ao vivo que corresponde ao mercado/linha salvos no
+    pick. Best-effort e silencioso: qualquer mercado sem correspondência
+    clara retorna None (nunca lança erro, nunca bloqueia o fluxo -- o
+    front usa a odd já salva nesse caso, igual já funcionava antes)."""
+    mtype = (market_type or "").lower()
+    direction, line_val = _extract_line(line)
+
+    if mtype in _LIVE_OVERUNDER_NAMES and direction in ("over", "under") and line_val is not None:
+        wanted_names = _LIVE_OVERUNDER_NAMES[mtype]
+        best = None
+        for m in odds_markets:
+            if (m.get("name") or "").lower() not in wanted_names:
+                continue
+            for v in m.get("values", []):
+                if v.get("suspended") or (v.get("value") or "").lower() != direction:
+                    continue
+                try:
+                    handicap = float(v.get("handicap"))
+                    odd = float(v["odd"])
+                except (TypeError, ValueError):
+                    continue
+                if abs(handicap - line_val) < 0.01 and (best is None or odd > best):
+                    best = odd
+        return best
+
+    if mtype == "btts":
+        want_yes = direction in ("yes", "sim")
+        for m in odds_markets:
+            name = (m.get("name") or "").lower()
+            if "both teams to score" not in name or "half" in name:
+                continue
+            for v in m.get("values", []):
+                if v.get("suspended"):
+                    continue
+                if ((v.get("value") or "").lower() == "yes") == want_yes:
+                    try:
+                        return float(v["odd"])
+                    except (TypeError, ValueError):
+                        continue
+        return None
+
+    if mtype == "double_chance":
+        l = (line or "").lower().replace(" ", "")
+        if "home/draw" in l or "draw/home" in l or "casaempate" in l:
+            wants = "home or draw"
+        elif "draw/away" in l or "away/draw" in l or "empatevisitante" in l:
+            wants = "away or draw"
+        elif "home/away" in l or "away/home" in l or "casavisitante" in l:
+            wants = "home or away"
+        else:
+            return None
+        for m in odds_markets:
+            if (m.get("name") or "").lower() != "double chance":
+                continue
+            for v in m.get("values", []):
+                if v.get("suspended"):
+                    continue
+                if (v.get("value") or "").lower() == wants:
+                    try:
+                        return float(v["odd"])
+                    except (TypeError, ValueError):
+                        continue
+        return None
+
+    if mtype in ("result_1x2", "outcome"):
+        l = (line or "").lower().strip()
+        wants = {"1": "home", "casa": "home", "home": "home", "mandante": "home",
+                 "x": "draw", "empate": "draw", "draw": "draw",
+                 "2": "away", "visitante": "away", "away": "away", "fora": "away"}.get(l)
+        if not wants:
+            return None
+        for m in odds_markets:
+            if (m.get("name") or "").lower() not in ("fulltime result", "match winner"):
+                continue
+            for v in m.get("values", []):
+                if v.get("suspended"):
+                    continue
+                if (v.get("value") or "").lower() == wants:
+                    try:
+                        return float(v["odd"])
+                    except (TypeError, ValueError):
+                        continue
+        return None
+
+    return None
 
 
 def _parse_stats(raw: list) -> tuple[dict, dict]:
@@ -603,6 +727,24 @@ def get_fixture_live_stats(fixture_id: int, current_user: dict = Depends(get_cur
         "home_possession":  home_s.get("Ball Possession", 0),
         "away_possession":  away_s.get("Ball Possession", 0),
     }
+
+
+@router.get("/pick-odd")
+def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
+                         current_user: dict = Depends(get_current_user)):
+    """Odd atual do mercado, buscada na API-Football no momento da consulta
+    -- chamado quando o usuário abre o modal de aposta. Jogo ainda não
+    começado (NS/TBD): devolve odd=None (sem mudança, front usa a odd já
+    salva no pick, igual sempre funcionou). Jogo ao vivo: busca /odds/live
+    e tenta achar a linha equivalente (best-effort, ver _find_live_odd) --
+    se não achar correspondência, também devolve None, nunca erro."""
+    fix_data = _fetch_fixture(fixture_id)
+    status = fix_data.get("fixture", {}).get("status", {}).get("short", "NS")
+    if status not in LIVE_STATUSES:
+        return {"odd": None, "is_live": False, "status": status}
+    odds_markets = _fetch_live_odds(fixture_id)
+    odd = _find_live_odd(market_type, line, odds_markets)
+    return {"odd": odd, "is_live": True, "status": status}
 
 
 @router.get("/my-picks")
