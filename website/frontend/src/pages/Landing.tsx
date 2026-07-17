@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Menu, X as XIcon, UserPlus, Zap, TrendingUp, Trophy, Gift, ArrowRight } from 'lucide-react'
+import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -98,16 +98,38 @@ function SocialProofStats() {
   )
 }
 
-// 3 passos · jornada do usuário
+// 3 passos · jornada do usuário, com ênfase na análise real da IA
 function ThreeSteps() {
   return (
-    <section id="como-funciona" className="py-16 bg-black border-b border-zinc-800/60">
+    <section id="como-funciona" className="py-20 bg-black border-b border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
-        <p className="text-center text-sm text-zinc-500 font-medium mb-10">Como funciona</p>
+        <div className="text-center mb-5">
+          <span className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full">
+            <BrainCircuit className="w-3.5 h-3.5" />
+            Como a IA decide cada pick
+          </span>
+        </div>
+        <h2 className="text-3xl md:text-4xl font-black text-center mb-4 leading-tight">
+          Nada de achismo. <span className="text-green-500">Só dados reais e matemática.</span>
+        </h2>
+        <p className="text-center text-zinc-400 text-sm max-w-2xl mx-auto mb-8 leading-relaxed">
+          Antes de qualquer pick, a IA cruza dados de forma recente, confronto direto, força do
+          adversário e odds de mercado · milhares de dados por rodada. Só entra quando encontra
+          valor esperado (EV) positivo, sem achismo e auditável do início ao fim.
+        </p>
+
+        <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
+          {['Forma recente', 'Confronto direto', 'Odds de mercado', 'Valor esperado (EV)', 'Confiança mínima ≥ 60%'].map(t => (
+            <span key={t} className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
+              {t}
+            </span>
+          ))}
+        </div>
+
         <div className="grid md:grid-cols-3 gap-5">
           {([
             { n: '1', Icon: UserPlus, title: 'Cria sua conta', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
-            { n: '2', Icon: Zap,      title: 'Recebe picks todo dia', desc: 'A IA analisa os jogos e entrega os melhores picks direto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
+            { n: '2', Icon: BrainCircuit, title: 'A IA faz a análise pesada', desc: 'A IA cruza estatística real de forma, confronto direto e odds de mercado, e só recomenda quando o valor esperado é positivo. Chega pronto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
             <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>
@@ -298,43 +320,6 @@ function RecentResults() {
         ) : (
           <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
         )}
-
-        {/* Simulação de lucro */}
-        {s && s.profit > 1 && (() => {
-          const unidade = 10
-          const inicial = 600
-          const ganho = Math.round(s.profit * unidade)
-          const final_ = inicial + ganho
-          const pct = ((ganho / inicial) * 100).toFixed(0)
-          return (
-            <div className="mt-8 bg-zinc-900 border border-green-500/20 rounded-2xl p-5">
-              <div className="flex items-start justify-between gap-3 mb-4 flex-wrap">
-                <div>
-                  <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold">Simulação · R$10 por unidade</p>
-                  <p className="text-[10px] text-zinc-700 mt-0.5">Seguindo todos os picks desde o início</p>
-                </div>
-                <span className="bg-green-500/10 border border-green-500/20 text-green-400 text-[10px] font-black px-2 py-1 rounded-full shrink-0">
-                  Atualizado automaticamente
-                </span>
-              </div>
-              <div className="flex items-center gap-3 sm:gap-6">
-                <div className="text-center shrink-0">
-                  <p className="text-xl sm:text-2xl font-black text-zinc-400">R${inicial}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">banca inicial</p>
-                </div>
-                <div className="flex-1 flex flex-col items-center gap-1">
-                  <span className="text-green-400 text-sm font-black">+R${ganho}</span>
-                  <div className="w-full border-t-2 border-dashed border-green-500/30" />
-                  <span className="text-zinc-600 text-[10px]">{s.total} picks · +{pct}%</span>
-                </div>
-                <div className="text-center shrink-0">
-                  <p className="text-xl sm:text-2xl font-black text-green-400">R${final_}</p>
-                  <p className="text-[10px] text-zinc-600 mt-0.5">banca atual</p>
-                </div>
-              </div>
-            </div>
-          )
-        })()}
       </div>
     </section>
   )
@@ -488,58 +473,6 @@ function LeaderboardTeaser() {
   )
 }
 
-// ── Activity Ticker (dados reais do backend) ──────────────────────────────
-const FALLBACK_ACTIVITIES = [
-  'João acabou de ativar o teste VIP',
-  'Maria criou uma conta agora',
-  'Carlos está acompanhando ao vivo',
-  'Rodrigo seguiu o pick VIP de hoje',
-  'Ana ativou o acesso VIP',
-]
-function ActivityTicker() {
-  const [events, setEvents] = useState<{ name: string; verb: string }[]>([])
-  const [totalUsers, setTotalUsers] = useState<number | null>(null)
-  const [idx, setIdx] = useState(0)
-  const [fade, setFade] = useState(true)
-
-  useEffect(() => {
-    api.get('/public/activity')
-      .then(r => {
-        if (r.data?.events?.length) {
-          setEvents(r.data.events)
-          setTotalUsers(r.data.total_users ?? null)
-        }
-      })
-      .catch(() => {})
-  }, [])
-
-  const items = events.length > 0
-    ? events.map(e => `${e.name} ${e.verb}`)
-    : FALLBACK_ACTIVITIES
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      setFade(false)
-      setTimeout(() => { setIdx(i => (i + 1) % items.length); setFade(true) }, 300)
-    }, 4000)
-    return () => clearInterval(t)
-  }, [items.length])
-
-  return (
-    <div className="border-y border-zinc-800/60 bg-zinc-950/60 py-2.5">
-      <div className="flex items-center justify-center gap-3">
-        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
-        <p className={`text-xs text-zinc-400 transition-opacity duration-300 ${fade ? 'opacity-100' : 'opacity-0'}`}>
-          {items[idx]}
-        </p>
-        {totalUsers !== null && totalUsers > 0 && (
-          <span className="text-[10px] text-zinc-600 hidden sm:block">· {totalUsers}+ usuários cadastrados</span>
-        )}
-      </div>
-    </div>
-  )
-}
-
 // ── Bastidores da IA ─────────────────────────────────────────────────────
 const BAST = [
   { text: 'Coletando dados dos jogos...', val: 'jogos do dia' },
@@ -587,7 +520,6 @@ export default function Landing() {
   const [menuOpen, setMenuOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
   const [chatDemo, setChatDemo] = useState(0)
-  const [openFaq, setOpenFaq] = useState<number | null>(null)
   useEffect(() => {
     const t = setInterval(() => setChatDemo(n => (n + 1) % 3), 3000)
     return () => clearInterval(t)
@@ -696,8 +628,8 @@ export default function Landing() {
               </h1>
 
               <p className="text-zinc-400 text-base leading-relaxed mb-8">
-                A IA analisa cada jogo do Brasileirão e da Premier League com dados reais de
-                estatísticas, forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
+                A IA analisa cada jogo do Brasileirão e da Premier League com estatística real,
+                forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
                 toda manhã. De graça pra começar.
               </p>
 
@@ -734,15 +666,11 @@ export default function Landing() {
 
       <FreePickTeaser />
 
-      <ActivityTicker />
-
-      <ActiveLeagues />
+      <RecentResults />
 
       <ThreeSteps />
 
-      <RecentResults />
-
-      <LeaderboardTeaser />
+      <ActiveLeagues />
 
       <section className="py-24">
         <div className="max-w-5xl mx-auto px-4">
@@ -868,7 +796,7 @@ export default function Landing() {
               <div className="space-y-2.5 mb-8">
                 {[
                   'Pick Free + todos os Picks VIP',
-                  'Múltiplas geradas pela IA',
+                  'Múltiplas geradas por IA',
                   'Alavancagem',
                   'Agente IA de futebol',
                   'Histórico completo com filtros',
@@ -917,76 +845,7 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-16 bg-black border-t border-zinc-800/60">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="bg-zinc-900 border border-green-500/20 rounded-2xl p-8 text-center">
-            <div className="inline-flex items-center justify-center w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-2xl mb-4">
-              <UserPlus className="w-6 h-6 text-green-500" />
-            </div>
-            <h2 className="text-2xl font-black text-white mb-2">Indique e ganhe dias de VIP grátis</h2>
-            <p className="text-zinc-400 text-sm max-w-md mx-auto mb-6">
-              Cada amigo que criar conta pela sua indicação te dá +1 dia de VIP. Se ele virar assinante,
-              você ganha +2 dias extras. Sem limite de indicações.
-            </p>
-            <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
-              Criar conta e começar a indicar
-            </Link>
-          </div>
-        </div>
-      </section>
-
-      <section className="py-24 bg-zinc-950 border-y border-zinc-800/60">
-        <div className="max-w-3xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl font-black">Dúvidas frequentes</h2>
-          </div>
-          <div className="space-y-3">
-            {[
-              {
-                q: 'Quando os picks do dia ficam disponíveis?',
-                a: 'Os picks são gerados automaticamente toda manhã. Acesse /picks após as 9h e eles já estarão lá. Em dias de muitos jogos pode levar alguns minutos a mais.',
-              },
-              {
-                q: 'Posso cancelar quando quiser?',
-                a: 'Sim. Você pode solicitar o cancelamento a qualquer momento via WhatsApp. Pelo Código de Defesa do Consumidor, compras digitais têm 7 dias de direito de arrependimento com reembolso total.',
-              },
-              {
-                q: 'O que é o trial gratuito de 2 dias?',
-                a: 'Ao criar sua conta você ganha 2 dias de acesso VIP completo. Após os 2 dias o acesso vira Free automaticamente. Só é ativado uma vez por conta.',
-              },
-              {
-                q: 'Os picks são garantidos?',
-                a: 'Não. Nenhum pick em apostas esportivas é garantido. A IA analisa dados estatísticos e encontra apostas com valor esperado positivo (EV+), mas resultados passados não garantem resultados futuros. Aposte com responsabilidade.',
-              },
-              {
-                q: 'O que é a Alavancagem?',
-                a: 'Uma estratégia que começa com um valor fixo (ex: R$50) e reinveste 100% do lucro a cada GREEN. Uma sequência de 5 acertos pode multiplicar o valor várias vezes. Em caso de RED, recomeça do início.',
-              },
-              {
-                q: 'Funciona no celular (iPhone e Android)?',
-                a: 'Sim, o site foi desenvolvido para funcionar perfeitamente em todos os dispositivos. Você pode inclusive salvar na tela inicial do seu celular para acesso rápido como um app.',
-              },
-              {
-                q: 'Quais ligas são cobertas?',
-                a: 'Brasileirão Série A e B e Premier League estão ao vivo agora. A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando. Mais ligas e torneios entram conforme o calendário avança.',
-              },
-            ].map(({ q, a }, i) => (
-              <div key={i} className="border border-zinc-800 rounded-xl overflow-hidden">
-                <button
-                  onClick={() => setOpenFaq(openFaq === i ? null : i)}
-                  className="w-full flex items-center justify-between gap-4 px-5 py-4 text-left font-semibold text-white text-sm hover:bg-zinc-900 transition-colors"
-                >
-                  {q}
-                  <span className={`text-zinc-500 text-lg font-light shrink-0 leading-none transition-transform duration-200 ${openFaq === i ? 'rotate-45' : ''}`}>+</span>
-                </button>
-                {openFaq === i && (
-                  <p className="px-5 pb-5 pt-3 text-zinc-400 text-sm leading-relaxed border-t border-zinc-800/60">{a}</p>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <LeaderboardTeaser />
 
       <Footer />
 
