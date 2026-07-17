@@ -18,26 +18,6 @@ function LeagueIcon({ className }: { className?: string }) {
   )
 }
 
-const PROCESSO = [
-  {
-    n: '01', color: 'text-green-500', bg: 'bg-green-500/10 border-green-500/20',
-    title: 'Coleta de dados',
-    desc: 'Estatísticas completas de cada jogo de cada liga coberta: gols, escanteios, cartões, posse, forma recente e confrontos diretos.',
-  },
-  {
-    n: '02', color: 'text-blue-400', bg: 'bg-blue-400/10 border-blue-400/20',
-    title: 'Análise estatística',
-    desc: 'A IA calcula médias por contexto (casa/fora), tendências recentes, força ofensiva e defensiva. Compara probabilidades reais com as odds do mercado para encontrar edge.',
-  },
-  {
-    n: '03', color: 'text-yellow-400', bg: 'bg-yellow-400/10 border-yellow-400/20',
-    title: 'Geração de picks',
-    desc: 'Apenas recomendações com EV positivo e confiança mínima entram no sistema. Picks VIP, Múltiplas e Alavancagem gerados automaticamente todo dia, para todas as ligas ativas.',
-  },
-]
-
-const MERCADOS = ['Gols Over/Under', 'Ambas marcam', '1X2', 'Handicap Asiático', 'Total Escanteios', 'Cartões', 'Gols 1º Tempo']
-
 export default function Ligas() {
   const [leagues, setLeagues] = useState<League[]>([])
   const [loading, setLoading] = useState(true)
@@ -106,35 +86,10 @@ export default function Ligas() {
           )}
         </div>
 
-        <div className="max-w-3xl mx-auto px-4 pb-10">
-          <div className="text-center mb-8">
-            <h2 className="text-2xl font-black mb-2">Como a IA gera os picks</h2>
-            <p className="text-zinc-400 text-sm max-w-lg mx-auto">
-              Não é palpite. É processamento de dados em escala, análise estatística e modelos
-              treinados para o mercado de apostas esportivas — o mesmo processo para qualquer liga coberta.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-3 gap-4">
-            {PROCESSO.map(({ n, color, bg, title, desc }) => (
-              <div key={n} className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 relative overflow-hidden">
-                <div className={`absolute -top-3 -right-3 text-6xl font-black opacity-5 ${color}`}>{n}</div>
-                <div className={`inline-flex items-center justify-center w-9 h-9 rounded-xl border text-sm font-black mb-3 ${bg} ${color}`}>{n}</div>
-                <h3 className="text-sm font-black text-white mb-1.5">{title}</h3>
-                <p className="text-zinc-400 text-xs leading-relaxed">{desc}</p>
-              </div>
-            ))}
-          </div>
-
-          <div className="mt-6 bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-xs text-zinc-500 font-medium mb-4">Mercados analisados</p>
-            <div className="flex flex-wrap gap-2">
-              {MERCADOS.map(m => (
-                <span key={m} className="bg-zinc-800 border border-zinc-700/60 text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-lg">
-                  {m}
-                </span>
-              ))}
-            </div>
-          </div>
+        <div className="max-w-3xl mx-auto px-4 pb-10 text-center">
+          <Link to="/como-funciona" className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+            Quer entender como a IA gera os picks? Veja como funciona →
+          </Link>
         </div>
 
         <div className="max-w-3xl mx-auto px-4 pb-16 text-center">
