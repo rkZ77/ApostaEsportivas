@@ -152,13 +152,10 @@ function StickyMobileCTA() {
   )
 }
 
-// Teaser compacto de ligas -- antes essa secao mostrava a grade completa
-// de logos aqui, que repetia mencoes a Copa/Premier/Brasileirao ja
-// presentes em varios outros pontos da home. Agora so uma amostra +
-// link pra pagina dedicada (/ligas) com a lista completa.
-interface LeagueTeaser { league_id: number; name: string; logo_url: string }
+// Ligas ativas (do banco)
+interface LeagueTeaser { league_id: number; name: string; season: number; logo_url: string }
 
-function ActiveLeaguesTeaser() {
+function ActiveLeagues() {
   const [leagues, setLeagues] = useState<LeagueTeaser[]>([])
 
   useEffect(() => {
@@ -167,27 +164,34 @@ function ActiveLeaguesTeaser() {
       .catch(() => {})
   }, [])
 
+  if (!leagues.length) return null
+
   return (
-    <section className="border-y border-zinc-800/60 bg-zinc-950 py-8">
-      <div className="max-w-5xl mx-auto px-4 flex flex-col items-center gap-4">
-        {leagues.length > 0 && (
-          <div className="flex items-center gap-4">
-            {leagues.slice(0, 5).map(({ league_id, name, logo_url }) => (
+    <section className="border-y border-zinc-800/60 bg-zinc-950 py-14">
+      <div className="max-w-5xl mx-auto px-4">
+        <div className="text-center mb-8">
+          <h2 className="text-2xl font-black mb-2">Ligas e torneios cobertos</h2>
+          <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+            A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando —
+            hoje a IA já analisa:
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center justify-center gap-8">
+          {leagues.map(({ league_id, name, logo_url }) => (
+            <div key={league_id} className="flex flex-col items-center gap-2">
               <img
-                key={league_id}
                 src={logo_url}
                 alt={name}
-                title={name}
-                className="w-8 h-8 object-contain opacity-80"
+                className="w-10 h-10 object-contain"
                 onError={e => (e.currentTarget.style.display = 'none')}
               />
-            ))}
-          </div>
-        )}
-        <Link to="/ligas" className="text-sm text-zinc-400 hover:text-white font-medium transition-colors inline-flex items-center gap-1.5">
-          Ver todas as ligas e torneios cobertos
-          <ArrowRight className="w-3.5 h-3.5" />
-        </Link>
+              <div className="text-center">
+                <p className="text-xs font-semibold text-zinc-300 leading-tight">{name}</p>
+                <p className="text-[10px] text-green-500 font-bold">Ativo</p>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -732,7 +736,7 @@ export default function Landing() {
 
       <ActivityTicker />
 
-      <ActiveLeaguesTeaser />
+      <ActiveLeagues />
 
       <ThreeSteps />
 
