@@ -488,53 +488,36 @@ function LeaderboardTeaser() {
   )
 }
 
-// ── Activity Ticker (dados reais do backend) ──────────────────────────────
-const FALLBACK_ACTIVITIES = [
-  'João acabou de ativar o teste VIP',
-  'Maria criou uma conta agora',
-  'Carlos está acompanhando ao vivo',
-  'Rodrigo seguiu o pick VIP de hoje',
-  'Ana ativou o acesso VIP',
-]
+// ── Activity Ticker (só dados reais do backend, nunca inventa atividade) ──
 function ActivityTicker() {
   const [events, setEvents] = useState<{ name: string; verb: string }[]>([])
-  const [totalUsers, setTotalUsers] = useState<number | null>(null)
   const [idx, setIdx] = useState(0)
   const [fade, setFade] = useState(true)
 
   useEffect(() => {
     api.get('/public/activity')
-      .then(r => {
-        if (r.data?.events?.length) {
-          setEvents(r.data.events)
-          setTotalUsers(r.data.total_users ?? null)
-        }
-      })
+      .then(r => { if (r.data?.events?.length) setEvents(r.data.events) })
       .catch(() => {})
   }, [])
 
-  const items = events.length > 0
-    ? events.map(e => `${e.name} ${e.verb}`)
-    : FALLBACK_ACTIVITIES
-
   useEffect(() => {
+    if (events.length === 0) return
     const t = setInterval(() => {
       setFade(false)
-      setTimeout(() => { setIdx(i => (i + 1) % items.length); setFade(true) }, 300)
+      setTimeout(() => { setIdx(i => (i + 1) % events.length); setFade(true) }, 300)
     }, 4000)
     return () => clearInterval(t)
-  }, [items.length])
+  }, [events.length])
+
+  if (events.length === 0) return null
 
   return (
     <div className="border-y border-zinc-800/60 bg-zinc-950/60 py-2.5">
       <div className="flex items-center justify-center gap-3">
         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
         <p className={`text-xs text-zinc-400 transition-opacity duration-300 ${fade ? 'opacity-100' : 'opacity-0'}`}>
-          {items[idx]}
+          {events[idx].name} {events[idx].verb}
         </p>
-        {totalUsers !== null && totalUsers > 0 && (
-          <span className="text-[10px] text-zinc-600 hidden sm:block">· {totalUsers}+ usuários cadastrados</span>
-        )}
       </div>
     </div>
   )
@@ -736,13 +719,11 @@ export default function Landing() {
 
       <ActivityTicker />
 
-      <ActiveLeagues />
+      <RecentResults />
 
       <ThreeSteps />
 
-      <RecentResults />
-
-      <LeaderboardTeaser />
+      <ActiveLeagues />
 
       <section className="py-24">
         <div className="max-w-5xl mx-auto px-4">
@@ -916,6 +897,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <LeaderboardTeaser />
 
       <section className="py-16 bg-black border-t border-zinc-800/60">
         <div className="max-w-3xl mx-auto px-4">
