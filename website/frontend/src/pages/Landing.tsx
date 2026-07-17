@@ -988,38 +988,6 @@ export default function Landing() {
         </div>
       </section>
 
-      <section className="py-24 border-t border-zinc-800/60 relative overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-br from-green-500/5 via-transparent to-yellow-400/5" />
-        <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
-        <div className="max-w-2xl mx-auto px-4 text-center relative">
-          <div className="flex items-center justify-center gap-3 mb-6">
-            <Trophy className="w-9 h-9 text-yellow-400" />
-          </div>
-          <div className="inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full mb-6">
-            <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-            Brasileirão e Premier League ao vivo
-          </div>
-          <h2 className="text-3xl md:text-4xl font-black mb-4 leading-tight">
-            Todo round tem valor.<br /><span className="text-green-500">Não fique de fora.</span>
-          </h2>
-          <p className="text-zinc-400 text-sm mb-8 leading-relaxed">
-            Crie sua conta e ganhe <span className="text-white font-bold">2 dias de acesso VIP completo.</span>
-            {' '}Picks de Brasileirão, Premier League, agente IA e muito mais.
-          </p>
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-            <Link to="/login?mode=register"
-              className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto">
-              Criar conta · 2 dias VIP grátis
-            </Link>
-            <a href="#resultados"
-              className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-8 py-4 rounded-xl text-sm transition-colors w-full sm:w-auto text-center">
-              Ver resultados primeiro
-            </a>
-          </div>
-          <p className="text-xs text-zinc-600 mt-4">Sem compromisso · Após 2 dias vira Free automaticamente</p>
-        </div>
-      </section>
-
       <Footer />
 
       <StickyMobileCTA />
