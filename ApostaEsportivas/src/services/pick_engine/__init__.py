@@ -5,12 +5,15 @@ Ponto de entrada publico: analyze_fixture_markets() + rank_market_candidates()
 + explain(). Fase 3 adiciona news_model.py / consensus.py sem reabrir os
 modulos existentes."""
 from services.pick_engine.orchestrator import analyze_fixture_markets, explain
-from services.pick_engine.ranking import rank_market_candidates, rank_all_candidates, select_final_picks
+from services.pick_engine.ranking import (
+    rank_market_candidates, rank_all_candidates, select_final_picks,
+    rank_all_candidates_debug, select_final_picks_debug, evaluate_all_lines,
+)
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG, DICA_CONFIG
 from services.pick_engine import (
     context_model, team_profile_model, competition_profile,
     probability_model, variance_model, team_strength, data_validation,
-    bayesian_model,
+    bayesian_model, homologation,
 )
 
 __all__ = [
@@ -18,6 +21,9 @@ __all__ = [
     "rank_market_candidates",
     "rank_all_candidates",
     "select_final_picks",
+    "rank_all_candidates_debug",
+    "select_final_picks_debug",
+    "evaluate_all_lines",
     "explain",
     "PickEngineConfig",
     "DEFAULT_CONFIG",
@@ -30,4 +36,5 @@ __all__ = [
     "team_strength",
     "data_validation",
     "bayesian_model",
+    "homologation",
 ]

@@ -193,7 +193,24 @@ _PIPELINE_SCRIPTS = {
     "gerar_multipla":       "gerar_sugestao_multiplas.py",
     "gerar_alavancagem":    os.path.join("ai", "alavancagem_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
+    # Motor deterministico (services/pick_engine) + fase de homologacao --
+    # prefixo "dev_" sinaliza que _run_and_track() precisa injetar DB_ENV=dev
+    # (ver _dev_env()) antes de rodar. Nunca chamam IA, sem custo de API.
+    "dev_gerar_vip":           os.path.join("engine_pipelines", "vip_pipeline.py"),
+    "dev_gerar_dica":          os.path.join("engine_pipelines", "dica_pipeline.py"),
+    "dev_gerar_multipla":      os.path.join("engine_pipelines", "multipla_pipeline.py"),
+    "dev_gerar_alavancagem":   os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
+    "dev_homolog_vip":         os.path.join("ai", "vip_engine_shadow.py"),
+    "dev_homolog_dica":        os.path.join("ai", "dica_homologation.py"),
+    "dev_homolog_multipla":    os.path.join("ai", "multipla_homologation.py"),
+    "dev_homolog_alavancagem": os.path.join("ai", "alavancagem_homologation.py"),
 }
+
+_DEV_PIPELINE_STEPS = [
+    "atualizar_jogos", "capturar_odds",
+    "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem",
+    "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
+]
 
 # Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
 _PIPELINE_TIMEOUTS = {
@@ -220,6 +237,27 @@ class PipelineCommandBody(BaseModel):
     command: str
 
 
+def _dev_env(base_env: dict) -> dict:
+    """Env pros steps "dev_*" (motor deterministico + homologacao) --
+    EXIGE que DB_HOST_DEV (e as demais _DEV) estejam configuradas de
+    verdade neste servico Railway, nunca fabrica a partir de DB_HOST
+    unsuffixed (que neste mesmo processo pode ser producao -- ver
+    website/backend/database.py::get_connection, usa DATABASE_URL/
+    DB_HOST_PROD, esquema DIFERENTE do DB_ENV usado pelos scripts do
+    motor). Fabricar _DEV a partir de credenciais desconhecidas geraria o
+    risco real de o motor escrever picks numa base errada acreditando
+    que e' DEV. Falha alto e claro em vez disso."""
+    if not base_env.get("DB_HOST_DEV"):
+        raise RuntimeError(
+            "DB_HOST_DEV nao configurado neste ambiente -- os steps dev_* exigem as "
+            "variaveis _DEV (DB_HOST_DEV, DB_PORT_DEV, DB_NAME_DEV, DB_USER_DEV, "
+            "DB_PASS_DEV, DB_SSLMODE_DEV) configuradas explicitamente no Railway."
+        )
+    env = dict(base_env)
+    env["DB_ENV"] = "dev"
+    return env
+
+
 async def _run_and_track(command: str, script: str):
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
@@ -227,6 +265,8 @@ async def _run_and_track(command: str, script: str):
     timeout = _PIPELINE_TIMEOUTS.get(command, _PIPELINE_TIMEOUTS["default"])
     try:
         env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
+        if command.startswith("dev_"):
+            env = _dev_env(env)
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script,
             stdout=asyncio.subprocess.PIPE,
@@ -270,6 +310,27 @@ async def _run_tudo():
     _pipeline_status["tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline completo!", "error": None}
 
 
+async def _run_dev_pipeline():
+    """Motor deterministico + fase de homologacao (ver plano de validacao
+    antes de promover pra producao) -- coleta jogos/odds do dia, roda os 4
+    engine_pipelines de verdade (grava picks reais em DEV) e os 4 scripts
+    de homologacao (so leitura + log JSONL, comparam contra o pick real
+    da IA em PROD). Sem custo de API -- motor determinista, nunca chama
+    Anthropic. So roda de fato quando DB_HOST_DEV existe (ver _dev_env)."""
+    now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+    started = now()
+    _pipeline_status["dev_tudo"] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, "log": "Iniciando..."}
+    for cmd in _DEV_PIPELINE_STEPS:
+        script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
+        _pipeline_status["dev_tudo"]["log"] = f"Rodando {cmd}..."
+        await _run_and_track(cmd, script)
+        if _pipeline_status[cmd]["status"] == "error":
+            err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
+            _pipeline_status["dev_tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
+            return
+    _pipeline_status["dev_tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline DEV completo!", "error": None}
+
+
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
@@ -302,6 +363,10 @@ def pipeline_status_public(current_user: dict = Depends(get_current_user)):
 async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(require_admin)):
     if body.command == "tudo":
         asyncio.create_task(_run_tudo())
+        return {"ok": True, "status": "iniciado"}
+
+    if body.command == "dev_tudo":
+        asyncio.create_task(_run_dev_pipeline())
         return {"ok": True, "status": "iniciado"}
 
     if body.command not in _PIPELINE_SCRIPTS:

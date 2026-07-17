@@ -72,7 +72,7 @@ BET_ID_PT_MAP: dict[int, str] = {
     1:   "Resultado Final (1X2)",
     12:  "Dupla Chance",
     13:  "Vencedor do 1º Tempo",
-    4:   "Ambas as Equipes Marcam",
+    4:   "Handicap Asiático",
     8:   "Ambas as Equipes Marcam",
     34:  "Ambas Marcam - 1º Tempo",
     5:   "Gols Mais/Menos",
@@ -298,9 +298,10 @@ class OddsCollectorService:
 
                         # Guarda o value completo da API (ex: "Over 1.5", "Under 0.5").
                         # Assim cada linha é um registro único pelo conflict key (market_row_id, value_name).
-                        # line_value vem só do campo handicap quando disponível.
+                        # line_value vem só do campo handicap quando disponível -- coluna e' numeric,
+                        # None vira NULL; string vazia quebra o insert (regressao ja documentada antes).
                         value_name = raw_value
-                        line_value = handicap if handicap else ""
+                        line_value = handicap if handicap else None
 
                         values_batch.append((
                             market_row_id,
