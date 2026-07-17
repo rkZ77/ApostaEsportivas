@@ -1,10 +1,10 @@
-"""Dica do Dia via motor deterministico (pick_engine) -- so roda quando
-DB_ENV=dev. Reimplementa localmente a selecao de fixtures/checagem de
-"ja rodou hoje" (nao importa de ai/dica_do_dia_pipeline.py -- esse modulo
-instancia Anthropic() no nivel de modulo, import indevido custaria uma
-inicializacao de client sem necessidade e acopla este pipeline ao de IA)."""
-import os
-
+"""Dica do Dia via motor deterministico (pick_engine) -- unico gerador de
+picks_free desde 2026-07-17 (decisao do usuario de cortar IA em producao
+tambem, nao so em dev). Reimplementa localmente a selecao de fixtures/
+checagem de "ja rodou hoje" (nao importa de ai/dica_do_dia_pipeline.py --
+esse modulo instancia Anthropic() no nivel de modulo, import indevido
+custaria uma inicializacao de client sem necessidade e acopla este
+pipeline ao de IA)."""
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -28,12 +28,6 @@ _LEAGUE_PRIORITY = {
     1: 1, 2: 2, 3: 3, 848: 4, 39: 5, 140: 6, 135: 7, 78: 8,
     61: 9, 94: 10, 88: 11, 13: 12, 11: 13, 71: 14, 72: 15,
 }
-
-
-def _require_dev():
-    if os.getenv("DB_ENV", "").lower() != "dev":
-        raise RuntimeError(
-            "run_dica_engine() so pode rodar com DB_ENV=dev -- producao continua com IA.")
 
 
 def _has_today_dica(cur) -> bool:
@@ -182,8 +176,6 @@ def _save_pick(cur, fixture: dict, pick: dict):
 
 
 def run_dica_engine():
-    _require_dev()
-
     conn = get_connection()
     cur = conn.cursor()
 
