@@ -389,6 +389,39 @@ def public_pick(pick_type: str, pick_id: int):
         conn.close()
 
 
+@router.get("/fixtures-today")
+def public_fixtures_today():
+    """Jogos de hoje das ligas cobertas, sem autenticacao -- so calendario
+    (times, liga, horario), sem odds/picks. Usado pro card de compartilhamento
+    'jogos que a IA vai analisar hoje'."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT f.fixture_id, f.home_team, f.away_team,
+                   f.home_team_id, f.away_team_id,
+                   f.league_id, COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
+                   f.match_datetime
+            FROM fixtures f
+            LEFT JOIN leagues l ON l.league_id = f.league_id
+            WHERE f.match_datetime::date = CURRENT_DATE
+              AND f.status = 'NS'
+            ORDER BY f.match_datetime
+            LIMIT 8
+        """)
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
+                d["match_datetime"] = d["match_datetime"].isoformat()
+            result.append(d)
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/free-pick-today")
 def public_free_pick_today():
     """Teaser da Dica do Dia (free) de hoje, sem autenticacao -- usado pra
