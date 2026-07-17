@@ -2,21 +2,14 @@ from utils.db_utils import get_connection
 import psycopg2.extras
 from datetime import datetime, date
 from decimal import Decimal
+from services.pick_engine.competition_profile import national_team_league_ids
 
 # Competições de seleções nacionais (API-Football IDs).
 # Para esses torneios, o histórico deve cruzar TODAS as competições
-# (Copa + Eliminatórias + Amistosos) — não só a liga atual.
-NATIONAL_TEAM_LEAGUE_IDS: frozenset = frozenset({
-    1,    # Copa do Mundo FIFA
-    9,    # Copa América
-    10,   # Amistosos Internacionais
-    4,    # Eurocopa (UEFA)
-    14,   # Copa Africana de Nações (AFCON)
-    23,   # Copa Asiática (AFC)
-    11,   # Eliminatórias Copa América (CONMEBOL)
-    31, 32, 33, 34, 35, 36, 37, 38, 39,  # Eliminatórias Copa do Mundo
-    882, 780,                              # Outros qualificatórios
-})
+# (Copa + Eliminatórias + Amistosos) · não só a liga atual.
+# Fonte única: services/pick_engine/competition_profile.py (Prioridade 1 do
+# plano de refatoração · antes essa lista era mantida em paralelo aqui).
+NATIONAL_TEAM_LEAGUE_IDS: frozenset = national_team_league_ids()
 
 
 ###############################################################################
@@ -70,6 +63,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -98,6 +97,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -126,6 +131,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 ls.team_name AS opponent_name,
                 ls.rank AS opponent_rank
             FROM match_statistics ms
@@ -160,7 +171,7 @@ class MatchStatsService:
         return self.get_all_matches_full(team_id, season, league_id)
 
     ##########################################################################
-    # SELEÇÕES — Últimos N jogos em QUALQUER competição (sem filtro de liga)
+    # SELEÇÕES · Últimos N jogos em QUALQUER competição (sem filtro de liga)
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################
@@ -175,6 +186,12 @@ class MatchStatsService:
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                 ms.home_fouls, ms.away_fouls,
+                ms.home_shots_on, ms.away_shots_on,
+                ms.home_total_shots, ms.away_total_shots,
+                ms.home_offsides, ms.away_offsides,
+                ms.home_possession, ms.away_possession,
+                ms.home_passes, ms.away_passes,
+                ms.home_passes_accuracy, ms.away_passes_accuracy,
                 NULL::text    AS opponent_name,
                 NULL::integer AS opponent_rank
             FROM match_statistics ms

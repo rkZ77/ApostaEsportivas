@@ -59,7 +59,7 @@ class DataCollectorMain:
         return self.team_aggregator
 
     # ---------------------------------------------------------
-    # RESET — apaga todos os dados de temporada (mantém leagues)
+    # RESET · apaga todos os dados de temporada (mantém leagues)
     # ---------------------------------------------------------
 
     def run_reset(self):
@@ -189,7 +189,7 @@ class DataCollectorMain:
     # ---------------------------------------------------------
 
     def run_new_league(self):
-        print("\n========== NOVA LIGA — RESET + COLETA COMPLETA ==========\n")
+        print("\n========== NOVA LIGA · RESET + COLETA COMPLETA ==========\n")
         self.run_reset()
         self.run_all(mode="full", wc_mode="full")
 

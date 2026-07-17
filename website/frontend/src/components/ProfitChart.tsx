@@ -48,7 +48,7 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
     yTicks.push(parseFloat(v.toFixed(10)))
   }
 
-  // X-axis ticks — máximo 6 labels espaçadas uniformemente
+  // X-axis ticks · máximo 6 labels espaçadas uniformemente
   const maxXTicks = Math.min(6, points.length)
   const xTicks = Array.from({ length: maxXTicks }, (_, i) =>
     Math.round(i * (points.length - 1) / (maxXTicks - 1))

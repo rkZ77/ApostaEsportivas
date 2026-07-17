@@ -72,7 +72,7 @@ class TeamStatsAggregatorService:
         print("\n[TeamStatsAggregatorService] Finalizado.\n")
 
     ##########################################################################
-    # Processa seleção nacional — últimos N jogos (amistosos + Copa)
+    # Processa seleção nacional · últimos N jogos (amistosos + Copa)
     ##########################################################################
     def process_national_team(self, team_id, season=2026, last_n=10):
 

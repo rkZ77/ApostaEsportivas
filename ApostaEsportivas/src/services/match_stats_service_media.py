@@ -166,7 +166,7 @@ class MatchStatsServiceMedia:
         return self._aggregate_games(games, team_id)
 
     ##########################################################################
-    # CALCULA MÉDIAS DAS SELEÇÕES — ÚLTIMOS N JOGOS (AMISTOSOS + COPA)
+    # CALCULA MÉDIAS DAS SELEÇÕES · ÚLTIMOS N JOGOS (AMISTOSOS + COPA)
     ##########################################################################
     def calculate_national_team_averages(self, team_id, last_n=10):
         """Médias dos últimos N jogos da seleção, misturando amistosos e Copa do Mundo."""

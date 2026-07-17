@@ -35,7 +35,7 @@ except ZoneInfoNotFoundError:
 
 
 # ============================================================
-# CONVERSÃO UTC -> BR (NAIVE — sem tzinfo, para salvar no banco)
+# CONVERSÃO UTC -> BR (NAIVE · sem tzinfo, para salvar no banco)
 # ============================================================
 def convert_utc_to_br_naive(dt_str: str) -> datetime:
     dt_utc   = datetime.fromisoformat(dt_str.replace("Z", "+00:00"))
@@ -116,7 +116,7 @@ class FixtureCollectorService:
             return []
 
         if not valid_team_ids:
-            print("[WARN] Tabela 'teams' está vazia — nenhum jogo será coletado.")
+            print("[WARN] Tabela 'teams' está vazia · nenhum jogo será coletado.")
             print("[WARN] Execute o Stage 1 (sync de times) primeiro.")
             return []
 
@@ -173,6 +173,7 @@ class FixtureCollectorService:
                 "match_datetime": dt_local,
                 "status":         status,
                 "referee":        fixture.get("referee"),
+                "round":          league.get("round"),
             })
 
         print(f"📊 Jogos NS válidos encontrados: {len(fixtures)}")
@@ -216,7 +217,7 @@ class FixtureCollectorService:
 
         # Inclui:
         # 1. Jogos de hoje (BRT)
-        # 2. Jogos de 00:00–02:59 BRT do próximo dia — captura virada da meia-noite
+        # 2. Jogos de 00:00–02:59 BRT do próximo dia · captura virada da meia-noite
         def is_target(f: dict) -> bool:
             d = f["match_datetime"].date()
             h = f["match_datetime"].hour
@@ -271,6 +272,7 @@ class FixtureCollectorService:
                             match_datetime  = %s,
                             status          = %s,
                             referee         = COALESCE(%s, referee),
+                            round           = COALESCE(%s, round),
                             last_updated    = NOW()
                         WHERE fixture_id = %s;
                     """, (
@@ -283,6 +285,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                         fid,
                     ))
                     updates += 1
@@ -292,10 +295,10 @@ class FixtureCollectorService:
                             fixture_id, league_id, season,
                             home_team_id, away_team_id,
                             home_team, away_team,
-                            match_datetime, status, referee,
+                            match_datetime, status, referee, round,
                             created_at, last_updated
                         )
-                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
+                        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW(),NOW());
                     """, (
                         fid,
                         f["league_id"],
@@ -307,6 +310,7 @@ class FixtureCollectorService:
                         f["match_datetime"],
                         f["status"],
                         f.get("referee"),
+                        f.get("round"),
                     ))
                     inserts += 1
 

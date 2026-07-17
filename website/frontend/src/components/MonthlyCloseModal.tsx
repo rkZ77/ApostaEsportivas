@@ -96,7 +96,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     if (isPreview) return
     api.get('/banca/monthly-close')
       .then(r => {
-        // Já fechado em outro dispositivo/sessão neste mês — não reabre o popup
+        // Já fechado em outro dispositivo/sessão neste mês · não reabre o popup
         // nem arrisca sobrescrever o registro histórico com uma nova confirmação.
         if (r.data.already_closed) { dismissMonthlyClose(); onClose(); return }
         setData(r.data)
@@ -292,7 +292,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               </div>
             )}
 
-            {/* Alavancagem — série é composta, não entra na banca de unidades acima */}
+            {/* Alavancagem · série é composta, não entra na banca de unidades acima */}
             {data.alavancagem?.configured && (
               <div className="mx-5 mb-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
                 <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1.5">Série de alavancagem</p>
@@ -336,7 +336,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 {copied ? 'Copiado!' : 'Compartilhar resultado'}
               </button>
 
-              {/* Atualizar com o lucro — salva direto */}
+              {/* Atualizar com o lucro · salva direto */}
               <button
                 onClick={handleUpdateDirect}
                 disabled={saving}
@@ -348,7 +348,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 }
               </button>
 
-              {/* Definir outro valor — abre input */}
+              {/* Definir outro valor · abre input */}
               <button
                 onClick={() => { setNewBanca(''); setStep('edit') }}
                 className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"

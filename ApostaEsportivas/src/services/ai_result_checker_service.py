@@ -24,7 +24,8 @@ class AIResultCheckerService:
                 home_corners, away_corners, total_corners,
                 home_yellow_cards, away_yellow_cards,
                 home_red_cards, away_red_cards,
-                home_goals_ht, away_goals_ht
+                home_goals_ht, away_goals_ht,
+                status
             FROM match_statistics
             WHERE fixture_id = %s
             LIMIT 1;
@@ -53,6 +54,7 @@ class AIResultCheckerService:
             "away_red":      ar,
             "home_cards":    hy + hr,
             "away_cards":    ay + ar,
+            "status":        row[12],
             "total_cards":   hy + hr + ay + ar,
             "total_yellow":  hy + ay,
             "total_red":     hr + ar,
@@ -137,7 +139,7 @@ class AIResultCheckerService:
         if any(w in name for w in dc_kws):
             return "double_chance"
 
-        # Classificação (mata-mata) — quem avança de fase (90min + prorrogação + pênaltis)
+        # Classificação (mata-mata) · quem avança de fase (90min + prorrogação + pênaltis)
         if any(w in name for w in ["classificaç", "classificacao", "to qualify", "qualify", "passagem de fase"]):
             return "to_qualify"
 
@@ -334,6 +336,16 @@ class AIResultCheckerService:
         side   = self.detect_side(market, home_team, away_team)
         op, val = self.parse_line(line)
 
+        # Mercados de over/under (gols totais/escanteios/cartões) são
+        # liquidados pelas casas com base no TEMPO NORMAL (90min) -- mas
+        # /fixtures/statistics da API-Football devolve o jogo inteiro
+        # (incluindo prorrogação/pênaltis) sem separar por período. Sem
+        # como recalcular o número certo, anula (PUSH) em vez de arriscar
+        # um RED/GREEN errado. Mercados de 1° tempo não são afetados (HT é
+        # sempre tempo normal, por definição).
+        if mt in ("goals", "corners", "cards") and not is_ht and stats.get("status") in ("AET", "PEN"):
+            return ("PUSH", Decimal("0"))
+
         # Seleciona gols corretos (1° tempo ou jogo completo)
         if is_ht:
             hg = stats.get("home_goals_ht")
@@ -382,7 +394,7 @@ class AIResultCheckerService:
 
         elif mt == "to_qualify":
             # Lado vem do campo line ("Casa"/"Visitante"/"Home"/"Away"), não do nome do mercado.
-            # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis —
+            # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis ·
             # essa informação não é capturada em match_statistics hoje, então não arriscamos
             # um GREEN/RED errado e deixamos pendente para conferência manual.
             side_line = (str(line) or "").strip().lower()
@@ -452,7 +464,7 @@ class AIResultCheckerService:
 
             stats = self.get_fixture_result(fixture_id, cur)
             if not stats:
-                print(f"[CHECKER] Sem stats para fixture_id={fixture_id} (id={sid}) — aguardando sync.")
+                print(f"[CHECKER] Sem stats para fixture_id={fixture_id} (id={sid}) · aguardando sync.")
                 continue
 
             result, factor = self.evaluate_pick(market, line, float(odd), stats,
@@ -478,7 +490,7 @@ class AIResultCheckerService:
                 """, (result, profit, sid))
                 conn.commit()
             except Exception as e:
-                print(f"[CHECKER] Erro ao salvar id={sid}: {e} — reconectando...")
+                print(f"[CHECKER] Erro ao salvar id={sid}: {e} · reconectando...")
                 try: conn.rollback()
                 except Exception: pass
                 conn = get_connection()

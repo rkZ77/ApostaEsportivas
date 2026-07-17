@@ -111,7 +111,7 @@ class AIPerformanceService:
         """
         data = self.get_summary(days)
         if not data:
-            return '{"status": "sem historico suficiente — menos de 5 resultados registrados"}'
+            return '{"status": "sem historico suficiente · menos de 5 resultados registrados"}'
         return json.dumps(data, ensure_ascii=False, separators=(",", ":"))
 
     def get_team_picks(self, teams: list[str], limit: int = 15) -> list[dict]:

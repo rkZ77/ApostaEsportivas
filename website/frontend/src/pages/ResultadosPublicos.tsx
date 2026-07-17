@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
+import { Share2 } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo } from '../components/TeamLogo'
+import { useShareResultsImage, useShareTodayGamesImage } from '../hooks/useShareStoryImage'
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
@@ -56,6 +58,10 @@ export default function ResultadosPublicos() {
   const [error, setError] = useState(false)
   const [source, setSource] = useState('all')
   const [month, setMonth] = useState('')
+  const [todayGames, setTodayGames] = useState<any[]>([])
+
+  const shareResults = useShareResultsImage()
+  const shareTodayGames = useShareTodayGamesImage()
 
   useEffect(() => {
     setLoading(true)
@@ -68,6 +74,12 @@ export default function ResultadosPublicos() {
       .catch(() => { setData(null); setError(true) })
       .finally(() => setLoading(false))
   }, [source, month])
+
+  useEffect(() => {
+    api.get('/public/fixtures-today')
+      .then(r => setTodayGames(r.data ?? []))
+      .catch(() => {})
+  }, [])
 
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
@@ -159,6 +171,32 @@ export default function ResultadosPublicos() {
                     <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
                   </div>
                 ))}
+              </div>
+
+              {/* Compartilhar */}
+              <div className="flex flex-wrap gap-2 justify-center mb-8">
+                <button
+                  onClick={() => shareResults.share({ winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0 })}
+                  disabled={shareResults.sharing}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado'}
+                </button>
+                {todayGames.length > 0 && (
+                  <button
+                    onClick={() => shareTodayGames.share(todayGames.map(g => ({
+                      homeTeamName: g.home_team, awayTeamName: g.away_team,
+                      homeTeamId: g.home_team_id, awayTeamId: g.away_team_id,
+                      leagueName: g.league_name, matchDatetime: g.match_datetime,
+                    })))}
+                    disabled={shareTodayGames.sharing}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/20 transition-colors disabled:opacity-50"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {shareTodayGames.shared ? 'Compartilhado!' : shareTodayGames.sharing ? 'Gerando...' : 'Compartilhar jogos de hoje'}
+                  </button>
+                )}
               </div>
 
               {/* Gráfico por dia */}

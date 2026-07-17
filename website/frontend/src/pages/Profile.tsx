@@ -429,7 +429,7 @@ export default function Profile() {
         {/* Notificacoes push */}
         {push.supported && push.vapidKey !== '' && (
           <div className="card p-5">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificacoes</p>
+            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificações</p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-zinc-800'}`}>
@@ -439,7 +439,7 @@ export default function Profile() {
                 </div>
                 <div className="min-w-0">
                   <p className="text-sm font-semibold text-white">
-                    {push.subscribed ? 'Notificacoes ativas' : 'Ativar notificacoes'}
+                    {push.subscribed ? 'Notificações ativas' : 'Ativar notificações'}
                   </p>
                   <p className="text-xs text-zinc-500 truncate">
                     {push.subscribed
@@ -528,7 +528,7 @@ export default function Profile() {
         </div>
       </main>
 
-      {/* Copa do Mundo 2026 — canto inferior esquerdo (direito é ocupado pelo botão do WhatsApp) */}
+      {/* Copa do Mundo 2026 · canto inferior esquerdo (direito é ocupado pelo botão do WhatsApp) */}
       <div className="fixed bottom-6 left-6 flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity pointer-events-none select-none">
         <img src="/logo-copa-mundo.png" alt="Copa do Mundo 2026" className="w-14 h-14 object-contain drop-shadow-lg" />
         <span className="text-zinc-500 text-[10px] font-semibold tracking-wide">Copa 2026</span>

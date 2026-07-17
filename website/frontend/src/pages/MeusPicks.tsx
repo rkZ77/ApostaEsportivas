@@ -172,7 +172,7 @@ export default function MeusPicks() {
         ) : (
           <div className="space-y-4">
 
-            {/* Filtros de período — pills */}
+            {/* Filtros de período · pills */}
             {allEntries.length > 0 && (
               <div className="flex gap-2 flex-wrap">
                 {([
@@ -197,7 +197,7 @@ export default function MeusPicks() {
               </div>
             )}
 
-            {/* Resumo — filtra pelo período selecionado */}
+            {/* Resumo · filtra pelo período selecionado */}
             {allEntries.length > 0 && (() => {
               const periodEntries = filteredByPeriod
               const resolved = periodEntries.filter((e: any) => e.result)
@@ -305,7 +305,7 @@ export default function MeusPicks() {
               </div>
             ) : (
               <>
-                {/* Navegação de dia — só aparece quando um filtro de período está ativo */}
+                {/* Navegação de dia · só aparece quando um filtro de período está ativo */}
                 {(typeof daysBack === 'number' ? daysBack > 0 : true) && uniqueDatesFiltered.length > 1 && (
                   <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
                     <button
@@ -419,7 +419,7 @@ export default function MeusPicks() {
                   </div>
                 )}
 
-                {/* Paginação — só no modo Todos (daysBack=0) */}
+                {/* Paginação · só no modo Todos (daysBack=0) */}
                 {daysBack === 0 && filteredTabEntries.length > PAGE_SIZE && (
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button

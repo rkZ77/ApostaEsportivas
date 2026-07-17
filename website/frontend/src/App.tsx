@@ -11,7 +11,7 @@ import PushPromptBanner from './components/PushPromptBanner'
 import PostCopaBanner from './components/PostCopaBanner'
 import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
 
-// Cada página vira chunk separado — só baixa quando o usuário navega para ela
+// Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
 const Results        = lazy(() => import('./pages/Results'))
@@ -147,7 +147,7 @@ export default function App() {
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/termos" element={<Termos />} />
                 <Route path="/estatisticas" element={<PrivateRoute><Estatisticas /></PrivateRoute>} />
-                <Route path="/como-funciona" element={<PrivateRoute><ComoFunciona /></PrivateRoute>} />
+                <Route path="/como-funciona" element={<ComoFunciona />} />
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
                 <Route path="/resultados" element={<ResultadosPublicos />} />
                 <Route path="*" element={<NotFound />} />

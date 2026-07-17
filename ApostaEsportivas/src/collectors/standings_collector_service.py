@@ -89,7 +89,7 @@ class StandingsCollectorService:
         country = league_data["country"]
         season = league_data["season"]
 
-        # standings é lista de grupos — Copa do Mundo tem 12 grupos (A-L),
+        # standings é lista de grupos · Copa do Mundo tem 12 grupos (A-L),
         # ligas comuns têm 1. Itera por todos os grupos.
         all_groups = league_data["standings"]
 

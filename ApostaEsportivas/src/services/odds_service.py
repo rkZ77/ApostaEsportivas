@@ -55,7 +55,7 @@ class OddsService:
         return structured
 
     ##########################################################################
-    # Agrega odds por mercado+linha+side — retorna melhor odd entre bookmakers
+    # Agrega odds por mercado+linha+side · retorna melhor odd entre bookmakers
     ##########################################################################
     def load_odds_structured(self, fixture_id) -> list[dict]:
         """Agrupa odds por (market_id, line_value, value_name) e retorna a melhor
@@ -107,7 +107,7 @@ class OddsService:
                     print(f"[ODDS] Par corrompido descartado: {bk} market={mid} line={lv} "
                           f"Over={o} Under={u} impl_sum={implied_sum:.2%}")
 
-        # Agrupa por (market_id, value_name) — value_name já inclui a linha ("Over 1.5")
+        # Agrupa por (market_id, value_name) · value_name já inclui a linha ("Over 1.5")
         groups: dict[tuple, list[dict]] = {}
         for r in raw:
             vn     = r.get("value_name", "")

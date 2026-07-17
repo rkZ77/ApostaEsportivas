@@ -15,7 +15,7 @@ LOCAL_LOGOS: dict[int, str] = {
 
 @router.get("/leagues")
 def public_leagues():
-    """Ligas ativas cadastradas no sistema — sem autenticação."""
+    """Ligas ativas cadastradas no sistema · sem autenticação."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -154,7 +154,7 @@ def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[s
 
 @router.get("/results")
 def public_results(
-    month:  Optional[str] = Query(None, description="YYYY-MM — filtra por mês"),
+    month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem"),
 ):
     """Resultados públicos consolidados para a Landing page."""
@@ -282,7 +282,7 @@ _ACTIVITY_VERBS = [
 
 @router.get("/activity")
 def public_activity():
-    """Últimas ações de usuários reais — anonimizadas — para o ticker da landing."""
+    """Últimas ações de usuários reais · anonimizadas · para o ticker da landing."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -389,9 +389,74 @@ def public_pick(pick_type: str, pick_id: int):
         conn.close()
 
 
+@router.get("/fixtures-today")
+def public_fixtures_today():
+    """Jogos de hoje das ligas cobertas, sem autenticacao -- so calendario
+    (times, liga, horario), sem odds/picks. Usado pro card de compartilhamento
+    'jogos que a IA vai analisar hoje'."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT f.fixture_id, f.home_team, f.away_team,
+                   f.home_team_id, f.away_team_id,
+                   f.league_id, COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
+                   f.match_datetime
+            FROM fixtures f
+            LEFT JOIN leagues l ON l.league_id = f.league_id
+            WHERE f.match_datetime::date = CURRENT_DATE
+              AND f.status = 'NS'
+            ORDER BY f.match_datetime
+            LIMIT 8
+        """)
+        rows = cur.fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
+                d["match_datetime"] = d["match_datetime"].isoformat()
+            result.append(d)
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/free-pick-today")
+def public_free_pick_today():
+    """Teaser da Dica do Dia (free) de hoje, sem autenticacao -- usado pra
+    dar um gostinho do produto pra quem ainda nao tem conta. Nao expoe
+    mercado/linha/reasoning, so o suficiente pra linkar pra /p/free/{id}."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT pf.id, pf.match_date,
+                   pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                   COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
+                   COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
+                   pf.odd, pf.result
+            FROM picks_free pf
+            LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
+            WHERE pf.match_date = CURRENT_DATE
+            ORDER BY pf.created_at DESC
+            LIMIT 1
+        """)
+        row = cur.fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
+            d["match_date"] = d["match_date"].isoformat()
+        return d
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/leaderboard")
 def public_leaderboard():
-    """Top 5 usuarios por yield ROI — anonimizados para landing page (min 5 picks resolvidos)."""
+    """Top 5 usuarios por yield ROI · anonimizados para landing page (min 5 picks resolvidos)."""
     conn = get_connection()
     cur  = conn.cursor()
     try:

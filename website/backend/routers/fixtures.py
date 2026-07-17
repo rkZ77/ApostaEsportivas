@@ -119,7 +119,7 @@ def get_leagues(current_user: dict = Depends(get_current_user)):
     for row in db_leagues:
         lid    = row["league_id"]
         season = row["season"]
-        # Logo da liga é determinístico — sem chamada API extra
+        # Logo da liga é determinístico · sem chamada API extra
         logo = f"https://media.api-sports.io/football/leagues/{lid}.png"
         flag = None
         country = None
@@ -159,7 +159,7 @@ def get_today_fixtures(
     date: Optional[str] = Query(None, description="YYYY-MM-DD no fuso de Brasília"),
 ):
     """
-    Jogos do dia das ligas monitoradas — horários em BRT, cache 10 min.
+    Jogos do dia das ligas monitoradas · horários em BRT, cache 10 min.
 
     Busca o dia solicitado E o dia UTC seguinte, pois jogos após 21h BRT
     caem no próximo dia UTC (BRT = UTC-3, então 21h BRT = 00h UTC+1).

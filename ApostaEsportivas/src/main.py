@@ -1,5 +1,5 @@
 """
-main.py — Orquestrador único do ApostaEsportivas (sem website).
+main.py · Orquestrador único do ApostaEsportivas (sem website).
 
 Uso:
   python main.py dados            # Atualiza jogos, stats e classificação
@@ -83,11 +83,19 @@ def cmd_odds():
 
 
 def cmd_vip():
+    if os.getenv("DB_ENV", "").lower() == "dev":
+        from engine_pipelines.vip_pipeline import run_vip_engine
+        run_vip_engine()
+        return
     from gerar_sugestao_vip import AIVipSuggestionsMain
     AIVipSuggestionsMain().generate_vip_suggestions()
 
 
 def cmd_dica():
+    if os.getenv("DB_ENV", "").lower() == "dev":
+        from engine_pipelines.dica_pipeline import run_dica_engine
+        run_dica_engine()
+        return
     from ai.dica_do_dia_pipeline import run_dica_pipeline
     result = run_dica_pipeline()
     if result is None:
@@ -98,6 +106,10 @@ def cmd_dica():
 
 
 def cmd_multiplas():
+    if os.getenv("DB_ENV", "").lower() == "dev":
+        from engine_pipelines.multipla_pipeline import run_multipla_engine
+        run_multipla_engine()
+        return
     from ai.multipla_pipeline import run_multipla_pipeline
     result = run_multipla_pipeline()
     if result is None:
@@ -107,6 +119,10 @@ def cmd_multiplas():
 
 
 def cmd_alavancagem():
+    if os.getenv("DB_ENV", "").lower() == "dev":
+        from engine_pipelines.alavancagem_pipeline import run_alavancagem_engine
+        run_alavancagem_engine()
+        return
     from ai.alavancagem_pipeline import run_alavancagem_pipeline
     result = run_alavancagem_pipeline()
     if result:
@@ -120,6 +136,14 @@ def cmd_resultados():
     AIUpdateResultsMain().update_all_results()
 
 
+def cmd_shadow():
+    """Modo sombra do motor de picks (Fase 3): roda pick_engine em paralelo
+    aos picks já salvos pela IA hoje, só para registrar a comparação em
+    logs/shadow_consensus.jsonl. Nunca escreve em tabela de produção."""
+    from shadow_consensus import run_shadow_comparison
+    run_shadow_comparison()
+
+
 def cmd_ligas():
     from atualizar_ligas import AILeagueUpdateMain
     ai = AILeagueUpdateMain()
@@ -131,7 +155,7 @@ def cmd_tudo(mode: str = "fast"):
     """Pipeline completo diário na ordem correta."""
     t0 = time.perf_counter()
     print("\n" + "="*60)
-    print("PIPELINE COMPLETO — ApostaEsportivas")
+    print("PIPELINE COMPLETO · ApostaEsportivas")
     print("="*60 + "\n")
 
     print("─── [1/7] DADOS ────────────────────────────────────────")
@@ -176,6 +200,7 @@ Comandos disponíveis:
   ligas            Atualiza perfis de ligas (IA)
   tudo [full]      Pipeline completo na ordem correta
   setup            Roda apenas as migrações do banco
+  shadow           Motor de picks em modo sombra (só log, não afeta picks)
 """
 
 if __name__ == "__main__":
@@ -213,6 +238,9 @@ if __name__ == "__main__":
 
     elif cmd == "resultados":
         cmd_resultados()
+
+    elif cmd == "shadow":
+        cmd_shadow()
 
     elif cmd == "ligas":
         cmd_ligas()

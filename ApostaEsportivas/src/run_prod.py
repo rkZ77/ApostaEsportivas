@@ -31,7 +31,7 @@ OPCOES = {
 
 def menu():
     print("\n========================================")
-    print("         APOSTA ESPORTIVAS — PROD       ")
+    print("         APOSTA ESPORTIVAS · PROD       ")
     print("========================================")
     for k, (label, _) in OPCOES.items():
         print(f"  [{k}] {label}")

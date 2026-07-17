@@ -77,7 +77,7 @@ export default function Navbar() {
             </div>
           </Link>
 
-          {/* Nav links — desktop only */}
+          {/* Nav links · desktop only */}
           <div className="hidden lg:flex items-center gap-1">
             {navLinks.map(({ to, label, Icon, badge, onClick, highlight }) => (
               <Link
@@ -101,7 +101,7 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
-            {/* Avatar dropdown — desktop */}
+            {/* Avatar dropdown · desktop */}
             <div className="relative hidden sm:block">
               <button
                 onClick={() => setProfileOpen(v => !v)}
@@ -152,7 +152,7 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Hamburger — mobile */}
+            {/* Hamburger · mobile */}
             <button
               onClick={() => setSidebarOpen(v => !v)}
               className="lg:hidden text-zinc-400 hover:text-white transition-colors p-2"
@@ -200,7 +200,7 @@ export default function Navbar() {
         />
       )}
 
-      {/* Sidebar — mobile */}
+      {/* Sidebar · mobile */}
       <aside
         className={`fixed top-0 right-0 h-full w-72 bg-zinc-950 border-l border-zinc-800 z-50 flex flex-col transition-transform duration-300 ease-in-out lg:hidden ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'

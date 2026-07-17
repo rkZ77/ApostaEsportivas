@@ -130,7 +130,7 @@ def _compute_suggested_stake_units(
 ) -> int:
     """
     Calcula unidades sugeridas baseado no tipo de pick e banca real do usuário.
-    Lógica exclusiva do backend — não recalcular no frontend.
+    Lógica exclusiva do backend · não recalcular no frontend.
 
     Caps por tipo:
       VIP      → usa stake_pct do DB (calculate_stake), max 5% da banca
@@ -153,7 +153,7 @@ def _compute_suggested_stake_units(
 
     # VIP: stake_pct já calculado pelo backend com Kelly ajustado
     if pick_type == 'vip' and stake_pct and float(stake_pct) > 0:
-        # Cap por tier de confiança — diferencia unidades em vez de sempre ir ao máximo
+        # Cap por tier de confiança · diferencia unidades em vez de sempre ir ao máximo
         if conf >= 0.80 and ev_f > 0.10:
             max_pct, max_units = 0.05, 10
         elif conf >= 0.72 and ev_f > 0.05:
@@ -218,7 +218,7 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
                         "league_id":    fx["league_id"],
                     })
                 else:
-                    # fixture não existe mais na tabela — usa nomes salvos no JSON
+                    # fixture não existe mais na tabela · usa nomes salvos no JSON
                     leg.setdefault("home", leg.get("home_team", ""))
                     leg.setdefault("away", leg.get("away_team", ""))
             enriched.append(leg)
@@ -230,7 +230,7 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
 @router.get("/today")
 def get_today_suggestions(
     current_user: dict = Depends(get_current_user),
-    date: Optional[str] = Query(None, description="YYYY-MM-DD — deixar vazio para hoje"),
+    date: Optional[str] = Query(None, description="YYYY-MM-DD · deixar vazio para hoje"),
 ):
     is_vip = is_vip_active(current_user)
     conn = get_connection()
@@ -943,7 +943,7 @@ async def get_standings_for_fixture(
     fixture_id: int,
     current_user: dict = Depends(get_current_user),
 ):
-    """Classificação da liga do jogo — direto da API-Football (sem cache)."""
+    """Classificação da liga do jogo · direto da API-Football (sem cache)."""
     from futebol_agent.api_football import get_standings
 
     conn = get_connection()
@@ -1030,7 +1030,7 @@ def get_recent_results(
     current_user: dict = Depends(get_current_user),
 ):
     """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem.
-    Não expõe reasoning (nenhuma das queries abaixo seleciona essa coluna) — só
+    Não expõe reasoning (nenhuma das queries abaixo seleciona essa coluna) · só
     market/odd/result/profit, o mesmo nível de dado que /api/public/results já
     mostra sem login."""
     conn = get_connection()
@@ -1287,7 +1287,7 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Stats gerais — todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem)
+        # Stats gerais · todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem)
         month_row = _safe_query_one(cur, """
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
@@ -1344,7 +1344,7 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
 
 @router.get("/latest-pick")
 def get_latest_pick(current_user: dict = Depends(get_current_user)):
-    """Retorna o pick mais recente — frontend usa para detectar novos picks."""
+    """Retorna o pick mais recente · frontend usa para detectar novos picks."""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1852,7 +1852,7 @@ def get_liga_ranking(
 
 @router.get("/copa/tendencias")
 def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
-    """Alias para /liga/tendencias?league_id=1 — mantido por compatibilidade."""
+    """Alias para /liga/tendencias?league_id=1 · mantido por compatibilidade."""
     return get_liga_tendencias(league_id=1, limit=500, current_user=current_user)
 
 

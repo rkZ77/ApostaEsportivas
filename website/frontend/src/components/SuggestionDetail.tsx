@@ -176,7 +176,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
       {/* overlay */}
       <div className="flex-1 bg-black/70 backdrop-blur-sm hidden sm:block" />
 
-      {/* panel — full screen mobile, side panel desktop */}
+      {/* panel · full screen mobile, side panel desktop */}
       <div
         className="w-full sm:max-w-lg bg-zinc-950 sm:border-l border-zinc-800 flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
@@ -364,7 +364,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     </div>
                   </div>
 
-                  {/* Múltipla / Alavancagem — legs */}
+                  {/* Múltipla / Alavancagem · legs */}
                   {(pickType === 'multipla' || pickType === 'alavancagem') && s.legs?.length > 0 && (
                     <div>
                       <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Jogos</p>

@@ -64,7 +64,7 @@ export function calcVipStake(
 
   let stakePct: number
 
-  // Cap por tier de confiança — diferencia unidades em vez de sempre ir ao máximo
+  // Cap por tier de confiança · diferencia unidades em vez de sempre ir ao máximo
   const maxUnits = prob >= 0.80 && ev > 0.10 ? 10
                  : prob >= 0.72 && ev > 0.05 ? 7
                  : 5
