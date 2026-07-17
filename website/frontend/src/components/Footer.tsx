@@ -10,7 +10,6 @@ export default function Footer() {
           <div className="flex items-center gap-2.5">
             <img src="/logo.png" alt="PickIA" className="w-7 h-7 rounded-full object-cover" />
             <span className="text-sm font-black text-zinc-300">Pick<span className="text-green-500">IA</span></span>
-            <span className="text-xs text-zinc-600">· Copa do Mundo 2026</span>
           </div>
 
           {/* Links */}
@@ -27,7 +26,7 @@ export default function Footer() {
             <Link to="/planos" className="text-xs text-zinc-500 hover:text-green-400 transition-colors">
               Planos
             </Link>
-            <Link to="/results" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+            <Link to="/resultados" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Resultados
             </Link>
             <Link to="/termos" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
