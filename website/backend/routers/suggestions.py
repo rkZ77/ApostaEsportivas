@@ -1944,7 +1944,11 @@ def get_results(
         rows = _safe_query(cur, f"""
             SELECT match_date,
                    COUNT(*) AS total,
-                   COUNT(*) FILTER (WHERE result = 'GREEN') AS greens,
+                   COUNT(*) FILTER (WHERE result = 'GREEN')     AS greens,
+                   COUNT(*) FILTER (WHERE result = 'RED')       AS reds,
+                   COUNT(*) FILTER (WHERE result = 'PUSH')      AS push,
+                   COUNT(*) FILTER (WHERE result = 'HALF-WIN')  AS half_wins,
+                   COUNT(*) FILTER (WHERE result = 'HALF-LOSS') AS half_losses,
                    COALESCE(SUM(profit), 0)                 AS profit
             FROM ({inner_sql}) AS c
             GROUP BY match_date
