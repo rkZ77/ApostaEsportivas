@@ -238,9 +238,6 @@ async def webhook(request: Request):
         logger.error("[WEBHOOK] Plano inválido: %s", plan_key)
         return {"status": "error", "detail": "plano inválido"}
 
-    expires_at = datetime.now(timezone.utc) + timedelta(days=plan_info["days"])
-    logger.info("[WEBHOOK] Ativando VIP para user_id=%s plano=%s expires=%s", user_id, plan_key, expires_at)
-
     amount        = float(payment.get("transaction_amount") or plan_info["price"])
     payment_method = payment.get("payment_type_id") or payment.get("payment_method_id") or "unknown"
 
@@ -249,13 +246,23 @@ async def webhook(request: Request):
     user_name  = None
     user_email = None
     try:
-        cur.execute("SELECT name, email FROM users WHERE id = %s", (int(user_id),))
+        # Renovacao/upgrade estende a partir do maior entre "agora" e o expires_at
+        # atual (se o usuario ainda tem VIP ativo), em vez de sempre sobrescrever
+        # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
+        # (comportamento comum) perdia os dias restantes que ja tinha pago.
+        # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
+        cur.execute("SELECT name, email, expires_at FROM users WHERE id = %s", (int(user_id),))
         row = cur.fetchone()
         if not row:
             logger.error("[WEBHOOK] user_id=%s não encontrado no banco · pagamento %s ignorado", user_id, payment_id)
             return {"status": "error", "detail": "user not found"}
         user_name  = row["name"]
         user_email = row["email"]
+        current_expires = row["expires_at"]  # naive UTC (coluna timestamp without time zone)
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        base = current_expires if (current_expires and current_expires > now_naive) else now_naive
+        expires_at = base + timedelta(days=plan_info["days"])
+        logger.info("[WEBHOOK] Ativando VIP para user_id=%s plano=%s expires=%s", user_id, plan_key, expires_at)
 
         # Registra pagamento ANTES do UPDATE · garante idempotência real
         # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
