@@ -188,14 +188,25 @@ def debug_paths(current_user: dict = Depends(require_admin)):
 _PIPELINE_SCRIPTS = {
     "atualizar_jogos":      "atualizar_jogos.py",
     "capturar_odds":        "capturar_odds.py",
-    "gerar_vip":            "gerar_sugestao_vip.py",
-    "gerar_free":           os.path.join("ai", "dica_do_dia_pipeline.py"),
-    "gerar_multipla":       "gerar_sugestao_multiplas.py",
-    "gerar_alavancagem":    os.path.join("ai", "alavancagem_pipeline.py"),
+    # Motor deterministico (services/pick_engine), mesmos modulos que
+    # main.py::cmd_vip/cmd_dica/cmd_multiplas/cmd_alavancagem chamam desde o
+    # corte de IA em producao (2026-07-17) -- os scripts de IA antigos
+    # (gerar_sugestao_vip.py, ai/dica_do_dia_pipeline.py, etc) ficaram
+    # esquecidos aqui, ainda ligados nesses botoes do admin apos o corte:
+    # clicar "Rodar Tudo" ou qualquer "Gerar X" individual chamava IA de
+    # verdade (custo real), nao o motor. Os scripts antigos continuam no
+    # disco (sem uso, ver docstring de cmd_vip) so pra reverter rapido se
+    # precisar.
+    "gerar_vip":            os.path.join("engine_pipelines", "vip_pipeline.py"),
+    "gerar_free":           os.path.join("engine_pipelines", "dica_pipeline.py"),
+    "gerar_multipla":       os.path.join("engine_pipelines", "multipla_pipeline.py"),
+    "gerar_alavancagem":    os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
-    # Motor deterministico (services/pick_engine) + fase de homologacao --
+    # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
+    # separada, ANTES de promover mudanca pro motor de producao acima) --
     # prefixo "dev_" sinaliza que _run_and_track() precisa injetar DB_ENV=dev
-    # (ver _dev_env()) antes de rodar. Nunca chamam IA, sem custo de API.
+    # (ver _dev_env()) e exige DB_HOST_DEV configurado de verdade. Nao e' o
+    # gatilho de producao (isso e' os steps gerar_* acima, sem prefixo).
     "dev_gerar_vip":           os.path.join("engine_pipelines", "vip_pipeline.py"),
     "dev_gerar_dica":          os.path.join("engine_pipelines", "dica_pipeline.py"),
     "dev_gerar_multipla":      os.path.join("engine_pipelines", "multipla_pipeline.py"),

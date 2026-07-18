@@ -189,13 +189,18 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler = BackgroundScheduler()
         scheduler.add_job(lambda: _job_banca_reminder(logger), "interval", hours=1, id="banca_reminder")
         scheduler.add_job(lambda: _job_resolve_picks(logger), "interval", minutes=5, id="resolve_picks")
-        # Pipeline diario de geracao de picks segue pausado. Reativar descomentando este bloco.
-        # scheduler.add_job(
-        #     lambda: _job_run_daily_pipeline(logger),
-        #     CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
-        #     id="daily_pipeline",
-        #     misfire_grace_time=3600,
-        # )
+        # Pipeline diario de geracao de picks (00:10 BR) -- ficou pausado desde o
+        # corte de IA em producao (2026-07-17), porque na epoca _run_tudo() ainda
+        # chamava os scripts de IA antigos. Agora que routers.admin::_PIPELINE_SCRIPTS
+        # aponta pro motor deterministico (engine_pipelines), reativado: sem esse
+        # job nada gera picks novos automaticamente (o unico jeito de picks
+        # aparecerem seria disparo manual via /admin ou linha de comando).
+        scheduler.add_job(
+            lambda: _job_run_daily_pipeline(logger),
+            CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
+            id="daily_pipeline",
+            misfire_grace_time=3600,
+        )
         dev_pipeline_enabled = bool(os.getenv("DB_HOST_DEV"))
         if dev_pipeline_enabled:
             scheduler.add_job(
@@ -207,8 +212,8 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler.start()
         logger.info(
             "[SCHEDULER] Iniciado - lembrete banca 1h | resolve picks 5min | "
-            "pipeline diario (IA) DESATIVADO | pipeline DEV (motor) %s",
-            "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativado (sem DB_HOST_DEV)",
+            "pipeline diario (motor) ATIVADO 00:10 BR | homologacao DEV %s",
+            "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativada (sem DB_HOST_DEV)",
         )
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
