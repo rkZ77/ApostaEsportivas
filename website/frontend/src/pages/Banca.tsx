@@ -359,7 +359,7 @@ export default function Banca() {
             {/* Aviso alavancagem */}
             <div className="flex items-center gap-1.5 -mt-2 text-[11px] text-zinc-600">
               <Info className="w-3 h-3 shrink-0" />
-              <span>Picks de Alavancagem Copa não são contabilizados nesta banca</span>
+              <span>Picks de Alavancagem não são contabilizados nesta banca</span>
             </div>
 
             {/* Meta de banca */}

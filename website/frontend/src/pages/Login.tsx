@@ -3,6 +3,7 @@ import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
+import api from '../services/api'
 
 function getPasswordStrength(pwd: string): { score: number; checks: { label: string; ok: boolean }[] } {
   const checks = [
@@ -38,6 +39,29 @@ function validateCPF(cpf: string): boolean {
 
 function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
+}
+
+// Win rate real (mesma fonte publica de /resultados) -- reforca credibilidade
+// bem no ponto de decisao de cadastro, em vez de so listar promessas em texto.
+function RealWinRate() {
+  const [pct, setPct] = useState<number | null>(null)
+  useEffect(() => {
+    api.get('/public/results')
+      .then(r => {
+        const s = r.data?.summary
+        if (s && s.total > 0) setPct(Math.round((s.greens / s.total) * 100))
+      })
+      .catch(() => {})
+  }, [])
+  if (pct == null) return null
+  return (
+    <p className="text-xs text-zinc-600 mt-5">
+      Win rate real auditável:{' '}
+      <Link to="/resultados" className="text-green-500 font-bold hover:text-green-400 transition-colors">
+        {pct}% <span className="text-zinc-600 font-normal">· ver histórico</span>
+      </Link>
+    </p>
+  )
 }
 
 type LoginMethod = 'username' | 'email' | 'cpf'
@@ -198,7 +222,7 @@ export default function Login() {
               {[
                 { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
                 { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
-                { dot: 'bg-orange-400', text: 'Alavancagem Copa do Mundo' },
+                { dot: 'bg-orange-400', text: 'Alavancagem de risco calculado' },
                 { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
                 { dot: 'bg-yellow-400', text: 'Histórico completo com Win Rate' },
               ].map(({ dot, text }) => (
@@ -209,6 +233,7 @@ export default function Login() {
               ))}
             </div>
             <p className="text-xs text-zinc-600 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
+            <RealWinRate />
           </div>
           <a href="https://www.instagram.com/pickia.br/" target="_blank" rel="noopener noreferrer"
             className="mt-8 flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition-colors justify-center">

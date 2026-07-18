@@ -239,7 +239,7 @@ export default function Planos() {
 
             {/* Features incluídas */}
             <div className="grid grid-cols-2 gap-2">
-              {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem Copa 2026', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
+              {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
                 <div key={f} className="flex items-center gap-1.5 text-xs text-zinc-400">
                   <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -290,7 +290,7 @@ export default function Planos() {
                 <h2 className="text-xl font-black text-white mb-1">2 dias de VIP grátis</h2>
                 <p className="text-zinc-400 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
                 <ul className="space-y-1.5 mb-5">
-                  {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem Copa 2026', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
+                  {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm text-zinc-300">
                       <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
