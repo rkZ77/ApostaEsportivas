@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, Query
 from auth_utils import get_current_user
 from database import get_connection
+from routers.banca import _compute_follow_pnl
 
 router = APIRouter(prefix="/api/leaderboard", tags=["leaderboard"])
 
@@ -42,74 +43,94 @@ def get_leaderboard(
     cur = conn.cursor()
     try:
         date_cond = ""
-        date_params_extra: list = []
+        date_params: list = []
         if days > 0:
             date_cond = "AND uf.followed_at >= NOW() - (%s * INTERVAL '1 day')"
-            date_params_extra = [days, days]
+            date_params = [days]
 
+        # Busca cru (sem calcular resultado/profit em SQL) e resolve por pick em
+        # Python via _compute_follow_pnl -- mesma funcao usada em GET /banca e no
+        # fechamento mensal. A query antiga usava pv.profit/pf.profit/etc direto
+        # (pre-calculado com a odd OFICIAL do pick), ignorando uf.actual_odd (a
+        # odd que o usuario realmente registrou) -- bug real: 84% dos follows no
+        # banco tem actual_odd preenchido, entao o ranking (ROI/yield/total_pnl)
+        # estava errado pra maioria das entradas sempre que a odd real divergia
+        # da oficial.
         cur.execute(f"""
-            WITH resolved AS (
-                SELECT
-                    uf.user_id,
-                    uf.stake_units,
-                    uf.followed_at,
-                    CASE
-                        WHEN uf.cashout_amount IS NOT NULL THEN 'CASHOUT'
-                        WHEN uf.pick_type = 'vip'         THEN pv.result
-                        WHEN uf.pick_type = 'free'        THEN pf.result
-                        WHEN uf.pick_type = 'multipla'    THEN pm.result
-                        WHEN uf.pick_type = 'alavancagem' THEN pa.result
-                    END AS result,
-                    CASE
-                        WHEN uf.cashout_amount IS NOT NULL
-                            THEN (uf.cashout_amount / COALESCE(ub.unit_value, 1)) - uf.stake_units
-                        WHEN uf.pick_type = 'vip'         THEN COALESCE(pv.profit, 0) * uf.stake_units
-                        WHEN uf.pick_type = 'free'        THEN COALESCE(pf.profit, 0) * uf.stake_units
-                        WHEN uf.pick_type = 'multipla'    THEN COALESCE(pm.profit, 0) * uf.stake_units
-                        WHEN uf.pick_type = 'alavancagem' THEN COALESCE(pa.profit, 0) * uf.stake_units
-                        ELSE 0
-                    END AS profit_weighted
-                FROM user_followed_picks uf
-                LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
-                LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
-                LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
-                LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
-                LEFT JOIN user_banca ub        ON ub.user_id = uf.user_id
-                WHERE 1=1 {date_cond}
-            ),
-            user_stats AS (
-                SELECT
-                    user_id,
-                    COUNT(*)         FILTER (WHERE result IS NOT NULL)  AS total_resolved,
-                    COUNT(*)         FILTER (WHERE result = 'GREEN')    AS greens,
-                    COALESCE(SUM(profit_weighted) FILTER (WHERE result IS NOT NULL), 0) AS total_profit_units,
-                    COALESCE(SUM(stake_units)     FILTER (WHERE result IS NOT NULL), 0) AS total_staked_units
-                FROM resolved
-                GROUP BY user_id
-                HAVING COUNT(*) FILTER (WHERE result IS NOT NULL) >= 3
-            )
             SELECT
-                u.id,
-                u.name,
-                u.avatar_url,
-                COALESCE(ub.bankroll_start, 100)                    AS bankroll_start,
-                COALESCE(ub.unit_value, 1)                          AS unit_value,
-                us.total_resolved,
-                us.greens,
-                ROUND(us.greens::numeric / us.total_resolved * 100) AS win_rate,
-                ROUND(us.total_profit_units * COALESCE(ub.unit_value,1)
-                      / COALESCE(ub.bankroll_start, 100) * 100, 1)  AS roi,
-                CASE WHEN us.total_staked_units > 0
-                     THEN ROUND(us.total_profit_units / us.total_staked_units * 100, 1)
-                     ELSE 0 END                                      AS yield_roi,
-                us.total_profit_units * COALESCE(ub.unit_value, 1)  AS total_pnl
-            FROM user_stats us
-            JOIN users u ON u.id = us.user_id
-            LEFT JOIN user_banca ub ON ub.user_id = us.user_id
-            LIMIT 50
-        """, date_params_extra + date_params_extra)
+                uf.user_id, uf.stake_units, uf.actual_odd, uf.cashout_amount,
+                CASE uf.pick_type
+                    WHEN 'vip'         THEN pv.result
+                    WHEN 'free'        THEN pf.result
+                    WHEN 'multipla'    THEN pm.result
+                    WHEN 'alavancagem' THEN pa.result
+                END AS result,
+                CASE uf.pick_type
+                    WHEN 'vip'         THEN pv.odd
+                    WHEN 'free'        THEN pf.odd
+                    WHEN 'multipla'    THEN pm.total_odd
+                    WHEN 'alavancagem' THEN pa.odd_combined
+                END AS odd,
+                COALESCE(ub.unit_value, 1)       AS unit_value,
+                COALESCE(ub.bankroll_start, 100) AS bankroll_start
+            FROM user_followed_picks uf
+            LEFT JOIN picks_vip pv         ON pv.id = uf.pick_id AND uf.pick_type = 'vip'
+            LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
+            LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
+            LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+            LEFT JOIN user_banca ub        ON ub.user_id = uf.user_id
+            WHERE 1=1 {date_cond}
+        """, date_params)
 
-        rows = [dict(r) for r in cur.fetchall()]
+        per_user: dict[int, dict] = {}
+        for raw in cur.fetchall():
+            raw = dict(raw)
+            uid = raw["user_id"]
+            unit_value = float(raw["unit_value"] or 1)
+            pick = {"result": raw["result"], "odd": raw["odd"]}
+            follow = {"stake_units": raw["stake_units"], "actual_odd": raw["actual_odd"], "cashout_amount": raw["cashout_amount"]}
+            result, _profit_u, pnl_r = _compute_follow_pnl(pick, follow, unit_value)
+            if result is None:
+                continue
+            st = per_user.setdefault(uid, {
+                "total_resolved": 0, "greens": 0,
+                "total_profit_units": 0.0, "total_staked_units": 0.0,
+                "unit_value": unit_value, "bankroll_start": float(raw["bankroll_start"] or 100),
+            })
+            st["total_resolved"] += 1
+            if result == "GREEN":
+                st["greens"] += 1
+            # pnl_r vem em R$ (jah multiplicado por unit_value); volta pra
+            # "unidades" pra agregar igual a query antiga fazia, e so converte
+            # pra R$ de novo no final (evita contaminar a soma entre usuarios
+            # com unit_value diferentes).
+            st["total_profit_units"] += (pnl_r / unit_value) if unit_value else 0.0
+            st["total_staked_units"] += float(raw["stake_units"])
+
+        qualifying = {uid: st for uid, st in per_user.items() if st["total_resolved"] >= 3}
+        if not qualifying:
+            return []
+
+        user_ids_q = list(qualifying.keys())
+        placeholders_q = ",".join(["%s"] * len(user_ids_q))
+        cur.execute(f"SELECT id, name, avatar_url FROM users WHERE id IN ({placeholders_q})", user_ids_q)
+        user_info = {r["id"]: dict(r) for r in cur.fetchall()}
+
+        rows = []
+        for uid, st in qualifying.items():
+            info = user_info.get(uid)
+            if not info:
+                continue
+            win_rate = round(st["greens"] / st["total_resolved"] * 100) if st["total_resolved"] else 0
+            roi = round(st["total_profit_units"] * st["unit_value"] / st["bankroll_start"] * 100, 1) if st["bankroll_start"] else 0
+            yield_roi = round(st["total_profit_units"] / st["total_staked_units"] * 100, 1) if st["total_staked_units"] > 0 else 0
+            rows.append({
+                "id": uid, "name": info["name"], "avatar_url": info["avatar_url"],
+                "bankroll_start": st["bankroll_start"], "unit_value": st["unit_value"],
+                "total_resolved": st["total_resolved"], "greens": st["greens"],
+                "win_rate": win_rate, "roi": roi, "yield_roi": yield_roi,
+                "total_pnl": round(st["total_profit_units"] * st["unit_value"], 2),
+            })
 
         if not rows:
             return []
