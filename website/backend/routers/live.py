@@ -261,7 +261,20 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
     is_cards   = mtype == "cards"   or any(k in m for k in ["cart", "card"])
     is_fouls   = any(k in m for k in ["falta", "foul"])
     is_saves   = any(k in m for k in ["defesa", "save", "goleiro"])
-    is_shots   = any(k in m for k in ["chute", "shot", "finaliza"])
+    # "shots" (chutes totais, ~20-25/jogo) e "shots_on_target" (chutes NO
+    # ALVO, ~8-10/jogo) sao familias DIFERENTES -- mesmo gap ja documentado
+    # em pick_engine/stats_model.py, achado aqui com dado real de producao:
+    # "Total ShotOnGoal" (chutes no alvo) sendo somado como Shots on Goal +
+    # Shots off Goal (= chutes totais), estourando a linha Under e dando
+    # RED errado (pick #114, fixture 1520774: 4 chutes no alvo vs 13
+    # chutes totais numa linha Under 9.5).
+    m_nospace = m.replace(" ", "")
+    is_shots_on_target = mtype == "shots_on_target" or any(
+        k in m_nospace for k in ["shotontarget", "shotongoal", "shotsontarget"]
+    ) or any(k in m for k in ["chute no alvo", "chute a gol", "finalizacao no alvo", "finalização no alvo"])
+    is_shots = not is_shots_on_target and (
+        mtype == "shots" or any(k in m for k in ["chute", "shot", "finaliza"])
+    )
     # "impediment" tambem casa com "impedimento"/"impedimentos" (PT) --
     # mesma lista usada em services/ai_result_checker_service.py, achado
     # como gap real validando os resultados de hoje: o motor ja sugere
@@ -306,10 +319,24 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         as_ = away_stats.get("Goalkeeper Saves", 0)
         return float(hs + as_), "Defesas do Goleiro", direction
 
-    # ── Shots ──
+    # ── Shots on Goal (chutes NO ALVO) ──
+    if is_shots_on_target:
+        hs = home_stats.get("Shots on Goal", 0)
+        as_ = away_stats.get("Shots on Goal", 0)
+        if "casa" in m or "home" in m:
+            return float(hs), "Chutes no Alvo Casa", direction
+        if any(k in m for k in ["fora", "away", "visitante"]):
+            return float(as_), "Chutes no Alvo Fora", direction
+        return float(hs + as_), "Chutes no Alvo", direction
+
+    # ── Shots (chutes totais) ──
     if is_shots:
-        hs = home_stats.get("Shots on Goal", 0) + home_stats.get("Shots off Goal", 0)
-        as_ = away_stats.get("Shots on Goal", 0) + away_stats.get("Shots off Goal", 0)
+        hs = home_stats.get("Total Shots", 0)
+        as_ = away_stats.get("Total Shots", 0)
+        if "casa" in m or "home" in m:
+            return float(hs), "Chutes Casa", direction
+        if any(k in m for k in ["fora", "away", "visitante"]):
+            return float(as_), "Chutes Fora", direction
         return float(hs + as_), "Chutes", direction
 
     # ── Offsides ──
