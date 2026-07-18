@@ -313,11 +313,20 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                       </div>
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
-                      {stakeUnits != null
-                        ? <div className="text-2xl font-black text-white">{stakeUnits}u</div>
-                        : <div className="text-xs text-zinc-500 mt-1">s/d</div>
-                      }
+                      {isAlav ? (
+                        <>
+                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Tipo</div>
+                          <div className="text-2xl font-black text-white capitalize">{s?.tipo ?? '—'}</div>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
+                          {stakeUnits != null
+                            ? <div className="text-2xl font-black text-white">{stakeUnits}u</div>
+                            : <div className="text-xs text-zinc-500 mt-1">s/d</div>
+                          }
+                        </>
+                      )}
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>

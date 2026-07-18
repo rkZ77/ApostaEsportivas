@@ -56,6 +56,7 @@ def _create_table_if_needed(cur):
             bet_house_3     TEXT, confidence_3 NUMERIC, prob_real_3 NUMERIC, reasoning_3 TEXT,
             odd_combined    NUMERIC,
             confidence_media NUMERIC,
+            ev_combined     NUMERIC,
             result          TEXT,
             profit          NUMERIC,
             checked_at      TIMESTAMP,
@@ -211,9 +212,11 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
             p["best_bookmaker"], p["confidence"], p["taxa_real"], explain(p),
         ]
 
-    cols += ["odd_combined", "confidence_media"]
-    vals += ["%s", "%s"]
-    params += [odd_combined, confidence_media]
+    ev_combined = round(sum(p["ev"] for p in legs) / len(legs), 4)
+
+    cols += ["odd_combined", "confidence_media", "ev_combined"]
+    vals += ["%s", "%s", "%s"]
+    params += [odd_combined, confidence_media, ev_combined]
 
     cur.execute(f"INSERT INTO picks_alavancagem ({', '.join(cols)}) VALUES ({', '.join(vals)})", params)
     return tipo
