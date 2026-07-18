@@ -105,54 +105,6 @@ def _brt_date_of(item: dict) -> str:
         return ""
 
 
-@router.get("/leagues")
-def get_leagues(current_user: dict = Depends(get_current_user)):
-    """Retorna as ligas monitoradas com logo e bandeira da API Football."""
-    conn = get_connection()
-    cur  = conn.cursor()
-    cur.execute("SELECT league_id, name, season FROM leagues ORDER BY name")
-    db_leagues = cur.fetchall()
-    cur.close()
-    conn.close()
-
-    result = []
-    for row in db_leagues:
-        lid    = row["league_id"]
-        season = row["season"]
-        # Logo da liga é determinístico · sem chamada API extra
-        logo = f"https://media.api-sports.io/football/leagues/{lid}.png"
-        flag = None
-        country = None
-
-        # Busca flag e country via API (usa cache do dia se já tiver fixture)
-        try:
-            resp = requests.get(
-                "https://v3.football.api-sports.io/leagues",
-                headers=_api_headers(),
-                params={"id": lid, "season": season},
-                timeout=8,
-            )
-            data = resp.json().get("response", [])
-            if data:
-                entry   = data[0]
-                logo    = entry["league"].get("logo", logo)
-                flag    = entry["country"].get("flag")
-                country = entry["country"].get("name")
-        except Exception:
-            pass
-
-        result.append({
-            "league_id": lid,
-            "name":      row["name"],
-            "season":    season,
-            "logo":      logo,
-            "flag":      flag,
-            "country":   country,
-        })
-
-    return result
-
-
 @router.get("/today")
 def get_today_fixtures(
     current_user: dict = Depends(get_current_user),

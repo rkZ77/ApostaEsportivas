@@ -1,3 +1,4 @@
+import time
 import httpx
 from typing import Any
 from datetime import date
@@ -18,14 +19,39 @@ def get_client() -> httpx.AsyncClient:
 
 _TZ_ENDPOINTS = {"fixtures", "fixtures/headtohead"}
 
+# Cache em memoria por (endpoint, params) -- achado real de consumo de cota:
+# o agente de chat tinha ZERO cache nas 16 ferramentas que chamam a API ao
+# vivo (fixtures, standings, h2h, stats, predictions, odds, etc), cada
+# mensagem do chat podia disparar varias chamadas repetidas sem necessidade
+# (ex: perguntar sobre o mesmo time duas vezes gastava cota duas vezes).
+# TTL curto (10s) so pra dado genuinamente ao vivo (jogos em andamento/odds
+# ao vivo), TTL longo (5 min) pro resto -- standings/stats/h2h/predictions
+# nao mudam segundo a segundo.
+_cache: dict[tuple, tuple[float, dict]] = {}
+_LIVE_TTL = 10
+_DEFAULT_TTL = 300
+
+
+def _is_live_call(endpoint: str, params: dict) -> bool:
+    return endpoint == "odds/live" or params.get("live") == "all"
+
 
 async def _get(endpoint: str, params: dict) -> dict[str, Any]:
     if endpoint in _TZ_ENDPOINTS:
         params.setdefault("timezone", API_TIMEZONE)
+
+    cache_key = (endpoint, tuple(sorted(params.items())))
+    ttl = _LIVE_TTL if _is_live_call(endpoint, params) else _DEFAULT_TTL
+    cached = _cache.get(cache_key)
+    if cached and time.time() - cached[0] < ttl:
+        return cached[1]
+
     url = f"{API_FOOTBALL_BASE}/{endpoint}"
     resp = await get_client().get(url, headers=API_FOOTBALL_HEADERS, params=params)
     resp.raise_for_status()
-    return resp.json()
+    data = resp.json()
+    _cache[cache_key] = (time.time(), data)
+    return data
 
 
 async def get_live_fixtures(league_ids: list[int] | None = None) -> list[dict]:
@@ -140,10 +166,7 @@ async def get_fixture_odds(fixture_id: int) -> list[dict]:
 
 
 async def get_live_odds(fixture_id: int) -> dict:
-    url = f"{API_FOOTBALL_BASE}/odds/live"
-    resp = await get_client().get(url, headers=API_FOOTBALL_HEADERS, params={"fixture": fixture_id})
-    resp.raise_for_status()
-    data = resp.json()
+    data = await _get("odds/live", {"fixture": fixture_id})
     entries = data.get("response", [])
     if not entries:
         return {"status": "sem_cobertura", "odds": []}
