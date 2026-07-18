@@ -1958,10 +1958,10 @@ export default function Picks() {
                 )
               })()}
 
-              {/* Alavancagem Copa · free vê lock; some se não houver pick pra quem já tem acesso */}
+              {/* Alavancagem · free vê lock; some se não houver pick pra quem já tem acesso */}
               {(canSeeVip ? !!today?.alavancagem : true) && (
                 <section>
-                  <SectionHeader color="bg-orange-400" label="Alavancagem Copa" />
+                  <SectionHeader color="bg-orange-400" label="Alavancagem" />
                   {!canSeeVip ? <VipLockOverlay color="orange" /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
@@ -2223,11 +2223,11 @@ export default function Picks() {
               </div>
             ) : (
               <>
-                {/* Config banca Copa alavancagem */}
+                {/* Config banca alavancagem */}
                 <div className="card p-5 border-orange-500/20">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-sm font-black text-orange-400">Banca Copa Alavancagem</p>
+                      <p className="text-sm font-black text-orange-400">Banca Alavancagem</p>
                       <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
                     </div>
                     {userAlavSerie?.configured && (
