@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { SlidersHorizontal, X, ChevronDown } from 'lucide-react'
 
-export interface FilterOption { value: string; label: string }
+export interface FilterOption { value: string; label: string; icon?: React.ReactNode }
 export interface FilterGroup {
   key: string
   label: string
@@ -75,17 +75,33 @@ export default function FilterPanel({
           {groups.map(g => (
             <div key={g.key}>
               <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{g.label}</p>
-              <div className="flex flex-wrap gap-2">
-                {g.options.map(opt => (
-                  <button
-                    key={opt.value || 'all'}
-                    onClick={() => g.onChange(opt.value)}
-                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${g.value === opt.value ? c.active : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
+              {/* Muitas opcoes (ex: 30 meses de historico) viram select nativo em
+                  vez de parede de botoes -- pill buttons soh escalam bem ate uns
+                  8 itens, depois disso o painel fica maior que a tela. */}
+              {g.options.length > 8 ? (
+                <select
+                  value={g.value}
+                  onChange={e => g.onChange(e.target.value)}
+                  className="input text-sm py-2 w-full"
+                >
+                  {g.options.map(opt => (
+                    <option key={opt.value || 'all'} value={opt.value}>{opt.label}</option>
+                  ))}
+                </select>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {g.options.map(opt => (
+                    <button
+                      key={opt.value || 'all'}
+                      onClick={() => g.onChange(opt.value)}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${g.value === opt.value ? c.active : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}
+                    >
+                      {opt.icon}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           ))}
 
