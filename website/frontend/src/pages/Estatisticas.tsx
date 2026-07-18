@@ -8,6 +8,7 @@ import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import FilterPanel from '../components/FilterPanel'
 
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
 const LEAGUE_LOGO = (id: number) => LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`
@@ -179,51 +180,31 @@ export function EstatisticasContent() {
     <div className="space-y-6">
 
         {/* Filtros */}
-        <div className="card p-4 flex flex-col sm:flex-row gap-3 items-start sm:items-center">
-          <div className="flex-1">
-            <label className="text-xs text-zinc-500 font-semibold block mb-1.5">Liga</label>
-            {leaguesLoading ? (
-              <div className="h-9 bg-zinc-800 rounded-lg animate-pulse w-48" />
-            ) : (
-              <div className="flex flex-wrap gap-2">
-                {leagues.map(l => (
-                  <button
-                    key={l.league_id}
-                    onClick={() => { setLeagueId(l.league_id); setActiveCard(null) }}
-                    className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-                      leagueId === l.league_id
-                        ? 'bg-green-500/10 border-green-500/40 text-green-400'
-                        : 'border-zinc-800 text-zinc-400 hover:border-zinc-600 hover:text-zinc-300'
-                    }`}
-                  >
-                    <img src={LEAGUE_LOGO(l.league_id)} alt={l.name} className="w-4 h-4 object-contain"
-                      onError={e => (e.currentTarget.style.display = 'none')} />
-                    {l.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="shrink-0">
-            <label className="text-xs text-zinc-500 font-semibold block mb-1.5">Jogos</label>
-            <div className="flex gap-1 flex-wrap">
-              {LIMIT_OPTIONS.map(({ label, value }) => (
-                <button
-                  key={value}
-                  onClick={() => setLimit(value)}
-                  className={`px-3 py-1.5 rounded-lg border text-xs font-semibold transition-colors ${
-                    limit === value
-                      ? 'bg-zinc-700 border-zinc-600 text-white'
-                      : 'border-zinc-800 text-zinc-500 hover:border-zinc-700 hover:text-zinc-400'
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
+        {leaguesLoading ? (
+          <div className="h-9 bg-zinc-800 rounded-lg animate-pulse w-48" />
+        ) : (
+          <FilterPanel
+            accent="green"
+            groups={[
+              {
+                key: 'league', label: 'Liga',
+                options: leagues.map(l => ({
+                  value: String(l.league_id), label: l.name,
+                  icon: <img src={LEAGUE_LOGO(l.league_id)} alt={l.name} className="w-4 h-4 object-contain"
+                          onError={e => (e.currentTarget.style.display = 'none')} />,
+                })),
+                value: String(leagueId ?? leagues[0]?.league_id ?? ''),
+                onChange: v => { setLeagueId(Number(v)); setActiveCard(null) },
+              },
+              {
+                key: 'limit', label: 'Jogos',
+                options: LIMIT_OPTIONS.map(o => ({ value: String(o.value), label: o.label })),
+                value: String(limit), defaultValue: '0',
+                onChange: v => setLimit(Number(v)),
+              },
+            ]}
+          />
+        )}
 
         {loading ? <Spinner /> : !summary ? (
           <div className="card p-12 text-center">
