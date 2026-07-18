@@ -8,6 +8,13 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
+import FilterPanel, { FilterGroup } from '../components/FilterPanel'
+
+const RESULTADO_OPTIONS = [
+  { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
+  { value: 'PUSH', label: 'Push' }, { value: 'HALF-WIN', label: '½ Win' }, { value: 'HALF-LOSS', label: '½ Loss' },
+  { value: 'pending', label: 'Pendente' },
+]
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
 type View    = 'resumo' | 'por_jogo' | 'por_mes'
@@ -163,52 +170,40 @@ export default function Results() {
         </div>
 
         {/* Filtros */}
-        <div className="card p-4 mb-5 space-y-3">
-          {/* Fonte */}
-          <div>
-            <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Fonte</p>
-            <div className="flex flex-wrap gap-2">
-              {SOURCES.map(s => (
-                <button key={s.key} onClick={() => applySource(s.key)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    source === s.key
-                      ? 'bg-green-500 border-green-500 text-black'
-                      : s.cls
-                  }`}>{s.label}</button>
-              ))}
-            </div>
-          </div>
-
-          {/* Período (Resumo + Por Jogo) */}
-          {view !== 'por_mes' && (
-            <div>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">Período</p>
-              <div className="flex flex-wrap gap-2">
-                {PERIODS.map(p => (
-                  <button key={p.key} onClick={() => applyPeriod(p.key)}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                      period === p.key
-                        ? 'bg-green-500 border-green-500 text-black'
-                        : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                    }`}>{p.label}</button>
-                ))}
+        <FilterPanel
+          accent="green"
+          groups={[
+            {
+              key: 'source', label: 'Fonte',
+              options: SOURCES.map(s => ({ value: s.key, label: s.label })),
+              value: source, onChange: v => applySource(v as Source),
+            },
+            ...(view !== 'por_mes' ? [{
+              key: 'period', label: 'Período',
+              options: PERIODS.map(p => ({ value: p.key, label: p.label })),
+              value: period, defaultValue: '30d', onChange: v => applyPeriod(v as Period),
+            } as FilterGroup] : []),
+            ...(view === 'por_jogo' ? [{
+              key: 'resultado', label: 'Resultado',
+              options: RESULTADO_OPTIONS,
+              value: gamesFilter, onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(period, 0, v, source, customFrom, customTo) },
+            } as FilterGroup] : []),
+          ]}
+          extra={
+            <div className="flex items-end gap-3">
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">De</label>
+                <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="input text-sm py-2" />
               </div>
-              {period === 'custom' && (
-                <div className="flex items-end gap-3 mt-3">
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">De</label>
-                    <input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="input text-sm py-2" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-zinc-500 block mb-1">Até</label>
-                    <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="input text-sm py-2" />
-                  </div>
-                  <button onClick={applyCustom} disabled={!customFrom || !customTo} className="btn-primary text-sm px-5 py-2">Buscar</button>
-                </div>
-              )}
+              <div>
+                <label className="text-xs text-zinc-500 block mb-1">Até</label>
+                <input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="input text-sm py-2" />
+              </div>
+              <button onClick={applyCustom} disabled={!customFrom || !customTo} className="btn-primary text-sm px-5 py-2">Buscar</button>
             </div>
-          )}
-        </div>
+          }
+          extraWhen={view !== 'por_mes' && period === 'custom'}
+        />
 
         {view === 'resumo' && (
           loading ? (
@@ -331,16 +326,7 @@ export default function Results() {
 
         {view === 'por_jogo' && (
           <div>
-            {/* Filtro resultado */}
-            <div className="flex gap-2 mb-4 flex-wrap">
-              {[['all','Todos'],['GREEN','Green'],['RED','Red'],['PUSH','Push'],['HALF-WIN','½ Win'],['HALF-LOSS','½ Loss'],['pending','Pendente']].map(([k,l]) => (
-                <button key={k} onClick={() => { setGamesFilter(k); setGamesPage(0); fetchGames(period, 0, k, source, customFrom, customTo) }}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    gamesFilter === k ? 'bg-green-500 border-green-500 text-black' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                  }`}>{l}</button>
-              ))}
-              <span className="text-zinc-600 text-xs self-center ml-auto">{gamesTotal} picks</span>
-            </div>
+            <p className="text-zinc-600 text-xs mb-4">{gamesTotal} picks</p>
 
             {gamesLoading ? (
               <div className="card p-12 flex items-center justify-center">
