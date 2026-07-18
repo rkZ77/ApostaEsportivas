@@ -295,25 +295,65 @@ class AIResultCheckerService:
     ##########################################################################
     # HANDICAP ASIÁTICO (resultado)
     ##########################################################################
-    def evaluate_handicap(self, hg, ag, raw_line, side):
-        try:
-            handicap = Decimal(str(raw_line).replace(",", ".").strip())
-        except Exception:
-            return ("RED", Decimal("-1"))
+    def evaluate_handicap(self, hg, ag, raw_line, val, side, home_team=None, away_team=None):
+        """Handicap Asiatico (linha inteira/meia/quarto-de-bola).
+
+        Bug real encontrado com pick em producao (Handicap Asiatico, linha
+        "Home +0.25"): a linha inteira era jogada direto no Decimal(), o
+        parse estourava excecao e a pick caia sempre em RED, mercado nenhum
+        resolvido de fato -- corrigido usando o `val` ja extraido em
+        parse_line() (so o numero) em vez de reparsear o texto cru aqui.
+
+        O lado (casa/fora) normalmente vem embutido no proprio texto da
+        linha ("Home +0.25"), nao no nome do mercado -- extrai daqui, com o
+        `side` de detect_side(market, ...) so como ultimo fallback (usado
+        pelas chamadas de handicap de escanteios/gols, onde raw_line e so o
+        numero sem indicacao de lado).
+
+        Tambem cobre quarto-de-bola (.25/.75), que a versao anterior nao
+        suportava: divide em duas metades de meia-bola e combina os dois
+        resultados em HALF-WIN/HALF-LOSS quando aplicavel.
+        """
+        if val is None:
+            return (None, Decimal("0"))
+        handicap = val
+
+        raw_lower = str(raw_line or "").lower()
+        resolved_side = side
+        if any(k in raw_lower for k in ("home", "casa", "mandante")):
+            resolved_side = "home"
+        elif any(k in raw_lower for k in ("away", "visitante", "fora", "visita")):
+            resolved_side = "away"
+        elif home_team and home_team.lower() in raw_lower:
+            resolved_side = "home"
+        elif away_team and away_team.lower() in raw_lower:
+            resolved_side = "away"
 
         home_g = Decimal(str(hg))
         away_g = Decimal(str(ag))
 
-        if side == "home":
-            adj = home_g + handicap
-            if adj > away_g:   return ("GREEN", Decimal("1"))
-            elif adj == away_g: return ("PUSH", Decimal("0"))
-            return ("RED", Decimal("-1"))
+        def _straight(h):
+            if resolved_side == "away":
+                adj, opp = away_g + h, home_g
+            else:
+                adj, opp = home_g + h, away_g
+            if adj > opp:   return Decimal("1")
+            if adj == opp:  return Decimal("0")
+            return Decimal("-1")
+
+        quarters = handicap * 4
+        if quarters == quarters.to_integral_value() and int(quarters) % 2 != 0:
+            half_a = (quarters - 1) / 4
+            half_b = (quarters + 1) / 4
+            factor = (_straight(half_a) + _straight(half_b)) / 2
         else:
-            adj = away_g + handicap
-            if adj > home_g:   return ("GREEN", Decimal("1"))
-            elif adj == home_g: return ("PUSH", Decimal("0"))
-            return ("RED", Decimal("-1"))
+            factor = _straight(handicap)
+
+        result = {
+            Decimal("1"): "GREEN", Decimal("0.5"): "HALF-WIN", Decimal("0"): "PUSH",
+            Decimal("-0.5"): "HALF-LOSS", Decimal("-1"): "RED",
+        }[factor]
+        return (result, factor)
 
     ##########################################################################
     # RESOLVE STAT_VAL para mercados over/under
@@ -391,10 +431,11 @@ class AIResultCheckerService:
                 # Asian handicap sem over/under (ex: "Corners Asian Handicap Away -5.5")
                 if mt == "corners":
                     result, factor = self.evaluate_handicap(
-                        stats["home_corners"], stats["away_corners"], str(val), side
+                        stats["home_corners"], stats["away_corners"], str(val), val, side,
+                        home_team, away_team
                     )
                 else:
-                    result, factor = self.evaluate_handicap(hg, ag, str(val), side)
+                    result, factor = self.evaluate_handicap(hg, ag, str(val), val, side, home_team, away_team)
 
         elif mt == "cards":
             if val is None:
@@ -442,7 +483,7 @@ class AIResultCheckerService:
             result, factor = self.evaluate_result_1x2(hg, ag, line, market)
 
         elif mt == "handicap":
-            result, factor = self.evaluate_handicap(hg, ag, line, side)
+            result, factor = self.evaluate_handicap(hg, ag, line, val, side, home_team, away_team)
 
         else:
             return (None, Decimal("0"))  # mercado desconhecido → não resolve
