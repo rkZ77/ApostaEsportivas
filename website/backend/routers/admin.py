@@ -423,13 +423,22 @@ async def sync_payment(body: SyncPaymentBody, current_user: dict = Depends(requi
     if not days:
         raise HTTPException(400, f"Plano inválido: {plan_key}")
 
-    expires_at     = datetime.now(timezone.utc) + timedelta(days=days)
     amount         = float(payment.get("transaction_amount") or 0)
     payment_method = payment.get("payment_type_id") or "unknown"
 
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # Mesmo criterio de GET /payments/webhook: estende a partir do maior
+        # entre "agora" e o expires_at atual, nao sobrescreve (perderia dias
+        # restantes se o usuario ja tiver VIP ativo).
+        cur.execute("SELECT expires_at FROM users WHERE id = %s", (int(user_id),))
+        row_exp = cur.fetchone()
+        current_expires = row_exp["expires_at"] if row_exp else None  # naive UTC
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        base = current_expires if (current_expires and current_expires > now_naive) else now_naive
+        expires_at = base + timedelta(days=days)
+
         cur.execute(
             "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s RETURNING id, name, email",
             (expires_at, plan_key, int(user_id)),
