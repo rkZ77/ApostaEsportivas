@@ -262,6 +262,11 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
     is_fouls   = any(k in m for k in ["falta", "foul"])
     is_saves   = any(k in m for k in ["defesa", "save", "goleiro"])
     is_shots   = any(k in m for k in ["chute", "shot", "finaliza"])
+    # "impediment" tambem casa com "impedimento"/"impedimentos" (PT) --
+    # mesma lista usada em services/ai_result_checker_service.py, achado
+    # como gap real validando os resultados de hoje: o motor ja sugere
+    # esse mercado, mas nada aqui sabia resolver o status ao vivo.
+    is_offsides = any(k in m for k in ["impediment", "offside"])
     is_btts    = mtype == "btts"    or any(k in m for k in ["ambas", "btts", "ambos"])
     is_goals   = mtype == "goals"   or any(k in m for k in ["gol", "goal"])
     is_result  = _mtype_is_result   or direction == "result" or \
@@ -306,6 +311,16 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         hs = home_stats.get("Shots on Goal", 0) + home_stats.get("Shots off Goal", 0)
         as_ = away_stats.get("Shots on Goal", 0) + away_stats.get("Shots off Goal", 0)
         return float(hs + as_), "Chutes", direction
+
+    # ── Offsides ──
+    if is_offsides:
+        ho = home_stats.get("Offsides", 0)
+        ao = away_stats.get("Offsides", 0)
+        if "casa" in m or "home" in m:
+            return float(ho), "Impedimentos Casa", direction
+        if any(k in m for k in ["fora", "away", "visitante"]):
+            return float(ao), "Impedimentos Fora", direction
+        return float(ho + ao), "Impedimentos", direction
 
     # ── BTTS ──
     if is_btts:
@@ -385,6 +400,19 @@ def _result_pick_status(line_str: str, home_goals: int, away_goals: int,
     if l in ("x ou 2", "empate ou 2", "draw ou away", "empate ou fora"):
         return "winning" if cur in ("x", "2") else "losing"
     if l in ("1 ou 2", "home ou away", "casa ou fora"):
+        return "winning" if cur in ("1", "2") else "losing"
+    # Formato cru da API-Football pro mercado Double Chance ("Home/Draw",
+    # "Draw/Away", "Home/Away") -- e' o formato que o motor deterministico
+    # grava direto (services/ai_result_checker_service.py tinha o mesmo gap,
+    # corrigido antes; faltava aqui tambem, achado validando os resultados
+    # de hoje -- sem isso o pick ficava "neutral" a partida toda e nunca
+    # resolvia sozinho ao vivo).
+    l_slash = l.replace(" ", "")
+    if l_slash in ("home/draw", "draw/home"):
+        return "winning" if cur in ("1", "x") else "losing"
+    if l_slash in ("draw/away", "away/draw"):
+        return "winning" if cur in ("x", "2") else "losing"
+    if l_slash in ("home/away", "away/home"):
         return "winning" if cur in ("1", "2") else "losing"
     # Dupla chance escrita com nome do time, ex: "Fortaleza EC ou Empate"
     if home_n and "empate" in l and home_n in l:
