@@ -74,7 +74,7 @@ function TodayBadge() {
 
 // Social proof stats · bloco de 4 métricas em tempo real
 function SocialProofStats() {
-  const [summary, setSummary] = useState<{ total: number; greens: number; profit: number } | null>(null)
+  const [summary, setSummary] = useState<{ total: number; greens: number; reds: number; profit: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
   useEffect(() => {
     api.get('/public/results')
@@ -85,7 +85,10 @@ function SocialProofStats() {
   if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-2xl animate-pulse" />
 
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
-  const reds    = summary ? summary.total - summary.greens : 0
+  // summary.reds ja vem certo do backend (COUNT WHERE result='RED') -- NAO
+  // recalcular via total-greens, isso soma HALF-WIN/HALF-LOSS/PUSH como se
+  // fossem RED (achado real em /results, mesmo bug replicado aqui).
+  const reds    = summary?.reds ?? 0
 
   if (!summary || summary.total === 0) {
     return (
