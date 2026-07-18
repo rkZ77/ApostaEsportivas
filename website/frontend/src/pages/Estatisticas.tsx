@@ -378,7 +378,7 @@ export function EstatisticasContent() {
 
               <div className="divide-y divide-zinc-800/60">
                 {games.map(g => {
-                  const date = new Date(g.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                  const date = new Date(g.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                   const goalsColor = (g.total_goals || 0) >= 3
                     ? 'text-green-400' : (g.total_goals || 0) === 0 ? 'text-red-400' : 'text-zinc-300'
                   return (
