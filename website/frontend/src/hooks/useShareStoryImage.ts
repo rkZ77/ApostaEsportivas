@@ -94,14 +94,15 @@ export function useShareResultsImage() {
   const [shared, setShared] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const share = async (input: Omit<ResultsStoryInput, 'shareUrl'>) => {
+  const share = async (input: Omit<ResultsStoryInput, 'shareUrl'> & { shareText?: string }) => {
     setSharing(true)
     setError(null)
     try {
       const refCode = await getReferralCode()
       const shareUrl = `${window.location.origin}/resultados${refCode ? `?ref=${refCode}` : ''}`
-      const blob = await buildResultsStoryImage({ ...input, shareUrl })
-      const text = `A IA da Pick IA acerta ${Math.round(input.winRatePct)}% dos picks. Histórico 100% auditável.`
+      const { shareText, ...imgInput } = input
+      const blob = await buildResultsStoryImage({ ...imgInput, shareUrl })
+      const text = shareText ?? `A IA da Pick IA acerta ${Math.round(input.winRatePct)}% dos picks. Histórico 100% auditável.`
       await dispatchShare(blob, 'pick-ia-resultados.png', 'Pick IA · Resultados', text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
