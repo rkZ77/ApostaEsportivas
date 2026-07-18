@@ -10,6 +10,7 @@ import { fmtBRL, fmtSigned } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
+import FilterPanel from '../components/FilterPanel'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -307,16 +308,18 @@ export default function Banca() {
           <div className="space-y-6">
 
             {/* Filtro de período */}
-            <div className="flex items-center gap-2 flex-wrap">
-              {PERIODS.map(p => (
-                <button key={p.key} onClick={() => setPeriod(p.key)}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                    period === p.key
-                      ? 'bg-green-500 border-green-500 text-black'
-                      : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
-                  }`}>{p.label}</button>
-              ))}
-            </div>
+            <FilterPanel
+              accent="green"
+              groups={[{
+                key: 'period', label: 'Período',
+                options: PERIODS.map(p => ({ value: String(p.key), label: p.label })),
+                value: String(period),
+                onChange: v => {
+                  const found = PERIODS.find(p => String(p.key) === v)
+                  if (found) setPeriod(found.key)
+                },
+              }]}
+            />
 
             {/* Stats principais */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">

@@ -210,6 +210,61 @@ def _month_bounds(month_key: str):
     return year, mo, month_start, month_end
 
 
+def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_value: float) -> float:
+    """Banca atual "de verdade": bankroll_start (banca no ultimo fechamento mensal,
+    ou desde sempre se nunca fechou) + PNL de tudo que segue dali pra frente.
+
+    Sempre roda sobre TODO o historico desde o epoch, independente de qualquer
+    filtro de periodo (days/from_date/to_date) que a tela esteja usando pra
+    listar as entries -- serve de fonte unica de verdade pro "banca total" e
+    a barra de progresso da meta em Banca.tsx. Bug real encontrado validando o
+    fechamento mensal: GET /banca sempre usava bankroll_start (valor de HOJE,
+    ja rolado pelos fechamentos) como base pro `running`, mas so somava o PNL
+    do periodo filtrado -- ao navegar "Mes passado"/"Este mes"/dias apos algum
+    fechamento ja ter empurrado bankroll_start pra frente, o numero exibido
+    nao era nem a banca real de hoje, nem a banca real no fim daquele periodo.
+    """
+    epoch = _get_bankroll_epoch(cur, user_id)
+    cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
+    params: list = [user_id] + ([epoch] if epoch is not None else [])
+    cur.execute(f"""
+        SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
+        FROM user_followed_picks uf
+        WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {cond}
+    """, params)
+    followed = [dict(r) for r in cur.fetchall()]
+    if not followed:
+        return round(bankroll_start, 2)
+
+    vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
+    free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
+    multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+
+    vip_map: dict = {}
+    if vip_ids:
+        cur.execute("SELECT id, result, odd FROM picks_vip WHERE id = ANY(%s)", (vip_ids,))
+        for r in cur.fetchall(): vip_map[r["id"]] = dict(r)
+    free_map: dict = {}
+    if free_ids:
+        cur.execute("SELECT id, result, odd FROM picks_free WHERE id = ANY(%s)", (free_ids,))
+        for r in cur.fetchall(): free_map[r["id"]] = dict(r)
+    multipla_map: dict = {}
+    if multipla_ids:
+        cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
+        for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+
+    total = bankroll_start
+    for f in followed:
+        pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
+        if not pick:
+            continue
+        _, _, pnl_r = _compute_follow_pnl(pick, f, unit_value)
+        if pnl_r is not None:
+            total += pnl_r
+    return round(total, 2)
+
+
 def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, unit_value: float) -> dict:
     """P&L e contagem de resultados (vip/free/multipla) de um usuário dentro de [month_start, month_end)."""
     cur.execute("""
@@ -453,10 +508,17 @@ def get_banca(
                     "bankroll": round(running2, 2),
                 })
 
+        # Banca atual sempre "de verdade" (todo o historico desde o ultimo
+        # fechamento), nao presa ao periodo filtrado acima -- ver docstring
+        # de _compute_bankroll_current. Pra "Tudo" (sem filtro) da o mesmo
+        # valor que `running` ja dava; so muda o resultado quando days/
+        # from_date/to_date estao filtrando uma janela diferente do epoch.
+        bankroll_current_real = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
+
         return {
             "bankroll_start":       bankroll_start,
             "bankroll_goal":        bankroll_goal,
-            "bankroll_current":     round(running, 2),
+            "bankroll_current":     bankroll_current_real,
             "unit_value":           unit_value,
             "total_followed":       len(followed),
             "total_resolved":       len(resolved),
@@ -874,33 +936,12 @@ def get_monthly_close(
         # Banca atual = bankroll_start + P&L desde o último fechamento mensal (ou desde
         # sempre, se nunca fechou). Sem esse corte, todo fechamento aceito soma de novo
         # o lucro/prejuízo de meses que já foram "rolados" pro bankroll_start.
-        epoch = _get_bankroll_epoch(cur, user_id)
-        epoch_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
-        epoch_params = [unit_value] * 5 + [user_id] + ([epoch] if epoch is not None else [])
-        cur.execute(f"""
-            SELECT COALESCE(SUM(
-                CASE
-                    WHEN uf.cashout_amount IS NOT NULL
-                        THEN uf.cashout_amount - uf.stake_units * %s
-                    WHEN uf.pick_type = 'vip' AND pv.result IN ('GREEN','RED','PUSH','HALF-WIN','HALF-LOSS')
-                        THEN COALESCE(pv.profit, 0) * uf.stake_units * %s
-                    WHEN uf.pick_type = 'free' AND pf.result IN ('GREEN','RED','PUSH','HALF-WIN','HALF-LOSS')
-                        THEN COALESCE(pf.profit, 0) * uf.stake_units * %s
-                    WHEN uf.pick_type = 'multipla' AND pm.result = 'GREEN'
-                        THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %s
-                    WHEN uf.pick_type = 'multipla' AND pm.result = 'RED'
-                        THEN -1.0 * uf.stake_units * %s
-                    ELSE 0
-                END
-            ), 0) AS total_pnl
-            FROM user_followed_picks uf
-            LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
-            LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
-            LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
-            WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {epoch_cond}
-        """, epoch_params)
-        pnl_all = float((cur.fetchone() or {}).get("total_pnl") or 0)
-        bankroll_current = round(bankroll_start + pnl_all, 2)
+        # Usa o mesmo helper de GET /banca (_compute_follow_pnl por pick, via Python)
+        # em vez de reimplementar em SQL puro -- a versão antiga em CASE/SQL ignorava
+        # uf.actual_odd (odd real que o usuário registrou) e sempre usava o profit
+        # pré-calculado com a odd oficial do pick, divergindo do resto do sistema
+        # sempre que o usuário tivesse pego uma odd diferente da oficial.
+        bankroll_current = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
 
         stats = _compute_month_stats(cur, user_id, month_start, month_end, unit_value)
         alav = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
