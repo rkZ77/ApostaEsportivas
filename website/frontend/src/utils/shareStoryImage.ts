@@ -71,15 +71,17 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const rs = getResultStyle(input.result)
   const accentHex = rs?.hex ?? '#00CC00'
 
-  // Fundo
+  // Fundo — gradiente escuro com a cor de destaque bem mais presente (chama
+  // atenção no feed/story, em vez do brilho sutil de antes)
   const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#000000')
+  bg.addColorStop(0, `${accentHex}40`)
+  bg.addColorStop(0.35, '#000000')
   bg.addColorStop(1, '#09090b')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
-  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 720)
-  glow.addColorStop(0, `${accentHex}33`)
+  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 820)
+  glow.addColorStop(0, `${accentHex}88`)
   glow.addColorStop(1, 'transparent')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, W, H)
