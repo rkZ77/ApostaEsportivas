@@ -7,6 +7,25 @@ from auth_utils import get_current_user, require_vip, is_vip_active
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
+_EV_IN_REASONING_RE = re.compile(r"EV[:=]\s*([+-]?\d+(?:[.,]\d+)?)\s*%", re.IGNORECASE)
+
+
+def _ev_from_reasoning(text: str | None) -> float | None:
+    """Fallback pra picks_alavancagem gravados antes da coluna ev_combined
+    existir (ver engine_pipelines/alavancagem_pipeline.py) -- o EV sempre
+    esteve no texto do reasoning, so nunca tinha sido extraido pra um campo
+    estruturado. Cobre os dois formatos ja usados: motor determinístico
+    ("EV: +16.8%") e o pipeline antigo de IA ("EV=+8.2%")."""
+    if not text:
+        return None
+    m = _EV_IN_REASONING_RE.search(text)
+    if not m:
+        return None
+    try:
+        return float(m.group(1).replace(",", ".")) / 100
+    except ValueError:
+        return None
+
 _MARKET_PT = {
     "match winner": "Resultado Final (1X2)",
     "double chance": "Dupla Chance",
@@ -709,6 +728,8 @@ def get_suggestion_detail(
                 "odd": d.get("odd_combined"),
                 "bet_house": d.get("bet_house_1"),
                 "confidence": d.get("confidence_media"),
+                "ev": float(d["ev_combined"]) if d.get("ev_combined") is not None
+                      else _ev_from_reasoning(d.get("reasoning_1")),
                 "reasoning": d.get("reasoning_1") or "",
                 "result": d["result"],
                 "profit": d["profit"],
