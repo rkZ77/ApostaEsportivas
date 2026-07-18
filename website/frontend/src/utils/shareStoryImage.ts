@@ -370,11 +370,20 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
 
-  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 720)
-  glow.addColorStop(0, `${accentHex}33`)
+  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 760)
+  glow.addColorStop(0, `${accentHex}44`)
   glow.addColorStop(1, 'transparent')
   ctx.fillStyle = glow
   ctx.fillRect(0, 0, W, H)
+
+  // Barra de destaque no topo -- mesmo padrao visual dos cards do site
+  // (SuggestionCard.tsx: gradiente via-green-500 na borda superior).
+  const topBar = ctx.createLinearGradient(0, 0, W, 0)
+  topBar.addColorStop(0, 'transparent')
+  topBar.addColorStop(0.5, accentHex)
+  topBar.addColorStop(1, 'transparent')
+  ctx.fillStyle = topBar
+  ctx.fillRect(0, 0, W, 6)
 
   const logoImg = await loadImage('/logo.png')
   const brandY = drawBrandHeader(ctx, logoImg)
@@ -387,20 +396,31 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 64, 32)
   ctx.fillStyle = `${accentHex}22`
   ctx.fill()
-  ctx.strokeStyle = `${accentHex}66`
+  ctx.strokeStyle = `${accentHex}88`
   ctx.lineWidth = 2
   ctx.stroke()
   ctx.fillStyle = accentHex
   ctx.fillText(badgeLabel, W / 2, cursorY + 43)
   cursorY += 64
 
-  // Win rate em destaque
+  // Win rate em destaque -- verde-400 (#4ade80), o mesmo tom usado em TODO
+  // resultado positivo no site de verdade (text-green-400: badges GREEN,
+  // stat boxes de greens em Landing/Results/ResultadosPublicos). accentHex
+  // (#00CC00/green-500) e' a cor da marca (botao/logo/CTA), usada so no
+  // "chrome" do card (badge, glow, barra do topo, rodape) -- sao duas
+  // cores intencionalmente diferentes no design system (ver tailwind.config),
+  // nao um erro; misturar as duas pro mesmo elemento que antes era so
+  // uma delas e' o que ficava com o verde "diferente de antes".
+  const resultGreen = '#4ade80'
   cursorY += 180
   ctx.font = '900 220px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#ffffff'
+  ctx.shadowColor = `${resultGreen}99`
+  ctx.shadowBlur = 40
+  ctx.fillStyle = resultGreen
   ctx.fillText(`${Math.round(input.winRatePct)}%`, W / 2, cursorY)
+  ctx.shadowBlur = 0
   ctx.font = '700 34px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#71717a'
+  ctx.fillStyle = '#a1a1aa'
   ctx.fillText('WIN RATE', W / 2, cursorY + 54)
 
   // Estatísticas: total, greens, lucro
@@ -408,8 +428,8 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   const profitText = `${input.profit >= 0 ? '+' : ''}${input.profit.toFixed(1)}u`
   const stats = [
     { label: 'PICKS', value: String(input.total), color: '#ffffff' },
-    { label: 'GREENS', value: String(input.greens), color: '#4ade80' },
-    { label: 'LUCRO', value: profitText, color: input.profit >= 0 ? '#4ade80' : '#f87171' },
+    { label: 'GREENS', value: String(input.greens), color: resultGreen },
+    { label: 'LUCRO', value: profitText, color: input.profit >= 0 ? resultGreen : '#f87171' },
   ]
   const totalW = W - 200
   const colW = totalW / stats.length
@@ -534,6 +554,115 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   })
 
   cursorY += games.length * rowH + 60
+  drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
+
+  return toBlobPromise(canvas)
+}
+
+// ── Card: resultados por liga ───────────────────────────────────────────────
+export interface LeagueResultItem {
+  leagueId?: number | null
+  leagueName: string
+  total: number
+  winRatePct: number
+  profit: number
+}
+
+export interface LeagueResultsStoryInput {
+  leagues: LeagueResultItem[]
+  shareUrl: string
+  /** Texto do badge no topo. Default: "RESULTADOS POR LIGA" */
+  badgeLabel?: string
+}
+
+export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInput): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D não suportado')
+
+  const accentHex = '#00CC00'
+  const resultGreen = '#4ade80'
+
+  const bg = ctx.createLinearGradient(0, 0, 0, H)
+  bg.addColorStop(0, '#000000')
+  bg.addColorStop(1, '#09090b')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, W, H)
+
+  const glow = ctx.createRadialGradient(W / 2, 380, 40, W / 2, 380, 700)
+  glow.addColorStop(0, `${accentHex}33`)
+  glow.addColorStop(1, 'transparent')
+  ctx.fillStyle = glow
+  ctx.fillRect(0, 0, W, H)
+
+  const topBar = ctx.createLinearGradient(0, 0, W, 0)
+  topBar.addColorStop(0, 'transparent')
+  topBar.addColorStop(0.5, accentHex)
+  topBar.addColorStop(1, 'transparent')
+  ctx.fillStyle = topBar
+  ctx.fillRect(0, 0, W, 6)
+
+  const logoImg = await loadImage('/logo.png')
+  const brandY = drawBrandHeader(ctx, logoImg)
+
+  let cursorY = brandY + 56
+  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
+  const badgeLabel = input.badgeLabel ?? 'RESULTADOS POR LIGA'
+  const badgeTextW = ctx.measureText(badgeLabel).width
+  const badgeW = badgeTextW + 72
+  drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 60, 30)
+  ctx.fillStyle = `${accentHex}22`
+  ctx.fill()
+  ctx.strokeStyle = `${accentHex}88`
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = accentHex
+  ctx.fillText(badgeLabel, W / 2, cursorY + 40)
+  cursorY += 60 + 66
+
+  const leagues = input.leagues.slice(0, 6)
+  const rowH = leagues.length > 5 ? 108 : 128
+  const logoSize = 60
+
+  const logos = await Promise.all(
+    leagues.map(lg => lg.leagueId != null ? loadImage(`/api/proxy/league/${lg.leagueId}.png`) : Promise.resolve(null))
+  )
+
+  leagues.forEach((lg, i) => {
+    const rowY = cursorY + i * rowH
+    const rowInnerH = rowH - 16
+
+    drawRoundedRect(ctx, 70, rowY, W - 140, rowInnerH, 20)
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    const midY = rowY + rowInnerH / 2
+    drawCircularLogo(ctx, logos[i], 70 + 66, midY, logoSize)
+
+    ctx.textAlign = 'left'
+    ctx.font = '800 32px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitText(ctx, lg.leagueName, 420), 70 + 66 + logoSize / 2 + 30, midY - 8)
+    ctx.font = '600 22px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(`${lg.total} picks`, 70 + 66 + logoSize / 2 + 30, midY + 26)
+
+    ctx.textAlign = 'right'
+    ctx.font = '900 40px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = lg.winRatePct >= 55 ? resultGreen : '#ffffff'
+    ctx.fillText(`${Math.round(lg.winRatePct)}%`, W - 70 - 40, midY - 8)
+    ctx.font = '700 24px system-ui, -apple-system, sans-serif'
+    ctx.fillStyle = lg.profit >= 0 ? resultGreen : '#f87171'
+    ctx.fillText(`${lg.profit >= 0 ? '+' : ''}${lg.profit.toFixed(1)}u`, W - 70 - 40, midY + 26)
+    ctx.textAlign = 'center'
+  })
+
+  cursorY += leagues.length * rowH + 60
   drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
 
   return toBlobPromise(canvas)

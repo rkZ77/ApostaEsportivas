@@ -4,6 +4,7 @@ import {
   buildStoryImage, StoryImageInput,
   buildResultsStoryImage, ResultsStoryInput,
   buildTodayGamesStoryImage, TodayGameItem,
+  buildLeagueResultsStoryImage, LeagueResultItem,
 } from '../utils/shareStoryImage'
 import { winRate as calcWinRate } from '../utils/format'
 
@@ -133,6 +134,38 @@ export function useShareTodayGamesImage() {
       const blob = await buildTodayGamesStoryImage({ games, shareUrl })
       const text = `A IA da Pick IA vai analisar ${games.length} jogo(s) hoje. Vem ver.`
       await dispatchShare(blob, 'pick-ia-jogos-hoje.png', 'Pick IA · Jogos de hoje', text, shareUrl)
+      setShared(true)
+      setTimeout(() => setShared(false), 2500)
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        setError('Não foi possível gerar a imagem. Tente novamente.')
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  return { share, sharing, shared, error }
+}
+
+/** Compartilha o resultado da IA quebrado por liga. */
+export function useShareLeagueResultsImage() {
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const share = async (leagues: LeagueResultItem[], badgeLabel?: string) => {
+    setSharing(true)
+    setError(null)
+    try {
+      const refCode = await getReferralCode()
+      const shareUrl = `${window.location.origin}/resultados${refCode ? `?ref=${refCode}` : ''}`
+      const blob = await buildLeagueResultsStoryImage({ leagues, shareUrl, badgeLabel })
+      const top = leagues[0]
+      const text = top
+        ? `${top.leagueName}: ${Math.round(top.winRatePct)}% de acerto na Pick IA. Histórico 100% auditável.`
+        : 'Resultados da IA por liga na Pick IA. Histórico 100% auditável.'
+      await dispatchShare(blob, 'pick-ia-resultados-liga.png', 'Pick IA · Resultados por liga', text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {
