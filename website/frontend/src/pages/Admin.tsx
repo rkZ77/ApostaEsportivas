@@ -687,7 +687,7 @@ export default function Admin() {
                         <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-zinc-400 bg-zinc-700/40'}`}>{p.pick_type}</span>
                         <span className="text-xs font-semibold text-white truncate">{p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}</span>
                       </div>
-                      <span className="text-[10px] text-zinc-500 shrink-0">{p.match_date ? new Date(p.match_date).toLocaleDateString('pt-BR') : ''}</span>
+                      <span className="text-[10px] text-zinc-500 shrink-0">{p.match_date ? new Date(p.match_date + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-black px-2 py-1 rounded border ${resCls}`}>{p.result ?? 'Pendente'}</span>

@@ -433,20 +433,6 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
           <span className="badge-free">FREE</span>
-          {dica.market_type && dica.market_type !== 'unknown' && (() => {
-            const mtLabel: Record<string,string> = { goals:'Gols', corners:'Cantos', cards:'Cartões', result:'Resultado' }
-            const mtCls: Record<string,string> = {
-              goals:  'text-green-400 border-green-700/50 bg-green-900/20',
-              corners:'text-blue-400 border-blue-700/50 bg-blue-900/20',
-              cards:  'text-yellow-400 border-yellow-700/50 bg-yellow-900/20',
-              result: 'text-purple-400 border-purple-700/50 bg-purple-900/20',
-            }
-            return (
-              <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase tracking-wide ${mtCls[dica.market_type] ?? 'text-zinc-500 border-zinc-700'}`}>
-                {mtLabel[dica.market_type] ?? dica.market_type}
-              </span>
-            )
-          })()}
           {dica.league_name && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
@@ -736,7 +722,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
           <span className="text-xs font-black text-blue-400">Múltipla</span>
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-zinc-600">
-            {new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
+            {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {' · '}{legs.length} seleções
           </span>
           {legs.length >= 2 && legs[0]?.home && legs[1]?.home && (
@@ -1869,7 +1855,7 @@ export default function Picks() {
               {/* Stats da IA este mês */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2">Performance da IA · Este mês</p>
+                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
@@ -2370,7 +2356,7 @@ export default function Picks() {
                       {[...alavancagem].reverse().map((pick: any, idx: number, arr: any[]) => {
                         const res = pick.result
                         const date = pick.match_date
-                          ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                          ? new Date(pick.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                           : ''
                         const bankBefore = pick.bankroll_before != null ? Number(pick.bankroll_before) : null
                         const bankAfter  = pick.bankroll_after  != null ? Number(pick.bankroll_after)  : null

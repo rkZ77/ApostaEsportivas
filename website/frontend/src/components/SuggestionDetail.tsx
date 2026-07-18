@@ -484,7 +484,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                           {recent.length === 0 ? (
                             <p className="text-xs text-zinc-600 py-2">Sem jogos recentes</p>
                           ) : recent.map((m: RecentMatch, i: number) => {
-                            const date = new Date(m.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                            const date = new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                             const isHome = m.is_home
                             return (
                               <div key={i} className="flex items-center gap-2 bg-zinc-900 rounded-lg px-3 py-2 border border-zinc-800/50">
@@ -616,7 +616,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                           : 'text-zinc-400 bg-zinc-800 border-zinc-700'
                         const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '·'
                         const date = pick.match_date
-                          ? new Date(pick.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                          ? new Date(pick.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                           : ''
                         const bankBefore = pick.bankroll_before
                         const bankAfter = pick.bankroll_after
