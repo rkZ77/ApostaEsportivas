@@ -140,7 +140,7 @@ export default function ResultadosPublicos() {
               },
               ...(months.length > 0 ? [{
                 key: 'month', label: 'Mês',
-                options: [{ value: '', label: 'Todos os meses' }, ...months.slice(0, 6).map(m => ({ value: m, label: m }))],
+                options: [{ value: '', label: 'Todos os meses' }, ...months.map(m => ({ value: m, label: m }))],
                 value: month, onChange: setMonth,
               } as FilterGroup] : []),
             ]}
