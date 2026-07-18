@@ -35,9 +35,33 @@ const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
 const PickPublico         = lazy(() => import('./pages/PickPublico'))
 const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
 
+const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Loading chunk \d+ failed/i
+const CHUNK_RELOAD_KEY = 'pickia_chunk_reload_at'
+
+/** true se ainda nao tentamos recarregar por esse motivo nos ultimos 10s
+ * (evita loop infinito de reload se o build realmente estiver quebrado). */
+function shouldAutoReloadForChunkError(): boolean {
+  const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY) || 0)
+  if (Date.now() - last < 10_000) return false
+  sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()))
+  return true
+}
+
 class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
   state = { error: null }
-  static getDerivedStateFromError(error: Error) { return { error } }
+  static getDerivedStateFromError(error: Error) {
+    // Depois de um deploy, o navegador ainda com a pagina antiga aberta tenta
+    // buscar um chunk JS com hash que nao existe mais no servidor -- a tela
+    // "Algo deu errado" aparecia sempre que isso acontecia, embora um simples
+    // reload resolva na hora (a pagina nova ja aponta pros chunks certos).
+    // Como fizemos varios deploys seguidos numa mesma sessao, isso ficava
+    // aparecendo "do nada" pra quem estava com o site aberto de fundo.
+    if (CHUNK_ERROR_RE.test(error?.message || '') && shouldAutoReloadForChunkError()) {
+      window.location.reload()
+      return { error: null }
+    }
+    return { error }
+  }
   render() {
     if (this.state.error) {
       return (
