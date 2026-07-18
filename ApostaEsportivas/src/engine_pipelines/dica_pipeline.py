@@ -192,7 +192,7 @@ def run_dica_engine():
         conn.close()
         return
 
-    print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (DEV, motor deterministico)...")
+    print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (motor deterministico)...")
 
     result = _best_candidate_across_fixtures(fixtures)
     if not result:
