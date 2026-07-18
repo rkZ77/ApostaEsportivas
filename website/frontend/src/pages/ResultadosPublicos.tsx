@@ -6,7 +6,7 @@ import { Share2 } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
-import { useShareResultsImage, useShareTodayGamesImage } from '../hooks/useShareStoryImage'
+import { useShareResultsImage, useShareTodayGamesImage, useShareLeagueResultsImage } from '../hooks/useShareStoryImage'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 
 interface Summary {
@@ -70,6 +70,7 @@ export default function ResultadosPublicos() {
 
   const shareResults = useShareResultsImage()
   const shareTodayGames = useShareTodayGamesImage()
+  const shareLeagueResults = useShareLeagueResultsImage()
 
   useEffect(() => {
     setLoading(true)
@@ -97,6 +98,13 @@ export default function ResultadosPublicos() {
   const recent   = data?.recent ?? []
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
+
+  const monthLabel = month
+    ? new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+    : null
+  const filterBadgeLabel = monthLabel
+    ? `RESULTADOS · ${monthLabel.toUpperCase()}`
+    : source !== 'all' ? `RESULTADOS · ${SOURCE_LABELS[source].toUpperCase()}` : undefined
 
   const now = new Date()
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
@@ -176,7 +184,11 @@ export default function ResultadosPublicos() {
               {/* Compartilhar */}
               <div className="flex flex-wrap gap-2 justify-center mb-8">
                 <button
-                  onClick={() => shareResults.share({ winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0 })}
+                  onClick={() => shareResults.share({
+                    winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0,
+                    badgeLabel: filterBadgeLabel,
+                    footerText: monthLabel ? `Referente a ${monthLabel}` : undefined,
+                  })}
                   disabled={shareResults.sharing}
                   className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
                 >
@@ -200,6 +212,25 @@ export default function ResultadosPublicos() {
                   >
                     <Share2 className="w-3.5 h-3.5" />
                     {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado de hoje'}
+                  </button>
+                )}
+                {byLeague.length > 0 && (
+                  <button
+                    onClick={() => shareLeagueResults.share(
+                      [...byLeague]
+                        .sort((a, b) => b.total - a.total)
+                        .map(lg => ({
+                          leagueId: lg.league_id, leagueName: lg.league_name,
+                          total: lg.total, winRatePct: calcWinRate(lg.greens, lg.total) ?? 0,
+                          profit: Number(lg.profit),
+                        })),
+                      filterBadgeLabel ? `POR LIGA · ${filterBadgeLabel.replace('RESULTADOS · ', '')}` : undefined,
+                    )}
+                    disabled={shareLeagueResults.sharing}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {shareLeagueResults.shared ? 'Compartilhado!' : shareLeagueResults.sharing ? 'Gerando...' : 'Compartilhar por liga'}
                   </button>
                 )}
                 {todayGames.length > 0 && (
