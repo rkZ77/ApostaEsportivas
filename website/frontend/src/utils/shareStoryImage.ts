@@ -351,6 +351,10 @@ export interface ResultsStoryInput {
   reds: number
   profit: number
   shareUrl: string
+  /** Texto do badge no topo. Default: "RESULTADOS DA IA" */
+  badgeLabel?: string
+  /** Texto de rodapé acima do CTA. Default: "Histórico 100% auditável e público" */
+  footerText?: string
 }
 
 export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<Blob> {
@@ -379,7 +383,7 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
 
   let cursorY = brandY + 56
   ctx.font = '800 30px system-ui, -apple-system, sans-serif'
-  const badgeLabel = 'RESULTADOS DA IA'
+  const badgeLabel = input.badgeLabel ?? 'RESULTADOS DA IA'
   const badgeTextW = ctx.measureText(badgeLabel).width
   const badgeW = badgeTextW + 80
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 64, 32)
@@ -425,7 +429,7 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   cursorY += 220
   ctx.font = '600 28px system-ui, -apple-system, sans-serif'
   ctx.fillStyle = '#52525b'
-  ctx.fillText('Histórico 100% auditável e público', W / 2, cursorY)
+  ctx.fillText(input.footerText ?? 'Histórico 100% auditável e público', W / 2, cursorY)
 
   cursorY += 90
   drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
