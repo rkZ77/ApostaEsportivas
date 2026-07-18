@@ -69,10 +69,63 @@ const LINE_PT: Record<string, string> = {
   'no': 'Não',
 }
 
-// Só traduz quando a linha inteira é uma palavra conhecida (ex.: "Away").
-// Linhas numéricas/handicap (ex.: "Over 2.5") permanecem como estão.
+// Traduz linha completa (ex.: "Away"), "Over/Under X.Y" (ex.: "Over 8.5" ->
+// "Mais de 8.5") e combos tipo Dupla Chance no formato cru da API
+// ("Home/Draw" -> "Casa/Empate", ver ai_result_checker_service.py que já
+// entende esse mesmo formato pra grading).
 export function translateLine(line?: string): string {
   if (!line) return ''
-  const key = line.trim().toLowerCase()
-  return LINE_PT[key] ?? line
+  const trimmed = line.trim()
+  const key = trimmed.toLowerCase()
+  if (LINE_PT[key]) return LINE_PT[key]
+
+  const overUnder = trimmed.match(/^(over|under)\s+([\d.,]+)$/i)
+  if (overUnder) {
+    const dir = overUnder[1].toLowerCase() === 'over' ? 'Mais de' : 'Menos de'
+    return `${dir} ${overUnder[2]}`
+  }
+
+  const parts = trimmed.split('/')
+  if (parts.length === 2) {
+    const [a, b] = parts.map(p => LINE_PT[p.trim().toLowerCase()])
+    if (a && b) return `${a}/${b}`
+  }
+
+  return line
+}
+
+// Seleções nacionais (Copa do Mundo etc.) vêm da API-Football em inglês --
+// times de clube ja usam o mesmo nome em PT/EN, entao passam direto (fallback).
+const TEAM_PT: Record<string, string> = {
+  'brazil': 'Brasil', 'argentina': 'Argentina', 'germany': 'Alemanha',
+  'france': 'França', 'spain': 'Espanha', 'england': 'Inglaterra',
+  'italy': 'Itália', 'netherlands': 'Holanda', 'portugal': 'Portugal',
+  'belgium': 'Bélgica', 'croatia': 'Croácia', 'uruguay': 'Uruguai',
+  'colombia': 'Colômbia', 'mexico': 'México', 'usa': 'Estados Unidos',
+  'united states': 'Estados Unidos', 'canada': 'Canadá', 'japan': 'Japão',
+  'south korea': 'Coreia do Sul', 'korea republic': 'Coreia do Sul',
+  'morocco': 'Marrocos', 'senegal': 'Senegal', 'ghana': 'Gana',
+  'nigeria': 'Nigéria', 'cameroon': 'Camarões', 'egypt': 'Egito',
+  'tunisia': 'Tunísia', 'algeria': 'Argélia', 'ivory coast': 'Costa do Marfim',
+  'switzerland': 'Suíça', 'denmark': 'Dinamarca', 'sweden': 'Suécia',
+  'norway': 'Noruega', 'poland': 'Polônia', 'serbia': 'Sérvia',
+  'austria': 'Áustria', 'scotland': 'Escócia', 'wales': 'País de Gales',
+  'ukraine': 'Ucrânia', 'turkey': 'Turquia', 'czech republic': 'República Tcheca',
+  'greece': 'Grécia', 'romania': 'Romênia', 'hungary': 'Hungria',
+  'ecuador': 'Equador', 'chile': 'Chile', 'peru': 'Peru',
+  'paraguay': 'Paraguai', 'venezuela': 'Venezuela', 'bolivia': 'Bolívia',
+  'costa rica': 'Costa Rica', 'panama': 'Panamá', 'jamaica': 'Jamaica',
+  'australia': 'Austrália', 'new zealand': 'Nova Zelândia',
+  'saudi arabia': 'Arábia Saudita', 'qatar': 'Catar', 'iran': 'Irã',
+  'iraq': 'Iraque', 'jordan': 'Jordânia', 'china': 'China',
+  'south africa': 'África do Sul', 'dr congo': 'Congo RD', 'congo dr': 'Congo RD',
+  'bosnia and herzegovina': 'Bósnia e Herzegovina', 'bosnia & herzegovina': 'Bósnia e Herzegovina',
+  'slovenia': 'Eslovênia', 'slovakia': 'Eslováquia', 'finland': 'Finlândia',
+  'iceland': 'Islândia', 'russia': 'Rússia', 'israel': 'Israel',
+  'uzbekistan': 'Uzbequistão', 'india': 'Índia',
+}
+
+export function translateTeamName(name?: string): string {
+  if (!name) return ''
+  return TEAM_PT[name.trim().toLowerCase()] ?? name
 }

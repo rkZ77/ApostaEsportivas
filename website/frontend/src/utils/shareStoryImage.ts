@@ -151,11 +151,22 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   cursorY += 190
 
   if (input.market) {
-    ctx.font = '600 28px system-ui, -apple-system, sans-serif'
-    ctx.fillStyle = '#a1a1aa'
     const marketText = input.line ? `${input.market} · ${input.line}` : input.market
-    ctx.fillText(fitText(ctx, marketText, W - 160), W / 2, cursorY)
-    cursorY += 56
+    ctx.font = '800 36px system-ui, -apple-system, sans-serif'
+    const fitted = fitText(ctx, marketText, W - 240)
+    const textW = ctx.measureText(fitted).width
+    const boxW = Math.min(textW + 80, W - 120)
+    const boxH = 76
+    const boxY = cursorY - 52
+    drawRoundedRect(ctx, W / 2 - boxW / 2, boxY, boxW, boxH, 22)
+    ctx.fillStyle = 'rgba(255,255,255,0.07)'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.18)'
+    ctx.lineWidth = 2
+    ctx.stroke()
+    ctx.fillStyle = '#ffffff'
+    ctx.fillText(fitted, W / 2, boxY + 51)
+    cursorY += 80
   }
 
   // Selo de resultado

@@ -5,7 +5,7 @@ import { Helmet } from 'react-helmet-async'
 import { Share2 } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
-import { TeamLogo } from '../components/TeamLogo'
+import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useShareResultsImage, useShareTodayGamesImage } from '../hooks/useShareStoryImage'
 
 interface Summary {
@@ -13,6 +13,10 @@ interface Summary {
   profit: number; stake_total: number; roi: number
 }
 interface DayResult { match_date: string; total: number; greens: number; reds: number; profit: number }
+interface LeagueResult {
+  league_id: number | null; league_name: string
+  total: number; greens: number; reds: number; profit: number; stake_total: number
+}
 interface RecentTip {
   match_date: string
   home_team_name: string; away_team_name?: string
@@ -24,6 +28,7 @@ interface PublicData {
   available_months: string[]
   summary: Summary
   by_day: DayResult[]
+  by_league: LeagueResult[]
   recent: RecentTip[]
 }
 
@@ -84,9 +89,10 @@ export default function ResultadosPublicos() {
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
   const profit  = s ? Number(s.profit) : null
-  const months  = data?.available_months ?? []
-  const recent  = data?.recent ?? []
-  const byDay   = data?.by_day ?? []
+  const months   = data?.available_months ?? []
+  const recent   = data?.recent ?? []
+  const byDay    = data?.by_day ?? []
+  const byLeague = data?.by_league ?? []
 
   return (
     <>
@@ -207,6 +213,36 @@ export default function ResultadosPublicos() {
                   <div className="flex items-center gap-4 mt-3">
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500/60" /><span className="text-[10px] text-zinc-600">Mais greens</span></div>
                     <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/50" /><span className="text-[10px] text-zinc-600">Mais reds</span></div>
+                  </div>
+                </div>
+              )}
+
+              {/* Resultados por liga */}
+              {byLeague.length > 0 && (
+                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden mb-8">
+                  <div className="px-5 py-3 border-b border-zinc-800">
+                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Resultados por liga</span>
+                  </div>
+                  <div className="divide-y divide-zinc-800/50">
+                    {byLeague.map((lg) => {
+                      const wr = calcWinRate(lg.greens, lg.total)
+                      const p  = Number(lg.profit)
+                      return (
+                        <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
+                          {lg.league_id != null
+                            ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
+                            : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
+                          <span className="text-sm font-semibold text-white flex-1 min-w-0 truncate">{lg.league_name}</span>
+                          <span className="text-[11px] text-zinc-600 shrink-0 hidden sm:block">{lg.total} picks</span>
+                          <span className={`text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                            {wr}%
+                          </span>
+                          <span className={`text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {p >= 0 ? '+' : ''}{p.toFixed(1)}u
+                          </span>
+                        </div>
+                      )
+                    })}
                   </div>
                 </div>
               )}

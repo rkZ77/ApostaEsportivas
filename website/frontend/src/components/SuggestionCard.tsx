@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
-import { translateMarket, translateLine } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 import { getResultStyle } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -110,14 +110,14 @@ export default function SuggestionCard({
     shareStory({
       pickId: s.id,
       pickTypeRoute,
-      homeTeamName: s.home_team_name,
-      awayTeamName: s.away_team_name,
+      homeTeamName: translateTeamName(s.home_team_name),
+      awayTeamName: translateTeamName(s.away_team_name),
       homeTeamId: s.home_team_id,
       awayTeamId: s.away_team_id,
       leagueName: s.league_name,
       pickType: pickTypeRoute,
       market: s.market ? translateMarket(s.market) : undefined,
-      line: s.line,
+      line: translateLine(s.line),
       odd: Number(s.odd),
       result: s.result,
       profit: s.result ? calcProfitUnits(s.result, Number(s.odd), s.user_stake_units ?? stakeSuggestion?.units ?? 1, s.user_actual_odd) : null,

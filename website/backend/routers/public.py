@@ -66,16 +66,23 @@ def _q1(cur, sql, params=()):
 
 
 def _sub_vip(date_cond: str) -> str:
+    # league via match_statistics, nao fixtures -- fixtures e' so fila
+    # operacional, o registro ja resolvido/graded quase sempre ja saiu de
+    # la; match_statistics e' o registro permanente (sem FK, nunca deletado).
     return f"""
-        SELECT match_date,
-               home_team_name, away_team_name,
-               home_team_id,   away_team_id,
-               market, line, odd,
-               result, profit,
+        SELECT pv.match_date,
+               pv.home_team_name, pv.away_team_name,
+               pv.home_team_id,   pv.away_team_id,
+               pv.market, pv.line, pv.odd,
+               pv.result, pv.profit,
                1::numeric AS stake,
-               'vip' AS source
-        FROM picks_vip
-        WHERE result IS NOT NULL {date_cond}
+               'vip' AS source,
+               ms.league_id AS league_id,
+               COALESCE(l.name, 'Liga ' || ms.league_id) AS league_name
+        FROM picks_vip pv
+        LEFT JOIN match_statistics ms ON ms.fixture_id = pv.fixture_id
+        LEFT JOIN leagues l ON l.league_id = ms.league_id
+        WHERE pv.result IS NOT NULL {date_cond}
     """
 
 def _sub_free(date_cond: str) -> str:
@@ -93,9 +100,13 @@ def _sub_free(date_cond: str) -> str:
                pf.market, pf.line, pf.odd,
                pf.result, pf.profit,
                1 AS stake,
-               'free' AS source
+               'free' AS source,
+               COALESCE(pf.league_id, ms.league_id) AS league_id,
+               COALESCE(pf.league_name, l.name, 'Liga ' || COALESCE(pf.league_id, ms.league_id)) AS league_name
         FROM picks_free pf
         LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+        LEFT JOIN match_statistics ms ON ms.fixture_id = pf.fixture_id
+        LEFT JOIN leagues l ON l.league_id = COALESCE(pf.league_id, ms.league_id)
         WHERE pf.result IS NOT NULL {date_cond}
     """
 
@@ -108,7 +119,9 @@ def _sub_mult(date_cond: str) -> str:
                'Múltipla' AS market, NULL AS line, total_odd AS odd,
                result, profit,
                1::numeric AS stake,
-               'multiplas' AS source
+               'multiplas' AS source,
+               NULL::INTEGER AS league_id,
+               'Múltiplas' AS league_name
         FROM picks_multiplas
         WHERE result IS NOT NULL {date_cond}
     """
@@ -121,7 +134,9 @@ def _sub_alav(date_cond: str) -> str:
                market_1 AS market, line_1 AS line, odd_combined AS odd,
                result, profit,
                1::numeric AS stake,
-               'alavancagem' AS source
+               'alavancagem' AS source,
+               NULL::INTEGER AS league_id,
+               'Alavancagem' AS league_name
         FROM picks_alavancagem
         WHERE result IS NOT NULL {date_cond}
     """
@@ -227,6 +242,39 @@ def public_results(
             ORDER BY match_date
         """, p)
 
+        # ── Por liga. Agrupa so por league_id (nao league_name -- o nome
+        # denormalizado em picks_free pode estar desatualizado em relacao a
+        # leagues.name atual, ex: "Copa do Mundo" vs "Copa do Mundo FIFA"
+        # pro mesmo league_id, o que duplicaria a liga em duas linhas).
+        # Multipla/Alavancagem nao tem league_id real (pernas podem ser de
+        # ligas diferentes) -- agrupadas pelo proprio `source` nesse caso,
+        # senao as duas colapsariam juntas por serem ambas league_id NULL.
+        by_league_raw = _q(cur, f"""
+            SELECT
+                COALESCE(league_id::text, source) AS group_key,
+                MAX(league_id) AS league_id,
+                MAX(source)    AS source,
+                COUNT(*)                                  AS total,
+                COUNT(*) FILTER (WHERE result = 'GREEN')  AS greens,
+                COUNT(*) FILTER (WHERE result = 'RED')    AS reds,
+                COALESCE(SUM(profit), 0)                  AS profit,
+                COALESCE(SUM(stake), 0)                   AS stake_total
+            FROM ({union_sql}) AS t
+            GROUP BY group_key
+            ORDER BY total DESC
+        """, p)
+        _league_names = {r["league_id"]: r["name"] for r in _q(cur, "SELECT league_id, name FROM leagues")}
+        _combo_labels = {"multiplas": "Múltiplas", "alavancagem": "Alavancagem"}
+        by_league = []
+        for r in by_league_raw:
+            d = dict(r)
+            lid = d.pop("league_id")
+            src = d.pop("source")
+            d["league_id"] = lid
+            d["league_name"] = _league_names.get(lid, f"Liga {lid}") if lid is not None \
+                else _combo_labels.get(src, "Outros")
+            by_league.append(d)
+
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
         single_source = source if source in _SUB_BUILDERS else None
         recent = _collect_results(cur, date_cond, date_params, single_source, limit=30)
@@ -253,6 +301,7 @@ def public_results(
             "available_months": available_months,
             "summary": dict(summary) if summary else {},
             "by_day":  [dict(r) for r in by_day],
+            "by_league": [dict(r) for r in by_league],
             "recent":  [dict(r) for r in recent],
             "counts":  dict(counts_row) if counts_row else {},
         }
