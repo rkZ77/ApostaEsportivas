@@ -78,7 +78,7 @@ def run_vip_engine():
         print("[VIP_ENGINE] Nenhum fixture pendente.")
         return
 
-    print(f"[VIP_ENGINE] Processando {len(fixtures)} fixtures (DEV, motor deterministico)...")
+    print(f"[VIP_ENGINE] Processando {len(fixtures)} fixtures (motor deterministico)...")
 
     conn = get_connection()
     cur = conn.cursor()
