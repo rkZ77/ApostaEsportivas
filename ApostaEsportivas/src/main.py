@@ -45,6 +45,7 @@ def run_migrations():
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS stake_pct NUMERIC;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
+        "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;",
     ]
     conn = get_connection()
     cur = conn.cursor()
