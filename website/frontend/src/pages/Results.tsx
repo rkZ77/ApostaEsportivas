@@ -282,7 +282,7 @@ export default function Results() {
                         <tbody>
                           {daySlice.map((d: any) => {
                             const wr   = calcWinRate(d.greens, d.total) ?? 0
-                            const reds = d.reds ?? (d.total - d.greens - (d.push ?? 0) - (d.half_wins ?? 0) - (d.half_losses ?? 0))
+                            const reds = d.reds ?? 0
                             return (
                               <tr key={d.match_date} className="border-b border-zinc-800/50 hover:bg-zinc-900/50">
                                 <td className="px-3 sm:px-5 py-3 text-white font-medium">{new Date(d.match_date + 'T12:00:00').toLocaleDateString('pt-BR')}</td>
@@ -455,7 +455,7 @@ export default function Results() {
                   <tbody>
                     {monthly.map(m => {
                       const wr   = m.win_rate ?? calcWinRate(m.greens, m.total) ?? 0
-                      const reds = m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))
+                      const reds = m.reds ?? 0
                       const [year, month] = (m.month ?? '').split('-')
                       const label = new Date(Number(year), Number(month) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                       return (
@@ -479,7 +479,7 @@ export default function Results() {
                     {(() => {
                       const totT  = monthly.reduce((a, m) => a + (m.total ?? 0), 0)
                       const totG  = monthly.reduce((a, m) => a + (m.greens ?? 0), 0)
-                      const totR  = monthly.reduce((a, m) => a + (m.reds ?? (m.total - m.greens - (m.push ?? 0) - (m.half_wins ?? 0) - (m.half_losses ?? 0))), 0)
+                      const totR  = monthly.reduce((a, m) => a + (m.reds ?? 0), 0)
                       const avgWR = calcWinRate(totG, totT) ?? 0
                       return (
                         <tr className="bg-zinc-900 border-t border-zinc-700">
