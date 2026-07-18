@@ -15,6 +15,7 @@ import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stak
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
+import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -2070,41 +2071,21 @@ export default function Picks() {
                 const filteredVips = vipResultFilter
                   ? byLeague.filter((s: any) => vipResultFilter === 'pending' ? !s.result : s.result === vipResultFilter)
                   : byLeague
-                const RESULT_FILTERS: [string, string][] = [['', 'Todos'], ['pending', 'Pendentes'], ['GREEN', 'Green'], ['RED', 'Red']]
+                const filterGroups: FilterGroup[] = [
+                  ...(leagues.length > 1 ? [{
+                    key: 'league', label: 'Liga',
+                    options: [{ value: '', label: 'Todas' }, ...leagues.map(lg => ({ value: lg, label: lg }))],
+                    value: leagueFilter, onChange: setLeagueFilter,
+                  }] : []),
+                  ...(vips.length > 1 ? [{
+                    key: 'resultado', label: 'Resultado',
+                    options: [{ value: '', label: 'Todos' }, { value: 'pending', label: 'Pendentes' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' }],
+                    value: vipResultFilter, onChange: setVipResultFilter,
+                  }] : []),
+                ]
                 return (
                   <>
-                    {leagues.length > 1 && (
-                      <div className="flex gap-2 flex-wrap mb-3">
-                        <button
-                          onClick={() => setLeagueFilter('')}
-                          className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${!leagueFilter ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                        >
-                          Todas
-                        </button>
-                        {leagues.map(lg => (
-                          <button
-                            key={lg}
-                            onClick={() => setLeagueFilter(lg === leagueFilter ? '' : lg)}
-                            className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${leagueFilter === lg ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                          >
-                            {lg}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                    {vips.length > 1 && (
-                      <div className="flex gap-2 flex-wrap mb-4">
-                        {RESULT_FILTERS.map(([k, l]) => (
-                          <button
-                            key={k}
-                            onClick={() => setVipResultFilter(k === vipResultFilter ? '' : k)}
-                            className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${vipResultFilter === k ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-                          >
-                            {l}
-                          </button>
-                        ))}
-                      </div>
-                    )}
+                    {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} />}
                     {filteredVips.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
                         {filteredVips.map((s: any) => (
