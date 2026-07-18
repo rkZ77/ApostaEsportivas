@@ -14,6 +14,7 @@ import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, Br
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -56,76 +57,6 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
       className="object-contain shrink-0 opacity-80" style={{ width: size, height: size }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
-}
-
-// Tradução de mercados (espelha ai_suggestions_service._MARKET_MAP)
-const MARKET_PT: Record<string, string> = {
-  'match winner': 'Resultado Final (1X2)',
-  'double chance': 'Dupla Chance',
-  'double chance - 1st half': 'Dupla Chance - 1º Tempo',
-  'first half winner': 'Vencedor do 1º Tempo',
-  'asian handicap': 'Handicap Asiático',
-  'corners asian handicap': 'Escanteios Handicap Asiático',
-  'both teams score': 'Ambas as Equipes Marcam',
-  'both teams to score': 'Ambas as Equipes Marcam',
-  'both teams score - first half': 'Ambas Marcam - 1º Tempo',
-  'both teams to score - first half': 'Ambas Marcam - 1º Tempo',
-  'both teams score first half': 'Ambas Marcam - 1º Tempo',
-  'goals over/under': 'Gols Mais/Menos',
-  'total goals': 'Gols Mais/Menos',
-  'over/under': 'Gols Mais/Menos',
-  'goals over/under first half': 'Gols Mais/Menos - 1º Tempo',
-  'goals over/under - first half': 'Gols Mais/Menos - 1º Tempo',
-  'goals over/under 1st half': 'Gols Mais/Menos - 1º Tempo',
-  'goals over/under - second half': 'Gols Mais/Menos - 2º Tempo',
-  'goals over/under second half': 'Gols Mais/Menos - 2º Tempo',
-  'goals over/under 2nd half': 'Gols Mais/Menos - 2º Tempo',
-  'total - home': 'Total de Gols Casa',
-  'total - away': 'Total de Gols Visitante',
-  'home team total goals': 'Total de Gols Casa',
-  'away team total goals': 'Total de Gols Visitante',
-  'home team total goals - 1st half': 'Total de Gols Casa (1º Tempo)',
-  'away team total goals - 1st half': 'Total de Gols Visitante (1º Tempo)',
-  'corners over under': 'Escanteios Mais/Menos',
-  'corners over/under': 'Escanteios Mais/Menos',
-  'total corners': 'Escanteios Mais/Menos',
-  'corners 1x2': 'Escanteios 1x2',
-  'home corners over/under': 'Escanteios Casa Mais/Menos',
-  'away corners over/under': 'Escanteios Visitante Mais/Menos',
-  'total corners (1st half)': 'Escanteios (1º Tempo)',
-  'corners over/under - 1st half': 'Escanteios (1º Tempo)',
-  'total corners (2nd half)': 'Escanteios (2º Tempo)',
-  'corners over/under - 2nd half': 'Escanteios (2º Tempo)',
-  'cards over/under': 'Cartões Mais/Menos',
-  'home team total cards': 'Cartões Casa',
-  'away team total cards': 'Cartões Visitante',
-  'home team cards': 'Cartões Casa',
-  'away team cards': 'Cartões Visitante',
-  'ht/ft': 'Inter./Final',
-  'exact score': 'Placar Exato',
-  'correct score': 'Placar Exato',
-  'first goal scorer': 'Primeiro Gol',
-  'anytime goalscorer': 'Marcar a Qualquer Tempo',
-  'result': 'Resultado',
-  'home/away': '1X2',
-  'to qualify': 'Classificação',
-  'to qualify - extra time': 'Classificação (Prorrogação)',
-}
-const translateMarket = (m?: string): string => {
-  if (!m) return ''
-  const key = m.trim().toLowerCase()
-  if (MARKET_PT[key]) return MARKET_PT[key]
-  // Partial match: verifica se alguma key está contida no nome do mercado
-  for (const [k, v] of Object.entries(MARKET_PT)) {
-    if (key.includes(k)) return v
-  }
-  return m
-}
-const LINE_PT: Record<string, string> = { home: 'Casa', away: 'Visitante', draw: 'Empate', yes: 'Sim', no: 'Não' }
-// Só traduz quando a linha inteira é uma palavra conhecida (ex.: "Away"); linhas numéricas/handicap ficam como estão.
-const translateLine = (line?: string): string => {
-  if (!line) return ''
-  return LINE_PT[line.trim().toLowerCase()] ?? line
 }
 
 // Tipos
@@ -435,14 +366,14 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
     shareStory({
       pickId: dica.id,
       pickTypeRoute: 'free',
-      homeTeamName: dica.home_team,
-      awayTeamName: dica.away_team,
+      homeTeamName: translateTeamName(dica.home_team),
+      awayTeamName: translateTeamName(dica.away_team),
       homeTeamId: dica.home_team_id,
       awayTeamId: dica.away_team_id,
       leagueName: dica.league_name,
       pickType: 'free',
-      market: dica.market,
-      line: dica.line,
+      market: translateMarket(dica.market),
+      line: translateLine(dica.line),
       odd: Number(dica.odd),
       result: dica.result,
       profit: dica.result ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? stakeSuggestion?.units ?? 1, dica.user_actual_odd) : null,
@@ -748,7 +679,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
     shareStory({
       pickId: m.id,
       pickTypeRoute: 'multipla',
-      homeTeamName: legs[0]?.home ?? legs[0]?.home_team ?? 'Múltipla',
+      homeTeamName: translateTeamName(legs[0]?.home ?? legs[0]?.home_team) || 'Múltipla',
       awayTeamName: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : undefined,
       homeTeamId: legs[0]?.home_team_id,
       awayTeamId: legs[0]?.away_team_id,
@@ -1052,13 +983,13 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
     shareStory({
       pickId: pick.id,
       pickTypeRoute: 'alavancagem',
-      homeTeamName: legs[0]?.home ?? 'Alavancagem',
-      awayTeamName: legs[0]?.away,
+      homeTeamName: translateTeamName(legs[0]?.home) || 'Alavancagem',
+      awayTeamName: translateTeamName(legs[0]?.away),
       homeTeamId: legs[0]?.homeId,
       awayTeamId: legs[0]?.awayId,
       pickType: 'alavancagem',
       market: isCombo ? `${comboLabel} · ${legs.length} jogos` : translateMarket(legs[0]?.market),
-      line: legs[0]?.line,
+      line: translateLine(legs[0]?.line),
       odd: oddCombined,
       result: pick.result,
       profit: pick.result === 'GREEN' ? (oddCombined - 1) : pick.result === 'RED' ? -1 : null,
