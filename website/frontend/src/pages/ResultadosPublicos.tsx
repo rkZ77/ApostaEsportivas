@@ -307,7 +307,7 @@ export default function ResultadosPublicos() {
                     {filteredRecent.map((tip, i) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-3">
                         <span className="text-[10px] text-zinc-600 shrink-0 w-12">
-                          {new Date(tip.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                          {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                         </span>
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                           {SRC_LBL[tip.source] ?? tip.source}

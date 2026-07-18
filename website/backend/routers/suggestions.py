@@ -1304,7 +1304,7 @@ def get_multiplas(
 
 @router.get("/stats/quick")
 def get_quick_stats(current_user: dict = Depends(get_current_user)):
-    """Win rate do mês, lucro mensal, sequência atual."""
+    """Win rate geral, lucro total, sequência atual."""
     conn = get_connection()
     cur = conn.cursor()
     try:

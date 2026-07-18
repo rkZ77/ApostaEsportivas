@@ -295,7 +295,7 @@ function RecentResults() {
                 <div key={i} className="flex items-center gap-2 px-3 sm:px-5 py-3">
                   <div className="w-10 sm:w-14 shrink-0 text-center">
                     <span className="text-[10px] sm:text-xs text-zinc-500">
-                      {new Date(tip.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                      {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                     </span>
                   </div>
                   <div className="flex-1 min-w-0">
