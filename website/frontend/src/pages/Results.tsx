@@ -333,7 +333,7 @@ export default function Results() {
           <div>
             {/* Filtro resultado */}
             <div className="flex gap-2 mb-4 flex-wrap">
-              {[['all','Todos'],['GREEN','Green'],['RED','Red'],['PUSH','Push'],['HALF-WIN','½ Win'],['HALF-LOSS','½ Loss']].map(([k,l]) => (
+              {[['all','Todos'],['GREEN','Green'],['RED','Red'],['PUSH','Push'],['HALF-WIN','½ Win'],['HALF-LOSS','½ Loss'],['pending','Pendente']].map(([k,l]) => (
                 <button key={k} onClick={() => { setGamesFilter(k); setGamesPage(0); fetchGames(period, 0, k, source, customFrom, customTo) }}
                   className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
                     gamesFilter === k ? 'bg-green-500 border-green-500 text-black' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'

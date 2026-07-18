@@ -23,6 +23,7 @@ interface RecentTip {
   home_team_id?: number; away_team_id?: number
   market?: string; line?: string; odd: number
   result: string; profit: number; source: string
+  league_id?: number | null; league_name?: string
 }
 interface PublicData {
   available_months: string[]
@@ -64,6 +65,7 @@ export default function ResultadosPublicos() {
   const [source, setSource] = useState('all')
   const [month, setMonth] = useState('')
   const [todayGames, setTodayGames] = useState<any[]>([])
+  const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const shareResults = useShareResultsImage()
   const shareTodayGames = useShareTodayGamesImage()
@@ -78,6 +80,7 @@ export default function ResultadosPublicos() {
       .then(r => setData(r.data))
       .catch(() => { setData(null); setError(true) })
       .finally(() => setLoading(false))
+    setRecentLeagueFilter('')
   }, [source, month])
 
   useEffect(() => {
@@ -93,6 +96,11 @@ export default function ResultadosPublicos() {
   const recent   = data?.recent ?? []
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
+
+  const now = new Date()
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
+  const todayResult = byDay.find(d => d.match_date === todayStr)
+  const todayWinRate = todayResult ? calcWinRate(todayResult.greens, todayResult.total) : null
 
   return (
     <>
@@ -189,6 +197,25 @@ export default function ResultadosPublicos() {
                   <Share2 className="w-3.5 h-3.5" />
                   {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado'}
                 </button>
+                {todayResult && todayResult.total > 0 && (
+                  <button
+                    onClick={() => shareResults.share({
+                      winRatePct: todayWinRate ?? 0,
+                      total: todayResult.total,
+                      greens: todayResult.greens,
+                      reds: todayResult.reds,
+                      profit: Number(todayResult.profit),
+                      badgeLabel: 'RESULTADO DE HOJE',
+                      footerText: new Date(todayStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
+                      shareText: `Hoje a IA da Pick IA fechou ${todayResult.greens}G / ${todayResult.reds}R (${Math.round(todayWinRate ?? 0)}%). Histórico 100% auditável.`,
+                    })}
+                    disabled={shareResults.sharing}
+                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado de hoje'}
+                  </button>
+                )}
                 {todayGames.length > 0 && (
                   <button
                     onClick={() => shareTodayGames.share(todayGames.map(g => ({
@@ -248,14 +275,36 @@ export default function ResultadosPublicos() {
               )}
 
               {/* Lista recente */}
-              {recent.length > 0 && (
+              {recent.length > 0 && (() => {
+                const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
+                const filteredRecent = recentLeagueFilter ? recent.filter(t => t.league_name === recentLeagueFilter) : recent
+                return (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Picks recentes</span>
-                    <span className="text-[10px] text-zinc-600">{recent.length} resultados</span>
+                    <span className="text-[10px] text-zinc-600">{filteredRecent.length} resultados</span>
                   </div>
+                  {recentLeagues.length > 1 && (
+                    <div className="flex gap-2 flex-wrap px-4 pt-3">
+                      <button
+                        onClick={() => setRecentLeagueFilter('')}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${!recentLeagueFilter ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                      >
+                        Todas
+                      </button>
+                      {recentLeagues.map(lg => (
+                        <button
+                          key={lg}
+                          onClick={() => setRecentLeagueFilter(lg === recentLeagueFilter ? '' : lg)}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${recentLeagueFilter === lg ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        >
+                          {lg}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   <div className="divide-y divide-zinc-800/50">
-                    {recent.map((tip, i) => (
+                    {filteredRecent.map((tip, i) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-3">
                         <span className="text-[10px] text-zinc-600 shrink-0 w-12">
                           {new Date(tip.match_date).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
@@ -283,7 +332,8 @@ export default function ResultadosPublicos() {
                     ))}
                   </div>
                 </div>
-              )}
+                )
+              })()}
             </>
           )}
 

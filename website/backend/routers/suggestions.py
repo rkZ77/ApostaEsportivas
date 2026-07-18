@@ -1383,8 +1383,9 @@ def get_latest_pick(current_user: dict = Depends(get_current_user)):
         conn.close()
 
 
-def _source_games_sql(source: str, date_cond: str) -> str:
-    """Retorna subquery normalizada para cada fonte de picks."""
+def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS NOT NULL") -> str:
+    """Retorna subquery normalizada para cada fonte de picks.
+    result_null_cond: "IS NOT NULL" (default, exclui pendentes) ou "IS NULL" (so pendentes)."""
     if source == "free":
         return f"""
             SELECT pf.id, 'free' AS pick_type, pf.match_date,
@@ -1395,7 +1396,7 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                    pf.result, pf.profit, 1::numeric AS stake
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
-            WHERE pf.result IS NOT NULL {date_cond}
+            WHERE pf.result {result_null_cond} {date_cond}
         """
     if source == "multipla":
         return f"""
@@ -1413,7 +1414,7 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                    END AS profit,
                    1::numeric AS stake
             FROM picks_multiplas
-            WHERE result IS NOT NULL {date_cond}
+            WHERE result {result_null_cond} {date_cond}
         """
     if source == "alavancagem":
         return f"""
@@ -1430,7 +1431,7 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                    pa.result, pa.profit, 1::numeric AS stake
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
-            WHERE pa.result IS NOT NULL {date_cond}
+            WHERE pa.result {result_null_cond} {date_cond}
         """
     # vip (default)
     return f"""
@@ -1439,16 +1440,16 @@ def _source_games_sql(source: str, date_cond: str) -> str:
                market, line, odd, bet_house,
                result, profit, 1::numeric AS stake
         FROM picks_vip
-        WHERE result IS NOT NULL {date_cond}
+        WHERE result {result_null_cond} {date_cond}
     """
 
 
-def _build_combined_sql(source: str, date_cond: str) -> str:
+def _build_combined_sql(source: str, date_cond: str, result_null_cond: str = "IS NOT NULL") -> str:
     if source in ("vip", "free", "multipla", "alavancagem"):
-        return _source_games_sql(source, date_cond)
+        return _source_games_sql(source, date_cond, result_null_cond)
     # all
     return " UNION ALL ".join(
-        _source_games_sql(s, date_cond) for s in ("vip", "free", "multipla", "alavancagem")
+        _source_games_sql(s, date_cond, result_null_cond) for s in ("vip", "free", "multipla", "alavancagem")
     )
 
 
@@ -1468,26 +1469,32 @@ def get_results_games(
     cur = conn.cursor()
     try:
         date_cond = ""
-        params: list = []
+        date_params: list = []
         if date_from:
-            date_cond += " AND match_date >= %s"; params.append(date_from)
+            date_cond += " AND match_date >= %s"; date_params.append(date_from)
         else:
-            date_cond += " AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')"; params.append(days)
+            date_cond += " AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')"; date_params.append(days)
         if date_to:
-            date_cond += " AND match_date <= %s"; params.append(date_to)
+            date_cond += " AND match_date <= %s"; date_params.append(date_to)
 
+        # "pending" filtra pelo IS NULL dentro de cada subquery (elas excluem
+        # pendentes por padrao); qualquer outro valor filtra por igualdade
+        # na query externa, em cima do resultado ja unido das 4 fontes.
+        result_null_cond = "IS NULL" if resultado == "pending" else "IS NOT NULL"
         result_cond = ""
-        if resultado and resultado != "all":
-            result_cond = " AND result = %s"; params.append(resultado)
+        result_params: list = []
+        if resultado and resultado not in ("all", "pending"):
+            result_cond = " AND result = %s"; result_params.append(resultado)
 
-        inner_sql = _build_combined_sql(source, date_cond)
-        combined_params = params * (1 if source != "all" else 4)
+        inner_sql = _build_combined_sql(source, date_cond, result_null_cond)
+        n_legs = 1 if source != "all" else 4
+        combined_date_params = date_params * n_legs
 
         count_sql = f"SELECT COUNT(*) AS n FROM ({inner_sql}) AS c WHERE TRUE {result_cond}"
-        count_row = _safe_query_one(cur, count_sql, combined_params + (params if result_cond else []))
+        count_row = _safe_query_one(cur, count_sql, combined_date_params + result_params)
         total = count_row["n"] if count_row else 0
 
-        page_params = combined_params + (params if result_cond else []) + [limit, offset]
+        page_params = combined_date_params + result_params + [limit, offset]
         rows = _safe_query(cur, f"""
             SELECT * FROM ({inner_sql}) AS c
             WHERE TRUE {result_cond}

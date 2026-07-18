@@ -1558,6 +1558,7 @@ export default function Picks() {
   const [recentResults, setRecentResults] = useState<any[]>([])
   const [selectedOffset, setSelectedOffset] = useState(0)
   const [leagueFilter, setLeagueFilter] = useState<string>('')
+  const [vipResultFilter, setVipResultFilter] = useState<string>('')
 
   function getBrasiliaDate(offset: number): Date {
     const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
@@ -2079,11 +2080,15 @@ export default function Picks() {
               {!canSeeVip ? <VipLockOverlay color="yellow" /> : todayLoading ? <Spinner /> : (() => {
                 const vips = today?.vip ?? []
                 const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
-                const filteredVips = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips
+                const byLeague = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips
+                const filteredVips = vipResultFilter
+                  ? byLeague.filter((s: any) => vipResultFilter === 'pending' ? !s.result : s.result === vipResultFilter)
+                  : byLeague
+                const RESULT_FILTERS: [string, string][] = [['', 'Todos'], ['pending', 'Pendentes'], ['GREEN', 'Green'], ['RED', 'Red']]
                 return (
                   <>
                     {leagues.length > 1 && (
-                      <div className="flex gap-2 flex-wrap mb-4">
+                      <div className="flex gap-2 flex-wrap mb-3">
                         <button
                           onClick={() => setLeagueFilter('')}
                           className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${!leagueFilter ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
@@ -2101,6 +2106,19 @@ export default function Picks() {
                         ))}
                       </div>
                     )}
+                    {vips.length > 1 && (
+                      <div className="flex gap-2 flex-wrap mb-4">
+                        {RESULT_FILTERS.map(([k, l]) => (
+                          <button
+                            key={k}
+                            onClick={() => setVipResultFilter(k === vipResultFilter ? '' : k)}
+                            className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${vipResultFilter === k ? 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                          >
+                            {l}
+                          </button>
+                        ))}
+                      </div>
+                    )}
                     {filteredVips.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
                         {filteredVips.map((s: any) => (
@@ -2109,8 +2127,8 @@ export default function Picks() {
                       </div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">{leagueFilter ? `Nenhum pick de ${leagueFilter} hoje.` : 'Picks VIP do dia ainda não gerados.'}</p>
-                        <p className="text-zinc-600 text-xs mt-1">{leagueFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
+                        <p className="text-zinc-500 text-sm font-semibold">{leagueFilter || vipResultFilter ? 'Nenhum pick encontrado com esse filtro.' : 'Picks VIP do dia ainda não gerados.'}</p>
+                        <p className="text-zinc-600 text-xs mt-1">{leagueFilter || vipResultFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
                       </div>
                     )}
                   </>
