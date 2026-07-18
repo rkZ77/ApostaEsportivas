@@ -82,7 +82,7 @@ async def security_headers(request: Request, call_next):
 
 
 _rate_store: dict[str, list[float]] = defaultdict(list)
-RATE_LIMIT = 120
+RATE_LIMIT = 300
 RATE_WINDOW = 60
 
 _login_failures: dict[str, list[float]] = defaultdict(list)
@@ -113,6 +113,17 @@ def _get_real_ip(request: Request) -> str:
 
 @app.middleware("http")
 async def rate_limiter(request: Request, call_next):
+    # So limita trafego de API -- rotas do SPA (/, /picks, /admin, ...) e
+    # assets estaticos (JS/CSS/imagens do build, servidos pelo mesmo app via
+    # /static e o catch-all serve_spa) passam direto. Achado com dado real de
+    # producao: um unico carregamento de pagina com cache frio dispara 15-30
+    # requests so de chunk JS/CSS -- contava tudo isso contra o mesmo budget
+    # das chamadas de API, entao uso legitimo com poucas abas abertas (ex:
+    # admin acompanhando o pipeline + picks ao vivo) estourava 429 sem
+    # nenhum abuso de verdade acontecendo.
+    if not request.url.path.startswith("/api/"):
+        return await call_next(request)
+
     ip = _get_real_ip(request)
     now = time.time()
 
