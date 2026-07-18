@@ -1570,6 +1570,8 @@ def get_results_monthly(
                 COUNT(*) FILTER (WHERE result = 'GREEN')             AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')               AS reds,
                 COUNT(*) FILTER (WHERE result = 'PUSH')              AS push,
+                COUNT(*) FILTER (WHERE result = 'HALF-WIN')          AS half_wins,
+                COUNT(*) FILTER (WHERE result = 'HALF-LOSS')         AS half_losses,
                 COALESCE(SUM(profit), 0)                             AS profit,
                 COALESCE(SUM(stake),  0)                             AS stake
             FROM ({inner_sql}) AS c
