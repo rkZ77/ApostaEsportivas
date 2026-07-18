@@ -396,6 +396,38 @@ def public_pick(pick_type: str, pick_id: int):
         conn.close()
 
 
+@router.get("/today-summary")
+def public_today_summary():
+    """Contagem de picks publicados hoje (qualquer status, inclusive ainda
+    sem resultado -- jogo pode estar rolando) -- sem isso a home so mostrava
+    estatisticas agregadas historicas, sem nenhum sinal de atividade do dia
+    atual (achado real: usuario relatou 'nao aparece nada do dia' na home)."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        row = _q1(cur, """
+            SELECT
+                COUNT(*) FILTER (WHERE t.source = 'vip')         AS vip,
+                COUNT(*) FILTER (WHERE t.source = 'free')        AS free,
+                COUNT(*) FILTER (WHERE t.source = 'multiplas')   AS multiplas,
+                COUNT(*) FILTER (WHERE t.source = 'alavancagem') AS alavancagem,
+                COUNT(*)                                         AS total
+            FROM (
+                SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = CURRENT_DATE
+                UNION ALL
+                SELECT 'free'        AS source FROM picks_free        WHERE match_date = CURRENT_DATE
+                UNION ALL
+                SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = CURRENT_DATE
+                UNION ALL
+                SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = CURRENT_DATE
+            ) t
+        """)
+        return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0, "alavancagem": 0, "total": 0}
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/fixtures-today")
 def public_fixtures_today():
     """Jogos de hoje das ligas cobertas, sem autenticacao -- so calendario

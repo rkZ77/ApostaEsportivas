@@ -50,6 +50,28 @@ interface PublicData {
 // Helpers
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
+// Indicador "hoje" · sem isso a home so mostrava estatistica agregada
+// historica, sem nenhum sinal de que a IA rodou HOJE especificamente
+// (jogos de hoje costumam ainda estar sem resultado, entao o card de
+// "resultados" mais abaixo na pagina nao pega essa atividade do dia).
+function TodayBadge() {
+  const [today, setToday] = useState<{ total: number } | null>(null)
+  useEffect(() => {
+    api.get('/public/today-summary')
+      .then(r => setToday(r.data ?? null))
+      .catch(() => {})
+  }, [])
+
+  if (!today || today.total === 0) return null
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-4">
+      <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
+      <span className="text-green-400 font-bold">{today.total}</span> pick{today.total > 1 ? 's' : ''} publicado{today.total > 1 ? 's' : ''} hoje pela IA
+    </div>
+  )
+}
+
 // Social proof stats · bloco de 4 métricas em tempo real
 function SocialProofStats() {
   const [summary, setSummary] = useState<{ total: number; greens: number; profit: number } | null>(null)
@@ -77,24 +99,27 @@ function SocialProofStats() {
   }
 
   return (
-    <div className="mt-6 grid grid-cols-2 sm:grid-cols-4 gap-2">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-        <p className="text-xl font-black text-green-500">{winRate}%</p>
-        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Win Rate</p>
+    <>
+      <TodayBadge />
+      <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-black text-green-500">{winRate}%</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Win Rate</p>
+        </div>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+          <p className="text-xl font-black text-white">{summary.total}</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Picks</p>
+        </div>
+        <div className="bg-zinc-900 border border-green-500/20 rounded-xl p-3 text-center">
+          <p className="text-xl font-black text-green-400">{summary.greens}</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">GREEN</p>
+        </div>
+        <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-3 text-center">
+          <p className="text-xl font-black text-red-400">{reds}</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">RED</p>
+        </div>
       </div>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-        <p className="text-xl font-black text-white">{summary.total}</p>
-        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Picks</p>
-      </div>
-      <div className="bg-zinc-900 border border-green-500/20 rounded-xl p-3 text-center">
-        <p className="text-xl font-black text-green-400">{summary.greens}</p>
-        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">GREEN</p>
-      </div>
-      <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-3 text-center">
-        <p className="text-xl font-black text-red-400">{reds}</p>
-        <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">RED</p>
-      </div>
-    </div>
+    </>
   )
 }
 
