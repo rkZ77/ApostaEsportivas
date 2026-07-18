@@ -6,7 +6,7 @@ import DailyGreensChart from '../components/DailyGreensChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
-import { TeamLogo } from '../components/TeamLogo'
+import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 
@@ -17,7 +17,7 @@ const RESULTADO_OPTIONS = [
 ]
 
 type Period  = '7d' | '30d' | '90d' | 'all' | 'custom'
-type View    = 'resumo' | 'por_jogo' | 'por_mes'
+type View    = 'resumo' | 'por_jogo' | 'por_mes' | 'por_liga'
 type Source  = 'all' | 'vip' | 'free' | 'multipla' | 'alavancagem'
 
 const SOURCES: { key: Source; label: string; cls: string }[] = [
@@ -161,7 +161,7 @@ export default function Results() {
 
         {/* View tabs */}
         <div className="flex border-b border-zinc-800 mb-5 overflow-x-auto">
-          {([['resumo','Resumo'],['por_jogo','Por Jogo'],['por_mes','Por Mês']] as [View,string][]).map(([k,l]) => (
+          {([['resumo','Resumo'],['por_jogo','Por Jogo'],['por_mes','Por Mês'],['por_liga','Por Liga']] as [View,string][]).map(([k,l]) => (
             <button key={k} onClick={() => setView(k)}
               className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
                 view === k ? 'border-green-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
@@ -491,6 +491,58 @@ export default function Results() {
                         </tr>
                       )
                     })()}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )
+        )}
+
+        {view === 'por_liga' && (
+          !stats?.by_league?.length ? (
+            <div className="card p-10 text-center border-dashed">
+              <p className="text-zinc-600 text-sm">Nenhum resultado encontrado para os filtros selecionados.</p>
+            </div>
+          ) : (
+            <div className="card overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm min-w-[460px]">
+                  <thead>
+                    <tr className="border-b border-zinc-800">
+                      {['Liga','Picks','Win %','Lucro'].map(h => (
+                        <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {stats.by_league.map((lg: any) => {
+                      const wr = calcWinRate(lg.greens, lg.total) ?? 0
+                      const p  = Number(lg.profit)
+                      return (
+                        <tr key={lg.league_id ?? lg.league_name} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+                          <td className="px-3 sm:px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              {lg.league_id != null
+                                ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
+                                : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
+                              <span className="text-white font-semibold truncate">{lg.league_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-3 sm:px-5 py-3 text-zinc-300">{lg.total}</td>
+                          <td className="px-3 sm:px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="bg-zinc-800 rounded-full h-1.5 w-16">
+                                <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
+                              </div>
+                              <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>{wr}%</span>
+                            </div>
+                          </td>
+                          <td className={`px-3 sm:px-5 py-3 font-black ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {p >= 0 ? '+' : ''}{p.toFixed(1)}u
+                          </td>
+                        </tr>
+                      )
+                    })}
                   </tbody>
                 </table>
               </div>

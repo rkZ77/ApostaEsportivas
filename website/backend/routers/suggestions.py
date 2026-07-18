@@ -1387,13 +1387,24 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
     """Retorna subquery normalizada para cada fonte de picks.
     result_null_cond: "IS NOT NULL" (default, exclui pendentes) ou "IS NULL" (so pendentes)."""
     if source == "free":
+        # league via subquery correlacionada (nao JOIN) -- match_statistics
+        # tambem tem colunas match_date/result, e {date_cond} (texto
+        # compartilhado com varios outros endpoints deste arquivo) referencia
+        # match_date sem qualificar a tabela; um JOIN direto tornaria essas
+        # colunas ambiguas pro Postgres.
         return f"""
             SELECT pf.id, 'free' AS pick_type, pf.match_date,
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
                    pf.market, pf.line, pf.odd, pf.bet_house,
-                   pf.result, pf.profit, 1::numeric AS stake
+                   pf.result, pf.profit, 1::numeric AS stake,
+                   COALESCE(pf.league_id, (SELECT ms.league_id FROM match_statistics ms WHERE ms.fixture_id = pf.fixture_id)) AS league_id,
+                   COALESCE(
+                       pf.league_name,
+                       (SELECT l.name FROM match_statistics ms LEFT JOIN leagues l ON l.league_id = ms.league_id WHERE ms.fixture_id = pf.fixture_id),
+                       'Liga ' || COALESCE(pf.league_id, (SELECT ms.league_id FROM match_statistics ms WHERE ms.fixture_id = pf.fixture_id))
+                   ) AS league_name
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.result {result_null_cond} {date_cond}
@@ -1412,7 +1423,8 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
                        WHEN 'PUSH'  THEN 0.0
                        ELSE NULL
                    END AS profit,
-                   1::numeric AS stake
+                   1::numeric AS stake,
+                   NULL::INTEGER AS league_id, 'Múltiplas' AS league_name
             FROM picks_multiplas
             WHERE result {result_null_cond} {date_cond}
         """
@@ -1428,17 +1440,23 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
                    ) AS away_team_id,
                    pa.market_1 AS market, pa.line_1 AS line,
                    pa.odd_combined AS odd, pa.bet_house_1 AS bet_house,
-                   pa.result, pa.profit, 1::numeric AS stake
+                   pa.result, pa.profit, 1::numeric AS stake,
+                   NULL::INTEGER AS league_id, 'Alavancagem' AS league_name
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result {result_null_cond} {date_cond}
         """
-    # vip (default)
+    # vip (default) -- league via subquery correlacionada, mesmo motivo do free acima
     return f"""
         SELECT id, 'vip' AS pick_type, match_date,
                home_team_name, away_team_name, home_team_id, away_team_id,
                market, line, odd, bet_house,
-               result, profit, 1::numeric AS stake
+               result, profit, 1::numeric AS stake,
+               (SELECT ms.league_id FROM match_statistics ms WHERE ms.fixture_id = picks_vip.fixture_id) AS league_id,
+               COALESCE(
+                   (SELECT l.name FROM match_statistics ms LEFT JOIN leagues l ON l.league_id = ms.league_id WHERE ms.fixture_id = picks_vip.fixture_id),
+                   'Liga ' || (SELECT ms.league_id FROM match_statistics ms WHERE ms.fixture_id = picks_vip.fixture_id)
+               ) AS league_name
         FROM picks_vip
         WHERE result {result_null_cond} {date_cond}
     """
@@ -1933,6 +1951,28 @@ def get_results(
             ORDER BY match_date DESC
         """, combined_params)
         stats["by_day"] = [dict(r) for r in rows]
+
+        # Por liga · agrupa por league_id (nao league_name, que pode estar
+        # desatualizado pra um mesmo league_id) e usa pick_type como fallback
+        # quando league_id e NULL (Multipla/Alavancagem), senao as duas
+        # colapsariam juntas por serem ambas league_id NULL. Mesmo padrao
+        # ja usado em /public/results.
+        league_rows = _safe_query(cur, f"""
+            SELECT
+                COALESCE(league_id::text, pick_type) AS group_key,
+                MAX(league_id)   AS league_id,
+                MAX(league_name) AS league_name,
+                COUNT(*)                                  AS total,
+                COUNT(*) FILTER (WHERE result = 'GREEN')  AS greens,
+                COUNT(*) FILTER (WHERE result = 'RED')    AS reds,
+                COALESCE(SUM(profit), 0)                  AS profit,
+                COALESCE(SUM(stake),  0)                  AS stake_total
+            FROM ({inner_sql}) AS c
+            GROUP BY group_key
+            ORDER BY total DESC
+        """, combined_params)
+        stats["by_league"] = [{k: v for k, v in dict(r).items() if k != "group_key"} for r in league_rows]
+
         return stats
     finally:
         cur.close()
