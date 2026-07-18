@@ -7,6 +7,7 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useShareResultsImage, useShareTodayGamesImage } from '../hooks/useShareStoryImage'
+import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
@@ -129,36 +130,21 @@ export default function ResultadosPublicos() {
           </div>
 
           {/* Filtros */}
-          <div className="flex flex-wrap gap-2 mb-6 justify-center">
-            {SOURCES.map(src => (
-              <button
-                key={src}
-                onClick={() => setSource(src)}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${source === src ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
-              >
-                {SOURCE_LABELS[src]}
-              </button>
-            ))}
-          </div>
-          {months.length > 0 && (
-            <div className="flex flex-wrap gap-2 mb-8 justify-center">
-              <button
-                onClick={() => setMonth('')}
-                className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${!month ? 'bg-zinc-700/40 border-zinc-600 text-zinc-300' : 'border-zinc-800 text-zinc-600 hover:border-zinc-700'}`}
-              >
-                Todos os meses
-              </button>
-              {months.slice(0, 6).map(m => (
-                <button
-                  key={m}
-                  onClick={() => setMonth(m === month ? '' : m)}
-                  className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-colors ${month === m ? 'bg-zinc-700/40 border-zinc-600 text-zinc-300' : 'border-zinc-800 text-zinc-600 hover:border-zinc-700'}`}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-          )}
+          <FilterPanel
+            accent="green"
+            groups={[
+              {
+                key: 'source', label: 'Fonte',
+                options: SOURCES.map(src => ({ value: src, label: SOURCE_LABELS[src] })),
+                value: source, onChange: setSource,
+              },
+              ...(months.length > 0 ? [{
+                key: 'month', label: 'Mês',
+                options: [{ value: '', label: 'Todos os meses' }, ...months.slice(0, 6).map(m => ({ value: m, label: m }))],
+                value: month, onChange: setMonth,
+              } as FilterGroup] : []),
+            ]}
+          />
 
           {loading ? (
             <div className="flex justify-center py-20">
