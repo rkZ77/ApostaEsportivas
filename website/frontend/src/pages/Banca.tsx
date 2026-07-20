@@ -165,6 +165,69 @@ function SetupModal({ current, onSave, onClose }: {
   )
 }
 
+// modal de saque · desconta um valor da banca atual (bankroll_start = current - valor)
+function WithdrawModal({ current, unitValue, goal, onSave, onClose }: {
+  current: number
+  unitValue: number
+  goal: number | null
+  onSave: (newStart: number) => void
+  onClose: () => void
+}) {
+  const [amount,  setAmount]  = useState('')
+  const [err,     setErr]     = useState('')
+  const [loading, setLoading] = useState(false)
+
+  const amountNum = parseFloat(amount.replace(',', '.')) || 0
+  const newBanca  = current - amountNum
+
+  const handleSave = async () => {
+    setErr('')
+    if (!amountNum || amountNum <= 0) { setErr('Informe um valor maior que zero.'); return }
+    if (amountNum > current) { setErr('Você não pode sacar mais do que tem na banca.'); return }
+    setLoading(true)
+    try {
+      await api.post('/banca/setup', { bankroll_start: newBanca, bankroll_goal: goal, unit_value: unitValue })
+      onSave(newBanca)
+    } catch (e: any) {
+      setErr(e.response?.data?.detail ?? 'Erro ao salvar.')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}>
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
+        <h2 className="text-white font-black text-lg mb-1">Sacar da banca</h2>
+        <p className="text-zinc-500 text-xs mb-5">Banca atual: <span className="text-white font-bold">{fmtBRL(current)}</span></p>
+
+        <div>
+          <label className="text-xs text-zinc-500 block mb-1.5">Quanto você quer sacar? (R$)</label>
+          <input type="number" min="0.01" step="0.01" value={amount}
+            onChange={e => setAmount(e.target.value)} className="input w-full" placeholder="Ex: 500" autoFocus />
+        </div>
+
+        {amountNum > 0 && (
+          <div className="mt-3 bg-zinc-800/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
+            <span className="text-zinc-400">Banca depois do saque</span>
+            <span className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-white'}`}>{fmtBRL(newBanca)}</span>
+          </div>
+        )}
+
+        {err && <p className="text-red-400 text-xs mt-3">{err}</p>}
+
+        <div className="flex gap-3 mt-5">
+          <button onClick={handleSave} disabled={loading || !amountNum || amountNum > current}
+            className="btn-primary flex-1 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed">
+            {loading ? 'Salvando...' : 'Confirmar saque'}
+          </button>
+          <button onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 function monthRange(offset: number) {
   // offset 0 = este mes, -1 = mes passado
   const now = new Date()
@@ -196,6 +259,7 @@ export default function Banca() {
   const [loading, setLoading] = useState(true)
   const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
+  const [showWithdraw, setShowWithdraw]     = useState(false)
   const [confirmReset, setConfirmReset]     = useState(false)
   const [showMonthlyClose, setShowMonthlyClose] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
@@ -267,6 +331,20 @@ export default function Banca() {
         />
       )}
 
+      {showWithdraw && (
+        <WithdrawModal
+          current={data?.bankroll_current ?? data?.bankroll_start ?? 0}
+          unitValue={data?.unit_value ?? 1}
+          goal={data?.bankroll_goal ?? null}
+          onSave={(newStart) => {
+            setShowWithdraw(false)
+            setData((d: any) => d ? { ...d, bankroll_start: newStart, bankroll_current: newStart } : d)
+            load(period)
+          }}
+          onClose={() => setShowWithdraw(false)}
+        />
+      )}
+
       {detailPick && (
         <SuggestionDetail
           id={detailPick.id}
@@ -291,15 +369,18 @@ export default function Banca() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2 hidden sm:inline-flex">
               Meus Picks
             </Link>
-            <button onClick={() => setConfirmReset(true)} className="btn-ghost text-xs px-3 py-2">
-              Fechamento mensal
+            <button onClick={() => setShowWithdraw(true)} className="btn-ghost text-xs px-3 py-2">
+              Sacar
             </button>
             <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
               Configurar
+            </button>
+            <button onClick={() => setConfirmReset(true)} className="btn-ghost text-xs px-3 py-2">
+              Fechamento mensal
             </button>
           </div>
         </div>
