@@ -44,6 +44,11 @@ self.addEventListener('fetch', e => {
   const url = new URL(e.request.url)
   if (e.request.method !== 'GET') return
   if (url.pathname.startsWith('/api/')) return
+  // So intercepta recursos do proprio site -- re-emitir fetch() de origem
+  // cruzada (fonts.googleapis.com, googletagmanager.com, challenges.cloudflare.com)
+  // de dentro do service worker cai sob connect-src do CSP (nao script-src/style-src),
+  // bloqueando scripts/fontes de terceiros que carregariam normal sem o SW no meio.
+  if (url.origin !== self.location.origin) return
 
   e.respondWith(
     caches.match(e.request).then(cached => {
