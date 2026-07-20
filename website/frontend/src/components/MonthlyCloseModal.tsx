@@ -78,13 +78,9 @@ type Step = 'summary' | 'edit' | 'success'
 
 interface Props {
   onClose: () => void
-  /** 'YYYY-MM' · quando ausente, o backend usa o mês calendário anterior
-   * (fluxo automático). Passar o mês atual permite um "fechar agora" manual,
-   * pra reiniciar a banca no meio do mês em vez de esperar o próximo. */
-  month?: string
 }
 
-export default function MonthlyCloseModal({ onClose, month }: Props) {
+export default function MonthlyCloseModal({ onClose }: Props) {
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
 
   const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
@@ -98,7 +94,7 @@ export default function MonthlyCloseModal({ onClose, month }: Props) {
 
   useEffect(() => {
     if (isPreview) return
-    api.get('/banca/monthly-close', { params: month ? { month } : {} })
+    api.get('/banca/monthly-close')
       .then(r => {
         // Já fechado em outro dispositivo/sessão neste mês · não reabre o popup
         // nem arrisca sobrescrever o registro histórico com uma nova confirmação.

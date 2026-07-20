@@ -6,7 +6,6 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
-import MonthlyCloseModal from '../components/MonthlyCloseModal'
 import { fmtBRL, fmtSigned } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
@@ -259,8 +258,6 @@ export default function Banca() {
   const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
   const [showWithdraw, setShowWithdraw]     = useState(false)
-  const [confirmReset, setConfirmReset]     = useState(false)
-  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
   const [withdrawals, setWithdrawals] = useState<any[]>([])
 
@@ -384,55 +381,9 @@ export default function Banca() {
             <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
               Configurar
             </button>
-            <button onClick={() => setConfirmReset(true)} className="btn-ghost text-xs px-3 py-2">
-              Fechamento mensal
-            </button>
           </div>
         </div>
       </div>
-
-      {confirmReset && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
-          onClick={() => setConfirmReset(false)}>
-          <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
-            onClick={e => e.stopPropagation()}>
-            <div className="w-11 h-11 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mb-4">
-              <Info className="w-5 h-5 text-yellow-400" />
-            </div>
-            <h3 className="text-white font-black text-lg mb-2">Fazer o fechamento mensal agora?</h3>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-4">
-              Isso mostra um resumo do período atual (lucro, greens/reds, opção de compartilhar) e
-              depois deixa você definir um novo valor inicial pra recomeçar a contagem. Nada do seu
-              histórico de picks ou resultados é apagado, só o ponto de partida da banca muda a partir de agora.
-            </p>
-            <p className="text-zinc-500 text-xs mb-5">
-              Normalmente isso acontece sozinho no começo de cada mês. Se você só quer trocar o valor da
-              banca agora (ex: sacou o dinheiro), sem ver resumo nenhum, cancela aqui e usa o botão "Configurar".
-            </p>
-            <div className="flex flex-col gap-2">
-              <button
-                onClick={() => { setConfirmReset(false); setShowMonthlyClose(true) }}
-                className="btn-primary w-full py-3 text-sm"
-              >
-                Continuar
-              </button>
-              <button
-                onClick={() => setConfirmReset(false)}
-                className="btn-ghost w-full py-2.5 text-sm"
-              >
-                Cancelar
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showMonthlyClose && (
-        <MonthlyCloseModal
-          month={`${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}`}
-          onClose={() => { setShowMonthlyClose(false); load(period) }}
-        />
-      )}
 
       <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
