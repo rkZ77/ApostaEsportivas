@@ -59,7 +59,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
           return (
             <g key={pct}>
               <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#1f1f23" strokeWidth="0.8" />
-              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="monospace">{v}</text>
+              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="'Inter', sans-serif">{v}</text>
             </g>
           )
         })}
@@ -109,7 +109,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
             y={H - 6}
             fill="#52525b" fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
-            fontFamily="monospace"
+            fontFamily="'Inter', sans-serif"
           >
             {fmtDate(sorted[idx].match_date)}
           </text>
