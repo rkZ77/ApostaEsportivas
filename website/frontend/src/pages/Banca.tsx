@@ -317,7 +317,7 @@ export default function Banca() {
             <p className="text-zinc-400 text-sm leading-relaxed mb-4">
               Isso fecha o período atual (com o resultado de tudo que você seguiu até agora) e deixa
               você definir um novo valor inicial pra recomeçar a contagem. Nada do seu histórico de
-              picks ou resultados é apagado — só o ponto de partida da banca muda a partir de agora.
+              picks ou resultados é apagado, só o ponto de partida da banca muda a partir de agora.
             </p>
             <p className="text-zinc-500 text-xs mb-5">
               Normalmente isso acontece sozinho no começo de cada mês. Você só precisa fazer isso manualmente
