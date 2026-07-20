@@ -316,7 +316,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                       {isAlav ? (
                         <>
                           <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Tipo</div>
-                          <div className="text-2xl font-black text-white capitalize">{s?.tipo ?? '—'}</div>
+                          <div className="text-2xl font-black text-white capitalize">{s?.tipo ?? 'N/D'}</div>
                         </>
                       ) : (
                         <>
