@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { CalendarClock } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
@@ -28,6 +29,19 @@ async function findNextGames(): Promise<Fixture[]> {
     } catch { /* tenta o próximo dia */ }
   }
   return []
+}
+
+function groupByDate(games: Fixture[]): { dateLabel: string; games: Fixture[] }[] {
+  const groups = new Map<string, Fixture[]>()
+  for (const g of games) {
+    const key = g.match_datetime.slice(0, 10)
+    if (!groups.has(key)) groups.set(key, [])
+    groups.get(key)!.push(g)
+  }
+  return Array.from(groups.entries()).map(([key, games]) => ({
+    dateLabel: new Date(`${key}T12:00:00`).toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit' }),
+    games,
+  }))
 }
 
 export default function CountdownTo7AM() {
@@ -82,29 +96,41 @@ export default function CountdownTo7AM() {
   // Se a checagem falhou, não sabemos se há jogo ou não -- assume que sim
   // (comportamento normal) em vez de esconder o card sem motivo aparente.
   if (todayCount === 0 && !todayCheckFailed) {
+    const groups = nextGames ? groupByDate(nextGames.slice(0, 8)) : []
     return (
       <div className="card p-6 text-center border-zinc-800">
-        <p className="text-sm text-zinc-300 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
-        {leagueNames && <p className="text-zinc-600 text-xs mb-4">{leagueNames}</p>}
+        <div className="w-11 h-11 rounded-full bg-zinc-800/80 flex items-center justify-center mx-auto mb-3">
+          <CalendarClock className="w-5 h-5 text-zinc-400" />
+        </div>
+        <p className="text-sm text-zinc-200 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
+        {leagueNames && <p className="text-zinc-600 text-xs mb-5">{leagueNames}</p>}
         {nextGames === null ? (
           <div className="h-8" />
-        ) : nextGames.length === 0 ? (
+        ) : groups.length === 0 ? (
           <p className="text-zinc-600 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
-          <div className="text-left">
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2">Próximos jogos</p>
-            <div className="space-y-1.5">
-              {nextGames.slice(0, 4).map(g => (
-                <div key={g.fixture_id} className="flex items-center gap-2 bg-zinc-900/60 border border-zinc-800 rounded-lg px-3 py-2">
-                  <span className="text-[10px] text-zinc-500 shrink-0 w-12">
-                    {new Date(g.match_datetime).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                  </span>
-                  <TeamLogo id={g.home_team_id} name={g.home_team} size={16} />
-                  <span className="text-xs text-zinc-300 truncate flex-1">{g.home_team} x {g.away_team}</span>
-                  <LeagueLogo id={g.league_id} name={g.league_name} />
+          <div className="text-left space-y-4">
+            <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">Próximos jogos</p>
+            {groups.map(group => (
+              <div key={group.dateLabel}>
+                <p className="text-[11px] text-zinc-500 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
+                <div className="space-y-1.5">
+                  {group.games.map(g => (
+                    <div key={g.fixture_id}
+                      className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-xl px-3 py-2.5 hover:border-zinc-700 transition-colors">
+                      <span className="text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                        {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                      </span>
+                      <TeamLogo id={g.home_team_id} name={g.home_team} size={20} />
+                      <span className="text-xs text-zinc-200 font-medium truncate flex-1">
+                        {g.home_team} <span className="text-zinc-600">x</span> {g.away_team}
+                      </span>
+                      <LeagueLogo id={g.league_id} name={g.league_name} />
+                    </div>
+                  ))}
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </div>
         )}
       </div>

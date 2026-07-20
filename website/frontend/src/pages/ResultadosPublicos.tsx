@@ -11,6 +11,7 @@ import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import SuggestionDetail from '../components/SuggestionDetail'
+import DailyGreensChart from '../components/DailyGreensChart'
 
 const RESULTADO_OPTIONS = [
   { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
@@ -47,27 +48,6 @@ interface PublicData {
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem']
 const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem' }
-
-function BarChart({ days }: { days: DayResult[] }) {
-  if (!days.length) return null
-  const maxTotal = Math.max(...days.map(d => d.total), 1)
-  return (
-    <div className="flex items-end gap-0.5 h-16 w-full overflow-hidden">
-      {days.map((d, i) => {
-        const heightPct = (d.total / maxTotal) * 100
-        const isGreen = d.greens >= d.reds
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center justify-end group relative" title={`${d.match_date}: ${d.greens}G / ${d.reds}R`}>
-            <div
-              className={`w-full rounded-sm transition-opacity group-hover:opacity-80 ${isGreen ? 'bg-green-500/60' : 'bg-red-500/50'}`}
-              style={{ height: `${heightPct}%`, minHeight: 2 }}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)
@@ -362,11 +342,7 @@ export default function ResultadosPublicos() {
               {byDay.length > 1 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-8">
                   <p className="text-sm text-zinc-500 font-bold mb-4">Picks por dia</p>
-                  <BarChart days={byDay} />
-                  <div className="flex items-center gap-4 mt-3">
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500/60" /><span className="text-[10px] text-zinc-600">Mais greens</span></div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/50" /><span className="text-[10px] text-zinc-600">Mais reds</span></div>
-                  </div>
+                  <DailyGreensChart data={byDay} />
                 </div>
               )}
 
