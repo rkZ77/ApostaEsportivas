@@ -12,7 +12,7 @@ import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
 
 const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
+  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.', bingo: 'Bingo',
 }
 
 const pnlColor = (v: number | null) =>
@@ -367,6 +367,8 @@ export default function MeusPicks() {
                                     ? 'Múltipla'
                                     : e.pick_type === 'alavancagem'
                                     ? 'Alavancagem'
+                                    : e.pick_type === 'bingo'
+                                    ? 'Bingo'
                                     : e.market ?? `Pick #${e.pick_id}`}
                                 </span>
                                 {e.away_team_name && (

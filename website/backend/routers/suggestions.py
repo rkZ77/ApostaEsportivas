@@ -136,7 +136,7 @@ def _compute_suggested_stake_units(
     if not bankroll or not unit_value or unit_value <= 0:
         return 1
 
-    KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25}
+    KELLY_FR  = {'vip': 0.50, 'free': 0.50, 'multipla': 0.25, 'bingo': 0.25}
     kelly_frac = KELLY_FR.get(pick_type, 0.5)
 
     conf  = float(confidence or 0)
@@ -158,12 +158,12 @@ def _compute_suggested_stake_units(
             max_pct, max_units = 0.03, 5
         final_pct = min(float(stake_pct), max_pct)
     else:
-        # Free / Múltipla / VIP sem stake_pct: Kelly direto
-        MAX_PCT = {'free': 0.02, 'multipla': 0.025}
+        # Free / Múltipla / Bingo / VIP sem stake_pct: Kelly direto
+        MAX_PCT = {'free': 0.02, 'multipla': 0.025, 'bingo': 0.025}
         max_pct = MAX_PCT.get(pick_type, 0.03)
 
         # EV negativo sem base sólida → stake mínimo (1u)
-        if ev_f <= 0 and pick_type != 'multipla':
+        if ev_f <= 0 and pick_type not in ('multipla', 'bingo'):
             return 1
 
         if odd_f <= 1 or conf <= 0 or conf >= 1:
@@ -220,6 +220,44 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
             enriched.append(leg)
         m["legs"] = enriched
         result.append(m)
+    return result
+
+
+def _enrich_bingo_games(cur, rows: list) -> list:
+    """Enriquece o JSONB `games` do bingo com dados de fixtures -- mesma ideia
+    de _enrich_multipla_legs(), mas com um nivel de aninhamento a mais: cada
+    jogo (games[i]) carrega seu proprio sub-combo de pernas (games[i]['legs']),
+    o jogo em si e' que tem fixture_id/home_team/away_team."""
+    import json as _json
+    result = []
+    for row in rows:
+        b = dict(row)
+        games = b.get("games") or []
+        if isinstance(games, str):
+            try:
+                games = _json.loads(games)
+            except Exception:
+                games = []
+        enriched_games = []
+        for game in (games if isinstance(games, list) else []):
+            game = dict(game) if isinstance(game, dict) else game
+            fid = game.get("fixture_id") if isinstance(game, dict) else None
+            if fid:
+                fx = _safe_query_one(cur, """
+                    SELECT home_team, away_team, home_team_id, away_team_id, league_id
+                    FROM fixtures WHERE fixture_id = %s
+                """, (fid,))
+                if fx:
+                    game.update({
+                        "home_team":    fx["home_team"],
+                        "away_team":    fx["away_team"],
+                        "home_team_id": fx["home_team_id"],
+                        "away_team_id": fx["away_team_id"],
+                        "league_id":    fx["league_id"],
+                    })
+            enriched_games.append(game)
+        b["games"] = enriched_games
+        result.append(b)
     return result
 
 
@@ -325,6 +363,20 @@ def get_today_suggestions(
                 LIMIT 1
             """, _d)
             result["alavancagem"] = dict(alav) if alav else None
+
+            # Bingo (mesma coluna match_date de picks_multiplas · reusa _m_where)
+            rows_b = _safe_query(cur, f"""
+                SELECT id, match_date, tipo,
+                       games,
+                       odd_final, confidence_media,
+                       reasoning, result, profit, created_at
+                FROM picks_bingo
+                WHERE {_m_where}
+                ORDER BY match_date DESC, created_at DESC
+                LIMIT 1
+            """, _d)
+            enriched_bingo = _enrich_bingo_games(cur, rows_b)
+            result["bingo"] = enriched_bingo[0] if enriched_bingo else None
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
@@ -389,6 +441,20 @@ def get_today_suggestions(
                 alav["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 alav["pick_type"] = "alavancagem"
 
+        if user_id and result.get("bingo"):
+            bingo = result["bingo"]
+            bingo_id = bingo.get("id")
+            if bingo_id:
+                fr = _safe_query_one(cur, """
+                    SELECT stake_units, actual_odd, bet_house FROM user_followed_picks
+                    WHERE user_id = %s AND pick_type = 'bingo' AND pick_id = %s
+                """, (user_id, bingo_id))
+                bingo["is_followed"]      = fr is not None
+                bingo["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                bingo["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                bingo["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
+                bingo["pick_type"] = "bingo"
+
         # ── Calcula suggested_stake_units com banca real do usuário ─────────
         # Centraliza a lógica no backend; frontend apenas exibe o valor.
         if user_id:
@@ -416,6 +482,13 @@ def get_today_suggestions(
                             'multipla', None, m.get("confidence"), m.get("total_odd"),
                             None, bankroll, unit_value,
                         )
+
+                bingo = result.get("bingo")
+                if bingo and not bingo.get("is_followed"):
+                    bingo["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'bingo', None, bingo.get("confidence_media"), bingo.get("odd_final"),
+                        None, bankroll, unit_value,
+                    )
 
         return result
     finally:
@@ -651,6 +724,57 @@ def get_suggestion_detail(
                     bl, uv = banca_d
                     suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
                         'multipla', None, d.get("confidence"), d.get("total_odd"), None, bl, uv,
+                    )
+            return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
+                    "home_recent": [], "away_recent": [], "odds": []}
+
+        # ── BINGO ─────────────────────────────────────────────────────────────
+        if pick_type == "bingo":
+            cur.execute("""
+                SELECT id, match_date, tipo, games,
+                       odd_final, confidence_media,
+                       reasoning, result, profit, created_at
+                FROM picks_bingo WHERE id = %s
+            """, (suggestion_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(404, "Bingo não encontrado")
+            d = dict(row)
+            if not is_vip:
+                raise HTTPException(403, "Acesso VIP necessário para ver a análise completa")
+
+            enriched = _enrich_bingo_games(cur, [d])
+            games = enriched[0]["games"] if enriched else []
+
+            n = len(games)
+            suggestion = {
+                "id": d["id"],
+                "match_date": d["match_date"],
+                "home_team_name": f"Bingo · {n} jogos",
+                "away_team_name": "",
+                "market": f"{n} jogos combinados",
+                "line": None,
+                "odd": d["odd_final"],
+                "confidence": d["confidence_media"],
+                "reasoning": d["reasoning"],
+                "result": d["result"],
+                "profit": d["profit"],
+                "games": games,
+                "pick_type": "bingo",
+                "tipo": d.get("tipo"),
+            }
+            ufp_b = _safe_query_one(cur, """
+                SELECT stake_units, actual_odd FROM user_followed_picks
+                WHERE user_id = %s AND pick_id = %s AND pick_type = 'bingo'
+            """, (current_user["id"], suggestion_id))
+            suggestion["user_stake_units"] = float(ufp_b["stake_units"]) if ufp_b else None
+            suggestion["user_actual_odd"]  = float(ufp_b["actual_odd"]) if ufp_b and ufp_b["actual_odd"] else None
+            if not suggestion["user_stake_units"]:
+                banca_d = _get_user_banca(cur, current_user["id"])
+                if banca_d:
+                    bl, uv = banca_d
+                    suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'bingo', None, d.get("confidence_media"), d.get("odd_final"), None, bl, uv,
                     )
             return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
                     "home_recent": [], "away_recent": [], "odds": []}
@@ -1027,7 +1151,7 @@ def get_recent_results(
     limit: int = Query(15, ge=1, le=50),
     current_user: dict = Depends(get_current_user),
 ):
-    """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem.
+    """Resultados recentes de todas as fontes: VIP, Free, Múltiplas, Alavancagem, Bingo.
     Não expõe reasoning (nenhuma das queries abaixo seleciona essa coluna) · só
     market/odd/result/profit, o mesmo nível de dado que /api/public/results já
     mostra sem login."""
@@ -1159,6 +1283,47 @@ def get_recent_results(
             d["pick_type"] = "alavancagem"
             results.append(d)
 
+        # ── BINGO (resultados visíveis para todos) ───────────────────────────
+        rows = _safe_query(cur, """
+            SELECT pb.id, pb.match_date,
+                   pb.odd_final AS odd,
+                   pb.confidence_media AS confidence,
+                   pb.result, pb.profit,
+                   pb.games,
+                   COALESCE(ufp.stake_units, 1) AS stake
+            FROM picks_bingo pb
+            LEFT JOIN user_followed_picks ufp
+                ON ufp.pick_id = pb.id AND ufp.pick_type = 'bingo' AND ufp.user_id = %s
+            WHERE pb.result IS NOT NULL
+            ORDER BY pb.match_date DESC, pb.id DESC
+            LIMIT %s
+        """, (current_user["id"], limit,))
+        for r in rows:
+            d = dict(r)
+            try:
+                games = _json.loads(d["games"]) if isinstance(d["games"], str) else (d["games"] or [])
+            except Exception:
+                games = []
+            n = len(games)
+            first = games[0] if games else {}
+            d["home_team_name"] = first.get("home_team") or f"Bingo · {n} jogos"
+            d["away_team_name"] = first.get("away_team") or ""
+            d["home_team_id"]   = first.get("home_team_id")
+            d["away_team_id"]   = first.get("away_team_id")
+            d["market"]         = f"Bingo · {n} jogos"
+            d["line"]           = None
+            d["bet_house"]      = None
+            d["games_count"]    = n
+            result_val = d.get("result")
+            odd_val = float(d.get("odd") or 1)
+            if result_val == "GREEN":
+                d["profit"] = round(odd_val - 1, 4)
+            elif result_val == "RED":
+                d["profit"] = -1.0
+            del d["games"]
+            d["pick_type"] = "bingo"
+            results.append(d)
+
         # Ordena tudo por data desc, pega limit
         results.sort(key=lambda x: str(x.get("match_date") or ""), reverse=True)
         return results[:limit]
@@ -1279,13 +1444,65 @@ def get_multiplas(
         conn.close()
 
 
+@router.get("/bingo")
+def get_bingo(
+    current_user: dict = Depends(require_vip),
+    date_from:  Optional[str] = Query(None),
+    date_to:    Optional[str] = Query(None),
+    resultado:  Optional[str] = Query(None),
+    order_by:   str = Query("match_date"),
+    limit:      int = Query(100, ge=1, le=500),
+):
+    """Lista de bingos com filtros. Mesmo padrão de /multiplas."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        conditions: list = []
+        params: list = []
+        if date_from:
+            conditions.append("match_date >= %s"); params.append(date_from)
+        else:
+            conditions.append("match_date >= CURRENT_DATE - INTERVAL '30 days'")
+        if date_to:
+            conditions.append("match_date <= %s"); params.append(date_to)
+        if resultado == "pending":
+            conditions.append("result IS NULL")
+        elif resultado and resultado != "all":
+            conditions.append("result = %s"); params.append(resultado)
+        where = "WHERE " + " AND ".join(conditions)
+        order_col = "odd_final" if order_by == "odd" else "confidence_media" if order_by == "confidence" else "match_date"
+        params.append(limit)
+        rows = _safe_query(cur, f"""
+            SELECT id, match_date, tipo, games,
+                   odd_final, confidence_media,
+                   reasoning, result, profit, created_at
+            FROM picks_bingo
+            {where}
+            ORDER BY {order_col} DESC, created_at DESC
+            LIMIT %s
+        """, params)
+        enriched = _enrich_bingo_games(cur, rows)
+        banca_d = _get_user_banca(cur, current_user["id"])
+        if banca_d:
+            bl, uv = banca_d
+            for b in enriched:
+                if not b.get("result"):
+                    b["suggested_stake_units"] = _compute_suggested_stake_units(
+                        'bingo', None, b.get("confidence_media"), b.get("odd_final"), None, bl, uv
+                    )
+        return enriched
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stats/quick")
 def get_quick_stats(current_user: dict = Depends(get_current_user)):
     """Win rate geral, lucro total, sequência atual."""
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Stats gerais · todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem)
+        # Stats gerais · todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem + Bingo)
         month_row = _safe_query_one(cur, """
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
@@ -1300,6 +1517,8 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 SELECT result, profit FROM picks_multiplas
                 UNION ALL
                 SELECT result, profit FROM picks_alavancagem
+                UNION ALL
+                SELECT result, profit FROM picks_bingo
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1423,6 +1642,24 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.result {result_null_cond} {date_cond}
         """
+    if source == "bingo":
+        return f"""
+            SELECT id, 'bingo' AS pick_type, match_date,
+                   CONCAT('Bingo · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
+                   NULL AS away_team_name, NULL AS home_team_id, NULL AS away_team_id,
+                   CONCAT('Bingo · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS market,
+                   NULL AS line, odd_final AS odd, NULL AS bet_house,
+                   result,
+                   CASE result
+                       WHEN 'GREEN' THEN ROUND((odd_final - 1)::numeric, 4)
+                       WHEN 'RED'   THEN -1.0
+                       ELSE NULL
+                   END AS profit,
+                   1::numeric AS stake,
+                   NULL::INTEGER AS league_id, 'Bingo' AS league_name
+            FROM picks_bingo
+            WHERE result {result_null_cond} {date_cond}
+        """
     # vip (default) -- league via subquery correlacionada, mesmo motivo do free acima
     return f"""
         SELECT id, 'vip' AS pick_type, match_date,
@@ -1440,11 +1677,11 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
 
 
 def _build_combined_sql(source: str, date_cond: str, result_null_cond: str = "IS NOT NULL") -> str:
-    if source in ("vip", "free", "multipla", "alavancagem"):
+    if source in ("vip", "free", "multipla", "alavancagem", "bingo"):
         return _source_games_sql(source, date_cond, result_null_cond)
     # all
     return " UNION ALL ".join(
-        _source_games_sql(s, date_cond, result_null_cond) for s in ("vip", "free", "multipla", "alavancagem")
+        _source_games_sql(s, date_cond, result_null_cond) for s in ("vip", "free", "multipla", "alavancagem", "bingo")
     )
 
 
@@ -1459,7 +1696,7 @@ def get_results_games(
     offset:    int = Query(0, ge=0),
     limit:     int = Query(50, ge=1, le=200),
 ):
-    """Picks individuais com resultado, paginados. source: all|vip|free|multipla|alavancagem"""
+    """Picks individuais com resultado, paginados. source: all|vip|free|multipla|alavancagem|bingo"""
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1482,7 +1719,7 @@ def get_results_games(
             result_cond = " AND result = %s"; result_params.append(resultado)
 
         inner_sql = _build_combined_sql(source, date_cond, result_null_cond)
-        n_legs = 1 if source != "all" else 4
+        n_legs = 1 if source != "all" else 5
         combined_date_params = date_params * n_legs
 
         count_sql = f"SELECT COUNT(*) AS n FROM ({inner_sql}) AS c WHERE TRUE {result_cond}"
@@ -1499,8 +1736,8 @@ def get_results_games(
 
         items = [dict(r) for r in rows]
 
-        # Substitui stake de VIP/Free/Múltipla pelo stake pessoal do usuário
-        personal_types = ("vip", "free", "multipla")
+        # Substitui stake de VIP/Free/Múltipla/Bingo pelo stake pessoal do usuário
+        personal_types = ("vip", "free", "multipla", "bingo")
         ids_by_type: dict[str, list] = {t: [] for t in personal_types}
         for x in items:
             pt = x.get("pick_type")
@@ -1535,7 +1772,7 @@ def get_results_monthly(
 ):
     """Resumo mensal."""
     inner_sql = _build_combined_sql(source, "")
-    n_legs = 1 if source != "all" else 4
+    n_legs = 1 if source != "all" else 5
 
     conn = get_connection()
     cur = conn.cursor()

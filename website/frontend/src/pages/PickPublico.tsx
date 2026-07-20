@@ -61,7 +61,7 @@ export default function PickPublico() {
   const odd    = pick.odd != null ? Number(pick.odd) : null
   const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
   const resultLabel = pick.result ? ` · ${pick.result}` : ''
-  const pageTitle = `${pick.home_team_name ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
+  const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? (pick.pick_type === 'bingo' ? 'Bingo' : 'Múltipla')}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
 
   return (
     <div className="min-h-screen bg-black flex flex-col">
@@ -111,7 +111,7 @@ export default function PickPublico() {
 
           {/* Times */}
           <div className="px-5 py-4 border-b border-zinc-800/60">
-            {pick.pick_type === 'multipla' && pick.teams_preview ? (
+            {(pick.pick_type === 'multipla' || pick.pick_type === 'bingo') && pick.teams_preview ? (
               <div className="space-y-1.5">
                 {pick.teams_preview.map((t: string, i: number) => (
                   <p key={i} className="text-sm font-semibold text-white">{t}</p>

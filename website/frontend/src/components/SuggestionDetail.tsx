@@ -110,6 +110,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   }, [tab])
 
   const isAlav = pickType === 'alavancagem'
+  const isBingo = pickType === 'bingo'
   const hasStats = pickType === 'vip' || pickType === 'free' || isAlav
   const tabs = [
     { key: 'ia',         label: 'Pick',          Icon: TrendingUp    },
@@ -146,7 +147,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
     }
 
     // 3. Fallback com mesmas funções dos cards (por tipo de pick)
-    const isMultipla = pickType === 'multipla'
+    const isMultipla = pickType === 'multipla' || pickType === 'bingo'
     const isFree     = pickType === 'free'
     const odd  = Number(s.total_odd ?? s.odd ?? 0)
     const prob = Number(s.probability ?? s.confidence ?? s.prob_real ?? 0)
@@ -186,7 +187,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-zinc-500 font-semibold">
-                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
+                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'bingo' ? 'Bingo' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
               </span>
               <button
                 onClick={onClose}
@@ -241,7 +242,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           </div>
 
           {/* Bet summary bar */}
-          {s && pickType !== 'multipla' && pickType !== 'alavancagem' && (
+          {s && pickType !== 'multipla' && pickType !== 'alavancagem' && pickType !== 'bingo' && (
             <div className="flex items-center gap-0 border-t border-zinc-800/60 text-center divide-x divide-zinc-800/60">
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-zinc-500 mb-0.5">Mercado</div>
@@ -402,6 +403,48 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                                 <span className="text-green-400 font-black shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                               </div>
                               <div className="text-xs text-zinc-500 mt-0.5">{translateMarket(g.market)}{g.line ? ` · ${translateLine(g.line)}` : ''}</div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Bingo · jogos + sub-combo de cada um */}
+                  {isBingo && s.games?.length > 0 && (
+                    <div>
+                      <p className="text-[10px] text-zinc-500 uppercase mb-2">Jogos</p>
+                      <div className="space-y-2">
+                        {s.games.map((g: any, i: number) => {
+                          const homeLogo = g.home_team_id ? `/api/proxy/team/${g.home_team_id}.png` : null
+                          const awayLogo = g.away_team_id ? `/api/proxy/team/${g.away_team_id}.png` : null
+                          const legs: any[] = Array.isArray(g.legs) ? g.legs : []
+                          return (
+                            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
+                                  {homeLogo && (
+                                    <img src={homeLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
+                                      onError={e => (e.currentTarget.style.display = 'none')} />
+                                  )}
+                                  <span className="text-sm font-semibold text-white truncate">{g.home_team}</span>
+                                  <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                  {awayLogo && (
+                                    <img src={awayLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
+                                      onError={e => (e.currentTarget.style.display = 'none')} />
+                                  )}
+                                  <span className="text-sm font-semibold text-white truncate">{g.away_team}</span>
+                                </div>
+                                <span className="text-purple-400 font-black shrink-0">{g.combo_odd ? Number(g.combo_odd).toFixed(2) : ''}</span>
+                              </div>
+                              <div className="mt-1.5 space-y-0.5">
+                                {legs.map((leg: any, li: number) => (
+                                  <div key={li} className="text-xs text-zinc-500 flex items-center justify-between">
+                                    <span>{translateMarket(leg.market)}{leg.line ? ` · ${translateLine(leg.line)}` : ''}</span>
+                                    <span className="text-zinc-400">{leg.odd ? Number(leg.odd).toFixed(2) : ''}</span>
+                                  </div>
+                                ))}
+                              </div>
                             </div>
                           )
                         })}

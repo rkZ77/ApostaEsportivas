@@ -83,6 +83,18 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.id = %s
         """, (pick_id,))
+    elif pick_type == "bingo":
+        cur.execute("""
+            SELECT result, profit, 1 AS stake,
+                   NULL AS home_team_name, NULL AS away_team_name,
+                   NULL AS home_team_id, NULL AS away_team_id,
+                   NULL AS market, NULL AS line,
+                   odd_final AS odd,
+                   games AS games_json,
+                   confidence_media AS confidence,
+                   NULL AS match_datetime
+            FROM picks_bingo WHERE id = %s
+        """, (pick_id,))
     else:
         return None
     row = cur.fetchone()
@@ -109,6 +121,26 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                 d["match_datetime"] = md_row["md"] if md_row else None
         d["market"] = f"Múltipla · {len(legs)} seleções"
         del d["legs_json"]
+    # Para bingo: extrai primeiro jogo dos games + kickoff mais cedo entre os jogos
+    if pick_type == "bingo" and d.get("games_json"):
+        import json as _json
+        try:
+            games = _json.loads(d["games_json"]) if isinstance(d["games_json"], str) else (d["games_json"] or [])
+        except Exception:
+            games = []
+        if games:
+            first = games[0]
+            d["home_team_name"] = first.get("home_team")
+            d["away_team_name"] = first.get("away_team")
+            d["home_team_id"]   = first.get("home_team_id")
+            d["away_team_id"]   = first.get("away_team_id")
+            fixture_ids = [g["fixture_id"] for g in games if g.get("fixture_id")]
+            if fixture_ids:
+                cur.execute("SELECT MIN(match_datetime) AS md FROM fixtures WHERE fixture_id = ANY(%s)", (fixture_ids,))
+                md_row = cur.fetchone()
+                d["match_datetime"] = md_row["md"] if md_row else None
+        d["market"] = f"Bingo · {len(games)} jogos"
+        del d["games_json"]
     return d
 
 
@@ -249,6 +281,7 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
     free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
     multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+    bingo_ids    = [f["pick_id"] for f in followed if f["pick_type"] == "bingo"]
 
     vip_map: dict = {}
     if vip_ids:
@@ -262,7 +295,11 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     if multipla_ids:
         cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
         for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+    bingo_map: dict = {}
+    if bingo_ids:
+        cur.execute("SELECT id, result, odd_final AS odd FROM picks_bingo WHERE id = ANY(%s)", (bingo_ids,))
+        for r in cur.fetchall(): bingo_map[r["id"]] = dict(r)
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map, "bingo": bingo_map}
 
     total = bankroll_start
     for f in followed:
@@ -300,6 +337,7 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
     vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
     free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
     multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+    bingo_ids    = [f["pick_id"] for f in followed if f["pick_type"] == "bingo"]
 
     vip_map: dict = {}
     if vip_ids:
@@ -316,7 +354,12 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
         cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
         for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
 
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+    bingo_map: dict = {}
+    if bingo_ids:
+        cur.execute("SELECT id, result, odd_final AS odd FROM picks_bingo WHERE id = ANY(%s)", (bingo_ids,))
+        for r in cur.fetchall(): bingo_map[r["id"]] = dict(r)
+
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map, "bingo": bingo_map}
 
     for f in followed:
         pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
@@ -392,6 +435,7 @@ def get_banca(
             vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
             free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
             multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+            bingo_ids    = [f["pick_id"] for f in followed if f["pick_type"] == "bingo"]
 
             vip_map: dict = {}
             if vip_ids:
@@ -440,7 +484,29 @@ def get_banca(
                     del d["legs_json"]
                     multipla_map[d["id"]] = d
 
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+            bingo_map: dict = {}
+            if bingo_ids:
+                cur.execute("""
+                    SELECT id, result, profit, odd_final AS odd, games AS games_json
+                    FROM picks_bingo WHERE id = ANY(%s)
+                """, (bingo_ids,))
+                for r in cur.fetchall():
+                    d = dict(r)
+                    games = []
+                    try:
+                        games = _json.loads(d["games_json"]) if isinstance(d.get("games_json"), str) else (d.get("games_json") or [])
+                    except Exception:
+                        pass
+                    first = games[0] if games else {}
+                    d["home_team_name"] = first.get("home_team")
+                    d["away_team_name"] = first.get("away_team")
+                    d["home_team_id"]   = first.get("home_team_id")
+                    d["away_team_id"]   = first.get("away_team_id")
+                    d["market"]         = f"Bingo · {len(games)} jogos"
+                    del d["games_json"]
+                    bingo_map[d["id"]] = d
+
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map, "bingo": bingo_map}
 
             entries = []
             for f in followed:
@@ -731,15 +797,16 @@ STAKE_LIMITS = {
     "free":       (1, 6),
     "multipla":   (1, 5),
     "alavancagem":(1, 9999),  # sem limite fixo · banca composta progressiva
+    "bingo":      (1, 5),
 }
 
 @router.post("/follow")
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
-    if body.pick_type not in ("vip", "free", "multipla", "alavancagem"):
+    if body.pick_type not in ("vip", "free", "multipla", "alavancagem", "bingo"):
         raise HTTPException(400, "Tipo inválido.")
     min_u, max_u = STAKE_LIMITS[body.pick_type]
     if not (min_u <= body.stake_units <= max_u):
-        labels = {"vip": "VIP", "free": "Free", "multipla": "Múltipla", "alavancagem": "Alavancagem"}
+        labels = {"vip": "VIP", "free": "Free", "multipla": "Múltipla", "alavancagem": "Alavancagem", "bingo": "Bingo"}
         raise HTTPException(400, f"Stake para picks {labels[body.pick_type]} deve ser entre {min_u} e {max_u} unidades.")
     user_id = current_user["id"]
     conn = get_connection()
@@ -878,6 +945,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
             vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
             free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
             multipla_ids = [f["pick_id"] for f in followed if f["pick_type"] == "multipla"]
+            bingo_ids    = [f["pick_id"] for f in followed if f["pick_type"] == "bingo"]
 
             vip_map: dict = {}
             if vip_ids:
@@ -894,7 +962,12 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
                 cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
                 for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
 
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+            bingo_map: dict = {}
+            if bingo_ids:
+                cur.execute("SELECT id, result, odd_final AS odd FROM picks_bingo WHERE id = ANY(%s)", (bingo_ids,))
+                for r in cur.fetchall(): bingo_map[r["id"]] = dict(r)
+
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map, "bingo": bingo_map}
             for f in followed:
                 pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
                 if not pick:
