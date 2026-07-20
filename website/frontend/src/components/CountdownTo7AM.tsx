@@ -121,7 +121,7 @@ export default function CountdownTo7AM() {
           <p className="text-zinc-600 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
           <div className="text-left space-y-4">
-            <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold">Próximos jogos</p>
+            <p className="text-[10px] text-zinc-600 uppercase font-semibold">Próximos jogos</p>
             {groups.map(group => (
               <div key={group.dateLabel}>
                 <p className="text-[11px] text-zinc-500 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
@@ -132,10 +132,13 @@ export default function CountdownTo7AM() {
                       <span className="text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
                         {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
-                      <TeamLogo id={g.home_team_id} name={g.home_team} size={20} />
-                      <span className="text-xs text-zinc-200 font-medium truncate flex-1">
-                        {g.home_team} <span className="text-zinc-600">x</span> {g.away_team}
-                      </span>
+                      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                        <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
+                        <span className="text-xs text-zinc-200 font-medium truncate">{g.home_team}</span>
+                        <span className="text-zinc-600 text-[11px] shrink-0">x</span>
+                        <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
+                        <span className="text-xs text-zinc-200 font-medium truncate">{g.away_team}</span>
+                      </div>
                       <LeagueLogo id={g.league_id} name={g.league_name} />
                     </div>
                   ))}

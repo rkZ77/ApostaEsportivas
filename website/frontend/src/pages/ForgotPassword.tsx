@@ -106,7 +106,7 @@ export default function ForgotPassword() {
               <input
                 type="text"
                 inputMode="numeric"
-                className="input w-full text-center tracking-widest text-lg font-bold"
+                className="input w-full text-center text-lg font-bold"
                 placeholder="000000"
                 value={code}
                 onChange={e => setCode(e.target.value.replace(/\D/g, '').slice(0, 6))}

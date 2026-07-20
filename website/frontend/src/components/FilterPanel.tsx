@@ -74,7 +74,7 @@ export default function FilterPanel({
         <div className="mt-2 card p-4 space-y-4 border-zinc-800">
           {groups.map(g => (
             <div key={g.key}>
-              <p className="text-xs text-zinc-500 uppercase tracking-wider mb-2">{g.label}</p>
+              <p className="text-xs text-zinc-500 uppercase mb-2">{g.label}</p>
               {/* Muitas opcoes (ex: 30 meses de historico) viram select nativo em
                   vez de parede de botoes -- pill buttons soh escalam bem ate uns
                   8 itens, depois disso o painel fica maior que a tela. */}

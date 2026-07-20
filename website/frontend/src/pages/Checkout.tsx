@@ -262,7 +262,7 @@ export default function Checkout() {
 
         {/* Aviso sobre tempo de ativação por método */}
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
-          <p className="text-zinc-400 text-xs font-bold uppercase tracking-wider mb-1">Tempo de ativação por método</p>
+          <p className="text-zinc-400 text-xs font-bold uppercase mb-1">Tempo de ativação por método</p>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span className="text-zinc-300 font-semibold">Cartão de crédito:</span>

@@ -270,7 +270,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold uppercase tracking-wider transition-colors ${
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold uppercase transition-colors ${
                 tab === key ? 'text-green-500 border-b-2 border-green-500' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
@@ -307,7 +307,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Métricas principais */}
                   <div className="grid grid-cols-3 gap-2">
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Confiança</div>
+                      <div className="text-[10px] text-zinc-500 uppercase mb-1">Confiança</div>
                       <div className={`text-2xl font-black ${confidence >= 75 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-zinc-300'}`}>
                         {confidence}%
                       </div>
@@ -315,12 +315,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                       {isAlav ? (
                         <>
-                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Tipo</div>
+                          <div className="text-[10px] text-zinc-500 uppercase mb-1">Tipo</div>
                           <div className="text-2xl font-black text-white capitalize">{s?.tipo ?? 'N/D'}</div>
                         </>
                       ) : (
                         <>
-                          <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">Stake</div>
+                          <div className="text-[10px] text-zinc-500 uppercase mb-1">Stake</div>
                           {stakeUnits != null
                             ? <div className="text-2xl font-black text-white">{stakeUnits}u</div>
                             : <div className="text-xs text-zinc-500 mt-1">s/d</div>
@@ -329,7 +329,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                       )}
                     </div>
                     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                      <div className="text-[10px] text-zinc-500 uppercase tracking-wider mb-1">EV</div>
+                      <div className="text-[10px] text-zinc-500 uppercase mb-1">EV</div>
                       <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : ''}
                       </div>
@@ -365,7 +365,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
 
                   {/* Raciocínio da IA */}
                   <div>
-                    <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Análise da IA</p>
+                    <p className="text-[10px] text-zinc-500 uppercase mb-2">Análise da IA</p>
                     <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
                       <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
                         {s.reasoning || 'Sem análise registrada.'}
@@ -376,7 +376,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Múltipla / Alavancagem · legs */}
                   {(pickType === 'multipla' || pickType === 'alavancagem') && s.legs?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2">Jogos</p>
+                      <p className="text-[10px] text-zinc-500 uppercase mb-2">Jogos</p>
                       <div className="space-y-2">
                         {s.legs.map((g: any, i: number) => {
                           const homeTeam = g.home_team || g.home || ''
@@ -419,7 +419,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     return (
                       <div key={ctx}>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] text-zinc-500 uppercase tracking-wider font-semibold">
+                          <p className="text-[10px] text-zinc-500 uppercase font-semibold">
                             {ctx === 'HOME' ? 'Contexto Casa' : 'Contexto Fora'}
                           </p>
                           <span className="text-[10px] text-zinc-600">{hStats?.games_count ?? 0}j / {aStats?.games_count ?? 0}j</span>
@@ -515,7 +515,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   ) : standings.groups.map((g: any, gi: number) => (
                     <div key={gi} className={gi > 0 ? 'mt-6' : ''}>
                       {standings.groups.length > 1 && (
-                        <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-2 font-semibold">{g.group}</p>
+                        <p className="text-[10px] text-zinc-500 uppercase mb-2 font-semibold">{g.group}</p>
                       )}
                       <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
                         {/* Header */}
@@ -592,7 +592,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                               <span className="text-orange-400 text-xs font-black">R$</span>
                             </div>
                             <div className="flex-1">
-                              <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Banca atual da série</div>
+                              <div className="text-[10px] text-zinc-500 uppercase">Banca atual da série</div>
                               <div className="text-lg font-black text-orange-400">
                                 R${Number(currentBankroll ?? 0).toFixed(0)}
                               </div>
