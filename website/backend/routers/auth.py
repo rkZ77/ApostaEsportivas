@@ -321,7 +321,7 @@ def _welcome_html(first_name: str, site_url: str, logo_b64: str = "", logo_url: 
         <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
           <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
             Siga no Instagram:
-            <a href="https://www.instagram.com/pickia_br/" style="color:#22c55e;text-decoration:none;">@pickia_br</a>
+            <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
           </p>
           <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
         </td></tr>
@@ -363,7 +363,7 @@ def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str
         </td></tr>
         <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
           <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
-            Siga no Instagram: <a href="https://www.instagram.com/pickia_br/" style="color:#22c55e;text-decoration:none;">@pickia_br</a>
+            Siga no Instagram: <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
           </p>
           <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
         </td></tr>

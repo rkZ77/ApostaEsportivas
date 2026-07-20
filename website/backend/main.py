@@ -32,6 +32,7 @@ _OPTIONAL_VARS = {
     "ANTHROPIC_API_KEY": "IA / picks",
     "RESEND_API_KEY": "envio de emails",
     "TURNSTILE_SECRET_KEY": "verificação anti-bot (captcha) no login/cadastro",
+    "VAPID_PRIVATE_KEY": "push notifications",
 }
 
 _missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
