@@ -165,11 +165,10 @@ function SetupModal({ current, onSave, onClose }: {
   )
 }
 
-// modal de saque · desconta um valor da banca atual (bankroll_start = current - valor)
-function WithdrawModal({ current, unitValue, goal, onSave, onClose }: {
+// modal de saque · desconta um valor da banca atual e registra no histórico
+// (POST /banca/withdraw, diferente do /setup que so troca o numero sem rastro)
+function WithdrawModal({ current, onSave, onClose }: {
   current: number
-  unitValue: number
-  goal: number | null
   onSave: (newStart: number) => void
   onClose: () => void
 }) {
@@ -186,8 +185,8 @@ function WithdrawModal({ current, unitValue, goal, onSave, onClose }: {
     if (amountNum > current) { setErr('Você não pode sacar mais do que tem na banca.'); return }
     setLoading(true)
     try {
-      await api.post('/banca/setup', { bankroll_start: newBanca, bankroll_goal: goal, unit_value: unitValue })
-      onSave(newBanca)
+      const { data } = await api.post('/banca/withdraw', { amount: amountNum })
+      onSave(data.bankroll_start)
     } catch (e: any) {
       setErr(e.response?.data?.detail ?? 'Erro ao salvar.')
     } finally {
@@ -263,6 +262,7 @@ export default function Banca() {
   const [confirmReset, setConfirmReset]     = useState(false)
   const [showMonthlyClose, setShowMonthlyClose] = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
+  const [withdrawals, setWithdrawals] = useState<any[]>([])
 
   const load = useCallback((p: PeriodKey) => {
     setLoading(true)
@@ -279,6 +279,12 @@ export default function Banca() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
+
+  const loadWithdrawals = useCallback(() => {
+    api.get('/banca/withdrawals').then(r => setWithdrawals(r.data ?? [])).catch(() => {})
+  }, [])
+
+  useEffect(() => { loadWithdrawals() }, [loadWithdrawals])
 
   useEffect(() => {
     load(period)
@@ -334,12 +340,11 @@ export default function Banca() {
       {showWithdraw && (
         <WithdrawModal
           current={data?.bankroll_current ?? data?.bankroll_start ?? 0}
-          unitValue={data?.unit_value ?? 1}
-          goal={data?.bankroll_goal ?? null}
           onSave={(newStart) => {
             setShowWithdraw(false)
             setData((d: any) => d ? { ...d, bankroll_start: newStart, bankroll_current: newStart } : d)
             load(period)
+            loadWithdrawals()
           }}
           onClose={() => setShowWithdraw(false)}
         />
@@ -590,6 +595,30 @@ export default function Banca() {
                 )}
               </div>
             </div>
+
+            {/* Histórico de saques */}
+            {withdrawals.length > 0 && (
+              <div className="card overflow-hidden">
+                <div className="px-5 py-3 border-b border-zinc-800">
+                  <span className="text-xs font-bold text-zinc-500 uppercase">Histórico de saques</span>
+                </div>
+                <div className="divide-y divide-zinc-800/60">
+                  {withdrawals.map(w => (
+                    <div key={w.id} className="flex items-center gap-3 px-5 py-3">
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-bold text-white">− {fmtBRL(w.amount)}</p>
+                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                          {new Date(w.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <p className="text-[10px] text-zinc-600">{fmtBRL(w.bankroll_before)} → {fmtBRL(w.bankroll_after)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Melhor e pior pick */}
             {(data?.best_pick || data?.worst_pick) && (

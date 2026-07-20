@@ -19,6 +19,10 @@ class BancaSetup(BaseModel):
     monthly_close_month_key: Optional[str] = None  # 'YYYY-MM'; presente quando vem do fechamento mensal
 
 
+class BancaWithdraw(BaseModel):
+    amount: float
+
+
 class FollowPick(BaseModel):
     pick_id: int
     pick_type: str
@@ -617,6 +621,79 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
         """, (user_id, body.bankroll_start, body.bankroll_goal, body.unit_value))
         conn.commit()
         return {"ok": True}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/withdraw")
+def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current_user)):
+    """Desconta um valor da banca atual e registra o saque pra ter historico
+    (data, valor, banca antes/depois) -- diferente do /setup, que so troca o
+    numero sem deixar rastro de por que mudou."""
+    if body.amount <= 0:
+        raise HTTPException(400, "Valor do saque deve ser maior que zero.")
+
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT bankroll_start, bankroll_goal, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        bankroll_start = float(row["bankroll_start"]) if row else 100.0
+        bankroll_goal  = float(row["bankroll_goal"]) if row and row["bankroll_goal"] else None
+        unit_value     = float(row["unit_value"])     if row and row["unit_value"] else 1.0
+
+        bankroll_current = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
+        if body.amount > bankroll_current:
+            raise HTTPException(400, f"Você não pode sacar mais do que tem na banca (R${bankroll_current:.2f}).")
+
+        new_start = bankroll_current - body.amount
+
+        cur.execute("""
+            INSERT INTO banca_withdrawals (user_id, amount, bankroll_before, bankroll_after)
+            VALUES (%s, %s, %s, %s)
+        """, (user_id, body.amount, bankroll_current, new_start))
+
+        cur.execute("""
+            INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value)
+            VALUES (%s, %s, %s, %s)
+            ON CONFLICT (user_id) DO UPDATE
+                SET bankroll_start = EXCLUDED.bankroll_start,
+                    updated_at     = NOW()
+        """, (user_id, new_start, bankroll_goal, unit_value))
+        conn.commit()
+        return {"ok": True, "bankroll_start": new_start}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/withdrawals")
+def get_withdrawals(current_user: dict = Depends(get_current_user), limit: int = Query(20, ge=1, le=100)):
+    """Historico de saques da banca do usuario, mais recente primeiro."""
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, amount, bankroll_before, bankroll_after, created_at
+            FROM banca_withdrawals
+            WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s
+        """, (user_id, limit))
+        rows = cur.fetchall()
+        return [
+            {
+                "id": r["id"],
+                "amount": float(r["amount"]),
+                "bankroll_before": float(r["bankroll_before"]),
+                "bankroll_after": float(r["bankroll_after"]),
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+            }
+            for r in rows
+        ]
     finally:
         cur.close()
         conn.close()
