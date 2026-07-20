@@ -24,6 +24,7 @@ const Planos         = lazy(() => import('./pages/Planos'))
 const Agente         = lazy(() => import('./pages/Agente'))
 const Checkout       = lazy(() => import('./pages/Checkout'))
 const Banca          = lazy(() => import('./pages/Banca'))
+const BancaSaque     = lazy(() => import('./pages/BancaSaque'))
 const MeusPicks      = lazy(() => import('./pages/MeusPicks'))
 const VerifyEmail    = lazy(() => import('./pages/VerifyEmail'))
 const Privacidade    = lazy(() => import('./pages/Privacidade'))
@@ -163,6 +164,7 @@ export default function App() {
                 <Route path="/checkout" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/checkout/:status" element={<PrivateRoute><Checkout /></PrivateRoute>} />
                 <Route path="/banca" element={<PrivateRoute><Banca /></PrivateRoute>} />
+                <Route path="/banca/saque" element={<PrivateRoute><BancaSaque /></PrivateRoute>} />
                 <Route path="/meus-picks" element={<PrivateRoute><MeusPicks /></PrivateRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
                 <Route path="/reset-password" element={<ResetPassword />} />

@@ -188,68 +188,6 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
   )
 }
 
-// modal de saque · desconta um valor da banca atual e registra no histórico
-// (POST /banca/withdraw, diferente do /setup que so troca o numero sem rastro)
-function WithdrawModal({ current, onSave, onClose }: {
-  current: number
-  onSave: (newStart: number) => void
-  onClose: () => void
-}) {
-  const [amount,  setAmount]  = useState('')
-  const [err,     setErr]     = useState('')
-  const [loading, setLoading] = useState(false)
-
-  const amountNum = parseFloat(amount.replace(',', '.')) || 0
-  const newBanca  = current - amountNum
-
-  const handleSave = async () => {
-    setErr('')
-    if (!amountNum || amountNum <= 0) { setErr('Informe um valor maior que zero.'); return }
-    if (amountNum > current) { setErr('Você não pode sacar mais do que tem na banca.'); return }
-    setLoading(true)
-    try {
-      const { data } = await api.post('/banca/withdraw', { amount: amountNum })
-      onSave(data.bankroll_start)
-    } catch (e: any) {
-      setErr(e.response?.data?.detail ?? 'Erro ao salvar.')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}>
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
-        <h2 className="text-white font-black text-lg mb-1">Sacar da banca</h2>
-        <p className="text-zinc-500 text-xs mb-5">Banca atual: <span className="text-white font-bold">{fmtBRL(current)}</span></p>
-
-        <div>
-          <label className="text-xs text-zinc-500 block mb-1.5">Quanto você quer sacar? (R$)</label>
-          <input type="number" min="0.01" step="0.01" value={amount}
-            onChange={e => setAmount(e.target.value)} className="input w-full" placeholder="Ex: 500" autoFocus />
-        </div>
-
-        {amountNum > 0 && (
-          <div className="mt-3 bg-zinc-800/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
-            <span className="text-zinc-400">Banca depois do saque</span>
-            <span className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-white'}`}>{fmtBRL(newBanca)}</span>
-          </div>
-        )}
-
-        {err && <p className="text-red-400 text-xs mt-3">{err}</p>}
-
-        <div className="flex gap-3 mt-5">
-          <button onClick={handleSave} disabled={loading || !amountNum || amountNum > current}
-            className="btn-primary flex-1 py-2.5 disabled:opacity-40 disabled:cursor-not-allowed">
-            {loading ? 'Salvando...' : 'Confirmar saque'}
-          </button>
-          <button onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">Cancelar</button>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 function monthRange(offset: number) {
   // offset 0 = este mes, -1 = mes passado
   const now = new Date()
@@ -281,9 +219,7 @@ export default function Banca() {
   const [loading, setLoading] = useState(true)
   const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
-  const [showWithdraw, setShowWithdraw]     = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
-  const [withdrawals, setWithdrawals] = useState<any[]>([])
 
   const load = useCallback((p: PeriodKey) => {
     setLoading(true)
@@ -300,12 +236,6 @@ export default function Banca() {
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
-
-  const loadWithdrawals = useCallback(() => {
-    api.get('/banca/withdrawals').then(r => setWithdrawals(r.data ?? [])).catch(() => {})
-  }, [])
-
-  useEffect(() => { loadWithdrawals() }, [loadWithdrawals])
 
   useEffect(() => {
     load(period)
@@ -356,20 +286,7 @@ export default function Banca() {
           locked={data?.can_configure === false}
           onSave={handleSave}
           onClose={() => setShowSetup(false)}
-          onWithdraw={() => setShowWithdraw(true)}
-        />
-      )}
-
-      {showWithdraw && (
-        <WithdrawModal
-          current={data?.bankroll_current ?? data?.bankroll_start ?? 0}
-          onSave={(newStart) => {
-            setShowWithdraw(false)
-            setData((d: any) => d ? { ...d, bankroll_start: newStart, bankroll_current: newStart } : d)
-            load(period)
-            loadWithdrawals()
-          }}
-          onClose={() => setShowWithdraw(false)}
+          onWithdraw={() => navigate('/banca/saque')}
         />
       )}
 
@@ -401,7 +318,7 @@ export default function Banca() {
             <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2 hidden sm:inline-flex">
               Meus Picks
             </Link>
-            <button onClick={() => setShowWithdraw(true)} className="btn-ghost text-xs px-3 py-2">
+            <button onClick={() => navigate('/banca/saque')} className="btn-ghost text-xs px-3 py-2">
               Sacar
             </button>
             <button
@@ -576,30 +493,6 @@ export default function Banca() {
                 )}
               </div>
             </div>
-
-            {/* Histórico de saques */}
-            {withdrawals.length > 0 && (
-              <div className="card overflow-hidden">
-                <div className="px-5 py-3 border-b border-zinc-800">
-                  <span className="text-xs font-bold text-zinc-500 uppercase">Histórico de saques</span>
-                </div>
-                <div className="divide-y divide-zinc-800/60">
-                  {withdrawals.map(w => (
-                    <div key={w.id} className="flex items-center gap-3 px-5 py-3">
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white">− {fmtBRL(w.amount)}</p>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">
-                          {new Date(w.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                        </p>
-                      </div>
-                      <div className="text-right shrink-0">
-                        <p className="text-[10px] text-zinc-600">de {fmtBRL(w.bankroll_before)} pra {fmtBRL(w.bankroll_after)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* Melhor e pior pick */}
             {(data?.best_pick || data?.worst_pick) && (
