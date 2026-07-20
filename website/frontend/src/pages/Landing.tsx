@@ -107,19 +107,19 @@ function SocialProofStats() {
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-green-500">{winRate}%</p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Win Rate</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Win Rate</p>
         </div>
         <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-white">{summary.total}</p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">Picks</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Picks</p>
         </div>
         <div className="bg-zinc-900 border border-green-500/20 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-green-400">{summary.greens}</p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">GREEN</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">GREEN</p>
         </div>
         <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-3 text-center">
           <p className="text-xl font-black text-red-400">{reds}</p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase tracking-wide">RED</p>
+          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">RED</p>
         </div>
       </div>
     </>
@@ -292,7 +292,7 @@ function RecentResults() {
         ) : recent6.length > 0 ? (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Últimas 6 dicas finalizadas</span>
+              <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 6 dicas finalizadas</span>
               <span className="text-xs text-zinc-600">Atualizado automaticamente</span>
             </div>
             <div className="divide-y divide-zinc-800/50">
@@ -812,7 +812,7 @@ export default function Landing() {
             <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-7 overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
               <div className="absolute top-3.5 right-4">
-                <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">
+                <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase">
                   Começar agora
                 </span>
               </div>

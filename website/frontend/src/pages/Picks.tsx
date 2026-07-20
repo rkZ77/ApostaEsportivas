@@ -10,6 +10,7 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
+import CountdownTo7AM from '../components/CountdownTo7AM'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -137,12 +138,12 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
             >
               {t.label}
               {t.badge && (
-                <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold uppercase tracking-wide ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
+                <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold uppercase ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
                   {t.badge}
                 </span>
               )}
               {t.premiumOnly && canSeeVip && (
-                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold uppercase tracking-wide">
+                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold uppercase">
                   VIP
                 </span>
               )}
@@ -316,7 +317,7 @@ function QuickStats({ stats }: { stats: any }) {
       {items.map(({ icon, label, value, color, iconColor, sub }) => (
         <div key={label} className="card p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-zinc-600 font-semibold uppercase tracking-wider">{label}</span>
+            <span className="text-xs text-zinc-600 font-semibold uppercase">{label}</span>
             <span className={iconColor}>{icon}</span>
           </div>
           <div className={`text-2xl font-black ${color}`}>{value}</div>
@@ -549,7 +550,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
       {/* Reasoning snippet */}
       {fato && (
         <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{fato}</span>
         </div>
       )}
@@ -855,7 +856,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Fato da IA */}
       {shortReasoning(m.reasoning) && (
         <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
         </div>
       )}
@@ -1091,7 +1092,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
       {/* Fato da IA */}
       {shortReasoning(pick.reasoning_1) && (
         <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
         </div>
       )}
@@ -1175,37 +1176,6 @@ function Spinner() {
   )
 }
 
-function CountdownTo7AM() {
-  const [timeLeft, setTimeLeft] = useState<string | null>(null)
-
-  useEffect(() => {
-    const update = () => {
-      const brNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      if (brNow.getHours() >= 12) { setTimeLeft(null); return }
-      const target = new Date(brNow)
-      target.setHours(12, 0, 0, 0)
-      if (brNow >= target) target.setDate(target.getDate() + 1)
-      const diff = target.getTime() - brNow.getTime()
-      const h = Math.floor(diff / 3600000)
-      const m = Math.floor((diff % 3600000) / 60000)
-      const s = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-    }
-    update()
-    const t = setInterval(update, 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  if (timeLeft === null) return null
-
-  return (
-    <div className="card p-8 text-center border-zinc-800">
-      <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
-      <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
-      <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
-    </div>
-  )
-}
 
 interface PipelineStep { key: string; label: string; status: 'pending' | 'running' | 'done' | 'error' }
 
@@ -1856,7 +1826,7 @@ export default function Picks() {
               {/* Stats da IA este mês */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2">Performance da IA · Geral</p>
+                  <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
@@ -1866,7 +1836,7 @@ export default function Picks() {
                     ].map(({ label, value, color }) => (
                       <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
                         <div className={`text-xl font-black ${color}`}>{value}</div>
-                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                        <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                       </div>
                     ))}
                   </div>

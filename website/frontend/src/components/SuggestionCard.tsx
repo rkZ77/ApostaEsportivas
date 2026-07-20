@@ -323,7 +323,7 @@ export default function SuggestionCard({
       {/* Reasoning snippet */}
       {fato && (
         <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <span className="text-[10px] text-zinc-600 font-black uppercase tracking-wider">Fato · </span>
+          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">{fato}</span>
         </div>
       )}

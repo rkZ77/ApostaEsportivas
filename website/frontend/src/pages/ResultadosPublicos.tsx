@@ -11,6 +11,7 @@ import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import SuggestionDetail from '../components/SuggestionDetail'
+import DailyGreensChart from '../components/DailyGreensChart'
 
 const RESULTADO_OPTIONS = [
   { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
@@ -47,27 +48,6 @@ interface PublicData {
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem']
 const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem' }
-
-function BarChart({ days }: { days: DayResult[] }) {
-  if (!days.length) return null
-  const maxTotal = Math.max(...days.map(d => d.total), 1)
-  return (
-    <div className="flex items-end gap-0.5 h-16 w-full overflow-hidden">
-      {days.map((d, i) => {
-        const heightPct = (d.total / maxTotal) * 100
-        const isGreen = d.greens >= d.reds
-        return (
-          <div key={i} className="flex-1 flex flex-col items-center justify-end group relative" title={`${d.match_date}: ${d.greens}G / ${d.reds}R`}>
-            <div
-              className={`w-full rounded-sm transition-opacity group-hover:opacity-80 ${isGreen ? 'bg-green-500/60' : 'bg-red-500/50'}`}
-              style={{ height: `${heightPct}%`, minHeight: 2 }}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)
@@ -277,7 +257,7 @@ export default function ResultadosPublicos() {
                 ].map(({ label, value, color }) => (
                   <div key={label} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-center">
                     <div className={`text-2xl font-black ${color}`}>{value}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                   </div>
                 ))}
               </div>
@@ -362,11 +342,7 @@ export default function ResultadosPublicos() {
               {byDay.length > 1 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-8">
                   <p className="text-sm text-zinc-500 font-bold mb-4">Picks por dia</p>
-                  <BarChart days={byDay} />
-                  <div className="flex items-center gap-4 mt-3">
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-green-500/60" /><span className="text-[10px] text-zinc-600">Mais greens</span></div>
-                    <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-sm bg-red-500/50" /><span className="text-[10px] text-zinc-600">Mais reds</span></div>
-                  </div>
+                  <DailyGreensChart data={byDay} />
                 </div>
               )}
 
@@ -374,7 +350,7 @@ export default function ResultadosPublicos() {
               {byLeague.length > 0 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden mb-8">
                   <div className="px-5 py-3 border-b border-zinc-800">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Resultados por liga</span>
+                    <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
                   </div>
                   <div className="divide-y divide-zinc-800/50">
                     {byLeague.map((lg) => {
@@ -407,7 +383,7 @@ export default function ResultadosPublicos() {
                 return (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Picks recentes</span>
+                    <span className="text-xs font-bold text-zinc-400 uppercase">Picks recentes</span>
                     <span className="text-[10px] text-zinc-600">{filteredRecent.length} resultados</span>
                   </div>
                   {recentLeagues.length > 1 && (
@@ -551,7 +527,7 @@ export default function ResultadosPublicos() {
                     <thead>
                       <tr className="border-b border-zinc-800">
                         {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
-                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
                         ))}
                       </tr>
                     </thead>
