@@ -125,7 +125,7 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, active, session_token, last_login_device, last_login_at, plan, plan_expires_at FROM users WHERE id = %s",
+            "SELECT id, active, session_token, last_login_device, last_login_at, plan, expires_at FROM users WHERE id = %s",
             (payload.get("sub"),),
         )
         row = cur.fetchone()
@@ -140,7 +140,7 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     # Reconsulta sempre o plano/expiração reais do banco em vez de confiar no JWT.
     payload = dict(payload)
     payload["plan"] = row["plan"]
-    payload["plan_expires_at"] = row["plan_expires_at"].isoformat() if row["plan_expires_at"] else None
+    payload["plan_expires_at"] = row["expires_at"].isoformat() if row["expires_at"] else None
 
     # Sessão única: session_token no JWT deve bater com o hash guardado no banco
     # Admin fica isento · pode acessar de múltiplos dispositivos simultaneamente
