@@ -2,12 +2,32 @@ import { useEffect, useState } from 'react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
-interface NextFixture {
+interface Fixture {
   fixture_id: number
   home_team: string; away_team: string
   home_team_id?: number; away_team_id?: number
   league_id?: number; league_name: string
   match_datetime: string
+}
+
+function isoDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+}
+
+// Mesmo endpoint que a aba "Jogos" usa (busca ao vivo na API-Football pelas
+// ligas cadastradas, não só a tabela local) -- tenta os próximos dias até
+// achar algum com jogo, em vez de só checar hoje.
+async function findNextGames(): Promise<Fixture[]> {
+  const today = new Date()
+  for (let i = 1; i <= 7; i++) {
+    const d = new Date(today)
+    d.setDate(d.getDate() + i)
+    try {
+      const r = await api.get('/fixtures/today', { params: { date: isoDate(d) } })
+      if (r.data && r.data.length > 0) return r.data
+    } catch { /* tenta o próximo dia */ }
+  }
+  return []
 }
 
 export default function CountdownTo7AM() {
@@ -18,7 +38,8 @@ export default function CountdownTo7AM() {
   // sem isso, "carregando" e "falhou" ficavam com o mesmo estado (null) e
   // qualquer falha passageira escondia o card permanentemente.
   const [todayCheckFailed, setTodayCheckFailed] = useState(false)
-  const [nextGames, setNextGames] = useState<NextFixture[] | null>(null)
+  const [nextGames, setNextGames] = useState<Fixture[] | null>(null)
+  const [leagueNames, setLeagueNames] = useState<string | null>(null)
 
   useEffect(() => {
     const update = () => {
@@ -39,16 +60,17 @@ export default function CountdownTo7AM() {
   }, [])
 
   useEffect(() => {
-    api.get('/public/fixtures-today')
+    api.get('/fixtures/today')
       .then(r => setTodayCount((r.data ?? []).length))
       .catch(() => setTodayCheckFailed(true))
   }, [])
 
   useEffect(() => {
     if (todayCount !== 0) return
-    api.get('/public/fixtures-next')
-      .then(r => setNextGames(r.data ?? []))
-      .catch(() => setNextGames([]))
+    api.get('/public/leagues')
+      .then(r => setLeagueNames((r.data ?? []).map((l: any) => l.name).join(', ')))
+      .catch(() => setLeagueNames(''))
+    findNextGames().then(setNextGames).catch(() => setNextGames([]))
   }, [todayCount])
 
   // Ainda checando se há jogo hoje (e não falhou) -- mostra nada por um instante,
@@ -63,7 +85,7 @@ export default function CountdownTo7AM() {
     return (
       <div className="card p-6 text-center border-zinc-800">
         <p className="text-sm text-zinc-300 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
-        <p className="text-zinc-600 text-xs mb-4">Brasileirão, Champions League, Premier League e La Liga</p>
+        {leagueNames && <p className="text-zinc-600 text-xs mb-4">{leagueNames}</p>}
         {nextGames === null ? (
           <div className="h-8" />
         ) : nextGames.length === 0 ? (
