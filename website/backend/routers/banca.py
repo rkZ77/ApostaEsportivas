@@ -201,6 +201,12 @@ def _get_bankroll_epoch(cur, user_id: int) -> Optional[str]:
     return month_end
 
 
+def _current_month_key() -> str:
+    """Mês corrente 'YYYY-MM' no fuso de Brasília (não o do servidor)."""
+    now = datetime.now(BR_TZ)
+    return f"{now.year:04d}-{now.month:02d}"
+
+
 def _month_bounds(month_key: str):
     """A partir de 'YYYY-MM', retorna (year, mo, month_start, month_end) como strings YYYY-MM-DD."""
     try:
@@ -343,11 +349,12 @@ def get_banca(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT bankroll_start, bankroll_goal, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        cur.execute("SELECT bankroll_start, bankroll_goal, unit_value, last_manual_setup_month FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
         bankroll_goal  = float(row["bankroll_goal"]) if row and row["bankroll_goal"] else None
         unit_value = float(row["unit_value"]) if row and row["unit_value"] else 1.0
+        can_configure = not (row and row["last_manual_setup_month"] == _current_month_key())
 
         date_cond = ""
         date_params: list = [user_id]
@@ -524,6 +531,7 @@ def get_banca(
             "bankroll_goal":        bankroll_goal,
             "bankroll_current":     bankroll_current_real,
             "unit_value":           unit_value,
+            "can_configure":        can_configure,
             "total_followed":       len(followed),
             "total_resolved":       len(resolved),
             "greens":               greens,
@@ -569,9 +577,26 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                 f"Reduza a unidade para no máximo R${max_unit:.2f} (20 unidades mínimas)."
             )
     user_id = current_user["id"]
+    manual_setup = body.monthly_close_month_key is None
     conn = get_connection()
     cur = conn.cursor()
     try:
+        if manual_setup:
+            # Trava: 1 configuração manual por mês, pra não dar pra ficar mudando
+            # banca/unidade no meio do mês pra manipular o cálculo de stake e o
+            # histórico de risco. O fechamento mensal automático (que chama esse
+            # mesmo endpoint com monthly_close_month_key) sempre passa direto.
+            cur.execute("SELECT last_manual_setup_month FROM user_banca WHERE user_id = %s", (user_id,))
+            prev_row = cur.fetchone()
+            if prev_row and prev_row["last_manual_setup_month"] == _current_month_key():
+                raise HTTPException(
+                    400,
+                    "Você já configurou sua banca este mês. Isso evita mudar os números no "
+                    "meio do mês e distorcer o histórico de risco. Pra tirar dinheiro agora, "
+                    "use o botão \"Sacar\" · pra reconfigurar de novo, espera o fechamento "
+                    "mensal automático."
+                )
+
         if body.monthly_close_month_key:
             # Registra o fechamento (banca antes -> depois + estatísticas do mês) antes
             # de sobrescrever o bankroll_start. É esse registro que marca o "epoch" pra
@@ -610,15 +635,17 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                 stats["total_resolved"], stats["total_followed"], prev_unit,
             ))
 
+        new_last_manual_month = _current_month_key() if manual_setup else None
         cur.execute("""
-            INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value, last_manual_setup_month)
+            VALUES (%s, %s, %s, %s, %s)
             ON CONFLICT (user_id) DO UPDATE
                 SET bankroll_start = EXCLUDED.bankroll_start,
                     bankroll_goal  = EXCLUDED.bankroll_goal,
                     unit_value     = COALESCE(EXCLUDED.unit_value, user_banca.unit_value),
+                    last_manual_setup_month = COALESCE(EXCLUDED.last_manual_setup_month, user_banca.last_manual_setup_month),
                     updated_at     = NOW()
-        """, (user_id, body.bankroll_start, body.bankroll_goal, body.unit_value))
+        """, (user_id, body.bankroll_start, body.bankroll_goal, body.unit_value, new_last_manual_month))
         conn.commit()
         return {"ok": True}
     finally:

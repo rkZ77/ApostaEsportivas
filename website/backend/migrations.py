@@ -69,6 +69,7 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS bankroll_goal NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS alav_bankroll_init NUMERIC(10,2);")
+        cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS last_manual_setup_month VARCHAR(7);")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_followed_picks (
                 id          SERIAL PRIMARY KEY,
