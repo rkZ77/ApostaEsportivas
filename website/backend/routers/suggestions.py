@@ -1898,12 +1898,6 @@ def get_liga_ranking(
         conn.close()
 
 
-@router.get("/copa/tendencias")
-def get_copa_tendencias(current_user: dict = Depends(get_current_user)):
-    """Alias para /liga/tendencias?league_id=1 · mantido por compatibilidade."""
-    return get_liga_tendencias(league_id=1, limit=500, current_user=current_user)
-
-
 @router.get("/results")
 def get_results(
     current_user: dict = Depends(get_current_user),

@@ -69,6 +69,7 @@ export default function ResultadosPublicos() {
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const shareResults = useShareResultsImage()
+  const shareCurrentMonth = useShareResultsImage()
   const shareTodayGames = useShareTodayGamesImage()
   const shareLeagueResults = useShareLeagueResultsImage()
 
@@ -110,6 +111,23 @@ export default function ResultadosPublicos() {
   const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
   const todayResult = byDay.find(d => d.match_date === todayStr)
   const todayWinRate = todayResult ? calcWinRate(todayResult.greens, todayResult.total) : null
+
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const currentMonthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  const shareThisMonth = async () => {
+    // Reaproveita o resumo já carregado se o filtro atual já é o mês corrente;
+    // senão busca o mês corrente à parte, sem alterar o filtro visível na tela.
+    const summary = month === currentMonthStr ? s : (await api.get('/public/results', { params: { month: currentMonthStr } })).data?.summary
+    if (!summary || summary.total === 0) return
+    const wr = calcWinRate(summary.greens, summary.total)
+    shareCurrentMonth.share({
+      winRatePct: wr ?? 0, total: summary.total, greens: summary.greens, reds: summary.reds, profit: Number(summary.profit),
+      badgeLabel: `RESULTADOS · ${currentMonthLabel.toUpperCase()}`,
+      footerText: `Referente a ${currentMonthLabel}`,
+      shareText: `Em ${currentMonthLabel}, a IA da Pick IA fechou ${summary.greens}G / ${summary.reds}R (${Math.round(wr ?? 0)}%). Histórico 100% auditável.`,
+    })
+  }
 
   return (
     <>
@@ -183,6 +201,14 @@ export default function ResultadosPublicos() {
 
               {/* Compartilhar */}
               <div className="flex flex-wrap gap-2 justify-center mb-8">
+                <button
+                  onClick={shareThisMonth}
+                  disabled={shareCurrentMonth.sharing}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  {shareCurrentMonth.shared ? 'Compartilhado!' : shareCurrentMonth.sharing ? 'Gerando...' : `Resultado de ${currentMonthLabel}`}
+                </button>
                 <button
                   onClick={() => shareResults.share({
                     winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0,

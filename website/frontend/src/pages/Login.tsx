@@ -1,16 +1,16 @@
-import { useState, FormEvent, useEffect } from 'react'
+import { useState, useRef, FormEvent, useEffect } from 'react'
 import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
 import api from '../services/api'
+import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 
 function getPasswordStrength(pwd: string): { score: number; checks: { label: string; ok: boolean }[] } {
   const checks = [
-    { label: 'Mínimo 8 caracteres', ok: pwd.length >= 8 },
+    { label: 'Mínimo 10 caracteres', ok: pwd.length >= 10 },
     { label: 'Letra maiúscula',      ok: /[A-Z]/.test(pwd) },
     { label: 'Número',               ok: /\d/.test(pwd) },
-    { label: 'Caractere especial',   ok: /[^A-Za-z0-9]/.test(pwd) },
   ]
   return { score: checks.filter(c => c.ok).length, checks }
 }
@@ -73,6 +73,7 @@ export default function Login() {
 
   const [mode, setMode]             = useState<'login' | 'register'>('login')
   const [loginMethod, setLoginMethod] = useState<LoginMethod>('username')
+  const [regStep, setRegStep]       = useState<1 | 2>(1)
 
   // Login fields
   const [loginUsername, setLoginUsername] = useState('')
@@ -96,6 +97,8 @@ export default function Login() {
   const [kickedDevice, setKickedDevice] = useState<string | null>(null)
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirm, setShowConfirm]   = useState(false)
+  const [captchaToken, setCaptchaToken] = useState('')
+  const turnstileRef = useRef<TurnstileHandle>(null)
 
   const redirectTo = (() => {
     const r = searchParams.get('redirect')
@@ -141,21 +144,26 @@ export default function Login() {
       if (!id) { setError('Preencha o campo de identificação.'); return }
       if (loginMethod === 'email' && !validateEmail(id)) { setError('Email inválido.'); return }
       if (loginMethod === 'cpf' && id.replace(/\D/g, '').length !== 11) { setError('CPF inválido.'); return }
-    } else {
+    } else if (regStep === 1) {
+      // Passo 1: só dados de acesso -- CPF/telefone ficam pro passo 2, reduz
+      // a primeira tela de 7 campos obrigatórios pra 4.
       if (!name.trim() || name.trim().split(' ').filter(Boolean).length < 2) {
         setError('Informe seu nome completo (nome e sobrenome).')
         return
       }
-      if (!validateEmail(email)) { setError('Email inválido.'); return }
       if (!username.trim()) { setError('Escolha um nome de usuário.'); return }
+      if (!validateEmail(email)) { setError('Email inválido.'); return }
+      const { score: pwScore } = getPasswordStrength(password)
+      if (pwScore < 3) { setError('A senha deve ter pelo menos 10 caracteres, uma letra maiúscula e um número.'); return }
+      setRegStep(2)
+      return
+    } else {
       if (!validateCPF(cpf)) { setError('CPF inválido. Verifique os dígitos informados.'); return }
       const phoneDigits = phone.replace(/\D/g, '')
       if (phoneDigits.length < 10 || phoneDigits.length > 11) {
         setError('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX.')
         return
       }
-      const { score: pwScore } = getPasswordStrength(password)
-      if (pwScore < 4) { setError('A senha deve ter pelo menos 8 caracteres, uma letra maiúscula, um número e um caractere especial.'); return }
       if (password !== confirm) { setError('As senhas não coincidem.'); return }
       if (!acceptedTerms) { setError('Você precisa aceitar os Termos de Uso e a Política de Privacidade.'); return }
     }
@@ -163,14 +171,16 @@ export default function Login() {
     setLoading(true)
     try {
       if (mode === 'login') {
-        await login(getIdentifier(), password)
+        await login(getIdentifier(), password, captchaToken || undefined)
         navigate(redirectTo ?? '/picks')
       } else {
-        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms)
+        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
         localStorage.removeItem('ref_code')
         navigate(redirectTo ?? '/picks#guia')
       }
     } catch (err: any) {
+      turnstileRef.current?.reset()
+      setCaptchaToken('')
       const detail = err.response?.data?.detail
       if (Array.isArray(detail)) {
         const msg = detail.map((e: any) => e.msg || e.message || String(e)).join('. ')
@@ -190,9 +200,12 @@ export default function Login() {
   const switchMode = () => {
     setMode(m => m === 'login' ? 'register' : 'login')
     setError('')
+    setRegStep(1)
+    setCaptchaToken('')
     setLoginUsername(''); setLoginEmail(''); setLoginCpf('')
     setName(''); setUsername(''); setCpf(''); setPhone(''); setConfirm('')
   }
+
 
   const loginTabs: { key: LoginMethod; label: string }[] = [
     { key: 'username', label: 'Usuário' },
@@ -208,12 +221,8 @@ export default function Login() {
         <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
 
-        <img src="/trofeu.png" alt="" aria-hidden="true"
-          className="absolute inset-0 w-full h-full object-contain opacity-[0.06] pointer-events-none select-none"
-          onError={e => (e.currentTarget.style.display = 'none')} />
-
         <div className="relative z-10 text-center px-12">
-          <img src="/logo.png" alt="Pick IA" className="w-52 h-52 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
+          <img src="/logo.png" alt="Pick IA" width={208} height={208} className="w-52 h-52 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
           <h1 className="text-5xl font-black text-white tracking-tight mb-3">Pick<span className="text-green-500">IA</span></h1>
           <p className="text-zinc-400 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
           <div className="mt-8 text-left max-w-xs mx-auto">
@@ -237,7 +246,7 @@ export default function Login() {
           </div>
           <a href="https://www.instagram.com/pickia.br/" target="_blank" rel="noopener noreferrer"
             className="mt-8 flex items-center gap-2 text-zinc-500 hover:text-pink-400 transition-colors justify-center">
-            <img src="/instagram.png" alt="Instagram" className="w-5 h-5 rounded-sm object-cover" />
+            <img src="/instagram.png" alt="Instagram" width={20} height={20} className="w-5 h-5 rounded-sm object-cover" />
             <span className="text-sm font-semibold">@pickia.br</span>
           </a>
         </div>
@@ -249,7 +258,7 @@ export default function Login() {
 
           {/* Mobile logo */}
           <div className="flex lg:hidden flex-col items-center mb-10">
-            <img src="/logo.png" alt="Pick IA" className="w-24 h-24 mb-3" />
+            <img src="/logo.png" alt="Pick IA" width={96} height={96} className="w-24 h-24 mb-3" />
             <h1 className="text-3xl font-black text-white">Pick<span className="text-green-500">IA</span></h1>
           </div>
 
@@ -322,13 +331,22 @@ export default function Login() {
             )}
 
             {mode === 'register' && (
+              <div className="flex items-center gap-2 -mt-1 mb-1">
+                {[1, 2].map(step => (
+                  <div key={step} className={`h-1 flex-1 rounded-full transition-colors ${step <= regStep ? 'bg-green-500' : 'bg-zinc-800'}`} />
+                ))}
+                <span className="text-[11px] text-zinc-500 font-semibold shrink-0 ml-1">Passo {regStep} de 2</span>
+              </div>
+            )}
+
+            {mode === 'register' && regStep === 1 && (
               <>
                 <div>
                   <label htmlFor="reg-name" className="block text-sm text-zinc-400 mb-1.5 font-medium">Nome completo</label>
                   <input id="reg-name" type="text" value={name}
                     onChange={e => setName(e.target.value)}
                     required className="input" placeholder="Nome e sobrenome"
-                    autoComplete="name" />
+                    autoComplete="name" autoFocus />
                 </div>
                 <div>
                   <label htmlFor="reg-username" className="block text-sm text-zinc-400 mb-1.5 font-medium">Usuário</label>
@@ -345,12 +363,24 @@ export default function Login() {
                     required className="input" placeholder="seu@email.com"
                     autoComplete="email" />
                 </div>
+              </>
+            )}
+
+            {mode === 'register' && regStep === 2 && (
+              <button type="button" onClick={() => setRegStep(1)}
+                className="text-zinc-500 hover:text-zinc-300 text-xs font-semibold transition-colors -mt-1 mb-1">
+                ← Voltar
+              </button>
+            )}
+
+            {mode === 'register' && regStep === 2 && (
+              <>
                 <div>
                   <label htmlFor="reg-cpf" className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
                   <input id="reg-cpf" type="text" value={cpf}
                     onChange={e => handleRegCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
-                    inputMode="numeric" autoComplete="off" />
+                    inputMode="numeric" autoComplete="off" autoFocus />
                   <p className="text-xs text-zinc-600 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
                 </div>
                 <div>
@@ -363,51 +393,53 @@ export default function Login() {
               </>
             )}
 
-            {/* Senha · comum aos dois modos */}
-            <div>
-              <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
-              <div className="relative">
-                <input id="password" type={showPassword ? 'text' : 'password'} value={password}
-                  onChange={e => setPassword(e.target.value)}
-                  required className="input pr-10"
-                  placeholder={mode === 'register' ? 'Mínimo 8 caracteres' : '••••••••'}
-                  autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
-                <button type="button" onClick={() => setShowPassword(v => !v)}
-                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
-                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
+            {/* Senha · login inteiro, ou passo 1 do cadastro */}
+            {(mode === 'login' || (mode === 'register' && regStep === 1)) && (
+              <div>
+                <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
+                <div className="relative">
+                  <input id="password" type={showPassword ? 'text' : 'password'} value={password}
+                    onChange={e => setPassword(e.target.value)}
+                    required className="input pr-10"
+                    placeholder={mode === 'register' ? 'Mínimo 10 caracteres' : '••••••••'}
+                    autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
+                  <button type="button" onClick={() => setShowPassword(v => !v)}
+                    aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+                {mode === 'register' && password.length > 0 && (() => {
+                  const { score, checks } = getPasswordStrength(password)
+                  const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
+                  const labels    = ['Fraca', 'Boa', 'Forte']
+                  const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                  const label     = score > 0 ? labels[score - 1] : ''
+                  return (
+                    <div className="mt-2 space-y-2">
+                      {/* Barras */}
+                      <div className="flex items-center gap-1.5">
+                        {[1,2,3].map(i => (
+                          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                        ))}
+                        {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
+                      </div>
+                      {/* Checklist */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                        {checks.map(c => (
+                          <div key={c.label} className="flex items-center gap-1.5">
+                            <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
+                            <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
               </div>
-              {mode === 'register' && password.length > 0 && (() => {
-                const { score, checks } = getPasswordStrength(password)
-                const barColors = ['bg-red-500', 'bg-orange-400', 'bg-yellow-400', 'bg-green-500']
-                const labels    = ['Fraca', 'Razoável', 'Boa', 'Forte']
-                const color     = barColors[score - 1] ?? 'bg-zinc-700'
-                const label     = score > 0 ? labels[score - 1] : ''
-                return (
-                  <div className="mt-2 space-y-2">
-                    {/* Barras */}
-                    <div className="flex items-center gap-1.5">
-                      {[1,2,3,4].map(i => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
-                      ))}
-                      {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
-                    </div>
-                    {/* Checklist */}
-                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
-                      {checks.map(c => (
-                        <div key={c.label} className="flex items-center gap-1.5">
-                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
-                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )
-              })()}
-            </div>
+            )}
 
-            {mode === 'register' && (
+            {mode === 'register' && regStep === 2 && (
               <div>
                 <label htmlFor="password-confirm" className="block text-sm text-zinc-400 mb-1.5 font-medium">Confirmar senha</label>
                 <div className="relative">
@@ -424,14 +456,14 @@ export default function Login() {
               </div>
             )}
 
-            {mode === 'register' && refCode && (
+            {mode === 'register' && regStep === 2 && refCode && (
               <div className="bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl px-4 py-3 text-xs flex items-center gap-2">
                 <PartyPopper className="w-4 h-4 shrink-0" />
                 <span>Código de indicação <strong>{refCode}</strong> aplicado!</span>
               </div>
             )}
 
-            {mode === 'register' && (
+            {mode === 'register' && regStep === 2 && (
               <label className="flex items-start gap-3 cursor-pointer">
                 <input
                   type="checkbox"
@@ -449,6 +481,10 @@ export default function Login() {
               </label>
             )}
 
+            {(mode === 'login' || (mode === 'register' && regStep === 2)) && (
+              <Turnstile ref={turnstileRef} onVerify={setCaptchaToken} />
+            )}
+
             {error && (
               <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 text-sm">
                 {error}
@@ -456,7 +492,7 @@ export default function Login() {
             )}
 
             <button type="submit" disabled={loading} className="btn-primary w-full text-center mt-2">
-              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : 'Ativar 2 dias VIP grátis'}
+              {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : regStep === 1 ? 'Continuar' : 'Ativar 2 dias VIP grátis'}
             </button>
           </form>
 

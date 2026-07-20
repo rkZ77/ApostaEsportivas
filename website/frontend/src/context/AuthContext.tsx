@@ -16,8 +16,8 @@ interface User {
 
 interface AuthContextType {
   user: User | null
-  login: (identifier: string, password: string) => Promise<User>
-  register: (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string, accepted_terms?: boolean) => Promise<User>
+  login: (identifier: string, password: string, captcha_token?: string) => Promise<User>
+  register: (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string, accepted_terms?: boolean, captcha_token?: string) => Promise<User>
   logout: () => void
   updateUser: (patch: Partial<User>) => void
   refreshUser: () => Promise<void>
@@ -38,14 +38,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(u)
   }
 
-  const login = async (identifier: string, password: string): Promise<User> => {
-    const { data } = await api.post('/auth/login', { identifier, password })
+  const login = async (identifier: string, password: string, captcha_token?: string): Promise<User> => {
+    const { data } = await api.post('/auth/login', { identifier, password, captcha_token })
     _save(data.user)
     return data.user
   }
 
-  const register = async (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string, accepted_terms?: boolean): Promise<User> => {
-    const { data } = await api.post('/auth/register', { name, email, password, phone, cpf, username, ref_code, accepted_terms })
+  const register = async (name: string, email: string, password: string, phone: string, cpf: string, username?: string, ref_code?: string, accepted_terms?: boolean, captcha_token?: string): Promise<User> => {
+    const { data } = await api.post('/auth/register', { name, email, password, phone, cpf, username, ref_code, accepted_terms, captcha_token })
     localStorage.setItem('pickia_just_registered', '1')
     _save(data.user)
     return data.user

@@ -8,7 +8,7 @@ export default function Footer() {
 
           {/* Logo + tagline */}
           <div className="flex items-center gap-2.5">
-            <img src="/logo.png" alt="PickIA" className="w-7 h-7 rounded-full object-cover" />
+            <img src="/logo.png" alt="PickIA" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
             <span className="text-sm font-black text-zinc-300">Pick<span className="text-green-500">IA</span></span>
           </div>
 
@@ -20,7 +20,7 @@ export default function Footer() {
               rel="noopener noreferrer"
               className="flex items-center gap-1.5 text-xs text-zinc-500 hover:text-pink-400 transition-colors font-semibold"
             >
-              <img src="/instagram.png" alt="Instagram" className="w-4 h-4 rounded-sm object-cover" />
+              <img src="/instagram.png" alt="Instagram" width={16} height={16} className="w-4 h-4 rounded-sm object-cover" />
               @pickia.br
             </a>
             <Link to="/planos" className="text-xs text-zinc-500 hover:text-green-400 transition-colors">

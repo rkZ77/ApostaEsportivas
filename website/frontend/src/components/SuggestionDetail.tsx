@@ -202,7 +202,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 {/* Casa */}
                 <div className="flex-1 flex items-center gap-2 min-w-0">
                   {homeLogo && (
-                    <img src={homeLogo} alt="" className="w-8 h-8 object-contain shrink-0"
+                    <img src={homeLogo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   )}
                   <span className="font-black text-white text-sm leading-tight truncate">{s.home_team_name}</span>
@@ -228,7 +228,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div className="flex-1 flex items-center gap-2 justify-end min-w-0">
                   <span className="font-black text-white text-sm leading-tight truncate text-right">{s.away_team_name}</span>
                   {awayLogo && (
-                    <img src={awayLogo} alt="" className="w-8 h-8 object-contain shrink-0"
+                    <img src={awayLogo} alt="" width={32} height={32} className="w-8 h-8 object-contain shrink-0"
                       onError={e => (e.currentTarget.style.display = 'none')} />
                   )}
                 </div>
@@ -388,13 +388,13 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
                                   {homeLogo && (
-                                    <img src={homeLogo} alt="" className="w-4 h-4 object-contain shrink-0"
+                                    <img src={homeLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                                       onError={e => (e.currentTarget.style.display = 'none')} />
                                   )}
                                   <span className="text-sm font-semibold text-white truncate">{homeTeam}</span>
                                   <span className="text-zinc-600 text-xs shrink-0">vs</span>
                                   {awayLogo && (
-                                    <img src={awayLogo} alt="" className="w-4 h-4 object-contain shrink-0"
+                                    <img src={awayLogo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                                       onError={e => (e.currentTarget.style.display = 'none')} />
                                   )}
                                   <span className="text-sm font-semibold text-white truncate">{awayTeam}</span>
@@ -467,7 +467,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         {/* Time + forma */}
                         <div className="flex items-center gap-2 mb-2">
                           {logo && (
-                            <img src={logo} alt="" className="w-5 h-5 object-contain"
+                            <img src={logo} alt="" width={20} height={20} className="w-5 h-5 object-contain"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
                           <span className="text-xs font-bold text-white truncate">{name}</span>
@@ -543,7 +543,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                               <span className={`text-xs font-black ${isHome || isAway ? 'text-white' : 'text-zinc-500'}`}>{t.pos}</span>
                               <div className="flex items-center gap-1.5 min-w-0">
                                 {logo && (
-                                  <img src={logo} alt="" className="w-4 h-4 object-contain shrink-0"
+                                  <img src={logo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                                     onError={e => (e.currentTarget.style.display = 'none')} />
                                 )}
                                 <span className={`text-xs truncate ${isHome ? 'text-green-400 font-bold' : isAway ? 'text-blue-400 font-bold' : 'text-zinc-300'}`}>
@@ -647,14 +647,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                                   <div className="flex items-center gap-1 flex-wrap mb-0.5">
                                     {pick.home_team_id_1 && (
                                       <img src={`/api/proxy/team/${pick.home_team_id_1}.png`}
-                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain shrink-0"
                                         onError={e => (e.currentTarget.style.display = 'none')} />
                                     )}
                                     <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
                                     <span className="text-zinc-600 text-[10px]">vs</span>
                                     {pick.away_team_id_1 && (
                                       <img src={`/api/proxy/team/${pick.away_team_id_1}.png`}
-                                        alt="" className="w-3.5 h-3.5 object-contain shrink-0"
+                                        alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain shrink-0"
                                         onError={e => (e.currentTarget.style.display = 'none')} />
                                     )}
                                     <span className="text-xs font-bold text-white truncate">{pick.away_team_1}</span>

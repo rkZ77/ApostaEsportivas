@@ -121,7 +121,7 @@ export default function Planos() {
     <>
     <Helmet>
       <title>Planos · Pick IA | VIP e Free para Apostas Esportivas</title>
-      <meta name="description" content="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Copa do Mundo 2026." />
+      <meta name="description" content="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias." />
       <link rel="canonical" href="https://pickia.com.br/planos" />
     </Helmet>
     <div className="min-h-screen bg-black">

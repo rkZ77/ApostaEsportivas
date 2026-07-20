@@ -18,7 +18,7 @@ const SUGGESTIONS = [
   'Qual o desempenho dos picks este mês?',
   'Como funciona a alavancagem?',
   'Jogos ao vivo agora',
-  'Classificação da Copa do Mundo 2026',
+  'Classificação do Brasileirão',
 ]
 
 function TypingDots() {

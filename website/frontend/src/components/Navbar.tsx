@@ -70,7 +70,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/picks" className="flex items-center gap-3">
-            <img src="/logo.png" alt="Pick IA" className="w-10 h-10 rounded-full object-cover" />
+            <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
             <div className="hidden sm:block">
               <span className="text-white font-black text-lg tracking-tight">Pick</span>
               <span className="text-green-500 font-black text-lg">IA</span>

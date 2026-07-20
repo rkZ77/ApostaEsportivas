@@ -162,7 +162,7 @@ function TeamDonutRow({ matches, teamId, name, logoSrc, circles }: {
   return (
     <div className="py-3 border-b border-zinc-800/50">
       <div className="flex items-center gap-2 mb-1.5">
-        <img src={logoSrc} alt={name} className="w-5 h-5 object-contain shrink-0"
+        <img src={logoSrc} alt={name} width={20} height={20} className="w-5 h-5 object-contain shrink-0"
           onError={e => (e.currentTarget.style.display = 'none')} />
         <span className="text-xs font-semibold text-zinc-300 truncate flex-1">{name}</span>
         <span className="text-[10px] text-zinc-600 shrink-0">{matches.length}J</span>
@@ -363,7 +363,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
           <div className="flex justify-between items-center mb-3">
             <div className="flex items-center gap-2">
               {fixture.league_flag && (
-                <img src={fixture.league_flag} alt="" className="w-4 h-3 object-cover rounded-sm"
+                <img src={fixture.league_flag} alt="" width={16} height={12} className="w-4 h-3 object-cover rounded-sm"
                   onError={e => (e.currentTarget.style.display = 'none')} />
               )}
               <span className="text-xs text-zinc-400 font-semibold">{fixture.league_name}</span>
@@ -376,7 +376,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
           {/* Teams + score */}
           <div className="flex items-center px-2 mb-4 gap-3">
             <div className="flex flex-col items-center gap-1.5 flex-1">
-              <img src={homeLogo} alt={fixture.home_team} className="w-10 h-10 object-contain"
+              <img src={homeLogo} alt={fixture.home_team} width={40} height={40} className="w-10 h-10 object-contain"
                 onError={e => (e.currentTarget.style.display = 'none')} />
               <span className="text-[11px] text-white font-semibold text-center leading-tight line-clamp-2 max-w-[80px]">
                 {fixture.home_team}
@@ -394,7 +394,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
               )}
             </div>
             <div className="flex flex-col items-center gap-1.5 flex-1">
-              <img src={awayLogo} alt={fixture.away_team} className="w-10 h-10 object-contain"
+              <img src={awayLogo} alt={fixture.away_team} width={40} height={40} className="w-10 h-10 object-contain"
                 onError={e => (e.currentTarget.style.display = 'none')} />
               <span className="text-[11px] text-white font-semibold text-center leading-tight line-clamp-2 max-w-[80px]">
                 {fixture.away_team}
