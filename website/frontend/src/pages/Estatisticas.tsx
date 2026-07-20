@@ -190,7 +190,7 @@ export function EstatisticasContent() {
                 key: 'league', label: 'Liga',
                 options: leagues.map(l => ({
                   value: String(l.league_id), label: l.name,
-                  icon: <img src={LEAGUE_LOGO(l.league_id)} alt={l.name} className="w-4 h-4 object-contain"
+                  icon: <img src={LEAGUE_LOGO(l.league_id)} alt={l.name} width={16} height={16} className="w-4 h-4 object-contain"
                           onError={e => (e.currentTarget.style.display = 'none')} />,
                 })),
                 value: String(leagueId ?? leagues[0]?.league_id ?? ''),
@@ -216,7 +216,7 @@ export function EstatisticasContent() {
             {selectedLeague && (
               <div className="flex items-center gap-3">
                 <img src={LEAGUE_LOGO(selectedLeague.league_id)} alt={selectedLeague.name}
-                  className="w-8 h-8 object-contain"
+                  width={32} height={32} className="w-8 h-8 object-contain"
                   onError={e => (e.currentTarget.style.display = 'none')} />
                 <div>
                   <h2 className="text-white font-black text-base">{selectedLeague.name}</h2>
@@ -326,7 +326,7 @@ export function EstatisticasContent() {
                               className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
                               <span className={`text-sm font-black w-6 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
                               <img src={`/api/proxy/team/${team.team_id}.png`} alt=""
-                                className="w-6 h-6 object-contain shrink-0"
+                                width={24} height={24} className="w-6 h-6 object-contain shrink-0"
                                 onError={e => (e.currentTarget.style.display = 'none')} />
                               <span className="text-sm text-zinc-200 font-semibold flex-1 truncate">{team.team_name}</span>
                               <span className="text-[11px] text-zinc-600 shrink-0">{team.games}j</span>
@@ -371,7 +371,7 @@ export function EstatisticasContent() {
                         <div className="flex items-center gap-1.5">
                           {g.home_team_id && (
                             <img src={`/api/proxy/team/${g.home_team_id}.png`} alt=""
-                              className="w-4 h-4 object-contain shrink-0"
+                              width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
                           <span className="text-sm text-zinc-300 font-semibold truncate">{g.home_team}</span>
@@ -381,7 +381,7 @@ export function EstatisticasContent() {
                           <span className="text-sm text-zinc-300 font-semibold truncate">{g.away_team}</span>
                           {g.away_team_id && (
                             <img src={`/api/proxy/team/${g.away_team_id}.png`} alt=""
-                              className="w-4 h-4 object-contain shrink-0"
+                              width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
                         </div>

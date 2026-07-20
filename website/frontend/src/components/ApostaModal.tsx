@@ -45,7 +45,7 @@ export default function ApostaModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-2xl overflow-hidden"
+        className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-2xl overflow-y-auto max-h-[92dvh]"
         onClick={e => e.stopPropagation()}
       >
         {overrideStep ? (

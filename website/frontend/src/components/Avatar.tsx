@@ -23,6 +23,12 @@ const SIZE = {
   lg: 'w-16 h-16 text-xl',
 }
 
+const SIZE_PX = {
+  sm: 28,
+  md: 36,
+  lg: 64,
+}
+
 export default function Avatar({ name, imageUrl, size = 'md', className = '' }: AvatarProps) {
   const [imgError, setImgError] = useState(false)
 
@@ -42,6 +48,8 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
       <img
         src={src}
         alt={name}
+        width={SIZE_PX[size]}
+        height={SIZE_PX[size]}
         className={`${SIZE[size]} rounded-full object-cover shrink-0 ${className}`}
         onError={() => setImgError(true)}
       />

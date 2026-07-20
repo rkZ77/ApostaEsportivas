@@ -169,22 +169,6 @@ def delete_user(user_id: int, current_user: dict = Depends(require_admin)):
         conn.close()
 
 
-@router.get("/debug-paths")
-def debug_paths(current_user: dict = Depends(require_admin)):
-    dunder_file = os.path.abspath(__file__)
-    cwd = os.getcwd()
-    candidate1 = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../ApostaEsportivas/src"))
-    candidate2 = os.path.abspath(os.path.join(cwd, "ApostaEsportivas/src"))
-    return {
-        "__file__": dunder_file,
-        "cwd": cwd,
-        "PIPELINE_SRC_PATH_env": os.getenv("PIPELINE_SRC_PATH"),
-        "_PIPELINE_DIR": _PIPELINE_DIR,
-        "candidate1_exists": os.path.isdir(candidate1),
-        "candidate2_exists": os.path.isdir(candidate2),
-    }
-
-
 _PIPELINE_SCRIPTS = {
     "atualizar_jogos":      "atualizar_jogos.py",
     "capturar_odds":        "capturar_odds.py",

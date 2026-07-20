@@ -31,6 +31,7 @@ _OPTIONAL_VARS = {
     "MERCADOPAGO_ACCESS_TOKEN": "pagamentos",
     "ANTHROPIC_API_KEY": "IA / picks",
     "RESEND_API_KEY": "envio de emails",
+    "TURNSTILE_SECRET_KEY": "verificação anti-bot (captcha) no login/cadastro",
 }
 
 _missing_required = [v for v in _REQUIRED_VARS if not os.getenv(v)]
@@ -71,11 +72,12 @@ async def security_headers(request: Request, call_next):
     response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
     response.headers["Content-Security-Policy"] = (
         "default-src 'self'; "
-        "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com; "
+        "script-src 'self' https://www.googletagmanager.com https://www.google-analytics.com https://challenges.cloudflare.com; "
         "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
         "img-src 'self' data: https:; "
-        "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com; "
+        "connect-src 'self' https://www.google-analytics.com https://analytics.google.com https://region1.google-analytics.com https://challenges.cloudflare.com; "
         "font-src 'self' data: https://fonts.gstatic.com; "
+        "frame-src https://challenges.cloudflare.com; "
         "frame-ancestors 'none'"
     )
     return response
