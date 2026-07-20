@@ -1,11 +1,14 @@
 import os
 import re
+import time
 import base64
 import hashlib
 import logging
 import secrets
 import pathlib
 import shutil
+import httpx
+from collections import defaultdict
 
 def _detect_device(user_agent: str) -> str:
     ua = (user_agent or "").lower()
@@ -39,6 +42,58 @@ from auth_utils import (
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
 _LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
+
+# Lockout por conta (além do lockout por IP em main.py): sem isso, um ataque
+# distribuído por IP contorna o limite por IP mas ainda bate sempre na mesma
+# conta-alvo. Chave é o identifier normalizado (email/cpf/username), não o id
+# do usuário, já que uma conta inexistente/errada também deve contar.
+_account_login_failures: dict[str, list[float]] = defaultdict(list)
+ACCOUNT_LOGIN_MAX_FAILURES = 10
+ACCOUNT_LOGIN_LOCKOUT_SECS = 900
+
+
+def _check_account_lockout(key: str) -> None:
+    now = time.time()
+    attempts = [t for t in _account_login_failures[key] if now - t < ACCOUNT_LOGIN_LOCKOUT_SECS]
+    _account_login_failures[key] = attempts
+    if len(attempts) >= ACCOUNT_LOGIN_MAX_FAILURES:
+        remaining = int(ACCOUNT_LOGIN_LOCKOUT_SECS - (now - attempts[0]))
+        raise HTTPException(status_code=429, detail=f"Conta temporariamente bloqueada. Tente novamente em {remaining // 60} min.")
+
+
+def _record_account_failure(key: str) -> None:
+    _account_login_failures[key].append(time.time())
+
+
+# Verificação anti-bot (Cloudflare Turnstile) em login/cadastro. Sem
+# TURNSTILE_SECRET_KEY configurada (ex: dev local), pula a verificação --
+# mesmo padrão de "integração opcional" já usado pra pagamentos/IA/email
+# (ver _OPTIONAL_VARS em main.py).
+TURNSTILE_SECRET_KEY = os.getenv("TURNSTILE_SECRET_KEY", "")
+_TURNSTILE_VERIFY_URL = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
+
+
+def _verify_captcha(token: str | None, request: Request) -> None:
+    if not TURNSTILE_SECRET_KEY:
+        return
+    if not token:
+        raise HTTPException(status_code=400, detail="Verificação de segurança pendente. Tente novamente.")
+    try:
+        resp = httpx.post(
+            _TURNSTILE_VERIFY_URL,
+            data={
+                "secret": TURNSTILE_SECRET_KEY,
+                "response": token,
+                "remoteip": request.headers.get("CF-Connecting-IP") or (request.client.host if request.client else ""),
+            },
+            timeout=8.0,
+        )
+        ok = bool(resp.json().get("success"))
+    except (httpx.HTTPError, ValueError):
+        logging.getLogger("auth").warning("Falha ao contatar Turnstile pra verificação de captcha")
+        raise HTTPException(status_code=503, detail="Não foi possível validar a verificação de segurança. Tente novamente.")
+    if not ok:
+        raise HTTPException(status_code=400, detail="Verificação de segurança falhou. Tente novamente.")
 
 
 def _hash_token(token: str) -> str:
@@ -78,8 +133,12 @@ def _detect_image_type(data: bytes) -> str | None:
 
 
 def _validate_password(password: str) -> None:
-    if len(password) < 8:
-        raise HTTPException(400, "Senha deve ter pelo menos 8 caracteres")
+    if len(password) < 10:
+        raise HTTPException(400, "Senha deve ter pelo menos 10 caracteres")
+    if not re.search(r"[A-Z]", password):
+        raise HTTPException(400, "Senha deve ter letra maiúscula")
+    if not re.search(r"\d", password):
+        raise HTTPException(400, "Senha deve ter número")
 
 
 def _validate_cpf(cpf: str) -> str:
@@ -262,7 +321,7 @@ def _welcome_html(first_name: str, site_url: str, logo_b64: str = "", logo_url: 
         <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
           <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
             Siga no Instagram:
-            <a href="https://www.instagram.com/pickia_br/" style="color:#22c55e;text-decoration:none;">@pickia_br</a>
+            <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
           </p>
           <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
         </td></tr>
@@ -304,7 +363,7 @@ def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str
         </td></tr>
         <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
           <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
-            Siga no Instagram: <a href="https://www.instagram.com/pickia_br/" style="color:#22c55e;text-decoration:none;">@pickia_br</a>
+            Siga no Instagram: <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
           </p>
           <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
         </td></tr>
@@ -343,10 +402,12 @@ class RegisterBody(BaseModel):
     username: Optional[str] = None
     ref_code: Optional[str] = None
     accepted_terms: bool = False
+    captcha_token: Optional[str] = None
 
 class LoginBody(BaseModel):
     identifier: str  # e-mail, CPF ou username
     password: str
+    captcha_token: Optional[str] = None
 
 class ForgotPasswordBody(BaseModel):
     email: EmailStr
@@ -369,6 +430,7 @@ class UpdateProfileBody(BaseModel):
 
 @router.post("/register")
 def register(body: RegisterBody, response: Response, background_tasks: BackgroundTasks, request: Request):
+    _verify_captcha(body.captcha_token, request)
     if not body.accepted_terms:
         raise HTTPException(status_code=400, detail="Você precisa aceitar os Termos de Uso e a Política de Privacidade.")
     conn = get_connection()
@@ -490,6 +552,10 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
 
 @router.post("/login")
 def login(body: LoginBody, response: Response, request: Request):
+    _verify_captcha(body.captcha_token, request)
+    lockout_key = body.identifier.strip().lower()
+    _check_account_lockout(lockout_key)
+
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -503,13 +569,16 @@ def login(body: LoginBody, response: Response, request: Request):
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE username = %s", (id_value,))
         row = cur.fetchone()
         if not row:
+            _record_account_failure(lockout_key)
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
 
         user = dict(row)
         if not user["active"]:
             raise HTTPException(status_code=403, detail="Conta desativada")
         if not verify_password(body.password, user["password_hash"]):
+            _record_account_failure(lockout_key)
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
+        _account_login_failures.pop(lockout_key, None)
 
         # Auto-expire VIP/trial expirado
         if user["plan"] in ("vip", "trial") and user.get("expires_at"):

@@ -49,7 +49,7 @@ export default function Navbar() {
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
-    { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
+    { to: '/resultados', label: 'Resultados da IA', Icon: BarChart2 },
     { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
     { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
@@ -70,7 +70,7 @@ export default function Navbar() {
 
           {/* Logo */}
           <Link to="/picks" className="flex items-center gap-3">
-            <img src="/logo.png" alt="Pick IA" className="w-10 h-10 rounded-full object-cover" />
+            <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
             <div className="hidden sm:block">
               <span className="text-white font-black text-lg tracking-tight">Pick</span>
               <span className="text-green-500 font-black text-lg">IA</span>

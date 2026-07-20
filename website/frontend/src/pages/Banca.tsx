@@ -67,7 +67,7 @@ function SetupModal({ current, onSave, onClose }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
         <h2 className="text-white font-black text-lg mb-1">Configurar banca</h2>
         <p className="text-zinc-500 text-xs mb-5">Define banca, unidade e meta como um tipster profissional.</p>
 

@@ -1,6 +1,14 @@
 # ── Stage 1: Build React frontend ─────────────────────────────
 FROM node:20-slim AS frontend
 WORKDIR /frontend
+# Vite so consegue ler VITE_* de process.env durante o "npm run build" --
+# variaveis do Railway sao injetadas em tempo de execucao, nao chegam
+# sozinhas dentro de um estagio isolado de build do Dockerfile. Precisa
+# declarar cada uma como ARG aqui pra ela virar ENV disponivel pro build.
+ARG VITE_TURNSTILE_SITE_KEY
+ENV VITE_TURNSTILE_SITE_KEY=$VITE_TURNSTILE_SITE_KEY
+ARG VITE_CONTACT_URL
+ENV VITE_CONTACT_URL=$VITE_CONTACT_URL
 COPY website/frontend/package*.json ./
 RUN npm ci --ignore-scripts
 COPY website/frontend/ .

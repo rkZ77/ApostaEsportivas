@@ -232,6 +232,8 @@ function ActiveLeagues() {
               <img
                 src={logo_url}
                 alt={name}
+                width={40}
+                height={40}
                 className="w-10 h-10 object-contain"
                 onError={e => (e.currentTarget.style.display = 'none')}
               />
@@ -470,7 +472,7 @@ function LeaderboardTeaser() {
                 </span>
                 <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-400 shrink-0 overflow-hidden">
                   {l.avatar_url
-                    ? <img src={l.avatar_url} alt={l.name} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
+                    ? <img src={l.avatar_url} alt={l.name} width={36} height={36} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                     : l.name[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
@@ -571,7 +573,7 @@ export default function Landing() {
       <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md" ref={menuRef}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img src="/logo.png" alt="PickIA" className="w-9 h-9 rounded-full object-cover" />
+            <img src="/logo.png" alt="PickIA" width={36} height={36} className="w-9 h-9 rounded-full object-cover" />
             <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
             <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
@@ -626,10 +628,6 @@ export default function Landing() {
       </nav>
 
       <section className="relative overflow-hidden">
-        {/* Troféu no fundo */}
-        <img src="/trofeu.png" alt="" aria-hidden="true"
-          className="absolute right-0 top-0 h-full max-w-[55%] object-contain object-right opacity-[0.07] pointer-events-none select-none hidden md:block"
-          onError={e => (e.currentTarget.style.display = 'none')} />
         {/* Background gradients */}
         <div className="absolute inset-0 bg-gradient-to-br from-green-500/6 via-transparent to-transparent" />
 

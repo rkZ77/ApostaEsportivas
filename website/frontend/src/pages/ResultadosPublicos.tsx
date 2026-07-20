@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
@@ -8,6 +8,16 @@ import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import { useShareResultsImage, useShareTodayGamesImage, useShareLeagueResultsImage } from '../hooks/useShareStoryImage'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
+import { useAuth } from '../context/AuthContext'
+import Navbar from '../components/Navbar'
+import SuggestionDetail from '../components/SuggestionDetail'
+
+const RESULTADO_OPTIONS = [
+  { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
+  { value: 'PUSH', label: 'Push' }, { value: 'HALF-WIN', label: '½ Win' }, { value: 'HALF-LOSS', label: '½ Loss' },
+  { value: 'pending', label: 'Pendente' },
+]
+const GAMES_PAGE_SIZE = 10
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
@@ -68,9 +78,61 @@ export default function ResultadosPublicos() {
   const [todayGames, setTodayGames] = useState<any[]>([])
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
+  const { user } = useAuth()
+  const [tab, setTab] = useState<'resumo' | 'por_jogo' | 'por_mes'>('resumo')
+
   const shareResults = useShareResultsImage()
+  const shareCurrentMonth = useShareResultsImage()
   const shareTodayGames = useShareTodayGamesImage()
   const shareLeagueResults = useShareLeagueResultsImage()
+
+  // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
+  const [games, setGames]           = useState<any[]>([])
+  const [gamesTotal, setGamesTotal] = useState(0)
+  const [gamesPage, setGamesPage]   = useState(0)
+  const [gamesFilter, setGamesFilter] = useState('all')
+  const [gamesLoading, setGamesLoading] = useState(false)
+  const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
+
+  // "Por Mês" · também exige login
+  const [monthly, setMonthly]   = useState<any[]>([])
+  const [monthLoad, setMonthLoad] = useState(false)
+
+  const monthDateRange = (m: string): { date_from?: string; date_to?: string } => {
+    if (!m) return {}
+    const [y, mo] = m.split('-').map(Number)
+    const lastDay = new Date(y, mo, 0).getDate()
+    return { date_from: `${m}-01`, date_to: `${m}-${String(lastDay).padStart(2, '0')}` }
+  }
+
+  const fetchGames = useCallback((page: number, resultado: string, src: string, m: string) => {
+    setGamesLoading(true)
+    const { date_from, date_to } = monthDateRange(m)
+    const params: any = { limit: GAMES_PAGE_SIZE, offset: page * GAMES_PAGE_SIZE, source: src, days: 3650 }
+    if (date_from) params.date_from = date_from
+    if (date_to) params.date_to = date_to
+    if (resultado !== 'all') params.resultado = resultado
+    api.get('/suggestions/results/games', { params })
+      .then(r => { setGames(r.data.items); setGamesTotal(r.data.total) })
+      .catch(() => { setGames([]); setGamesTotal(0) })
+      .finally(() => setGamesLoading(false))
+  }, [])
+
+  const fetchMonthly = useCallback((src: string) => {
+    setMonthLoad(true)
+    api.get('/suggestions/results/monthly', { params: { source: src } })
+      .then(r => setMonthly(r.data))
+      .catch(() => setMonthly([]))
+      .finally(() => setMonthLoad(false))
+  }, [])
+
+  useEffect(() => {
+    if (!user) return
+    if (tab === 'por_jogo') fetchGames(0, gamesFilter, source, month)
+    if (tab === 'por_mes')  fetchMonthly(source)
+    setGamesPage(0)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, user, source, month])
 
   useEffect(() => {
     setLoading(true)
@@ -111,6 +173,23 @@ export default function ResultadosPublicos() {
   const todayResult = byDay.find(d => d.match_date === todayStr)
   const todayWinRate = todayResult ? calcWinRate(todayResult.greens, todayResult.total) : null
 
+  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
+  const currentMonthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+
+  const shareThisMonth = async () => {
+    // Reaproveita o resumo já carregado se o filtro atual já é o mês corrente;
+    // senão busca o mês corrente à parte, sem alterar o filtro visível na tela.
+    const summary = month === currentMonthStr ? s : (await api.get('/public/results', { params: { month: currentMonthStr } })).data?.summary
+    if (!summary || summary.total === 0) return
+    const wr = calcWinRate(summary.greens, summary.total)
+    shareCurrentMonth.share({
+      winRatePct: wr ?? 0, total: summary.total, greens: summary.greens, reds: summary.reds, profit: Number(summary.profit),
+      badgeLabel: `RESULTADOS · ${currentMonthLabel.toUpperCase()}`,
+      footerText: `Referente a ${currentMonthLabel}`,
+      shareText: `Em ${currentMonthLabel}, a IA da Pick IA fechou ${summary.greens}G / ${summary.reds}R (${Math.round(wr ?? 0)}%). Histórico 100% auditável.`,
+    })
+  }
+
   return (
     <>
       <Helmet>
@@ -119,17 +198,27 @@ export default function ResultadosPublicos() {
       </Helmet>
 
       <div className="min-h-screen bg-black text-white">
-        {/* Nav */}
-        <nav className="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-40">
-          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-            <Link to="/" className="text-white font-black text-lg tracking-tight">
-              Pick<span className="text-green-400">IA</span>
-            </Link>
-            <Link to="/login" className="text-xs font-bold text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/10 transition-colors">
-              Entrar
-            </Link>
-          </div>
-        </nav>
+        {/* Nav: logado usa a navbar do app (já tem tudo), visitante anônimo (ex: veio de link compartilhado) vê nav enxuta */}
+        {user ? <Navbar /> : (
+          <nav className="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-40">
+            <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+              <Link to="/" className="text-white font-black text-lg tracking-tight">
+                Pick<span className="text-green-400">IA</span>
+              </Link>
+              <Link to="/login" className="text-xs font-bold text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/10 transition-colors">
+                Entrar
+              </Link>
+            </div>
+          </nav>
+        )}
+
+        {detailPick && (
+          <SuggestionDetail
+            id={detailPick.id}
+            pickType={detailPick.pick_type}
+            onClose={() => setDetailPick(null)}
+          />
+        )}
 
         <main className="max-w-5xl mx-auto px-4 py-10">
           <div className="mb-8 text-center">
@@ -154,7 +243,19 @@ export default function ResultadosPublicos() {
             ]}
           />
 
-          {loading ? (
+          {/* Abas · Por Jogo e Por Mês exigem login (dado detalhado por usuário) */}
+          {user && (
+            <div className="flex border-b border-zinc-800 mb-6 overflow-x-auto">
+              {([['resumo', 'Resumo'], ['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês']] as [typeof tab, string][]).map(([k, l]) => (
+                <button key={k} onClick={() => setTab(k)}
+                  className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                    tab === k ? 'border-green-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                  }`}>{l}</button>
+              ))}
+            </div>
+          )}
+
+          {tab === 'resumo' && (loading ? (
             <div className="flex justify-center py-20">
               <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
             </div>
@@ -183,6 +284,14 @@ export default function ResultadosPublicos() {
 
               {/* Compartilhar */}
               <div className="flex flex-wrap gap-2 justify-center mb-8">
+                <button
+                  onClick={shareThisMonth}
+                  disabled={shareCurrentMonth.sharing}
+                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  {shareCurrentMonth.shared ? 'Compartilhado!' : shareCurrentMonth.sharing ? 'Gerando...' : `Resultado de ${currentMonthLabel}`}
+                </button>
                 <button
                   onClick={() => shareResults.share({
                     winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0,
@@ -352,15 +461,139 @@ export default function ResultadosPublicos() {
                 )
               })()}
             </>
+          ))}
+
+          {tab === 'por_jogo' && user && (
+            <div>
+              <div className="mb-4">
+                <FilterPanel
+                  accent="green"
+                  groups={[{
+                    key: 'resultado', label: 'Resultado',
+                    options: RESULTADO_OPTIONS,
+                    value: gamesFilter, onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(0, v, source, month) },
+                  }]}
+                />
+              </div>
+              <p className="text-zinc-600 text-xs mb-4">{gamesTotal} picks</p>
+              {gamesLoading ? (
+                <div className="flex justify-center py-16">
+                  <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+                </div>
+              ) : games.length === 0 ? (
+                <div className="text-center py-16 text-zinc-500 text-sm">Nenhum pick encontrado.</div>
+              ) : (
+                <>
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+                    <div className="divide-y divide-zinc-800/50">
+                      {games.map(g => {
+                        const rs = getResultStyle(g.result)
+                        const badge = rs ? `${rs.bg} ${rs.text} ${rs.border}` : 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
+                        return (
+                          <div key={`${g.pick_type}-${g.id}`}
+                            className="flex items-center gap-2 px-4 py-3 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                            onClick={() => setDetailPick({ id: g.id, pick_type: g.pick_type })}>
+                            <span className="text-[10px] text-zinc-600 shrink-0 w-12">
+                              {new Date(g.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+                            </span>
+                            {g.pick_type && source === 'all' && (
+                              <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[g.pick_type] ?? ''}`}>
+                                {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type.toUpperCase()}
+                              </span>
+                            )}
+                            <div className="flex items-center gap-1 flex-1 min-w-0">
+                              <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
+                              <span className="text-xs text-zinc-300 truncate">{g.home_team_name}{g.away_team_name && g.pick_type !== 'multipla' ? ` x ${g.away_team_name}` : ''}</span>
+                            </div>
+                            <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[120px]">
+                              {g.market}{g.line ? ` · ${g.line}` : ''}
+                            </span>
+                            <span className="text-xs font-bold text-zinc-400 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
+                            {g.result ? (
+                              <span className={`text-xs font-black px-2 py-0.5 rounded border shrink-0 ${badge}`}>{rs ? rs.label : g.result}</span>
+                            ) : (
+                              <span className="text-zinc-600 text-xs shrink-0">Pendente</span>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  </div>
+                  {gamesTotal > GAMES_PAGE_SIZE && (() => {
+                    const totalPages = Math.ceil(gamesTotal / GAMES_PAGE_SIZE)
+                    const goTo = (p: number) => { setGamesPage(p); fetchGames(p, gamesFilter, source, month) }
+                    return (
+                      <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
+                        <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
+                        <span className="text-xs text-zinc-500 px-2">{gamesPage + 1} / {totalPages}</span>
+                        <button disabled={(gamesPage + 1) * GAMES_PAGE_SIZE >= gamesTotal} onClick={() => goTo(gamesPage + 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
+                      </div>
+                    )
+                  })()}
+                </>
+              )}
+            </div>
           )}
 
-          {/* CTA */}
+          {tab === 'por_mes' && user && (
+            monthLoad ? (
+              <div className="flex justify-center py-16">
+                <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+              </div>
+            ) : monthly.length === 0 ? (
+              <div className="text-center py-16 text-zinc-500 text-sm">Nenhum resultado mensal encontrado.</div>
+            ) : (
+              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[460px]">
+                    <thead>
+                      <tr className="border-b border-zinc-800">
+                        {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
+                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {monthly.map((m: any) => {
+                        const wr = m.win_rate ?? calcWinRate(m.greens, m.total) ?? 0
+                        const reds = m.reds ?? 0
+                        const [year, mo] = (m.month ?? '').split('-')
+                        const label = new Date(Number(year), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
+                        return (
+                          <tr key={m.month} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+                            <td className="px-3 sm:px-5 py-3 text-white font-semibold capitalize">{label}</td>
+                            <td className="px-3 sm:px-5 py-3 text-zinc-300">{m.total}</td>
+                            <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
+                            <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
+                            <td className="px-3 sm:px-5 py-3">
+                              <div className="flex items-center gap-2">
+                                <div className="bg-zinc-800 rounded-full h-1.5 w-16">
+                                  <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
+                                </div>
+                                <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>{wr}%</span>
+                              </div>
+                            </td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )
+          )}
+
+          {/* CTA · só faz sentido pra quem ainda não tem conta */}
+          {!user && (
           <div className="mt-12 text-center">
             <p className="text-zinc-500 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
             <Link to="/login" className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3.5 rounded-xl text-sm transition-colors">
               Criar conta · 2 dias VIP grátis
             </Link>
           </div>
+          )}
         </main>
       </div>
     </>

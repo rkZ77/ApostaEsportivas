@@ -124,13 +124,23 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, active, session_token, last_login_device, last_login_at FROM users WHERE id = %s", (payload.get("sub"),))
+        cur.execute(
+            "SELECT id, active, session_token, last_login_device, last_login_at, plan, expires_at FROM users WHERE id = %s",
+            (payload.get("sub"),),
+        )
         row = cur.fetchone()
     finally:
         cur.close(); conn.close()
 
     if not row or not row["active"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
+
+    # O claim "plan" do JWT pode ficar defasado por até ACCESS_TOKEN_EXPIRE_HOURS
+    # (ex: admin rebaixado continuaria passando em require_admin com o token antigo).
+    # Reconsulta sempre o plano/expiração reais do banco em vez de confiar no JWT.
+    payload = dict(payload)
+    payload["plan"] = row["plan"]
+    payload["plan_expires_at"] = row["expires_at"].isoformat() if row["expires_at"] else None
 
     # Sessão única: session_token no JWT deve bater com o hash guardado no banco
     # Admin fica isento · pode acessar de múltiplos dispositivos simultaneamente

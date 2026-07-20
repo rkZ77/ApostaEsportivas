@@ -1692,7 +1692,7 @@ export default function Picks() {
       {/* Modal de boas-vindas · configura banca */}
       {showBancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
                 <Wallet className="w-5 h-5 text-yellow-400" />
@@ -2021,7 +2021,7 @@ export default function Picks() {
             )}
 
 
-            <button onClick={() => navigate('/results')}
+            <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
@@ -2104,7 +2104,7 @@ export default function Picks() {
             </div>
 
 
-            <button onClick={() => navigate('/results')}
+            <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
@@ -2158,7 +2158,7 @@ export default function Picks() {
             </div>
 
 
-            <button onClick={() => navigate('/results')}
+            <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
@@ -2402,7 +2402,7 @@ export default function Picks() {
             )}
 
 
-            <button onClick={() => navigate('/results')}
+            <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>

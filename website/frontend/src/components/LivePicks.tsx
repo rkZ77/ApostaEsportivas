@@ -252,7 +252,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
         <div>
           <p className="font-bold text-white text-sm">Registrar Cashout</p>
           <p className="text-xs text-zinc-500 mt-0.5">

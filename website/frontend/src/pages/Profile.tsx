@@ -527,12 +527,6 @@ export default function Profile() {
           )}
         </div>
       </main>
-
-      {/* Copa do Mundo 2026 · canto inferior esquerdo (direito é ocupado pelo botão do WhatsApp) */}
-      <div className="fixed bottom-6 left-6 flex flex-col items-center gap-1 opacity-70 hover:opacity-100 transition-opacity pointer-events-none select-none">
-        <img src="/logo-copa-mundo.png" alt="Copa do Mundo 2026" className="w-14 h-14 object-contain drop-shadow-lg" />
-        <span className="text-zinc-500 text-[10px] font-semibold tracking-wide">Copa 2026</span>
-      </div>
     </div>
   )
 }
