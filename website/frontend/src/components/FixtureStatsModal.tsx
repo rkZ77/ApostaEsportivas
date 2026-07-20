@@ -117,7 +117,7 @@ function StatRow({ label, home, away, higherIsBetter = true }: {
   const awayWins = higherIsBetter ? a > h : a < h
   return (
     <div className="py-2">
-      <div className="text-[10px] text-zinc-600 text-center mb-1.5 uppercase tracking-wider font-semibold">{label}</div>
+      <div className="text-[10px] text-zinc-600 text-center mb-1.5 uppercase font-semibold">{label}</div>
       <div className="flex items-center gap-2">
         <span className={`text-sm font-bold tabular-nums w-10 text-right ${homeWins ? 'text-blue-400' : 'text-zinc-400'}`}>
           {home != null ? Number(home).toFixed(1) : ''}
@@ -221,7 +221,7 @@ function FormRow({ matches, teamId, name }: { matches: Match[]; teamId: number; 
   if (!matches.length) return null
   return (
     <div>
-      <p className="text-[10px] text-zinc-600 uppercase tracking-wider font-semibold mb-2 truncate">{name}</p>
+      <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2 truncate">{name}</p>
       <div className="flex gap-1.5 flex-wrap">
         {matches.slice(0, 8).map((m, i) => {
           const scored   = m.home_team_id === teamId ? (m.home_goals ?? 0) : (m.away_goals ?? 0)

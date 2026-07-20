@@ -213,25 +213,25 @@ export default function Planos() {
             <div className="grid grid-cols-2 gap-3 mb-5">
               {startDate && (
                 <div className="bg-zinc-800/60 rounded-xl p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Início</p>
+                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Início</p>
                   <p className="text-white text-xs font-semibold">{startDate}</p>
                 </div>
               )}
               {expiryDate && (
                 <div className="bg-zinc-800/60 rounded-xl p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
+                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
                   <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-white'}`}>{expiryDate}</p>
                 </div>
               )}
               {memberSince && (
                 <div className="bg-zinc-800/60 rounded-xl p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Membro desde</p>
+                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Membro desde</p>
                   <p className="text-white text-xs font-semibold">{memberSince}</p>
                 </div>
               )}
               {totalSpent > 0 && (
                 <div className="bg-zinc-800/60 rounded-xl p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase tracking-wider mb-0.5">Total investido</p>
+                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Total investido</p>
                   <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
                 </div>
               )}
@@ -277,7 +277,7 @@ export default function Planos() {
           <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase tracking-wider">Sem cartão</span>
+              <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase">Sem cartão</span>
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
@@ -313,7 +313,7 @@ export default function Planos() {
 
         {upgradeOptions.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
-            <p className="text-xs text-zinc-500 font-black uppercase tracking-wider mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
+            <p className="text-xs text-zinc-500 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
             <p className="text-white text-sm mb-4">
               No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
               Veja quanto economizaria mudando:
@@ -417,7 +417,7 @@ export default function Planos() {
 
         {payments.length > 0 && (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-            <h3 className="text-sm font-black text-white uppercase tracking-wider mb-4">Histórico de pagamentos</h3>
+            <h3 className="text-sm font-black text-white uppercase mb-4">Histórico de pagamentos</h3>
             <div className="space-y-0">
               {payments.map(p => {
                 const date = p.created_at

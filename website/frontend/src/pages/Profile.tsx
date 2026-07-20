@@ -256,7 +256,7 @@ export default function Profile() {
 
         {/* Assinatura */}
         <div className="card p-5">
-          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider mb-4">Assinatura</p>
+          <p className="text-xs text-zinc-500 font-semibold uppercase mb-4">Assinatura</p>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -291,7 +291,7 @@ export default function Profile() {
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-5">
-          <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Informações pessoais</p>
+          <p className="text-xs text-zinc-500 font-semibold uppercase">Informações pessoais</p>
           <div>
             <label className="text-xs text-zinc-500 block mb-1.5">Nome completo</label>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} required />
@@ -328,7 +328,7 @@ export default function Profile() {
           <hr className="border-zinc-800" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-zinc-500 font-semibold uppercase tracking-wider">Senha</p>
+              <p className="text-xs text-zinc-500 font-semibold uppercase">Senha</p>
               <p className="text-xs text-zinc-600 mt-0.5">Para alterar, use o link enviado por email</p>
             </div>
             <button
@@ -429,7 +429,7 @@ export default function Profile() {
         {/* Notificacoes push */}
         {push.supported && push.vapidKey !== '' && (
           <div className="card p-5">
-            <p className="text-xs text-zinc-500 uppercase tracking-wider font-semibold mb-3">Notificações</p>
+            <p className="text-xs text-zinc-500 uppercase font-semibold mb-3">Notificações</p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-zinc-800'}`}>

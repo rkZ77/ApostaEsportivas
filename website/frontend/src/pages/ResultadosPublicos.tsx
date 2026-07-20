@@ -257,7 +257,7 @@ export default function ResultadosPublicos() {
                 ].map(({ label, value, color }) => (
                   <div key={label} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-center">
                     <div className={`text-2xl font-black ${color}`}>{value}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase tracking-wider mt-1">{label}</div>
+                    <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                   </div>
                 ))}
               </div>
@@ -350,7 +350,7 @@ export default function ResultadosPublicos() {
               {byLeague.length > 0 && (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden mb-8">
                   <div className="px-5 py-3 border-b border-zinc-800">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Resultados por liga</span>
+                    <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
                   </div>
                   <div className="divide-y divide-zinc-800/50">
                     {byLeague.map((lg) => {
@@ -383,7 +383,7 @@ export default function ResultadosPublicos() {
                 return (
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-400 uppercase tracking-wider">Picks recentes</span>
+                    <span className="text-xs font-bold text-zinc-400 uppercase">Picks recentes</span>
                     <span className="text-[10px] text-zinc-600">{filteredRecent.length} resultados</span>
                   </div>
                   {recentLeagues.length > 1 && (
@@ -527,7 +527,7 @@ export default function ResultadosPublicos() {
                     <thead>
                       <tr className="border-b border-zinc-800">
                         {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
-                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase tracking-wider">{h}</th>
+                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
                         ))}
                       </tr>
                     </thead>
