@@ -612,7 +612,7 @@ export default function Banca() {
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] text-zinc-600">{fmtBRL(w.bankroll_before)} → {fmtBRL(w.bankroll_after)}</p>
+                        <p className="text-[10px] text-zinc-600">de {fmtBRL(w.bankroll_before)} pra {fmtBRL(w.bankroll_after)}</p>
                       </div>
                     </div>
                   ))}
