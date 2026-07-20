@@ -4,6 +4,7 @@ import { Helmet } from 'react-helmet-async'
 import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
+import CountdownTo7AM from '../components/CountdownTo7AM'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 
 const TEAM_LOGO = (id?: number | null) =>
@@ -671,6 +672,10 @@ export default function Landing() {
               </div>
 
               <SocialProofStats />
+
+              <div className="mt-5">
+                <CountdownTo7AM />
+              </div>
             </div>
 
             {/* Engine rodando ao vivo + Dica do Dia real -- preenche a coluna,

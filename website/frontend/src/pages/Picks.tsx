@@ -10,6 +10,7 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
+import CountdownTo7AM from '../components/CountdownTo7AM'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -1175,37 +1176,6 @@ function Spinner() {
   )
 }
 
-function CountdownTo7AM() {
-  const [timeLeft, setTimeLeft] = useState<string | null>(null)
-
-  useEffect(() => {
-    const update = () => {
-      const brNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      if (brNow.getHours() >= 12) { setTimeLeft(null); return }
-      const target = new Date(brNow)
-      target.setHours(12, 0, 0, 0)
-      if (brNow >= target) target.setDate(target.getDate() + 1)
-      const diff = target.getTime() - brNow.getTime()
-      const h = Math.floor(diff / 3600000)
-      const m = Math.floor((diff % 3600000) / 60000)
-      const s = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-    }
-    update()
-    const t = setInterval(update, 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  if (timeLeft === null) return null
-
-  return (
-    <div className="card p-8 text-center border-zinc-800">
-      <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
-      <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
-      <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
-    </div>
-  )
-}
 
 interface PipelineStep { key: string; label: string; status: 'pending' | 'running' | 'done' | 'error' }
 
