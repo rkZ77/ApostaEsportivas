@@ -318,8 +318,8 @@ function calcMultiProb(legs: any[]): number | null {
   for (const leg of legs) {
     const finished = FINISHED_SET.has(leg.status)
     if (leg.is_locked || finished) {
-      if (leg.pick_status === 'winning') continue  // já ganhou → fator 1
-      return 1                                     // já perdeu → pick inteiro perdido
+      if (leg.pick_status === 'winning') continue  // já ganhou, fator 1
+      return 1                                     // já perdeu, pick inteiro perdido
     }
     const isLive = LIVE_SET.has(leg.status)
     const legOdd = Number(leg.odd)

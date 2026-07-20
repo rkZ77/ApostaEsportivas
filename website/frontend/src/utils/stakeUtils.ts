@@ -27,9 +27,9 @@ export interface StakeSuggestion {
 /**
  * Caps máximos de stake por tipo de pick (% da banca).
  * Lógica espelhada no backend (_compute_suggested_stake_units).
- *   VIP      → 5%  banca  | Kelly ½
- *   Free     → 2%  banca  | Kelly ½
- *   Múltipla → 2.5% banca | Kelly ¼
+ *   VIP:      5%  banca  | Kelly ½
+ *   Free:     2%  banca  | Kelly ½
+ *   Múltipla: 2.5% banca | Kelly ¼
  */
 export const STAKE_CAPS = {
   vip:      { maxPct: 0.05, kellyFrac: 0.50 },
@@ -42,10 +42,10 @@ export const STAKE_CAPS = {
  * Preferir sempre usar suggested_stake_units vindo da API.
  *
  * Caps por nível de confiança (backend):
- *   conf ≥ 80% e EV > 10% → max 5%
- *   conf ≥ 72% e EV > 5%  → max 4%
- *   demais positivos       → max 3%
- *   EV ≤ 0                 → 1u (stat-strong)
+ *   conf ≥ 80% e EV > 10%: max 5%
+ *   conf ≥ 72% e EV > 5%: max 4%
+ *   demais positivos: max 3%
+ *   EV ≤ 0: 1u (stat-strong)
  */
 export function calcVipStake(
   prob: number,

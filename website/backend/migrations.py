@@ -69,6 +69,7 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS bankroll_goal NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS alav_bankroll_init NUMERIC(10,2);")
+        cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS last_manual_setup_month VARCHAR(7);")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_followed_picks (
                 id          SERIAL PRIMARY KEY,
@@ -189,6 +190,17 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_monthly_closes_user ON banca_monthly_closes(user_id, closed_at DESC);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS banca_withdrawals (
+                id              SERIAL PRIMARY KEY,
+                user_id         INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                amount          NUMERIC(10,2) NOT NULL,
+                bankroll_before NUMERIC(10,2) NOT NULL,
+                bankroll_after  NUMERIC(10,2) NOT NULL,
+                created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_withdrawals_user ON banca_withdrawals(user_id, created_at DESC);")
         conn.commit()
         return True
     except Exception as e:

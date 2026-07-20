@@ -20,6 +20,15 @@
     @apply bg-black text-gray-100 antialiased;
     font-family: 'Inter', sans-serif;
   }
+  /* Remove as setinhas nativas de incremento dos campos numéricos (todo o site) */
+  input[type="number"]::-webkit-outer-spin-button,
+  input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
 }
 
 @layer components {

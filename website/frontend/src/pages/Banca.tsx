@@ -18,10 +18,12 @@ const SOURCE_LBL: Record<string, string> = {
 
 // lock overlay para free
 // modal de setup
-function SetupModal({ current, onSave, onClose }: {
+function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
   current: { start: number; goal: number | null; unitValue: number }
+  locked?: boolean
   onSave: (start: number, goal: number | null, unitValue: number) => void
   onClose: () => void
+  onWithdraw: () => void
 }) {
   const [start,     setStart]     = useState(String(current.start))
   const [goal,      setGoal]      = useState(current.goal ? String(current.goal) : '')
@@ -63,6 +65,28 @@ function SetupModal({ current, onSave, onClose }: {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (locked) {
+    return (
+      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}>
+        <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
+          onClick={e => e.stopPropagation()}>
+          <h2 className="text-white font-black text-lg mb-2">Já configurada este mês</h2>
+          <p className="text-zinc-400 text-sm leading-relaxed mb-4">
+            Pra manter o histórico de risco confiável, a banca só pode ser configurada uma vez por
+            mês. Se você quer tirar um valor agora, use o botão "Sacar" (fica registrado no
+            histórico). Pra reconfigurar do zero, espera o fechamento mensal automático.
+          </p>
+          <div className="flex flex-col gap-2">
+            <button onClick={() => { onClose(); onWithdraw() }} className="btn-primary w-full py-2.5 text-sm">
+              Sacar da banca
+            </button>
+            <button onClick={onClose} className="btn-ghost w-full py-2.5 text-sm">Entendi</button>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -259,8 +283,10 @@ export default function Banca() {
       {showSetup && (
         <SetupModal
           current={{ start: data?.bankroll_start ?? 100, goal: data?.bankroll_goal ?? null, unitValue: data?.unit_value ?? 1 }}
+          locked={data?.can_configure === false}
           onSave={handleSave}
           onClose={() => setShowSetup(false)}
+          onWithdraw={() => navigate('/banca/saque')}
         />
       )}
 
@@ -288,11 +314,18 @@ export default function Banca() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap justify-end">
             <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2 hidden sm:inline-flex">
               Meus Picks
             </Link>
-            <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
+            <button onClick={() => navigate('/banca/saque')} className="btn-ghost text-xs px-3 py-2">
+              Sacar
+            </button>
+            <button
+              onClick={() => setShowSetup(true)}
+              className={`btn-ghost text-xs px-3 py-2 ${data?.can_configure === false ? 'opacity-50' : ''}`}
+              title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
+            >
               Configurar
             </button>
           </div>

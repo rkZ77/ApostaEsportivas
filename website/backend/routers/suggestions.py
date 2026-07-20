@@ -4,6 +4,7 @@ import re
 import psycopg2.extras
 from database import get_connection
 from auth_utils import get_current_user, require_vip, is_vip_active
+from routers.banca import _compute_bankroll_current
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
@@ -95,7 +96,11 @@ def _safe_query_one(cur, sql, params=()):
 
 def _get_user_banca(cur, user_id: int):
     """Retorna (bankroll_current, unit_value) ou None se banca não configurada.
-    Calcula bankroll_current = bankroll_start + PnL real (usando picks_vip/free/multiplas).
+
+    Reusa _compute_bankroll_current (mesma função de GET /banca e /banca/summary)
+    em vez de somar o PnL de todo o histórico aqui: sem o corte por epoch do
+    último fechamento mensal, essa conta dava banca inflada pra sempre depois do
+    primeiro fechamento (somava de novo o PnL que já tinha virado bankroll_start).
     """
     row = _safe_query_one(cur, """
         SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s
@@ -106,35 +111,7 @@ def _get_user_banca(cur, user_id: int):
     if unit_value <= 0:
         return None
     bankroll_start = float(row["bankroll_start"])
-
-    # PnL real: espelha o cálculo do /banca/summary
-    pnl_row = _safe_query_one(cur, """
-        SELECT COALESCE(SUM(
-            CASE
-                WHEN uf.cashout_amount IS NOT NULL
-                    THEN uf.cashout_amount - uf.stake_units * %(uv)s
-                WHEN uf.pick_type = 'vip' AND pv.result IS NOT NULL
-                    THEN COALESCE(pv.profit, 0) * uf.stake_units * %(uv)s
-                WHEN uf.pick_type = 'free' AND pf.result IS NOT NULL
-                    THEN COALESCE(pf.profit, 0) * uf.stake_units * %(uv)s
-                WHEN uf.pick_type = 'multipla' AND pm.result IS NOT NULL
-                    THEN CASE pm.result
-                        WHEN 'GREEN' THEN (COALESCE(pm.total_odd, 1) - 1) * uf.stake_units * %(uv)s
-                        WHEN 'RED'   THEN -1.0 * uf.stake_units * %(uv)s
-                        ELSE 0.0
-                    END
-                ELSE 0
-            END
-        ), 0) AS total_pnl
-        FROM user_followed_picks uf
-        LEFT JOIN picks_vip pv       ON uf.pick_type='vip'      AND pv.id=uf.pick_id
-        LEFT JOIN picks_free pf      ON uf.pick_type='free'      AND pf.id=uf.pick_id
-        LEFT JOIN picks_multiplas pm ON uf.pick_type='multipla'  AND pm.id=uf.pick_id
-        WHERE uf.user_id = %(uid)s
-    """, {"uv": unit_value, "uid": user_id})
-
-    pnl = float(pnl_row["total_pnl"]) if pnl_row else 0.0
-    bankroll = bankroll_start + pnl
+    bankroll = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
     return bankroll, unit_value
 
 
