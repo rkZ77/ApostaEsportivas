@@ -346,7 +346,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
-  // Prioridade: suggested_stake_units do backend → calcFreeStake fallback (max 2%)
+  // Prioridade: suggested_stake_units do backend, senão calcFreeStake fallback (max 2%)
   const stakeSuggestion = (() => {
     if (!banca) return null
     if (dica.suggested_stake_units != null && dica.suggested_stake_units > 0) {
@@ -644,7 +644,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
-  // Prioridade: suggested_stake_units do backend → calcMultiplaStake fallback (max 2.5%)
+  // Prioridade: suggested_stake_units do backend, senão calcMultiplaStake fallback (max 2.5%)
   const stakeSuggestion = (() => {
     if (!banca) return null
     if (m.suggested_stake_units != null && m.suggested_stake_units > 0) {
@@ -800,7 +800,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg: any, i: number) => {
-          // Se overall GREEN → todas GREEN. Se overall RED → legs sem GREEN explícito são RED
+          // Se overall GREEN, todas GREEN. Se overall RED, legs sem GREEN explícito são RED
           const lr = (
             m.result === 'GREEN' ? 'GREEN' :
             m.result === 'RED'   ? (leg.result === 'GREEN' ? 'GREEN' : 'RED') :
