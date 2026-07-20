@@ -296,7 +296,7 @@ export default function Banca() {
               Meus Picks
             </Link>
             <button onClick={() => setConfirmReset(true)} className="btn-ghost text-xs px-3 py-2">
-              Reiniciar mês
+              Fechamento mensal
             </button>
             <button onClick={() => setShowSetup(true)} className="btn-ghost text-xs px-3 py-2">
               Configurar
@@ -313,15 +313,15 @@ export default function Banca() {
             <div className="w-11 h-11 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mb-4">
               <Info className="w-5 h-5 text-yellow-400" />
             </div>
-            <h3 className="text-white font-black text-lg mb-2">Reiniciar sua banca agora?</h3>
+            <h3 className="text-white font-black text-lg mb-2">Fazer o fechamento mensal agora?</h3>
             <p className="text-zinc-400 text-sm leading-relaxed mb-4">
-              Isso fecha o período atual (com o resultado de tudo que você seguiu até agora) e deixa
-              você definir um novo valor inicial pra recomeçar a contagem. Nada do seu histórico de
-              picks ou resultados é apagado, só o ponto de partida da banca muda a partir de agora.
+              Isso mostra um resumo do período atual (lucro, greens/reds, opção de compartilhar) e
+              depois deixa você definir um novo valor inicial pra recomeçar a contagem. Nada do seu
+              histórico de picks ou resultados é apagado, só o ponto de partida da banca muda a partir de agora.
             </p>
             <p className="text-zinc-500 text-xs mb-5">
-              Normalmente isso acontece sozinho no começo de cada mês. Você só precisa fazer isso manualmente
-              se quiser recomeçar antes disso.
+              Normalmente isso acontece sozinho no começo de cada mês. Se você só quer trocar o valor da
+              banca agora (ex: sacou o dinheiro), sem ver resumo nenhum, cancela aqui e usa o botão "Configurar".
             </p>
             <div className="flex flex-col gap-2">
               <button
