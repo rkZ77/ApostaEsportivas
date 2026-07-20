@@ -17,16 +17,25 @@ function isoDate(d: Date): string {
 
 // Mesmo endpoint que a aba "Jogos" usa (busca ao vivo na API-Football pelas
 // ligas cadastradas, não só a tabela local) -- tenta os próximos dias até
-// achar algum com jogo, em vez de só checar hoje.
+// achar algum com jogo, em vez de só checar hoje. Busca os 7 dias em
+// paralelo (não um de cada vez) pra não somar a latência de cada chamada
+// quando os primeiros dias vêm vazios.
 async function findNextGames(): Promise<Fixture[]> {
   const today = new Date()
-  for (let i = 1; i <= 7; i++) {
+  const dates = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today)
-    d.setDate(d.getDate() + i)
-    try {
-      const r = await api.get('/fixtures/today', { params: { date: isoDate(d) } })
-      if (r.data && r.data.length > 0) return r.data
-    } catch { /* tenta o próximo dia */ }
+    d.setDate(d.getDate() + i + 1)
+    return isoDate(d)
+  })
+  const perDay = await Promise.all(
+    dates.map(date =>
+      api.get('/fixtures/today', { params: { date } })
+        .then(r => (r.data ?? []) as Fixture[])
+        .catch(() => [] as Fixture[])
+    )
+  )
+  for (const games of perDay) {
+    if (games.length > 0) return games
   }
   return []
 }
@@ -105,7 +114,9 @@ export default function CountdownTo7AM() {
         <p className="text-sm text-zinc-200 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
         {leagueNames && <p className="text-zinc-600 text-xs mb-5">{leagueNames}</p>}
         {nextGames === null ? (
-          <div className="h-8" />
+          <div className="flex justify-center py-3">
+            <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+          </div>
         ) : groups.length === 0 ? (
           <p className="text-zinc-600 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
