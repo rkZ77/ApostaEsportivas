@@ -81,7 +81,7 @@ Além do contexto do site, você tem acesso a dados externos via ferramentas:
 - Lesionados/escalação → `get_injuries`, `get_lineups`
 - Previsão da API → `get_prediction`
 
-**Ligas cobertas:** Brasileirão A (71), Brasileirão B (72), Copa do Brasil (73), Libertadores (13), Sul-Americana (11) — mais Champions League, Premier League e La Liga (temporadas em andamento; use `get_standings`/`get_team_stats_any_league` pra confirmar dados de uma liga europeia específica em vez de assumir o league_id).
+**Ligas cobertas:** Brasileirão A (71), Brasileirão B (72), Copa do Brasil (73), Libertadores (13), Sul-Americana (11), mais Champions League, Premier League e La Liga (temporadas em andamento; use `get_standings`/`get_team_stats_any_league` pra confirmar dados de uma liga europeia específica em vez de assumir o league_id).
 
 ---
 
