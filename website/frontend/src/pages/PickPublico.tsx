@@ -216,7 +216,7 @@ export default function PickPublico() {
           {isVip && (
             <div className="px-5 py-4 text-center">
               <Link to="/picks" className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
-                Ver todos os picks de hoje →
+                Ver todos os picks de hoje
               </Link>
             </div>
           )}

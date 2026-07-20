@@ -273,7 +273,7 @@ export default function MonthlyCloseModal({ onClose, month }: Props) {
               </div>
             </div>
 
-            {/* Banca início → fim */}
+            {/* Banca início e fim */}
             <div className="mx-5 mb-3 flex items-center gap-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
               <div className="flex-1 min-w-0">
                 <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Início do mês</p>

@@ -38,7 +38,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
     .map(w => w[0]?.toUpperCase() ?? '')
     .join('')
 
-  // URL relativa funciona tanto em dev (proxy Vite /static → 8000) quanto em prod (mesmo domínio)
+  // URL relativa funciona tanto em dev (proxy Vite /static -> 8000) quanto em prod (mesmo domínio)
   const src = imageUrl && !imgError
     ? (imageUrl.startsWith('http') ? imageUrl : imageUrl)
     : null

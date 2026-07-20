@@ -238,10 +238,8 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const linkText = fitText(ctx, displayDomain, W - 320)
   ctx.font = '900 48px system-ui, -apple-system, sans-serif'
   const linkTextW = ctx.measureText(linkText).width
-  const arrowGap = 28
-  const arrowW = ctx.measureText('→').width
   const btnPadX = 56
-  const btnW = linkTextW + arrowGap + arrowW + btnPadX * 2
+  const btnW = linkTextW + btnPadX * 2
   const btnH = 112
   drawRoundedRect(ctx, W / 2 - btnW / 2, cursorY, btnW, btnH, btnH / 2)
   ctx.fillStyle = 'rgba(255,255,255,0.06)'
@@ -255,8 +253,6 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const textY = cursorY + btnH / 2 + 17
   ctx.fillStyle = '#ffffff'
   ctx.fillText(linkText, textX, textY)
-  ctx.fillStyle = accentHex
-  ctx.fillText('→', textX + linkTextW + arrowGap, textY)
   ctx.textAlign = 'center'
 
   // Rodapé
@@ -290,7 +286,7 @@ function drawBrandHeader(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElemen
   return brandY
 }
 
-function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl: string, accentHex: string): void {
+function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl: string): void {
   const pillLabel = '2 DIAS DE VIP GRÁTIS'
   ctx.font = '800 28px system-ui, -apple-system, sans-serif'
   const pillW = ctx.measureText(pillLabel).width + 64
@@ -308,10 +304,8 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
   const linkText = fitText(ctx, displayDomain, W - 320)
   ctx.font = '900 48px system-ui, -apple-system, sans-serif'
   const linkTextW = ctx.measureText(linkText).width
-  const arrowGap = 28
-  const arrowW = ctx.measureText('→').width
   const btnPadX = 56
-  const btnW = linkTextW + arrowGap + arrowW + btnPadX * 2
+  const btnW = linkTextW + btnPadX * 2
   const btnH = 112
   drawRoundedRect(ctx, W / 2 - btnW / 2, cursorY, btnW, btnH, btnH / 2)
   ctx.fillStyle = 'rgba(255,255,255,0.06)'
@@ -325,8 +319,6 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
   const textY = cursorY + btnH / 2 + 17
   ctx.fillStyle = '#ffffff'
   ctx.fillText(linkText, textX, textY)
-  ctx.fillStyle = accentHex
-  ctx.fillText('→', textX + linkTextW + arrowGap, textY)
   ctx.textAlign = 'center'
 
   ctx.font = '600 23px system-ui, -apple-system, sans-serif'
@@ -452,7 +444,7 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   ctx.fillText(input.footerText ?? 'Histórico 100% auditável e público', W / 2, cursorY)
 
   cursorY += 90
-  drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
+  drawCtaFooter(ctx, cursorY, input.shareUrl)
 
   return toBlobPromise(canvas)
 }
@@ -556,7 +548,7 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   })
 
   cursorY += games.length * rowH + 60
-  drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
+  drawCtaFooter(ctx, cursorY, input.shareUrl)
 
   return toBlobPromise(canvas)
 }
@@ -665,7 +657,7 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
   })
 
   cursorY += leagues.length * rowH + 60
-  drawCtaFooter(ctx, cursorY, input.shareUrl, accentHex)
+  drawCtaFooter(ctx, cursorY, input.shareUrl)
 
   return toBlobPromise(canvas)
 }
