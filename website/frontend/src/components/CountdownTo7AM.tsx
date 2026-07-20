@@ -14,6 +14,10 @@ export default function CountdownTo7AM() {
   const [timeLeft, setTimeLeft] = useState<string | null>(null)
   // null = ainda carregando, 0 = confirmado sem jogo hoje, >0 = tem jogo
   const [todayCount, setTodayCount] = useState<number | null>(null)
+  // Erro de rede não deve travar o componente em branco pra sempre --
+  // sem isso, "carregando" e "falhou" ficavam com o mesmo estado (null) e
+  // qualquer falha passageira escondia o card permanentemente.
+  const [todayCheckFailed, setTodayCheckFailed] = useState(false)
   const [nextGames, setNextGames] = useState<NextFixture[] | null>(null)
 
   useEffect(() => {
@@ -37,7 +41,7 @@ export default function CountdownTo7AM() {
   useEffect(() => {
     api.get('/public/fixtures-today')
       .then(r => setTodayCount((r.data ?? []).length))
-      .catch(() => setTodayCount(null))
+      .catch(() => setTodayCheckFailed(true))
   }, [])
 
   useEffect(() => {
@@ -47,11 +51,15 @@ export default function CountdownTo7AM() {
       .catch(() => setNextGames([]))
   }, [todayCount])
 
-  if (todayCount === null) return null // ainda checando se há jogo hoje
+  // Ainda checando se há jogo hoje (e não falhou) -- mostra nada por um instante,
+  // não a vida toda: se der erro, cai pro comportamento normal do contador.
+  if (todayCount === null && !todayCheckFailed) return null
 
   // Sem jogo nenhum hoje nas ligas cobertas -- mostra os próximos em vez de
   // uma contagem regressiva enganosa (nada vai chegar até as 12h nesse caso).
-  if (todayCount === 0) {
+  // Se a checagem falhou, não sabemos se há jogo ou não -- assume que sim
+  // (comportamento normal) em vez de esconder o card sem motivo aparente.
+  if (todayCount === 0 && !todayCheckFailed) {
     return (
       <div className="card p-6 text-center border-zinc-800">
         <p className="text-sm text-zinc-300 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
