@@ -222,8 +222,8 @@ export default function Login() {
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
 
         <div className="relative z-10 text-center px-12">
-          <img src="/logo.png" alt="Pick IA" width={208} height={208} className="w-52 h-52 mx-auto mb-8 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
-          <h1 className="text-5xl font-black text-white tracking-tight mb-3">Pick<span className="text-green-500">IA</span></h1>
+          <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
+          <h1 className="text-4xl font-black text-white tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
           <p className="text-zinc-400 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
           <div className="mt-8 text-left max-w-xs mx-auto">
             <p className="text-zinc-500 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
@@ -233,7 +233,6 @@ export default function Login() {
                 { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
                 { dot: 'bg-orange-400', text: 'Alavancagem de risco calculado' },
                 { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
-                { dot: 'bg-yellow-400', text: 'Histórico completo com Win Rate' },
               ].map(({ dot, text }) => (
                 <div key={text} className="flex items-center gap-3">
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />

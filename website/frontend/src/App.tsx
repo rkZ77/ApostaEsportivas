@@ -14,7 +14,6 @@ import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyC
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
-const Results        = lazy(() => import('./pages/Results'))
 const Admin          = lazy(() => import('./pages/Admin'))
 const Fixtures       = lazy(() => import('./pages/Fixtures'))
 const Landing        = lazy(() => import('./pages/Landing'))
@@ -155,7 +154,7 @@ export default function App() {
                 <Route path="/" element={<Landing />} />
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
-                <Route path="/results" element={<PrivateRoute><Results /></PrivateRoute>} />
+                <Route path="/results" element={<Navigate to="/resultados" replace />} />
                 <Route path="/fixtures" element={<PrivateRoute><Fixtures /></PrivateRoute>} />
                 <Route path="/admin" element={<PrivateRoute><Admin /></PrivateRoute>} />
                 <Route path="/profile" element={<PrivateRoute><Profile /></PrivateRoute>} />

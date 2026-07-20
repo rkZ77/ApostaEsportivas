@@ -49,7 +49,7 @@ export default function Navbar() {
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
     { to: '/meus-picks', label: 'Meus Picks',       Icon: ListChecks },
     { to: '/banca',      label: 'Minha Banca',      Icon: Wallet },
-    { to: '/results',    label: 'Resultados da IA', Icon: BarChart2 },
+    { to: '/resultados', label: 'Resultados da IA', Icon: BarChart2 },
     { to: '/fixtures',   label: 'Jogos',            Icon: Trophy },
     { to: '/agente',     label: 'Agente',           Icon: Bot },
     ...(!isAdmin && (user?.plan === 'vip' || user?.plan === 'trial')
