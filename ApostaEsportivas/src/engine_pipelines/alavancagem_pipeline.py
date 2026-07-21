@@ -29,9 +29,18 @@ from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
 ODD_COMBINED_MIN = 1.45
-ODD_COMBINED_MAX = 1.55
+ODD_COMBINED_MAX = 1.90  # era 1.55 -- achado real (2026-07-21): com poucos
+                          # jogos no dia, a odd individual mais barata
+                          # disponivel ja passa de 1.65 (ex: 1.82), zerando
+                          # os candidatos elegiveis o dia inteiro. Novo teto
+                          # usa o mesmo range "conservador" que o motor ja
+                          # considera ideal internamente (ver
+                          # PickEngineConfig.conservative_odd_low/high em
+                          # services/pick_engine/config.py). Decisao do
+                          # usuario: mexe na conta de "5 greens" da home
+                          # (Picks.tsx), atualizado junto.
 ODD_INDIVIDUAL_MIN = 1.05
-ODD_INDIVIDUAL_MAX = 1.65  # = ODD_INDIVIDUAL_MAX(1.55) + 0.10, mesma folga do pipeline de IA
+ODD_INDIVIDUAL_MAX = 2.00  # = ODD_COMBINED_MAX(1.90) + 0.10, mesma folga de sempre
 MAX_FIXTURES = 15
 MAX_CANDIDATES_FOR_COMBO = 12
 
