@@ -139,7 +139,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                 cur.execute("SELECT MIN(match_datetime) AS md FROM fixtures WHERE fixture_id = ANY(%s)", (fixture_ids,))
                 md_row = cur.fetchone()
                 d["match_datetime"] = md_row["md"] if md_row else None
-        d["market"] = f"Bingo · {len(games)} jogos"
+        d["market"] = f"Bingo #{pick_id} · {len(games)} jogos"
         del d["games_json"]
     return d
 
@@ -502,7 +502,7 @@ def get_banca(
                     d["away_team_name"] = first.get("away_team")
                     d["home_team_id"]   = first.get("home_team_id")
                     d["away_team_id"]   = first.get("away_team_id")
-                    d["market"]         = f"Bingo · {len(games)} jogos"
+                    d["market"]         = f"Bingo #{d['id']} · {len(games)} jogos"
                     del d["games_json"]
                     bingo_map[d["id"]] = d
 

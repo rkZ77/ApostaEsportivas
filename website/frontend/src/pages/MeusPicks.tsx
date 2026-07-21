@@ -368,7 +368,7 @@ export default function MeusPicks() {
                                     : e.pick_type === 'alavancagem'
                                     ? 'Alavancagem'
                                     : e.pick_type === 'bingo'
-                                    ? 'Bingo'
+                                    ? `Bingo #${e.pick_id}`
                                     : e.market ?? `Pick #${e.pick_id}`}
                                 </span>
                                 {e.away_team_name && (

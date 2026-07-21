@@ -187,7 +187,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-zinc-500 font-semibold">
-                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'bingo' ? 'Bingo' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
+                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'bingo' ? `Bingo #${s?.id ?? ''}` : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
               </span>
               <button
                 onClick={onClose}

@@ -1198,12 +1198,12 @@ function BingoCard({ b, onClick, banca }: { b: any; onClick?: () => void; banca?
     shareStory({
       pickId: b.id,
       pickTypeRoute: 'bingo',
-      homeTeamName: translateTeamName(games[0]?.home_team) || 'Bingo',
+      homeTeamName: `Bingo #${b.id}`,
       awayTeamName: games.length > 1 ? `+${games.length - 1} jogo${games.length - 1 > 1 ? 's' : ''}` : undefined,
       homeTeamId: games[0]?.home_team_id,
       awayTeamId: games[0]?.away_team_id,
       pickType: 'bingo',
-      market: `Bingo · ${games.length} jogos`,
+      market: `Bingo #${b.id} · ${games.length} jogos`,
       odd: oddFinal,
       result: b.result,
       profit: b.result ? calcProfitUnits(b.result, oddFinal, b.user_stake_units ?? stakeSuggestion?.units ?? 1, b.user_actual_odd) : null,
@@ -1251,7 +1251,7 @@ function BingoCard({ b, onClick, banca }: { b: any; onClick?: () => void; banca?
       {/* Header */}
       <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-black text-purple-400">Bingo</span>
+          <span className="text-xs font-black text-purple-400">Bingo #{b.id}</span>
           <span className="badge-vip">VIP</span>
           <span className="text-[10px] text-zinc-600">
             {b.match_date && new Date(b.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}

@@ -61,7 +61,7 @@ export default function PickPublico() {
   const odd    = pick.odd != null ? Number(pick.odd) : null
   const typeLabel = PICK_TYPE_LABEL[pick.pick_type ?? pick_type ?? 'vip'] ?? 'VIP'
   const resultLabel = pick.result ? ` · ${pick.result}` : ''
-  const pageTitle = `${pick.home_team_name ?? pick.teams_preview?.[0] ?? (pick.pick_type === 'bingo' ? 'Bingo' : 'Múltipla')}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
+  const pageTitle = `${pick.pick_type === 'bingo' ? `Bingo #${pick.id}` : pick.home_team_name ?? pick.teams_preview?.[0] ?? 'Múltipla'}${pick.away_team_name ? ` x ${pick.away_team_name}` : ''}${resultLabel} · Pick IA`
 
   return (
     <div className="min-h-screen bg-black flex flex-col">

@@ -144,7 +144,7 @@ def _sub_alav(date_cond: str) -> str:
 def _sub_bingo(date_cond: str) -> str:
     return f"""
         SELECT match_date,
-               CONCAT('Bingo · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
+               CONCAT('Bingo #', id, ' · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
                NULL AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                'Bingo' AS market, NULL AS line, odd_final AS odd,

@@ -754,7 +754,7 @@ def get_suggestion_detail(
             suggestion = {
                 "id": d["id"],
                 "match_date": d["match_date"],
-                "home_team_name": f"Bingo · {n} jogos",
+                "home_team_name": f"Bingo #{d['id']} · {n} jogos",
                 "away_team_name": "",
                 "market": f"{n} jogos combinados",
                 "line": None,
@@ -1310,11 +1310,11 @@ def get_recent_results(
                 games = []
             n = len(games)
             first = games[0] if games else {}
-            d["home_team_name"] = first.get("home_team") or f"Bingo · {n} jogos"
-            d["away_team_name"] = first.get("away_team") or ""
+            d["home_team_name"] = f"Bingo #{d['id']} · {n} jogos"
+            d["away_team_name"] = ""
             d["home_team_id"]   = first.get("home_team_id")
             d["away_team_id"]   = first.get("away_team_id")
-            d["market"]         = f"Bingo · {n} jogos"
+            d["market"]         = f"Bingo #{d['id']} · {n} jogos"
             d["line"]           = None
             d["bet_house"]      = None
             d["games_count"]    = n
@@ -1649,9 +1649,9 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
     if source == "bingo":
         return f"""
             SELECT id, 'bingo' AS pick_type, match_date,
-                   CONCAT('Bingo · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
+                   CONCAT('Bingo #', id, ' · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
                    NULL AS away_team_name, NULL AS home_team_id, NULL AS away_team_id,
-                   CONCAT('Bingo · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS market,
+                   CONCAT('Bingo #', id, ' · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS market,
                    NULL AS line, odd_final AS odd, NULL AS bet_house,
                    result,
                    CASE result
