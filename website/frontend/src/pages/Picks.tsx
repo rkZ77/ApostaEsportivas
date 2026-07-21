@@ -807,18 +807,18 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             m.result === 'RED'   ? (leg.result === 'GREEN' ? 'GREEN' : 'RED') :
             leg.result ?? undefined
           ) as 'GREEN' | 'RED' | undefined
+          const boxClass = lr === 'GREEN'
+            ? 'border-green-500/20 bg-green-500/5'
+            : lr === 'RED'
+            ? 'border-red-500/20 bg-red-500/5'
+            : 'border-zinc-800 bg-zinc-900/60'
           const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : lr === 'RED'
             ? 'bg-red-500/20 text-red-400'
             : 'bg-blue-500/10 text-blue-400'
-          const rowClass = lr === 'GREEN'
-            ? 'bg-green-500/5 rounded-lg px-2 -mx-2'
-            : lr === 'RED'
-            ? 'bg-red-500/5 rounded-lg px-2 -mx-2'
-            : ''
           return (
-          <div key={i} className={`space-y-1 ${rowClass}`}>
+          <div key={i} className={`rounded-xl border px-3 py-2 ${boxClass}`}>
             <div className="flex items-center gap-2">
               <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
                 {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
@@ -830,11 +830,11 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
                 <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
                 <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
               </div>
-              <span className={`font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : 'text-green-400'}`}>
+              <span className={`font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : 'text-blue-300'}`}>
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>
-            <div className="flex items-center gap-1.5 ml-7 text-xs">
+            <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
             </div>
@@ -1055,11 +1055,22 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
 
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
-        {legs.map((leg, i) => (
-          <div key={i} className="space-y-1">
+        {legs.map((leg, i) => {
+          const boxClass = pick.result === 'GREEN'
+            ? 'border-green-500/20 bg-green-500/5'
+            : pick.result === 'RED'
+            ? 'border-red-500/20 bg-red-500/5'
+            : 'border-zinc-800 bg-zinc-900/60'
+          const circleClass = pick.result === 'GREEN'
+            ? 'bg-green-500/20 text-green-400'
+            : pick.result === 'RED'
+            ? 'bg-red-500/20 text-red-400'
+            : 'bg-orange-500/10 text-orange-400'
+          return (
+          <div key={i} className={`rounded-xl border px-3 py-2 ${boxClass}`}>
             <div className="flex items-center gap-2">
-              <span className="w-5 h-5 flex items-center justify-center rounded-full bg-orange-500/10 text-orange-400 text-[10px] font-black shrink-0">
-                {i + 1}
+              <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
+                {pick.result === 'GREEN' ? '✓' : pick.result === 'RED' ? '✗' : i + 1}
               </span>
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
@@ -1068,15 +1079,18 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
                 <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
                 <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
               </div>
-              <span className="text-green-400 font-black text-sm shrink-0">{Number(leg.odd).toFixed(2)}</span>
+              <span className={`font-black text-sm shrink-0 ${pick.result === 'GREEN' ? 'text-green-400' : pick.result === 'RED' ? 'text-red-400' : 'text-orange-300'}`}>
+                {Number(leg.odd).toFixed(2)}
+              </span>
             </div>
-            <div className="flex items-center gap-1.5 ml-7 text-xs">
+            <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
               {leg.house && <><span className="text-zinc-600">·</span><span className="text-zinc-500">{leg.house}</span></>}
             </div>
           </div>
-        ))}
+          )
+        })}
       </div>
 
       {/* Confiança */}
