@@ -35,6 +35,16 @@ def _has_today_dica(cur) -> bool:
     return cur.fetchone()[0] >= 1
 
 
+def _today_vip_used_pairs(cur) -> set:
+    """(fixture_id, market_type) ja usados em picks_vip hoje -- pick free
+    (Dica do Dia) roda DEPOIS do VIP em cmd_tudo() (ver main.py), entao
+    nao repete pro mesmo assinante o mesmo mercado que ja saiu como VIP no
+    dia. Mesma regra ja aplicada em multipla_pipeline.py, so que aqui e'
+    so contra VIP (free nao existe ainda nesse ponto do pipeline)."""
+    cur.execute("SELECT fixture_id, market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
+    return {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
+
+
 def _fixtures_with_odds_in_range(cur) -> list:
     """Mesma query de ai/dica_do_dia_pipeline.py::get_fixtures_with_odds_in_range,
     reimplementada aqui para nao acoplar a esse modulo (que instancia
@@ -71,10 +81,11 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
 
-def _best_candidate_across_fixtures(fixtures: list) -> tuple | None:
+def _best_candidate_across_fixtures(fixtures: list, used_pairs: set) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick) do
     maior Score Final entre os que passam DICA_CONFIG (confidence>=0.72),
-    ou None se nenhum passar."""
+    ou None se nenhum passar. Pula candidatos cujo (fixture_id, market_type)
+    ja saiu como VIP hoje (used_pairs)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
 
@@ -119,6 +130,7 @@ def _best_candidate_across_fixtures(fixtures: list) -> tuple | None:
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
+        picks = [p for p in picks if (fixture["fixture_id"], p["market_type"]) not in used_pairs]
         if not picks:
             continue
 
@@ -194,7 +206,11 @@ def run_dica_engine():
 
     print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (motor deterministico)...")
 
-    result = _best_candidate_across_fixtures(fixtures)
+    used_pairs = _today_vip_used_pairs(cur)
+    if used_pairs:
+        print(f"[DICA_ENGINE] {len(used_pairs)} par(es) (fixture_id, market_type) ja usados no VIP hoje · bloqueados")
+
+    result = _best_candidate_across_fixtures(fixtures, used_pairs)
     if not result:
         print("[DICA_ENGINE] Nenhum candidato passou nos critérios mínimos (DICA_CONFIG).")
         cur.close()

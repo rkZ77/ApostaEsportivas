@@ -3,9 +3,14 @@ DIFERENTES no mesmo bilhete. Cada jogo entra com o seu proprio sub-combo
 (1 a 3 mercados do MESMO jogo, ja garantidos nao-correlacionados por
 rank_market_candidates -- no maximo 1 pick por grupo de correlacao, ver
 services/pick_engine/ranking.py::select_final_picks) cujo PRODUTO REAL de
-odds cai em [GAME_ODD_MIN, GAME_ODD_MAX]. Essa e a UNICA regra por jogo:
-nao ha teto pro odd_final do bilhete (produto dos sub-combos dos jogos
-escolhidos).
+odds cai em [GAME_ODD_MIN, GAME_ODD_MAX] por jogo. Alem disso (regra do
+usuario, 2026-07-21), o ODD FINAL do bilhete inteiro (produto dos
+sub-combos dos jogos escolhidos) tambem precisa cair em
+[ODD_FINAL_MIN, ODD_FINAL_MAX] -- sem esse teto o bingo podia sair com
+odd final parecida com a da Multipla (2.00-3.00), perdendo a identidade
+do produto. _select_bingo() busca, entre os jogos elegiveis, a combinacao
+de 2-4 jogos cujo produto bate essa faixa (nao so pega os melhores por
+score).
 
 Reimplementa localmente selecao de fixtures/checagem "ja rodou hoje"/
 bloqueio de pares ja usados em VIP/Free, mesmo padrao ja usado em
@@ -59,6 +64,15 @@ GAME_ODD_MAX = 1.70
 MIN_GAMES = 2
 MAX_GAMES = 4
 MAX_FIXTURES = 20  # teto de fixtures analisados por rodada (custo do motor por fixture)
+
+# ODD FINAL do bilhete (produto do combo_odd de cada jogo escolhido) --
+# regra do usuario (2026-07-21): tem que ficar entre 3.00 e 6.00, senao o
+# bingo fica indistinguivel da Multipla (que ja mira 2.00-3.00). Aplicada
+# em _select_bingo(), que busca entre 2-4 jogos elegiveis a combinacao que
+# bate essa faixa (nao so pega os N melhores por score, como antes).
+ODD_FINAL_MIN = 3.0
+ODD_FINAL_MAX = 6.0
+MAX_CANDIDATES_FOR_BINGO = 10  # limita o espaco de busca das combinacoes de jogos
 
 BINGO_CONFIG = replace(DEFAULT_CONFIG, min_odd=1.05)
 
@@ -199,10 +213,32 @@ def _gather_game_combos(fixtures: list, used_pairs: set) -> list:
 
 
 def _select_bingo(game_combos: list) -> list | None:
+    """Busca, entre os jogos elegiveis (2 a MAX_GAMES), a combinacao cujo
+    ODD FINAL (produto do combo_odd de cada jogo) cai em
+    [ODD_FINAL_MIN, ODD_FINAL_MAX] -- regra do usuario (2026-07-21): sem
+    esse teto o bingo podia sair com odd final parecida com a da propria
+    Multipla (2.00-3.00), perdendo a identidade do produto. Entre as
+    combinacoes validas, prefere a de maior score medio."""
     if len(game_combos) < MIN_GAMES:
         return None
-    ordered = sorted(game_combos, key=lambda g: g["combo_score"], reverse=True)
-    return ordered[:MAX_GAMES]
+    pool = sorted(game_combos, key=lambda g: g["combo_score"], reverse=True)[:MAX_CANDIDATES_FOR_BINGO]
+
+    best = None
+    for combo_size in range(MIN_GAMES, min(len(pool), MAX_GAMES) + 1):
+        for combo in itertools.combinations(pool, combo_size):
+            odd_final = round(1.0, 4)
+            for g in combo:
+                odd_final *= g["combo_odd"]
+            odd_final = round(odd_final, 4)
+            if not (ODD_FINAL_MIN <= odd_final <= ODD_FINAL_MAX):
+                continue
+            score = round(sum(g["combo_score"] for g in combo) / len(combo), 4)
+            if best is None or score > best[1]:
+                best = (list(combo), score, odd_final)
+
+    if not best:
+        return None
+    return best[0]
 
 
 def _save_bingo(cur, selected: list) -> float:
@@ -287,6 +323,13 @@ def run_bingo_engine():
         return
 
     selected = _select_bingo(game_combos)
+    if not selected:
+        print(f"[BINGO_ENGINE] Nenhuma combinação de {MIN_GAMES}-{MAX_GAMES} jogos bateu a faixa de "
+              f"odd final [{ODD_FINAL_MIN},{ODD_FINAL_MAX}] · {len(game_combos)} jogo(s) elegível(is) no total.")
+        cur.close()
+        conn.close()
+        return
+
     odd_final = _save_bingo(cur, selected)
     conn.commit()
     cur.close()
