@@ -26,7 +26,11 @@ from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
 ODD_TOTAL_MIN = 2.00
-ODD_TOTAL_MAX = 3.00
+ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
+                      # no dia, o menor produto possivel entre 2 pernas de
+                      # jogos diferentes ja passa de 3.00 (ex: 1.82x1.85=3.37),
+                      # bloqueando a multipla o dia inteiro sem motivo real de
+                      # qualidade. Decisao do usuario: alargar o teto pra 4.00.
 MAX_FIXTURES = 4
 MAX_CANDIDATES_FOR_COMBO = 12  # limita o espaco de busca das combinacoes
 

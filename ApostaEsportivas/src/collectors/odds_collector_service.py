@@ -101,6 +101,41 @@ BET_ID_PT_MAP: dict[int, str] = {
     10:  "Placar Exato",
 }
 
+# Fallback por palavra-chave no nome cru quando o bet_id vem de um mercado
+# raro/novo que ainda nao foi cadastrado em BET_ID_PT_MAP acima (ex.:
+# "Corners Asian Handicap" vazando em ingles pro reasoning/UI enquanto
+# outros mercados do mesmo pick ja saem em PT). Mesmas chaves usadas em
+# website/frontend/src/utils/marketTranslate.ts, checadas na ordem abaixo
+# (mais especifico primeiro) pra "corners asian handicap" nao cair em
+# "asian handicap" antes.
+_MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
+    ("corners asian handicap", "Escanteios Handicap Asiático"),
+    ("asian handicap", "Handicap Asiático"),
+    ("corners over/under", "Escanteios Mais/Menos"),
+    ("corners 1x2", "Escanteios 1x2"),
+    ("home corners over/under", "Escanteios Casa Mais/Menos"),
+    ("away corners over/under", "Escanteios Visitante Mais/Menos"),
+    ("cards over/under", "Cartões Mais/Menos"),
+    ("both teams to score", "Ambas as Equipes Marcam"),
+    ("both teams score", "Ambas as Equipes Marcam"),
+    ("goals over/under", "Gols Mais/Menos"),
+    ("over/under", "Gols Mais/Menos"),
+    ("double chance", "Dupla Chance"),
+    ("match winner", "Resultado Final (1X2)"),
+    ("first half winner", "Vencedor do 1º Tempo"),
+    ("exact score", "Placar Exato"),
+    ("correct score", "Placar Exato"),
+]
+
+
+def _market_pt_fallback(bet_name: str) -> str | None:
+    """Traduz pelo nome cru quando o bet_id ainda nao esta em BET_ID_PT_MAP."""
+    name = (bet_name or "").strip().lower()
+    for key, pt in _MARKET_NAME_PT_FALLBACK:
+        if key in name:
+            return pt
+    return None
+
 
 def detect_market_type(bet_id: int, bet_name: str) -> str:
     """
@@ -255,7 +290,7 @@ class OddsCollectorService:
                         bet["id"],
                         bet["name"],
                         fixture_id,
-                        BET_ID_PT_MAP.get(bet["id"]),
+                        BET_ID_PT_MAP.get(bet["id"]) or _market_pt_fallback(bet["name"]),
                     ))
 
                     market_row_id = cur.fetchone()[0]
@@ -324,7 +359,7 @@ class OddsCollectorService:
                             team_id,
                             team_name,
                             line_value,
-                            BET_ID_PT_MAP.get(bet["id"]),  # market_pt por bet_id
+                            BET_ID_PT_MAP.get(bet["id"]) or _market_pt_fallback(bet["name"]),  # market_pt por bet_id, com fallback por nome
                         ))
 
             if values_batch:
