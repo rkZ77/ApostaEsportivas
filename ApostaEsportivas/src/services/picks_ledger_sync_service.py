@@ -1,5 +1,6 @@
 """Sincroniza uma tabela unica (`picks_ledger`) com TODAS as pernas de
-picks das 4 tabelas (picks_vip/picks_free/picks_multiplas/picks_alavancagem),
+picks das 5 tabelas (picks_vip/picks_free/picks_multiplas/picks_alavancagem/
+picks_bingo),
 independente de serem geradas por IA (producao) ou pelo motor deterministico
 (engine_pipelines/, hoje so em DEV) -- uma linha por PERNA individual, com
 schema consistente.
@@ -25,6 +26,7 @@ _PICK_TYPE_BY_TABLE = {
     "picks_free": "free",
     "picks_multiplas": "multipla",
     "picks_alavancagem": "alavancagem",
+    "picks_bingo": "bingo",
 }
 
 
