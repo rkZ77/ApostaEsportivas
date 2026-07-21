@@ -529,8 +529,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
           <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
         </div>
         <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <span className="font-semibold text-zinc-300">{dica.market}</span>
-          {dica.line && <><span>·</span><span>{dica.line}</span></>}
+          <span className="font-semibold text-zinc-300">{translateMarket(dica.market)}</span>
+          {dica.line && <><span>·</span><span>{translateLine(dica.line)}</span></>}
         </div>
       </div>
 
@@ -2391,8 +2391,8 @@ export default function Picks() {
               <p className="text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
-                  A IA combina <span className="text-white font-bold">3 a 5 seleções</span> de alta confiança em uma única aposta múltipla,
-                  gerando odds combinadas acima de <span className="text-blue-400 font-bold">3.00</span> com risco controlado.
+                  A IA combina <span className="text-white font-bold">2 a 3 seleções</span> de alta confiança em uma única aposta múltipla,
+                  gerando odds combinadas entre <span className="text-blue-400 font-bold">2.00 e 4.00</span> com risco controlado.
                 </p>
                 <p>
                   Cada seleção da múltipla é analisada individualmente antes de compor a aposta.
@@ -2400,8 +2400,8 @@ export default function Picks() {
                 </p>
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
-                    { label: 'Seleções',   value: '3–5',   color: 'text-blue-400'   },
-                    { label: 'Odd alvo',   value: '3.00+', color: 'text-green-400'  },
+                    { label: 'Seleções',   value: '2–3',   color: 'text-blue-400'   },
+                    { label: 'Odd alvo',   value: '2.00–4.00', color: 'text-green-400'  },
                     { label: 'Frequência', value: 'Diário', color: 'text-white'     },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
@@ -2504,7 +2504,7 @@ export default function Picks() {
                 <p>
                   A cada <span className="text-red-400 font-bold">RED</span>, a banca reseta para R$50 e uma nova
                   série começa do zero. A IA seleciona 1 pick (ou combinada de 2 com alta correlação)
-                  com <span className="text-white font-bold">odd alvo 1.50</span> para maximizar a consistência.
+                  com <span className="text-white font-bold">odd combinada entre 1.45 e 1.90</span> para maximizar a consistência.
                 </p>
                 <p>
                   O objetivo é <span className="text-green-400 font-bold">encadear greens consecutivos</span> e multiplicar
@@ -2513,7 +2513,7 @@ export default function Picks() {
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
                   {[
                     { label: 'Banca inicial', value: 'R$50',   color: 'text-orange-400' },
-                    { label: 'Odd alvo',      value: '1.50',   color: 'text-green-400'  },
+                    { label: 'Odd alvo',      value: '1.45–1.90', color: 'text-green-400'  },
                     { label: 'Reset no RED',  value: 'R$50',   color: 'text-red-400'    },
                     { label: '5 greens',      value: 'R$300+', color: 'text-white'      },
                   ].map(({ label, value, color }) => (
