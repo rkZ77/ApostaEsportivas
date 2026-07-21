@@ -61,6 +61,7 @@ export default function CountdownTo7AM() {
   // sem isso, "carregando" e "falhou" ficavam com o mesmo estado (null) e
   // qualquer falha passageira escondia o card permanentemente.
   const [todayCheckFailed, setTodayCheckFailed] = useState(false)
+  const [todayGames, setTodayGames] = useState<Fixture[]>([])
   const [nextGames, setNextGames] = useState<Fixture[] | null>(null)
   const [leagueNames, setLeagueNames] = useState<string | null>(null)
 
@@ -84,7 +85,11 @@ export default function CountdownTo7AM() {
 
   useEffect(() => {
     api.get('/fixtures/today')
-      .then(r => setTodayCount((r.data ?? []).length))
+      .then(r => {
+        const games = (r.data ?? []) as Fixture[]
+        setTodayGames(games)
+        setTodayCount(games.length)
+      })
       .catch(() => setTodayCheckFailed(true))
   }, [])
 
@@ -158,6 +163,31 @@ export default function CountdownTo7AM() {
       <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
       <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
       <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
+      {todayGames.length > 0 && (
+        <div className="text-left mt-6">
+          <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2">
+            {todayGames.length} jogo{todayGames.length > 1 ? 's' : ''} sendo analisado{todayGames.length > 1 ? 's' : ''} hoje
+          </p>
+          <div className="space-y-1.5">
+            {todayGames.map(g => (
+              <div key={g.fixture_id}
+                className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-xl px-3 py-2.5">
+                <span className="text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                  {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                </span>
+                <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                  <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
+                  <span className="text-xs text-zinc-200 font-medium truncate">{g.home_team}</span>
+                  <span className="text-zinc-600 text-[11px] shrink-0">x</span>
+                  <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
+                  <span className="text-xs text-zinc-200 font-medium truncate">{g.away_team}</span>
+                </div>
+                <LeagueLogo id={g.league_id} name={g.league_name} />
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

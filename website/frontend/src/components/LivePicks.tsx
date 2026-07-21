@@ -14,9 +14,10 @@ const STATUS_LABEL: Record<string, string> = {
 const TYPE_CLS: Record<string, string> = {
   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
+  bingo: 'text-purple-400 bg-purple-400/10',
 }
 const TYPE_LABEL: Record<string, string> = {
-  vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
+  vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.', bingo: 'BINGO',
 }
 
 // Poisson-based live win probability (same math bookmakers use)
@@ -361,7 +362,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   const [showCashout, setShowCashout] = useState(false)
   const isLive      = pick.is_live
   const isFinished  = FINISHED_SET.has(pick.status)
-  const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
+  const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem' || pick.pick_type === 'bingo'
   const hasCashout  = pick.cashout_amount != null
 
   const earlyLocked     = !pick.is_locked && isLive && !isMulti && isEarlyLocked(pick)

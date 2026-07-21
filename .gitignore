@@ -14,6 +14,16 @@ ApostaEsportivas/venv/
 *.pem
 *.p12
 *.pfx
+*.keystore
+*.jks
+
+# App Android (TWA) — build local, nao versionar
+website/android-twa/app/
+website/android-twa/*.aab
+website/android-twa/*.apk
+website/android-twa/local.properties
+website/android-twa/.gradle/
+website/android-twa/build/
 
 # Python
 __pycache__/
