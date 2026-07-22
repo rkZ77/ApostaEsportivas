@@ -566,7 +566,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
                 : banca
-                ? 'border-zinc-700 text-zinc-400 hover:border-green-500/50 hover:text-green-400 hover:bg-green-500/5'
+                ? 'border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20'
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
@@ -577,7 +577,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-green-400 hover:bg-green-500/5 border border-zinc-700 hover:border-green-500/50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -872,7 +872,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
                 : banca
-                ? 'border-zinc-700 text-zinc-400 hover:border-blue-500/40 hover:text-blue-400 hover:bg-blue-500/5'
+                ? 'border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20'
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
@@ -883,7 +883,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-blue-400 hover:bg-blue-500/5 border border-zinc-700 hover:border-blue-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -1126,7 +1126,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
                 : userBankroll != null
-                ? 'border-zinc-700 text-zinc-400 hover:border-orange-500/40 hover:text-orange-400 hover:bg-orange-500/5'
+                ? 'border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20'
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
@@ -1137,7 +1137,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-orange-400 hover:bg-orange-500/5 border border-zinc-700 hover:border-orange-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -1397,7 +1397,7 @@ function BingoCard({ b, onClick, banca }: { b: any; onClick?: () => void; banca?
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
                 : banca
-                ? 'border-zinc-700 text-zinc-400 hover:border-purple-500/40 hover:text-purple-400 hover:bg-purple-500/5'
+                ? 'border-purple-500/30 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20'
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
@@ -1408,7 +1408,7 @@ function BingoCard({ b, onClick, banca }: { b: any; onClick?: () => void; banca?
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-purple-400 hover:bg-purple-500/5 border border-zinc-700 hover:border-purple-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
