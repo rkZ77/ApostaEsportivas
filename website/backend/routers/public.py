@@ -172,22 +172,41 @@ def _build_union(date_cond: str, source: Optional[str]) -> str:
     return " UNION ALL ".join(fn(date_cond) for fn in _SUB_BUILDERS.values())
 
 
-def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[str], limit: int = 30) -> list:
-    """Corre cada sub-query separada, assim uma falha não apaga as outras."""
+def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[str],
+                     limit: int = 30, offset: int = 0) -> list:
+    """Corre cada sub-query separada, assim uma falha não apaga as outras.
+    Paginação: cada sub-query busca até offset+limit linhas (pior caso, se a
+    janela [offset, offset+limit) inteira vier de uma unica fonte) -- depois
+    do merge+sort global, so' entao aplica o slice [offset:offset+limit]."""
     builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
+    fetch_n = offset + limit
     rows: list = []
     for fn in builders:
         sub = fn(date_cond)
-        batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (limit,))
+        batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (fetch_n,))
         rows.extend(batch)
     rows.sort(key=lambda r: (str(r["match_date"]), str(r.get("result",""))), reverse=True)
-    return rows[:limit]
+    return rows[offset:offset + limit]
+
+
+def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]) -> int:
+    """Total de linhas pra paginação de 'recent' -- mesma defesa por sub-query
+    de _collect_results (uma fonte com erro conta 0 em vez de derrubar o total)."""
+    builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
+    total = 0
+    for fn in builders:
+        sub = fn(date_cond)
+        row = _q1(cur, f"SELECT COUNT(*) AS c FROM ({sub}) t", date_params)
+        total += row["c"] if row else 0
+    return total
 
 
 @router.get("/results")
 def public_results(
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | bingo"),
+    recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
+    recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
 ):
     """Resultados públicos consolidados para a Landing page."""
     conn = get_connection()
@@ -262,42 +281,41 @@ def public_results(
             ORDER BY match_date
         """, p)
 
-        # ── Por liga. Agrupa so por league_id (nao league_name -- o nome
-        # denormalizado em picks_free pode estar desatualizado em relacao a
-        # leagues.name atual, ex: "Copa do Mundo" vs "Copa do Mundo FIFA"
-        # pro mesmo league_id, o que duplicaria a liga em duas linhas).
-        # Multipla/Alavancagem nao tem league_id real (pernas podem ser de
-        # ligas diferentes) -- agrupadas pelo proprio `source` nesse caso,
-        # senao as duas colapsariam juntas por serem ambas league_id NULL.
+        # ── Por liga. So' ligas de verdade (league_id IS NOT NULL) -- Múltipla/
+        # Alavancagem/Bingo nao tem league_id real (pernas podem ser de ligas
+        # diferentes) e NAO sao ligas, entao ficam de fora desta lista (pedido
+        # explicito do usuario: "na liga nao aparece multiplas alavancagem,
+        # aparece so ligas mesmo" -- esses tipos continuam cobertos pelo filtro
+        # "Fonte" e por `counts` abaixo, so nao entram na quebra POR LIGA).
+        # Agrupa por league_id (nao league_name -- o nome denormalizado em
+        # picks_free pode estar desatualizado em relacao a leagues.name atual,
+        # ex: "Copa do Mundo" vs "Copa do Mundo FIFA" pro mesmo league_id, o
+        # que duplicaria a liga em duas linhas).
         by_league_raw = _q(cur, f"""
             SELECT
-                COALESCE(league_id::text, source) AS group_key,
-                MAX(league_id) AS league_id,
-                MAX(source)    AS source,
+                league_id,
                 COUNT(*)                                  AS total,
                 COUNT(*) FILTER (WHERE result = 'GREEN')  AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')    AS reds,
                 COALESCE(SUM(profit), 0)                  AS profit,
                 COALESCE(SUM(stake), 0)                   AS stake_total
             FROM ({union_sql}) AS t
-            GROUP BY group_key
+            WHERE league_id IS NOT NULL
+            GROUP BY league_id
             ORDER BY total DESC
         """, p)
         _league_names = {r["league_id"]: r["name"] for r in _q(cur, "SELECT league_id, name FROM leagues")}
-        _combo_labels = {"multiplas": "Múltiplas", "alavancagem": "Alavancagem", "bingo": "Bingo"}
         by_league = []
         for r in by_league_raw:
             d = dict(r)
-            lid = d.pop("league_id")
-            src = d.pop("source")
-            d["league_id"] = lid
-            d["league_name"] = _league_names.get(lid, f"Liga {lid}") if lid is not None \
-                else _combo_labels.get(src, "Outros")
+            d["league_name"] = _league_names.get(d["league_id"], f"Liga {d['league_id']}")
             by_league.append(d)
 
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
         single_source = source if source in _SUB_BUILDERS else None
-        recent = _collect_results(cur, date_cond, date_params, single_source, limit=30)
+        recent_total = _count_recent(cur, date_cond, date_params, single_source)
+        recent = _collect_results(cur, date_cond, date_params, single_source,
+                                   limit=recent_limit, offset=recent_offset)
 
         # ── Contagem por tipo ─────────────────────────────────────────────────
         counts_row = _q1(cur, f"""
@@ -326,6 +344,7 @@ def public_results(
             "by_day":  [dict(r) for r in by_day],
             "by_league": [dict(r) for r in by_league],
             "recent":  [dict(r) for r in recent],
+            "recent_total": recent_total,
             "counts":  dict(counts_row) if counts_row else {},
         }
     finally:
