@@ -5,8 +5,10 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
-    data_validation, bayesian_model,
+    data_validation, bayesian_model, referee_model,
 )
+
+_CARDS_FAMILIES = ("cards", "handicap_cards")
 
 _OPPOSITE_VALUE = {
     "over": "under", "under": "over",
@@ -44,6 +46,7 @@ def analyze_fixture_markets(
     matchup_data: dict | None = None,
     news_data: dict | None = None,
     team_strength_data: dict | None = None,
+    referee_stats: dict | None = None,
     data_quality_score: float | None = None,
     debug: bool = False,
 ) -> list | dict:
@@ -83,6 +86,13 @@ def analyze_fixture_markets(
 
     Retorna candidatos prontos para ranking.rank_market_candidates().
 
+    `referee_stats` (saida de services.referee_stats_service.RefereeStatsService.
+    get_stats) e opcional -- quando ausente, mercados de cartoes (cards/
+    handicap_cards) ficam bloqueados por falta de dado confiavel de arbitro
+    (ver referee_model.cards_market_eligible, gate duro pra TODOS os
+    pipelines: sem arbitro com amostra minima OU jogo classificado "frio"
+    pelo contexto, cartoes nem vira candidato).
+
     `debug=True` (fase de homologacao, ver services/pick_engine/homologation.py
     e o plano de validacao antes de promover o motor pra producao): retorno
     muda de list pra dict {"candidates": [...], "eliminated_markets": [...],
@@ -99,6 +109,8 @@ def analyze_fixture_markets(
         calibration_data = calibration.get_market_calibration()
     ctx_score = context_model.context_score(context_data) if context_data else None
     news_score = news_model.news_score(news_data) if news_data else None
+    referee_sig = referee_model.referee_signal(referee_stats, config)
+    game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
 
     groups: dict[tuple, list] = {}
     for m in structured_odds:
@@ -109,6 +121,16 @@ def analyze_fixture_markets(
 
     candidates = []
     for (family, scope), entries in groups.items():
+        if family in _CARDS_FAMILIES:
+            eligible, reason = referee_model.cards_market_eligible(referee_sig, game_intensity, config)
+            if not eligible:
+                if debug:
+                    eliminated_markets.append({
+                        "family": family, "scope": scope, "market_type": family,
+                        "reason": reason,
+                    })
+                continue
+
         convergence = stats_model.expected_value_convergence(last10_home, last10_away, family, scope)
         market_type = "goals" if family == "btts" else family
         # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
@@ -298,6 +320,8 @@ def analyze_fixture_markets(
             "news_score": news_score,
             "news_raw": news_data,
             "team_strength": team_strength_data,
+            "referee_signal": referee_sig if family in _CARDS_FAMILIES else None,
+            "game_intensity": game_intensity if family in _CARDS_FAMILIES else None,
         }
         if debug:
             candidate["_all_lines"] = ranking.evaluate_all_lines(line_candidates, config, data_quality_score)

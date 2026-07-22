@@ -1,8 +1,10 @@
 import os
+import re
 import json
 import time
 import logging
 import requests
+from decimal import Decimal
 from datetime import datetime
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
@@ -284,7 +286,13 @@ def _extract_line(line_str: str | None) -> tuple[str | None, float | None]:
 # pena chamar /fixtures/statistics; se ficar dessincronizado da lista de
 # keywords abaixo o pior caso é uma chamada a mais (nunca um dado errado,
 # pois quem calcula o valor continua sendo só _stat_for_market).
-_STATS_MARKET_TYPES = {"corners", "cards", "fouls", "saves", "shots", "shots_on_target", "offsides"}
+# handicap_corners/handicap_cards entram aqui tambem -- _calc_result precisa
+# de home/away separados (nao so' o total que _stat_for_market devolveria)
+# pra resolver o lado do handicap, ver _resolve_asian_handicap.
+_STATS_MARKET_TYPES = {
+    "corners", "cards", "fouls", "saves", "shots", "shots_on_target", "offsides",
+    "handicap_corners", "handicap_cards",
+}
 _STATS_KEYWORDS = (
     "escanteio", "corner", "cart", "card", "falta", "foul",
     "defesa", "save", "goleiro",
@@ -294,9 +302,13 @@ _STATS_KEYWORDS = (
 
 
 def _leg_needs_stats(market: str | None, market_type: str | None) -> bool:
+    """market_type bate contra o set primeiro; keyword no texto do mercado e'
+    sempre checado tambem (nao so' quando market_type esta vazio) -- pior
+    caso de um falso positivo aqui e' uma chamada a API a mais, nunca dado
+    errado (quem calcula o valor e' so' _stat_for_market/_calc_result)."""
     mtype = (market_type or "").lower()
-    if mtype:
-        return mtype in _STATS_MARKET_TYPES
+    if mtype in _STATS_MARKET_TYPES:
+        return True
     m = (market or "").lower()
     return any(k in m for k in _STATS_KEYWORDS)
 
@@ -525,13 +537,78 @@ def _correct_score_pick_status(line_str: str, home_goals: int, away_goals: int) 
     return "winning" if (hg == ph and ag == pa) else "losing"
 
 
+def _extract_handicap_side_value(
+    line_str: str | None, home_team: str | None = None, away_team: str | None = None,
+) -> tuple[str | None, "Decimal | None"]:
+    """Extrai (side, handicap) de uma linha de handicap asiático tipo
+    'Home +0.25'/'Away -1.5'/'Casa -0.5' -- mesmo parsing de
+    services/ai_result_checker_service.py::evaluate_handicap (lado embutido
+    no texto da linha, não no nome do mercado). None/None quando a linha não
+    é reconhecida (nunca adivinha)."""
+    if not line_str:
+        return None, None
+    raw_lower = line_str.strip().lower()
+
+    side = None
+    if any(k in raw_lower for k in ("home", "casa", "mandante")):
+        side = "home"
+    elif any(k in raw_lower for k in ("away", "visitante", "fora", "visita")):
+        side = "away"
+    elif home_team and home_team.lower() in raw_lower:
+        side = "home"
+    elif away_team and away_team.lower() in raw_lower:
+        side = "away"
+    if side is None:
+        return None, None
+
+    nums = re.findall(r"[+-]?\d+(?:\.\d+)?", raw_lower.replace(",", "."))
+    if not nums:
+        return None, None
+    return side, Decimal(nums[0])
+
+
+def _resolve_asian_handicap(side: str, handicap: Decimal, home_val: float, away_val: float) -> str:
+    """Mesma lógica de services/ai_result_checker_service.py::evaluate_handicap
+    -- linha inteira/meia-bola resolve direto; quarto-de-bola (.25/.75) divide
+    em duas metades de meia-bola e combina os dois resultados em HALF-WIN/
+    HALF-LOSS quando aplicável. Genérico: home_val/away_val tanto pode ser
+    gols quanto escanteios/cartões, quem decide qual estatística passar é o
+    chamador (_calc_result)."""
+    home_g, away_g = Decimal(str(home_val)), Decimal(str(away_val))
+
+    def straight(h):
+        if side == "away":
+            adj, opp = away_g + h, home_g
+        else:
+            adj, opp = home_g + h, away_g
+        if adj > opp:
+            return Decimal("1")
+        if adj == opp:
+            return Decimal("0")
+        return Decimal("-1")
+
+    quarters = handicap * 4
+    if quarters == quarters.to_integral_value() and int(quarters) % 2 != 0:
+        half_a = (quarters - 1) / 4
+        half_b = (quarters + 1) / 4
+        factor = (straight(half_a) + straight(half_b)) / 2
+    else:
+        factor = straight(handicap)
+
+    return {
+        Decimal("1"): "GREEN", Decimal("0.5"): "HALF-WIN", Decimal("0"): "PUSH",
+        Decimal("-0.5"): "HALF-LOSS", Decimal("-1"): "RED",
+    }[factor]
+
+
 def _calc_result(market: str, line: str, cur_val: float | None,
                  home_goals: int, away_goals: int,
                  market_type: str | None = None,
-                 home_team: str | None = None, away_team: str | None = None) -> str | None:
+                 home_team: str | None = None, away_team: str | None = None,
+                 home_stats: dict | None = None, away_stats: dict | None = None) -> str | None:
     """Resultado definitivo de um pick com jogo encerrado.
 
-    Suporta handicap asiático quarter-ball (.25 / .75):
+    Suporta over/under com handicap asiático quarter-ball (.25 / .75):
       Over X.25: GREEN se cur>X, HALF-LOSS se cur==X, RED se cur<X
       Over X.75: GREEN se cur>X+1, HALF-WIN se cur==X+1, RED se cur<=X
       Under X.25: GREEN se cur<X, HALF-WIN se cur==X, RED se cur>X
@@ -539,9 +616,24 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     Linhas inteiras (.0): PUSH quando cur==line.
     Linhas em .5: nunca PUSH (stats são inteiros).
     market_type do banco tem prioridade sobre keyword matching.
-    """
+
+    Handicap Asiático (gols/escanteios/cartões): bug real encontrado em
+    produção (pick VIP travado em "Pendente" apesar do jogo já ter
+    resultado) -- _stat_for_market() não tinha nenhum branch pra market_type
+    "handicap"/"handicap_goals"/"handicap_corners"/"handicap_cards" (só
+    goals/corners/cards/btts/result/etc. como mercado "reto"), então cur_val
+    chegava sempre None aqui e a função retornava None pra sempre, mesmo com
+    o jogo encerrado. Corrigido resolvendo direto por home/away (gols já
+    disponíveis nos parâmetros; escanteios/cartões via home_stats/away_stats,
+    ver _leg_needs_stats -- precisa dos dois lados separados, não só o total
+    que cur_val traria), mesma lógica de
+    services/ai_result_checker_service.py::evaluate_handicap (batch job, já
+    corrigida lá em 2026-07-17) -- side embutido no texto da linha, apoio a
+    quarto-de-bola via _resolve_asian_handicap()."""
     m     = (market or "").lower()
     mtype = (market_type or "").lower()
+    home_stats = home_stats or {}
+    away_stats = away_stats or {}
 
     direction, line_val = _extract_line(line)
 
@@ -550,6 +642,16 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     is_result = _mtype_is_result or direction == "result" or \
                 any(k in m for k in ["resultado", "dupla chance", "1x2", "vencedor"])
     is_btts   = mtype == "btts"  or any(k in m for k in ["ambas", "btts", "ambos"])
+    _has_handicap_kw = any(k in m for k in ["handicap", "handi"])
+    is_corners_handicap = mtype == "handicap_corners" or (
+        _has_handicap_kw and any(k in m for k in ["corner", "escanteio", "canto"])
+    )
+    is_cards_handicap = mtype == "handicap_cards" or (
+        _has_handicap_kw and any(k in m for k in ["cart", "card"])
+    )
+    is_goals_handicap = not is_corners_handicap and not is_cards_handicap and (
+        mtype in ("handicap", "handicap_goals") or _has_handicap_kw
+    )
 
     # ── Placar Exato · compara placar real com previsto (ex: "3:0") ───────────
     if mtype == "correct_score" or "placar exato" in m:
@@ -577,6 +679,29 @@ def _calc_result(market: str, line: str, cur_val: float | None,
         if direction in ("no", "não", "nao"):
             return "RED" if both_scored else "GREEN"
         return "GREEN" if both_scored else "RED"
+
+    # ── Handicap Asiático de gols · não depende de cur_val/stats ────────────
+    if is_goals_handicap:
+        side, handicap = _extract_handicap_side_value(line, home_team, away_team)
+        if side is None or handicap is None:
+            return None  # linha não reconhecida → não resolve
+        return _resolve_asian_handicap(side, handicap, home_goals, away_goals)
+
+    # ── Handicap Asiático de escanteios/cartões · precisa de home/away
+    # separados (home_stats/away_stats), não do cur_val (que seria o total) ──
+    if is_corners_handicap or is_cards_handicap:
+        side, handicap = _extract_handicap_side_value(line, home_team, away_team)
+        if side is None or handicap is None:
+            return None  # linha não reconhecida → não resolve
+        if not home_stats and not away_stats:
+            return None  # stats não disponíveis/não buscadas → não arrisca resolver em 0-0
+        if is_corners_handicap:
+            home_val = home_stats.get("Corner Kicks", 0)
+            away_val = away_stats.get("Corner Kicks", 0)
+        else:
+            home_val = home_stats.get("Yellow Cards", 0) + home_stats.get("Red Cards", 0)
+            away_val = away_stats.get("Yellow Cards", 0) + away_stats.get("Red Cards", 0)
+        return _resolve_asian_handicap(side, handicap, home_val, away_val)
 
     # ── Mercados estatísticos (gols, escanteios, cartões…) ────────────────────
     if cur_val is None:
@@ -634,6 +759,7 @@ def _locked_leg_result(leg: dict) -> str | None:
             leg["current_val"], leg["home_goals"], leg["away_goals"],
             market_type=leg.get("market_type"),
             home_team=leg.get("home_team"), away_team=leg.get("away_team"),
+            home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
         )
     if leg.get("is_locked"):
         direction, line_val = _extract_line(leg["line"])
@@ -813,6 +939,8 @@ def _enrich_leg(fid: int, market: str, line: str,
         "is_live":      status in LIVE_STATUSES,
         "is_ft":        is_ft,
         "is_locked":    is_locked,
+        "home_stats":   home_stats,
+        "away_stats":   away_stats,
     }
 
 
@@ -1118,6 +1246,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     leg["current_val"], leg["home_goals"], leg["away_goals"],
                     market_type=p.get("market_type"),
                     home_team=p["home_team"], away_team=p["away_team"],
+                    home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
                 )
                 if auto_res:
                     _save_single_result(pick_id, pick_type, auto_res, odd, conn)
@@ -1415,7 +1544,8 @@ def resolve_all_pending() -> dict:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
                                            market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"])
+                                           home_team=p["home_team"], away_team=p["away_team"],
+                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"))
                         if res:
                             _save_single_result(p["id"], "vip", res, odd, conn)
                             resolved["vip"] += 1
@@ -1443,7 +1573,8 @@ def resolve_all_pending() -> dict:
                         res = _calc_result(p["market"], p["line"],
                                            leg["current_val"], leg["home_goals"], leg["away_goals"],
                                            market_type=p.get("market_type"),
-                                           home_team=p["home_team"], away_team=p["away_team"])
+                                           home_team=p["home_team"], away_team=p["away_team"],
+                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"))
                         if res:
                             _save_single_result(p["id"], "free", res, odd, conn)
                             resolved["free"] += 1

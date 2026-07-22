@@ -50,7 +50,8 @@ class FixturesService:
                 f.home_team,
                 f.away_team,
                 f.match_datetime,
-                f.status
+                f.status,
+                f.referee
             FROM fixtures f
             LEFT JOIN leagues l ON f.league_id = l.league_id
             WHERE (
