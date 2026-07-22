@@ -1,7 +1,5 @@
 from futebol_agent.config import ODDS_MIN, ODDS_MAX
 
-ODDS_BINGO_MAX = 3.00
-
 
 def fmt_live_matches(matches: list[dict]) -> str:
     if not matches:
@@ -84,14 +82,10 @@ def _eligible_entries(markets: dict, min_odd: float = ODDS_MIN, max_odd: float =
 
 def _append_eligible_sections(result: str, markets: dict) -> str:
     eligible = _eligible_entries(markets)
-    bingo    = _eligible_entries(markets, max_odd=ODDS_BINGO_MAX)
     if eligible:
         result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}):\n" + "\n".join(eligible)
     else:
         result += f"\n\nELEGÍVEIS ANÁLISE ({ODDS_MIN}–{ODDS_MAX}): nenhuma odd neste range. Nao sugira entradas."
-    bingo_extra = [e for e in bingo if e not in eligible]
-    if bingo_extra:
-        result += f"\n\nELEGÍVEIS BINGO ({ODDS_MIN}–{ODDS_BINGO_MAX}):\n" + "\n".join(bingo)
     return result
 
 

@@ -5,12 +5,14 @@ checagem de "ja rodou hoje" (nao importa de ai/dica_do_dia_pipeline.py --
 esse modulo instancia Anthropic() no nivel de modulo, import indevido
 custaria uma inicializacao de client sem necessidade e acopla este
 pipeline ao de IA)."""
+import json
+
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake
-from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.config import DICA_CONFIG
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
@@ -47,7 +49,7 @@ def _today_vip_used_market_groups(cur) -> set:
     o mesmo mercado repetir livremente em outro jogo). correlation_group()
     agrupa "cards"/"handicap_cards" etc. como a mesma familia, pra nao
     driblar o bloqueio so trocando a estrutura da aposta sobre o mesmo dado
-    bruto. Multipla/Alavancagem/Bingo rodam DEPOIS da Free e mantem a regra
+    bruto. Multipla/Alavancagem rodam DEPOIS da Free e mantem a regra
     propria (fixture+mercado, contra VIP e Free) -- fora de escopo aqui."""
     cur.execute("SELECT market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
     return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
@@ -91,16 +93,16 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
 
 
 def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple | None:
-    """Roda o motor pra cada fixture candidato e devolve (fixture, pick) do
-    maior Score Final entre os que passam DICA_CONFIG (confidence>=0.72),
-    ou None se nenhum passar. Pula candidatos cujo grupo de correlacao de
-    market_type ja saiu em QUALQUER picks_vip hoje (used_groups, bloqueio
-    global -- ver _today_vip_used_market_groups)."""
+    """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
+    data_quality_score) do maior Score Final entre os que passam DICA_CONFIG
+    (confidence>=0.72), ou None se nenhum passar. Pula candidatos cujo grupo
+    de correlacao de market_type ja saiu em QUALQUER picks_vip hoje
+    (used_groups, bloqueio global -- ver _today_vip_used_market_groups)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
     referee_service = RefereeStatsService()
 
-    best_fixture, best_pick = None, None
+    best_fixture, best_pick, best_quality = None, None, None
 
     for fixture in fixtures:
         structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
@@ -139,7 +141,7 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
             structured_odds, last10_home, last10_away,
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
             team_strength_data=team_strength_data, referee_stats=referee_stats,
-            data_quality_score=quality["score"],
+            league_id=fixture["league_id"], data_quality_score=quality["score"],
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -149,18 +151,25 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
 
         pick = next((p for p in picks if p.get("is_best_pick")), picks[0])
         if best_pick is None or pick["final_score"] > best_pick["final_score"]:
-            best_fixture, best_pick = fixture, pick
+            best_fixture, best_pick, best_quality = fixture, pick, quality["score"]
 
     if best_pick is None:
         return None
-    return best_fixture, best_pick
+    return best_fixture, best_pick, best_quality
 
 
-def _save_pick(cur, fixture: dict, pick: dict):
+def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None):
     stake_pct, stake_units = AISuggestionsService.calculate_stake(
         confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="free",
     )
     reasoning = explain(pick)
+    # Retrato do candidato no momento da escolha -- mesma logica de
+    # engine_pipelines/vip_pipeline.py::_save_pick, usado depois por
+    # services/pick_engine/red_analysis.py + calibration.py.
+    engine_debug = json.dumps(
+        homologation.build_score_breakdown_section(pick, data_quality_score),
+        default=str, ensure_ascii=False,
+    )
 
     cur.execute("""
         INSERT INTO picks_free
@@ -168,8 +177,8 @@ def _save_pick(cur, fixture: dict, pick: dict):
              home_team_id, away_team_id,
              league_id, league_name, market, market_type, line, odd, bet_house,
              market_id, confidence, prob_real, edge, reasoning,
-             stake_pct, stake_units)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+             stake_pct, stake_units, engine_debug)
+        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) DO UPDATE SET
             fixture_id   = EXCLUDED.fixture_id,
             home_team    = EXCLUDED.home_team,
@@ -189,14 +198,15 @@ def _save_pick(cur, fixture: dict, pick: dict):
             edge         = EXCLUDED.edge,
             reasoning    = EXCLUDED.reasoning,
             stake_pct    = EXCLUDED.stake_pct,
-            stake_units  = EXCLUDED.stake_units
+            stake_units  = EXCLUDED.stake_units,
+            engine_debug = EXCLUDED.engine_debug
     """, (
         fixture["fixture_id"], fixture["home_team"], fixture["away_team"],
         fixture["home_team_id"], fixture["away_team_id"],
         fixture["league_id"], None,
         pick["market_name"], pick["market_type"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_id"], pick["confidence"], pick["taxa_real"], pick["edge"], reasoning,
-        stake_pct, stake_units,
+        stake_pct, stake_units, engine_debug,
     ))
 
 
@@ -230,8 +240,8 @@ def run_dica_engine():
         conn.close()
         return
 
-    fixture, pick = result
-    _save_pick(cur, fixture, pick)
+    fixture, pick, quality_score = result
+    _save_pick(cur, fixture, pick, quality_score)
     conn.commit()
     cur.close()
     conn.close()

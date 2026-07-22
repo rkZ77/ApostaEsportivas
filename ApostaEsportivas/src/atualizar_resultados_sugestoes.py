@@ -1,10 +1,9 @@
-﻿import sys, os
+import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from services.ai_result_checker_service import AIResultCheckerService
 from services.ai_result_checker_multiplas import AIMultiplasCheckerService
 from services.ai_result_checker_alavancagem import AIResultCheckerAlavancagem
-from services.ai_result_checker_bingo import AIResultCheckerBingo
 from services.ai_result_checker_free import AIResultCheckerFree
 from collectors.match_statistics_sync_service import MatchStatisticsSyncService
 from services.picks_ledger_sync_service import sync as sync_picks_ledger
@@ -24,9 +23,6 @@ class AIUpdateResultsMain:
 
         # ALAVANCAGEM
         self.result_checker_alavancagem = AIResultCheckerAlavancagem()
-
-        # BINGO
-        self.result_checker_bingo = AIResultCheckerBingo()
 
         # STATS SYNC
         self.stats_sync = MatchStatisticsSyncService()
@@ -52,13 +48,9 @@ class AIUpdateResultsMain:
         # ALAVANCAGEM
         updated_alav = self.result_checker_alavancagem.check_all_results()
 
-        # BINGO
-        updated_bingo = self.result_checker_bingo.check_all_results()
-
         print(
             f"[AI_UPDATE_MAIN] VIP: {updated_vip} | Free: {updated_free} | "
-            f"Multiplas: {updated_multiplas} | Alavancagem: {updated_alav} | "
-            f"Bingo: {updated_bingo}"
+            f"Multiplas: {updated_multiplas} | Alavancagem: {updated_alav}"
         )
 
         # Sincroniza a tabela unificada (picks_ledger) -- nunca escreve nas

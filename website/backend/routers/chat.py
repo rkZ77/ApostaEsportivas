@@ -38,7 +38,7 @@ class ChatRequest(BaseModel):
 
 
 def _get_site_context(user_id: int) -> str:
-    """Busca contexto completo do site: picks, banca, alavancagem, bingo e desempenho histórico."""
+    """Busca contexto completo do site: picks, banca, alavancagem e desempenho histórico."""
     try:
         conn = get_connection()
         cur = conn.cursor()
@@ -122,19 +122,6 @@ def _get_site_context(user_id: int) -> str:
             if (am.get("total") or 0) > 0:
                 lines.append(f"Alavancagem mês: {am.get('greens',0)} greens / {am.get('reds',0)} resets de {am.get('total',0)} picks")
 
-            # ── Desempenho bingo ─────────────────────────────────────────────
-            cur.execute("""
-                SELECT
-                    COUNT(*) FILTER (WHERE result IS NOT NULL) AS total,
-                    COUNT(*) FILTER (WHERE result = 'GREEN')   AS greens,
-                    COUNT(*) FILTER (WHERE result = 'RED')     AS reds
-                FROM picks_bingo
-                WHERE DATE_TRUNC('month', match_date) = DATE_TRUNC('month', CURRENT_DATE)
-            """)
-            bm = dict(cur.fetchone() or {})
-            if (bm.get("total") or 0) > 0:
-                lines.append(f"Bingo mês: {bm.get('greens',0)} greens / {bm.get('reds',0)} reds de {bm.get('total',0)} bilhetes")
-
             lines.append(f"\n--- PICKS DE HOJE ---")
 
             if is_vip:
@@ -201,36 +188,6 @@ def _get_site_context(user_id: int) -> str:
                     lines.append(f"\n--- HISTÓRICO ALAVANCAGEM (últimas {len(alav_hist)} entradas) ---")
                     for a in alav_hist:
                         lines.append(f"  {a.get('match_date','?')}: {a['home_team_1']} x {a['away_team_1']} · {a.get('result') or 'pendente'}")
-
-                # Bingo (games[].legs[] tem um nivel de aninhamento a mais que multipla/alavancagem)
-                cur.execute("""
-                    SELECT games, odd_final, result
-                    FROM picks_bingo WHERE match_date = CURRENT_DATE ORDER BY created_at DESC LIMIT 1
-                """)
-                bingo_pick = cur.fetchone()
-                if bingo_pick:
-                    bingo_pick = dict(bingo_pick)
-                    games = bingo_pick["games"]
-                    if isinstance(games, str):
-                        try: games = json.loads(games)
-                        except Exception: games = []
-                    lines.append(f"\nBingo do dia (odd final: {float(bingo_pick['odd_final']):.2f}) | {bingo_pick.get('result') or 'pendente'}:")
-                    for g in (games or [])[:4]:
-                        legs_desc = ", ".join(
-                            f"{leg.get('market','')} {leg.get('line','')}".strip()
-                            for leg in (g.get('legs') or [])
-                        )
-                        lines.append(f"  • {g.get('home_team','?')} x {g.get('away_team','?')} (@{g.get('combo_odd','?')}): {legs_desc}")
-
-                # Histórico bingo (últimas 10)
-                cur.execute("""
-                    SELECT id, match_date, result FROM picks_bingo ORDER BY match_date DESC LIMIT 10
-                """)
-                bingo_hist = [dict(r) for r in cur.fetchall()]
-                if bingo_hist:
-                    lines.append(f"\n--- HISTÓRICO BINGO (últimas {len(bingo_hist)} entradas) ---")
-                    for b in bingo_hist:
-                        lines.append(f"  {b.get('match_date','?')}: bilhete #{b['id']} · {b.get('result') or 'pendente'}")
 
             else:
                 # Preview free (top 3 sem detalhes)

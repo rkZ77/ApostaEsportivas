@@ -37,7 +37,6 @@ interface Stats {
     alavancagem: number
     dica: number
     multiplas: number
-    bingo: number
   }
 }
 
@@ -112,7 +111,6 @@ export default function Admin() {
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
-    { command: 'gerar_bingo',          label: 'Gerar Bingo'          },
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
@@ -398,13 +396,12 @@ export default function Admin() {
             {/* Picks de hoje */}
             <div className="card p-4 mb-6">
               <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Picks de hoje</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 {[
                   { label: 'VIP',         value: stats.picks_hoje.vip_picks,   target: '' },
                   { label: 'Alavancagem', value: stats.picks_hoje.alavancagem, target: 1   },
                   { label: 'Dica do Dia', value: stats.picks_hoje.dica,        target: 1   },
                   { label: 'Múltiplas',   value: stats.picks_hoje.multiplas,   target: 1   },
-                  { label: 'Bingo',       value: stats.picks_hoje.bingo,       target: 1   },
                 ].map(({ label, value, target }) => {
                   const ok = target === '' ? value > 0 : value >= (target as number)
                   return (
@@ -655,7 +652,6 @@ export default function Admin() {
                 <option value="free">Free</option>
                 <option value="multipla">Múltipla</option>
                 <option value="alavancagem">Alavancagem</option>
-                <option value="bingo">Bingo</option>
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -685,7 +681,6 @@ export default function Admin() {
                 const typeCls: Record<string, string> = {
                   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
-                  bingo: 'text-purple-400 bg-purple-400/10',
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30') : 'text-zinc-600 bg-zinc-900 border-zinc-800'
                 return (

@@ -13,7 +13,7 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG, DICA_C
 from services.pick_engine import (
     context_model, team_profile_model, competition_profile,
     probability_model, variance_model, team_strength, data_validation,
-    bayesian_model, homologation, referee_model,
+    bayesian_model, homologation, referee_model, red_analysis,
 )
 
 __all__ = [
@@ -38,4 +38,5 @@ __all__ = [
     "bayesian_model",
     "homologation",
     "referee_model",
+    "red_analysis",
 ]
