@@ -5,6 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import BackButton from '../components/BackButton'
+import AdminShareResults from '../components/AdminShareResults'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -418,6 +419,8 @@ export default function Admin() {
                 })}
               </div>
             </div>
+
+            <AdminShareResults />
           </>
         )}
 

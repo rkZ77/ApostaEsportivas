@@ -47,8 +47,13 @@ function fitText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number):
   return t + '…'
 }
 
+/**
+ * Círculo do escudo/logo. Quando a imagem falha (proxy fora do ar, time sem
+ * escudo mapeado) SEMPRE desenha o círculo base + borda -- antes retornava
+ * cedo e não desenhava nada, deixando um buraco no layout (times/ligas sem
+ * imagem ficavam com espaço em branco no meio do card).
+ */
 function drawCircularLogo(ctx: CanvasRenderingContext2D, img: HTMLImageElement | null, cx: number, cy: number, size: number) {
-  if (!img) return
   const r = size / 2
   ctx.save()
   ctx.beginPath()
@@ -56,8 +61,14 @@ function drawCircularLogo(ctx: CanvasRenderingContext2D, img: HTMLImageElement |
   ctx.closePath()
   ctx.fillStyle = '#18181b'
   ctx.fill()
-  ctx.clip()
-  ctx.drawImage(img, cx - r, cy - r, size, size)
+  if (img) {
+    ctx.clip()
+    ctx.drawImage(img, cx - r, cy - r, size, size)
+  } else {
+    ctx.strokeStyle = 'rgba(255,255,255,0.14)'
+    ctx.lineWidth = 2
+    ctx.stroke()
+  }
   ctx.restore()
 }
 
@@ -86,6 +97,14 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   // Logo
   const logoImg = await loadImage('/logo.png')
+
+  // Mirror dos incrementos de cursorY usados abaixo (876 = soma dos fixos;
+  // leagueName/market são as duas únicas seções opcionais que mudam a altura).
+  const contentBottomUnshifted = (logoImg ? 290 : 170) + 876
+    + (input.leagueName ? 58 : 0) + (input.market ? 80 : 0) + FOOTER_HEIGHT
+  ctx.save()
+  ctx.translate(0, computeShiftY(contentBottomUnshifted))
+
   if (logoImg) {
     ctx.drawImage(logoImg, W / 2 - 70, 100, 140, 140)
   }
@@ -217,46 +236,9 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   //    celular, então não dá pra escanear; um link grande e memorável
   //    funciona melhor, e deixa espaço livre pra pessoa colar o sticker
   //    de link do Instagram por cima) ─────────────────────────────────
-  const pillLabel = '2 DIAS DE VIP GRÁTIS'
-  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
-  const pillW = ctx.measureText(pillLabel).width + 64
-  drawRoundedRect(ctx, W / 2 - pillW / 2, cursorY, pillW, 58, 29)
-  ctx.fillStyle = '#00CC00'
-  ctx.fill()
-  ctx.fillStyle = '#04140a'
-  ctx.fillText(pillLabel, W / 2, cursorY + 39)
-  cursorY += 58 + 48
-
-  // Mostra só o domínio (limpo, memorizável) · o link completo com ?ref= já
-  // vai junto no navigator.share/clipboard, não precisa aparecer na imagem
-  const displayDomain = (() => {
-    try { return new URL(input.shareUrl).hostname.replace(/^www\./, '') }
-    catch { return input.shareUrl.replace(/^https?:\/\//, '').split('/')[0] }
-  })()
-  const linkText = fitText(ctx, displayDomain, W - 320)
-  ctx.font = '900 48px system-ui, -apple-system, sans-serif'
-  const linkTextW = ctx.measureText(linkText).width
-  const btnPadX = 56
-  const btnW = linkTextW + btnPadX * 2
-  const btnH = 112
-  drawRoundedRect(ctx, W / 2 - btnW / 2, cursorY, btnW, btnH, btnH / 2)
-  ctx.fillStyle = 'rgba(255,255,255,0.06)'
-  ctx.fill()
-  ctx.strokeStyle = '#ffffff'
-  ctx.lineWidth = 2.5
-  ctx.stroke()
-
-  ctx.textAlign = 'left'
-  const textX = W / 2 - btnW / 2 + btnPadX
-  const textY = cursorY + btnH / 2 + 17
-  ctx.fillStyle = '#ffffff'
-  ctx.fillText(linkText, textX, textY)
-  ctx.textAlign = 'center'
-
-  // Rodapé
-  ctx.font = '600 23px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#3f3f46'
-  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, H - 60)
+  drawCtaFooter(ctx, cursorY, input.shareUrl)
+  ctx.restore()
+  drawFooterCredit(ctx)
 
   return new Promise((resolve, reject) => {
     canvas.toBlob(blob => {
@@ -264,6 +246,31 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
       else reject(new Error('Falha ao gerar imagem'))
     }, 'image/png', 0.95)
   })
+}
+
+// ── Centralização vertical ───────────────────────────────────────────────
+// Os cards são desenhados de cima pra baixo e paravam onde o conteúdo
+// acabava, deixando 35-40% do canvas (formato Story, 1080x1920) vazio embaixo
+// -- achado real comparando as 4 variações renderizadas. FOOTER_HEIGHT é a
+// altura fixa do bloco final (pill + botão de domínio) desenhado por
+// drawCtaFooter/buildStoryImage; CREDIT_Y é onde a linha de crédito no rodapé
+// fica ancorada (sempre no mesmo lugar, não desloca). computeShiftY calcula
+// quanto dá pra empurrar o conteúdo pra baixo (metade do espaço sobrando,
+// com teto) sem chegar perto da linha de crédito -- cards com pouco conteúdo
+// (ex: resultado geral) ganham mais respiro; cards com muita linha (ex: 8
+// jogos de hoje) já preenchem o quadro e não são deslocados.
+const FOOTER_HEIGHT = 58 + 48 + 112
+const CREDIT_Y = H - 60
+function computeShiftY(contentBottomUnshifted: number): number {
+  const slack = Math.max(0, (CREDIT_Y - 100) - contentBottomUnshifted)
+  return Math.min(slack * 0.4, 240)
+}
+
+function drawFooterCredit(ctx: CanvasRenderingContext2D): void {
+  ctx.font = '600 23px system-ui, -apple-system, sans-serif'
+  ctx.fillStyle = '#3f3f46'
+  ctx.textAlign = 'center'
+  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, CREDIT_Y)
 }
 
 // ── Helpers compartilhados pelos cards abaixo (resultado geral / jogos do dia) ──
@@ -318,10 +325,6 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
   ctx.fillStyle = '#ffffff'
   ctx.fillText(linkText, textX, textY)
   ctx.textAlign = 'center'
-
-  ctx.font = '600 23px system-ui, -apple-system, sans-serif'
-  ctx.fillStyle = '#3f3f46'
-  ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, H - 60)
 }
 
 function toBlobPromise(canvas: HTMLCanvasElement): Promise<Blob> {
@@ -378,6 +381,13 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   ctx.fillRect(0, 0, W, 6)
 
   const logoImg = await loadImage('/logo.png')
+
+  // Altura do conteúdo é fixa nesse card (não depende de nenhum dado
+  // variável de input) -- mirror dos incrementos de cursorY usados abaixo.
+  const contentBottomUnshifted = (logoImg ? 290 : 170) + 56 + 64 + 180 + 150 + 220 + 90 + FOOTER_HEIGHT
+  ctx.save()
+  ctx.translate(0, computeShiftY(contentBottomUnshifted))
+
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
@@ -443,6 +453,8 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
 
   cursorY += 90
   drawCtaFooter(ctx, cursorY, input.shareUrl)
+  ctx.restore()
+  drawFooterCredit(ctx)
 
   return toBlobPromise(canvas)
 }
@@ -484,6 +496,16 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   ctx.fillRect(0, 0, W, H)
 
   const logoImg = await loadImage('/logo.png')
+  const games = input.games.slice(0, 8)
+  const rowH = games.length > 6 ? 128 : 154
+  const logoSize = games.length > 6 ? 44 : 52
+
+  // Mirror dos incrementos de cursorY usados abaixo (só a lista de jogos
+  // varia de tamanho -- o resto do card é fixo).
+  const contentBottomUnshifted = (logoImg ? 290 : 170) + 56 + 60 + 70 + games.length * rowH + 60 + FOOTER_HEIGHT
+  ctx.save()
+  ctx.translate(0, computeShiftY(contentBottomUnshifted))
+
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
@@ -500,10 +522,6 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   ctx.fillStyle = accentHex
   ctx.fillText(badgeLabel, W / 2, cursorY + 40)
   cursorY += 60 + 70
-
-  const games = input.games.slice(0, 8)
-  const rowH = games.length > 6 ? 128 : 154
-  const logoSize = games.length > 6 ? 44 : 52
 
   const gameLogos = await Promise.all(
     games.map(g => Promise.all([
@@ -547,6 +565,8 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
 
   cursorY += games.length * rowH + 60
   drawCtaFooter(ctx, cursorY, input.shareUrl)
+  ctx.restore()
+  drawFooterCredit(ctx)
 
   return toBlobPromise(canvas)
 }
@@ -597,6 +617,15 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
   ctx.fillRect(0, 0, W, 6)
 
   const logoImg = await loadImage('/logo.png')
+  const leagues = input.leagues.slice(0, 6)
+  const rowH = leagues.length > 5 ? 108 : 128
+  const logoSize = 60
+
+  // Mirror dos incrementos de cursorY usados abaixo.
+  const contentBottomUnshifted = (logoImg ? 290 : 170) + 56 + 60 + 66 + leagues.length * rowH + 60 + FOOTER_HEIGHT
+  ctx.save()
+  ctx.translate(0, computeShiftY(contentBottomUnshifted))
+
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
@@ -613,10 +642,6 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
   ctx.fillStyle = accentHex
   ctx.fillText(badgeLabel, W / 2, cursorY + 40)
   cursorY += 60 + 66
-
-  const leagues = input.leagues.slice(0, 6)
-  const rowH = leagues.length > 5 ? 108 : 128
-  const logoSize = 60
 
   const logos = await Promise.all(
     leagues.map(lg => lg.leagueId != null ? loadImage(`/api/proxy/league/${lg.leagueId}.png`) : Promise.resolve(null))
@@ -656,6 +681,8 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
 
   cursorY += leagues.length * rowH + 60
   drawCtaFooter(ctx, cursorY, input.shareUrl)
+  ctx.restore()
+  drawFooterCredit(ctx)
 
   return toBlobPromise(canvas)
 }
