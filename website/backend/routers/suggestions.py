@@ -132,10 +132,12 @@ def _compute_suggested_stake_units(
       VIP      → usa stake_pct do DB (calculate_stake), max 5% da banca
       Free     → Kelly ½ com max 2% da banca, max 6 unidades
       Múltipla → Kelly ¼ com max 2.5% da banca, max 3 unidades
-      Bingo    → Kelly ¼ com max 2.5% da banca, max 3 unidades (mesmo teto da
-                 múltipla -- sem isso o cap de % sozinho ainda pode virar
-                 dezenas de unidades com banca grande, achado real testando
-                 com um bilhete de 4 jogos: sugeriu 21u)
+      Bingo    → Kelly ¼ com max 2.5% da banca, max 2 unidades (teto mais
+                 baixo que múltipla -- combo de 2-4 jogos com sub-combo em
+                 cada um, risco composto maior pra mesma odd final; sem
+                 cap o % sozinho ainda pode virar dezenas de unidades com
+                 banca grande, achado real testando com um bilhete de 4
+                 jogos: sugeriu 21u)
     """
     if not bankroll or not unit_value or unit_value <= 0:
         return 1
@@ -181,7 +183,7 @@ def _compute_suggested_stake_units(
 
         final_pct = min(max_pct, kelly * kelly_frac)
         final_pct = max(0.005, final_pct)
-        max_units = {'free': 6, 'multipla': 3, 'bingo': 3}.get(pick_type, 9999)
+        max_units = {'free': 6, 'multipla': 3, 'bingo': 2}.get(pick_type, 9999)
 
     stake_amount = final_pct * bankroll
     units = round(stake_amount / unit_value)
