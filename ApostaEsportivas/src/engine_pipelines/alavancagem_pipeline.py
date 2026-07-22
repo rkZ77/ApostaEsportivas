@@ -6,8 +6,11 @@ ai/alavancagem_pipeline.py -- esse modulo instancia Anthropic() no nivel
 de modulo). Mesmo algoritmo guloso da multipla, adaptado: aceita fixtures
 de QUALQUER liga cadastrada (nao mais restrito a Copa do Mundo -- ver
 atualizacao abaixo), permite pernas do mesmo fixture ou de fixtures
-diferentes (regra original), tenta simples -> dupla -> tripla ate bater
-[1.45, 1.55] de odd combinada.
+diferentes (regra original), tenta simples -> dupla -> tripla ate bater o
+alvo [1.39, 1.55] de odd combinada (2-3 pernas de odd individual bem baixa
+somando ~1.50 -- pedido explicito do usuario, 2026-07-22); so' cai pro
+fallback [1.45, 1.90] se o alvo estreito nao achar combo nenhum no dia (ver
+ODD_COMBINED_TARGET_*/ODD_COMBINED_FALLBACK_*).
 
 Atualizacao: pipeline nasceu restrito a WC_LEAGUE_ID (so fixtures da Copa
 do Mundo, torneio concentrado que facilitava achar combos no mesmo dia).
@@ -20,6 +23,7 @@ import itertools
 from utils.db_utils import get_connection
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
@@ -28,19 +32,21 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
 
-ODD_COMBINED_MIN = 1.45
-ODD_COMBINED_MAX = 1.90  # era 1.55 -- achado real (2026-07-21): com poucos
-                          # jogos no dia, a odd individual mais barata
-                          # disponivel ja passa de 1.65 (ex: 1.82), zerando
-                          # os candidatos elegiveis o dia inteiro. Novo teto
-                          # usa o mesmo range "conservador" que o motor ja
-                          # considera ideal internamente (ver
-                          # PickEngineConfig.conservative_odd_low/high em
-                          # services/pick_engine/config.py). Decisao do
-                          # usuario: mexe na conta de "5 greens" da home
-                          # (Picks.tsx), atualizado junto.
+# Alvo real da alavancagem ("odd 1.50"): 2-3 pernas de odd individual bem
+# baixa somando ~1.50 de odd combinada -- pedido explicito do usuario
+# (2026-07-22). Tentado PRIMEIRO; so cai no fallback largo abaixo se nenhum
+# combo bater essa faixa estreita no dia.
+ODD_COMBINED_TARGET_MIN = 1.39
+ODD_COMBINED_TARGET_MAX = 1.55
+
+# Fallback: mesmo range largo criado em 2026-07-21 (achado real: com poucos
+# jogos no dia, a odd individual mais barata disponivel ja passa de 1.65,
+# zerando os candidatos elegiveis o dia inteiro se so existisse a faixa
+# estreita acima). So' usado quando o alvo 1.39-1.55 nao acha combo nenhum.
+ODD_COMBINED_FALLBACK_MIN = 1.45
+ODD_COMBINED_FALLBACK_MAX = 1.90
 ODD_INDIVIDUAL_MIN = 1.05
-ODD_INDIVIDUAL_MAX = 2.00  # = ODD_COMBINED_MAX(1.90) + 0.10, mesma folga de sempre
+ODD_INDIVIDUAL_MAX = 2.00  # = ODD_COMBINED_FALLBACK_MAX(1.90) + 0.10, mesma folga de sempre
 MAX_FIXTURES = 15
 MAX_CANDIDATES_FOR_COMBO = 12
 
@@ -85,7 +91,8 @@ def _fixtures_with_odds_today(cur) -> list:
     modulo."""
     cur.execute("""
         SELECT DISTINCT f.fixture_id, f.home_team_id, f.away_team_id,
-               f.home_team, f.away_team, f.season, f.match_datetime, f.league_id, f.round
+               f.home_team, f.away_team, f.season, f.match_datetime, f.league_id, f.round,
+               f.referee
         FROM fixtures f
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         WHERE f.match_datetime::date = CURRENT_DATE
@@ -100,6 +107,7 @@ def _fixtures_with_odds_today(cur) -> list:
             "fixture_id": r[0], "home_team_id": r[1], "away_team_id": r[2],
             "home_team": r[3], "away_team": r[4], "season": r[5],
             "match_datetime": r[6], "league_id": r[7], "round": r[8],
+            "referee": r[9],
         }
         for r in cur.fetchall()
     ]
@@ -116,6 +124,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
     individual na faixa exigida pra combos."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    referee_service = RefereeStatsService()
     legs = []
 
     for fixture in fixtures:
@@ -142,10 +151,11 @@ def _gather_leg_candidates(fixtures: list) -> list:
                 None, None, fixture["league_id"], round_str=fixture.get("round"),
             )
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+            referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
-                context_data=context_data,
+                referee_stats=referee_stats, context_data=context_data,
             )
             quality = dv.data_quality_score(
                 {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
@@ -154,7 +164,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-                data_quality_score=quality["score"],
+                referee_stats=referee_stats, data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -172,11 +182,13 @@ def _gather_leg_candidates(fixtures: list) -> list:
     return legs
 
 
-def _find_combo(legs: list) -> tuple | None:
+def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
     """Tenta simples -> dupla -> tripla (pernas podem ser do mesmo fixture
     ou de fixtures diferentes) ate o produto real das odds cair em
-    [ODD_COMBINED_MIN, ODD_COMBINED_MAX]. Rejeita combo com todas as
-    pernas do mesmo market_type."""
+    [odd_min, odd_max]. Rejeita combo com todas as pernas do mesmo
+    market_type. Faixa recebida por parametro pra permitir tentar o alvo
+    estreito primeiro e cair pro fallback largo depois (ver
+    run_alavancagem_engine)."""
     pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
 
     for combo_size in (1, 2, 3):
@@ -191,7 +203,7 @@ def _find_combo(legs: list) -> tuple | None:
                 odd_combined *= p["odd"]
             odd_combined = round(odd_combined, 4)
 
-            if not (ODD_COMBINED_MIN <= odd_combined <= ODD_COMBINED_MAX):
+            if not (odd_min <= odd_combined <= odd_max):
                 continue
 
             confidence_media = round(sum(p["confidence"] for p in combo) / len(combo), 4)
@@ -257,9 +269,12 @@ def run_alavancagem_engine():
         conn.close()
         return
 
-    result = _find_combo(legs)
+    result = _find_combo(legs, ODD_COMBINED_TARGET_MIN, ODD_COMBINED_TARGET_MAX)
     if not result:
-        print("[ALAVANCAGEM_ENGINE] Nenhuma combinação bateu a faixa de odd combinada [1.45, 1.55].")
+        print(f"[ALAVANCAGEM_ENGINE] Nenhum combo no alvo [{ODD_COMBINED_TARGET_MIN}, {ODD_COMBINED_TARGET_MAX}] · tentando fallback largo...")
+        result = _find_combo(legs, ODD_COMBINED_FALLBACK_MIN, ODD_COMBINED_FALLBACK_MAX)
+    if not result:
+        print(f"[ALAVANCAGEM_ENGINE] Nenhuma combinação bateu nem o alvo [{ODD_COMBINED_TARGET_MIN}, {ODD_COMBINED_TARGET_MAX}] nem o fallback [{ODD_COMBINED_FALLBACK_MIN}, {ODD_COMBINED_FALLBACK_MAX}].")
         cur.close()
         conn.close()
         return

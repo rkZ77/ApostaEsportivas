@@ -97,9 +97,24 @@ class PickEngineConfig:
     risco_baixo_min: float = 0.80
     risco_medio_min: float = 0.65
 
+    # Cartoes: gate duro (referee_model.cards_market_eligible) -- mesma regra
+    # que ja existia no prompt de IA legado (dica_do_dia_pipeline.py: "arbitro
+    # com >=3 jogos"), agora aplicada no motor deterministico pra TODOS os
+    # pipelines (cartoes/handicap_cards ficam fora da analise sem esses dois
+    # sinais, nao so com confidence reduzida).
+    cards_referee_min_games: int = 3
+    # Abaixo deste score de intensidade (0-1, ver referee_model.game_intensity)
+    # o jogo e' classificado "frio" e cartoes fica bloqueado -- so o extremo
+    # frio bloqueia (permite "morno"+"quente"), pra nao zerar a frequencia de
+    # picks de cartoes; ajustar aqui se sair cartao demais em jogo sem tensao.
+    cards_intensity_cold_threshold: float = 0.40
+
 
 DEFAULT_CONFIG = PickEngineConfig()
 
-# Dica do Dia exige consistencia maior (regra ja existia como constante
-# fixa CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py)
-DICA_CONFIG = PickEngineConfig(min_confidence=0.72)
+# Dica do Dia exige consistencia maior (regra ja existia como constante fixa
+# CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py) e faixa de odd propria --
+# piso igual ao VIP (min_odd=1.39) mas com teto mais conservador (1.90 em vez
+# de 15.0): pick gratuita precisa ser mais "segura" que VIP, odd muito alta
+# tipicamente reflete evento menos provavel (decisao explicita do usuario).
+DICA_CONFIG = PickEngineConfig(min_confidence=0.72, min_odd=1.39, max_odd=1.90)

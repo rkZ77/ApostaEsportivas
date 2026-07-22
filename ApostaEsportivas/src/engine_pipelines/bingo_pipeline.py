@@ -50,6 +50,7 @@ from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
@@ -120,7 +121,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
 
-def _fixture_picks(fixture: dict, used_pairs: set, match_stats: MatchStatsService, odds_service: OddsService) -> list:
+def _fixture_picks(
+    fixture: dict, used_pairs: set, match_stats: MatchStatsService, odds_service: OddsService,
+    referee_service: RefereeStatsService,
+) -> list:
     """Roda o motor pro fixture e devolve os candidatos elegiveis dele (ja
     decorrelacionados por rank_market_candidates, ate 3), excluindo quem
     repete (fixture_id, market_type) ja usado em VIP/Free hoje."""
@@ -146,10 +150,11 @@ def _fixture_picks(fixture: dict, used_pairs: set, match_stats: MatchStatsServic
         None, None, fixture["league_id"], round_str=fixture.get("round"),
     )
     team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+    referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
 
     coverage_val = dv.validate_coverage(
         structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
-        context_data=context_data,
+        referee_stats=referee_stats, context_data=context_data,
     )
     quality = dv.data_quality_score(
         {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
@@ -159,7 +164,7 @@ def _fixture_picks(fixture: dict, used_pairs: set, match_stats: MatchStatsServic
         structured_odds, last10_home, last10_away,
         config=BINGO_CONFIG,
         context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-        data_quality_score=quality["score"],
+        referee_stats=referee_stats, data_quality_score=quality["score"],
     )
     picks = rank_market_candidates(candidates, config=BINGO_CONFIG)
     log_decision("BINGO_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -194,11 +199,12 @@ def _build_game_combo(picks: list) -> dict | None:
 def _gather_game_combos(fixtures: list, used_pairs: set) -> list:
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    referee_service = RefereeStatsService()
     combos = []
 
     for fixture in fixtures[:MAX_FIXTURES]:
         try:
-            picks = _fixture_picks(fixture, used_pairs, match_stats, odds_service)
+            picks = _fixture_picks(fixture, used_pairs, match_stats, odds_service, referee_service)
             if not picks:
                 continue
             combo = _build_game_combo(picks)
