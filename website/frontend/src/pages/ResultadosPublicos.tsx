@@ -42,6 +42,7 @@ interface PublicData {
   by_day: DayResult[]
   by_league: LeagueResult[]
   recent: RecentTip[]
+  recent_total: number
 }
 
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.', bingo: 'Bingo' }
@@ -57,7 +58,13 @@ export default function ResultadosPublicos() {
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const { user } = useAuth()
-  const [tab, setTab] = useState<'resumo' | 'por_jogo' | 'por_mes'>('resumo')
+  const [tab, setTab] = useState<'resumo' | 'por_liga' | 'por_jogo' | 'por_mes'>('resumo')
+
+  // "Picks recentes" · paginação (server-side, ver recent_limit/recent_offset em /public/results)
+  const RECENT_PAGE_SIZE = 10
+  const [recentPage, setRecentPage] = useState(0)
+  const handleSourceChange = (v: string) => { setSource(v); setRecentPage(0); setRecentLeagueFilter('') }
+  const handleMonthChange = (v: string) => { setMonth(v); setRecentPage(0); setRecentLeagueFilter('') }
 
   // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
   const [games, setGames]           = useState<any[]>([])
@@ -110,21 +117,24 @@ export default function ResultadosPublicos() {
   useEffect(() => {
     setLoading(true)
     setError(false)
-    const params: Record<string, string> = {}
+    const params: Record<string, string | number> = {
+      recent_limit: RECENT_PAGE_SIZE,
+      recent_offset: recentPage * RECENT_PAGE_SIZE,
+    }
     if (source !== 'all') params.source = source
     if (month) params.month = month
     api.get('/public/results', { params })
       .then(r => setData(r.data))
       .catch(() => { setData(null); setError(true) })
       .finally(() => setLoading(false))
-    setRecentLeagueFilter('')
-  }, [source, month])
+  }, [source, month, recentPage])
 
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
   const profit  = s ? Number(s.profit) : null
   const months   = data?.available_months ?? []
   const recent   = data?.recent ?? []
+  const recentTotal = data?.recent_total ?? 0
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
 
@@ -174,27 +184,28 @@ export default function ResultadosPublicos() {
               {
                 key: 'source', label: 'Fonte',
                 options: SOURCES.map(src => ({ value: src, label: SOURCE_LABELS[src] })),
-                value: source, onChange: setSource,
+                value: source, onChange: handleSourceChange,
               },
               ...(months.length > 0 ? [{
                 key: 'month', label: 'Mês',
                 options: [{ value: '', label: 'Todos os meses' }, ...months.map(m => ({ value: m, label: m }))],
-                value: month, onChange: setMonth,
+                value: month, onChange: handleMonthChange,
               } as FilterGroup] : []),
             ]}
           />
 
-          {/* Abas · Por Jogo e Por Mês exigem login (dado detalhado por usuário) */}
-          {user && (
-            <div className="flex border-b border-zinc-800 mb-6 overflow-x-auto">
-              {([['resumo', 'Resumo'], ['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês']] as [typeof tab, string][]).map(([k, l]) => (
-                <button key={k} onClick={() => setTab(k)}
-                  className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                    tab === k ? 'border-green-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                  }`}>{l}</button>
-              ))}
-            </div>
-          )}
+          {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
+          <div className="flex border-b border-zinc-800 mb-6 overflow-x-auto">
+            {([
+              ['resumo', 'Resumo'], ['por_liga', 'Por Liga'],
+              ...(user ? [['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês']] : []),
+            ] as [typeof tab, string][]).map(([k, l]) => (
+              <button key={k} onClick={() => setTab(k)}
+                className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
+                  tab === k ? 'border-green-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
+                }`}>{l}</button>
+            ))}
+          </div>
 
           {tab === 'resumo' && (loading ? (
             <div className="flex justify-center py-20">
@@ -231,36 +242,6 @@ export default function ResultadosPublicos() {
                 </div>
               )}
 
-              {/* Resultados por liga */}
-              {byLeague.length > 0 && (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden mb-8">
-                  <div className="px-5 py-3 border-b border-zinc-800">
-                    <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
-                  </div>
-                  <div className="divide-y divide-zinc-800/50">
-                    {byLeague.map((lg) => {
-                      const wr = calcWinRate(lg.greens, lg.total)
-                      const p  = Number(lg.profit)
-                      return (
-                        <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
-                          {lg.league_id != null
-                            ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
-                            : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
-                          <span className="text-sm font-semibold text-white flex-1 min-w-0 truncate">{lg.league_name}</span>
-                          <span className="text-[11px] text-zinc-600 shrink-0 hidden sm:block">{lg.total} picks</span>
-                          <span className={`text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
-                            {wr}%
-                          </span>
-                          <span className={`text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            {p >= 0 ? '+' : ''}{p.toFixed(1)}u
-                          </span>
-                        </div>
-                      )
-                    })}
-                  </div>
-                </div>
-              )}
-
               {/* Lista recente */}
               {recent.length > 0 && (() => {
                 const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
@@ -269,7 +250,7 @@ export default function ResultadosPublicos() {
                 <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-400 uppercase">Picks recentes</span>
-                    <span className="text-[10px] text-zinc-600">{filteredRecent.length} resultados</span>
+                    <span className="text-[10px] text-zinc-600">{recentTotal} resultados</span>
                   </div>
                   {recentLeagues.length > 1 && (
                     <div className="flex gap-2 flex-wrap px-4 pt-3">
@@ -299,9 +280,20 @@ export default function ResultadosPublicos() {
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
                           {SRC_LBL[tip.source] ?? tip.source}
                         </span>
-                        <div className="flex items-center gap-1 flex-1 min-w-0">
-                          <TeamLogo id={tip.home_team_id} name={tip.home_team_name} size={16} />
-                          <span className="text-xs text-zinc-300 truncate">{tip.home_team_name}{tip.away_team_name ? ` x ${tip.away_team_name}` : ''}</span>
+                        <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                          <div className="flex items-center gap-1 min-w-0 shrink">
+                            <TeamLogo id={tip.home_team_id} name={tip.home_team_name} size={16} />
+                            <span className="text-xs text-zinc-300 truncate">{tip.home_team_name}</span>
+                          </div>
+                          {tip.away_team_name && (
+                            <>
+                              <span className="text-[10px] text-zinc-600 shrink-0">x</span>
+                              <div className="flex items-center gap-1 min-w-0 shrink">
+                                <TeamLogo id={tip.away_team_id} name={tip.away_team_name} size={16} />
+                                <span className="text-xs text-zinc-300 truncate">{tip.away_team_name}</span>
+                              </div>
+                            </>
+                          )}
                         </div>
                         <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[100px]">
                           {tip.market?.split(' ').slice(0, 3).join(' ')} {tip.line ?? ''}
@@ -318,10 +310,61 @@ export default function ResultadosPublicos() {
                       </div>
                     ))}
                   </div>
+                  {recentTotal > RECENT_PAGE_SIZE && (() => {
+                    const totalPages = Math.ceil(recentTotal / RECENT_PAGE_SIZE)
+                    return (
+                      <div className="flex items-center justify-center gap-1 py-4 border-t border-zinc-800/50">
+                        <button disabled={recentPage === 0} onClick={() => setRecentPage(p => p - 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
+                        <span className="text-xs text-zinc-500 px-2">{recentPage + 1} / {totalPages}</span>
+                        <button disabled={(recentPage + 1) * RECENT_PAGE_SIZE >= recentTotal} onClick={() => setRecentPage(p => p + 1)}
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
+                      </div>
+                    )
+                  })()}
                 </div>
                 )
               })()}
             </>
+          ))}
+
+          {tab === 'por_liga' && (loading ? (
+            <div className="flex justify-center py-20">
+              <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+            </div>
+          ) : error ? (
+            <div className="text-center py-16 text-zinc-500">
+              Não foi possível carregar os resultados agora. Tente novamente em instantes.
+            </div>
+          ) : byLeague.length === 0 ? (
+            <div className="text-center py-16 text-zinc-500">Nenhum resultado de liga encontrado para os filtros selecionados.</div>
+          ) : (
+            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="px-5 py-3 border-b border-zinc-800">
+                <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
+              </div>
+              <div className="divide-y divide-zinc-800/50">
+                {byLeague.map((lg) => {
+                  const wr = calcWinRate(lg.greens, lg.total)
+                  const p  = Number(lg.profit)
+                  return (
+                    <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
+                      {lg.league_id != null
+                        ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
+                        : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
+                      <span className="text-sm font-semibold text-white flex-1 min-w-0 truncate">{lg.league_name}</span>
+                      <span className="text-[11px] text-zinc-600 shrink-0 hidden sm:block">{lg.total} picks</span>
+                      <span className={`text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                        {wr}%
+                      </span>
+                      <span className={`text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {p >= 0 ? '+' : ''}{p.toFixed(1)}u
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           ))}
 
           {tab === 'por_jogo' && user && (
@@ -362,9 +405,20 @@ export default function ResultadosPublicos() {
                                 {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type === 'bingo' ? 'Bingo' : g.pick_type.toUpperCase()}
                               </span>
                             )}
-                            <div className="flex items-center gap-1 flex-1 min-w-0">
-                              <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
-                              <span className="text-xs text-zinc-300 truncate">{g.home_team_name}{g.away_team_name && g.pick_type !== 'multipla' && g.pick_type !== 'bingo' ? ` x ${g.away_team_name}` : ''}</span>
+                            <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                              <div className="flex items-center gap-1 min-w-0 shrink">
+                                <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
+                                <span className="text-xs text-zinc-300 truncate">{g.home_team_name}</span>
+                              </div>
+                              {g.away_team_name && g.pick_type !== 'multipla' && g.pick_type !== 'bingo' && (
+                                <>
+                                  <span className="text-[10px] text-zinc-600 shrink-0">x</span>
+                                  <div className="flex items-center gap-1 min-w-0 shrink">
+                                    <TeamLogo id={g.away_team_id} name={g.away_team_name} size={16} />
+                                    <span className="text-xs text-zinc-300 truncate">{g.away_team_name}</span>
+                                  </div>
+                                </>
+                              )}
                             </div>
                             <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[120px]">
                               {g.market}{g.line ? ` · ${g.line}` : ''}
