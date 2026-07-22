@@ -92,6 +92,15 @@ def build_explanation(candidate: dict) -> dict:
         agrees = matchup["label"].lower() == direction
         (positive_factors if agrees else negative_factors).append(note)
 
+    referee_sig = candidate.get("referee_signal")
+    intensity = candidate.get("game_intensity")
+    if referee_sig and intensity:
+        positive_factors.append(
+            f"Árbitro com média de {referee_sig['avg_yellow']} cartões amarelos/jogo "
+            f"em {referee_sig['games']} jogos na temporada · contexto de jogo "
+            f"classificado como '{intensity['label']}' (score {intensity['score']*100:.0f}%)"
+        )
+
     news = candidate.get("news_raw")
     if news:
         for side_key, side_label in (("home", "Mandante"), ("away", "Visitante")):

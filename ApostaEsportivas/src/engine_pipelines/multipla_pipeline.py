@@ -16,6 +16,7 @@ from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.referee_stats_service import RefereeStatsService
 from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine import team_profile_model as tpm
@@ -91,6 +92,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     fixture anexados e os pares ja usados excluidos."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    referee_service = RefereeStatsService()
     legs = []
 
     for fixture in fixtures[:MAX_FIXTURES]:
@@ -117,10 +119,11 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 None, None, fixture["league_id"], round_str=fixture.get("round"),
             )
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+            referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
-                context_data=context_data,
+                referee_stats=referee_stats, context_data=context_data,
             )
             quality = dv.data_quality_score(
                 {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
@@ -129,7 +132,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-                data_quality_score=quality["score"],
+                referee_stats=referee_stats, data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)

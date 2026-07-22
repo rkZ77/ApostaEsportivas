@@ -283,11 +283,6 @@ def build_profile(matches: list, team_id: int) -> dict:
 
 
 _PRESSING_SCORE = {"Alta": 2, "Média-Alta": 1, "Média": 0, "Baixa": -1, "Desconhecida": 0}
-_POSSESSION_PRESSURE = {
-    "Posse de bola dominante": 1.0,
-    "Posse de bola + Contra-ataque": 0.5,
-    "Ataque direto e intenso": 0.5,
-}
 
 # Baseline de conversao (gols por chute no alvo) tipica do futebol
 # profissional -- mesmo espirito de referencia que _CORNERS_BASELINE/
@@ -297,9 +292,25 @@ _POSSESSION_PRESSURE = {
 _CONVERSION_BASELINE = 0.30
 _MIN_EFFICIENCY_AMOSTRA = 3
 
+# Baselines neutros de posse (%) e chutes totais/jogo (por time) -- ponto
+# zero do indice continuo de pressao ofensiva usado em corners_delta abaixo.
+# Substituem o antigo bucket categorico de "estilo de jogo" (_POSSESSION_PRESSURE)
+# por um sinal proporcional aos numeros reais de avg_possession/avg_shots
+# (pedido explicito do usuario: "escanteios tem que analisar estatisticamente
+# pressao/posse de bola/ataque/chutes", nao so uma faixa de estilo).
+_POSSESSION_BASELINE = 50.0
+_SHOTS_BASELINE = 12.5
 
-def _possession_pressure_score(tactical: dict) -> float:
-    return _POSSESSION_PRESSURE.get(tactical.get("style"), 0.0)
+
+def _attacking_pressure_score(tactical: dict) -> float:
+    """Indice continuo de pressao ofensiva (posse + volume de chutes) de UM
+    time, centrado em 0 nos baselines acima -- usa avg_possession/avg_shots
+    (ja calculados em tactical_patterns(), stats_model.py), NUNCA
+    home_corners/away_corners diretamente, preservando o principio anti-
+    double-counting ja documentado em compare_matchup() (Prioridade 1.3)."""
+    possession = tactical.get("avg_possession") or 0
+    shots = tactical.get("avg_shots") or 0
+    return (possession - _POSSESSION_BASELINE) / 100 + (shots - _SHOTS_BASELINE) / _SHOTS_BASELINE
 
 
 def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
@@ -316,12 +327,14 @@ def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
     de novo aqui no Score Final, isso confirmava a mesma evidencia duas
     vezes. Agora cada delta usa APENAS sinais que nao vem de contar o
     proprio evento historico: eficiencia de finalizacao (chutes no alvo ->
-    gol, nao contagem de gols), estilo de posse (categorico, nao contagem
-    de escanteios) e intensidade de pressao (categorico, nao contagem de
-    faltas). Efeito colateral: cada delta agora so discrimina na direcao
-    onde ha sinal tatico independente -- goals/corners tem sinal mais
-    forte pra Over (falta um sinal tatico igualmente forte pra "por que
-    seria Under" com os dados disponiveis hoje) enquanto cards ja e'
+    gol, nao contagem de gols), pressao ofensiva continua de posse+chutes
+    (nao contagem de escanteios) e intensidade de pressao (categorico, nao
+    contagem de faltas). Efeito colateral: corners_delta agora pode ser
+    NEGATIVO (time de baixa posse/poucos chutes -> menos escanteios
+    esperados) -- antes so' discriminava pra Over (bucket categorico de
+    estilo nunca ia abaixo de 0), essa era uma limitacao conhecida que o
+    indice continuo de posse/chutes corrige; goals ainda so' discrimina pra
+    Over (falta sinal tatico igualmente forte pra Under) e cards ja e'
     simetrico (pressing_score vai de -2 a +4)."""
     tac_h, tac_a = profile_home.get("tactical_profile", {}), profile_away.get("tactical_profile", {})
     eff_h, eff_a = profile_home.get("offensive_efficiency") or {}, profile_away.get("offensive_efficiency") or {}
@@ -335,8 +348,9 @@ def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
         combined_conversion = None
         goals_delta = 0.0  # amostra insuficiente pra eficiencia -- neutro, nao inventa
 
-    possession_pressure = round(_possession_pressure_score(tac_h) + _possession_pressure_score(tac_a), 2)
-    corners_delta = round(possession_pressure * 0.3, 2)
+    pressure_h, pressure_a = _attacking_pressure_score(tac_h), _attacking_pressure_score(tac_a)
+    attacking_pressure = round(max(min(pressure_h + pressure_a, 2.0), -2.0), 3)
+    corners_delta = round(attacking_pressure * 0.5, 2)
 
     pressing_score = (
         _PRESSING_SCORE.get(tac_h.get("pressing_intensity"), 0)
@@ -364,9 +378,13 @@ def compare_matchup(profile_home: dict, profile_away: dict) -> dict:
         "corners": {
             "delta": corners_delta, "label": label(corners_delta),
             "components": {
-                "possession_pressure_score": possession_pressure,
-                "style_home": tac_h.get("style"),
-                "style_away": tac_a.get("style"),
+                "attacking_pressure_score": attacking_pressure,
+                "avg_possession_home": tac_h.get("avg_possession"),
+                "avg_possession_away": tac_a.get("avg_possession"),
+                "avg_shots_home": tac_h.get("avg_shots"),
+                "avg_shots_away": tac_a.get("avg_shots"),
+                "possession_baseline": _POSSESSION_BASELINE,
+                "shots_baseline": _SHOTS_BASELINE,
             },
         },
         "cards": {

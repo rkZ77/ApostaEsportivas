@@ -17,11 +17,13 @@ from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
+from services.pick_engine import ranking
+from services.referee_stats_service import RefereeStatsService
 from engine_pipelines.decision_log import log_decision
 
 WC_LEAGUE_ID = 1
-ODD_MIN = 1.30
-ODD_MAX = 1.80
+ODD_MIN = 1.39
+ODD_MAX = 1.90
 MAX_FIXTURES = 3
 
 _LEAGUE_PRIORITY = {
@@ -35,14 +37,20 @@ def _has_today_dica(cur) -> bool:
     return cur.fetchone()[0] >= 1
 
 
-def _today_vip_used_pairs(cur) -> set:
-    """(fixture_id, market_type) ja usados em picks_vip hoje -- pick free
-    (Dica do Dia) roda DEPOIS do VIP em cmd_tudo() (ver main.py), entao
-    nao repete pro mesmo assinante o mesmo mercado que ja saiu como VIP no
-    dia. Mesma regra ja aplicada em multipla_pipeline.py, so que aqui e'
-    so contra VIP (free nao existe ainda nesse ponto do pipeline)."""
-    cur.execute("SELECT fixture_id, market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
-    return {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
+def _today_vip_used_market_groups(cur) -> set:
+    """Grupos de correlacao (ranking.correlation_group) de todo market_type
+    ja usado em QUALQUER picks_vip hoje -- bloqueio GLOBAL, nao so no mesmo
+    fixture: a Free (Dica do Dia) roda DEPOIS do VIP em cmd_tudo() (ver
+    main.py), entao nao pode repetir pro assinante gratuito o mesmo mercado
+    que ja saiu como VIP no dia, em jogo nenhum (decisao explicita do
+    usuario -- antes so bloqueava (fixture_id, market_type) igual, deixando
+    o mesmo mercado repetir livremente em outro jogo). correlation_group()
+    agrupa "cards"/"handicap_cards" etc. como a mesma familia, pra nao
+    driblar o bloqueio so trocando a estrutura da aposta sobre o mesmo dado
+    bruto. Multipla/Alavancagem/Bingo rodam DEPOIS da Free e mantem a regra
+    propria (fixture+mercado, contra VIP e Free) -- fora de escopo aqui."""
+    cur.execute("SELECT market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
+    return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
 
 
 def _fixtures_with_odds_in_range(cur) -> list:
@@ -53,7 +61,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
-            f.match_datetime, f.status, f.round
+            f.match_datetime, f.status, f.round, f.referee
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         WHERE DATE(f.match_datetime) = CURRENT_DATE
@@ -68,6 +76,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
             "home_team_id": r[3], "away_team_id": r[4],
             "home_team": r[5], "away_team": r[6],
             "match_datetime": r[7], "status": r[8], "round": r[9],
+            "referee": r[10],
         }
         for r in rows
     ]
@@ -81,13 +90,15 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id)
 
 
-def _best_candidate_across_fixtures(fixtures: list, used_pairs: set) -> tuple | None:
+def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick) do
     maior Score Final entre os que passam DICA_CONFIG (confidence>=0.72),
-    ou None se nenhum passar. Pula candidatos cujo (fixture_id, market_type)
-    ja saiu como VIP hoje (used_pairs)."""
+    ou None se nenhum passar. Pula candidatos cujo grupo de correlacao de
+    market_type ja saiu em QUALQUER picks_vip hoje (used_groups, bloqueio
+    global -- ver _today_vip_used_market_groups)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    referee_service = RefereeStatsService()
 
     best_fixture, best_pick = None, None
 
@@ -114,10 +125,11 @@ def _best_candidate_across_fixtures(fixtures: list, used_pairs: set) -> tuple | 
             None, None, fixture["league_id"], round_str=fixture.get("round"),
         )
         team_strength_data = ts.compare_team_strength(profile_home, profile_away)
+        referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
 
         coverage_val = dv.validate_coverage(
             structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
-            context_data=context_data,
+            referee_stats=referee_stats, context_data=context_data,
         )
         quality = dv.data_quality_score(
             {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
@@ -126,11 +138,12 @@ def _best_candidate_across_fixtures(fixtures: list, used_pairs: set) -> tuple | 
         candidates = analyze_fixture_markets(
             structured_odds, last10_home, last10_away,
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
-            team_strength_data=team_strength_data, data_quality_score=quality["score"],
+            team_strength_data=team_strength_data, referee_stats=referee_stats,
+            data_quality_score=quality["score"],
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
-        picks = [p for p in picks if (fixture["fixture_id"], p["market_type"]) not in used_pairs]
+        picks = [p for p in picks if ranking.correlation_group(p["market_type"]) not in used_groups]
         if not picks:
             continue
 
@@ -206,11 +219,11 @@ def run_dica_engine():
 
     print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (motor deterministico)...")
 
-    used_pairs = _today_vip_used_pairs(cur)
-    if used_pairs:
-        print(f"[DICA_ENGINE] {len(used_pairs)} par(es) (fixture_id, market_type) ja usados no VIP hoje · bloqueados")
+    used_groups = _today_vip_used_market_groups(cur)
+    if used_groups:
+        print(f"[DICA_ENGINE] {len(used_groups)} grupo(s) de mercado ja usados no VIP hoje (bloqueio global) · bloqueados")
 
-    result = _best_candidate_across_fixtures(fixtures, used_pairs)
+    result = _best_candidate_across_fixtures(fixtures, used_groups)
     if not result:
         print("[DICA_ENGINE] Nenhum candidato passou nos critérios mínimos (DICA_CONFIG).")
         cur.close()
