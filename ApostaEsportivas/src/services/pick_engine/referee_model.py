@@ -21,12 +21,22 @@ def referee_signal(referee_stats: dict | None, config: PickEngineConfig = DEFAUL
     amostra insuficiente, mesmo se referee_stats existir)."""
     games = referee_stats.get("games", 0) if referee_stats else 0
     reliable = referee_stats is not None and games >= config.cards_referee_min_games
+
+    def _f(key):
+        # referee_stats vem direto do psycopg2 (RealDictCursor) -- colunas
+        # NUMERIC do Postgres chegam como Decimal, nao float. Normaliza aqui
+        # (unico ponto de entrada do dado bruto no motor) pra nunca misturar
+        # Decimal com float mais adiante (bug real de producao: game_intensity
+        # fazia Decimal - float e estourava TypeError).
+        val = referee_stats.get(key) if reliable else None
+        return float(val) if val is not None else None
+
     return {
         "reliable": reliable,
         "games": games,
-        "avg_yellow": referee_stats.get("avg_yellow") if reliable else None,
-        "avg_red": referee_stats.get("avg_red") if reliable else None,
-        "avg_fouls": referee_stats.get("avg_fouls") if reliable else None,
+        "avg_yellow": _f("avg_yellow"),
+        "avg_red": _f("avg_red"),
+        "avg_fouls": _f("avg_fouls"),
     }
 
 

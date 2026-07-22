@@ -709,14 +709,18 @@ def offensive_efficiency(matches: list, team_id: int) -> dict | None:
     total_possession = possession_n = 0
     for m in with_shots:
         is_home = m.get("home_team_id") == team_id
-        shots_on = m.get("home_shots_on" if is_home else "away_shots_on") or 0
-        goals = m.get("home_goals" if is_home else "away_goals") or 0
+        # float() defensivo -- coluna do banco pode chegar como Decimal
+        # (psycopg2, NUMERIC) em vez de int/float puro; misturar Decimal com
+        # float mais adiante (ex.: goals_delta em team_profile_model.compare_matchup)
+        # estoura TypeError (bug real de producao ja visto em referee_model.py).
+        shots_on = float(m.get("home_shots_on" if is_home else "away_shots_on") or 0)
+        goals = float(m.get("home_goals" if is_home else "away_goals") or 0)
         possession = m.get("home_possession" if is_home else "away_possession")
         total_shots_on += shots_on
         total_goals += goals
         n += 1
         if possession is not None:
-            total_possession += possession
+            total_possession += float(possession)
             possession_n += 1
 
     avg_shots_on = round(total_shots_on / n, 2)

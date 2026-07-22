@@ -308,8 +308,13 @@ def _attacking_pressure_score(tactical: dict) -> float:
     (ja calculados em tactical_patterns(), stats_model.py), NUNCA
     home_corners/away_corners diretamente, preservando o principio anti-
     double-counting ja documentado em compare_matchup() (Prioridade 1.3)."""
-    possession = tactical.get("avg_possession") or 0
-    shots = tactical.get("avg_shots") or 0
+    # float() defensivo -- mesmo bug real ja visto em referee_model.py: campo
+    # numerico vindo do banco (psycopg2) pode chegar como Decimal, e Decimal-
+    # float estoura TypeError. avg_possession/avg_shots passam por soma+round()
+    # em tactical_patterns() antes de chegar aqui, o que preserva o tipo
+    # original do campo bruto se ele vier Decimal.
+    possession = float(tactical.get("avg_possession") or 0)
+    shots = float(tactical.get("avg_shots") or 0)
     return (possession - _POSSESSION_BASELINE) / 100 + (shots - _SHOTS_BASELINE) / _SHOTS_BASELINE
 
 
