@@ -20,7 +20,9 @@ LIVE_STATUSES = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
 FT_STATUSES   = {"FT", "AET", "PEN"}
 
 # TTL adaptativo: jogos ao vivo → curto; não iniciados → médio; encerrados → longo
-_TTL_LIVE = 10   # segundos · atualiza depressa durante o jogo
+# TTL_LIVE alinhado ao polling mais rápido do front (15s, ver LivePicks.tsx)
+# pra maioria dos polls bater em cache em vez de sempre errar (era 10s < 15s de poll = miss garantido)
+_TTL_LIVE = 20   # segundos · atualiza depressa durante o jogo
 _TTL_NS   = 60   # segundos · jogo ainda não começou
 _TTL_FT   = 300  # segundos · encerrado, dados não mudam
 
@@ -58,6 +60,44 @@ def _fetch_fixture(fid: int) -> dict:
         data = _fix_cache.get(fid, (0, {}))[1]  # mantém cache antigo em caso de erro
     _fix_cache[fid] = (now, data)
     return data
+
+
+def _fetch_fixtures_bulk(fids: list[int]) -> None:
+    """Pré-aquece o cache de fixtures em lote via /fixtures?ids=1-2-3 (até 20
+    por chamada, limite da API-Football), reduzindo N chamadas individuais
+    a ceil(N/20). Só busca fixtures com cache expirado/ausente; o que não
+    vier na resposta em lote (erro, id inválido) cai no fallback individual
+    de _fetch_fixture -- puramente aditivo, nunca piora o comportamento
+    anterior."""
+    now = time.time()
+    stale = []
+    for fid in fids:
+        cached = _fix_cache.get(fid)
+        if cached is None:
+            stale.append(fid)
+            continue
+        ts, data = cached
+        status = data.get("fixture", {}).get("status", {}).get("short", "NS")
+        if now - ts >= _cache_ttl(status):
+            stale.append(fid)
+    if not stale:
+        return
+    for i in range(0, len(stale), 20):
+        batch = stale[i:i + 20]
+        try:
+            r = requests.get(f"{API_BASE}/fixtures", headers=_headers(),
+                             params={"ids": "-".join(str(f) for f in batch),
+                                     "timezone": "America/Sao_Paulo"}, timeout=10)
+            items = r.json().get("response", [])
+        except Exception as e:
+            logger.error("[LIVE] bulk fixtures %s: %s", batch, e)
+            continue
+        fetched_now = time.time()
+        by_id = {item.get("fixture", {}).get("id"): item for item in items}
+        for fid in batch:
+            data = by_id.get(fid)
+            if data is not None:
+                _fix_cache[fid] = (fetched_now, data)
 
 
 def _fetch_stats(fid: int, status: str) -> list:
@@ -236,6 +276,29 @@ def _extract_line(line_str: str | None) -> tuple[str | None, float | None]:
             except Exception:
                 pass
     return l, None
+
+
+# Mercados que realmente leem home_stats/away_stats dentro de _stat_for_market
+# (corners/cards/fouls/saves/shots/shots_on_target/offsides) -- mesmas
+# keywords/market_types do dispatch abaixo. Usado só pra decidir se vale a
+# pena chamar /fixtures/statistics; se ficar dessincronizado da lista de
+# keywords abaixo o pior caso é uma chamada a mais (nunca um dado errado,
+# pois quem calcula o valor continua sendo só _stat_for_market).
+_STATS_MARKET_TYPES = {"corners", "cards", "fouls", "saves", "shots", "shots_on_target", "offsides"}
+_STATS_KEYWORDS = (
+    "escanteio", "corner", "cart", "card", "falta", "foul",
+    "defesa", "save", "goleiro",
+    "chute", "shot", "finaliza",
+    "impediment", "offside",
+)
+
+
+def _leg_needs_stats(market: str | None, market_type: str | None) -> bool:
+    mtype = (market_type or "").lower()
+    if mtype:
+        return mtype in _STATS_MARKET_TYPES
+    m = (market or "").lower()
+    return any(k in m for k in _STATS_KEYWORDS)
 
 
 def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
@@ -697,7 +760,7 @@ def _enrich_leg(fid: int, market: str, line: str,
     away_goals = int(goals.get("away") or 0)
 
     home_stats, away_stats = {}, {}
-    if status in LIVE_STATUSES or status in FT_STATUSES:
+    if (status in LIVE_STATUSES or status in FT_STATUSES) and _leg_needs_stats(market, market_type):
         home_stats, away_stats = _parse_stats(_fetch_stats(fid, status))
 
     cur_val, stat_label, direction = _stat_for_market(
@@ -982,6 +1045,42 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         bingo_stats_map = {r["fixture_id"]: r for r in cur.fetchall()}
 
     cur.close()
+
+    # ── Pré-aquece o cache de fixtures em lote (1 chamada a cada 20 fixtures
+    # em vez de 1 chamada por fixture/perna dentro do loop abaixo) ──────────
+    all_fixture_ids: set[int] = set()
+    for p in vip_map.values():
+        if p["fixture_id"]:
+            all_fixture_ids.add(p["fixture_id"])
+    for p in free_map.values():
+        if p["fixture_id"]:
+            all_fixture_ids.add(p["fixture_id"])
+    for p in multipla_map.values():
+        legs_raw = p["games"]
+        if isinstance(legs_raw, str):
+            try: legs_raw = json.loads(legs_raw)
+            except Exception: legs_raw = []
+        for leg_data in (legs_raw if isinstance(legs_raw, list) else []):
+            fid = leg_data.get("fixture_id")
+            if fid:
+                all_fixture_ids.add(fid)
+    for p in alavancagem_map.values():
+        for i in (1, 2):
+            fid = p.get(f"fixture_id_{i}")
+            if fid:
+                all_fixture_ids.add(fid)
+    for p in bingo_map.values():
+        games_raw = p["games"]
+        if isinstance(games_raw, str):
+            try: games_raw = json.loads(games_raw)
+            except Exception: games_raw = []
+        for g in (games_raw if isinstance(games_raw, list) else []):
+            fid = g.get("fixture_id")
+            if fid:
+                all_fixture_ids.add(fid)
+
+    if all_fixture_ids:
+        _fetch_fixtures_bulk(list(all_fixture_ids))
 
     result = []
 
@@ -1288,6 +1387,12 @@ def resolve_all_pending() -> dict:
     conn = get_connection()
     cur  = conn.cursor()
     resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0, "bingo": 0}
+    # Picks de jogos que ainda nem começaram não têm nada pra resolver --
+    # sem esse filtro o job (roda a cada 5 min, 24/7) reconsultava a
+    # API-Football pra TODO pick pendente do sistema, inclusive os
+    # publicados com antecedência pra dias futuros. Maior consumidor de
+    # cota do que a própria aba "Minhas Apostas".
+    today_br = datetime.now(_BR_TZ).date()
 
     try:
         # ── VIP ──────────────────────────────────────────────────────────────
@@ -1296,8 +1401,9 @@ def resolve_all_pending() -> dict:
                 SELECT id, fixture_id, market, market_type, line, odd,
                        home_team_name AS home_team, away_team_name AS away_team,
                        home_team_id, away_team_id
-                FROM picks_vip WHERE result IS NULL AND fixture_id IS NOT NULL
-            """)
+                FROM picks_vip
+                WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
+            """, (today_br,))
             for p in cur.fetchall():
                 try:
                     odd = float(p["odd"] or 1)
@@ -1323,8 +1429,9 @@ def resolve_all_pending() -> dict:
             cur.execute("""
                 SELECT id, fixture_id, market, market_type, line, odd,
                        home_team, away_team, home_team_id, away_team_id
-                FROM picks_free WHERE result IS NULL AND fixture_id IS NOT NULL
-            """)
+                FROM picks_free
+                WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
+            """, (today_br,))
             for p in cur.fetchall():
                 try:
                     odd = float(p["odd"] or 1)
@@ -1347,7 +1454,10 @@ def resolve_all_pending() -> dict:
 
         # ── MÚLTIPLA ─────────────────────────────────────────────────────────
         try:
-            cur.execute("SELECT id, games, total_odd FROM picks_multiplas WHERE result IS NULL")
+            cur.execute(
+                "SELECT id, games, total_odd FROM picks_multiplas WHERE result IS NULL AND match_date <= %s",
+                (today_br,),
+            )
             for p in cur.fetchall():
                 try:
                     games = p["games"]
@@ -1398,8 +1508,9 @@ def resolve_all_pending() -> dict:
                        market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
                        market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
                        odd_combined
-                FROM picks_alavancagem WHERE result IS NULL
-            """)
+                FROM picks_alavancagem
+                WHERE result IS NULL AND match_date <= %s
+            """, (today_br,))
             for p in cur.fetchall():
                 try:
                     legs_out = []
@@ -1446,7 +1557,10 @@ def resolve_all_pending() -> dict:
 
         # ── BINGO ────────────────────────────────────────────────────────────
         try:
-            cur.execute("SELECT id, games, odd_final FROM picks_bingo WHERE result IS NULL")
+            cur.execute(
+                "SELECT id, games, odd_final FROM picks_bingo WHERE result IS NULL AND match_date <= %s",
+                (today_br,),
+            )
             for p in cur.fetchall():
                 try:
                     games = p["games"]

@@ -613,7 +613,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   )
 }
 
-const REFRESH_LIVE = 5_000 // 5s · polling quando tem pick ao vivo
+const REFRESH_LIVE = 15_000 // 15s · polling quando tem pick ao vivo
 
 function LiveSkeleton() {
   return (
@@ -655,10 +655,13 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
 
-  // Primeiro fetch sempre (ao montar, antes de clicar na aba)
-  useEffect(() => { load() }, [load])
+  // Fetch ao ativar a aba -- o componente fica sempre montado (só escondido
+  // via CSS em Picks.tsx), então buscar incondicionalmente ao montar batia
+  // a API pra qualquer usuário que abrisse /picks, mesmo sem nunca clicar
+  // em "Minhas Apostas"
+  useEffect(() => { if (isActive) load() }, [isActive, load])
 
-  // Polling: 5s quando tem pick ao vivo, 60s quando tem pick pendente
+  // Polling: 15s quando tem pick ao vivo, 60s quando tem pick pendente
   const hasLive    = picks.some(p => p.is_live)
   const hasPending = picks.some(p => !p.is_live && !FINISHED_SET.has(p.status))
   useEffect(() => {
@@ -672,12 +675,13 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
     return () => clearInterval(id)
   }, [load, isActive, hasLive, hasPending])
 
-  // Atualiza quando o usuário volta ao browser (troca de aba, minimiza, etc.)
+  // Atualiza quando o usuário volta ao browser (troca de aba, minimiza, etc.),
+  // só se a aba "Minhas Apostas" for a que está ativa
   useEffect(() => {
-    const onVisible = () => { if (document.visibilityState === 'visible') load() }
+    const onVisible = () => { if (document.visibilityState === 'visible' && isActive) load() }
     document.addEventListener('visibilitychange', onVisible)
     return () => document.removeEventListener('visibilitychange', onVisible)
-  }, [load])
+  }, [load, isActive])
 
   if (loading && picks.length === 0) {
     return <LiveSkeleton />

@@ -3,7 +3,11 @@ import api from '../services/api'
 import { useAuth } from './AuthContext'
 
 const LS_KEY = 'lastSeenPickId'
-const POLL_INTERVAL = 30_000
+// 60s: esse poll roda em TODA página do site pra todo usuário logado (não só
+// na aba "Minhas Apostas"), então cada segundo a menos aqui multiplica pelo
+// total de usuários ativos * jogos ao vivo. LivePicks.tsx tem seu próprio
+// poll mais rápido quando a aba está de fato aberta.
+const POLL_INTERVAL = 60_000
 
 interface NotificationCtx {
   hasNew: boolean
