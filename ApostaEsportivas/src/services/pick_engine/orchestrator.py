@@ -47,6 +47,7 @@ def analyze_fixture_markets(
     news_data: dict | None = None,
     team_strength_data: dict | None = None,
     referee_stats: dict | None = None,
+    league_id: int | None = None,
     data_quality_score: float | None = None,
     debug: bool = False,
 ) -> list | dict:
@@ -93,6 +94,12 @@ def analyze_fixture_markets(
     pipelines: sem arbitro com amostra minima OU jogo classificado "frio"
     pelo contexto, cartoes nem vira candidato).
 
+    `league_id` e opcional -- quando presente, calibration.get_prior/
+    calibration_adjustment tentam a calibracao segmentada por
+    (market_type, league_id) antes de cair pro agregado so por market_type
+    (ver services/pick_engine/calibration.py, fallback gracioso quando a
+    liga especifica nao tem amostra suficiente).
+
     `debug=True` (fase de homologacao, ver services/pick_engine/homologation.py
     e o plano de validacao antes de promover o motor pra producao): retorno
     muda de list pra dict {"candidates": [...], "eliminated_markets": [...],
@@ -136,7 +143,7 @@ def analyze_fixture_markets(
         # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
         # -- MESMA fonte que calibration_adjustment ja usa (hit-rate real
         # historico do market_type), nao um numero novo/inventado.
-        bayes_prior = calibration.get_prior(market_type, calibration_data)
+        bayes_prior = calibration.get_prior(market_type, calibration_data, league_id=league_id)
 
         line_candidates = []
         for m in entries:
@@ -249,7 +256,7 @@ def analyze_fixture_markets(
         K = round(min(max(K, 0.10), 1.00), 4)
         conf = confidence.confidence_score(C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
 
-        cal_delta = calibration.calibration_adjustment(market_type, calibration_data)
+        cal_delta = calibration.calibration_adjustment(market_type, calibration_data, league_id=league_id)
 
         # V (variancia): mesma media, dispersao real -> menos previsivel,
         # perde confidence mesmo com taxa boa (nao aplica a familias sem

@@ -9,7 +9,6 @@ Uso:
   python main.py dica             # Gera pick free (Dica do Dia)
   python main.py multiplas        # Gera múltipla do dia
   python main.py alavancagem      # Gera pick de alavancagem
-  python main.py bingo            # Gera bilhete Bingo do dia (VIP)
   python main.py resultados       # Atualiza resultados de todos os picks
   python main.py ligas            # Atualiza perfis de ligas (IA)
   python main.py tudo             # Pipeline completo: dados → odds → picks → resultados
@@ -47,6 +46,8 @@ def run_migrations():
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS stake_pct NUMERIC;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS stake_units INTEGER;",
         "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;",
+        "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
+        "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -109,11 +110,6 @@ def cmd_alavancagem():
     run_alavancagem_engine()
 
 
-def cmd_bingo():
-    from engine_pipelines.bingo_pipeline import run_bingo_engine
-    run_bingo_engine()
-
-
 def cmd_resultados():
     from atualizar_resultados_sugestoes import AIUpdateResultsMain
     AIUpdateResultsMain().update_all_results()
@@ -141,28 +137,25 @@ def cmd_tudo(mode: str = "fast"):
     print("PIPELINE COMPLETO · ApostaEsportivas")
     print("="*60 + "\n")
 
-    print("─── [1/8] DADOS ────────────────────────────────────────")
+    print("─── [1/7] DADOS ────────────────────────────────────────")
     cmd_dados(mode=mode)
 
-    print("\n─── [2/8] ODDS ─────────────────────────────────────────")
+    print("\n─── [2/7] ODDS ─────────────────────────────────────────")
     cmd_odds()
 
-    print("\n─── [3/8] PICKS VIP ────────────────────────────────────")
+    print("\n─── [3/7] PICKS VIP ────────────────────────────────────")
     cmd_vip()
 
-    print("\n─── [4/8] DICA DO DIA ──────────────────────────────────")
+    print("\n─── [4/7] DICA DO DIA ──────────────────────────────────")
     cmd_dica()
 
-    print("\n─── [5/8] MÚLTIPLA ─────────────────────────────────────")
+    print("\n─── [5/7] MÚLTIPLA ─────────────────────────────────────")
     cmd_multiplas()
 
-    print("\n─── [6/8] ALAVANCAGEM ──────────────────────────────────")
+    print("\n─── [6/7] ALAVANCAGEM ──────────────────────────────────")
     cmd_alavancagem()
 
-    print("\n─── [7/8] BINGO ────────────────────────────────────────")
-    cmd_bingo()
-
-    print("\n─── [8/8] RESULTADOS ───────────────────────────────────")
+    print("\n─── [7/7] RESULTADOS ───────────────────────────────────")
     cmd_resultados()
 
     total = time.perf_counter() - t0
@@ -182,7 +175,6 @@ Comandos disponíveis:
   dica             Gera pick free (Dica do Dia)
   multiplas        Gera múltipla do dia
   alavancagem      Gera pick de alavancagem
-  bingo            Gera bilhete Bingo do dia (VIP)
   resultados       Atualiza resultados de todos os picks
   ligas            Atualiza perfis de ligas (IA)
   tudo [full]      Pipeline completo na ordem correta
@@ -222,9 +214,6 @@ if __name__ == "__main__":
 
     elif cmd == "alavancagem":
         cmd_alavancagem()
-
-    elif cmd == "bingo":
-        cmd_bingo()
 
     elif cmd == "resultados":
         cmd_resultados()

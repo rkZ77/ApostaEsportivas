@@ -13,7 +13,7 @@ import BackButton from '../components/BackButton'
 import FilterPanel from '../components/FilterPanel'
 
 const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.', bingo: 'Bingo',
+  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
 }
 
 // lock overlay para free
@@ -615,7 +615,6 @@ export default function Banca() {
                             ? e.home_team_name
                             : e.pick_type === 'multipla' ? 'Múltipla'
                             : e.pick_type === 'alavancagem' ? 'Alavancagem'
-                            : e.pick_type === 'bingo' ? `Bingo #${e.pick_id}`
                             : e.market ?? `Pick #${e.pick_id}`}
                         </span>
                         {e.away_team_name && (

@@ -2,8 +2,8 @@
 arbitro e se o jogo tem contexto de tensao suficiente pra caber cartoes.
 Espelha a regra que ja existia no prompt de IA legado (dica_do_dia_pipeline.py:
 "cartoes so' com arbitro >=3 jogos"), agora reimplementada no motor
-deterministico e usada por TODOS os pipelines (VIP/Free/Multipla/Alavancagem/
-Bingo, ja que sao todos orquestrados por analyze_fixture_markets), reforcada
+deterministico e usada por TODOS os pipelines (VIP/Free/Multipla/Alavancagem,
+ja que sao todos orquestrados por analyze_fixture_markets), reforcada
 com o contexto de jogo (pressao de tabela + intensidade tatica dos times),
 nao so o historico do arbitro isolado."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG

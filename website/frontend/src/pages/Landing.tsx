@@ -48,7 +48,7 @@ interface PublicData {
 }
 
 // Helpers
-const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.', bingo: 'Bingo' }
+const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
 // Indicador "hoje" · sem isso a home so mostrava estatistica agregada
 // historica, sem nenhum sinal de que a IA rodou HOJE especificamente

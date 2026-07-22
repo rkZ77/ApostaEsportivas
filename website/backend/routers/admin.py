@@ -185,7 +185,6 @@ _PIPELINE_SCRIPTS = {
     "gerar_free":           os.path.join("engine_pipelines", "dica_pipeline.py"),
     "gerar_multipla":       os.path.join("engine_pipelines", "multipla_pipeline.py"),
     "gerar_alavancagem":    os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
-    "gerar_bingo":          os.path.join("engine_pipelines", "bingo_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
     # separada, ANTES de promover mudanca pro motor de producao acima) --
@@ -196,7 +195,6 @@ _PIPELINE_SCRIPTS = {
     "dev_gerar_dica":          os.path.join("engine_pipelines", "dica_pipeline.py"),
     "dev_gerar_multipla":      os.path.join("engine_pipelines", "multipla_pipeline.py"),
     "dev_gerar_alavancagem":   os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
-    "dev_gerar_bingo":         os.path.join("engine_pipelines", "bingo_pipeline.py"),
     "dev_homolog_vip":         os.path.join("ai", "vip_engine_shadow.py"),
     "dev_homolog_dica":        os.path.join("ai", "dica_homologation.py"),
     "dev_homolog_multipla":    os.path.join("ai", "multipla_homologation.py"),
@@ -205,10 +203,8 @@ _PIPELINE_SCRIPTS = {
 
 _DEV_PIPELINE_STEPS = [
     "atualizar_jogos", "capturar_odds",
-    "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem", "dev_gerar_bingo",
+    "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem",
     "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
-    # sem dev_homolog_bingo: bingo nasceu direto no motor deterministico,
-    # nunca teve pipeline de IA pra comparar (ver docstring de engine_pipelines/bingo_pipeline.py)
 ]
 
 # Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
@@ -217,11 +213,10 @@ _PIPELINE_TIMEOUTS = {
     "gerar_vip":       600.0,   # 10 min · múltiplos fixtures com chamadas IA
     "gerar_multipla":  600.0,   # 10 min · IA + carregamento de contexto
     "gerar_alavancagem": 600.0, # 10 min
-    "gerar_bingo":     600.0,   # 10 min · varre ate MAX_FIXTURES jogos com motor completo por jogo
     "default":         300.0,   # 5 min para os demais
 }
 
-_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem", "gerar_bingo"]
+_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem"]
 
 _STEP_LABELS = {
     "atualizar_jogos":   "Atualizando jogos",
@@ -230,7 +225,6 @@ _STEP_LABELS = {
     "gerar_free":        "Gerando pick gratuito",
     "gerar_multipla":    "Gerando múltipla",
     "gerar_alavancagem": "Gerando alavancagem",
-    "gerar_bingo":       "Gerando bingo",
 }
 
 
@@ -534,9 +528,6 @@ _PICK_TABLES = {
     "free":        ("picks_free",        "home_team",      "away_team"),
     "multipla":    ("picks_multiplas",   "home_team_name", "away_team_name"),
     "alavancagem": ("picks_alavancagem", "home_team_1",    "away_team_1"),
-    # bingo nao tem colunas home_team/away_team diretas -- times do 1o jogo
-    # vem de dentro do JSONB `games` (lista de jogos, cada um com seu sub-combo)
-    "bingo":       ("picks_bingo",       "games->0->>'home_team'", "games->0->>'away_team'"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
@@ -677,9 +668,7 @@ def admin_stats(current_user: dict = Depends(require_admin)):
                 (SELECT COUNT(*) FROM picks_free
                  WHERE match_date = CURRENT_DATE)                            AS dica,
                 (SELECT COUNT(*) FROM picks_multiplas
-                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas,
-                (SELECT COUNT(*) FROM picks_bingo
-                 WHERE match_date = CURRENT_DATE)                            AS bingo
+                 WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
         """)
         picks_row = dict(cur.fetchone())
 

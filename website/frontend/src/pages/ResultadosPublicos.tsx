@@ -45,9 +45,9 @@ interface PublicData {
   recent_total: number
 }
 
-const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.', bingo: 'Bingo' }
-const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'bingo']
-const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem', bingo: 'Bingo' }
+const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
+const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem']
+const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem' }
 
 export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)
@@ -402,7 +402,7 @@ export default function ResultadosPublicos() {
                             </span>
                             {g.pick_type && source === 'all' && (
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[g.pick_type] ?? ''}`}>
-                                {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type === 'bingo' ? 'Bingo' : g.pick_type.toUpperCase()}
+                                {g.pick_type === 'alavancagem' ? 'Alav.' : g.pick_type === 'multipla' ? 'Múlt.' : g.pick_type.toUpperCase()}
                               </span>
                             )}
                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -410,7 +410,7 @@ export default function ResultadosPublicos() {
                                 <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
                                 <span className="text-xs text-zinc-300 truncate">{g.home_team_name}</span>
                               </div>
-                              {g.away_team_name && g.pick_type !== 'multipla' && g.pick_type !== 'bingo' && (
+                              {g.away_team_name && g.pick_type !== 'multipla' && (
                                 <>
                                   <span className="text-[10px] text-zinc-600 shrink-0">x</span>
                                   <div className="flex items-center gap-1 min-w-0 shrink">

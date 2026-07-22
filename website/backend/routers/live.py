@@ -852,25 +852,6 @@ def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
     logger.info("[AUTO-RESULT] alavancagem #%s → %s (%+.2fu)", pick_id, result, profit)
 
 
-def _save_bingo_result(pick_id: int, game_results: list[str | None],
-                       odd_final: float, conn) -> None:
-    """Resultado combinado do bingo a partir do resultado JA combinado de cada
-    jogo (um por game_results, ver combine-por-jogo em get_live_my_picks/
-    resolve_all_pending -- cada jogo em si ja e' um _multipla_combined_result
-    das suas proprias pernas antes de chegar aqui)."""
-    result = _multipla_combined_result(game_results)
-    if result is None:
-        return
-    profit = _profit_for_result(result, odd_final)
-    c = conn.cursor()
-    c.execute("UPDATE picks_bingo SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
-              (result, profit, pick_id))
-    _sync_followed_result(pick_id, "bingo", result, c)
-    conn.commit()
-    c.close()
-    logger.info("[AUTO-RESULT] bingo #%s → %s (%+.4fu)", pick_id, result, profit)
-
-
 def _enrich_leg(fid: int, market: str, line: str,
                 home_team: str, away_team: str,
                 home_team_id: int | None, away_team_id: int | None,
@@ -1036,7 +1017,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     free_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "free"]
     multipla_ids    = [r["pick_id"] for r in followed if r["pick_type"] == "multipla"]
     alavancagem_ids = [r["pick_id"] for r in followed if r["pick_type"] == "alavancagem"]
-    bingo_ids       = [r["pick_id"] for r in followed if r["pick_type"] == "bingo"]
 
     # ── Batch fetch all pick data ────────────────────────────────────────────
     vip_map: dict = {}
@@ -1076,14 +1056,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             FROM picks_alavancagem WHERE id = ANY(%s)
         """, (alavancagem_ids,))
         alavancagem_map = {r["id"]: r for r in cur.fetchall()}
-
-    bingo_map: dict = {}
-    if bingo_ids:
-        cur.execute("""
-            SELECT id, games, odd_final, result, match_date
-            FROM picks_bingo WHERE id = ANY(%s)
-        """, (bingo_ids,))
-        bingo_map = {r["id"]: r for r in cur.fetchall()}
 
     # Batch fixture lookups for alavancagem team_ids
     alav_fixture_ids = set()
@@ -1137,41 +1109,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         )
         multipla_stats_map = {r["fixture_id"]: r for r in cur.fetchall()}
 
-    # Batch fixture lookups para os jogos do bingo (mesmo padrao da multipla,
-    # mas games[].legs[] tem um nivel de aninhamento a mais -- o fixture_id/
-    # nomes/ids vivem no JOGO, nao em cada perna individual)
-    bingo_fixture_ids: set = set()
-    bingo_stats_ids: set = set()
-    for p in bingo_map.values():
-        games_raw = p["games"]
-        if isinstance(games_raw, str):
-            try: games_raw = json.loads(games_raw)
-            except Exception: games_raw = []
-        for g in (games_raw if isinstance(games_raw, list) else []):
-            fid = g.get("fixture_id")
-            if not fid:
-                continue
-            if not g.get("home_team") or not g.get("away_team"):
-                bingo_fixture_ids.add(fid)
-            if not g.get("home_team_id") or not g.get("away_team_id"):
-                bingo_stats_ids.add(fid)
-
-    bingo_fixture_map: dict = {}
-    if bingo_fixture_ids:
-        cur.execute(
-            "SELECT fixture_id, home_team, away_team, home_team_id, away_team_id FROM fixtures WHERE fixture_id = ANY(%s)",
-            (list(bingo_fixture_ids),),
-        )
-        bingo_fixture_map = {r["fixture_id"]: r for r in cur.fetchall()}
-
-    bingo_stats_map: dict = {}
-    if bingo_stats_ids:
-        cur.execute(
-            "SELECT DISTINCT ON (fixture_id) fixture_id, home_team_id, away_team_id FROM match_statistics WHERE fixture_id = ANY(%s)",
-            (list(bingo_stats_ids),),
-        )
-        bingo_stats_map = {r["fixture_id"]: r for r in cur.fetchall()}
-
     cur.close()
 
     # ── Pré-aquece o cache de fixtures em lote (1 chamada a cada 20 fixtures
@@ -1195,15 +1132,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     for p in alavancagem_map.values():
         for i in (1, 2):
             fid = p.get(f"fixture_id_{i}")
-            if fid:
-                all_fixture_ids.add(fid)
-    for p in bingo_map.values():
-        games_raw = p["games"]
-        if isinstance(games_raw, str):
-            try: games_raw = json.loads(games_raw)
-            except Exception: games_raw = []
-        for g in (games_raw if isinstance(games_raw, list) else []):
-            fid = g.get("fixture_id")
             if fid:
                 all_fixture_ids.add(fid)
 
@@ -1406,99 +1334,6 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "legs":           legs_out,
                 })
 
-        # ── BINGO ───────────────────────────────────────────────────────────
-        # games[].legs[] tem um nivel de aninhamento a mais que multipla (que e'
-        # so uma lista plana de legs) -- cada jogo primeiro combina o resultado
-        # das suas proprias pernas (sub-combo), so' depois os jogos entre si se
-        # combinam pro resultado final do bilhete. Pernas achatadas numa lista
-        # unica no final pro frontend reusar o mesmo card de múltipla/alavancagem.
-        elif pick_type == "bingo":
-            p = bingo_map.get(pick_id)
-            if not p:
-                continue
-            is_today = (p["match_date"] == today_br)
-            if p["result"] is not None and not is_today:
-                continue
-
-            games_raw = p["games"]
-            if isinstance(games_raw, str):
-                try: games_raw = json.loads(games_raw)
-                except Exception: games_raw = []
-
-            games_out = []
-            for g in (games_raw if isinstance(games_raw, list) else []):
-                fid = g.get("fixture_id")
-                if not fid:
-                    continue
-                home = g.get("home_team") or ""
-                away = g.get("away_team") or ""
-                h_id = g.get("home_team_id")
-                a_id = g.get("away_team_id")
-                if not home or not away:
-                    fx = bingo_fixture_map.get(fid)
-                    if fx:
-                        home = home or fx["home_team"] or ""
-                        away = away or fx["away_team"] or ""
-                        h_id = h_id or fx["home_team_id"]
-                        a_id = a_id or fx["away_team_id"]
-                if not h_id or not a_id:
-                    ms = bingo_stats_map.get(fid)
-                    if ms:
-                        h_id = h_id or ms["home_team_id"]
-                        a_id = a_id or ms["away_team_id"]
-
-                legs_enriched = [
-                    _enrich_leg(
-                        fid,
-                        leg_data.get("market", ""),
-                        leg_data.get("line", ""),
-                        home, away, h_id, a_id,
-                        float(leg_data.get("odd", 1)),
-                        market_type=leg_data.get("market_type"),
-                    )
-                    for leg_data in (g.get("legs") or [])
-                ]
-                if legs_enriched:
-                    games_out.append(legs_enriched)
-
-            if games_out:
-                odd_final    = float(p["odd_final"] or 1)
-                final_result = p["result"]
-                if final_result is None:
-                    game_results = []
-                    for legs_enriched in games_out:
-                        leg_results = [_locked_leg_result(l) for l in legs_enriched]
-                        if any(r == "RED" for r in leg_results):
-                            leg_results = ["RED"] * len(legs_enriched)
-                        game_results.append(
-                            _multipla_combined_result(leg_results) if all(r is not None for r in leg_results) else None
-                        )
-                    if any(r == "RED" for r in game_results):
-                        game_results = ["RED"] * len(games_out)
-                    if all(r is not None for r in game_results):
-                        final_result = _multipla_combined_result(game_results)
-                        if final_result:
-                            _save_bingo_result(pick_id, game_results, odd_final, conn)
-                            if not is_today:
-                                continue
-
-                flat_legs = [leg for legs_enriched in games_out for leg in legs_enriched]
-
-                result.append({
-                    "pick_id":        pick_id,
-                    "pick_type":      "bingo",
-                    "match_date":     str(p["match_date"]),
-                    "odd":            odd_final,
-                    "actual_odd":     actual_odd,
-                    "bet_house":      bet_house,
-                    "stake_units":    stake_u,
-                    "cashout_amount": cashout_amt,
-                    "is_live":        any(l["is_live"] for l in flat_legs),
-                    "status":         "FT" if final_result else None,
-                    "result":         final_result,
-                    "legs":           flat_legs,
-                })
-
     conn.close()
 
     # Live picks first, then by date
@@ -1515,7 +1350,7 @@ def resolve_all_pending() -> dict:
     """
     conn = get_connection()
     cur  = conn.cursor()
-    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0, "bingo": 0}
+    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0}
     # Picks de jogos que ainda nem começaram não têm nada pra resolver --
     # sem esse filtro o job (roda a cada 5 min, 24/7) reconsultava a
     # API-Football pra TODO pick pendente do sistema, inclusive os
@@ -1685,68 +1520,6 @@ def resolve_all_pending() -> dict:
                     logger.error("[AUTO-RESULT] alavancagem #%s erro: %s", p["id"], e)
         except Exception as e:
             logger.error("[AUTO-RESULT] alavancagem query erro: %s", e)
-
-        # ── BINGO ────────────────────────────────────────────────────────────
-        try:
-            cur.execute(
-                "SELECT id, games, odd_final FROM picks_bingo WHERE result IS NULL AND match_date <= %s",
-                (today_br,),
-            )
-            for p in cur.fetchall():
-                try:
-                    games = p["games"]
-                    if isinstance(games, str):
-                        try:    games = json.loads(games)
-                        except: continue
-                    if not isinstance(games, list) or not games:
-                        continue
-
-                    games_out = []
-                    for g in games:
-                        fid = g.get("fixture_id")
-                        if not fid:
-                            continue
-                        home = g.get("home_team") or ""
-                        away = g.get("away_team") or ""
-                        legs_enriched = [
-                            _enrich_leg(
-                                fid,
-                                leg_data.get("market", ""),
-                                leg_data.get("line", ""),
-                                home, away,
-                                g.get("home_team_id"),
-                                g.get("away_team_id"),
-                                float(leg_data.get("odd", 1)),
-                                market_type=leg_data.get("market_type"),
-                            )
-                            for leg_data in (g.get("legs") or [])
-                        ]
-                        if legs_enriched:
-                            games_out.append(legs_enriched)
-
-                    if not games_out:
-                        continue
-
-                    odd_final    = float(p["odd_final"] or 1)
-                    game_results = []
-                    for legs_enriched in games_out:
-                        leg_results = [_locked_leg_result(l) for l in legs_enriched]
-                        if any(r == "RED" for r in leg_results):
-                            leg_results = ["RED"] * len(legs_enriched)
-                        game_results.append(
-                            _multipla_combined_result(leg_results) if all(r is not None for r in leg_results) else None
-                        )
-
-                    if any(r == "RED" for r in game_results):
-                        _save_bingo_result(p["id"], ["RED"] * len(games_out), odd_final, conn)
-                        resolved["bingo"] += 1
-                    elif all(r is not None for r in game_results):
-                        _save_bingo_result(p["id"], game_results, odd_final, conn)
-                        resolved["bingo"] += 1
-                except Exception as e:
-                    logger.error("[AUTO-RESULT] bingo #%s erro: %s", p["id"], e)
-        except Exception as e:
-            logger.error("[AUTO-RESULT] bingo query erro: %s", e)
 
     finally:
         cur.close()
