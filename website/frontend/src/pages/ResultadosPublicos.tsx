@@ -2,14 +2,13 @@ import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
-import { Share2 } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
-import { useShareResultsImage, useShareTodayGamesImage, useShareLeagueResultsImage } from '../hooks/useShareStoryImage'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
+import BackButton from '../components/BackButton'
 import SuggestionDetail from '../components/SuggestionDetail'
 import DailyGreensChart from '../components/DailyGreensChart'
 
@@ -55,16 +54,10 @@ export default function ResultadosPublicos() {
   const [error, setError] = useState(false)
   const [source, setSource] = useState('all')
   const [month, setMonth] = useState('')
-  const [todayGames, setTodayGames] = useState<any[]>([])
   const [recentLeagueFilter, setRecentLeagueFilter] = useState<string>('')
 
   const { user } = useAuth()
   const [tab, setTab] = useState<'resumo' | 'por_jogo' | 'por_mes'>('resumo')
-
-  const shareResults = useShareResultsImage()
-  const shareCurrentMonth = useShareResultsImage()
-  const shareTodayGames = useShareTodayGamesImage()
-  const shareLeagueResults = useShareLeagueResultsImage()
 
   // "Por Jogo" · exige login (mesmos dados detalhados que antes só existiam em /results)
   const [games, setGames]           = useState<any[]>([])
@@ -127,12 +120,6 @@ export default function ResultadosPublicos() {
     setRecentLeagueFilter('')
   }, [source, month])
 
-  useEffect(() => {
-    api.get('/public/fixtures-today')
-      .then(r => setTodayGames(r.data ?? []))
-      .catch(() => {})
-  }, [])
-
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
   const profit  = s ? Number(s.profit) : null
@@ -140,35 +127,6 @@ export default function ResultadosPublicos() {
   const recent   = data?.recent ?? []
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
-
-  const monthLabel = month
-    ? new Date(Number(month.slice(0, 4)), Number(month.slice(5, 7)) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-    : null
-  const filterBadgeLabel = monthLabel
-    ? `RESULTADOS · ${monthLabel.toUpperCase()}`
-    : source !== 'all' ? `RESULTADOS · ${SOURCE_LABELS[source].toUpperCase()}` : undefined
-
-  const now = new Date()
-  const todayStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
-  const todayResult = byDay.find(d => d.match_date === todayStr)
-  const todayWinRate = todayResult ? calcWinRate(todayResult.greens, todayResult.total) : null
-
-  const currentMonthStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
-  const currentMonthLabel = now.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
-
-  const shareThisMonth = async () => {
-    // Reaproveita o resumo já carregado se o filtro atual já é o mês corrente;
-    // senão busca o mês corrente à parte, sem alterar o filtro visível na tela.
-    const summary = month === currentMonthStr ? s : (await api.get('/public/results', { params: { month: currentMonthStr } })).data?.summary
-    if (!summary || summary.total === 0) return
-    const wr = calcWinRate(summary.greens, summary.total)
-    shareCurrentMonth.share({
-      winRatePct: wr ?? 0, total: summary.total, greens: summary.greens, reds: summary.reds, profit: Number(summary.profit),
-      badgeLabel: `RESULTADOS · ${currentMonthLabel.toUpperCase()}`,
-      footerText: `Referente a ${currentMonthLabel}`,
-      shareText: `Em ${currentMonthLabel}, a IA da Pick IA fechou ${summary.greens}G / ${summary.reds}R (${Math.round(wr ?? 0)}%). Histórico 100% auditável.`,
-    })
-  }
 
   return (
     <>
@@ -201,6 +159,9 @@ export default function ResultadosPublicos() {
         )}
 
         <main className="max-w-5xl mx-auto px-4 py-10">
+          <div className="mb-4">
+            <BackButton />
+          </div>
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-black mb-2">Resultados da IA</h1>
             <p className="text-zinc-400 text-sm">Histórico auditável de todos os picks. Atualizado automaticamente.</p>
@@ -260,82 +221,6 @@ export default function ResultadosPublicos() {
                     <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                   </div>
                 ))}
-              </div>
-
-              {/* Compartilhar */}
-              <div className="flex flex-wrap gap-2 justify-center mb-8">
-                <button
-                  onClick={shareThisMonth}
-                  disabled={shareCurrentMonth.sharing}
-                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-colors disabled:opacity-50"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  {shareCurrentMonth.shared ? 'Compartilhado!' : shareCurrentMonth.sharing ? 'Gerando...' : `Resultado de ${currentMonthLabel}`}
-                </button>
-                <button
-                  onClick={() => shareResults.share({
-                    winRatePct: winRatePct ?? 0, total: s.total, greens: s.greens, reds: s.reds, profit: profit ?? 0,
-                    badgeLabel: filterBadgeLabel,
-                    footerText: monthLabel ? `Referente a ${monthLabel}` : undefined,
-                  })}
-                  disabled={shareResults.sharing}
-                  className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
-                >
-                  <Share2 className="w-3.5 h-3.5" />
-                  {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado'}
-                </button>
-                {todayResult && todayResult.total > 0 && (
-                  <button
-                    onClick={() => shareResults.share({
-                      winRatePct: todayWinRate ?? 0,
-                      total: todayResult.total,
-                      greens: todayResult.greens,
-                      reds: todayResult.reds,
-                      profit: Number(todayResult.profit),
-                      badgeLabel: 'RESULTADO DE HOJE',
-                      footerText: new Date(todayStr + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' }),
-                      shareText: `Hoje a IA da Pick IA fechou ${todayResult.greens}G / ${todayResult.reds}R (${Math.round(todayWinRate ?? 0)}%). Histórico 100% auditável.`,
-                    })}
-                    disabled={shareResults.sharing}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-blue-500/10 border border-blue-500/30 text-blue-400 hover:bg-blue-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado de hoje'}
-                  </button>
-                )}
-                {byLeague.length > 0 && (
-                  <button
-                    onClick={() => shareLeagueResults.share(
-                      [...byLeague]
-                        .sort((a, b) => b.total - a.total)
-                        .map(lg => ({
-                          leagueId: lg.league_id, leagueName: lg.league_name,
-                          total: lg.total, winRatePct: calcWinRate(lg.greens, lg.total) ?? 0,
-                          profit: Number(lg.profit),
-                        })),
-                      filterBadgeLabel ? `POR LIGA · ${filterBadgeLabel.replace('RESULTADOS · ', '')}` : undefined,
-                    )}
-                    disabled={shareLeagueResults.sharing}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-purple-500/10 border border-purple-500/30 text-purple-400 hover:bg-purple-500/20 transition-colors disabled:opacity-50"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    {shareLeagueResults.shared ? 'Compartilhado!' : shareLeagueResults.sharing ? 'Gerando...' : 'Compartilhar por liga'}
-                  </button>
-                )}
-                {todayGames.length > 0 && (
-                  <button
-                    onClick={() => shareTodayGames.share(todayGames.map(g => ({
-                      homeTeamName: g.home_team, awayTeamName: g.away_team,
-                      homeTeamId: g.home_team_id, awayTeamId: g.away_team_id,
-                      leagueName: g.league_name, matchDatetime: g.match_datetime,
-                    })))}
-                    disabled={shareTodayGames.sharing}
-                    className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 hover:bg-yellow-400/20 transition-colors disabled:opacity-50"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    {shareTodayGames.shared ? 'Compartilhado!' : shareTodayGames.sharing ? 'Gerando...' : 'Compartilhar jogos de hoje'}
-                  </button>
-                )}
               </div>
 
               {/* Gráfico por dia */}
