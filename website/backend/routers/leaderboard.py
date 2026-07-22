@@ -64,14 +64,12 @@ def get_leaderboard(
                     WHEN 'free'        THEN pf.result
                     WHEN 'multipla'    THEN pm.result
                     WHEN 'alavancagem' THEN pa.result
-                    WHEN 'bingo'       THEN pb.result
                 END AS result,
                 CASE uf.pick_type
                     WHEN 'vip'         THEN pv.odd
                     WHEN 'free'        THEN pf.odd
                     WHEN 'multipla'    THEN pm.total_odd
                     WHEN 'alavancagem' THEN pa.odd_combined
-                    WHEN 'bingo'       THEN pb.odd_final
                 END AS odd,
                 COALESCE(ub.unit_value, 1)       AS unit_value,
                 COALESCE(ub.bankroll_start, 100) AS bankroll_start
@@ -80,7 +78,6 @@ def get_leaderboard(
             LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
             LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
             LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
-            LEFT JOIN picks_bingo pb       ON pb.id = uf.pick_id AND uf.pick_type = 'bingo'
             LEFT JOIN user_banca ub        ON ub.user_id = uf.user_id
             WHERE 1=1 {date_cond}
         """, date_params)
@@ -154,7 +151,6 @@ def get_leaderboard(
                         WHEN 'free'        THEN pf.result
                         WHEN 'multipla'    THEN pm.result
                         WHEN 'alavancagem' THEN pa.result
-                        WHEN 'bingo'       THEN pb.result
                     END AS result,
                     ROW_NUMBER() OVER (
                         PARTITION BY uf.user_id
@@ -165,7 +161,6 @@ def get_leaderboard(
                 LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
                 LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
                 LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
-                LEFT JOIN picks_bingo pb       ON pb.id = uf.pick_id AND uf.pick_type = 'bingo'
                 WHERE uf.user_id IN ({placeholders}) {streak_date_cond}
             ) t
             WHERE t.result IS NOT NULL AND t.rn <= 20

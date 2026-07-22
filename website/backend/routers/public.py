@@ -141,28 +141,11 @@ def _sub_alav(date_cond: str) -> str:
         WHERE result IS NOT NULL {date_cond}
     """
 
-def _sub_bingo(date_cond: str) -> str:
-    return f"""
-        SELECT match_date,
-               CONCAT('Bingo #', id, ' · ', JSONB_ARRAY_LENGTH(games::jsonb), ' jogos') AS home_team_name,
-               NULL AS away_team_name,
-               NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
-               'Bingo' AS market, NULL AS line, odd_final AS odd,
-               result, profit,
-               1::numeric AS stake,
-               'bingo' AS source,
-               NULL::INTEGER AS league_id,
-               'Bingo' AS league_name
-        FROM picks_bingo
-        WHERE result IS NOT NULL {date_cond}
-    """
-
 _SUB_BUILDERS = {
     "vip":        _sub_vip,
     "free":       _sub_free,
     "multiplas":  _sub_mult,
     "alavancagem":_sub_alav,
-    "bingo":      _sub_bingo,
 }
 
 def _build_union(date_cond: str, source: Optional[str]) -> str:
@@ -204,7 +187,7 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
 @router.get("/results")
 def public_results(
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
-    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | bingo"),
+    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
 ):
@@ -226,9 +209,6 @@ def public_results(
                 UNION ALL
                 SELECT TO_CHAR(match_date, 'YYYY-MM'), COUNT(*)
                 FROM picks_alavancagem WHERE result IS NOT NULL GROUP BY 1
-                UNION ALL
-                SELECT TO_CHAR(match_date, 'YYYY-MM'), COUNT(*)
-                FROM picks_bingo WHERE result IS NOT NULL GROUP BY 1
             ) t
             GROUP BY month
             HAVING SUM(cnt) > 0
@@ -245,10 +225,10 @@ def public_results(
             date_cond   = ""
             date_params = ()
 
-        single = source in ("vip", "free", "multiplas", "alavancagem", "bingo")
+        single = source in ("vip", "free", "multiplas", "alavancagem")
         union_sql = _build_union(date_cond, source if single else None)
-        # cada sub-query tem 1 placeholder; UNION de 5 precisa 5x
-        p = date_params if single else date_params * 5
+        # cada sub-query tem 1 placeholder; UNION de 4 precisa 4x
+        p = date_params if single else date_params * 4
 
         # ── Sumário ───────────────────────────────────────────────────────────
         summary = _q1(cur, f"""
@@ -282,7 +262,7 @@ def public_results(
         """, p)
 
         # ── Por liga. So' ligas de verdade (league_id IS NOT NULL) -- Múltipla/
-        # Alavancagem/Bingo nao tem league_id real (pernas podem ser de ligas
+        # Alavancagem nao tem league_id real (pernas podem ser de ligas
         # diferentes) e NAO sao ligas, entao ficam de fora desta lista (pedido
         # explicito do usuario: "na liga nao aparece multiplas alavancagem,
         # aparece so ligas mesmo" -- esses tipos continuam cobertos pelo filtro
@@ -323,8 +303,7 @@ def public_results(
                 COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
                 COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
                 COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
-                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
-                COUNT(*) FILTER (WHERE source = 'bingo')      AS bingo_total
+                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total
             FROM (
                 SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
                 UNION ALL
@@ -333,8 +312,6 @@ def public_results(
                 SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
-                UNION ALL
-                SELECT 'bingo'      AS source FROM picks_bingo      WHERE result IS NOT NULL
             ) AS t
         """)
 
@@ -366,7 +343,7 @@ def _mask_first(full_name: str) -> str:
 @router.get("/pick/{pick_type}/{pick_id}")
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
-    valid = {"vip", "free", "multipla", "alavancagem", "bingo"}
+    valid = {"vip", "free", "multipla", "alavancagem"}
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
 
@@ -405,11 +382,6 @@ def public_pick(pick_type: str, pick_id: int):
                 SELECT id, match_date, games, total_odd AS odd, result, profit
                 FROM picks_multiplas WHERE id = %s
             """, (pick_id,))
-        elif pick_type == "bingo":
-            cur.execute("""
-                SELECT id, match_date, games, odd_final AS odd, result, profit
-                FROM picks_bingo WHERE id = %s
-            """, (pick_id,))
         else:  # alavancagem
             cur.execute("""
                 SELECT id, match_date,
@@ -426,8 +398,8 @@ def public_pick(pick_type: str, pick_id: int):
         if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
             d["match_date"] = d["match_date"].isoformat()
 
-        # Para múltipla/bingo: extrai preview dos times sem expor markets
-        if pick_type in ("multipla", "bingo") and d.get("games"):
+        # Para múltipla: extrai preview dos times sem expor markets
+        if pick_type == "multipla" and d.get("games"):
             import json as _json
             games = d["games"] if isinstance(d["games"], list) else _json.loads(d["games"])
             d["teams_preview"] = [
@@ -458,7 +430,6 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'free')        AS free,
                 COUNT(*) FILTER (WHERE t.source = 'multiplas')   AS multiplas,
                 COUNT(*) FILTER (WHERE t.source = 'alavancagem') AS alavancagem,
-                COUNT(*) FILTER (WHERE t.source = 'bingo')       AS bingo,
                 COUNT(*)                                         AS total
             FROM (
                 SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = CURRENT_DATE
@@ -468,11 +439,9 @@ def public_today_summary():
                 SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = CURRENT_DATE
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = CURRENT_DATE
-                UNION ALL
-                SELECT 'bingo'       AS source FROM picks_bingo       WHERE match_date = CURRENT_DATE
             ) t
         """)
-        return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0, "alavancagem": 0, "bingo": 0, "total": 0}
+        return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0, "alavancagem": 0, "total": 0}
     finally:
         cur.close()
         conn.close()
@@ -559,14 +528,12 @@ def public_leaderboard():
                         WHEN 'free'        THEN pf.result
                         WHEN 'multipla'    THEN pm.result
                         WHEN 'alavancagem' THEN pa.result
-                        WHEN 'bingo'       THEN pb.result
                     END AS result,
                     CASE uf.pick_type
                         WHEN 'vip'         THEN COALESCE(pv.profit, 0)
                         WHEN 'free'        THEN COALESCE(pf.profit, 0)
                         WHEN 'multipla'    THEN COALESCE(pm.profit, 0)
                         WHEN 'alavancagem' THEN COALESCE(pa.profit, 0)
-                        WHEN 'bingo'       THEN COALESCE(pb.profit, 0)
                         ELSE 0
                     END AS profit
                 FROM user_followed_picks uf
@@ -574,7 +541,6 @@ def public_leaderboard():
                 LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
                 LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
                 LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
-                LEFT JOIN picks_bingo pb       ON pb.id = uf.pick_id AND uf.pick_type = 'bingo'
             ),
             user_stats AS (
                 SELECT

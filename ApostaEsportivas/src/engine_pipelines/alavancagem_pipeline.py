@@ -164,7 +164,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-                referee_stats=referee_stats, data_quality_score=quality["score"],
+                referee_stats=referee_stats, league_id=fixture["league_id"], data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)

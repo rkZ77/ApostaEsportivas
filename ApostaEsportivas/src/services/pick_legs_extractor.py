@@ -1,8 +1,6 @@
-"""Extrai pernas individuais das 5 tabelas de picks (picks_vip/picks_free
+"""Extrai pernas individuais das 4 tabelas de picks (picks_vip/picks_free
 sao 1 linha = 1 perna; picks_multiplas/picks_alavancagem tem 2-3 pernas
-por linha, em formatos diferentes -- JSON array vs colunas _1/_2/_3;
-picks_bingo tem uma camada de aninhamento a mais, jogos com um sub-combo
-de pernas cada -- ver fetch_bingo_legs()).
+por linha, em formatos diferentes -- JSON array vs colunas _1/_2/_3).
 Usado por scripts/backtest_pick_engine.py e services/picks_ledger_sync_service.py
 -- extraido pra um lugar so em vez de duplicar a logica de achatamento."""
 import json
@@ -92,46 +90,13 @@ def fetch_alavancagem_legs(cur) -> list:
     return legs
 
 
-def fetch_bingo_legs(cur) -> list:
-    """cur precisa ser RealDictCursor. picks_bingo tem uma camada de
-    aninhamento a mais que multiplas: cada jogo (games[i]) carrega sua
-    propria lista de pernas do sub-combo (games[i]['legs']) -- o jogo em
-    si guarda fixture_id/home_team/away_team, a perna guarda market/line/
-    odd. leg_number aqui e sequencial GLOBAL dentro do bilhete (nao por
-    jogo), so pra manter cada linha unica em picks_ledger."""
-    cur.execute("SELECT id, games, match_date, created_at FROM picks_bingo")
-    legs = []
-    for row in cur.fetchall():
-        games_raw = row["games"]
-        games = games_raw if isinstance(games_raw, list) else json.loads(games_raw)
-        leg_number = 0
-        for game in games:
-            if not game.get("fixture_id"):
-                continue
-            for leg in game.get("legs", []):
-                leg_number += 1
-                legs.append({
-                    "source_table": "picks_bingo", "source_id": row["id"], "leg_number": leg_number,
-                    "fixture_id": game["fixture_id"], "match_date": row["match_date"],
-                    "home_team_id": game.get("home_team_id"), "away_team_id": game.get("away_team_id"),
-                    "home_team": game.get("home_team"), "away_team": game.get("away_team"),
-                    "market": leg.get("market", ""), "market_type": leg.get("market_type"),
-                    "line": leg.get("line", ""), "odd": leg.get("odd"), "bet_house": leg.get("bet_house"),
-                    "confidence": leg.get("confidence"), "probability": leg.get("prob_real"),
-                    "ev": None, "reasoning": None, "stake_pct": None, "stake_units": None,
-                    "result": leg.get("result"), "profit": None, "created_at": row["created_at"],
-                })
-    return legs
-
-
 def fetch_all_legs(cur) -> list:
-    """Todas as pernas das 5 tabelas, achatadas. cur precisa ser RealDictCursor."""
+    """Todas as pernas das 4 tabelas, achatadas. cur precisa ser RealDictCursor."""
     legs = []
     legs += fetch_vip_free_legs(cur, "picks_vip")
     legs += fetch_vip_free_legs(cur, "picks_free")
     legs += fetch_multiplas_legs(cur)
     legs += fetch_alavancagem_legs(cur)
-    legs += fetch_bingo_legs(cur)
     return legs
 
 

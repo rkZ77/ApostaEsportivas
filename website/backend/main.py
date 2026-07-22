@@ -268,7 +268,6 @@ _SITEMAP_PICK_TABLES = [
     ("free",        "picks_free"),
     ("multipla",    "picks_multiplas"),
     ("alavancagem", "picks_alavancagem"),
-    ("bingo",       "picks_bingo"),
 ]
 
 

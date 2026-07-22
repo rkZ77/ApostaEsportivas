@@ -104,6 +104,51 @@ class AIPerformanceService:
             "multiplas": multiplas,
         }
 
+    def get_calibration_rows(self, days: int = 60) -> list[dict]:
+        """Linhas cruas de picks_vip+picks_free resolvidos nos últimos N dias --
+        market_type, confidence declarado, o retrato salvo no momento da escolha
+        (engine_debug, ver services/pick_engine/homologation.py::build_score_breakdown_section)
+        e cartões vermelhos do jogo (sinal de evento atípico). Sem agregação
+        nem classificação aqui de propósito -- isso acontece em Python via
+        services/pick_engine/red_analysis.py + calibration.py (mais legível
+        que embutir a lógica de classify_miss em SQL, e reaproveita a mesma
+        função testável que decide se um RED conta contra a calibração).
+
+        picks_vip não tem league_id direto (fixtures é só fila operacional,
+        o registro permanente é match_statistics -- mesmo padrão já usado em
+        website/backend/routers/public.py::_sub_vip); picks_free já grava
+        league_id direto (engine_pipelines/dica_pipeline.py), com fallback
+        pro join só pra picks antigos que não tinham essa coluna ainda."""
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+
+        cur.execute("""
+            SELECT
+                pv.market_type, pv.result, pv.confidence, pv.engine_debug,
+                ms.league_id AS league_id,
+                COALESCE(ms.home_red_cards, 0) + COALESCE(ms.away_red_cards, 0) AS red_cards
+            FROM picks_vip pv
+            LEFT JOIN match_statistics ms ON ms.fixture_id = pv.fixture_id
+            WHERE pv.result IN ('GREEN', 'RED')
+              AND pv.created_at >= NOW() - INTERVAL '%s days'
+
+            UNION ALL
+
+            SELECT
+                pf.market_type, pf.result, pf.confidence, pf.engine_debug,
+                COALESCE(pf.league_id, ms.league_id) AS league_id,
+                COALESCE(ms.home_red_cards, 0) + COALESCE(ms.away_red_cards, 0) AS red_cards
+            FROM picks_free pf
+            LEFT JOIN match_statistics ms ON ms.fixture_id = pf.fixture_id
+            WHERE pf.result IN ('GREEN', 'RED')
+              AND pf.created_at >= NOW() - INTERVAL '%s days'
+        """, (days, days))
+
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [dict(r) for r in rows]
+
     def format_for_prompt(self, days: int = 60) -> str:
         """
         Retorna string compacta pronta para injetar no prompt.

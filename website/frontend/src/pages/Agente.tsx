@@ -17,7 +17,6 @@ const SUGGESTIONS = [
   'Como está minha banca de alavancagem?',
   'Qual o desempenho dos picks este mês?',
   'Como funciona a alavancagem?',
-  'Como funciona o Bingo?',
   'Jogos ao vivo agora',
   'Classificação do Brasileirão',
 ]
@@ -219,7 +218,7 @@ export default function Agente() {
             <div className="text-center">
               <h2 className="text-white font-bold text-lg">Olá, {user?.name?.split(' ')[0]}!</h2>
               <p className="text-zinc-500 text-sm mt-1 max-w-xs">
-                Pergunte sobre os picks do dia, sua banca, alavancagem, bingo, desempenho do site, jogos ao vivo e muito mais.
+                Pergunte sobre os picks do dia, sua banca, alavancagem, desempenho do site, jogos ao vivo e muito mais.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 w-full max-w-lg">

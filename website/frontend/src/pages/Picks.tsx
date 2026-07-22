@@ -62,7 +62,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
 }
 
 // Tipos
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'bingo' | 'aovivo' | 'chat'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -110,7 +110,6 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
-    { key: 'bingo',        label: 'Bingo',            premiumOnly: true },
     {
       key: 'aovivo' as Tab, label: 'Minhas Apostas',
       badge: (liveCount ?? 0) > 0 ? String(liveCount) : 'LIVE',
@@ -1171,277 +1170,6 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
   )
 }
 
-// Bingo card · N jogos combinados, cada jogo com seu proprio sub-combo de 1-3 mercados
-function BingoCard({ b, onClick, banca }: { b: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
-  const navigate = useNavigate()
-  const games: any[] = Array.isArray(b.games) ? b.games : []
-  const oddFinal = Number(b.odd_final ?? 0)
-  const pct = Math.round((b.confidence_media ?? 0) * 100)
-  const [followed, setFollowed] = useState<boolean>(!!b.is_followed)
-  const [following, setFollowing] = useState(false)
-  const [showModal, setShowModal] = useState(false)
-  const [apiError, setApiError] = useState<string | null>(null)
-  const [showSuccess, setShowSuccess] = useState(false)
-  const { share: shareStory, sharing, shared } = useShareStoryImage()
-
-  const stakeSuggestion = (() => {
-    if (!banca) return null
-    if (b.suggested_stake_units != null && b.suggested_stake_units > 0) {
-      const units = b.suggested_stake_units
-      return { units, amountR: units * banca.unit_value }
-    }
-    return calcMultiplaStake(Number(b.confidence_media ?? 0), oddFinal, banca.bankroll_current, banca.unit_value)
-  })()
-
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    shareStory({
-      pickId: b.id,
-      pickTypeRoute: 'bingo',
-      homeTeamName: `Bingo #${b.id}`,
-      awayTeamName: games.length > 1 ? `+${games.length - 1} jogo${games.length - 1 > 1 ? 's' : ''}` : undefined,
-      homeTeamId: games[0]?.home_team_id,
-      awayTeamId: games[0]?.away_team_id,
-      pickType: 'bingo',
-      market: `Bingo #${b.id} · ${games.length} jogos`,
-      odd: oddFinal,
-      result: b.result,
-      profit: b.result ? calcProfitUnits(b.result, oddFinal, b.user_stake_units ?? stakeSuggestion?.units ?? 1, b.user_actual_odd) : null,
-    })
-  }
-
-  const handleFollow = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (following || followed) return
-    setShowModal(true)
-  }
-
-  const handleConfirm = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
-    setFollowing(true)
-    setApiError(null)
-    try {
-      await api.post('/banca/follow', {
-        pick_id: b.id,
-        pick_type: 'bingo',
-        stake_units: stakeUnits,
-        actual_odd: actualOdd,
-        bet_house: betHouse,
-      })
-      setFollowed(true)
-      setShowModal(false)
-      setShowSuccess(true)
-      setTimeout(() => setShowSuccess(false), 3000)
-    } catch (err: any) {
-      setApiError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
-    } finally {
-      setFollowing(false)
-    }
-  }
-
-  const resultStyle = getResultStyle(b.result)
-
-  return (
-  <>
-    <div
-      className="relative overflow-hidden bg-zinc-950 border border-purple-500/20 hover:border-purple-500/40 rounded-2xl cursor-pointer transition-all duration-200 group"
-      onClick={onClick}
-    >
-      <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-purple-500 to-transparent" />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black text-purple-400">Bingo #{b.id}</span>
-          <span className="badge-vip">VIP</span>
-          <span className="text-[10px] text-zinc-600">
-            {b.match_date && new Date(b.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
-            {' · '}{games.length} jogos
-          </span>
-        </div>
-        {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label} {resultStyle.emoji}
-          </span>
-        ) : (
-          <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
-        )}
-      </div>
-
-      {/* Odd hero + retorno */}
-      <div className="flex items-center gap-0 divide-x divide-zinc-800/60 border-b border-zinc-800/60">
-        <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-zinc-500 mb-0.5">Odd final</div>
-          <div className="text-3xl font-black text-purple-400">{oddFinal.toFixed(2)}</div>
-        </div>
-        {stakeSuggestion && !b.result ? (
-          <>
-            <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
-              <div className="text-xl font-black text-blue-400">{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
-            </div>
-            <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
-              <div className="text-xl font-black text-white">+{((oddFinal - 1) * stakeSuggestion.units).toFixed(2)}u</div>
-              <div className="text-[11px] text-green-600 font-semibold">+R${((oddFinal - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
-            </div>
-          </>
-        ) : b.result ? (
-          (() => {
-            const u = b.user_stake_units ?? stakeSuggestion?.units ?? 1
-            const p = calcProfitUnits(b.result, oddFinal, u, b.user_actual_odd)
-            const color = p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = banca ? Math.abs(p) * banca.unit_value : null
-            return (
-              <>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
-                  <div className={`text-xl font-black ${color}`}>{p >= 0 ? '+' : ''}{p.toFixed(2)}u</div>
-                  {u > 1 && <div className="text-[10px] text-zinc-600">({u}u)</div>}
-                </div>
-                <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Em reais</div>
-                  {profitR != null ? (
-                    <div className={`text-xl font-black ${color}`}>{p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}</div>
-                  ) : (
-                    <div className="text-xl font-black text-zinc-600">-</div>
-                  )}
-                </div>
-              </>
-            )
-          })()
-        ) : (
-          <div className="flex-1 px-5 py-3 text-center">
-            <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
-            <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
-          </div>
-        )}
-      </div>
-
-      {/* Jogos (cada um com seu sub-combo de mercados) */}
-      <div className="px-5 py-3 space-y-3">
-        {games.map((g: any, gi: number) => {
-          const gr = b.result === 'GREEN' ? 'GREEN' : g.result
-          const legs: any[] = Array.isArray(g.legs) ? g.legs : []
-          return (
-            <div key={gi} className={`rounded-xl border px-3 py-2 ${
-              gr === 'GREEN' ? 'border-green-500/20 bg-green-500/5' :
-              gr === 'RED'   ? 'border-red-500/20 bg-red-500/5' :
-              'border-zinc-800 bg-zinc-900/60'
-            }`}>
-              <div className="flex items-center gap-2 mb-1.5">
-                <span className={`w-5 h-5 flex items-center justify-center rounded-full text-[10px] font-black shrink-0 ${
-                  gr === 'GREEN' ? 'bg-green-500/20 text-green-400' :
-                  gr === 'RED'   ? 'bg-red-500/20 text-red-400' :
-                  'bg-purple-500/10 text-purple-400'
-                }`}>
-                  {gr === 'GREEN' ? '✓' : gr === 'RED' ? '✗' : gi + 1}
-                </span>
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <TeamLogo id={g.home_team_id} name={g.home_team ?? ''} size={18} />
-                  <span className="text-xs text-zinc-300 font-semibold truncate">{translateTeamName(g.home_team)}</span>
-                  <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
-                  <span className="text-xs text-zinc-300 font-semibold truncate">{translateTeamName(g.away_team)}</span>
-                  <TeamLogo id={g.away_team_id} name={g.away_team ?? ''} size={18} />
-                </div>
-                <span className="font-black text-sm shrink-0 text-purple-300">{Number(g.combo_odd).toFixed(2)}</span>
-              </div>
-              <div className="ml-7 space-y-1">
-                {legs.map((leg: any, li: number) => {
-                  const lr = gr === 'GREEN' ? 'GREEN' : gr === 'RED' ? (leg.result === 'GREEN' ? 'GREEN' : 'RED') : leg.result
-                  return (
-                    <div key={li} className="flex items-center gap-1.5 text-xs">
-                      {lr && (
-                        <span className={`text-[10px] font-black ${lr === 'GREEN' ? 'text-green-400' : 'text-red-400'}`}>
-                          {lr === 'GREEN' ? '✓' : '✗'}
-                        </span>
-                      )}
-                      <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
-                      {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
-                      <span className="text-zinc-600 ml-auto">{Number(leg.odd).toFixed(2)}</span>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-          )
-        })}
-      </div>
-
-      {/* Confiança bar */}
-      <div className="px-5 pb-3">
-        <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-zinc-600">Confiança combinada</span>
-          <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
-        </div>
-        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
-          <div className={`h-1 rounded-full ${pct >= 70 ? 'bg-purple-500' : 'bg-zinc-600'}`} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
-
-      {/* Fato da IA */}
-      {shortReasoning(b.reasoning) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
-          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
-          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(b.reasoning)}</span>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
-        {!b.result ? (
-          <button
-            onClick={banca ? handleFollow : () => navigate('/banca')}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : banca
-                ? 'border-purple-500/30 text-purple-400 bg-purple-500/10 hover:bg-purple-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-purple-400 hover:bg-purple-500/5 border border-zinc-700 hover:border-purple-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
-        </div>
-      </div>
-    </div>
-    {showModal && (
-      <ApostaModal
-        pickOdd={oddFinal}
-        suggestedUnits={stakeSuggestion?.units ?? 1}
-        maxUnits={Math.max(10, stakeSuggestion?.units ?? 10)}
-        onConfirm={handleConfirm}
-        onCancel={() => setShowModal(false)}
-        loading={following}
-        error={apiError}
-      />
-    )}
-    {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
-        Pick registrado com sucesso!
-      </div>
-    )}
-  </>
-  )
-}
-
 // Seção header
 function SectionHeader({ color, label, badge }: { color: string; label: string; badge?: string }) {
   return (
@@ -2092,7 +1820,6 @@ export default function Picks() {
             vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
-            bingo:       today?.bingo && !today.bingo.result ? 1 : undefined,
           }}
         />
 
@@ -2133,7 +1860,7 @@ export default function Picks() {
               )}
 
               {/* Progresso da geração / countdown quando picks ainda não chegaram */}
-              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && !today?.bingo && (
+              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && (
                 <PipelineStatusCard />
               )}
 
@@ -2231,21 +1958,6 @@ export default function Picks() {
                         Ver histórico da série
                       </button>
                     </>
-                  )}
-                </section>
-              )}
-
-              {/* Bingo do dia · free vê lock; some se não houver pick pra quem já tem acesso */}
-              {(canSeeVip ? !!today?.bingo : true) && (
-                <section>
-                  <SectionHeader color="bg-purple-400" label="Bingo" />
-                  {!canSeeVip ? <VipLockOverlay color="purple" /> : today?.bingo ? (
-                    <BingoCard b={today.bingo} onClick={() => openDetail(today.bingo.id, 'bingo')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                  ) : (
-                    <div className="card p-8 text-center border-dashed">
-                      <p className="text-zinc-500 text-sm font-semibold">Bingo do dia ainda não gerado.</p>
-                      <p className="text-zinc-600 text-xs mt-1">Publicado diariamente pela manhã, quando há jogos suficientes.</p>
-                    </div>
                   )}
                 </section>
               )}
@@ -2433,59 +2145,6 @@ export default function Picks() {
 
             <button onClick={() => navigate('/resultados')}
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
-              Ver todos os resultados
-            </button>
-          </div>
-        )}
-
-        {tab === 'bingo' && (
-          <div className="space-y-6">
-            {/* O que é */}
-            <div className="card p-5 border-purple-500/20 bg-purple-500/5">
-              <p className="text-sm font-black text-purple-400 mb-3">O que é o Bingo?</p>
-              <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
-                <p>
-                  A IA junta <span className="text-white font-bold">2 a 4 jogos</span> diferentes em um único bilhete.
-                  Em cada jogo, combina de <span className="text-purple-400 font-bold">1 a 3 mercados do mesmo jogo</span> até
-                  a odd daquele jogo cair entre <span className="text-purple-400 font-bold">1.30 e 1.70</span>.
-                </p>
-                <p>
-                  A odd final do bilhete é o produto da odd de cada jogo · quanto mais jogos combinados, maior o retorno.
-                  Publicado quando há jogos suficientes no dia.
-                </p>
-                <div className="grid grid-cols-3 gap-3 mt-3">
-                  {[
-                    { label: 'Jogos',        value: '2–4',        color: 'text-purple-400' },
-                    { label: 'Odd por jogo', value: '1.30–1.70',  color: 'text-green-400'  },
-                    { label: 'Frequência',   value: 'Diário',     color: 'text-white'      },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
-                      <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Bingo de hoje */}
-            <div>
-              <SectionHeader color="bg-purple-400" label={`Bingo do Dia · ${todayDateStr}`} />
-              {!canSeeVip ? <VipLockOverlay color="purple" /> : todayLoading ? <Spinner /> : (
-                today?.bingo ? (
-                  <BingoCard b={today.bingo} onClick={() => openDetail(today.bingo.id, 'bingo')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
-                ) : (
-                  <div className="card p-8 text-center border-dashed">
-                    <p className="text-zinc-500 text-sm font-semibold">Bingo do dia ainda não gerado.</p>
-                    <p className="text-zinc-600 text-xs mt-1">Publicado diariamente pela manhã, quando há jogos suficientes.</p>
-                  </div>
-                )
-              )}
-            </div>
-
-
-            <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
           </div>

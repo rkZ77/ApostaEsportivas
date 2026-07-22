@@ -16,6 +16,7 @@ ApostaEsportivas/venv/
 *.pfx
 *.keystore
 *.jks
+KEYSTORE_PASSWORD*.txt
 
 # App Android (TWA) — build local, nao versionar
 website/android-twa/app/

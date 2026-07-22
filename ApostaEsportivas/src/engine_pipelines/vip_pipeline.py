@@ -3,6 +3,8 @@ desde 2026-07-17 (decisao do usuario de cortar IA em producao tambem, nao
 so em dev). Espelha gerar_sugestao_vip.py + ai_suggestions_service.py na
 estrutura de dados salva em picks_vip, mas sem IA: mercado/linha/confidence/
 EV/probability vem do pick_engine, reasoning vem de pick_engine.explain()."""
+import json
+
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
@@ -10,7 +12,7 @@ from services.odds_service import OddsService
 from services.standings_service import StandingsService
 from services.referee_stats_service import RefereeStatsService
 from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
-from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -39,11 +41,19 @@ def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_
     return context_data, matchup, team_strength_data
 
 
-def _save_pick(cur, fixture: dict, pick: dict) -> bool:
+def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None) -> bool:
     stake_pct, stake_units = AISuggestionsService.calculate_stake(
         confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="vip",
     )
     reasoning = explain(pick)
+    # Retrato do candidato no momento da escolha (variancia/model-fit/edge/
+    # confidence) -- usado depois por services/pick_engine/red_analysis.py
+    # pra distinguir, se este pick der RED, erro real de evento imprevisivel
+    # antes de contar contra a calibracao (services/pick_engine/calibration.py).
+    engine_debug = json.dumps(
+        homologation.build_score_breakdown_section(pick, data_quality_score),
+        default=str, ensure_ascii=False,
+    )
 
     cur.execute("""
         INSERT INTO picks_vip (
@@ -53,9 +63,9 @@ def _save_pick(cur, fixture: dict, pick: dict) -> bool:
             market, line, odd, bet_house,
             market_type, market_id,
             confidence, ev, probability, reasoning,
-            stake_pct, stake_units,
+            stake_pct, stake_units, engine_debug,
             created_at
-        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
+        ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
         ON CONFLICT (fixture_id) DO NOTHING
     """, (
         fixture["fixture_id"], fixture["match_datetime"].date(),
@@ -64,7 +74,7 @@ def _save_pick(cur, fixture: dict, pick: dict) -> bool:
         pick["market_name"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_type"], pick["market_id"],
         pick["confidence"], pick["ev"], pick["taxa_real"], reasoning,
-        stake_pct, stake_units,
+        stake_pct, stake_units, engine_debug,
     ))
     return cur.rowcount > 0
 
@@ -122,7 +132,7 @@ def run_vip_engine():
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-                referee_stats=referee_stats, data_quality_score=quality["score"],
+                referee_stats=referee_stats, league_id=fixture["league_id"], data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("VIP_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -130,7 +140,7 @@ def run_vip_engine():
                 continue
 
             best = next((p for p in picks if p.get("is_best_pick")), picks[0])
-            if _save_pick(cur, fixture, best):
+            if _save_pick(cur, fixture, best, quality["score"]):
                 conn.commit()
                 saved += 1
                 print(f"[VIP_ENGINE] Fixture {fixture['fixture_id']}: "

@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/social", tags=["social"])
 
 VALID_REACTIONS = {"fire", "money", "like", "doubt"}
-VALID_PICK_TYPES = {"vip", "free", "multiplas", "alavancagem", "bingo"}
+VALID_PICK_TYPES = {"vip", "free", "multiplas", "alavancagem"}
 
 # Rate limit: máx 5 comentários + 5 msgs de chat por usuário por 60s
 _comment_rate: dict[str, list[float]] = defaultdict(list)
