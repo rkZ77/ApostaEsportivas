@@ -18,4 +18,13 @@ export const CHANGELOG: ChangelogEntry[] = [
       'Sugestão de unidades por pick corrigida: usa a banca certa depois do fechamento mensal',
     ],
   },
+  {
+    id: '2026-07-22',
+    date: '22 de julho',
+    items: [
+      'Corrigido: picks com Handicap Asiático (gols, escanteios ou cartões) que ficavam travados em "Pendente" mesmo com o jogo já encerrado',
+      'Resultados da IA: nova aba "Por Liga" e paginação nos picks recentes',
+      'Motor de picks mais rigoroso: cartões agora considera o histórico do árbitro e o clima do jogo, escanteios passa a usar posse de bola e chutes reais',
+    ],
+  },
 ]

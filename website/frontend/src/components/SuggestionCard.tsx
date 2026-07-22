@@ -338,7 +338,7 @@ export default function SuggestionCard({
               followed
                 ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
                 : banca
-                ? 'border-zinc-700 text-zinc-400 hover:border-green-500/40 hover:text-green-400 hover:bg-green-500/5'
+                ? 'border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20'
                 : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
             }`}
           >
@@ -349,7 +349,7 @@ export default function SuggestionCard({
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-green-400 bg-green-500/10 hover:bg-green-500/20 border border-green-500/30 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-green-400 hover:bg-green-500/5 border border-zinc-700 hover:border-green-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
