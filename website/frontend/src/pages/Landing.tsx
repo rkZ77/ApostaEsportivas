@@ -272,7 +272,14 @@ function RecentResults() {
   }, [])
 
   const s = data?.summary
-  const recent6 = (data?.recent ?? []).slice(0, 6)
+  const recent10 = (data?.recent ?? []).slice(0, 10)
+  // Resumo do dia mais recente dentro da janela mostrada -- sem isso uma
+  // sequência de RED (escanteios/cartões travam cedo, GREEN só no FT) podia
+  // dominar visualmente a lista mesmo em dias com saldo positivo.
+  const latestDate = recent10[0]?.match_date
+  const todayItems  = latestDate ? recent10.filter(t => t.match_date === latestDate) : []
+  const todayGreens = todayItems.filter(t => t.result === 'GREEN').length
+  const todayReds   = todayItems.filter(t => t.result === 'RED').length
 
   return (
     <section id="resultados" className="py-24 bg-zinc-950 border-y border-zinc-800/60">
@@ -289,14 +296,22 @@ function RecentResults() {
           <div className="flex justify-center py-12">
             <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
           </div>
-        ) : recent6.length > 0 ? (
+        ) : recent10.length > 0 ? (
           <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-              <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 6 dicas finalizadas</span>
+            <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-y-1">
+              <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 10 dicas finalizadas</span>
+              {(todayGreens > 0 || todayReds > 0) && (
+                <span className="text-[11px] text-zinc-500">
+                  Dia {new Date(latestDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}:{' '}
+                  <span className="text-green-400 font-bold">{todayGreens} GREEN</span>
+                  {' · '}
+                  <span className="text-red-400 font-bold">{todayReds} RED</span>
+                </span>
+              )}
               <span className="text-xs text-zinc-600">Atualizado automaticamente</span>
             </div>
             <div className="divide-y divide-zinc-800/50">
-              {recent6.map((tip, i) => (
+              {recent10.map((tip, i) => (
                 <div key={i} className="flex items-center gap-2 px-3 sm:px-5 py-3">
                   <div className="w-10 sm:w-14 shrink-0 text-center">
                     <span className="text-[10px] sm:text-xs text-zinc-500">

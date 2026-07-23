@@ -5,7 +5,7 @@ import time
 import logging
 import requests
 from decimal import Decimal
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from database import get_connection
@@ -1527,3 +1527,185 @@ def resolve_all_pending() -> dict:
 
     logger.info("[AUTO-RESULT] resolvidos: %s", resolved)
     return resolved
+
+
+# ─── Re-verificação de resultados recentes (revisão tardia do provedor) ──────
+
+# Gols/1x2 praticamente nunca sao revisados pela API depois do apito final --
+# só escanteios/cartões têm esse historico (contagem as vezes muda algumas
+# horas apos o FT), entao só esses mercados valem o custo extra de cota da API.
+_STATS_REVERIFY_MARKET_TYPES = ("corners", "cards", "handicap_corners", "handicap_cards")
+_REVERIFY_WINDOW_DAYS = 2
+
+
+def reverify_recent_stats_results() -> dict:
+    """
+    Reconfere picks de escanteios/cartões já resolvidos nos últimos
+    _REVERIFY_WINDOW_DAYS dias, corrigindo se a API-Football revisou a
+    contagem depois do apito final (achado real: pick #1495 resolvida GREEN
+    no momento exato do FT, mas a contagem final de escanteios so' estabilizou
+    depois -- resolve_all_pending so' olha picks PENDENTES, uma vez gravado o
+    resultado nunca era reconferido). Roda de hora em hora via scheduler.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    corrected: list[dict] = []
+    checked = 0
+    today_br = datetime.now(_BR_TZ).date()
+    since = today_br - timedelta(days=_REVERIFY_WINDOW_DAYS)
+
+    try:
+        # ── VIP / FREE (perna única, market_type direto na linha) ──────────────
+        for table, pick_type, team_cols in (
+            ("picks_vip",  "vip",  "home_team_name AS home_team, away_team_name AS away_team"),
+            ("picks_free", "free", "home_team, away_team"),
+        ):
+            try:
+                cur.execute(f"""
+                    SELECT id, fixture_id, market, market_type, line, odd, result,
+                           {team_cols}, home_team_id, away_team_id
+                    FROM {table}
+                    WHERE result IS NOT NULL AND fixture_id IS NOT NULL
+                      AND market_type = ANY(%s)
+                      AND match_date BETWEEN %s AND %s
+                """, (list(_STATS_REVERIFY_MARKET_TYPES), since, today_br))
+                for p in cur.fetchall():
+                    checked += 1
+                    try:
+                        odd = float(p["odd"] or 1)
+                        leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
+                                          p["home_team"], p["away_team"],
+                                          p["home_team_id"], p["away_team_id"], odd,
+                                          market_type=p.get("market_type"))
+                        if not leg["is_ft"]:
+                            continue
+                        computed = _calc_result(p["market"], p["line"],
+                                                 leg["current_val"], leg["home_goals"], leg["away_goals"],
+                                                 market_type=p.get("market_type"),
+                                                 home_team=p["home_team"], away_team=p["away_team"],
+                                                 home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"))
+                        if computed and computed != p["result"]:
+                            profit = _profit_for_result(computed, odd)
+                            c = conn.cursor()
+                            c.execute(f"UPDATE {table} SET result=%s, profit=%s WHERE id=%s",
+                                      (computed, profit, p["id"]))
+                            _sync_followed_result(p["id"], pick_type, computed, c)
+                            conn.commit()
+                            c.close()
+                            corrected.append({"table": table, "id": p["id"],
+                                               "old": p["result"], "new": computed})
+                            logger.warning("[AUTO-RECHECK] %s #%s: %s -> %s (revisao tardia do provedor)",
+                                           pick_type, p["id"], p["result"], computed)
+                    except Exception as e:
+                        logger.error("[AUTO-RECHECK] %s #%s erro: %s", pick_type, p["id"], e)
+            except Exception as e:
+                logger.error("[AUTO-RECHECK] %s query erro: %s", table, e)
+
+        # ── MÚLTIPLA (pernas em JSON, resultado combinado) ──────────────────────
+        try:
+            cur.execute("""
+                SELECT id, games, total_odd, result
+                FROM picks_multiplas
+                WHERE result IS NOT NULL AND match_date BETWEEN %s AND %s
+            """, (since, today_br))
+            for p in cur.fetchall():
+                checked += 1
+                try:
+                    games = p["games"]
+                    if isinstance(games, str):
+                        games = json.loads(games)
+                    if not isinstance(games, list) or not games:
+                        continue
+                    if not any(g.get("market_type") in _STATS_REVERIFY_MARKET_TYPES for g in games):
+                        continue  # nenhuma perna usa mercado sujeito a revisao -- nada a reconferir
+                    legs_out = []
+                    for g in games:
+                        fid = g.get("fixture_id")
+                        if not fid:
+                            continue
+                        home = g.get("home") or g.get("home_team") or ""
+                        away = g.get("away") or g.get("away_team") or ""
+                        legs_out.append(_enrich_leg(fid, g.get("market", ""), g.get("line", ""), home, away,
+                                                     g.get("home_team_id"), g.get("away_team_id"),
+                                                     float(g.get("odd", 1)), market_type=g.get("market_type")))
+                    if not legs_out or not all(l["is_ft"] for l in legs_out):
+                        continue  # so' reconfere quando TODAS as pernas ja encerraram
+                    leg_results = [_locked_leg_result(l) for l in legs_out]
+                    computed = _multipla_combined_result(leg_results)
+                    if computed and computed != p["result"]:
+                        profit = _profit_for_result(computed, float(p["total_odd"] or 1))
+                        c = conn.cursor()
+                        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s",
+                                  (computed, profit, p["id"]))
+                        _sync_followed_result(p["id"], "multipla", computed, c)
+                        conn.commit()
+                        c.close()
+                        corrected.append({"table": "picks_multiplas", "id": p["id"],
+                                           "old": p["result"], "new": computed})
+                        logger.warning("[AUTO-RECHECK] multipla #%s: %s -> %s (revisao tardia do provedor)",
+                                       p["id"], p["result"], computed)
+                except Exception as e:
+                    logger.error("[AUTO-RECHECK] multipla #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RECHECK] multipla query erro: %s", e)
+
+        # ── ALAVANCAGEM (2 pernas em colunas separadas, resultado combinado) ────
+        try:
+            cur.execute("""
+                SELECT id, fixture_id_1, fixture_id_2,
+                       market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
+                       market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
+                       odd_combined, result
+                FROM picks_alavancagem
+                WHERE result IS NOT NULL AND match_date BETWEEN %s AND %s
+            """, (since, today_br))
+            for p in cur.fetchall():
+                checked += 1
+                try:
+                    if p.get("market_type_1") not in _STATS_REVERIFY_MARKET_TYPES and \
+                       p.get("market_type_2") not in _STATS_REVERIFY_MARKET_TYPES:
+                        continue
+                    legs_out = []
+                    for i in (1, 2):
+                        fid = p.get(f"fixture_id_{i}")
+                        if not fid:
+                            continue
+                        c2 = conn.cursor()
+                        c2.execute("SELECT home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s", (fid,))
+                        fx = c2.fetchone()
+                        c2.close()
+                        legs_out.append(_enrich_leg(
+                            fid, p.get(f"market_{i}", ""), p.get(f"line_{i}", ""),
+                            p.get(f"home_team_{i}", "") or "", p.get(f"away_team_{i}", "") or "",
+                            fx["home_team_id"] if fx else None, fx["away_team_id"] if fx else None,
+                            float(p.get(f"odd_{i}") or 1), market_type=p.get(f"market_type_{i}"),
+                        ))
+                    if not legs_out or not all(l["is_ft"] for l in legs_out):
+                        continue
+                    leg_results = [_locked_leg_result(l) for l in legs_out]
+                    computed = _multipla_combined_result(leg_results)
+                    if computed and computed != p["result"]:
+                        profit = _profit_for_result(computed, float(p["odd_combined"] or 1))
+                        c = conn.cursor()
+                        c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s",
+                                  (computed, profit, p["id"]))
+                        _sync_followed_result(p["id"], "alavancagem", computed, c)
+                        conn.commit()
+                        c.close()
+                        corrected.append({"table": "picks_alavancagem", "id": p["id"],
+                                           "old": p["result"], "new": computed})
+                        logger.warning("[AUTO-RECHECK] alavancagem #%s: %s -> %s (revisao tardia do provedor)",
+                                       p["id"], p["result"], computed)
+                except Exception as e:
+                    logger.error("[AUTO-RECHECK] alavancagem #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RECHECK] alavancagem query erro: %s", e)
+
+    finally:
+        cur.close()
+        conn.close()
+
+    if corrected:
+        logger.warning("[AUTO-RECHECK] %d corrigido(s) de %d reconferido(s): %s",
+                       len(corrected), checked, corrected)
+    return {"checked": checked, "corrected": corrected}
