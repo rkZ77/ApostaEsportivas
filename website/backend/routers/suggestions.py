@@ -304,6 +304,7 @@ def get_today_suggestions(
             # Alavancagem
             alav = _safe_query_one(cur, f"""
                 SELECT pa.id, pa.match_date, pa.tipo,
+                       pa.fixture_id_1, pa.fixture_id_2,
                        pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
                        pa.confidence_1, pa.reasoning_1,
                        pa.home_team_2, pa.away_team_2, pa.market_2, pa.line_2, pa.odd_2, pa.bet_house_2,
@@ -1576,9 +1577,16 @@ def get_alavancagem(
     date_from:    Optional[str] = Query(None),
     date_to:      Optional[str] = Query(None),
     resultado:    Optional[str] = Query(None),
-    limit:        int = Query(200, ge=1, le=500),
+    offset:       int = Query(0, ge=0),
+    limit:        int = Query(50, ge=1, le=200),
 ):
-    """Histórico de picks de alavancagem (Copa do Mundo). VIP only."""
+    """Histórico de picks de alavancagem. VIP only.
+
+    A banca da série é composta sequencialmente (reinveste no GREEN, reseta
+    no RED), entao o calculo de bankroll_before/after precisa SEMPRE da serie
+    inteira desde o início pra ficar correto -- so a resposta enviada ao
+    frontend e paginada (offset/limit), nao a query em si.
+    """
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1595,7 +1603,6 @@ def get_alavancagem(
         elif resultado and resultado != "all":
             conditions.append("pa.result = %s"); params.append(resultado)
         where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
-        params.append(limit)
         rows = _safe_query(cur, f"""
             SELECT pa.id, pa.match_date, pa.tipo,
                    pa.home_team_1, pa.away_team_1, pa.market_1, pa.line_1, pa.odd_1, pa.bet_house_1,
@@ -1625,7 +1632,6 @@ def get_alavancagem(
             LEFT JOIN fixtures f2 ON f2.fixture_id = pa.fixture_id_2
             {where}
             ORDER BY pa.match_date DESC
-            LIMIT %s
         """, params)
 
         # Busca bankroll inicial do usuário (default 50)
@@ -1657,7 +1663,11 @@ def get_alavancagem(
         for p in picks:
             p.update(bankroll_map.get(p["id"], {}))
 
-        return picks
+        # picks está em ordem DESC (mais recente primeiro) -- pagina por cima
+        # da lista já com o bankroll calculado a partir da série completa.
+        total = len(picks)
+        page = picks[offset:offset + limit]
+        return {"items": page, "total": total, "has_more": offset + limit < total}
     finally:
         cur.close()
         conn.close()

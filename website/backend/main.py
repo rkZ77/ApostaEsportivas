@@ -321,7 +321,10 @@ if _dist.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_spa(full_path: str):
-        file_path = _dist / full_path
-        if file_path.is_file():
-            return FileResponse(str(file_path))
+        # Resolve e confirma que o resultado fica dentro de _dist -- sem isso,
+        # full_path com ".." (ex: /../../../../etc/passwd) escapa do diretorio
+        # do build e serve qualquer arquivo legivel pelo processo.
+        candidate = (_dist / full_path).resolve()
+        if candidate.is_relative_to(_dist) and candidate.is_file():
+            return FileResponse(str(candidate))
         return FileResponse(str(_dist / "index.html"))

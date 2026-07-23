@@ -1,8 +1,10 @@
 import os
+import time
 import hmac
 import hashlib
 import logging
 import resend
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
@@ -11,6 +13,21 @@ from auth_utils import get_current_user
 from database import get_connection
 
 logger = logging.getLogger(__name__)
+
+# Rate limit por usuario ao criar preferencia de pagamento -- sem isso, um
+# script podia gerar preferencias no MercadoPago sem limite (nao afeta
+# integridade do plano/saldo, so evita ruido/custo na API do MP).
+_create_pref_rate: dict[int, list[float]] = defaultdict(list)
+_CREATE_PREF_LIMIT  = 6
+_CREATE_PREF_WINDOW = 60
+
+
+def _check_create_pref_rate(user_id: int) -> None:
+    now = time.time()
+    _create_pref_rate[user_id] = [t for t in _create_pref_rate[user_id] if now - t < _CREATE_PREF_WINDOW]
+    if len(_create_pref_rate[user_id]) >= _CREATE_PREF_LIMIT:
+        raise HTTPException(429, "Muitas tentativas. Aguarde um momento e tente novamente.")
+    _create_pref_rate[user_id].append(now)
 
 PLAN_LABELS = {
     "mensal":     "Mensal",
@@ -125,6 +142,7 @@ class CreatePreferenceBody(BaseModel):
 
 @router.post("/create")
 def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(get_current_user)):
+    _check_create_pref_rate(current_user["id"])
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
         raise HTTPException(500, "MERCADOPAGO_ACCESS_TOKEN não configurado")

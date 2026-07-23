@@ -1,3 +1,5 @@
+import time
+from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 from typing import Optional
@@ -10,6 +12,22 @@ from routers.payments import PLANS
 router = APIRouter(prefix="/api/banca", tags=["banca"])
 
 BR_TZ = ZoneInfo("America/Sao_Paulo")
+
+# Rate limit por usuario nas mutacoes de banca (setup/saque/seguir/cashout) --
+# nao existiam limites aqui antes, so em login/cadastro/chat. Generoso o
+# bastante pra nunca ser atingido por uso real (a UI nao dispara isso em
+# loop), so barra automacao/spam roteirizado.
+_banca_mutation_rate: dict[int, list[float]] = defaultdict(list)
+_BANCA_MUTATION_LIMIT  = 20
+_BANCA_MUTATION_WINDOW = 60
+
+
+def _check_banca_rate(user_id: int) -> None:
+    now = time.time()
+    _banca_mutation_rate[user_id] = [t for t in _banca_mutation_rate[user_id] if now - t < _BANCA_MUTATION_WINDOW]
+    if len(_banca_mutation_rate[user_id]) >= _BANCA_MUTATION_LIMIT:
+        raise HTTPException(429, "Muitas requisições. Aguarde um momento e tente novamente.")
+    _banca_mutation_rate[user_id].append(now)
 
 
 class BancaSetup(BaseModel):
@@ -343,6 +361,8 @@ def get_banca(
     days: int = Query(0, ge=0),        # 0 = tudo
     from_date: Optional[str] = Query(None),  # YYYY-MM-DD
     to_date:   Optional[str] = Query(None),  # YYYY-MM-DD
+    resolved_offset: int = Query(0, ge=0),
+    resolved_limit:  int = Query(100, ge=1, le=500),
 ):
     import json as _json
     user_id = current_user["id"]
@@ -526,6 +546,15 @@ def get_banca(
         # from_date/to_date estao filtrando uma janela diferente do epoch.
         bankroll_current_real = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
 
+        # Pendentes sempre completos (autolimitado -- resolve em poucos dias);
+        # so os resolvidos sao paginados, ja que crescem sem limite com o
+        # tempo. Stats/chart/bankroll acima usam `entries`/`resolved` inteiros
+        # -- so o payload de entradas devolvido ao cliente e que e recortado.
+        pending_entries = [e for e in entries if not e["result"]]
+        resolved_sorted_desc = sorted(resolved, key=lambda e: e["followed_at"] or "", reverse=True)
+        resolved_page = resolved_sorted_desc[resolved_offset:resolved_offset + resolved_limit]
+        page_entries = sorted(pending_entries + resolved_page, key=lambda e: e["followed_at"] or "")
+
         return {
             "bankroll_start":       bankroll_start,
             "bankroll_goal":        bankroll_goal,
@@ -549,7 +578,9 @@ def get_banca(
             "best_streak":          streak_info["best_streak"],
             "best_pick":            best_pick,
             "worst_pick":           worst_pick,
-            "entries":              entries,
+            "entries":              page_entries,
+            "resolved_total":       len(resolved),
+            "has_more_resolved":    resolved_offset + resolved_limit < len(resolved),
             "chart":                chart,
         }
     finally:
@@ -559,6 +590,7 @@ def get_banca(
 
 @router.post("/setup")
 def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)):
+    _check_banca_rate(current_user["id"])
     if body.bankroll_start <= 0:
         raise HTTPException(400, "Banca deve ser maior que zero.")
     if body.bankroll_goal is not None and body.bankroll_goal <= body.bankroll_start:
@@ -658,6 +690,7 @@ def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current
     """Desconta um valor da banca atual e registra o saque pra ter historico
     (data, valor, banca antes/depois) -- diferente do /setup, que so troca o
     numero sem deixar rastro de por que mudou."""
+    _check_banca_rate(current_user["id"])
     if body.amount <= 0:
         raise HTTPException(400, "Valor do saque deve ser maior que zero.")
 
@@ -665,6 +698,12 @@ def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # Trava consultivo por usuario (mesmo sem linha existente em user_banca)
+        # -- sem isso, dois saques concorrentes leem o mesmo bankroll_current
+        # antes de qualquer commit e ambos passam na checagem, deixando a banca
+        # negativa (numero virtual, mas exibido/usado pra calculos futuros).
+        cur.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
+
         cur.execute("SELECT bankroll_start, bankroll_goal, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
@@ -735,6 +774,7 @@ STAKE_LIMITS = {
 
 @router.post("/follow")
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
+    _check_banca_rate(current_user["id"])
     if body.pick_type not in ("vip", "free", "multipla", "alavancagem"):
         raise HTTPException(400, "Tipo inválido.")
     min_u, max_u = STAKE_LIMITS[body.pick_type]
@@ -915,6 +955,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
 
 @router.post("/cashout/{pick_id}/{pick_type}")
 def cashout_pick(pick_id: int, pick_type: str, body: CashoutBody, current_user: dict = Depends(get_current_user)):
+    _check_banca_rate(current_user["id"])
     if body.cashout_amount < 0:
         raise HTTPException(400, "Valor de cashout não pode ser negativo.")
     user_id = current_user["id"]
@@ -1084,6 +1125,7 @@ def get_monthly_close(
 
 @router.delete("/follow/{pick_id}/{pick_type}")
 def unfollow_pick(pick_id: int, pick_type: str, current_user: dict = Depends(get_current_user)):
+    _check_banca_rate(current_user["id"])
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()

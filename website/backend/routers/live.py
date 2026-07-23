@@ -975,6 +975,28 @@ def get_fixture_live_stats(fixture_id: int, current_user: dict = Depends(get_cur
     }
 
 
+@router.get("/is-live")
+def get_is_live(fixture_ids: str, current_user: dict = Depends(get_current_user)):
+    """Recebe fixture_ids separados por vírgula e devolve quais estão ao vivo
+    agora (status real da API-Football, via o mesmo cache/bulk-fetch usado
+    no resto do modulo) -- usado pra trocar o badge "Pendente" por "Ao Vivo"
+    nos cards de pick quando o jogo ja comecou."""
+    try:
+        fids = [int(x) for x in fixture_ids.split(",") if x.strip()]
+    except ValueError:
+        return {}
+    fids = fids[:50]
+    if not fids:
+        return {}
+    _fetch_fixtures_bulk(fids)
+    result = {}
+    for fid in fids:
+        cached = _fix_cache.get(fid)
+        status = cached[1].get("fixture", {}).get("status", {}).get("short", "NS") if cached else "NS"
+        result[str(fid)] = status in LIVE_STATUSES
+    return result
+
+
 @router.get("/pick-odd")
 def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
                          current_user: dict = Depends(get_current_user)):
