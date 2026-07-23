@@ -12,7 +12,11 @@ import os
 import sys
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+_dotenv_path = find_dotenv()
+load_dotenv(_dotenv_path)
+_env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
+load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
+load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 # Mapeia sufixo _DEV -> sem sufixo (paridade com run_prod.py, mesmo que
 # hoje pareça redundante -- get_connection() já lê DB_ENV diretamente)

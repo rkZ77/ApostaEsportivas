@@ -7,7 +7,11 @@ import os
 import sys
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+_dotenv_path = find_dotenv()
+load_dotenv(_dotenv_path)
+_env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
+load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
+load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 # Mapeia sufixo _PROD -> sem sufixo (para collectors legados)
 for key in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "DB_SSLMODE"):

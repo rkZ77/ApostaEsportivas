@@ -65,6 +65,25 @@ def _record_account_failure(key: str) -> None:
     _account_login_failures[key].append(time.time())
 
 
+# Rate limit por usuário autenticado para mutações sensíveis de perfil (troca
+# de senha/email, avatar) -- mesmo padrão usado em banca.py/social.py. Sem
+# isso, um atacante com sessão válida podia tentar milhares de códigos de
+# confirmação (900 mil combinações, código de 6 dígitos) dentro da janela
+# de expiração usando só o budget genérico de IP.
+_profile_mutation_rate: dict[int, list[float]] = defaultdict(list)
+_PROFILE_MUTATION_LIMIT = 5
+_PROFILE_MUTATION_WINDOW = 60
+
+
+def _check_profile_rate(user_id: int) -> None:
+    now = time.time()
+    attempts = [t for t in _profile_mutation_rate[user_id] if now - t < _PROFILE_MUTATION_WINDOW]
+    _profile_mutation_rate[user_id] = attempts
+    if len(attempts) >= _PROFILE_MUTATION_LIMIT:
+        raise HTTPException(429, "Muitas requisições. Aguarde um momento e tente novamente.")
+    _profile_mutation_rate[user_id].append(now)
+
+
 # Verificação anti-bot (Cloudflare Turnstile) em login/cadastro. Sem
 # TURNSTILE_SECRET_KEY configurada (ex: dev local), pula a verificação --
 # mesmo padrão de "integração opcional" já usado pra pagamentos/IA/email
@@ -756,6 +775,7 @@ def upload_avatar(
     file: UploadFile = File(...),
     current_user: dict = Depends(get_current_user),
 ):
+    _check_profile_rate(current_user["sub"])
     # Primeira checagem: content-type declarado (pode ser forjado)
     if file.content_type not in _ALLOWED_TYPES:
         raise HTTPException(400, "Tipo de arquivo inválido. Use JPG, PNG ou WebP.")
@@ -986,6 +1006,7 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
     reset_token_expires_at (mesmas colunas do "esqueci minha senha"), mas
     aqui o usuário já está autenticado, então não precisa e-mail/CPF, só o
     código bater com o hash guardado pra este user_id."""
+    _check_profile_rate(current_user["sub"])
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1028,6 +1049,7 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
 def confirm_password_change(body: ConfirmPasswordChangeBody, response: Response, current_user: dict = Depends(get_current_user)):
     """Passo 2: valida o código enviado por e-mail e efetiva a troca de
     senha, girando a sessão (derruba qualquer outro dispositivo logado)."""
+    _check_profile_rate(current_user["sub"])
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1060,6 +1082,7 @@ class ChangeEmailBody(BaseModel):
 @router.post("/change-email")
 def change_email(body: ChangeEmailBody, background_tasks: BackgroundTasks, request: Request, current_user: dict = Depends(get_current_user)):
     """Troca o e-mail do usuário e envia novo link de verificação."""
+    _check_profile_rate(current_user["sub"])
     new_email = body.new_email.strip().lower()
     if not new_email or "@" not in new_email:
         raise HTTPException(400, "E-mail inválido")

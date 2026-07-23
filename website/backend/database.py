@@ -4,7 +4,14 @@ import psycopg2
 import psycopg2.extras
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+# DB_*_PROD (e DB_*_DEV, usada por routers/admin.py pros steps dev_*) vivem
+# em .env.dev/.env.prod, separadas do .env principal, pra reduzir o raio de
+# explosão caso um dos arquivos vaze.
+_dotenv_path = find_dotenv()
+load_dotenv(_dotenv_path)
+_env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
+load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
+load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 
 def _env(*keys: str, default: str = "") -> str:
