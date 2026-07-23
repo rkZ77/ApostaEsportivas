@@ -863,6 +863,7 @@ class AlavancagemInit(BaseModel):
 
 @router.put("/alavancagem-init")
 def set_alavancagem_init(body: AlavancagemInit, current_user: dict = Depends(get_current_user)):
+    _check_banca_rate(current_user["id"])
     if body.bankroll_init <= 0:
         raise HTTPException(400, "Valor deve ser maior que zero.")
     bankroll_init = body.bankroll_init

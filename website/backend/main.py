@@ -12,7 +12,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-load_dotenv(find_dotenv())
+# DB_*_PROD/DB_*_DEV vivem em .env.dev/.env.prod (separadas do .env
+# principal) pra reduzir o raio de explosão caso um dos arquivos vaze.
+_dotenv_path = find_dotenv()
+load_dotenv(_dotenv_path)
+_env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
+load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
+load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, public, social, suggestions
