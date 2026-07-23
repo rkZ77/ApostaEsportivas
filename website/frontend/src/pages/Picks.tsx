@@ -13,10 +13,11 @@ import LivePicks from '../components/LivePicks'
 import CountdownTo7AM from '../components/CountdownTo7AM'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, explainResult, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
-import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
+import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
+import InfoTip from '../components/InfoTip'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -66,37 +67,8 @@ type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aoviv
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
-interface VipFilters {
-  date_from: string; date_to: string; market_type: string
-  resultado: string; min_conf: string; bet_house: string; order_by: string
-}
-const defaultVipFilters: VipFilters = {
-  date_from: TODAY, date_to: TODAY, market_type: 'all',
-  resultado: 'all', min_conf: '0', bet_house: 'all', order_by: 'confidence',
-}
-
-const THIRTY_AGO = (() => {
-  const d = new Date(); d.setDate(d.getDate() - 30)
-  return d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-})()
-
-interface PickFreeFilters { date_from: string; date_to: string; resultado: string }
-const defaultPickFreeFilters: PickFreeFilters = { date_from: THIRTY_AGO, date_to: TODAY, resultado: 'all' }
-
-interface MFilters { date_from: string; date_to: string; resultado: string; order_by: string }
-const defaultMFilters: MFilters = { date_from: THIRTY_AGO, date_to: TODAY, resultado: 'all', order_by: 'match_date' }
-
 interface AlavFilters { date_from: string; date_to: string; resultado: string }
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
-
-const MARKET_LABELS: Record<string, string> = {
-  all: 'Todos mercados', goals: 'Gols', corners: 'Escanteios',
-  cards: 'Cartões', result: '1X2', btts: 'Ambas marcam',
-}
-const RESULT_LABELS: Record<string, string> = {
-  all: 'Todos', pending: 'Pendente', GREEN: 'Green',
-  RED: 'Red', PUSH: 'Push', 'HALF-WIN': '½ Win', 'HALF-LOSS': '½ Loss',
-}
 
 // Tab bar
 function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
@@ -336,7 +308,7 @@ function shortReasoning(text?: string): string {
   return text.slice(0, 130)
 }
 
-function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
+function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const navigate = useNavigate()
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
@@ -443,8 +415,13 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
           )}
         </div>
         {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
+            <InfoTip text={explainResult(dica.result)} />
+          </span>
+        ) : isLive ? (
+          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
@@ -530,6 +507,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca }: { dica: any; 
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <span className="font-semibold text-zinc-300">{translateMarket(dica.market)}</span>
           {dica.line && <><span>·</span><span>{translateLine(dica.line)}</span></>}
+          <InfoTip text={explainMarket(dica.market, dica.line)} />
         </div>
       </div>
 
@@ -632,7 +610,7 @@ function PickSeguroEmpty() {
 }
 
 // Múltipla card
-function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null }) {
+function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const navigate = useNavigate()
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
@@ -734,8 +712,13 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
           )}
         </div>
         {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
+            <InfoTip text={explainResult(m.result)} />
+          </span>
+        ) : isLive ? (
+          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
@@ -836,6 +819,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
+              <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
           )
@@ -917,7 +901,7 @@ function MultiplaCard({ m, onClick, banca }: { m: any; onClick?: () => void; ban
 }
 
 // Alavancagem card
-function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void }) {
+function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive = false }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean }) {
   const navigate    = useNavigate()
   const isCombo     = pick.tipo === 'dupla' || pick.tipo === 'tripla' || pick.tipo === 'combinacao'
   const comboLabel  = pick.tipo === 'tripla' ? 'Tripla' : pick.tipo === 'dupla' ? 'Dupla' : 'Combinada'
@@ -1002,8 +986,13 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
         {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
+            <InfoTip text={explainResult(pick.result)} />
+          </span>
+        ) : isLive ? (
+          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-yellow-500 border border-yellow-500/20 bg-yellow-500/10 px-2 py-1 rounded-lg font-bold">Pendente</span>
@@ -1086,6 +1075,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca }: { pi
               <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
               {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
               {leg.house && <><span className="text-zinc-600">·</span><span className="text-zinc-500">{leg.house}</span></>}
+              <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
           )
@@ -1495,31 +1485,16 @@ export default function Picks() {
   const [today, setToday]         = useState<any>(null)
   const [todayLoading, setTodayLoading] = useState(true)
   const [todayError, setTodayError]     = useState(false)
-
-  // Tips VIP com filtros
-  const [vipFilters, setVipFilters] = useState<VipFilters>(defaultVipFilters)
-  const [vipRows,    setVipRows]    = useState<any[]>([])
-  const [vipLoading, setVipLoading] = useState(false)
-  const [meta,       setMeta]       = useState<{ bet_houses: string[]; market_types: string[] }>({ bet_houses: [], market_types: [] })
-  const [vipLoaded,  setVipLoaded]  = useState(false)
-
-  // Pick do Dia histórico
-  const [pfFilters,  setPfFilters]  = useState<PickFreeFilters>(defaultPickFreeFilters)
-  const [pfRows,     setPfRows]     = useState<any[]>([])
-  const [pfLoading,  setPfLoading]  = useState(false)
-  const [pfLoaded,   setPfLoaded]   = useState(false)
-
-  // Múltiplas
-  const [mFilters,  setMFilters]  = useState<MFilters>(defaultMFilters)
-  const [multiplas, setMultiplas] = useState<any[]>([])
-  const [mLoading,  setMLoading]  = useState(false)
-  const [mLoaded,   setMLoaded]   = useState(false)
+  const [liveFixtures, setLiveFixtures] = useState<Set<number>>(new Set())
 
   // Alavancagem
   const [alavFilters,  setAlavFilters]  = useState<AlavFilters>(defaultAlavFilters)
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
+  const [alavError,    setAlavError]    = useState(false)
+  const [alavHasMore,    setAlavHasMore]    = useState(false)
+  const [alavLoadingMore, setAlavLoadingMore] = useState(false)
   const [userAlavSerie, setUserAlavSerie] = useState<{ configured: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
@@ -1566,6 +1541,38 @@ export default function Picks() {
       .catch(() => {})
   }, [])
 
+  // Marca picks pendentes como "Ao Vivo" quando o jogo já começou (status real
+  // da API-Football via /live/is-live), em vez de continuar mostrando
+  // "Pendente" como se o jogo nem tivesse começado.
+  useEffect(() => {
+    if (!today) return
+    const ids = new Set<number>()
+    if (today.dica_do_dia && !today.dica_do_dia.result && today.dica_do_dia.fixture_id) {
+      ids.add(today.dica_do_dia.fixture_id)
+    }
+    for (const s of today.vip ?? []) {
+      if (!s.result && s.fixture_id) ids.add(s.fixture_id)
+    }
+    for (const m of today.multiplas ?? []) {
+      if (m.result) continue
+      for (const leg of m.legs ?? []) {
+        if (leg.fixture_id) ids.add(leg.fixture_id)
+      }
+    }
+    if (today.alavancagem && !today.alavancagem.result) {
+      if (today.alavancagem.fixture_id_1) ids.add(today.alavancagem.fixture_id_1)
+      if (today.alavancagem.fixture_id_2) ids.add(today.alavancagem.fixture_id_2)
+    }
+    if (ids.size === 0) { setLiveFixtures(new Set()); return }
+    api.get('/live/is-live', { params: { fixture_ids: Array.from(ids).join(',') } })
+      .then(r => setLiveFixtures(new Set(Object.entries(r.data).filter(([, v]) => v).map(([k]) => Number(k)))))
+      .catch(() => {})
+  }, [today])
+
+  const isFixtureLive  = (fixtureId?: number) => !!fixtureId && liveFixtures.has(fixtureId)
+  const isMultiplaLive = (m: any) => (m.legs ?? []).some((leg: any) => isFixtureLive(leg.fixture_id))
+  const isAlavLive     = (pick: any) => isFixtureLive(pick.fixture_id_1) || isFixtureLive(pick.fixture_id_2)
+
   useEffect(() => {
     api.get('/suggestions/recent-results', { params: { limit: 40 } })
       .then(r => setRecentResults(r.data as any[]))
@@ -1574,7 +1581,6 @@ export default function Picks() {
 
   useEffect(() => {
     if (!canSeeVip) return
-    api.get('/suggestions/vip/meta').then(r => setMeta(r.data)).catch(() => {})
     api.get('/banca/alavancagem-serie').then(r => setUserAlavSerie(r.data)).catch(() => {})
   }, [canSeeVip])
 
@@ -1588,51 +1594,9 @@ export default function Picks() {
   }, [])
 
   useEffect(() => {
-    if (tab === 'pick_seguro'  && !pfLoaded)                doFetchPickFree(defaultPickFreeFilters)
-    if (tab === 'vip'          && canSeeVip && !vipLoaded)  fetchVip(defaultVipFilters)
-    if (tab === 'multiplas'    && canSeeVip && !mLoaded)    doFetchMultiplas(defaultMFilters)
     if (tab === 'alavancagem'  && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
   }, [tab, canSeeVip])
 
-
-  const fetchVip = useCallback((f: VipFilters) => {
-    setVipLoading(true)
-    const params: Record<string, string> = { order_by: f.order_by, limit: '100' }
-    if (f.date_from) params.date_from = f.date_from
-    if (f.date_to)   params.date_to   = f.date_to
-    if (f.market_type !== 'all') params.market_type = f.market_type
-    if (f.resultado  !== 'all') params.resultado    = f.resultado
-    if (f.min_conf   !== '0')   params.min_conf     = f.min_conf
-    if (f.bet_house  !== 'all') params.bet_house    = f.bet_house
-    api.get('/suggestions/vip', { params })
-      .then(r => { setVipRows(r.data); setVipLoaded(true) })
-      .catch(() => setVipRows([]))
-      .finally(() => setVipLoading(false))
-  }, [])
-
-  function doFetchPickFree(f: PickFreeFilters) {
-    setPfLoading(true)
-    const p: Record<string, string> = {}
-    if (f.date_from) p.date_from = f.date_from
-    if (f.date_to)   p.date_to   = f.date_to
-    if (f.resultado !== 'all') p.resultado = f.resultado
-    api.get('/suggestions/picks-free', { params: p })
-      .then(r => { setPfRows(r.data); setPfLoaded(true) })
-      .catch(() => setPfRows([]))
-      .finally(() => setPfLoading(false))
-  }
-
-  function doFetchMultiplas(f: MFilters) {
-    setMLoading(true)
-    const p: Record<string, string> = { order_by: f.order_by }
-    if (f.date_from) p.date_from = f.date_from
-    if (f.date_to)   p.date_to   = f.date_to
-    if (f.resultado !== 'all') p.resultado = f.resultado
-    api.get('/suggestions/multiplas', { params: p })
-      .then(r => { setMultiplas(r.data); setMLoaded(true) })
-      .catch(() => setMultiplas([]))
-      .finally(() => setMLoading(false))
-  }
 
   const saveAlavInit = async () => {
     const val = parseFloat(alavInitInput)
@@ -1651,25 +1615,33 @@ export default function Picks() {
     }
   }
 
+  const ALAV_PAGE_SIZE = 50
+
   function doFetchAlavancagem(f: AlavFilters) {
     setAlavLoading(true)
-    const p: Record<string, string> = {}
+    setAlavError(false)
+    const p: Record<string, string> = { limit: String(ALAV_PAGE_SIZE) }
     if (f.date_from) p.date_from = f.date_from
     if (f.date_to)   p.date_to   = f.date_to
     if (f.resultado !== 'all') p.resultado = f.resultado
     api.get('/suggestions/alavancagem', { params: p })
-      .then(r => { setAlavancagem(r.data); setAlavLoaded(true) })
-      .catch(() => setAlavancagem([]))
+      .then(r => { setAlavancagem(r.data.items); setAlavHasMore(r.data.has_more); setAlavLoaded(true) })
+      .catch(() => setAlavError(true))
       .finally(() => setAlavLoading(false))
   }
 
-  const setVf = (key: keyof VipFilters, val: string) =>
-    setVipFilters(f => ({ ...f, [key]: val }))
-
-  const vipTotal   = vipRows.length
-  const vipGreens  = vipRows.filter(r => r.result === 'GREEN').length
-  const vipPending = vipRows.filter(r => !r.result).length
-  const vipLucro   = vipRows.reduce((acc, r) => acc + (Number(r.profit) || 0), 0)
+  function loadMoreAlavancagem() {
+    if (alavLoadingMore || !alavHasMore) return
+    setAlavLoadingMore(true)
+    const p: Record<string, string> = { limit: String(ALAV_PAGE_SIZE), offset: String(alavancagem.length) }
+    if (alavFilters.date_from) p.date_from = alavFilters.date_from
+    if (alavFilters.date_to)   p.date_to   = alavFilters.date_to
+    if (alavFilters.resultado !== 'all') p.resultado = alavFilters.resultado
+    api.get('/suggestions/alavancagem', { params: p })
+      .then(r => { setAlavancagem(prev => [...prev, ...r.data.items]); setAlavHasMore(r.data.has_more) })
+      .catch(() => {})
+      .finally(() => setAlavLoadingMore(false))
+  }
 
   return (
     <div className="min-h-screen bg-black">
@@ -1879,7 +1851,7 @@ export default function Picks() {
               {today?.dica_do_dia && (
                 <section>
                   <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
-                  <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                  <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} />
                 </section>
               )}
 
@@ -1899,7 +1871,7 @@ export default function Picks() {
                       <>
                         <div className="grid gap-4 md:grid-cols-2">
                           {vips.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
                         </div>
                         {vips.length > 4 && (
@@ -1925,7 +1897,7 @@ export default function Picks() {
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
                       <div className="grid gap-4 md:grid-cols-2">
-                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
+                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </div>
                     )}
                   </section>
@@ -1952,6 +1924,7 @@ export default function Picks() {
                         onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={() => setTab('alavancagem')}
+                        isLive={isAlavLive(today.alavancagem)}
                       />
                       <button onClick={() => setTab('alavancagem')}
                         className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
@@ -2001,7 +1974,7 @@ export default function Picks() {
             {todayLoading ? <Spinner /> : (
               <div>
                 <SectionHeader color="bg-green-500" label={`Pick do Dia · ${todayDateStr}`} />
-                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} /> : <PickSeguroEmpty />}
+                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
               </div>
             )}
 
@@ -2074,7 +2047,7 @@ export default function Picks() {
                     {filteredVips.length > 0 ? (
                       <div className="grid gap-4 md:grid-cols-2">
                         {filteredVips.map((s: any) => (
-                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} />
+                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
                       </div>
                     ) : (
@@ -2131,7 +2104,7 @@ export default function Picks() {
               {!canSeeVip ? <VipLockOverlay color="blue" /> : todayLoading ? <Spinner /> : (
                 today?.multiplas?.length > 0 ? (
                   <div className="space-y-4">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} />)}
+                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                   </div>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
@@ -2252,6 +2225,7 @@ export default function Picks() {
                         onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={() => setTab('alavancagem')}
+                        isLive={isAlavLive(today.alavancagem)}
                       />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
@@ -2284,6 +2258,14 @@ export default function Picks() {
                       <SectionHeader color="bg-orange-400" label="Progresso da Série" />
                       {alavLoading ? (
                         <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-zinc-700 border-t-orange-400 rounded-full animate-spin" /></div>
+                      ) : alavError ? (
+                        <div className="card p-8 text-center border-dashed">
+                          <p className="text-zinc-400 text-sm font-semibold mb-1">Erro ao carregar a série</p>
+                          <p className="text-zinc-600 text-xs mb-3">Não foi possível conectar ao servidor.</p>
+                          <button onClick={() => doFetchAlavancagem(alavFilters)} className="text-xs text-orange-400 hover:text-orange-300 font-semibold transition-colors">
+                            Tentar novamente
+                          </button>
+                        </div>
                       ) : !alavancagem.length ? (
                         <div className="card p-8 text-center border-dashed border-orange-500/20">
                           <p className="text-zinc-500 text-sm font-semibold">Série ainda não iniciada.</p>
@@ -2318,6 +2300,15 @@ export default function Picks() {
                 {!alavLoading && alavancagem.length > 0 && (
                   <div>
                     <SectionHeader color="bg-orange-400" label="Caminho da Série" />
+                    {alavHasMore && (
+                      <button
+                        onClick={loadMoreAlavancagem}
+                        disabled={alavLoadingMore}
+                        className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 mb-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+                      >
+                        {alavLoadingMore ? 'Carregando...' : 'Carregar picks mais antigos'}
+                      </button>
+                    )}
                     <div className="space-y-0">
                       {[...alavancagem].reverse().map((pick: any, idx: number, arr: any[]) => {
                         const res = pick.result

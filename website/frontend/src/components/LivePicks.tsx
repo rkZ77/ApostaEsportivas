@@ -829,7 +829,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               Atualizando...
             </span>
           )}
-          <button onClick={load}
+          <button onClick={load} aria-label="Atualizar"
             className="text-xs text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 px-2 py-1 rounded-lg transition-colors">
             ↻
           </button>

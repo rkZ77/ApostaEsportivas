@@ -104,7 +104,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
     if (tab !== 'caminho' || caminho.length > 0 || caminhoLoading) return
     setCaminhoLoading(true)
     api.get('/suggestions/alavancagem', { params: { limit: 50 } })
-      .then(r => setCaminho(Array.isArray(r.data) ? r.data : []))
+      .then(r => setCaminho(Array.isArray(r.data?.items) ? r.data.items : []))
       .catch(() => setCaminho([]))
       .finally(() => setCaminhoLoading(false))
   }, [tab])

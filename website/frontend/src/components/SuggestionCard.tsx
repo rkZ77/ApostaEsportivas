@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
-import { translateMarket, translateLine, translateTeamName } from '../utils/marketTranslate'
-import { getResultStyle } from '../utils/resultStyle'
+import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
+import { getResultStyle, explainResult } from '../utils/resultStyle'
+import InfoTip from './InfoTip'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
@@ -68,8 +69,8 @@ function shortReasoning(text?: string): string {
 interface BancaSummary { bankroll_current: number; unit_value: number }
 
 export default function SuggestionCard({
-  s, onClick, banca,
-}: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null }) {
+  s, onClick, banca, isLive = false,
+}: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null; isLive?: boolean }) {
   const navigate = useNavigate()
   const pct = Math.round((s.confidence ?? 0) * 100)
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
@@ -195,8 +196,13 @@ export default function SuggestionCard({
           )}
         </div>
         {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label}
+            <InfoTip text={explainResult(s.result)} />
+          </span>
+        ) : isLive ? (
+          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
+            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
           <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
@@ -303,6 +309,7 @@ export default function SuggestionCard({
         <div className="flex items-center gap-2 text-xs text-zinc-500">
           <span className="font-semibold text-zinc-300">{translateMarket(s.market)}</span>
           {s.line && <><span>·</span><span>{translateLine(s.line)}</span></>}
+          <InfoTip text={explainMarket(s.market, s.line)} />
         </div>
       </div>
 
