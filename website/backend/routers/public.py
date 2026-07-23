@@ -448,10 +448,10 @@ def public_today_summary():
 
 
 @router.get("/fixtures-today")
-def public_fixtures_today():
-    """Jogos de hoje das ligas cobertas, sem autenticacao -- so calendario
-    (times, liga, horario), sem odds/picks. Usado pro card de compartilhamento
-    'jogos que a IA vai analisar hoje'."""
+def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
+    """Jogos de hoje (ou dias_a_frente adiante) das ligas cobertas, sem
+    autenticacao -- so calendario (times, liga, horario), sem odds/picks.
+    Usado pro card de compartilhamento 'jogos de hoje/amanha'."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -462,11 +462,11 @@ def public_fixtures_today():
                    f.match_datetime
             FROM fixtures f
             LEFT JOIN leagues l ON l.league_id = f.league_id
-            WHERE f.match_datetime::date = CURRENT_DATE
+            WHERE f.match_datetime::date = CURRENT_DATE + (%s * INTERVAL '1 day')
               AND f.status = 'NS'
             ORDER BY f.match_datetime
             LIMIT 8
-        """)
+        """, (days_ahead,))
         rows = cur.fetchall()
         result = []
         for r in rows:

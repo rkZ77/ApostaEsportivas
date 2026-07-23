@@ -20,11 +20,13 @@ export default function AdminShareResults() {
   const [byDay, setByDay] = useState<DayResult[]>([])
   const [byLeague, setByLeague] = useState<LeagueResult[]>([])
   const [todayGames, setTodayGames] = useState<any[]>([])
+  const [tomorrowGames, setTomorrowGames] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
 
   const shareResults       = useShareResultsImage()
   const shareCurrentMonth  = useShareResultsImage()
   const shareTodayGames    = useShareTodayGamesImage()
+  const shareTomorrowGames = useShareTodayGamesImage()
   const shareLeagueResults = useShareLeagueResultsImage()
 
   useEffect(() => {
@@ -38,6 +40,9 @@ export default function AdminShareResults() {
       .finally(() => setLoading(false))
     api.get('/public/fixtures-today')
       .then(r => setTodayGames(r.data ?? []))
+      .catch(() => {})
+    api.get('/public/fixtures-today', { params: { days_ahead: 1 } })
+      .then(r => setTomorrowGames(r.data ?? []))
       .catch(() => {})
   }, [])
 
@@ -130,13 +135,27 @@ export default function AdminShareResults() {
             onClick={() => shareTodayGames.share(todayGames.map(g => ({
               homeTeamName: g.home_team, awayTeamName: g.away_team,
               homeTeamId: g.home_team_id, awayTeamId: g.away_team_id,
-              leagueName: g.league_name, matchDatetime: g.match_datetime,
-            })))}
+              leagueName: g.league_name,
+            })), 'hoje')}
             disabled={shareTodayGames.sharing}
             className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             <Share2 className="w-3.5 h-3.5" />
             {shareTodayGames.shared ? 'Compartilhado!' : shareTodayGames.sharing ? 'Gerando...' : 'Compartilhar jogos de hoje'}
+          </button>
+        )}
+        {tomorrowGames.length > 0 && (
+          <button
+            onClick={() => shareTomorrowGames.share(tomorrowGames.map(g => ({
+              homeTeamName: g.home_team, awayTeamName: g.away_team,
+              homeTeamId: g.home_team_id, awayTeamId: g.away_team_id,
+              leagueName: g.league_name,
+            })), 'amanha')}
+            disabled={shareTomorrowGames.sharing}
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+          >
+            <Share2 className="w-3.5 h-3.5" />
+            {shareTomorrowGames.shared ? 'Compartilhado!' : shareTomorrowGames.sharing ? 'Gerando...' : 'Compartilhar jogos de amanhã'}
           </button>
         )}
       </div>
