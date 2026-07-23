@@ -684,3 +684,12 @@ def admin_resolve_picks(current_user: dict = Depends(require_admin)):
     from routers.live import resolve_all_pending
     result = resolve_all_pending()
     return {"ok": True, "resolved": result}
+
+
+@router.post("/reverify-stats-results")
+def admin_reverify_stats_results(current_user: dict = Depends(require_admin)):
+    """Dispara manualmente a reconferência de escanteios/cartões já resolvidos
+    (mesmo job do scheduler, ver routers.live.reverify_recent_stats_results)."""
+    from routers.live import reverify_recent_stats_results
+    result = reverify_recent_stats_results()
+    return {"ok": True, **result}
