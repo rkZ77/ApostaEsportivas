@@ -217,12 +217,14 @@ export default function Banca() {
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error,   setError]   = useState(false)
   const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
   const load = useCallback((p: PeriodKey) => {
     setLoading(true)
+    setError(false)
     let params: Record<string, string | number> = {}
     if (p === 'thismonth') {
       const r = monthRange(0); params = { from_date: r.from, to_date: r.to }
@@ -233,7 +235,7 @@ export default function Banca() {
     }
     api.get('/banca', { params })
       .then(r => setData(r.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
 
@@ -336,6 +338,14 @@ export default function Banca() {
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="card p-10 text-center">
+            <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar sua banca</p>
+            <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+            <button onClick={() => load(period)} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+              Tentar novamente
+            </button>
           </div>
         ) : (
           <div className="space-y-6">

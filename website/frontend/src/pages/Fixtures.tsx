@@ -39,7 +39,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
 
   return (
     <div className="flex items-center gap-1">
-      <button onClick={prev}
+      <button onClick={prev} aria-label="Semana anterior"
         className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
         ‹
       </button>
@@ -66,7 +66,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
           )
         })}
       </div>
-      <button onClick={next}
+      <button onClick={next} aria-label="Próxima semana"
         className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
         ›
       </button>
