@@ -8,7 +8,6 @@ import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
 import PushPromptBanner from './components/PushPromptBanner'
-import PostCopaBanner from './components/PostCopaBanner'
 import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
@@ -151,7 +150,6 @@ export default function App() {
           <UpdateBanner />
           <ErrorToast />
           <PushPromptBanner />
-          <PostCopaBanner />
           <GlobalModals />
           <FirstLoginRedirect />
           <RouteErrorBoundary>
