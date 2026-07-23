@@ -422,8 +422,15 @@ class UpdateProfileBody(BaseModel):
     phone: Optional[str] = None
     cpf: Optional[str] = None
     username: Optional[str] = None
-    current_password: Optional[str] = None
-    new_password: Optional[str] = None
+
+
+class RequestPasswordChangeBody(BaseModel):
+    current_password: str
+    new_password: str
+
+
+class ConfirmPasswordChangeBody(BaseModel):
+    code: str
 
 
 # ── endpoints ────────────────────────────────────────────────────────────────
@@ -624,6 +631,16 @@ def logout(response: Response):
     return {"status": "ok"}
 
 
+@router.post("/logout-other-sessions")
+def logout_other_sessions(response: Response, current_user: dict = Depends(get_current_user)):
+    """Encerra qualquer outra sessão ativa (girando o session_token) sem
+    exigir troca de senha -- util quando o usuario suspeita que esqueceu
+    logado em outro aparelho. Emite um novo par de tokens pra manter o
+    dispositivo atual logado."""
+    _reissue_tokens_for_user(response, current_user["sub"], current_user.get("name", ""), current_user.get("email", ""))
+    return {"ok": True}
+
+
 class VerifyEmailBody(BaseModel):
     token: str
 
@@ -781,13 +798,15 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, (cpf IS NOT NULL) AS has_cpf FROM users WHERE id = %s",
+            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, (cpf IS NOT NULL) AS has_cpf, last_login_device, last_login_at FROM users WHERE id = %s",
             (current_user["sub"],),
         )
         row = cur.fetchone()
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         d = dict(row)
+        if d.get("last_login_at"):
+            d["last_login_at"] = d["last_login_at"].isoformat()
         # Auto-expire: mesma lógica do login/refresh
         if d.get("plan") in ("vip", "trial") and d.get("expires_at"):
             exp = d["expires_at"]
@@ -851,7 +870,7 @@ def activate_trial(response: Response, current_user: dict = Depends(get_current_
 
 
 @router.put("/profile")
-def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_current_user)):
+def update_profile(body: UpdateProfileBody, response: Response, current_user: dict = Depends(get_current_user)):
     """Usuário atualiza próprio nome, telefone, CPF ou senha."""
     conn = get_connection()
     cur = conn.cursor()
@@ -888,14 +907,6 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
                     raise HTTPException(400, "CPF já cadastrado em outra conta.")
                 fields.append("cpf = %s"); values.append(cpf_digits)
                 cpf_added = True
-
-        if body.new_password:
-            if not body.current_password:
-                raise HTTPException(400, "Informe a senha atual para trocar")
-            if not verify_password(body.current_password, row["password_hash"]):
-                raise HTTPException(400, "Senha atual incorreta")
-            _validate_password(body.new_password)
-            fields.append("password_hash = %s"); values.append(hash_password(body.new_password))
 
         if not fields:
             raise HTTPException(400, "Nenhum campo para atualizar")
@@ -937,6 +948,109 @@ def update_profile(body: UpdateProfileBody, current_user: dict = Depends(get_cur
         return updated
     finally:
         cur.close(); conn.close()
+
+
+def _reissue_tokens_for_user(response: Response, user_id: int, name: str, email: str) -> None:
+    """Gira o session_token (derruba qualquer outra sessão) e reemite os
+    cookies de auth pra manter só o dispositivo atual logado. Usado depois de
+    qualquer troca de senha bem-sucedida."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        new_session_id = secrets.token_hex(32)
+        cur.execute(
+            "UPDATE users SET session_token=%s WHERE id=%s RETURNING plan, expires_at, avatar_url",
+            (hashlib.sha256(new_session_id.encode()).hexdigest(), user_id),
+        )
+        u = cur.fetchone()
+        conn.commit()
+        token_data = {
+            "sub": str(user_id), "id": user_id,
+            "name": name, "email": email,
+            "plan": u["plan"], "plan_expires_at": u["expires_at"].isoformat() if u["expires_at"] else None,
+            "avatar_url": u["avatar_url"],
+            "session_id": new_session_id,
+        }
+        access_token = create_access_token(token_data)
+        refresh_token = create_refresh_token(token_data)
+        set_auth_cookies(response, access_token, refresh_token)
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/profile/password/request")
+def request_password_change(body: RequestPasswordChangeBody, background_tasks: BackgroundTasks, current_user: dict = Depends(get_current_user)):
+    """Passo 1 da troca de senha logada: confirma a senha atual, valida a
+    nova, e manda um código de 6 dígitos por e-mail. A senha só muda de fato
+    na confirmação (/profile/password/confirm) -- reusa reset_token/
+    reset_token_expires_at (mesmas colunas do "esqueci minha senha"), mas
+    aqui o usuário já está autenticado, então não precisa e-mail/CPF, só o
+    código bater com o hash guardado pra este user_id."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT password_hash, name, email FROM users WHERE id = %s", (current_user["sub"],))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Usuário não encontrado")
+        if not verify_password(body.current_password, row["password_hash"]):
+            raise HTTPException(400, "Senha atual incorreta")
+        _validate_password(body.new_password)
+
+        code = str(secrets.randbelow(900000) + 100000)  # 100000–999999
+        expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+        cur.execute(
+            "UPDATE users SET reset_token=%s, reset_token_expires_at=%s, pending_password_hash=%s WHERE id=%s",
+            (_hash_token(code), expires, hash_password(body.new_password), current_user["sub"]),
+        )
+        conn.commit()
+
+        first_name = row["name"].strip().split()[0] if row["name"] else ""
+        background_tasks.add_task(
+            _send_email,
+            row["email"],
+            "Confirme a troca de senha · Pick IA",
+            (
+                f"Olá {first_name},\n\n"
+                f"Seu código para confirmar a troca de senha é:\n\n"
+                f"  {code}\n\n"
+                f"O código expira em 15 minutos.\n"
+                f"Se não foi você quem pediu, ignore este email e sua senha continua a mesma.\n\n"
+                f"Equipe Pick IA"
+            ),
+        )
+        return {"ok": True}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/profile/password/confirm")
+def confirm_password_change(body: ConfirmPasswordChangeBody, response: Response, current_user: dict = Depends(get_current_user)):
+    """Passo 2: valida o código enviado por e-mail e efetiva a troca de
+    senha, girando a sessão (derruba qualquer outro dispositivo logado)."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT name, email, pending_password_hash FROM users "
+            "WHERE id = %s AND reset_token = %s AND reset_token_expires_at > NOW()",
+            (current_user["sub"], _hash_token(body.code)),
+        )
+        row = cur.fetchone()
+        if not row or not row["pending_password_hash"]:
+            raise HTTPException(400, "Código inválido ou expirado")
+
+        cur.execute(
+            "UPDATE users SET password_hash=%s, reset_token=NULL, reset_token_expires_at=NULL, pending_password_hash=NULL WHERE id=%s",
+            (row["pending_password_hash"], current_user["sub"]),
+        )
+        conn.commit()
+        name, email = row["name"], row["email"]
+    finally:
+        cur.close(); conn.close()
+
+    _reissue_tokens_for_user(response, current_user["sub"], name, email)
+    return {"ok": True}
 
 
 class ChangeEmailBody(BaseModel):
@@ -1027,9 +1141,14 @@ def reset_password(body: ResetPasswordBody):
         if not row:
             raise HTTPException(400, "Código inválido ou expirado")
 
+        # Gira o session_token junto: sem isso, uma sessão que já estivesse
+        # aberta (ex: dispositivo roubado que motivou o reset) continuava
+        # valida ate o access token expirar sozinho (ate 12h) mesmo depois
+        # da senha ter sido trocada.
+        new_session_token = hashlib.sha256(secrets.token_hex(32).encode()).hexdigest()
         cur.execute(
-            "UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expires_at = NULL WHERE id = %s",
-            (hash_password(body.new_password), row["id"]),
+            "UPDATE users SET password_hash = %s, reset_token = NULL, reset_token_expires_at = NULL, session_token = %s WHERE id = %s",
+            (hash_password(body.new_password), new_session_token, row["id"]),
         )
         conn.commit()
         return {"ok": True}

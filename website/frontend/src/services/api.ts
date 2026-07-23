@@ -6,14 +6,22 @@ const api = axios.create({ baseURL: '/api', withCredentials: true, timeout: 1500
 
 let _refreshing: Promise<unknown> | null = null
 
+// Endpoints onde um 401 significa "credencial errada" (form) ou onde deixar
+// passar pro fluxo de refresh criaria recursão (o próprio /auth/refresh) --
+// esses nunca tentam refresh, só devolvem o erro pro chamador. Todo o resto,
+// incluindo /auth/me, participa do refresh/kick normalmente: excluir /auth/me
+// daqui fazia a checagem periódica de sessão (AuthContext) nunca perceber
+// nem um token expirado nem uma sessão derrubada por login em outro
+// dispositivo enquanto o usuário ficava parado numa tela sem outras chamadas.
+const AUTH_NO_RETRY = ['/auth/login', '/auth/register', '/auth/refresh', '/auth/forgot-password', '/auth/reset-password']
+
 // Sessão deslizante: renova o access token silenciosamente via refresh cookie.
 // O refresh token dura 7 dias a partir do login e NÃO é renovado · após 7 dias, precisa logar de novo.
 api.interceptors.response.use(
   (res) => res,
   async (err) => {
     const original = err.config
-    // Never retry auth endpoints · surface errors directly to the caller
-    if (original.url?.includes('/auth/')) {
+    if (AUTH_NO_RETRY.some(p => original.url?.includes(p))) {
       return Promise.reject(err)
     }
     if (err.response?.status === 401 && !original._retry) {
@@ -25,7 +33,8 @@ api.interceptors.response.use(
         const device = detail.split('|')[1] ?? 'outro dispositivo'
         localStorage.setItem('session_kicked_device', device)
         localStorage.removeItem('user')
-        window.location.href = '/login?kicked=1'
+        const redirect = encodeURIComponent(window.location.pathname + window.location.search)
+        window.location.href = `/login?kicked=1&redirect=${redirect}`
         return Promise.reject(err)
       }
 
@@ -34,7 +43,10 @@ api.interceptors.response.use(
           .catch(() => {
             localStorage.removeItem('user')
             const path = window.location.pathname
-            if (path !== '/login' && path !== '/') window.location.href = '/login'
+            if (path !== '/login' && path !== '/') {
+              const redirect = encodeURIComponent(path + window.location.search)
+              window.location.href = `/login?redirect=${redirect}`
+            }
           })
           .finally(() => { _refreshing = null })
       }

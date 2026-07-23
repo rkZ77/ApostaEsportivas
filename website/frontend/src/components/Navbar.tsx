@@ -140,7 +140,7 @@ export default function Navbar() {
                     </div>
                     <div className="border-t border-zinc-800 py-1">
                       <button
-                        onClick={() => { logout(); navigate('/login') }}
+                        onClick={async () => { await logout(); navigate('/login') }}
                         className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
@@ -167,7 +167,7 @@ export default function Navbar() {
         {!emailBannerDismissed && user?.email_verified === false && (
           <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-start sm:items-center justify-between gap-2">
             <span className="text-blue-300 text-xs font-semibold leading-relaxed">
-              Confirme seu e-mail para garantir acesso à recuperação de senha.{' '}
+              Confirme seu e-mail para garantir que os avisos da conta cheguem até você.{' '}
               <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil</Link>
             </span>
             <button onClick={() => setEmailBannerDismissed(true)} aria-label="Dispensar aviso" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-sm font-black transition-colors">×</button>
@@ -263,7 +263,7 @@ export default function Navbar() {
             Como funciona
           </Link>
           <button
-            onClick={() => { logout(); navigate('/login') }}
+            onClick={async () => { await logout(); navigate('/login') }}
             className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-colors"
           >
             <LogOut className="w-4 h-4" />

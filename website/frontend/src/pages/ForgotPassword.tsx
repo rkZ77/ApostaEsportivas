@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
+import { Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
+import { getPasswordStrength } from '../utils/passwordStrength'
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
@@ -9,6 +11,7 @@ export default function ForgotPassword() {
   const [code, setCode]         = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')
+  const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading]   = useState(false)
   const [done, setDone]         = useState(false)
   const [error, setError]       = useState('')
@@ -29,7 +32,8 @@ export default function ForgotPassword() {
   const handleReset = async (e: React.FormEvent) => {
     e.preventDefault()
     if (password !== confirm) { setError('As senhas não coincidem'); return }
-    if (password.length < 8)  { setError('Mínimo 8 caracteres'); return }
+    const { score } = getPasswordStrength(password)
+    if (score < 3) { setError('Senha deve ter no mínimo 10 caracteres, 1 letra maiúscula e 1 número'); return }
     setLoading(true); setError('')
     try {
       await api.post('/auth/reset-password', { email, code, new_password: password })
@@ -85,6 +89,7 @@ export default function ForgotPassword() {
                 placeholder="seu@email.com"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
+                autoComplete="email"
                 required
                 autoFocus
               />
@@ -117,23 +122,57 @@ export default function ForgotPassword() {
             </div>
             <div>
               <label className="text-xs text-zinc-500 block mb-1.5">Nova senha</label>
-              <input
-                type="password"
-                className="input w-full"
-                placeholder="Mínimo 8 caracteres"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-              />
+              <div className="relative">
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  className="input w-full pr-10"
+                  placeholder="Mínimo 10 caracteres"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  autoComplete="new-password"
+                  required
+                />
+                <button type="button" onClick={() => setShowPassword(v => !v)}
+                  aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {password.length > 0 && (() => {
+                const { score, checks } = getPasswordStrength(password)
+                const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
+                const labels    = ['Fraca', 'Boa', 'Forte']
+                const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                const label     = score > 0 ? labels[score - 1] : ''
+                return (
+                  <div className="mt-2 space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                      ))}
+                      {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      {checks.map(c => (
+                        <div key={c.label} className="flex items-center gap-1.5">
+                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
             </div>
             <div>
               <label className="text-xs text-zinc-500 block mb-1.5">Confirmar senha</label>
               <input
-                type="password"
+                type={showPassword ? 'text' : 'password'}
                 className="input w-full"
                 placeholder="Repita a nova senha"
                 value={confirm}
                 onChange={e => setConfirm(e.target.value)}
+                autoComplete="new-password"
                 required
               />
             </div>
