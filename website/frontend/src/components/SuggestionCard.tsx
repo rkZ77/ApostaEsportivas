@@ -4,7 +4,7 @@ import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
-import { getResultStyle, explainResult } from '../utils/resultStyle'
+import { getResultStyle } from '../utils/resultStyle'
 import InfoTip from './InfoTip'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -196,9 +196,8 @@ export default function SuggestionCard({
           )}
         </div>
         {resultStyle ? (
-          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label}
-            <InfoTip text={explainResult(s.result)} />
           </span>
         ) : isLive ? (
           <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">

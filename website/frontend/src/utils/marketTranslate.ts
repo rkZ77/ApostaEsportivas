@@ -61,55 +61,65 @@ export function translateMarket(m?: string): string {
   return m
 }
 
-// Explicação curta do que a aposta significa, em português simples. Ordem dos
-// campos importa: entradas mais específicas (escanteios, cartões, times
+// Explicação curta de quando a aposta dá GREEN, em português simples. Ordem
+// dos campos importa: entradas mais específicas (escanteios, cartões, times
 // isolados) vêm antes das genéricas de gols/over-under, senão o match por
 // substring (ex.: "corners over/under" contém "over/under") acertaria a
 // explicação errada primeiro.
-const MARKET_EXPLAIN: Record<string, string> = {
-  'match winner': 'Aposta em quem vence a partida, incluindo a opção de empate: {line}.',
-  'double chance': 'Aposta cobrindo 2 dos 3 resultados possíveis. Reduz o risco, mas também reduz a odd: {line}.',
-  'first half winner': 'Aposta em quem está na frente no placar ao final do 1º tempo: {line}.',
-  'corners asian handicap': 'Uma equipe recebe uma vantagem ou desvantagem de escanteios no papel, pra equilibrar a odd: {line}.',
-  'corners over under': 'Aposta se o total de escanteios da partida fica acima ou abaixo do número da linha: {line}.',
-  'corners over/under': 'Aposta se o total de escanteios da partida fica acima ou abaixo do número da linha: {line}.',
-  'total corners': 'Aposta se o total de escanteios da partida fica acima ou abaixo do número da linha: {line}.',
-  'corners 1x2': 'Aposta em qual equipe fecha a partida com mais escanteios, incluindo a opção de empate: {line}.',
-  'home corners over/under': 'Aposta no total de escanteios só da equipe da casa, acima ou abaixo da linha: {line}.',
-  'away corners over/under': 'Aposta no total de escanteios só da equipe visitante, acima ou abaixo da linha: {line}.',
-  'cards over/under': 'Aposta se o total de cartões (amarelos + vermelhos) da partida fica acima ou abaixo da linha: {line}.',
-  'home team total cards': 'Aposta no total de cartões só da equipe da casa, acima ou abaixo da linha: {line}.',
-  'away team total cards': 'Aposta no total de cartões só da equipe visitante, acima ou abaixo da linha: {line}.',
-  'home team cards': 'Aposta no total de cartões só da equipe da casa, acima ou abaixo da linha: {line}.',
-  'away team cards': 'Aposta no total de cartões só da equipe visitante, acima ou abaixo da linha: {line}.',
-  'asian handicap': 'Uma equipe recebe uma vantagem ou desvantagem de gols no papel, pra equilibrar a odd: {line}.',
-  'both teams score': 'Aposta que as duas equipes marcam pelo menos 1 gol cada uma na partida.',
-  'both teams to score': 'Aposta que as duas equipes marcam pelo menos 1 gol cada uma na partida.',
-  'total - home': 'Aposta no total de gols só da equipe da casa, acima ou abaixo da linha: {line}.',
-  'total - away': 'Aposta no total de gols só da equipe visitante, acima ou abaixo da linha: {line}.',
-  'home team total goals': 'Aposta no total de gols só da equipe da casa, acima ou abaixo da linha: {line}.',
-  'away team total goals': 'Aposta no total de gols só da equipe visitante, acima ou abaixo da linha: {line}.',
-  'ht/ft': 'Aposta combinando quem está na frente no intervalo com quem vence no final da partida: {line}.',
-  'exact score': 'Aposta no placar exato da partida: {line}.',
-  'correct score': 'Aposta no placar exato da partida: {line}.',
-  'first goal scorer': 'Aposta em qual jogador marca o primeiro gol da partida.',
-  'anytime goalscorer': 'Aposta que esse jogador marca pelo menos 1 gol a qualquer momento da partida.',
-  'home/away': 'Aposta em quem vence a partida, sem a opção de empate: {line}.',
-  'to qualify': 'Aposta em quem avança de fase. Não depende do placar desse jogo específico.',
-  'result': 'Aposta no resultado da partida: {line}.',
-  'goals over/under': 'Aposta se o total de gols da partida fica acima ou abaixo do número da linha: {line}.',
-  'total goals': 'Aposta se o total de gols da partida fica acima ou abaixo do número da linha: {line}.',
-  'over/under': 'Aposta se o total fica acima ou abaixo do número da linha: {line}.',
+type OverUnderInfo = { dir: 'maior' | 'menor'; value: string } | null
+type ExplainFn = (lineTxt: string, ou: OverUnderInfo) => string
+
+const _ouOr = (subject: string) => (lineTxt: string, ou: OverUnderInfo) =>
+  ou
+    ? `Dá GREEN se ${subject} for ${ou.dir} que ${ou.value}.`
+    : `Dá GREEN se ${subject} bater com a linha ${lineTxt}.`
+
+const MARKET_EXPLAIN: Record<string, ExplainFn> = {
+  'match winner':          lineTxt => `Dá GREEN se o resultado da partida for: ${lineTxt}.`,
+  'double chance':         lineTxt => `Dá GREEN se a partida terminar em um dos 2 resultados cobertos: ${lineTxt}. Reduz o risco, mas também reduz a odd.`,
+  'first half winner':     lineTxt => `Dá GREEN se, ao final do 1º tempo, o resultado for: ${lineTxt}.`,
+  'corners asian handicap': lineTxt => `Dá GREEN se, já somando a vantagem/desvantagem de escanteios aplicada, o resultado for: ${lineTxt}.`,
+  'corners over under':    _ouOr('o total de escanteios da partida'),
+  'corners over/under':    _ouOr('o total de escanteios da partida'),
+  'total corners':         _ouOr('o total de escanteios da partida'),
+  'corners 1x2':           lineTxt => `Dá GREEN se a equipe com mais escanteios na partida for: ${lineTxt}.`,
+  'home corners over/under': _ouOr('o total de escanteios só da equipe da casa'),
+  'away corners over/under': _ouOr('o total de escanteios só da equipe visitante'),
+  'cards over/under':      _ouOr('o total de cartões (amarelos + vermelhos) da partida'),
+  'home team total cards': _ouOr('o total de cartões só da equipe da casa'),
+  'away team total cards': _ouOr('o total de cartões só da equipe visitante'),
+  'home team cards':       _ouOr('o total de cartões só da equipe da casa'),
+  'away team cards':       _ouOr('o total de cartões só da equipe visitante'),
+  'asian handicap':        lineTxt => `Dá GREEN se, já somando a vantagem/desvantagem de gols aplicada, o resultado for: ${lineTxt}.`,
+  'both teams score':      () => 'Dá GREEN se as duas equipes marcarem pelo menos 1 gol cada uma na partida.',
+  'both teams to score':   () => 'Dá GREEN se as duas equipes marcarem pelo menos 1 gol cada uma na partida.',
+  'total - home':          _ouOr('o total de gols só da equipe da casa'),
+  'total - away':          _ouOr('o total de gols só da equipe visitante'),
+  'home team total goals': _ouOr('o total de gols só da equipe da casa'),
+  'away team total goals': _ouOr('o total de gols só da equipe visitante'),
+  'ht/ft':                 lineTxt => `Dá GREEN se a combinação intervalo/final for: ${lineTxt}.`,
+  'exact score':           lineTxt => `Dá GREEN se o placar final da partida for exatamente: ${lineTxt}.`,
+  'correct score':         lineTxt => `Dá GREEN se o placar final da partida for exatamente: ${lineTxt}.`,
+  'first goal scorer':     () => 'Dá GREEN se esse jogador marcar o primeiro gol da partida.',
+  'anytime goalscorer':    () => 'Dá GREEN se esse jogador marcar pelo menos 1 gol a qualquer momento da partida.',
+  'home/away':             lineTxt => `Dá GREEN se o vencedor da partida (sem opção de empate) for: ${lineTxt}.`,
+  'to qualify':            () => 'Dá GREEN se essa equipe avançar de fase. Não depende do placar desse jogo específico.',
+  'result':                lineTxt => `Dá GREEN se o resultado da partida for: ${lineTxt}.`,
+  'goals over/under':      _ouOr('o total de gols da partida'),
+  'total goals':           _ouOr('o total de gols da partida'),
+  'over/under':            _ouOr('o total da partida'),
 }
 
-/** Explicação curta em português do que essa aposta (mercado + linha) significa na prática. */
+/** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */
 export function explainMarket(market?: string, line?: string): string {
   if (!market) return ''
   const key = market.trim().toLowerCase()
   const lineTxt = translateLine(line) || 'valor definido pela IA'
-  const template = MARKET_EXPLAIN[key] ?? Object.entries(MARKET_EXPLAIN).find(([k]) => key.includes(k))?.[1]
-  if (!template) return `Aposta no mercado "${translateMarket(market)}"${line ? `, linha ${lineTxt}` : ''}.`
-  return template.replace('{line}', lineTxt)
+  const ouMatch = lineTxt.match(/^(Mais de|Menos de)\s+([\d.,]+)$/)
+  const ou: OverUnderInfo = ouMatch ? { dir: ouMatch[1] === 'Mais de' ? 'maior' : 'menor', value: ouMatch[2] } : null
+  const fn = MARKET_EXPLAIN[key] ?? Object.entries(MARKET_EXPLAIN).find(([k]) => key.includes(k))?.[1]
+  if (!fn) return `Dá GREEN conforme as condições do mercado "${translateMarket(market)}"${line ? `, linha ${lineTxt}` : ''}.`
+  return fn(lineTxt, ou)
 }
 
 const LINE_PT: Record<string, string> = {

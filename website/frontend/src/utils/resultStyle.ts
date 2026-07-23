@@ -23,20 +23,6 @@ export function getResultStyle(result?: string | null): ResultStyle | null {
   return RESULT_STYLE[result as PickResult] ?? null
 }
 
-/** Explicação curta do que cada resultado significa, pra quem não conhece os termos. */
-export const RESULT_EXPLAIN: Record<PickResult, string> = {
-  GREEN:      'A aposta bateu: o que foi previsto aconteceu. Você ganha o valor apostado multiplicado pela odd.',
-  RED:        'A aposta não bateu: o que foi previsto não aconteceu. Você perde o valor apostado.',
-  PUSH:       'Empate técnico: a linha bateu exatamente no número apostado. O valor apostado é devolvido, sem ganho nem perda.',
-  'HALF-WIN': 'Meio ganho: a linha era fracionada (ex: 2.75 gols), a aposta foi dividida em duas partes e uma delas ganhou. Você recebe metade do lucro da odd.',
-  'HALF-LOSS':'Meia perda: a linha era fracionada (ex: 2.75 gols), a aposta foi dividida em duas partes e uma delas perdeu. Você perde metade do valor apostado.',
-}
-
-export function explainResult(result?: string | null): string {
-  if (!result) return ''
-  return RESULT_EXPLAIN[result as PickResult] ?? ''
-}
-
 export const PICK_TYPE_LABEL: Record<string, string> = {
   vip: 'VIP',
   free: 'Free',
