@@ -8,7 +8,6 @@ import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
 import PushPromptBanner from './components/PushPromptBanner'
-import PostCopaBanner from './components/PostCopaBanner'
 import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
@@ -33,6 +32,8 @@ const NotFound       = lazy(() => import('./pages/NotFound'))
 const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
 const PickPublico         = lazy(() => import('./pages/PickPublico'))
 const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
+const Blog                = lazy(() => import('./pages/Blog'))
+const BlogPost            = lazy(() => import('./pages/BlogPost'))
 
 const CHUNK_ERROR_RE = /Failed to fetch dynamically imported module|error loading dynamically imported module|Importing a module script failed|Loading chunk \d+ failed/i
 const CHUNK_RELOAD_KEY = 'pickia_chunk_reload_at'
@@ -149,7 +150,6 @@ export default function App() {
           <UpdateBanner />
           <ErrorToast />
           <PushPromptBanner />
-          <PostCopaBanner />
           <GlobalModals />
           <FirstLoginRedirect />
           <RouteErrorBoundary>
@@ -177,6 +177,8 @@ export default function App() {
                 <Route path="/como-funciona" element={<ComoFunciona />} />
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
                 <Route path="/resultados" element={<ResultadosPublicos />} />
+                <Route path="/blog" element={<Blog />} />
+                <Route path="/blog/:slug" element={<BlogPost />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>

@@ -29,6 +29,9 @@ export default function Footer() {
             <Link to="/resultados" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Resultados
             </Link>
+            <Link to="/blog" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+              Blog
+            </Link>
             <Link to="/termos" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
               Termos de Uso
             </Link>

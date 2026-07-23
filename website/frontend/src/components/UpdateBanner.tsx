@@ -13,11 +13,16 @@ export default function UpdateBanner() {
   const [staleBundle, setStaleBundle] = useState(false)
   const [dismissed, setDismissed]   = useState(false)
   const versionRef = useRef<string | null>(null)
+  const isInitialMount = useRef(true)
 
-  // Novidade curada que esse usuário ainda não viu · mostra assim que ele abre
-  // o app, não precisa esperar um redeploy acontecer com a aba já aberta.
+  // Novidade curada que esse usuário ainda não viu · mostra no momento do login,
+  // não numa sessão só restaurada ao abrir o app (senão só reaparecia limpando localStorage).
   useEffect(() => {
+    const wasInitialMount = isInitialMount.current
+    isInitialMount.current = false
     if (!user || !latestEntry) return
+    if (wasInitialMount) return
+    if (localStorage.getItem('pickia_just_registered')) return
     if (localStorage.getItem(SEEN_KEY) !== latestEntry.id) setShowNotes(true)
   }, [user])
 
