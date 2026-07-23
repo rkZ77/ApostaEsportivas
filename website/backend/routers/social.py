@@ -224,6 +224,7 @@ def toggle_reaction(pick_type: str, pick_id: int, body: ReactBody,
         raise HTTPException(400, "Reação inválida")
     if pick_type == "vip" and not is_vip_active(current_user):
         raise HTTPException(403, "Acesso VIP necessário")
+    _check_comment_rate(current_user["id"])
 
     conn = _conn(); cur = _cur(conn)
     try:

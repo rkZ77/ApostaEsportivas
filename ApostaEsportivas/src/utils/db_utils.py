@@ -2,7 +2,15 @@ import os
 import psycopg2
 from dotenv import load_dotenv, find_dotenv
 
-load_dotenv(find_dotenv())
+# Credenciais de banco vivem em .env.dev/.env.prod (separadas do .env
+# principal) pra reduzir o raio de explosão caso um dos arquivos vaze --
+# ambas continuam carregadas aqui porque scripts como
+# copy_prod_history_to_dev.py precisam de PROD e DEV no mesmo processo.
+_dotenv_path = find_dotenv()
+load_dotenv(_dotenv_path)
+_env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
+load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
+load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 _logged_envs: set = set()
 
