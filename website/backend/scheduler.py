@@ -201,7 +201,7 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler = BackgroundScheduler()
         scheduler.add_job(lambda: _job_banca_reminder(logger), "interval", hours=1, id="banca_reminder")
         scheduler.add_job(lambda: _job_resolve_picks(logger), "interval", minutes=5, id="resolve_picks")
-        scheduler.add_job(lambda: _job_reverify_stats(logger), "interval", hours=1, id="reverify_stats")
+        scheduler.add_job(lambda: _job_reverify_stats(logger), "interval", hours=3, id="reverify_stats")
         # Pipeline diario de geracao de picks (00:10 BR) -- ficou pausado desde o
         # corte de IA em producao (2026-07-17), porque na epoca _run_tudo() ainda
         # chamava os scripts de IA antigos. Agora que routers.admin::_PIPELINE_SCRIPTS
@@ -225,7 +225,7 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler.start()
         logger.info(
             "[SCHEDULER] Iniciado - lembrete banca 1h | resolve picks 5min | "
-            "reconfere escanteios/cartoes 1h | "
+            "reconfere escanteios/cartoes 3h | "
             "pipeline diario (motor) ATIVADO 00:10 BR | homologacao DEV %s",
             "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativada (sem DB_HOST_DEV)",
         )
