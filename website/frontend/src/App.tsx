@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route, Navigate, useNavigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -18,7 +18,6 @@ const Admin          = lazy(() => import('./pages/Admin'))
 const Fixtures       = lazy(() => import('./pages/Fixtures'))
 const Landing        = lazy(() => import('./pages/Landing'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
-const ResetPassword  = lazy(() => import('./pages/ResetPassword'))
 const Profile        = lazy(() => import('./pages/Profile'))
 const Planos         = lazy(() => import('./pages/Planos'))
 const Agente         = lazy(() => import('./pages/Agente'))
@@ -96,7 +95,11 @@ const PageLoader = () => (
 
 function PrivateRoute({ children }: { children: JSX.Element }) {
   const { user } = useAuth()
-  if (!user) return <Navigate to="/login" replace />
+  const location = useLocation()
+  if (!user) {
+    const redirect = encodeURIComponent(location.pathname + location.search)
+    return <Navigate to={`/login?redirect=${redirect}`} replace />
+  }
   return children
 }
 
@@ -167,7 +170,6 @@ export default function App() {
                 <Route path="/banca/saque" element={<PrivateRoute><BancaSaque /></PrivateRoute>} />
                 <Route path="/meus-picks" element={<PrivateRoute><MeusPicks /></PrivateRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
-                <Route path="/reset-password" element={<ResetPassword />} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
                 <Route path="/privacidade" element={<Privacidade />} />
                 <Route path="/termos" element={<Termos />} />
