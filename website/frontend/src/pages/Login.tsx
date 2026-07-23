@@ -5,15 +5,7 @@ import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
 import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
-
-function getPasswordStrength(pwd: string): { score: number; checks: { label: string; ok: boolean }[] } {
-  const checks = [
-    { label: 'Mínimo 10 caracteres', ok: pwd.length >= 10 },
-    { label: 'Letra maiúscula',      ok: /[A-Z]/.test(pwd) },
-    { label: 'Número',               ok: /\d/.test(pwd) },
-  ]
-  return { score: checks.filter(c => c.ok).length, checks }
-}
+import { getPasswordStrength } from '../utils/passwordStrength'
 
 function formatCPF(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11)
@@ -186,7 +178,14 @@ export default function Login() {
         const msg = detail.map((e: any) => e.msg || e.message || String(e)).join('. ')
         setError(msg || 'Dados inválidos. Verifique os campos preenchidos.')
       } else if (detail) {
-        setError(String(detail))
+        const msg = String(detail)
+        // Cadastro so envia no passo 2, mas alguns erros do backend sao sobre
+        // campos do passo 1 (email/usuario) -- sem voltar, o erro aparece
+        // numa tela que nao tem o campo problematico visivel.
+        if (mode === 'register' && regStep === 2 && /email já cadastrado|usuário já em uso|usuário inválido/i.test(msg)) {
+          setRegStep(1)
+        }
+        setError(msg)
       } else if (!err.response) {
         setError('Não foi possível conectar ao servidor. Verifique sua conexão.')
       } else {

@@ -1,12 +1,13 @@
 import { useState, useRef, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Bell, BellOff } from 'lucide-react'
+import { Bell, BellOff, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { maskPhone } from '../utils/format'
+import { getPasswordStrength } from '../utils/passwordStrength'
 import BackButton from '../components/BackButton'
 
 interface ReferralData {
@@ -47,6 +48,21 @@ export default function Profile() {
   const [referral, setReferral]       = useState<ReferralData | null>(null)
   const [referralLoaded, setReferralLoaded] = useState(false)
   const [referralCopied, setReferralCopied] = useState(false)
+
+  const [showPasswordChange, setShowPasswordChange] = useState(false)
+  const [pwStep, setPwStep]                         = useState<'form' | 'code'>('form')
+  const [currentPassword, setCurrentPassword]       = useState('')
+  const [newPassword, setNewPassword]               = useState('')
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('')
+  const [pwCode, setPwCode]                         = useState('')
+  const [showCurrentPw, setShowCurrentPw]           = useState(false)
+  const [showNewPw, setShowNewPw]                   = useState(false)
+  const [passwordChanging, setPasswordChanging]     = useState(false)
+  const [passwordChangeErr, setPasswordChangeErr]   = useState('')
+  const [passwordChanged, setPasswordChanged]       = useState(false)
+
+  const [loggingOutOthers, setLoggingOutOthers] = useState(false)
+  const [loggedOutOthers, setLoggedOutOthers]   = useState(false)
 
   const [emailResending, setEmailResending] = useState(false)
   const [emailResent, setEmailResent]       = useState(false)
@@ -97,6 +113,56 @@ export default function Profile() {
     } finally {
       setEmailChanging(false)
     }
+  }
+
+  const handleRequestPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordChangeErr('')
+    if (newPassword !== newPasswordConfirm) { setPasswordChangeErr('As senhas não coincidem'); return }
+    const { score } = getPasswordStrength(newPassword)
+    if (score < 3) { setPasswordChangeErr('Senha deve ter no mínimo 10 caracteres, 1 letra maiúscula e 1 número'); return }
+    setPasswordChanging(true)
+    try {
+      await api.post('/auth/profile/password/request', { current_password: currentPassword, new_password: newPassword })
+      setPwStep('code')
+    } catch (err: any) {
+      setPasswordChangeErr(err?.response?.data?.detail || 'Erro ao solicitar troca de senha')
+    } finally {
+      setPasswordChanging(false)
+    }
+  }
+
+  const resetPasswordChangeState = () => {
+    setShowPasswordChange(false)
+    setPwStep('form')
+    setPasswordChangeErr('')
+    setCurrentPassword(''); setNewPassword(''); setNewPasswordConfirm(''); setPwCode('')
+  }
+
+  const handleConfirmPasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setPasswordChangeErr('')
+    setPasswordChanging(true)
+    try {
+      await api.post('/auth/profile/password/confirm', { code: pwCode })
+      setPasswordChanged(true)
+      resetPasswordChangeState()
+      setTimeout(() => setPasswordChanged(false), 3000)
+    } catch (err: any) {
+      setPasswordChangeErr(err?.response?.data?.detail || 'Código inválido ou expirado')
+    } finally {
+      setPasswordChanging(false)
+    }
+  }
+
+  const handleLogoutOtherSessions = async () => {
+    setLoggingOutOthers(true)
+    try {
+      await api.post('/auth/logout-other-sessions')
+      setLoggedOutOthers(true)
+      setTimeout(() => setLoggedOutOthers(false), 3000)
+    } catch { /* silent */ }
+    finally { setLoggingOutOthers(false) }
   }
 
   const copyReferralLink = () => {
@@ -329,16 +395,143 @@ export default function Profile() {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs text-zinc-500 font-semibold uppercase">Senha</p>
-              <p className="text-xs text-zinc-600 mt-0.5">Para alterar, use o link enviado por email</p>
+              <p className="text-xs text-zinc-600 mt-0.5">
+                {passwordChanged ? <span className="text-green-400">Senha alterada!</span> : 'Troque sua senha atual'}
+              </p>
             </div>
-            <button
-              type="button"
-              onClick={() => navigate('/forgot-password')}
-              className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-semibold border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg"
-            >
-              Alterar senha
-            </button>
+            {!showPasswordChange && (
+              <button
+                type="button"
+                onClick={() => setShowPasswordChange(true)}
+                className="text-xs text-blue-400 hover:text-blue-300 transition-colors font-semibold border border-blue-400/20 hover:border-blue-400/40 bg-blue-400/5 px-3 py-2 rounded-lg"
+              >
+                Alterar senha
+              </button>
+            )}
           </div>
+
+          {showPasswordChange && pwStep === 'form' && (
+            <div className="space-y-3">
+              <div className="relative">
+                <input
+                  type={showCurrentPw ? 'text' : 'password'}
+                  value={currentPassword}
+                  onChange={e => setCurrentPassword(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                  placeholder="Senha atual"
+                  autoComplete="current-password"
+                  required
+                  className="input w-full pr-10 text-sm"
+                />
+                <button type="button" onClick={() => setShowCurrentPw(v => !v)}
+                  aria-label={showCurrentPw ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type={showNewPw ? 'text' : 'password'}
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                  placeholder="Nova senha (mínimo 10 caracteres)"
+                  autoComplete="new-password"
+                  required
+                  className="input w-full pr-10 text-sm"
+                />
+                <button type="button" onClick={() => setShowNewPw(v => !v)}
+                  aria-label={showNewPw ? 'Ocultar senha' : 'Mostrar senha'}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+              {newPassword.length > 0 && (() => {
+                const { score, checks } = getPasswordStrength(newPassword)
+                const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
+                const labels    = ['Fraca', 'Boa', 'Forte']
+                const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                const label     = score > 0 ? labels[score - 1] : ''
+                return (
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-1.5">
+                      {[1, 2, 3].map(i => (
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                      ))}
+                      {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                      {checks.map(c => (
+                        <div key={c.label} className="flex items-center gap-1.5">
+                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })()}
+              <input
+                type={showNewPw ? 'text' : 'password'}
+                value={newPasswordConfirm}
+                onChange={e => setNewPasswordConfirm(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                placeholder="Confirme a nova senha"
+                autoComplete="new-password"
+                required
+                className="input w-full text-sm"
+              />
+              {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={handleRequestPasswordChange} disabled={passwordChanging}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  {passwordChanging ? 'Enviando…' : 'Enviar código de confirmação'}
+                </button>
+                <button type="button" onClick={resetPasswordChangeState}
+                  className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  Cancelar
+                </button>
+              </div>
+              <button type="button" onClick={() => navigate('/forgot-password')}
+                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline">
+                Esqueceu a senha atual? Redefinir por e-mail
+              </button>
+            </div>
+          )}
+
+          {showPasswordChange && pwStep === 'code' && (
+            <div className="space-y-3">
+              <p className="text-xs text-zinc-500">
+                Enviamos um código de 6 dígitos pra <span className="text-zinc-300 font-semibold">{user?.email}</span>. Ele expira em 15 minutos.
+              </p>
+              <input
+                type="text"
+                inputMode="numeric"
+                value={pwCode}
+                onChange={e => setPwCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                onKeyDown={e => { if (e.key === 'Enter') e.preventDefault() }}
+                placeholder="000000"
+                maxLength={6}
+                required
+                className="input w-full text-center text-lg font-bold tracking-widest"
+              />
+              {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
+              <div className="flex gap-2">
+                <button type="button" onClick={handleConfirmPasswordChange} disabled={passwordChanging || pwCode.length !== 6}
+                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  {passwordChanging ? 'Confirmando…' : 'Confirmar troca de senha'}
+                </button>
+                <button type="button" onClick={resetPasswordChangeState}
+                  className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  Cancelar
+                </button>
+              </div>
+              <button type="button" onClick={() => setPwStep('form')}
+                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline">
+                Voltar
+              </button>
+            </div>
+          )}
 
           {error      && <p className="text-red-400 text-xs">{error}</p>}
           {successMsg && <p className="text-green-400 text-xs">{successMsg}</p>}
@@ -352,6 +545,34 @@ export default function Profile() {
             </button>
           </div>
         </form>
+
+        {/* Sessão */}
+        <div className="card p-6 space-y-4">
+          <div>
+            <h2 className="text-sm font-black text-white">Sessão</h2>
+            <p className="text-zinc-500 text-xs mt-0.5">Você só pode estar logado em 1 dispositivo por vez</p>
+          </div>
+          {meData?.last_login_device && (
+            <p className="text-sm text-zinc-300">
+              Último login: <span className="font-semibold text-white">{meData.last_login_device}</span>
+              {meData.last_login_at && (
+                <span className="text-zinc-500">
+                  {' · '}
+                  {new Date(meData.last_login_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={handleLogoutOtherSessions}
+            disabled={loggingOutOthers}
+            className="w-full py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+          >
+            {loggingOutOthers ? 'Encerrando…' : loggedOutOthers ? 'Sessão encerrada!' : 'Encerrar outras sessões'}
+          </button>
+          <p className="text-zinc-600 text-xs">Use isso se suspeitar que esqueceu logado em outro aparelho.</p>
+        </div>
 
         {/* E-mail e verificação */}
         <div className="card p-6 space-y-4">
