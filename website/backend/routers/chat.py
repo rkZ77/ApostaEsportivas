@@ -17,6 +17,14 @@ _chat_rate: dict[str, list[float]] = defaultdict(list)
 _CHAT_LIMIT  = 10
 _CHAT_WINDOW = 60
 
+# Limite diário adicional só pro plano free (decisão do usuário: manter o chat
+# aberto pra todo mundo como "gostinho" da IA, mas sem deixar uma conta free
+# ilimitada bater o burst limit repetidamente o dia todo). VIP/trial/admin
+# seguem só com o burst limit acima.
+_chat_daily: dict[str, list[float]] = defaultdict(list)
+_CHAT_FREE_DAILY_LIMIT  = 20
+_CHAT_FREE_DAILY_WINDOW = 86400
+
 # Importação direta do pacote futebol_agent
 try:
     from futebol_agent.agent import run_agent
@@ -233,6 +241,16 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     if len(_chat_rate[uid]) >= _CHAT_LIMIT:
         raise HTTPException(429, f"Limite de {_CHAT_LIMIT} mensagens por minuto atingido. Aguarde.")
     _chat_rate[uid].append(now)
+
+    if current_user.get("plan") not in ("vip", "trial", "admin"):
+        _chat_daily[uid] = [t for t in _chat_daily[uid] if now - t < _CHAT_FREE_DAILY_WINDOW]
+        if len(_chat_daily[uid]) >= _CHAT_FREE_DAILY_LIMIT:
+            raise HTTPException(
+                429,
+                f"Limite de {_CHAT_FREE_DAILY_LIMIT} mensagens por dia atingido no plano Free. "
+                f"Assine o VIP para chat ilimitado.",
+            )
+        _chat_daily[uid].append(now)
 
     if not body.messages:
         raise HTTPException(400, "Nenhuma mensagem enviada")

@@ -3,13 +3,14 @@ import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
-import { translateMarket } from '../utils/marketTranslate'
+import { translateMarket, explainMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
-import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, explainResult, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
+import InfoTip from '../components/InfoTip'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -23,18 +24,36 @@ export default function MeusPicks() {
 
   const [data,       setData]       = useState<any>(null)
   const [loading,    setLoading]    = useState(true)
+  const [error,      setError]      = useState(false)
   const [tab,        setTab]        = useState<'pendentes' | 'resolvidos'>('pendentes')
   const [dayOffset,  setDayOffset]  = useState(0)
   const [detailPick,   setDetailPick]   = useState<{ id: number; pick_type: string } | null>(null)
   const [showRemoved,  setShowRemoved]  = useState(false)
   const [autoSwitched, setAutoSwitched] = useState(false)
+  const [loadingMore,  setLoadingMore]  = useState(false)
   const load = useCallback(() => {
     setLoading(true)
+    setError(false)
     api.get('/banca')
       .then(r => setData(r.data))
-      .catch(() => {})
+      .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
+
+  const loadMoreResolved = () => {
+    if (loadingMore || !data?.has_more_resolved) return
+    setLoadingMore(true)
+    const resolvedLoaded = (data.entries ?? []).filter((e: any) => e.result).length
+    api.get('/banca', { params: { resolved_offset: resolvedLoaded } })
+      .then(r => setData((prev: any) => {
+        if (!prev) return r.data
+        const existingIds = new Set(prev.entries.map((e: any) => e.id))
+        const merged = [...prev.entries, ...r.data.entries.filter((e: any) => !existingIds.has(e.id))]
+        return { ...prev, entries: merged, has_more_resolved: r.data.has_more_resolved }
+      }))
+      .catch(() => {})
+      .finally(() => setLoadingMore(false))
+  }
 
   useEffect(() => { load() }, [load])
 
@@ -168,6 +187,14 @@ export default function MeusPicks() {
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
             <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+          </div>
+        ) : error ? (
+          <div className="card p-10 text-center">
+            <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar seus picks</p>
+            <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+            <button onClick={load} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
+              Tentar novamente
+            </button>
           </div>
         ) : (
           <div className="space-y-4">
@@ -377,21 +404,25 @@ export default function MeusPicks() {
                                   </>
                                 )}
                               </div>
-                              <p className="text-xs text-zinc-600 truncate">
-                                {translateMarket(e.market) ?? ''}
-                                {e.line ? ` · ${e.line}` : ''}
-                                {e.actual_odd
-                                  ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
-                                  : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
-                              </p>
+                              <div className="flex items-center gap-1 min-w-0">
+                                <p className="text-xs text-zinc-600 truncate">
+                                  {translateMarket(e.market) ?? ''}
+                                  {e.line ? ` · ${e.line}` : ''}
+                                  {e.actual_odd
+                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                    : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
+                                </p>
+                                <InfoTip text={explainMarket(e.market, e.line)} className="shrink-0" />
+                              </div>
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
                               {e.result ? (() => {
                                 const rs = getResultStyle(e.result)
                                 return (
-                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                                  <span className={`flex items-center gap-1 text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
                                     {rs ? rs.label : e.result}
+                                    <InfoTip text={explainResult(e.result)} />
                                   </span>
                                 )
                               })() : (
@@ -436,6 +467,17 @@ export default function MeusPicks() {
                       className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
                     >Próx</button>
                   </div>
+                )}
+
+                {/* Carregar mais resolvidos do servidor · histórico cresce sem limite */}
+                {tab === 'resolvidos' && daysBack === 0 && data?.has_more_resolved && (
+                  <button
+                    onClick={loadMoreResolved}
+                    disabled={loadingMore}
+                    className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+                  >
+                    {loadingMore ? 'Carregando...' : 'Carregar apostas mais antigas'}
+                  </button>
                 )}
               </>
             )}

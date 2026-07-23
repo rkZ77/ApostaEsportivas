@@ -6,7 +6,7 @@ from pydantic import BaseModel
 from typing import Optional
 import psycopg2.extras
 from database import get_connection
-from auth_utils import get_current_user
+from auth_utils import get_current_user, is_vip_active
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/social", tags=["social"])
@@ -160,9 +160,16 @@ def delete_chat(msg_id: int, current_user: dict = Depends(get_current_user)):
 # ── reactions + comentários ───────────────────────────────────────────────────
 
 @router.get("/{pick_type}/{pick_id}")
-def get_social(pick_type: str, pick_id: int, current_user: dict = Depends(get_current_user)):
+def get_social(
+    pick_type: str, pick_id: int,
+    before_id: Optional[int] = None, limit: int = 30,
+    current_user: dict = Depends(get_current_user),
+):
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
+    if pick_type == "vip" and not is_vip_active(current_user):
+        raise HTTPException(403, "Acesso VIP necessário")
+    limit = min(max(limit, 1), 100)
 
     conn = _conn(); cur = _cur(conn)
     try:
@@ -180,16 +187,30 @@ def get_social(pick_type: str, pick_id: int, current_user: dict = Depends(get_cu
         """, (current_user["id"], pick_id, pick_type))
         user_reactions = [r["reaction"] for r in cur.fetchall()]
 
-        cur.execute("""
+        # Pagina por cursor (id) partindo do mais recente -- pede limit+1 pra
+        # saber se tem mais sem precisar de um COUNT(*) separado.
+        params: list = [pick_id, pick_type]
+        before_clause = ""
+        if before_id is not None:
+            before_clause = "AND id < %s"
+            params.append(before_id)
+        params.append(limit + 1)
+        cur.execute(f"""
             SELECT id, user_id, user_name, user_plan, user_avatar_url, content, created_at
             FROM pick_comments
-            WHERE pick_id = %s AND pick_type = %s
-            ORDER BY created_at ASC
-            LIMIT 200
-        """, (pick_id, pick_type))
-        comments = [dict(c) for c in cur.fetchall()]
+            WHERE pick_id = %s AND pick_type = %s {before_clause}
+            ORDER BY id DESC
+            LIMIT %s
+        """, params)
+        rows = [dict(c) for c in cur.fetchall()]
+        has_more = len(rows) > limit
+        rows = rows[:limit]
+        comments = [dict(c) for c in reversed(rows)]  # ordem cronológica pra exibição
 
-        return {"reactions": reactions, "user_reactions": user_reactions, "comments": comments}
+        return {
+            "reactions": reactions, "user_reactions": user_reactions,
+            "comments": comments, "has_more": has_more,
+        }
     finally:
         cur.close(); conn.close()
 
@@ -201,6 +222,8 @@ def toggle_reaction(pick_type: str, pick_id: int, body: ReactBody,
         raise HTTPException(400, "Tipo inválido")
     if body.reaction not in VALID_REACTIONS:
         raise HTTPException(400, "Reação inválida")
+    if pick_type == "vip" and not is_vip_active(current_user):
+        raise HTTPException(403, "Acesso VIP necessário")
 
     conn = _conn(); cur = _cur(conn)
     try:
@@ -245,6 +268,8 @@ def add_comment(pick_type: str, pick_id: int, body: CommentBody,
                 current_user: dict = Depends(get_current_user)):
     if pick_type not in VALID_PICK_TYPES:
         raise HTTPException(400, "Tipo inválido")
+    if pick_type == "vip" and not is_vip_active(current_user):
+        raise HTTPException(403, "Acesso VIP necessário")
     _check_comment_rate(current_user["id"])
 
     content = body.content.strip()

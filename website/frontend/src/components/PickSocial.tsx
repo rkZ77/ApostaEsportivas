@@ -59,23 +59,45 @@ interface SocialData {
   reactions: Record<string, number>
   user_reactions: string[]
   comments: Comment[]
+  has_more: boolean
 }
 
 export default function PickSocial({ pickId, pickType }: { pickId: number; pickType: string }) {
   const { user } = useAuth()
   const [data, setData]           = useState<SocialData | null>(null)
   const [loading, setLoading]     = useState(true)
+  const [fetchError, setFetchError] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
   const [newComment, setNewComment] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [error, setError]         = useState('')
 
-  useEffect(() => {
+  const load = () => {
     setLoading(true)
+    setFetchError(false)
     api.get(`/social/${pickType}/${pickId}`)
       .then(r => setData(r.data))
-      .catch(() => setData({ reactions: {}, user_reactions: [], comments: [] }))
+      .catch(() => setFetchError(true))
       .finally(() => setLoading(false))
-  }, [pickId, pickType])
+  }
+
+  useEffect(load, [pickId, pickType])
+
+  const loadOlderComments = async () => {
+    if (!data?.comments.length || loadingMore) return
+    setLoadingMore(true)
+    try {
+      const oldestId = data.comments[0].id
+      const r = await api.get(`/social/${pickType}/${pickId}`, { params: { before_id: oldestId } })
+      setData(prev => prev ? {
+        ...prev,
+        comments: [...r.data.comments, ...prev.comments],
+        has_more: r.data.has_more,
+      } : prev)
+    } catch {} finally {
+      setLoadingMore(false)
+    }
+  }
 
   const toggleReaction = async (reaction: string) => {
     if (!data) return
@@ -118,6 +140,16 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
   if (loading) return (
     <div className="flex justify-center py-8">
       <div className="w-6 h-6 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+    </div>
+  )
+
+  if (fetchError) return (
+    <div className="text-center py-8">
+      <p className="text-zinc-500 text-sm font-semibold mb-1">Erro ao carregar reações e comentários</p>
+      <p className="text-zinc-600 text-xs mb-3">Não foi possível conectar ao servidor.</p>
+      <button onClick={load} className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors">
+        Tentar novamente
+      </button>
     </div>
   )
 
@@ -190,6 +222,15 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
           </div>
         ) : (
           <div className="space-y-3">
+            {data.has_more && (
+              <button
+                onClick={loadOlderComments}
+                disabled={loadingMore}
+                className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+              >
+                {loadingMore ? 'Carregando...' : 'Carregar comentários anteriores'}
+              </button>
+            )}
             {data.comments.map(c => (
               <div key={c.id} className="flex gap-2.5">
                 <Avatar name={c.user_name} imageUrl={c.user_avatar_url} size="sm" className="shrink-0 mt-0.5" />
