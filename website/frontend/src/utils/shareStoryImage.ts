@@ -252,14 +252,15 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 // Os cards são desenhados de cima pra baixo e paravam onde o conteúdo
 // acabava, deixando 35-40% do canvas (formato Story, 1080x1920) vazio embaixo
 // -- achado real comparando as 4 variações renderizadas. FOOTER_HEIGHT é a
-// altura fixa do bloco final (pill + botão de domínio) desenhado por
-// drawCtaFooter/buildStoryImage; CREDIT_Y é onde a linha de crédito no rodapé
-// fica ancorada (sempre no mesmo lugar, não desloca). computeShiftY calcula
-// quanto dá pra empurrar o conteúdo pra baixo (metade do espaço sobrando,
-// com teto) sem chegar perto da linha de crédito -- cards com pouco conteúdo
-// (ex: resultado geral) ganham mais respiro; cards com muita linha (ex: 8
-// jogos de hoje) já preenchem o quadro e não são deslocados.
-const FOOTER_HEIGHT = 58 + 48 + 112
+// altura fixa do bloco final (pill + instrução "Acesse agora:" + botão de
+// domínio) desenhado por drawCtaFooter/buildStoryImage; CREDIT_Y é onde a
+// linha de crédito no rodapé fica ancorada (sempre no mesmo lugar, não
+// desloca). computeShiftY calcula quanto dá pra empurrar o conteúdo pra
+// baixo (metade do espaço sobrando, com teto) sem chegar perto da linha de
+// crédito -- cards com pouco conteúdo (ex: resultado geral) ganham mais
+// respiro; cards com muita linha (ex: 8 jogos de hoje) já preenchem o
+// quadro e não são deslocados.
+const FOOTER_HEIGHT = 58 + 48 + 48 + 112
 const CREDIT_Y = H - 60
 function computeShiftY(contentBottomUnshifted: number): number {
   const slack = Math.max(0, (CREDIT_Y - 100) - contentBottomUnshifted)
@@ -301,6 +302,14 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
   ctx.fillStyle = '#04140a'
   ctx.fillText(pillLabel, W / 2, cursorY + 39)
   cursorY += 58 + 48
+
+  // Instrução curta acima do link -- sem isso, quem vê o card fora do
+  // Instagram (TikTok, print repostado, sem sticker de link clicável) não
+  // sabe que precisa digitar o endereço no navegador.
+  ctx.font = '700 26px system-ui, -apple-system, sans-serif'
+  ctx.fillStyle = '#a1a1aa'
+  ctx.fillText('Acesse agora:', W / 2, cursorY)
+  cursorY += 48
 
   const displayDomain = (() => {
     try { return new URL(shareUrl).hostname.replace(/^www\./, '') }
