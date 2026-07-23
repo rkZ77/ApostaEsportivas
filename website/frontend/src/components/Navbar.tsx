@@ -72,8 +72,8 @@ export default function Navbar() {
           <Link to="/picks" className="flex items-center gap-3">
             <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
             <div className="hidden sm:block">
-              <span className="text-white font-black text-lg tracking-tight">Pick</span>
-              <span className="text-green-500 font-black text-lg">IA</span>
+              <span className="font-display text-white font-semibold text-lg tracking-tight">Pick</span>
+              <span className="font-display text-green-500 font-semibold text-lg">IA</span>
             </div>
           </Link>
 
@@ -123,7 +123,7 @@ export default function Navbar() {
               {profileOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900 border border-zinc-800 rounded-2xl shadow-xl z-50 overflow-hidden">
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-50 overflow-hidden">
                     <div className="px-4 py-3 border-b border-zinc-800">
                       <p className="text-white text-sm font-bold truncate">{user?.name}</p>
                       <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
@@ -209,8 +209,8 @@ export default function Navbar() {
         {/* Sidebar header */}
         <div className="flex items-center justify-between px-5 h-16 border-b border-zinc-800">
           <div className="flex items-center gap-2">
-            <span className="text-white font-black text-lg tracking-tight">Pick</span>
-            <span className="text-green-500 font-black text-lg">IA</span>
+            <span className="font-display text-white font-semibold text-lg tracking-tight">Pick</span>
+            <span className="font-display text-green-500 font-semibold text-lg">IA</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-zinc-400 hover:text-white p-1">
             <X className="w-5 h-5" />
