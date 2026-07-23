@@ -13,7 +13,7 @@ import LivePicks from '../components/LivePicks'
 import CountdownTo7AM from '../components/CountdownTo7AM'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { getResultStyle, explainResult, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
@@ -415,9 +415,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
           )}
         </div>
         {resultStyle ? (
-          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
-            <InfoTip text={explainResult(dica.result)} />
           </span>
         ) : isLive ? (
           <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
@@ -712,9 +711,8 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           )}
         </div>
         {resultStyle ? (
-          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
-            <InfoTip text={explainResult(m.result)} />
           </span>
         ) : isLive ? (
           <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
@@ -986,9 +984,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
           {isCombo && <span className="text-[10px] text-blue-400 border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 rounded-md font-bold">{comboLabel}</span>}
         </div>
         {resultStyle ? (
-          <span className={`flex items-center gap-1 text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
+          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
             {resultStyle.label} {resultStyle.emoji}
-            <InfoTip text={explainResult(pick.result)} />
           </span>
         ) : isLive ? (
           <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">

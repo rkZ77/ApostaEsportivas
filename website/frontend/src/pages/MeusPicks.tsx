@@ -7,7 +7,7 @@ import { translateMarket, explainMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
-import { getResultStyle, explainResult, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
 import InfoTip from '../components/InfoTip'
@@ -420,9 +420,8 @@ export default function MeusPicks() {
                               {e.result ? (() => {
                                 const rs = getResultStyle(e.result)
                                 return (
-                                  <span className={`flex items-center gap-1 text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
                                     {rs ? rs.label : e.result}
-                                    <InfoTip text={explainResult(e.result)} />
                                   </span>
                                 )
                               })() : (
