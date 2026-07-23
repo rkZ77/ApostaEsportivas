@@ -475,12 +475,13 @@ export interface TodayGameItem {
   homeTeamId?: number | null
   awayTeamId?: number | null
   leagueName?: string
-  matchDatetime: string
 }
 
 export interface TodayGamesStoryInput {
   games: TodayGameItem[]
   shareUrl: string
+  /** 'hoje' (picks já saíram, IA já analisou) ou 'amanha' (prévia, picks saem só amanhã de manhã). Default: 'hoje'. */
+  variant?: 'hoje' | 'amanha'
 }
 
 export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Promise<Blob> {
@@ -519,7 +520,9 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
 
   let cursorY = brandY + 56
   ctx.font = '800 28px system-ui, -apple-system, sans-serif'
-  const badgeLabel = 'JOGOS DE HOJE · A IA VAI ANALISAR'
+  const badgeLabel = input.variant === 'amanha'
+    ? 'JOGOS DE AMANHÃ · A IA VAI ANALISAR'
+    : 'JOGOS DE HOJE · A IA JÁ ANALISOU'
   const badgeTextW = ctx.measureText(badgeLabel).width
   const badgeW = badgeTextW + 72
   drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 60, 30)
@@ -550,25 +553,33 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
     ctx.lineWidth = 1.5
     ctx.stroke()
 
-    const midY = rowY + (rowH - 16) / 2
+    const boxHalf = (rowH - 16) / 2
+    const midY = rowY + boxHalf
     drawCircularLogo(ctx, homeLogo, 70 + 70, midY, logoSize)
     drawCircularLogo(ctx, awayLogo, W - 70 - 70, midY, logoSize)
 
+    // Posições proporcionais à altura real da caixa (não fixas) -- com
+    // valores fixos, o nome da liga estourava pra fora da caixa (achado
+    // real comparando com >6 jogos no card, onde a caixa é mais baixa).
+    const nameFont   = games.length > 6 ? '800 26px' : '800 30px'
+    const vsFont     = games.length > 6 ? '600 20px' : '600 24px'
+    const leagueFont = games.length > 6 ? '600 17px' : '600 20px'
+
     ctx.textAlign = 'center'
-    ctx.font = '800 30px system-ui, -apple-system, sans-serif'
+    ctx.font = `${nameFont} system-ui, -apple-system, sans-serif`
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitText(ctx, g.homeTeamName, 300), W / 2, midY - 14)
-    ctx.font = '600 24px system-ui, -apple-system, sans-serif'
+    ctx.fillText(fitText(ctx, g.homeTeamName, 300), W / 2, midY - boxHalf * 0.62)
+    ctx.font = `${vsFont} system-ui, -apple-system, sans-serif`
     ctx.fillStyle = '#52525b'
-    ctx.fillText('vs', W / 2, midY + 20)
-    ctx.font = '800 30px system-ui, -apple-system, sans-serif'
+    ctx.fillText('vs', W / 2, midY - boxHalf * 0.04)
+    ctx.font = `${nameFont} system-ui, -apple-system, sans-serif`
     ctx.fillStyle = '#ffffff'
-    ctx.fillText(fitText(ctx, g.awayTeamName, 300), W / 2, midY + 54)
+    ctx.fillText(fitText(ctx, g.awayTeamName, 300), W / 2, midY + boxHalf * 0.5)
 
     if (g.leagueName) {
-      ctx.font = '600 20px system-ui, -apple-system, sans-serif'
+      ctx.font = `${leagueFont} system-ui, -apple-system, sans-serif`
       ctx.fillStyle = '#71717a'
-      ctx.fillText(fitText(ctx, g.leagueName, 260), W / 2, midY + 78)
+      ctx.fillText(fitText(ctx, g.leagueName, 260), W / 2, midY + boxHalf * 0.86)
     }
   })
 
