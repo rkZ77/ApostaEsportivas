@@ -136,6 +136,18 @@ def _job_resolve_picks(logger: logging.Logger):
         logger.error("[SCHEDULER] Erro em resolve_picks: %s", e)
 
 
+def _job_reverify_stats(logger: logging.Logger):
+    try:
+        from routers.live import reverify_recent_stats_results
+
+        result = reverify_recent_stats_results()
+        if result["corrected"]:
+            logger.warning("[SCHEDULER] Resultados corrigidos por revisao tardia do provedor: %s",
+                            result["corrected"])
+    except Exception as e:
+        logger.error("[SCHEDULER] Erro em reverify_stats: %s", e)
+
+
 def _job_run_daily_pipeline(logger: logging.Logger):
     try:
         from routers.admin import _pipeline_status, _run_tudo
@@ -189,6 +201,7 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler = BackgroundScheduler()
         scheduler.add_job(lambda: _job_banca_reminder(logger), "interval", hours=1, id="banca_reminder")
         scheduler.add_job(lambda: _job_resolve_picks(logger), "interval", minutes=5, id="resolve_picks")
+        scheduler.add_job(lambda: _job_reverify_stats(logger), "interval", hours=1, id="reverify_stats")
         # Pipeline diario de geracao de picks (00:10 BR) -- ficou pausado desde o
         # corte de IA em producao (2026-07-17), porque na epoca _run_tudo() ainda
         # chamava os scripts de IA antigos. Agora que routers.admin::_PIPELINE_SCRIPTS
@@ -212,6 +225,7 @@ def start_background_scheduler(logger: logging.Logger) -> None:
         scheduler.start()
         logger.info(
             "[SCHEDULER] Iniciado - lembrete banca 1h | resolve picks 5min | "
+            "reconfere escanteios/cartoes 1h | "
             "pipeline diario (motor) ATIVADO 00:10 BR | homologacao DEV %s",
             "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativada (sem DB_HOST_DEV)",
         )
