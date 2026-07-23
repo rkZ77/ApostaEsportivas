@@ -119,21 +119,29 @@ export function useShareResultsImage() {
   return { share, sharing, shared, error }
 }
 
-/** Compartilha os jogos de hoje que a IA vai analisar (antes dos resultados sairem). */
+/**
+ * Compartilha os jogos que a IA vai analisar (ou já analisou) hoje/amanhã.
+ * 'hoje': picks já saíram às 7h, texto no passado. 'amanha': prévia, picks
+ * só saem no dia seguinte, texto no futuro.
+ */
 export function useShareTodayGamesImage() {
   const [sharing, setSharing] = useState(false)
   const [shared, setShared] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const share = async (games: TodayGameItem[]) => {
+  const share = async (games: TodayGameItem[], variant: 'hoje' | 'amanha' = 'hoje') => {
     setSharing(true)
     setError(null)
     try {
       const refCode = await getReferralCode()
       const shareUrl = `${window.location.origin}/${refCode ? `?ref=${refCode}` : ''}`
-      const blob = await buildTodayGamesStoryImage({ games, shareUrl })
-      const text = `A IA da Pick IA vai analisar ${games.length} jogo(s) hoje. Vem ver.`
-      await dispatchShare(blob, 'pick-ia-jogos-hoje.png', 'Pick IA · Jogos de hoje', text, shareUrl)
+      const blob = await buildTodayGamesStoryImage({ games, shareUrl, variant })
+      const text = variant === 'amanha'
+        ? `A IA da Pick IA vai analisar ${games.length} jogo(s) amanhã. Os picks saem às 7h.`
+        : `A IA da Pick IA já analisou ${games.length} jogo(s) de hoje e os picks já estão no ar.`
+      const filename = variant === 'amanha' ? 'pick-ia-jogos-amanha.png' : 'pick-ia-jogos-hoje.png'
+      const title = variant === 'amanha' ? 'Pick IA · Jogos de amanhã' : 'Pick IA · Jogos de hoje'
+      await dispatchShare(blob, filename, title, text, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {
