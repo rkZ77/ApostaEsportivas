@@ -54,6 +54,72 @@ interface PublicData {
 // Helpers
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
+// Jogos que a IA vai analisar · lista real (nao um contador abstrato) dos proximos
+// jogos nas ligas cobertas. Tenta hoje primeiro, cai pro proximo dia com jogo se
+// hoje estiver vazio (fallback simples, sem a busca de 7 dias do CountdownTo7AM).
+interface UpcomingFixture {
+  fixture_id: number
+  home_team: string; away_team: string
+  home_team_id?: number; away_team_id?: number
+  league_name: string
+  match_datetime: string
+}
+function NextGamesPreview() {
+  const [games, setGames] = useState<UpcomingFixture[] | null>(null)
+  const [dateLabel, setDateLabel] = useState<string>('')
+
+  useEffect(() => {
+    const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const fetchDay = (offset: number): Promise<UpcomingFixture[]> => {
+      const d = new Date()
+      d.setDate(d.getDate() + offset)
+      return api.get('/fixtures/today', { params: offset === 0 ? {} : { date: isoDate(d) } })
+        .then(r => (r.data ?? []) as UpcomingFixture[])
+        .catch(() => [] as UpcomingFixture[])
+    }
+    (async () => {
+      for (let offset = 0; offset <= 3; offset++) {
+        const found = await fetchDay(offset)
+        if (found.length > 0) {
+          const d = new Date()
+          d.setDate(d.getDate() + offset)
+          setDateLabel(offset === 0 ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }))
+          setGames(found.slice(0, 5))
+          return
+        }
+      }
+      setGames([])
+    })()
+  }, [])
+
+  if (!games || games.length === 0) return null
+
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        <span className="text-green-400 font-bold font-mono text-xs">Jogos que a IA analisa · {dateLabel}</span>
+      </div>
+      <div className="space-y-1.5">
+        {games.map(g => (
+          <div key={g.fixture_id} className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2 font-mono">
+            <span className="text-[11px] text-zinc-500 tabular-nums shrink-0 w-9">
+              {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+            </span>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 text-xs text-zinc-200">
+              <TeamLogo id={g.home_team_id} name={g.home_team} />
+              <span className="truncate">{g.home_team}</span>
+              <span className="text-zinc-600 shrink-0">x</span>
+              <TeamLogo id={g.away_team_id} name={g.away_team} />
+              <span className="truncate">{g.away_team}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
 // So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
 // mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
@@ -474,7 +540,8 @@ function FreePickTeaserCard() {
 function FreePickTeaser() {
   return (
     <section className="py-14 md:hidden">
-      <div className="max-w-2xl mx-auto px-4">
+      <div className="max-w-2xl mx-auto px-4 space-y-6">
+        <NextGamesPreview />
         <FreePickTeaserCard />
       </div>
     </section>
@@ -550,47 +617,6 @@ function LeaderboardTeaser() {
         </div>
       </div>
     </section>
-  )
-}
-
-// ── Bastidores da IA ─────────────────────────────────────────────────────
-const BAST = [
-  { text: 'Coletando dados dos jogos...', val: 'jogos do dia' },
-  { text: 'Analisando estatísticas...', val: '18.412 dados' },
-  { text: 'Calculando valor esperado (EV)...', val: 'edge positivo' },
-  { text: 'Validando confiança mínima...', val: '≥ 60%' },
-  { text: 'Gerando picks do dia...', val: '' },
-]
-function BastidoresAnimation() {
-  const [step, setStep] = useState(0)
-  const [picks, setPicks] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setStep(s => (s + 1) % BAST.length), 1100)
-    return () => clearInterval(t)
-  }, [])
-  useEffect(() => {
-    if (step !== BAST.length - 1) { setPicks(0); return }
-    let n = 0
-    const t = setInterval(() => { n++; setPicks(n); if (n >= 4) clearInterval(t) }, 220)
-    return () => clearInterval(t)
-  }, [step])
-  return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5 font-mono text-xs space-y-2">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-        <span className="text-green-400 font-bold">Pick IA Engine · rodando agora</span>
-      </div>
-      {BAST.map(({ text, val }, i) => (
-        <div key={i} className={`flex items-center justify-between gap-2 transition-all duration-300 ${i <= step ? 'opacity-100' : 'opacity-15'}`}>
-          <span className={i < step ? 'text-zinc-500' : i === step ? 'text-white' : 'text-zinc-700'}>
-            <span className="text-green-500 mr-1.5">{i < step ? '✓' : i === step ? '>' : ' '}</span>{text}
-          </span>
-          <span className="text-green-400 shrink-0 text-[10px]">
-            {i < step ? val : (i === step && step === BAST.length - 1 && picks > 0) ? `${picks} picks` : ''}
-          </span>
-        </div>
-      ))}
-    </div>
   )
 }
 
@@ -708,7 +734,7 @@ export default function Landing() {
                 ))}
               </h1>
 
-              <p className="text-zinc-400 text-base leading-relaxed mb-8">
+              <p className="text-zinc-400 text-base leading-relaxed mb-5">
                 A IA analisa cada jogo do Brasileirão e da Premier League com estatística real,
                 forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
                 toda manhã. De graça pra começar.
@@ -727,17 +753,12 @@ export default function Landing() {
               <SocialProofStats />
             </div>
 
-            {/* Engine rodando ao vivo + Dica do Dia real -- preenche a coluna,
+            {/* Jogos reais que a IA analisa + Dica do Dia real -- preenche a coluna,
                 nao mockado. So desktop; no mobile o FreePickTeaser (secao cheia
                 logo abaixo do hero) cobre o mesmo conteudo pra quem acessa
                 por Android/Safari web. */}
             <div className="hidden md:flex md:flex-col md:gap-6">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-br from-green-500/10 to-yellow-400/10 rounded-3xl blur-xl" />
-                <div className="relative">
-                  <BastidoresAnimation />
-                </div>
-              </div>
+              <NextGamesPreview />
               <FreePickTeaserCard />
             </div>
           </div>
