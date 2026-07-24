@@ -54,12 +54,14 @@ interface PublicData {
 // Helpers
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
-// Ticker ao vivo · fita de dados reais rolando, no lugar do badge de pilula "ao vivo"
+// Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
+// So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
+// mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
 function LiveTicker() {
   const [items, setItems] = useState<RecentTip[]>([])
   useEffect(() => {
-    api.get('/public/results')
-      .then(r => setItems((r.data?.recent ?? []).slice(0, 8)))
+    api.get('/public/results', { params: { recent_limit: 50 } })
+      .then(r => setItems((r.data?.recent ?? []).filter((t: RecentTip) => t.result === 'GREEN').slice(0, 12)))
       .catch(() => {})
   }, [])
 
