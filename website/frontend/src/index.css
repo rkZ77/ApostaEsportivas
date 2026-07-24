@@ -52,19 +52,9 @@
            focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all;
   }
 
-  /* Tags em texto com borda, estilo terminal ("[ VIP ]") no lugar de pilulas coloridas */
+  /* Tags em texto com borda, estilo terminal, no lugar de pilulas coloridas */
   .badge-vip, .badge-free, .badge-admin, .badge-trial, .badge-green, .badge-red {
     @apply inline-flex items-center font-mono text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm border;
-  }
-  .badge-vip::before, .badge-free::before, .badge-admin::before, .badge-trial::before, .badge-green::before, .badge-red::before {
-    content: '[';
-    opacity: 0.45;
-    margin-right: 2px;
-  }
-  .badge-vip::after, .badge-free::after, .badge-admin::after, .badge-trial::after, .badge-green::after, .badge-red::after {
-    content: ']';
-    opacity: 0.45;
-    margin-left: 2px;
   }
   .badge-vip {
     @apply bg-yellow-400/5 text-yellow-400 border-yellow-400/30;
