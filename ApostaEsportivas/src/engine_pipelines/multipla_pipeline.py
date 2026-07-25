@@ -59,9 +59,15 @@ def _create_table_if_needed(cur):
     # pipeline (achado real 2026-07-25: duplicata identica gerada com 2.5s
     # de diferenca porque o check em Python e' select-then-insert, corrida
     # entre processos passa por cima dele).
+    # PARCIAL de proposito (so' multipla_name='MULTIPLA_ENGINE'): historico
+    # anterior a 2026-07-17 tem MULTIPLA_1/MULTIPLA_2 legitimos no mesmo
+    # match_date (2 slots do sistema antigo de IA, nao duplicata) -- indice
+    # global quebraria contra esse historico real (achado ao rodar a
+    # migracao em prod: 12 datas de junho "falharam" o indice global antes
+    # dessa correcao, todas dado legitimo, nao duplicata).
     cur.execute("""
         CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique
-        ON picks_multiplas (match_date);
+        ON picks_multiplas (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE';
     """)
 
 
@@ -228,7 +234,7 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
         INSERT INTO picks_multiplas
         (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-        ON CONFLICT (match_date) DO NOTHING
+        ON CONFLICT (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE' DO NOTHING
     """, (
         "MULTIPLA_ENGINE",
         json.dumps(games_info, default=str),

@@ -53,7 +53,13 @@ def run_migrations():
         # Python e' select-then-insert e nao pega corrida entre 2 execucoes
         # concorrentes -- so um indice unico no banco impede de verdade,
         # ON CONFLICT no INSERT absorve a segunda tentativa sem erro).
-        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique ON picks_multiplas (match_date);",
+        # PARCIAL de proposito (so' multipla_name='MULTIPLA_ENGINE'): o
+        # historico anterior a 2026-07-17 tem MULTIPLA_1 e MULTIPLA_2
+        # LEGITIMOS no mesmo match_date (2 slots do sistema antigo baseado
+        # em IA, nao duplicata) -- indice global quebraria contra esse
+        # historico real. So o motor novo (1 multipla/dia por design) precisa
+        # da trava.
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique ON picks_multiplas (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE';",
         # Fase 1.6 do plano de implementacao (2026-07-25): flag manual de
         # mudanca estrutural (troca de tecnico/elenco relevante) -- jogos
         # anteriores a essa data saem do historico usado pra taxa (ver
