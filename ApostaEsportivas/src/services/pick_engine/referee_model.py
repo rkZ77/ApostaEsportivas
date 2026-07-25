@@ -8,10 +8,13 @@ com o contexto de jogo (pressao de tabela + intensidade tatica dos times),
 nao so o historico do arbitro isolado."""
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
-# Media tipica de cartoes amarelos por jogo de um arbitro -- ponto neutro do
-# delta abaixo, mesmo espirito de referencia que _CONVERSION_BASELINE usa em
-# team_profile_model.py (nao um "ajuste" arbitrario, so' o ponto zero).
-_REFEREE_YELLOW_BASELINE = 3.8
+# Baseline de "pontos de cartao" tipicos por jogo de um arbitro (amarelo=1,
+# vermelho=2 -- mesma convencao de _cards_points em stats_model.py, ver
+# comentario la pro bug real que isso corrige). 3.8 amarelos + ~0.15
+# vermelhos*2 = ~4.1 -- ponto neutro do delta abaixo, mesmo espirito de
+# referencia que _CONVERSION_BASELINE usa em team_profile_model.py (nao um
+# "ajuste" arbitrario, so' o ponto zero).
+_REFEREE_CARD_POINTS_BASELINE = 4.1
 
 
 def referee_signal(referee_stats: dict | None, config: PickEngineConfig = DEFAULT_CONFIG) -> dict:
@@ -73,10 +76,19 @@ def game_intensity(context_data: dict | None, matchup_data: dict | None, referee
         components["table_pressure"] = table_labels
 
     if referee.get("reliable") and referee.get("avg_yellow") is not None:
-        diff = referee["avg_yellow"] - _REFEREE_YELLOW_BASELINE
+        # vermelho entra com peso 2 (mesma convencao de _cards_points) --
+        # antes so' amarelo contava, entao um arbitro com media de vermelho
+        # alta mas amarelo normal saia classificado "morno"/"frio" na
+        # intensidade de cartoes, quando na pratica os jogos dele tem mais
+        # cartao no total (pedido explicito do usuario, 2026-07-25).
+        avg_red = referee.get("avg_red") or 0.0
+        avg_card_points = referee["avg_yellow"] + 2 * avg_red
+        diff = avg_card_points - _REFEREE_CARD_POINTS_BASELINE
         score += max(min(diff * 0.05, 0.15), -0.15)
         components["referee_avg_yellow"] = referee["avg_yellow"]
-        components["referee_baseline"] = _REFEREE_YELLOW_BASELINE
+        components["referee_avg_red"] = avg_red
+        components["referee_avg_card_points"] = round(avg_card_points, 3)
+        components["referee_baseline"] = _REFEREE_CARD_POINTS_BASELINE
 
     score = round(max(min(score, 1.0), 0.0), 4)
     if score >= 0.65:

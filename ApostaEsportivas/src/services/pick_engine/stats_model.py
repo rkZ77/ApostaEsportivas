@@ -234,10 +234,32 @@ def classify_market(market_name: str):
     return None
 
 
+def _cards_points(m: dict, scope: str) -> float:
+    """Pontuacao de cartoes de uma partida: amarelo vale 1, vermelho vale 2
+    -- mesma convencao que ai_result_checker_service.py ja usa pra gradear
+    o resultado real (e convencao padrao de mercado "Total de Cartoes" nas
+    casas de aposta). Bug real corrigido 2026-07-25: _FAMILY_STAT_FIELDS
+    ["cards"] apontava so pra total_yellow_cards, entao a taxa historica
+    NUNCA via cartao vermelho -- picks de "Cartoes Under" saiam com taxa
+    inflada (rodando o motor contra dados reais: taxa "real" de 69% pra
+    Under 5.5 que, contando vermelho como o jogo de verdade conta, era na
+    prática ~40-50%)."""
+    if scope == "home":
+        return (m.get("home_yellow_cards") or 0) + 2 * (m.get("home_red_cards") or 0)
+    if scope == "away":
+        return (m.get("away_yellow_cards") or 0) + 2 * (m.get("away_red_cards") or 0)
+    return (
+        (m.get("home_yellow_cards") or 0) + (m.get("away_yellow_cards") or 0)
+        + 2 * ((m.get("home_red_cards") or 0) + (m.get("away_red_cards") or 0))
+    )
+
+
 def _extract_stat(m: dict, family: str, scope: str):
     """Le o valor real de uma familia/escopo num jogo historico, somando
     home+away quando a familia nao tem coluna 'total_X' pronta
     (shots/offsides)."""
+    if family == "cards":
+        return _cards_points(m, scope)
     fields = _FAMILY_STAT_FIELDS[family]
     if scope in ("home", "away"):
         return m.get(fields[scope]) or 0
@@ -456,19 +478,35 @@ def handicap_taxa(family: str, side: str, handicap: float, last10_home: list, la
     field) e combina os dois pools do mesmo jeito de outcome_taxa: o
     mesmo hit_fn mede, no pool casa, a tendencia do mandante atual, e no
     pool fora, a tendencia do adversario historico do visitante atual."""
-    if family not in _FAMILY_STAT_FIELDS or side not in ("home", "away"):
-        return None
-    fields = _FAMILY_STAT_FIELDS[family]
-    home_f, away_f = fields["home"], fields["away"]
-    if not home_f or not away_f:
+    if side not in ("home", "away"):
         return None
 
-    def hit_fn(m):
-        h = m.get(home_f) or 0
-        a = m.get(away_f) or 0
-        if side == "home":
-            return 1 if (h + handicap) > a else 0
-        return 1 if (a + handicap) > h else 0
+    if family == "cards":
+        # Cartoes usa _cards_points (amarelo=1, vermelho=2) em vez do campo
+        # bruto do dict -- mesmo motivo de _extract_stat acima, esta funcao
+        # NAO passava por ali (lia home_f/away_f direto), entao o bug de
+        # ignorar vermelho continuava valendo pra handicap_cards mesmo
+        # depois do fix em _extract_stat.
+        def hit_fn(m):
+            h = _cards_points(m, "home")
+            a = _cards_points(m, "away")
+            if side == "home":
+                return 1 if (h + handicap) > a else 0
+            return 1 if (a + handicap) > h else 0
+    else:
+        if family not in _FAMILY_STAT_FIELDS:
+            return None
+        fields = _FAMILY_STAT_FIELDS[family]
+        home_f, away_f = fields["home"], fields["away"]
+        if not home_f or not away_f:
+            return None
+
+        def hit_fn(m):
+            h = m.get(home_f) or 0
+            a = m.get(away_f) or 0
+            if side == "home":
+                return 1 if (h + handicap) > a else 0
+            return 1 if (a + handicap) > h else 0
 
     rate_home = weighted_rate(last10_home, hit_fn, reference_date, config)
     rate_away = weighted_rate(last10_away, hit_fn, reference_date, config)
@@ -632,9 +670,17 @@ def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str):
     jogos passados bateram a linha."""
     if not matches or family not in _SCORED_CONCEDED_FIELDS:
         return None, None
+    n = len(matches)
+    if family == "cards":
+        # amarelo=1, vermelho=2 (ver _cards_points) -- mesma correcao do
+        # bug de vermelho ignorado, aqui pro sinal de convergencia feitos
+        # x cedidos em vez da taxa em si.
+        scored_side, conceded_side = ("home", "away") if is_home_ctx else ("away", "home")
+        scored = sum(_cards_points(m, scored_side) for m in matches) / n
+        conceded = sum(_cards_points(m, conceded_side) for m in matches) / n
+        return round(scored, 3), round(conceded, 3)
     home_f, away_f = _SCORED_CONCEDED_FIELDS[family]
     scored_k, conceded_k = (home_f, away_f) if is_home_ctx else (away_f, home_f)
-    n = len(matches)
     scored = sum((m.get(scored_k) or 0) for m in matches) / n
     conceded = sum((m.get(conceded_k) or 0) for m in matches) / n
     return round(scored, 3), round(conceded, 3)

@@ -54,6 +54,15 @@ def _create_table_if_needed(cur):
             created_at    TIMESTAMP DEFAULT NOW()
         );
     """)
+    # Indice unico: no maximo 1 multipla por dia, mesma regra de negocio de
+    # _has_today_multipla() -- backstop contra 2 execucoes concorrentes do
+    # pipeline (achado real 2026-07-25: duplicata identica gerada com 2.5s
+    # de diferenca porque o check em Python e' select-then-insert, corrida
+    # entre processos passa por cima dele).
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique
+        ON picks_multiplas (match_date);
+    """)
 
 
 def _has_today_multipla(cur) -> bool:
@@ -211,6 +220,7 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
         INSERT INTO picks_multiplas
         (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning)
         VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        ON CONFLICT (match_date) DO NOTHING
     """, (
         "MULTIPLA_ENGINE",
         json.dumps(games_info, default=str),
