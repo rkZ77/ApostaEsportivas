@@ -50,6 +50,12 @@ const MARKET_PT: Record<string, string> = {
   'anytime goalscorer': 'Marcar a Qualquer Tempo',
   'result': 'Resultado',
   'home/away': '1X2',
+  // "Odd/Even" nao tinha traducao nenhuma -- ia cru pro site em ingles, e
+  // "Odd" (impar) colide visualmente com "odd" em portugues (coeficiente
+  // da aposta), confundindo o usuario ("Odd/Even Odd @ 2.02").
+  'odd/even': 'Par/Ímpar',
+  'odd or even': 'Par/Ímpar',
+  'corners odd/even': 'Escanteios Par/Ímpar',
   'to qualify': 'Classificação',
   'to qualify - extra time': 'Classificação (Prorrogação)',
 }
@@ -114,6 +120,8 @@ const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'goals over/under':      _ouOr('o total de gols da partida'),
   'total goals':           _ouOr('o total de gols da partida'),
   'over/under':            _ouOr('o total da partida'),
+  'corners odd/even':      lineTxt => `Dá GREEN se o total de escanteios da partida (somando os dois times) for um número ${lineTxt === 'Ímpar' ? 'ímpar' : 'par'}.`,
+  'odd/even':              lineTxt => `Dá GREEN se o total de gols da partida (somando os dois times) for um número ${lineTxt === 'Ímpar' ? 'ímpar' : 'par'}. Não importa quem vence, só a contagem total.`,
 }
 
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */
@@ -134,6 +142,8 @@ const LINE_PT: Record<string, string> = {
   'draw': 'Empate',
   'yes': 'Sim',
   'no': 'Não',
+  'odd': 'Ímpar',
+  'even': 'Par',
 }
 
 // Traduz linha completa (ex.: "Away"), "Over/Under X.Y" (ex.: "Over 8.5" ->
