@@ -114,7 +114,7 @@ function PendingPage() {
         </div>
         <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
         <p className="text-zinc-400">Seu pagamento está sendo processado.</p>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-md px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
           <p className="text-zinc-300 text-xs font-semibold">Previsão de ativação:</p>
           <p className="text-zinc-500 text-xs">Pix: até 5 minutos</p>
           <p className="text-zinc-500 text-xs">Boleto: até 3 dias úteis após compensação</p>
@@ -210,29 +210,29 @@ export default function Checkout() {
               <button
                 key={plan.id}
                 onClick={() => setSelectedPlan(plan.id)}
-                className={`relative text-left p-4 rounded-xl border-2 transition-all
+                className={`relative text-left p-4 rounded-md border-2 transition-all
                   ${selectedPlan === plan.id
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'}`}
               >
                 {plan.popular && (
-                  <span className="absolute -top-2.5 left-3 text-xs bg-green-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-white px-2 py-0.5 rounded-sm font-semibold">
                     Popular
                   </span>
                 )}
                 {plan.savings && (
-                  <span className="absolute -top-2.5 right-3 text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-full font-semibold">
+                  <span className="absolute -top-2.5 right-3 font-mono text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-sm font-semibold">
                     {plan.savings}
                   </span>
                 )}
                 <div className="text-white font-bold text-sm">{plan.label}</div>
                 <div className="text-zinc-500 text-xs mt-0.5">{plan.period}</div>
                 <div className="mt-2">
-                  <span className="text-white font-black text-xl">
+                  <span className="font-mono text-white font-black text-xl">
                     R$ {plan.price.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
-                <div className="text-zinc-500 text-xs mt-0.5">
+                <div className="font-mono text-zinc-500 text-xs mt-0.5">
                   R$ {plan.pricePerMonth.toFixed(2).replace('.', ',')}/mês
                 </div>
               </button>
@@ -261,7 +261,7 @@ export default function Checkout() {
         </div>
 
         {/* Aviso sobre tempo de ativação por método */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 space-y-2">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-4 space-y-2">
           <p className="text-zinc-400 text-xs font-bold uppercase mb-1">Tempo de ativação por método</p>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />

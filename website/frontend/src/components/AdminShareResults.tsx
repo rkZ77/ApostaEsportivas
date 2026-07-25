@@ -78,7 +78,7 @@ export default function AdminShareResults() {
         <button
           onClick={shareThisMonth}
           disabled={shareCurrentMonth.sharing}
-          className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
         >
           <Share2 className="w-3.5 h-3.5" />
           {shareCurrentMonth.shared ? 'Compartilhado!' : shareCurrentMonth.sharing ? 'Gerando...' : `Resultado de ${currentMonthLabel}`}
@@ -88,7 +88,7 @@ export default function AdminShareResults() {
             winRatePct: winRatePct ?? 0, total: summary.total, greens: summary.greens, reds: summary.reds, profit: profit ?? 0,
           })}
           disabled={shareResults.sharing}
-          className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+          className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
         >
           <Share2 className="w-3.5 h-3.5" />
           {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado geral'}
@@ -106,7 +106,7 @@ export default function AdminShareResults() {
               shareText: `Hoje a IA da Pick IA fechou ${todayResult.greens}G / ${todayResult.reds}R (${Math.round(todayWinRate ?? 0)}%). Histórico 100% auditável.`,
             })}
             disabled={shareResults.sharing}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             <Share2 className="w-3.5 h-3.5" />
             {shareResults.shared ? 'Compartilhado!' : shareResults.sharing ? 'Gerando...' : 'Compartilhar resultado de hoje'}
@@ -124,7 +124,7 @@ export default function AdminShareResults() {
                 })),
             )}
             disabled={shareLeagueResults.sharing}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             <Share2 className="w-3.5 h-3.5" />
             {shareLeagueResults.shared ? 'Compartilhado!' : shareLeagueResults.sharing ? 'Gerando...' : 'Compartilhar por liga'}
@@ -138,7 +138,7 @@ export default function AdminShareResults() {
               leagueName: g.league_name,
             })), 'hoje')}
             disabled={shareTodayGames.sharing}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             <Share2 className="w-3.5 h-3.5" />
             {shareTodayGames.shared ? 'Compartilhado!' : shareTodayGames.sharing ? 'Gerando...' : 'Compartilhar jogos de hoje'}
@@ -152,7 +152,7 @@ export default function AdminShareResults() {
               leagueName: g.league_name,
             })), 'amanha')}
             disabled={shareTomorrowGames.sharing}
-            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
+            className="flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-md bg-green-500/10 border border-green-500/30 text-green-400 hover:bg-green-500/20 transition-colors disabled:opacity-50"
           >
             <Share2 className="w-3.5 h-3.5" />
             {shareTomorrowGames.shared ? 'Compartilhado!' : shareTomorrowGames.sharing ? 'Gerando...' : 'Compartilhar jogos de amanhã'}

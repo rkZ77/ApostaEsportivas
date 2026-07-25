@@ -118,7 +118,7 @@ function StatRow({ label, home, away, higherIsBetter = true }: {
   return (
     <div className="py-2">
       <div className="text-[10px] text-zinc-600 text-center mb-1.5 uppercase font-semibold">{label}</div>
-      <div className="flex items-center gap-2">
+      <div className="font-mono flex items-center gap-2">
         <span className={`text-sm font-bold tabular-nums w-10 text-right ${homeWins ? 'text-blue-400' : 'text-zinc-400'}`}>
           {home != null ? Number(home).toFixed(1) : ''}
         </span>
@@ -354,7 +354,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
       <div className="absolute inset-0 bg-black/70" />
       <div
-        className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[92vh] flex flex-col"
+        className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[92vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
         {/* Fixed header */}
@@ -382,7 +382,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
                 {fixture.home_team}
               </span>
             </div>
-            <div className="flex flex-col items-center shrink-0 gap-0.5">
+            <div className="font-mono flex flex-col items-center shrink-0 gap-0.5">
               <span className={`text-2xl font-black tabular-nums ${live ? 'text-green-400' : 'text-white'}`}>
                 {scoreStr}
               </span>

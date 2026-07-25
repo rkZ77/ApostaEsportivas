@@ -45,13 +45,13 @@ export default function ApostaModal({
       onClick={onCancel}
     >
       <div
-        className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-2xl overflow-y-auto max-h-[92dvh]"
+        className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-lg overflow-y-auto max-h-[92dvh]"
         onClick={e => e.stopPropagation()}
       >
         {overrideStep ? (
           /* ── Tela de confirmação ao exceder sugestão ── */
           <div className="p-5">
-            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-4 mb-5">
+            <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4 mb-5">
               <p className="text-yellow-400 font-black text-sm mb-1">Stake acima do recomendado</p>
               <p className="text-yellow-200 text-xs leading-relaxed">
                 Você está apostando <strong>{units}u</strong>, a IA recomendou <strong>{suggestedUnits}u</strong> para proteger sua banca.
@@ -62,14 +62,14 @@ export default function ApostaModal({
             <div className="flex gap-2">
               <button
                 onClick={() => setOverrideStep(false)}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
+                className="flex-1 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
               >
                 Voltar
               </button>
               <button
                 onClick={() => onConfirm(parsed, house, units)}
                 disabled={loading}
-                className="flex-1 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
+                className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
               >
                 {loading ? '...' : 'Estou ciente'}
               </button>
@@ -90,7 +90,7 @@ export default function ApostaModal({
                     key={h}
                     type="button"
                     onClick={() => setHouse(h)}
-                    className={`py-2 rounded-xl border text-xs font-bold transition-colors ${
+                    className={`py-2 rounded-md border text-xs font-bold transition-colors ${
                       house === h
                         ? 'border-green-500/60 bg-green-500/10 text-green-400'
                         : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
@@ -111,7 +111,7 @@ export default function ApostaModal({
               <input
                 type="number" step="0.01" min="1.01" value={oddStr}
                 onChange={e => setOddStr(e.target.value)}
-                className="input w-full text-center text-xl font-black"
+                className="input font-mono w-full text-center text-xl font-black"
               />
               {oddChanged && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
@@ -132,18 +132,18 @@ export default function ApostaModal({
                     type="button"
                     onClick={() => setUnits(u => Math.max(1, u - 1))}
                     aria-label="Diminuir unidades"
-                    className="w-11 h-11 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
+                    className="w-11 h-11 rounded-md border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
                   >−</button>
                   <input
                     type="number" min="1" max={maxUnits} step="1" value={units}
                     onChange={e => setUnits(Math.max(1, Math.min(maxUnits, parseInt(e.target.value) || 1)))}
-                    className="input flex-1 text-center text-xl font-black"
+                    className="input font-mono flex-1 text-center text-xl font-black"
                   />
                   <button
                     type="button"
                     onClick={() => setUnits(u => Math.min(maxUnits, u + 1))}
                     aria-label="Aumentar unidades"
-                    className="w-11 h-11 rounded-xl border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
+                    className="w-11 h-11 rounded-md border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
                   >+</button>
                 </div>
                 {exceedsSuggested && !exceedsMax && (
@@ -164,14 +164,14 @@ export default function ApostaModal({
             <div className="flex gap-2">
               <button
                 onClick={onCancel}
-                className="flex-1 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
+                className="flex-1 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
               >
                 Cancelar
               </button>
               <button
                 onClick={handlePrimary}
                 disabled={!valid || loading}
-                className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-colors disabled:opacity-50 ${
+                className={`flex-1 py-2.5 rounded-md font-bold text-sm transition-colors disabled:opacity-50 ${
                   exceedsSuggested
                     ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
                     : 'bg-green-600 hover:bg-green-500 text-white'

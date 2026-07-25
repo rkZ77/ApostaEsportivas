@@ -133,8 +133,8 @@ export default function CountdownTo7AM() {
                 <div className="space-y-1.5">
                   {group.games.map(g => (
                     <div key={g.fixture_id}
-                      className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-xl px-3 py-2.5 hover:border-zinc-700 transition-colors">
-                      <span className="text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                      className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2.5 hover:border-zinc-700 transition-colors">
+                      <span className="font-mono text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
                         {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
@@ -161,7 +161,7 @@ export default function CountdownTo7AM() {
   return (
     <div className="card p-8 text-center border-zinc-800">
       <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
-      <div className="text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
+      <div className="font-mono text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
       <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">
@@ -171,8 +171,8 @@ export default function CountdownTo7AM() {
           <div className="space-y-1.5">
             {todayGames.map(g => (
               <div key={g.fixture_id}
-                className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-xl px-3 py-2.5">
-                <span className="text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2.5">
+                <span className="font-mono text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
                   {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                 </span>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">

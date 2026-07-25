@@ -182,7 +182,7 @@ function LiveLeg({ leg }: { leg: any }) {
           <TeamLogo id={leg.home_team_id} name={leg.home_team || ''} size={14} />
           <span className="text-xs text-zinc-300 truncate">{leg.home_team}</span>
           {leg.status !== 'NS' && (
-            <span className="text-xs font-black text-white tabular-nums mx-1 shrink-0">
+            <span className="font-mono text-xs font-black text-white tabular-nums mx-1 shrink-0">
               {leg.home_goals} – {leg.away_goals}
             </span>
           )}
@@ -192,10 +192,10 @@ function LiveLeg({ leg }: { leg: any }) {
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
           {isLive && leg.elapsed != null && (
-            <span className="text-[9px] font-black text-green-400 animate-pulse">{leg.elapsed}'</span>
+            <span className="font-mono text-[9px] font-black text-green-400 animate-pulse">{leg.elapsed}'</span>
           )}
           {legProb != null && (
-            <span className={`text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
+            <span className={`font-mono text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
               {legProb}%
             </span>
           )}
@@ -210,7 +210,7 @@ function LiveLeg({ leg }: { leg: any }) {
       <div className="flex items-center justify-between text-xs">
         <span className="text-zinc-500 truncate">{leg.market} · {leg.line}</span>
         {leg.current_val != null && (
-          <span className={`font-black shrink-0 ml-2 ${stColor}`}>
+          <span className={`font-mono font-black shrink-0 ml-2 ${stColor}`}>
             {leg.stat_label}: {leg.current_val}
           </span>
         )}
@@ -252,7 +252,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
+      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-lg p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
         <div>
           <p className="font-bold text-white text-sm">Registrar Cashout</p>
           <p className="text-xs text-zinc-500 mt-0.5">
@@ -261,7 +261,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
         </div>
 
         {stakeR != null && (
-          <div className="bg-zinc-800/60 rounded-xl px-3 py-2 flex justify-between text-xs">
+          <div className="font-mono bg-zinc-800/60 rounded-md px-3 py-2 flex justify-between text-xs">
             <span className="text-zinc-500">Apostado</span>
             <span className="text-white font-semibold">{pick.stake_units}u · R$ {stakeR.toFixed(2)}</span>
           </div>
@@ -278,12 +278,12 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
             onChange={e => { setAmount(e.target.value); setError('') }}
             onKeyDown={e => e.key === 'Enter' && confirm()}
             placeholder="0.00"
-            className="w-full bg-zinc-800 border border-zinc-700 focus:border-green-500/50 rounded-xl px-3 py-2.5 text-white text-sm outline-none transition-colors"
+            className="font-mono w-full bg-zinc-800 border border-zinc-700 focus:border-green-500/50 rounded-md px-3 py-2.5 text-white text-sm outline-none transition-colors"
           />
         </div>
 
         {pnlR != null && (
-          <div className={`text-sm font-bold text-center ${pnlColor}`}>
+          <div className={`font-mono text-sm font-bold text-center ${pnlColor}`}>
             {pnlR >= 0 ? '+' : ''}R$ {pnlR.toFixed(2)}
             {stakeR != null && stakeR > 0 && (
               <span className="text-xs font-normal text-zinc-500 ml-1">
@@ -297,11 +297,11 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
 
         <div className="flex gap-2">
           <button onClick={onClose} disabled={loading}
-            className="flex-1 text-sm text-zinc-400 border border-zinc-700 rounded-xl py-2.5 hover:bg-zinc-800 transition-colors">
+            className="flex-1 text-sm text-zinc-400 border border-zinc-700 rounded-md py-2.5 hover:bg-zinc-800 transition-colors">
             Cancelar
           </button>
           <button onClick={confirm} disabled={loading || amount === ''}
-            className="flex-1 text-sm font-semibold bg-green-500/20 text-green-400 border border-green-500/30 rounded-xl py-2.5 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+            className="flex-1 text-sm font-semibold bg-green-500/20 text-green-400 border border-green-500/30 rounded-md py-2.5 hover:bg-green-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
             {loading ? 'Salvando...' : 'Confirmar'}
           </button>
         </div>
@@ -412,9 +412,9 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
 
   // Header right-side content
   const headerRight = hasCashout ? (
-    <span className="text-sm font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
+    <span className="font-mono text-sm font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
   ) : (hasResult || isFinished) ? (
-    <div className="text-right">
+    <div className="font-mono text-right">
       {effectiveResult === 'GREEN' && potRetR != null ? (
         <span className="text-sm font-black text-green-400">+R${(potRetR - (stakeR ?? 0)).toFixed(2)}</span>
       ) : effectiveResult === 'RED' && stakeR != null ? (
@@ -426,12 +426,12 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
   ) : canCashout && suggestedCashout != null ? (
     <button
       onClick={e => { e.stopPropagation(); setShowCashout(true) }}
-      className="text-xs font-bold text-white bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded-lg transition-colors whitespace-nowrap"
+      className="text-xs font-bold text-white bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
     >
       Cash Out R${suggestedCashout.toFixed(0)}
     </button>
   ) : displayProb != null ? (
-    <span className={`text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
+    <span className={`font-mono text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
   ) : isLive ? (
     <span className="flex items-center gap-1 text-[9px] font-black text-green-400">
       <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
@@ -447,7 +447,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     : [pick.market, pick.line].filter(Boolean).join(' · ')
 
   return (
-    <div className={`rounded-xl border overflow-hidden transition-colors ${
+    <div className={`rounded-lg border overflow-hidden transition-colors ${
       earlyLocked && pick.pick_status === 'winning' ? 'border-green-500/40 bg-green-500/5' :
       earlyLocked && pick.pick_status === 'losing'  ? 'border-red-500/30 bg-red-500/5' :
       isCopa && isLive ? 'border-yellow-500/25 bg-zinc-900' :
@@ -469,13 +469,13 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
             </span>
             {isLive && (
-              <span className="flex items-center gap-1 text-[9px] font-black text-green-400">
+              <span className="font-mono flex items-center gap-1 text-[9px] font-black text-green-400">
                 <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
                 {pick.elapsed ? `${pick.elapsed}'` : 'AO VIVO'}
               </span>
             )}
             {stakeR != null && (
-              <span className="text-sm font-bold text-white">R${stakeR.toFixed(2)}</span>
+              <span className="font-mono text-sm font-bold text-white">R${stakeR.toFixed(2)}</span>
             )}
             {pick.bet_house && (
               <span className="text-[10px] text-zinc-600">{pick.bet_house}</span>
@@ -502,7 +502,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} />)}
                 {multiProb != null && !hasResult && (
                   <div className="pt-2 border-t border-zinc-800/60 space-y-1.5">
-                    <div className="flex justify-between text-xs">
+                    <div className="font-mono flex justify-between text-xs">
                       <span className="text-zinc-500">Prob. combinada</span>
                       <span className={`font-black ${multiProb >= 60 ? 'text-green-400' : multiProb >= 35 ? 'text-yellow-400' : 'text-red-400'}`}>{multiProb}%</span>
                     </div>
@@ -519,7 +519,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                   <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={16} />
                   <span className="text-sm font-bold text-white truncate">{pick.home_team}</span>
                   {pick.status !== 'NS' && (
-                    <span className={`text-sm font-black tabular-nums mx-1 ${isLive ? 'text-green-400' : 'text-zinc-300'}`}>
+                    <span className={`font-mono text-sm font-black tabular-nums mx-1 ${isLive ? 'text-green-400' : 'text-zinc-300'}`}>
                       {pick.home_goals} – {pick.away_goals}
                     </span>
                   )}
@@ -531,7 +531,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-zinc-400 truncate">{pick.market} · {pick.line}</span>
                   {pick.current_val != null && (
-                    <span className={`font-black shrink-0 ml-2 ${stColor}`}>{pick.stat_label}: {pick.current_val}</span>
+                    <span className={`font-mono font-black shrink-0 ml-2 ${stColor}`}>{pick.stat_label}: {pick.current_val}</span>
                   )}
                 </div>
                 {hasBar && !effectiveLocked && (
@@ -540,7 +540,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 {/* Probabilidade ao vivo */}
                 {liveProb != null && !effectiveLocked && isLive && (
                   <div className="pt-1 space-y-1">
-                    <div className="flex justify-between text-xs">
+                    <div className="font-mono flex justify-between text-xs">
                       <span className="text-zinc-500">Probabilidade de acertar</span>
                       <span className={`font-black ${liveProb >= 60 ? 'text-green-400' : liveProb >= 35 ? 'text-yellow-400' : 'text-red-400'}`}>{liveProb}%</span>
                     </div>
@@ -557,7 +557,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
           {/* ── Detalhes da aposta + Cashout ── */}
           <div className="px-4 pb-4 space-y-2 border-t border-zinc-800/60 pt-3">
             {effOdd > 1 && (
-              <div className="flex justify-between text-sm">
+              <div className="font-mono flex justify-between text-sm">
                 <span className="text-zinc-400">{isMulti ? 'Odd total' : 'Odd apostada'}</span>
                 <span className="text-white font-semibold">{effOdd.toFixed(2)}</span>
               </div>
@@ -569,13 +569,13 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               </div>
             )}
             {stakeR != null && (
-              <div className="flex justify-between text-sm">
+              <div className="font-mono flex justify-between text-sm">
                 <span className="text-zinc-400">Montante apostado</span>
                 <span className="text-white font-semibold">R${stakeR.toFixed(2)}</span>
               </div>
             )}
             {premioR != null && !hasCashout && (
-              <div className="flex justify-between text-sm">
+              <div className="font-mono flex justify-between text-sm">
                 <span className={`font-bold ${premioR > 0 ? 'text-green-400' : 'text-zinc-400'}`}>Retorno</span>
                 <span className={`font-black ${premioR > 0 ? 'text-green-400' : 'text-red-400'}`}>
                   R${premioR.toFixed(2)}
@@ -583,7 +583,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               </div>
             )}
             {hasCashout && (
-              <div className="flex justify-between text-sm">
+              <div className="font-mono flex justify-between text-sm">
                 <span className="text-zinc-400">Cash Out recebido</span>
                 <span className="font-black text-orange-400">R${Number(pick.cashout_amount).toFixed(2)}</span>
               </div>
@@ -591,7 +591,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
             {canCashout && (
               <button
                 onClick={() => setShowCashout(true)}
-                className="w-full mt-1 text-sm font-bold text-white bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-xl py-2.5 transition-colors"
+                className="w-full mt-1 text-sm font-bold text-white bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
               >
                 {suggestedCashout != null ? `Cash Out · R$${suggestedCashout.toFixed(0)}` : 'Cash Out'}
               </button>
@@ -618,13 +618,13 @@ function LiveSkeleton() {
   return (
     <div className="space-y-3 animate-pulse">
       {[1, 2, 3].map(i => (
-        <div key={i} className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4 space-y-3">
+        <div key={i} className="rounded-lg border border-zinc-800 bg-zinc-900 p-4 space-y-3">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <div className="h-4 w-10 bg-zinc-800 rounded" />
               <div className="h-4 w-16 bg-zinc-800 rounded" />
             </div>
-            <div className="h-4 w-14 bg-zinc-800 rounded-full" />
+            <div className="h-4 w-14 bg-zinc-800 rounded-sm" />
           </div>
           <div className="flex items-center gap-2">
             <div className="w-4 h-4 bg-zinc-800 rounded-full" />
@@ -813,7 +813,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3 flex-wrap">
           {live.length > 0 && (
-            <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-full px-3 py-1">
+            <div className="flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-sm px-3 py-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
               <span className="text-xs font-black text-green-400">{live.length} ao vivo</span>
             </div>
@@ -855,7 +855,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
                 <span className="text-sm font-black text-green-400">Ao Vivo</span>
-                <span className="text-[10px] text-green-400/60 bg-green-500/10 px-1.5 py-0.5 rounded-full">{live.length}</span>
+                <span className="font-mono text-[10px] text-green-400/60 bg-green-500/10 px-1.5 py-0.5 rounded-sm">{live.length}</span>
               </div>
               <div className="space-y-3">
                 {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
@@ -868,7 +868,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-zinc-500 rounded-full" />
                 <span className="text-sm font-black text-zinc-400">Aguardando</span>
-                <span className="text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded-full">{pending.length}</span>
+                <span className="font-mono text-[10px] text-zinc-400 bg-zinc-800 px-1.5 py-0.5 rounded-sm">{pending.length}</span>
               </div>
               <div className="space-y-3">
                 {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
@@ -881,7 +881,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               <div className="flex items-center gap-2 mb-3">
                 <span className="w-2 h-2 bg-zinc-600 rounded-full" />
                 <span className="text-sm font-black text-zinc-500">Finalizados</span>
-                <span className="text-[10px] text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded-full">{finalized.length}</span>
+                <span className="font-mono text-[10px] text-zinc-500 bg-zinc-800/50 px-1.5 py-0.5 rounded-sm">{finalized.length}</span>
               </div>
               <div className="space-y-3">
                 {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}

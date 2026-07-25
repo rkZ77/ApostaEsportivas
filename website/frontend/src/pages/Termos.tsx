@@ -41,7 +41,7 @@ export default function Termos() {
 
           <section>
             <h2 className="text-white font-bold text-base mb-3">4. Isenção de responsabilidade</h2>
-            <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-xl p-4 text-zinc-400 space-y-2">
+            <div className="bg-yellow-400/5 border border-yellow-400/20 rounded-lg p-4 text-zinc-400 space-y-2">
               <p>
                 As sugestões geradas pelo Pick IA são baseadas em análise estatística e modelos de IA. Resultados
                 passados não garantem resultados futuros.

@@ -140,7 +140,7 @@ export default function Planos() {
       <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
 
         {activated && (
-          <div className="bg-green-500/10 border border-green-500/40 rounded-2xl p-6 text-center">
+          <div className="bg-green-500/10 border border-green-500/40 rounded-lg p-6 text-center">
             <div className="w-14 h-14 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
               <svg className="w-7 h-7 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
@@ -149,14 +149,14 @@ export default function Planos() {
             <h2 className="text-white font-black text-xl mb-1">Teste VIP ativado!</h2>
             <p className="text-zinc-400 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
             <button onClick={() => navigate('/picks')}
-              className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-xl text-sm transition-colors">
+              className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-md text-sm transition-colors">
               Ver Picks
             </button>
           </div>
         )}
 
         {user && !activated && (isVip || isTrial) && (
-          <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-2xl p-6 overflow-hidden`}>
+          <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-lg p-6 overflow-hidden`}>
             <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
 
             {/* Cabeçalho */}
@@ -169,7 +169,7 @@ export default function Planos() {
                     {isTrial ? 'TRIAL' : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
                   </span>
                   {urgent && (
-                    <span className="text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-full font-bold uppercase animate-pulse">
+                    <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold uppercase animate-pulse">
                       Expirando
                     </span>
                   )}
@@ -182,13 +182,13 @@ export default function Planos() {
                   </p>
                 )}
 
-                <p className={`font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
+                <p className={`font-mono font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
                   {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
                   {remaining > 0 && daysUntilExpiry !== null && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
                 </p>
               </div>
               <button onClick={() => navigate('/checkout')}
-                className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-xl transition-colors">
+                className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-md transition-colors">
                 {isTrial ? 'Assinar VIP' : 'Renovar'}
               </button>
             </div>
@@ -212,25 +212,25 @@ export default function Planos() {
             {/* Datas */}
             <div className="grid grid-cols-2 gap-3 mb-5">
               {startDate && (
-                <div className="bg-zinc-800/60 rounded-xl p-3">
+                <div className="bg-zinc-800/60 rounded-md p-3">
                   <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Início</p>
                   <p className="text-white text-xs font-semibold">{startDate}</p>
                 </div>
               )}
               {expiryDate && (
-                <div className="bg-zinc-800/60 rounded-xl p-3">
+                <div className="bg-zinc-800/60 rounded-md p-3">
                   <p className="text-[10px] text-zinc-500 uppercase mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
                   <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-white'}`}>{expiryDate}</p>
                 </div>
               )}
               {memberSince && (
-                <div className="bg-zinc-800/60 rounded-xl p-3">
+                <div className="bg-zinc-800/60 rounded-md p-3">
                   <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Membro desde</p>
                   <p className="text-white text-xs font-semibold">{memberSince}</p>
                 </div>
               )}
               {totalSpent > 0 && (
-                <div className="bg-zinc-800/60 rounded-xl p-3">
+                <div className="bg-zinc-800/60 rounded-md p-3">
                   <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Total investido</p>
                   <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
                 </div>
@@ -252,7 +252,7 @@ export default function Planos() {
         )}
 
         {user && !activated && !isVip && !isAdmin && !isTrial && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
             <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
             <div className="flex-1">
               <p className="text-white font-bold text-sm">Plano Free</p>
@@ -260,27 +260,27 @@ export default function Planos() {
               {memberSince && <p className="text-zinc-700 text-xs mt-0.5">Membro desde {memberSince}</p>}
             </div>
             <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors">
+              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-md transition-colors">
               Upgrade VIP
             </button>
           </div>
         )}
 
         {isAdmin && (
-          <div className="bg-purple-400/10 border border-purple-400/20 rounded-2xl p-5">
+          <div className="bg-purple-400/10 border border-purple-400/20 rounded-lg p-5">
             <p className="text-purple-400 font-black text-sm">Conta Admin. Acesso irrestrito e permanente.</p>
             {memberSince && <p className="text-purple-400/50 text-xs mt-1">Membro desde {memberSince}</p>}
           </div>
         )}
 
         {isEligibleForTrial && !activated && (
-          <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-6 overflow-hidden">
+          <div className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase">Sem cartão</span>
+              <span className="font-mono bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-sm uppercase">Sem cartão</span>
             </div>
             <div className="flex items-start gap-4">
-              <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center justify-center shrink-0 mt-0.5">
+              <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-md flex items-center justify-center shrink-0 mt-0.5">
                 <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                 </svg>
@@ -301,7 +301,7 @@ export default function Planos() {
                 </ul>
                 {activateError && <p className="text-red-400 text-xs mb-3">{activateError}</p>}
                 <button onClick={handleActivateTrial} disabled={activating}
-                  className="bg-green-500 hover:bg-green-400 disabled:opacity-60 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors flex items-center gap-2">
+                  className="bg-green-500 hover:bg-green-400 disabled:opacity-60 text-black font-black px-7 py-3 rounded-md text-sm transition-colors flex items-center gap-2">
                   {activating
                     ? <><svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg>Ativando...</>
                     : 'Ativar 2 dias VIP gratuito'}
@@ -312,7 +312,7 @@ export default function Planos() {
         )}
 
         {upgradeOptions.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
             <p className="text-xs text-zinc-500 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
             <p className="text-white text-sm mb-4">
               No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
@@ -321,7 +321,7 @@ export default function Planos() {
             <div className="grid grid-cols-2 gap-3">
               {upgradeOptions.map(opt => (
                 <button key={opt.key} onClick={() => navigate('/checkout')}
-                  className="relative p-4 rounded-xl border border-zinc-700 hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
+                  className="relative p-4 rounded-md border border-zinc-700 hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
                   <p className="text-white font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
                   <p className="text-zinc-500 text-xs mt-0.5">R$ {opt.perMonth.toFixed(2).replace('.', ',')}/mês</p>
                   <p className="text-green-400 text-xs font-bold mt-2">Economize R$ {opt.saveAmt.replace('.', ',')} ↓{opt.savePct}%</p>
@@ -332,7 +332,7 @@ export default function Planos() {
         )}
 
         {referral && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 space-y-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
             <div>
               <h3 className="text-sm font-black text-white">Indicações</h3>
               <p className="text-zinc-500 text-xs mt-0.5">
@@ -342,14 +342,14 @@ export default function Planos() {
 
             {/* Recompensas */}
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-xl p-3 flex items-center gap-2">
+              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-md p-3 flex items-center gap-2">
                 <User className="w-5 h-5 text-zinc-400 shrink-0" />
                 <div>
                   <p className="text-white font-black">+1 dia</p>
                   <p className="text-zinc-500">por cadastro</p>
                 </div>
               </div>
-              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-xl p-3 flex items-center gap-2">
+              <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3 flex items-center gap-2">
                 <Crown className="w-5 h-5 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-yellow-400 font-black">+2 dias</p>
@@ -365,8 +365,8 @@ export default function Planos() {
                 { label: 'Assinantes',  value: referral.total_converted,  color: 'text-green-400' },
                 { label: 'Dias ganhos', value: referral.days_earned,      color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
-                <div key={label} className="bg-zinc-800/60 rounded-xl p-3 text-center">
-                  <p className={`text-2xl font-black ${color}`}>{value}</p>
+                <div key={label} className="bg-zinc-800/60 rounded-md p-3 text-center">
+                  <p className={`font-mono text-2xl font-black ${color}`}>{value}</p>
                   <p className="text-zinc-500 text-xs mt-0.5">{label}</p>
                 </div>
               ))}
@@ -374,7 +374,7 @@ export default function Planos() {
 
             {/* Breakdown */}
             {referral.total_indicated > 0 && (
-              <div className="bg-zinc-800/40 rounded-xl px-4 py-3 space-y-1.5 text-xs">
+              <div className="bg-zinc-800/40 rounded-md px-4 py-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-zinc-500">{referral.total_indicated} cadastro{referral.total_indicated !== 1 ? 's' : ''} × 1 dia</span>
                   <span className="text-white font-bold">+{referral.total_indicated} dia{referral.total_indicated !== 1 ? 's' : ''}</span>
@@ -416,7 +416,7 @@ export default function Planos() {
         )}
 
         {payments.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
             <h3 className="text-sm font-black text-white uppercase mb-4">Histórico de pagamentos</h3>
             <div className="space-y-0">
               {payments.map(p => {
@@ -455,7 +455,7 @@ export default function Planos() {
         )}
 
         {(isVip || isTrial) && !isAdmin && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
             <div className="flex-1">
               <p className="text-white font-bold text-sm">Solicitar cancelamento ou reembolso</p>
               <p className="text-zinc-500 text-xs mt-0.5">
@@ -466,14 +466,14 @@ export default function Planos() {
               href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20cancelamento%2Freembolso%20do%20meu%20plano%20Pick%20IA."
               target="_blank"
               rel="noopener noreferrer"
-              className="shrink-0 border border-zinc-700 hover:border-red-500/50 hover:text-red-400 text-zinc-400 font-bold text-xs px-4 py-2.5 rounded-xl transition-colors"
+              className="shrink-0 border border-zinc-700 hover:border-red-500/50 hover:text-red-400 text-zinc-400 font-bold text-xs px-4 py-2.5 rounded-md transition-colors"
             >
               Solicitar
             </a>
           </div>
         )}
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-5 flex items-center gap-4">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#25D366]/10 border border-[#25D366]/20 rounded-full flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#25D366]">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -488,20 +488,20 @@ export default function Planos() {
             href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA."
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-white font-black text-xs px-4 py-2.5 rounded-xl transition-colors"
+            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-white font-black text-xs px-4 py-2.5 rounded-md transition-colors"
           >
             WhatsApp
           </a>
         </div>
 
         {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
-          <div className="bg-zinc-900 border border-yellow-400/20 rounded-2xl p-6 flex items-center justify-between gap-4">
+          <div className="bg-zinc-900 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-white font-black text-sm">Quer acesso VIP completo?</p>
               <p className="text-zinc-500 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de R$ 39,90/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-xl transition-colors">
+              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-md transition-colors">
               Assinar VIP
             </button>
           </div>

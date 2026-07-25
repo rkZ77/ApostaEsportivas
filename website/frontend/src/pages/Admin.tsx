@@ -52,10 +52,10 @@ const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
 type PlanFilter = typeof PLAN_FILTER[number]
 
 const planBadge = (plan: string) => {
-  if (plan === 'vip')   return 'bg-yellow-500/10 text-yellow-400 border border-yellow-500/30'
-  if (plan === 'trial') return 'bg-amber-400/10 text-amber-400 border border-amber-400/30'
-  if (plan === 'admin') return 'bg-purple-500/10 text-purple-400 border border-purple-500/30'
-  return 'bg-zinc-800 text-zinc-400 border border-zinc-700'
+  if (plan === 'vip')   return 'badge-vip'
+  if (plan === 'trial') return 'badge-trial'
+  if (plan === 'admin') return 'badge-admin'
+  return 'badge-free'
 }
 
 const expiryWarning = (expires_at: string | null) => {
@@ -262,7 +262,7 @@ export default function Admin() {
   return (
     <div className="min-h-screen bg-black flex flex-col">
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-xl shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.msg}
         </div>
       )}
@@ -335,7 +335,7 @@ export default function Admin() {
                 : s.status === 'ok'      ? 'bg-green-500/5'
                 : 'bg-red-500/5'
               return (
-                <div key={command} className={`rounded-xl border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
+                <div key={command} className={`rounded-md border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
                   <div className="flex items-center justify-between">
                     <span className="text-[10px] text-zinc-600 font-mono font-bold">{String(idx + 1).padStart(2, '0')}</span>
                     {!s                    && <span className="w-2 h-2 rounded-full bg-zinc-700" />}
@@ -387,7 +387,7 @@ export default function Admin() {
                 { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-zinc-600' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-3">
-                  <div className={`text-3xl font-black ${color}`}>{value}</div>
+                  <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
                   <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
                 </div>
               ))}
@@ -405,10 +405,10 @@ export default function Admin() {
                 ].map(({ label, value, target }) => {
                   const ok = target === '' ? value > 0 : value >= (target as number)
                   return (
-                    <div key={label} className="flex items-center gap-3 bg-zinc-900 rounded-xl px-4 py-3">
+                    <div key={label} className="flex items-center gap-3 bg-zinc-900 rounded-md px-4 py-3">
                       <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? 'bg-green-500' : 'bg-zinc-700'}`} />
                       <div>
-                        <div className="text-white font-bold text-lg leading-none">{value}</div>
+                        <div className="font-mono text-white font-bold text-lg leading-none">{value}</div>
                         <div className="text-zinc-500 text-xs mt-0.5">{label}</div>
                       </div>
                     </div>
@@ -435,7 +435,7 @@ export default function Admin() {
                 { label: 'VIPs Ativos Agora',value: String(revenue.active_vip),                                                   color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-4">
-                  <div className={`text-2xl font-black ${color}`}>{value}</div>
+                  <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
                   <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
                 </div>
               ))}
@@ -470,10 +470,10 @@ export default function Admin() {
                             return (
                               <tr key={m.month} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
                                 <td className="px-4 py-2.5 text-zinc-300 font-medium capitalize">{label}</td>
-                                <td className="px-4 py-2.5 text-green-400 font-semibold">
+                                <td className="px-4 py-2.5 text-green-400 font-semibold font-mono">
                                   {fmtBRL(m.total)}
                                 </td>
-                                <td className="px-4 py-2.5 text-zinc-400">{m.count}</td>
+                                <td className="px-4 py-2.5 text-zinc-400 font-mono">{m.count}</td>
                                 <td className="px-4 py-2.5">
                                   <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
                                     <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
@@ -511,7 +511,7 @@ export default function Admin() {
                           <div key={p.plan}>
                             <div className="flex items-center justify-between mb-1">
                               <span className={`text-xs font-bold capitalize ${color}`}>{p.plan}</span>
-                              <div className="text-right">
+                              <div className="font-mono text-right">
                                 <span className="text-xs text-white font-semibold">{fmtBRL(p.total)}</span>
                                 <span className="text-[10px] text-zinc-600 ml-1">({p.count}x)</span>
                               </div>
@@ -578,10 +578,10 @@ export default function Admin() {
                           <div className="text-zinc-600">{p.user_email}</div>
                         </td>
                         <td className="px-4 py-2 capitalize text-zinc-300">{p.plan_key}</td>
-                        <td className="px-4 py-2 text-green-400 font-semibold">R${Number(p.amount).toFixed(2)}</td>
+                        <td className="px-4 py-2 text-green-400 font-semibold font-mono">R${Number(p.amount).toFixed(2)}</td>
                         <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? ''}</td>
                         <td className="px-4 py-2">
-                          <span className={`px-2 py-0.5 rounded font-medium ${p.status === 'approved' ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-zinc-500'}`}>
+                          <span className={p.status === 'approved' ? 'badge-green' : 'badge-free'}>
                             {p.status}
                           </span>
                         </td>
@@ -790,7 +790,7 @@ export default function Admin() {
                         : <span className="text-zinc-700">sem número</span>}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${planBadge(u.plan)}`}>
+                      <span className={planBadge(u.plan)}>
                         {u.plan.toUpperCase()}
                       </span>
                     </td>
@@ -816,13 +816,13 @@ export default function Admin() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400">
+                    <td className="px-4 py-3 text-xs text-zinc-400 font-mono">
                       {u.bankroll_current != null
                         ? <><div className="text-white font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-zinc-600">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
                         : null}
                     </td>
                     <td className="px-4 py-3">
-                      <span className={`text-xs px-2 py-1 rounded-lg font-medium ${u.active ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                      <span className={u.active ? 'badge-green' : 'badge-red'}>
                         {u.active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
@@ -908,10 +908,10 @@ export default function Admin() {
                   <div className="text-zinc-500 text-xs mt-0.5">{u.email}</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2 py-1 rounded-lg font-semibold ${planBadge(u.plan)}`}>
+                  <span className={planBadge(u.plan)}>
                     {u.plan.toUpperCase()}
                   </span>
-                  <span className={`text-xs px-2 py-1 rounded-lg font-medium ${u.active ? 'bg-green-500/10 text-green-400' : 'bg-red-500/10 text-red-400'}`}>
+                  <span className={u.active ? 'badge-green' : 'badge-red'}>
                     {u.active ? 'Ativo' : 'Inativo'}
                   </span>
                 </div>
@@ -923,7 +923,7 @@ export default function Admin() {
                   Expira: <span className="text-zinc-300">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}
                 </div>
-                <div>Banca: <span className="text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
+                <div>Banca: <span className="font-mono text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
                 <div>Cadastro: <span className="text-zinc-300">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
               </div>
 

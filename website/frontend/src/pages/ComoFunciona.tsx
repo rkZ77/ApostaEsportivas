@@ -96,7 +96,7 @@ export default function ComoFunciona() {
       <div className="sticky top-16 z-10 flex justify-end px-4 pt-4">
         <button
           onClick={handleClose}
-          className="flex items-center gap-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2 text-xs font-semibold transition-colors"
+          className="flex items-center gap-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-xs font-semibold transition-colors"
         >
           <X className="w-3.5 h-3.5" />
           Fechar
@@ -105,7 +105,7 @@ export default function ComoFunciona() {
 
       {/* Header */}
       <div className="max-w-3xl mx-auto px-4 pt-6 pb-8 text-center">
-        <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-6">
+        <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-sm px-4 py-1.5 mb-6">
           <span className="text-green-400 text-xs font-bold">Bem-vindo ao PickIA</span>
         </div>
         <h1 className="text-3xl sm:text-4xl font-black mb-4 leading-tight">
@@ -121,17 +121,17 @@ export default function ComoFunciona() {
       {/* Feature cards */}
       <div className="max-w-3xl mx-auto px-4 pb-8">
         <div className="space-y-4">
-          {features.map(({ icon: Icon, color, bg, badge, badgeColor, title, desc, items }) => (
-            <div key={title} className={`border rounded-2xl p-5 ${bg}`}>
+          {features.map(({ icon: Icon, color, bg, badge, title, desc, items }) => (
+            <div key={title} className={`border rounded-lg p-5 ${bg}`}>
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 bg-zinc-900 border border-zinc-800`}>
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-zinc-900 border border-zinc-800`}>
                   <Icon className={`w-5 h-5 ${color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="font-black text-white text-sm">{title}</span>
+                    <span className="font-display font-black text-white text-sm">{title}</span>
                     {badge && (
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeColor}`}>
+                      <span className={badge === 'VIP' ? 'badge-vip' : 'badge-free'}>
                         {badge}
                       </span>
                     )}
@@ -154,14 +154,14 @@ export default function ComoFunciona() {
 
       {/* CTA */}
       <div className="max-w-3xl mx-auto px-4 pb-16 text-center">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-8">
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8">
           <h2 className="text-xl font-black mb-2">Pronto para começar?</h2>
           <p className="text-zinc-400 text-sm mb-6">
             Os picks de hoje já estão disponíveis. Confira as análises da IA.
           </p>
           <button
             onClick={handleStart}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold px-8 py-3.5 rounded-xl transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold px-8 py-3.5 rounded-md transition-colors text-sm"
           >
             Ver picks de hoje
             <ArrowRight className="w-4 h-4" />
