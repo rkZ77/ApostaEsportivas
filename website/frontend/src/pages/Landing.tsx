@@ -651,10 +651,6 @@ export default function Landing() {
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" width={36} height={36} className="w-9 h-9 rounded-full object-cover" />
             <span className="font-display font-semibold text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 font-mono border border-zinc-800 text-zinc-500 text-[10px] px-2 py-0.5 rounded-sm">
-              <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-              Brasileirão · Premier League
-            </span>
           </div>
           <div className="flex items-center gap-5">
             <a href="#resultados" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Resultados</a>
@@ -714,12 +710,6 @@ export default function Landing() {
 
             {/* Texto */}
             <div>
-              {/* Status line */}
-              <div className="inline-flex items-center gap-2 mb-6 font-mono text-[11px] text-zinc-500 border border-zinc-800 rounded-sm px-2.5 py-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse shrink-0" />
-                Brasileirão · Premier League · cobertura ativa
-              </div>
-
               <h1 className="font-display text-4xl md:text-5xl font-semibold leading-[1.1] mb-5 tracking-tight">
                 {['Picks de futebol', 'gerados por IA,', 'entregues todo dia.'].map((line, i) => (
                   <motion.span
