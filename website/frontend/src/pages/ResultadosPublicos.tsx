@@ -227,8 +227,8 @@ export default function ResultadosPublicos() {
                   { label: 'Greens',    value: String(s.greens),         color: 'text-green-400' },
                   { label: 'Lucro (u)', value: `${profit != null && profit >= 0 ? '+' : ''}${profit?.toFixed(1) ?? '0'}u`, color: (profit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' },
                 ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-zinc-950 border border-zinc-800 rounded-2xl p-4 text-center">
-                    <div className={`text-2xl font-black ${color}`}>{value}</div>
+                  <div key={label} className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-center">
+                    <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
                     <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                   </div>
                 ))}
@@ -236,7 +236,7 @@ export default function ResultadosPublicos() {
 
               {/* Gráfico por dia */}
               {byDay.length > 1 && (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 mb-8">
+                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5 mb-8">
                   <p className="text-sm text-zinc-500 font-bold mb-4">Picks por dia</p>
                   <DailyGreensChart data={byDay} />
                 </div>
@@ -247,7 +247,7 @@ export default function ResultadosPublicos() {
                 const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
                 const filteredRecent = recentLeagueFilter ? recent.filter(t => t.league_name === recentLeagueFilter) : recent
                 return (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+                <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
                   <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
                     <span className="text-xs font-bold text-zinc-400 uppercase">Picks recentes</span>
                     <span className="text-[10px] text-zinc-600">{recentTotal} resultados</span>
@@ -298,7 +298,7 @@ export default function ResultadosPublicos() {
                         <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[100px]">
                           {tip.market?.split(' ').slice(0, 3).join(' ')} {tip.line ?? ''}
                         </span>
-                        <span className="text-xs font-bold text-zinc-400 shrink-0">{Number(tip.odd).toFixed(2)}</span>
+                        <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">{Number(tip.odd).toFixed(2)}</span>
                         {(() => {
                           const rs = getResultStyle(tip.result)
                           return (
@@ -339,7 +339,7 @@ export default function ResultadosPublicos() {
           ) : byLeague.length === 0 ? (
             <div className="text-center py-16 text-zinc-500">Nenhum resultado de liga encontrado para os filtros selecionados.</div>
           ) : (
-            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-zinc-800">
                 <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
               </div>
@@ -354,10 +354,10 @@ export default function ResultadosPublicos() {
                         : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
                       <span className="text-sm font-semibold text-white flex-1 min-w-0 truncate">{lg.league_name}</span>
                       <span className="text-[11px] text-zinc-600 shrink-0 hidden sm:block">{lg.total} picks</span>
-                      <span className={`text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                      <span className={`font-mono text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
                         {wr}%
                       </span>
-                      <span className={`text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                      <span className={`font-mono text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {p >= 0 ? '+' : ''}{p.toFixed(1)}u
                       </span>
                     </div>
@@ -388,7 +388,7 @@ export default function ResultadosPublicos() {
                 <div className="text-center py-16 text-zinc-500 text-sm">Nenhum pick encontrado.</div>
               ) : (
                 <>
-                  <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+                  <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
                     <div className="divide-y divide-zinc-800/50">
                       {games.map(g => {
                         const rs = getResultStyle(g.result)
@@ -423,7 +423,7 @@ export default function ResultadosPublicos() {
                             <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[120px]">
                               {g.market}{g.line ? ` · ${g.line}` : ''}
                             </span>
-                            <span className="text-xs font-bold text-zinc-400 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
+                            <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                             {g.result ? (
                               <span className={`text-xs font-black px-2 py-0.5 rounded border shrink-0 ${badge}`}>{rs ? rs.label : g.result}</span>
                             ) : (
@@ -460,7 +460,7 @@ export default function ResultadosPublicos() {
             ) : monthly.length === 0 ? (
               <div className="text-center py-16 text-zinc-500 text-sm">Nenhum resultado mensal encontrado.</div>
             ) : (
-              <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+              <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[460px]">
                     <thead>
@@ -470,7 +470,7 @@ export default function ResultadosPublicos() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody className="font-mono">
                       {monthly.map((m: any) => {
                         const wr = m.win_rate ?? calcWinRate(m.greens, m.total) ?? 0
                         const reds = m.reds ?? 0
@@ -478,7 +478,7 @@ export default function ResultadosPublicos() {
                         const label = new Date(Number(year), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                         return (
                           <tr key={m.month} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
-                            <td className="px-3 sm:px-5 py-3 text-white font-semibold capitalize">{label}</td>
+                            <td className="px-3 sm:px-5 py-3 text-white font-semibold capitalize font-sans">{label}</td>
                             <td className="px-3 sm:px-5 py-3 text-zinc-300">{m.total}</td>
                             <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
                             <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
@@ -504,7 +504,7 @@ export default function ResultadosPublicos() {
           {!user && (
           <div className="mt-12 text-center">
             <p className="text-zinc-500 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
-            <Link to="/login" className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3.5 rounded-xl text-sm transition-colors">
+            <Link to="/login" className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3.5 rounded-md text-sm transition-colors">
               Criar conta · 2 dias VIP grátis
             </Link>
           </div>

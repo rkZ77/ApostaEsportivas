@@ -53,7 +53,7 @@ export default function BlogPost() {
 
         <article className="max-w-2xl mx-auto px-4 pt-4 pb-16">
           <div className="flex items-center gap-2 mb-4">
-            <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-500/10 text-green-400 border border-green-500/20">
+            <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-green-500/10 text-green-400 border border-green-500/20">
               {meta.category}
             </span>
             <span className="text-zinc-600 text-xs">{formatDate(meta.publishedAt)}</span>

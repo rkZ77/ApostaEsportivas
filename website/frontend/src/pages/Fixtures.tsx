@@ -51,7 +51,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
           const isActive = d === date
           return (
             <button key={d} onClick={() => onChange(d)}
-              className={`flex flex-col items-center justify-center w-10 h-12 rounded-xl transition-all shrink-0 ${
+              className={`font-mono flex flex-col items-center justify-center w-10 h-12 rounded-md transition-all shrink-0 ${
                 isActive
                   ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
                   : isToday
@@ -290,7 +290,7 @@ export default function Fixtures() {
       {pageTab === 'jogos' && <main className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Banner informativo */}
-        <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3 mb-5">
+        <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 mb-5">
           <svg className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -379,7 +379,7 @@ export default function Fixtures() {
                           ) : finished ? (
                             <span className={`text-xs ${st.color}`}>{st.label}</span>
                           ) : (
-                            <span className="text-sm font-bold text-zinc-300">{time}</span>
+                            <span className="font-mono text-sm font-bold text-zinc-300">{time}</span>
                           )}
                         </div>
 
@@ -395,11 +395,11 @@ export default function Fixtures() {
                           <div className="shrink-0 flex items-center gap-1.5">
                             {finished || live ? (
                               <>
-                                <span className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
+                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
                                   {f.home_goals ?? 0}
                                 </span>
                                 <span className="text-zinc-600 text-xs">×</span>
-                                <span className={`w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
+                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
                                   {f.away_goals ?? 0}
                                 </span>
                               </>
@@ -444,7 +444,7 @@ export default function Fixtures() {
 
                       {/* Stats ao vivo · aparece apenas quando o jogo está em andamento */}
                       {live && ls && (
-                        <div className="px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
+                        <div className="font-mono px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
                           <div>
                             <div className="text-[10px] text-zinc-500 uppercase mb-0.5">Esc</div>
                             <div className="text-xs font-bold text-zinc-300">{ls.home_corners} <span className="text-zinc-600">-</span> {ls.away_corners}</div>
@@ -485,7 +485,7 @@ export default function Fixtures() {
       {lockPrompt && (
         <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
           onClick={() => setLockPrompt(false)}>
-          <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
+          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
             onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -497,7 +497,7 @@ export default function Fixtures() {
               Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
             </p>
             <Link to="/checkout"
-              className="block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-6 py-3 rounded-xl transition-colors text-sm mb-3">
+              className="block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">
               Assinar VIP
             </Link>
             <button onClick={() => setLockPrompt(false)}

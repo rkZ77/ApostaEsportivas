@@ -59,7 +59,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
           return (
             <g key={pct}>
               <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#1f1f23" strokeWidth="0.8" />
-              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="'Inter', sans-serif">{v}</text>
+              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="'JetBrains Mono', monospace">{v}</text>
             </g>
           )
         })}
@@ -109,7 +109,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
             y={H - 6}
             fill="#52525b" fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
-            fontFamily="'Inter', sans-serif"
+            fontFamily="'JetBrains Mono', monospace"
           >
             {fmtDate(sorted[idx].match_date)}
           </text>
@@ -119,14 +119,14 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
       {/* Tooltip */}
       {hoverIdx !== null && hovered && (
         <div
-          className="pointer-events-none absolute top-1 z-10 bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2 text-xs shadow-xl"
+          className="pointer-events-none absolute top-1 z-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-xs shadow-xl"
           style={{
             left: `${((barX(hoverIdx) + barW / 2) / W) * 100}%`,
             transform: hoverIdx > sorted.length * 0.65 ? 'translateX(-110%)' : 'translateX(8px)',
           }}
         >
           <p className="text-zinc-400 font-semibold mb-1">{fmtDate(hovered.match_date)}</p>
-          <div className="flex items-center gap-2">
+          <div className="font-mono flex items-center gap-2">
             <span className="text-green-400 font-black">{hovered.greens} green</span>
             <span className="text-zinc-600">·</span>
             <span className="text-zinc-300">{hovered.total} picks</span>

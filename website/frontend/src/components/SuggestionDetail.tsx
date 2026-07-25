@@ -255,7 +255,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               )}
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
-                <div className="text-sm font-black text-green-400">{Number(s.odd).toFixed(2)}</div>
+                <div className="font-mono text-sm font-black text-green-400">{Number(s.odd).toFixed(2)}</div>
               </div>
               <div className="flex-1 py-2.5 px-3">
                 <div className="text-[10px] text-zinc-500 mb-0.5">Casa</div>
@@ -305,14 +305,14 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               {tab === 'ia' && (
                 <div className="space-y-4">
                   {/* Métricas principais */}
-                  <div className="grid grid-cols-3 gap-2">
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                  <div className="font-mono grid grid-cols-3 gap-2">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase mb-1">Confiança</div>
                       <div className={`text-2xl font-black ${confidence >= 75 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-zinc-300'}`}>
                         {confidence}%
                       </div>
                     </div>
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-center">
                       {isAlav ? (
                         <>
                           <div className="text-[10px] text-zinc-500 uppercase mb-1">Tipo</div>
@@ -328,7 +328,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         </>
                       )}
                     </div>
-                    <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
+                    <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-3 text-center">
                       <div className="text-[10px] text-zinc-500 uppercase mb-1">EV</div>
                       <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : ''}
@@ -352,7 +352,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
 
                   {/* Resultado se tiver */}
                   {resultStyle && s.profit != null && (
-                    <div className={`rounded-xl p-4 border flex items-center justify-between ${resultStyle.bg} ${resultStyle.border}`}>
+                    <div className={`rounded-lg p-4 border flex items-center justify-between ${resultStyle.bg} ${resultStyle.border}`}>
                       <div>
                         <div className="text-xs text-zinc-500 mb-0.5">Resultado</div>
                         <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label} {resultStyle.emoji}</div>
@@ -366,7 +366,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Raciocínio da IA */}
                   <div>
                     <p className="text-[10px] text-zinc-500 uppercase mb-2">Análise da IA</p>
-                    <div className="bg-zinc-900 rounded-xl p-4 border border-zinc-800">
+                    <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
                       <p className="text-sm text-zinc-300 leading-relaxed whitespace-pre-wrap">
                         {s.reasoning || 'Sem análise registrada.'}
                       </p>
@@ -384,7 +384,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                           const homeLogo = g.home_team_id ? `/api/proxy/team/${g.home_team_id}.png` : null
                           const awayLogo = g.away_team_id ? `/api/proxy/team/${g.away_team_id}.png` : null
                           return (
-                            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-xl px-4 py-3">
+                            <div key={i} className="bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3">
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-1.5 flex-1 min-w-0 flex-wrap">
                                   {homeLogo && (
@@ -432,7 +432,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                           <span className="text-blue-400 font-bold truncate max-w-[120px] text-right">{s.away_team_name}</span>
                         </div>
 
-                        <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-4">
+                        <div className="bg-zinc-900 rounded-lg border border-zinc-800 p-4">
                           {hStats || aStats ? (
                             <>
                               <StatBar label="Gols feitos"      home={hStats?.avg_goals_for ?? 0}       away={aStats?.avg_goals_for ?? 0} />
@@ -518,7 +518,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                       {standings.groups.length > 1 && (
                         <p className="text-[10px] text-zinc-500 uppercase mb-2 font-semibold">{g.group}</p>
                       )}
-                      <div className="bg-zinc-900 rounded-xl border border-zinc-800 overflow-hidden">
+                      <div className="bg-zinc-900 rounded-lg border border-zinc-800 overflow-hidden">
                         {/* Header */}
                         <div className="grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-zinc-800 text-[10px] text-zinc-600 font-semibold uppercase">
                           <span>#</span>
@@ -588,7 +588,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         const lastDone = [...caminho].reverse().find(p => p.result)
                         const currentBankroll = lastDone?.bankroll_after ?? startBankroll
                         return (
-                          <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-xl px-4 py-3 mb-4">
+                          <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-lg px-4 py-3 mb-4">
                             <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
                               <span className="text-orange-400 text-xs font-black">R$</span>
                             </div>
@@ -640,7 +640,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                             </div>
 
                             {/* Card do pick */}
-                            <div className={`flex-1 mb-2 rounded-xl border px-3 py-2.5 ${
+                            <div className={`flex-1 mb-2 rounded-lg border px-3 py-2.5 ${
                               isThisPick ? 'border-orange-500/40 bg-orange-500/5' : 'border-zinc-800 bg-zinc-900'
                             }`}>
                               <div className="flex items-center justify-between gap-2">

@@ -212,7 +212,7 @@ export default function MeusPicks() {
                   <button
                     key={String(value)}
                     onClick={() => { setDaysBack(value); setDayOffset(0); setTodayPage(0) }}
-                    className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-colors ${
+                    className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-colors ${
                       daysBack === value
                         ? 'bg-green-500/15 border-green-500/50 text-green-400'
                         : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
@@ -236,7 +236,7 @@ export default function MeusPicks() {
               const wr = calcWinRate(greenCount, resolved.length) ?? 0
               const pnlStr = pnl === 0 ? 'R$ 0' : fmtSigned(pnl)
               return (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="font-mono grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
                     <div className="text-2xl font-black text-white">{periodEntries.length}</div>
                     <div className="text-[10px] text-zinc-500 uppercase mt-1">Apostas</div>
@@ -297,7 +297,7 @@ export default function MeusPicks() {
             <div className="flex gap-2">
               <button
                 onClick={() => changeTab('pendentes')}
-                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'pendentes'
                     ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400'
                     : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
@@ -307,7 +307,7 @@ export default function MeusPicks() {
               </button>
               <button
                 onClick={() => changeTab('resolvidos')}
-                className={`px-4 py-2 rounded-xl text-sm font-bold border transition-colors ${
+                className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'resolvidos'
                     ? 'bg-green-500/10 border-green-500/30 text-green-400'
                     : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
@@ -334,7 +334,7 @@ export default function MeusPicks() {
               <>
                 {/* Navegação de dia · só aparece quando um filtro de período está ativo */}
                 {(typeof daysBack === 'number' ? daysBack > 0 : true) && uniqueDatesFiltered.length > 1 && (
-                  <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-xl px-2 py-2">
+                  <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-md px-2 py-2">
                     <button
                       onClick={() => setDayOffset(o => o + 1)}
                       disabled={!hasPrev}
@@ -473,7 +473,7 @@ export default function MeusPicks() {
                   <button
                     onClick={loadMoreResolved}
                     disabled={loadingMore}
-                    className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+                    className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold"
                   >
                     {loadingMore ? 'Carregando...' : 'Carregar apostas mais antigas'}
                   </button>
@@ -486,7 +486,7 @@ export default function MeusPicks() {
       </main>
 
       {showRemoved && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
           Pick removido da sua banca
         </div>
       )}

@@ -145,10 +145,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const firstName = user.name.split(' ')[0]
   const isTrial = user.plan === 'trial'
 
-  const planBadgeColor = isAdmin ? 'text-purple-400 bg-purple-400/10 border-purple-400/20'
-    : isTrial ? 'text-amber-400 bg-amber-400/10 border-amber-400/20'
-    : isVip ? 'text-yellow-400 bg-yellow-400/10 border-yellow-400/20'
-    : 'text-zinc-400 bg-zinc-800 border-zinc-700'
+  const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
   const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
 
   const planStatusColor = isAdmin ? 'text-purple-400'
@@ -180,7 +177,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-white font-black text-lg leading-tight">Olá, {firstName}!</h2>
-          <span className={`text-xs font-black px-2.5 py-0.5 rounded-full border ${planBadgeColor}`}>{planLabel}</span>
+          <span className={planBadgeCls}>{planLabel}</span>
         </div>
         <p className="text-zinc-500 text-xs mt-0.5 truncate">{user.email}</p>
 
@@ -192,7 +189,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
           </div>
           {countdown && (
             <span className="text-zinc-400 text-xs">
-              Expira em <span className="font-bold text-white tabular-nums">{countdown}</span>
+              Expira em <span className="font-mono font-bold text-white tabular-nums">{countdown}</span>
             </span>
           )}
           {!isVip && !isAdmin && (
@@ -292,7 +289,7 @@ function QuickStats({ stats }: { stats: any }) {
             <span className="text-xs text-zinc-600 font-semibold uppercase">{label}</span>
             <span className={iconColor}>{icon}</span>
           </div>
-          <div className={`text-2xl font-black ${color}`}>{value}</div>
+          <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
           <div className="text-xs text-zinc-700 mt-0.5">{sub}</div>
         </div>
       ))}
@@ -397,7 +394,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
   return (
   <>
     <div
-      className={`relative overflow-hidden bg-zinc-950 border rounded-2xl transition-all duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
+      className={`relative overflow-hidden bg-zinc-950 border rounded-lg transition-all duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
     >
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
@@ -428,7 +425,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       </div>
 
       {/* Hero: Odd | Stake | Retorno */}
-      <div className="flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+      <div className="font-mono flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
           <div className="text-3xl font-black text-green-400">{Number(dica.odd).toFixed(2)}</div>
@@ -526,7 +523,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
 
       {/* Reasoning snippet */}
       {fato && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
           <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{fato}</span>
         </div>
@@ -584,7 +581,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       />
     )}
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
         Pick registrado com sucesso!
       </div>
     )}
@@ -689,7 +686,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
   return (
   <>
     <div
-      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-2xl cursor-pointer transition-all duration-200 group"
+      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-lg cursor-pointer transition-all duration-200 group"
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -724,7 +721,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       </div>
 
       {/* Odd hero + retorno */}
-      <div className="flex items-center gap-0 divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+      <div className="font-mono flex items-center gap-0 divide-x divide-zinc-800/60 border-b border-zinc-800/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-zinc-500 mb-0.5">Odd combinada</div>
           <div className="text-3xl font-black text-green-400">{Number(m.total_odd).toFixed(2)}</div>
@@ -798,7 +795,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
             ? 'bg-red-500/20 text-red-400'
             : 'bg-blue-500/10 text-blue-400'
           return (
-          <div key={i} className={`rounded-xl border px-3 py-2 ${boxClass}`}>
+          <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
             <div className="flex items-center gap-2">
               <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
                 {lr === 'GREEN' ? '✓' : lr === 'RED' ? '✗' : i + 1}
@@ -810,7 +807,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
                 <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
                 <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
               </div>
-              <span className={`font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : 'text-blue-300'}`}>
+              <span className={`font-mono font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : 'text-blue-300'}`}>
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>
@@ -837,7 +834,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
 
       {/* Fato da IA */}
       {shortReasoning(m.reasoning) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
           <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
         </div>
@@ -890,7 +887,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       />
     )}
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
         Pick registrado com sucesso!
       </div>
     )}
@@ -971,7 +968,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
   return (
   <>
     <div
-      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-2xl cursor-pointer transition-all duration-200 group"
+      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-lg cursor-pointer transition-all duration-200 group"
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -999,7 +996,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       {/* Bankroll progression */}
       <div className="px-5 py-3 border-b border-zinc-800/60">
         {userBankroll != null ? (
-          <div className="flex items-center gap-3">
+          <div className="font-mono flex items-center gap-3">
             <div className="flex-1">
               <div className="text-[10px] text-zinc-500 mb-1">Sua banca alavancagem</div>
               <div className="flex items-center gap-2">
@@ -1024,7 +1021,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
             </div>
           </div>
         ) : (
-          <div className="flex items-center justify-between">
+          <div className="font-mono flex items-center justify-between">
             <div>
               <div className="text-[10px] text-zinc-500 mb-0.5">Odd alvo</div>
               <div className="text-2xl font-black text-green-400">{oddCombined.toFixed(2)}</div>
@@ -1052,7 +1049,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
             ? 'bg-red-500/20 text-red-400'
             : 'bg-orange-500/10 text-orange-400'
           return (
-          <div key={i} className={`rounded-xl border px-3 py-2 ${boxClass}`}>
+          <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
             <div className="flex items-center gap-2">
               <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
                 {pick.result === 'GREEN' ? '✓' : pick.result === 'RED' ? '✗' : i + 1}
@@ -1064,7 +1061,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
                 <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
                 <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
               </div>
-              <span className={`font-black text-sm shrink-0 ${pick.result === 'GREEN' ? 'text-green-400' : pick.result === 'RED' ? 'text-red-400' : 'text-orange-300'}`}>
+              <span className={`font-mono font-black text-sm shrink-0 ${pick.result === 'GREEN' ? 'text-green-400' : pick.result === 'RED' ? 'text-red-400' : 'text-orange-300'}`}>
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>
@@ -1092,7 +1089,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
 
       {/* Fato da IA */}
       {shortReasoning(pick.reasoning_1) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
           <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
         </div>
@@ -1149,7 +1146,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       />
     )}
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
         Pick registrado com sucesso!
       </div>
     )}
@@ -1383,7 +1380,7 @@ function PicksTable({
                   </span>
                 )}
                 {p.profit != null ? (
-                  <span className={`text-sm font-black w-14 text-right ${p.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                  <span className={`font-mono text-sm font-black w-14 text-right ${p.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                     {p.profit >= 0 ? '+' : ''}{p.isMonetary ? 'R$' : ''}{Math.abs(p.profit).toFixed(2)}{!p.isMonetary ? 'u' : ''}
                   </span>
                 ) : (
@@ -1416,7 +1413,7 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
     ? { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-white' }
     : { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black' }
   return (
-    <div className="relative rounded-2xl overflow-hidden">
+    <div className="relative rounded-lg overflow-hidden">
       <div className="grid gap-4 md:grid-cols-2 select-none pointer-events-none" style={{ filter: 'blur(5px)', opacity: 0.35 }}>
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="card p-5 space-y-3">
@@ -1434,16 +1431,16 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
           </div>
         ))}
       </div>
-      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm rounded-2xl">
+      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm rounded-lg">
         <div className="text-center px-6">
           <div className={`w-12 h-12 border rounded-full flex items-center justify-center mx-auto mb-3 ${cls.ring}`}>
             <svg className={`w-6 h-6 ${cls.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <p className="text-white font-black text-base mb-1">Exclusivo para assinantes VIP</p>
+          <p className="font-display text-white font-black text-base mb-1">Exclusivo para assinantes VIP</p>
           <p className="text-zinc-400 text-xs mb-4 max-w-xs">10 a 20 picks por dia com análise completa da IA e resultados em tempo real.</p>
-          <Link to="/checkout" className={`inline-block font-black px-6 py-2.5 rounded-xl transition-colors text-sm ${cls.btn}`}>
+          <Link to="/checkout" className={`inline-block font-black px-6 py-2.5 rounded-md transition-colors text-sm ${cls.btn}`}>
             Assinar VIP
           </Link>
         </div>
@@ -1647,9 +1644,9 @@ export default function Picks() {
       {/* Modal de boas-vindas · configura banca */}
       {showBancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
             <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-md bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
                 <Wallet className="w-5 h-5 text-yellow-400" />
               </div>
               <div>
@@ -1670,7 +1667,7 @@ export default function Picks() {
                   setShowBancaModal(false)
                   navigate('/banca')
                 }}
-                className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-sm py-3 rounded-xl transition-colors"
+                className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-sm py-3 rounded-md transition-colors"
               >
                 Configurar banca agora
               </button>
@@ -1730,7 +1727,7 @@ export default function Picks() {
             {quickStats && (
               <div className="hidden sm:flex items-center gap-3 text-xs">
                 <span className="text-zinc-600">Win rate geral</span>
-                <span className={`font-black text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>
+                <span className={`font-mono font-black text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>
               </div>
@@ -1745,7 +1742,7 @@ export default function Picks() {
 
       <main className="max-w-6xl mx-auto px-4 py-6">
         {hasNew && (
-          <div className="mb-4 flex items-center justify-between bg-green-500/10 border border-green-500/25 rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center justify-between bg-green-500/10 border border-green-500/25 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
               <span className="text-green-400 text-sm font-semibold">Novos picks disponíveis hoje!</span>
@@ -1757,7 +1754,7 @@ export default function Picks() {
         )}
 
         {hasLive && tab !== 'aovivo' && (
-          <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-xl px-4 py-3">
+          <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
               <span className="text-red-300 text-sm font-semibold">
@@ -1819,8 +1816,8 @@ export default function Picks() {
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
                       { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400' },
                     ].map(({ label, value, color }) => (
-                      <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-                        <div className={`text-xl font-black ${color}`}>{value}</div>
+                      <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
+                        <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
                         <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
                       </div>
                     ))}
@@ -1874,7 +1871,7 @@ export default function Picks() {
                         {vips.length > 4 && (
                           <button
                             onClick={() => setTab('vip')}
-                            className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700"
+                            className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700"
                           >
                             Ver todos os {vips.length} picks
                           </button>
@@ -1924,7 +1921,7 @@ export default function Picks() {
                         isLive={isAlavLive(today.alavancagem)}
                       />
                       <button onClick={() => setTab('alavancagem')}
-                        className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700">
+                        className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700">
                         Ver histórico da série
                       </button>
                     </>
@@ -1942,7 +1939,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-green-500/20 bg-green-500/5">
-              <p className="text-sm font-black text-green-400 mb-3">O que é o Pick do Dia Free?</p>
+              <p className="font-display text-sm font-black text-green-400 mb-3">O que é o Pick do Dia Free?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   Um pick gratuito publicado diariamente pela <span className="text-white font-bold">IA</span>. Analisamos centenas de
@@ -1958,7 +1955,7 @@ export default function Picks() {
                     { label: 'Picks/dia',   value: '1',       color: 'text-white'     },
                     { label: 'Custo',       value: 'Grátis',  color: 'text-green-400' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
+                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
                       <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
                     </div>
@@ -1977,7 +1974,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
           </div>
@@ -1987,7 +1984,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-yellow-400/20 bg-yellow-400/5">
-              <p className="text-sm font-black text-yellow-400 mb-3">O que são os Picks VIP?</p>
+              <p className="font-display text-sm font-black text-yellow-400 mb-3">O que são os Picks VIP?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   Picks exclusivos gerados pela <span className="text-white font-bold">IA</span> com análise estatística avançada.
@@ -2004,7 +2001,7 @@ export default function Picks() {
                     { label: 'Mercados',     value: '5+',     color: 'text-white'      },
                     { label: 'Análise IA',   value: 'Completa', color: 'text-green-400' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
+                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
                       <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
                     </div>
@@ -2060,7 +2057,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
           </div>
@@ -2070,7 +2067,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-blue-400/20 bg-blue-400/5">
-              <p className="text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
+              <p className="font-display text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   A IA combina <span className="text-white font-bold">2 a 3 seleções</span> de alta confiança em uma única aposta múltipla,
@@ -2086,7 +2083,7 @@ export default function Picks() {
                     { label: 'Odd alvo',   value: '2.00–4.00', color: 'text-green-400'  },
                     { label: 'Frequência', value: 'Diário', color: 'text-white'     },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
+                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
                       <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
                     </div>
@@ -2114,7 +2111,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
           </div>
@@ -2124,7 +2121,7 @@ export default function Picks() {
           <div className="space-y-6">
             {/* Como funciona */}
             <div className="card p-5 border-orange-500/20 bg-orange-500/5">
-              <p className="text-sm font-black text-orange-400 mb-3">Como funciona a Alavancagem?</p>
+              <p className="font-display text-sm font-black text-orange-400 mb-3">Como funciona a Alavancagem?</p>
               <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
                 <p>
                   A banca começa em <span className="text-white font-bold">R$50</span> e o lucro de cada GREEN é
@@ -2146,7 +2143,7 @@ export default function Picks() {
                     { label: 'Reset no RED',  value: 'R$50',   color: 'text-red-400'    },
                     { label: '5 greens',      value: 'R$300+', color: 'text-white'      },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-xl p-3 text-center">
+                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
                       <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
                     </div>
@@ -2167,11 +2164,11 @@ export default function Picks() {
                 <div className="card p-5 border-orange-500/20">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="text-sm font-black text-orange-400">Banca Alavancagem</p>
+                      <p className="font-display text-sm font-black text-orange-400">Banca Alavancagem</p>
                       <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
                     </div>
                     {userAlavSerie?.configured && (
-                      <div className="text-right">
+                      <div className="font-mono text-right">
                         <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
                         <div className="text-xs text-zinc-600">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
                       </div>
@@ -2186,17 +2183,17 @@ export default function Picks() {
                         placeholder={userAlavSerie?.configured ? `Atual: R$${userAlavSerie.initial_bankroll.toFixed(0)}` : 'Ex: 100'}
                         value={alavInitInput}
                         onChange={e => setAlavInitInput(e.target.value)}
-                        className="input flex-1 text-sm"
+                        className="input font-mono flex-1 text-sm"
                       />
                       <button
                         onClick={saveAlavInit}
                         disabled={alavInitSaving || !alavInitInput}
-                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black px-4 py-2 rounded-xl text-sm transition-colors"
+                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black px-4 py-2 rounded-md text-sm transition-colors"
                       >
                         {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
                       </button>
                       {userAlavSerie?.configured && (
-                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-xl border border-zinc-700 text-zinc-500 text-sm hover:text-white transition-colors">✕</button>
+                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-md border border-zinc-700 text-zinc-500 text-sm hover:text-white transition-colors">✕</button>
                       )}
                     </div>
                   ) : (
@@ -2282,7 +2279,7 @@ export default function Picks() {
                             { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
                           ].map(({ label, value, color, sub }) => (
                             <div key={label} className="card p-4 text-center">
-                              <div className={`text-xl font-black ${color}`}>{value}</div>
+                              <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
                               <div className="text-xs text-zinc-500 font-semibold mt-0.5">{label}</div>
                               <div className="text-[10px] text-zinc-700 mt-0.5">{sub}</div>
                             </div>
@@ -2301,7 +2298,7 @@ export default function Picks() {
                       <button
                         onClick={loadMoreAlavancagem}
                         disabled={alavLoadingMore}
-                        className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 mb-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+                        className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 mb-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold"
                       >
                         {alavLoadingMore ? 'Carregando...' : 'Carregar picks mais antigos'}
                       </button>
@@ -2332,7 +2329,7 @@ export default function Picks() {
                             </div>
                             <div
                               onClick={() => openDetail(pick.id, 'alavancagem')}
-                              className={`flex-1 mb-2 rounded-xl border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
+                              className={`flex-1 mb-2 rounded-md border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
                                 !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-zinc-800 bg-zinc-900'
                               }`}
                             >
@@ -2347,7 +2344,7 @@ export default function Picks() {
                                   </div>
                                   <div className="text-[10px] text-zinc-500">{date}</div>
                                 </div>
-                                <div className="text-right shrink-0 space-y-0.5">
+                                <div className="font-mono text-right shrink-0 space-y-0.5">
                                   {bankBefore != null && (
                                     <div className="text-[10px] text-zinc-600">R${bankBefore.toFixed(2)}</div>
                                   )}
@@ -2376,7 +2373,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
           </div>

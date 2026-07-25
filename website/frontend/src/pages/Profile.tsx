@@ -342,7 +342,7 @@ export default function Profile() {
               <button
                 type="button"
                 onClick={() => navigate('/planos')}
-                className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-xl transition-colors"
+                className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
               >
                 Assinar
               </button>
@@ -484,11 +484,11 @@ export default function Profile() {
               {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={handleRequestPasswordChange} disabled={passwordChanging}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                   {passwordChanging ? 'Enviando…' : 'Enviar código de confirmação'}
                 </button>
                 <button type="button" onClick={resetPasswordChangeState}
-                  className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
                   Cancelar
                 </button>
               </div>
@@ -518,11 +518,11 @@ export default function Profile() {
               {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={handleConfirmPasswordChange} disabled={passwordChanging || pwCode.length !== 6}
-                  className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                   {passwordChanging ? 'Confirmando…' : 'Confirmar troca de senha'}
                 </button>
                 <button type="button" onClick={resetPasswordChangeState}
-                  className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
                   Cancelar
                 </button>
               </div>
@@ -567,7 +567,7 @@ export default function Profile() {
             type="button"
             onClick={handleLogoutOtherSessions}
             disabled={loggingOutOthers}
-            className="w-full py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+            className="w-full py-2.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
           >
             {loggingOutOthers ? 'Encerrando…' : loggedOutOthers ? 'Sessão encerrada!' : 'Encerrar outras sessões'}
           </button>
@@ -598,14 +598,14 @@ export default function Profile() {
                 <button
                   onClick={handleResendEmail}
                   disabled={emailResending || emailCooldown > 0}
-                  className="flex-1 py-2.5 rounded-xl border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
                 >
                   {emailResending ? 'Enviando…' : emailCooldown > 0 ? `Reenviar em ${emailCooldown}s` : 'Reenviar confirmação'}
                 </button>
                 {!showEmailChange && (
                   <button
                     onClick={() => setShowEmailChange(true)}
-                    className="flex-1 py-2.5 rounded-xl border border-blue-500/30 hover:border-blue-400/50 text-blue-400 hover:text-blue-300 text-xs font-semibold transition-colors"
+                    className="flex-1 py-2.5 rounded-md border border-blue-500/30 hover:border-blue-400/50 text-blue-400 hover:text-blue-300 text-xs font-semibold transition-colors"
                   >
                     Alterar e-mail
                   </button>
@@ -633,11 +633,11 @@ export default function Profile() {
                   {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={emailChanging}
-                      className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                      className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                       {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
                     </button>
                     <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
-                      className="px-4 py-2.5 rounded-xl border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                      className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
                       Cancelar
                     </button>
                   </div>
@@ -717,7 +717,7 @@ export default function Profile() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="font-mono grid grid-cols-3 gap-3">
                 <div className="bg-zinc-900 rounded-lg p-3 text-center">
                   <p className="text-xl font-black text-white">{referral.total_indicated}</p>
                   <p className="text-zinc-500 text-xs mt-0.5">Indicados</p>

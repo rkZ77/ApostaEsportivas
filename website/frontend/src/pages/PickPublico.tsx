@@ -83,7 +83,7 @@ export default function PickPublico() {
 
       {/* Card principal */}
       <div className="flex-1 px-4 py-4 max-w-lg mx-auto w-full">
-        <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+        <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
 
           {/* Accent bar */}
           <div className={`h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent ${pick.result === 'RED' ? 'via-red-500' : ''}`} />
@@ -139,19 +139,19 @@ export default function PickPublico() {
           <div className="flex divide-x divide-zinc-800/60 border-b border-zinc-800/60">
             <div className="flex-1 px-4 py-3 text-center">
               <p className="text-[10px] text-zinc-500 mb-0.5">Odd</p>
-              <p className="text-2xl font-black text-green-400">{odd?.toFixed(2) ?? '-'}</p>
+              <p className="font-mono text-2xl font-black text-green-400">{odd?.toFixed(2) ?? '-'}</p>
             </div>
             {profit != null ? (
               <div className="flex-1 px-4 py-3 text-center">
                 <p className="text-[10px] text-zinc-500 mb-0.5">Lucro</p>
-                <p className={`text-2xl font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                <p className={`font-mono text-2xl font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                   {profit >= 0 ? '+' : ''}{profit.toFixed(2)}u
                 </p>
               </div>
             ) : (
               <div className="flex-1 px-4 py-3 text-center">
                 <p className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</p>
-                <p className="text-2xl font-black text-zinc-400">
+                <p className="font-mono text-2xl font-black text-zinc-400">
                   {odd ? `+${(odd - 1).toFixed(2)}u` : '-'}
                 </p>
               </div>
@@ -171,7 +171,7 @@ export default function PickPublico() {
             </div>
           ) : (
             <div className="px-5 py-4 border-b border-zinc-800/60">
-              <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl">
+              <div className="flex items-center gap-3 px-4 py-3 bg-zinc-900 border border-zinc-800 rounded-md">
                 <Lock className="w-4 h-4 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-xs font-bold text-white">Mercado · Linha · Análise da IA</p>
@@ -181,7 +181,7 @@ export default function PickPublico() {
               <div className="mt-2 space-y-1.5">
                 {['Mercado: ████████████', 'Linha: ██████', 'Análise da IA...'].map((t, i) => (
                   <div key={i} className="flex items-center gap-2">
-                    <div className="h-3 bg-zinc-800 rounded-full flex-1 opacity-40 select-none blur-[2px]">
+                    <div className="h-3 bg-zinc-800 rounded-sm flex-1 opacity-40 select-none blur-[2px]">
                       <span className="text-[10px] text-zinc-700 px-2">{t}</span>
                     </div>
                   </div>
@@ -200,7 +200,7 @@ export default function PickPublico() {
               </p>
               <Link
                 to={signupUrl}
-                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors"
+                className="flex items-center justify-center gap-2 w-full py-3.5 rounded-md bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors"
               >
                 <TrendingUp className="w-4 h-4" />
                 {user ? 'Assinar VIP' : 'Criar conta gratuita e assinar VIP'}

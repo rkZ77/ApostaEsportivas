@@ -70,7 +70,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
   if (locked) {
     return (
       <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}>
-        <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
+        <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           onClick={e => e.stopPropagation()}>
           <h2 className="text-white font-black text-lg mb-2">Já configurada este mês</h2>
           <p className="text-zinc-400 text-sm leading-relaxed mb-4">
@@ -91,7 +91,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
+      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
         <h2 className="text-white font-black text-lg mb-1">Configurar banca</h2>
         <p className="text-zinc-500 text-xs mb-5">Define banca, unidade e meta como um tipster profissional.</p>
 
@@ -395,7 +395,7 @@ export default function Banca() {
                 },
               ].map(({ label, value, color, sub }) => (
                 <div key={label} className="stat-card text-center">
-                  <div className={`text-3xl font-black ${color}`}>{value}</div>
+                  <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
                   <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
                   <div className="text-[10px] text-zinc-700 mt-0.5">{sub}</div>
                 </div>
@@ -414,12 +414,12 @@ export default function Banca() {
                 <div className="flex items-center justify-between mb-3">
                   <div>
                     <p className="text-xs text-zinc-500 uppercase font-semibold mb-0.5">Meta de banca</p>
-                    <p className="text-white font-black">
+                    <p className="font-mono text-white font-black">
                       {fmtBRL(current)}
                       <span className="text-zinc-600 font-normal text-sm"> / {fmtBRL(goal)}</span>
                     </p>
                   </div>
-                  <span className={`text-2xl font-black ${goalPct >= 100 ? 'text-green-400' : 'text-zinc-300'}`}>
+                  <span className={`font-mono text-2xl font-black ${goalPct >= 100 ? 'text-green-400' : 'text-zinc-300'}`}>
                     {goalPct >= 100 ? 'Meta atingida!' : `${goalPct}%`}
                   </span>
                 </div>
@@ -521,7 +521,7 @@ export default function Banca() {
                           {SOURCE_LBL[data.best_pick.pick_type] ?? data.best_pick.pick_type}
                         </span>
                       </div>
-                      <span className="text-2xl font-black text-green-500">
+                      <span className="font-mono text-2xl font-black text-green-500">
                         +{fmtBRL(data.best_pick.pnl)}
                       </span>
                     </div>
@@ -541,7 +541,7 @@ export default function Banca() {
                           {SOURCE_LBL[data.worst_pick.pick_type] ?? data.worst_pick.pick_type}
                         </span>
                       </div>
-                      <span className="text-2xl font-black text-red-400">
+                      <span className="font-mono text-2xl font-black text-red-400">
                         −{fmtBRL(Math.abs(data.worst_pick.pnl))}
                       </span>
                     </div>
@@ -554,7 +554,7 @@ export default function Banca() {
             {data?.ia_roi != null && (
               <div className="card p-5">
                 <p className="text-xs text-zinc-500 uppercase font-semibold mb-4">Você vs IA</p>
-                <div className="grid grid-cols-3 gap-2 sm:gap-4">
+                <div className="font-mono grid grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
                     <div className={`text-xl sm:text-2xl font-black ${(data?.yield_roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
                       {(data?.yield_roi ?? 0) >= 0 ? '+' : ''}{data.yield_roi ?? 0}%
