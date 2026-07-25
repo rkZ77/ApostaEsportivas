@@ -263,7 +263,7 @@ export default function Login() {
           </p>
 
           {kickedDevice && (
-            <div className="mb-4 rounded-xl border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
+            <div className="mb-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
               <p className="text-yellow-300 font-semibold mb-1">Sessão encerrada</p>
               <p className="text-zinc-300">
                 Um acesso foi feito de <strong className="text-white">{kickedDevice}</strong> e sua sessão foi encerrada.
@@ -284,7 +284,7 @@ export default function Login() {
                 <div>
                   <label htmlFor="login-identifier" className="block text-sm text-zinc-400 mb-2 font-medium">Login ID</label>
                   {/* Tabs estilo Betano */}
-                  <div className="flex rounded-xl overflow-hidden border border-zinc-700 mb-3">
+                  <div className="flex rounded-md overflow-hidden border border-zinc-700 mb-3">
                     {loginTabs.map(tab => (
                       <button
                         key={tab.key}
@@ -450,7 +450,7 @@ export default function Login() {
             )}
 
             {mode === 'register' && regStep === 2 && refCode && (
-              <div className="bg-green-500/10 border border-green-500/30 text-green-400 rounded-xl px-4 py-3 text-xs flex items-center gap-2">
+              <div className="bg-green-500/10 border border-green-500/30 text-green-400 rounded-lg px-4 py-3 text-xs flex items-center gap-2">
                 <PartyPopper className="w-4 h-4 shrink-0" />
                 <span>Código de indicação <strong>{refCode}</strong> aplicado!</span>
               </div>
@@ -479,7 +479,7 @@ export default function Login() {
             )}
 
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-xl px-4 py-3 text-sm">
+              <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 text-sm">
                 {error}
               </div>
             )}

@@ -177,7 +177,7 @@ export default function Agente() {
             <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
               O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP.
             </p>
-            <a href="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-3 rounded-xl transition-colors text-sm">
+            <a href="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-3 rounded-md transition-colors text-sm">
               Assinar VIP
             </a>
           </div>
@@ -212,7 +212,7 @@ export default function Agente() {
       <main className="flex-1 max-w-3xl w-full mx-auto px-4 py-4 flex flex-col gap-4 overflow-y-auto min-h-0">
         {messages.length === 0 && (
           <div className="flex flex-col items-center justify-center flex-1 gap-6 py-8">
-            <div className="w-16 h-16 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+            <div className="w-16 h-16 rounded-md bg-green-500/10 border border-green-500/20 flex items-center justify-center">
               <Zap className="w-8 h-8 text-green-400" />
             </div>
             <div className="text-center">
@@ -226,7 +226,7 @@ export default function Agente() {
                 <button
                   key={s}
                   onClick={() => sendMessage(s)}
-                  className="text-left px-4 py-3 rounded-xl bg-zinc-900 border border-zinc-800 hover:border-green-500/40 hover:bg-zinc-800 transition-all text-sm text-zinc-300"
+                  className="text-left px-4 py-3 rounded-md bg-zinc-900 border border-zinc-800 hover:border-green-500/40 hover:bg-zinc-800 transition-all text-sm text-zinc-300"
                 >
                   {s}
                 </button>
@@ -250,7 +250,7 @@ export default function Agente() {
                   AI
                 </div>
               )}
-              <div className={`max-w-[80%] sm:max-w-[75%] rounded-2xl px-4 py-3 text-sm leading-relaxed
+              <div className={`max-w-[80%] sm:max-w-[75%] rounded-md px-4 py-3 text-sm leading-relaxed
                 ${msg.role === 'user'
                   ? 'bg-green-600 text-white rounded-tr-sm'
                   : 'bg-zinc-900 border border-zinc-800 rounded-tl-sm'}`}>
@@ -283,14 +283,14 @@ export default function Agente() {
             onKeyDown={handleKeyDown}
             placeholder="Pergunte sobre picks, banca, jogos ao vivo... (Enter para enviar)"
             rows={1}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
+            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-md px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
             style={{ minHeight: '48px', maxHeight: '120px' }}
             disabled={loading}
           />
           <button
             onClick={() => sendMessage()}
             disabled={!input.trim() || loading}
-            className="w-12 h-12 rounded-xl bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
+            className="w-12 h-12 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
           >
             {loading ? (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

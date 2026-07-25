@@ -9,7 +9,7 @@ export default function Footer() {
           {/* Logo + tagline */}
           <div className="flex items-center gap-2.5">
             <img src="/logo.png" alt="PickIA" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
-            <span className="text-sm font-black text-zinc-300">Pick<span className="text-green-500">IA</span></span>
+            <span className="font-display text-sm font-semibold text-zinc-300">Pick<span className="text-green-500">IA</span></span>
           </div>
 
           {/* Links */}

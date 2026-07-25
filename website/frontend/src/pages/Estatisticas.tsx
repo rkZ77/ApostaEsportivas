@@ -221,7 +221,7 @@ export function EstatisticasContent() {
                 <div>
                   <h2 className="text-white font-black text-base">{selectedLeague.name}</h2>
                   <p className="text-zinc-500 text-xs">
-                    Temporada {selectedLeague.season} · <span className="text-green-400 font-bold">{summary.total_games}</span> jogos analisados
+                    Temporada {selectedLeague.season} · <span className="font-mono text-green-400 font-bold">{summary.total_games}</span> jogos analisados
                   </p>
                 </div>
               </div>
@@ -249,7 +249,7 @@ export function EstatisticasContent() {
                     <div className={`flex justify-center mb-1 ${def.iconCls}`}>
                       <Icon className="w-4 h-4" />
                     </div>
-                    <div className={`text-xl font-black ${cls}`}>{display}</div>
+                    <div className={`font-mono text-xl font-black ${cls}`}>{display}</div>
                     <div className="text-[9px] text-zinc-600 font-semibold mt-0.5 leading-tight">{def.label}</div>
                     <div className={`flex items-center justify-center gap-0.5 mt-1 text-[9px] font-bold ${cls}`}>
                       <TrendIcon value={val} high={def.high} low={def.low} />
@@ -268,7 +268,7 @@ export function EstatisticasContent() {
               <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setActiveCard(null)}>
                 <div className="absolute inset-0 bg-black/70" />
                 <div
-                  className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-2xl sm:rounded-2xl overflow-hidden max-h-[80vh] flex flex-col"
+                  className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[80vh] flex flex-col"
                   onClick={e => e.stopPropagation()}
                 >
                   {/* Header */}
@@ -324,13 +324,13 @@ export function EstatisticasContent() {
                           return (
                             <div key={team.team_id}
                               className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
-                              <span className={`text-sm font-black w-6 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
+                              <span className={`font-mono text-sm font-black w-6 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
                               <img src={`/api/proxy/team/${team.team_id}.png`} alt=""
                                 width={24} height={24} className="w-6 h-6 object-contain shrink-0"
                                 onError={e => (e.currentTarget.style.display = 'none')} />
                               <span className="text-sm text-zinc-200 font-semibold flex-1 truncate">{team.team_name}</span>
-                              <span className="text-[11px] text-zinc-600 shrink-0">{team.games}j</span>
-                              <span className={`text-base font-black shrink-0 tabular-nums w-14 text-right ${isFirst ? 'text-green-400' : 'text-zinc-200'}`}>
+                              <span className="font-mono text-[11px] text-zinc-600 shrink-0">{team.games}j</span>
+                              <span className={`font-mono text-base font-black shrink-0 tabular-nums w-14 text-right ${isFirst ? 'text-green-400' : 'text-zinc-200'}`}>
                                 {val.toFixed(2)}
                               </span>
                             </div>
@@ -365,7 +365,7 @@ export function EstatisticasContent() {
                   return (
                     <div key={g.fixture_id}
                       className="flex items-center gap-2 px-4 py-2.5 hover:bg-zinc-900/50 transition-colors">
-                      <span className="text-xs text-zinc-600 w-10 shrink-0 font-semibold">{date}</span>
+                      <span className="font-mono text-xs text-zinc-600 w-10 shrink-0 font-semibold">{date}</span>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -375,7 +375,7 @@ export function EstatisticasContent() {
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
                           <span className="text-sm text-zinc-300 font-semibold truncate">{g.home_team}</span>
-                          <span className={`text-sm font-black shrink-0 mx-0.5 ${goalsColor}`}>
+                          <span className={`font-mono text-sm font-black shrink-0 mx-0.5 ${goalsColor}`}>
                             {g.home_goals ?? '?'} – {g.away_goals ?? '?'}
                           </span>
                           <span className="text-sm text-zinc-300 font-semibold truncate">{g.away_team}</span>
@@ -387,7 +387,7 @@ export function EstatisticasContent() {
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1 shrink-0">
+                      <div className="font-mono flex items-center gap-1 shrink-0">
                         <span className="text-xs bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-semibold min-w-[1.75rem] text-center">
                           {g.total_corners ?? '–'}
                         </span>
