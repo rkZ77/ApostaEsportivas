@@ -236,6 +236,7 @@ def analyze_fixture_markets(
                 "amostra":          taxa["amostra"],
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
+                "wilson":           taxa.get("wilson"),
                 "prob_baseline_source": prob_baseline["source"],
                 "stability":        stability,
                 "_direction":       (m.get("value") or "").strip().lower(),

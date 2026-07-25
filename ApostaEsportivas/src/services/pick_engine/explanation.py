@@ -41,6 +41,13 @@ def build_explanation(candidate: dict) -> dict:
     if candidate.get("amostra_label") in ("ESCASSO", "VAZIO"):
         risks.append(f"Amostra {candidate['amostra_label'].lower()} · confiança limitada")
 
+    wilson = candidate.get("wilson")
+    if wilson and wilson["width"] > 0.25:
+        risks.append(
+            f"Intervalo de confiança largo (taxa real entre {wilson['lower']*100:.0f}% e "
+            f"{wilson['upper']*100:.0f}%) · a taxa pontual pode não se sustentar"
+        )
+
     if candidate.get("bookmakers_count", 1) < 2:
         risks.append("Consenso de apenas 1 casa de apostas")
 

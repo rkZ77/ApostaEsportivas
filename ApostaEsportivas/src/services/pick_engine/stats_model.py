@@ -2,9 +2,31 @@
 recencia e forca do adversario, feitos x cedidos, classificacao de
 mercado, eficiencia ofensiva. Migrado de pick_math_service.py
 (feature/pick-math-deterministico), reorganizado em pacote modular."""
+import math
 from datetime import datetime, date
 
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
+
+_WILSON_Z = 1.96  # 95% de confianca
+
+
+def wilson_interval(hits: int, n: int, z: float = _WILSON_Z) -> dict | None:
+    """Intervalo de confianca de Wilson pra uma proporcao binomial (hits/n)
+    -- mais confiavel que Wald em amostra pequena (nao estoura os limites
+    0/1, nao fica simetrico artificialmente quando p esta perto de 0 ou 1).
+    Usa a contagem BRUTA (nao ponderada) porque a derivacao assume ensaios
+    iid -- taxa_ponderada ja incorpora peso de adversario/recencia, misturar
+    os dois na mesma formula nao teria interpretacao estatistica limpa.
+    None se n=0 (sem amostra, sem intervalo a calcular)."""
+    if not n or n <= 0:
+        return None
+    p = hits / n
+    denom = 1 + z * z / n
+    center = (p + z * z / (2 * n)) / denom
+    margin = (z * math.sqrt(p * (1 - p) / n + z * z / (4 * n * n))) / denom
+    lower = round(max(0.0, center - margin), 4)
+    upper = round(min(1.0, center + margin), 4)
+    return {"lower": lower, "upper": upper, "width": round(upper - lower, 4)}
 
 
 def temporal_decay_weight(match_date, reference_date=None, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
@@ -66,6 +88,7 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         return {
             "taxa_bruta": None, "taxa_ponderada": None,
             "amostra": 0, "amostra_label": quality["label"], "Q": quality["Q"],
+            "wilson": None,
         }
 
     values = [v for _, v in counted]
@@ -88,6 +111,7 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         "amostra": n,
         "amostra_label": quality["label"],
         "Q": quality["Q"],
+        "wilson": wilson_interval(round(sum(values)), n),
     }
 
 
