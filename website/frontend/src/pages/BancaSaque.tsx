@@ -71,7 +71,7 @@ export default function BancaSaque() {
           <div className="space-y-6">
             <div className="card p-5">
               <p className="text-xs text-zinc-500 uppercase font-semibold mb-1">Banca atual</p>
-              <p className="text-3xl font-black text-white">{fmtBRL(current)}</p>
+              <p className="font-mono text-3xl font-black text-white">{fmtBRL(current)}</p>
             </div>
 
             <div className="card p-5">
