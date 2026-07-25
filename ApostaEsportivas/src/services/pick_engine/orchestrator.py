@@ -10,6 +10,14 @@ from services.pick_engine import (
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
 
+# Familias de mercado de RESULTADO -- excluidas do pool de candidatos por
+# decisao explicita do usuario (2026-07-24): 1X2 puro, dupla chance e empate
+# anula (mesmo grupo de correlacao "result" em ranking.py). Handicap Asiatico
+# de gols (handicap_goals) fica DE FORA desta lista por pedido explicito do
+# usuario -- ele quer manter handicap_goals disponivel, so' o 1X2/dupla
+# chance/empate anula que devem sumir do pool.
+_RESULT_FAMILIES = ("outcome", "double_chance", "draw_no_bet")
+
 _OPPOSITE_VALUE = {
     "over": "under", "under": "over",
     "yes": "no", "no": "yes", "sim": "não", "não": "sim", "nao": "sim",
@@ -55,11 +63,14 @@ def analyze_fixture_markets(
     (classify_market()) disponivel nas odds ja estruturadas
     (services.odds_service.OddsService.load_odds_structured), a partir do
     historico ja carregado. Cobre gols/escanteios/cartoes/ambas marcam/
-    chutes/impedimentos (over-under), 1X2, dupla chance, empate anula
-    aposta, handicap (gols/escanteios/cartoes), par/impar, clean sheet e
-    vitoria sem sofrer gol -- ver stats_model.classify_market() pra lista
-    completa e o que fica de fora (jogador individual, placar exato,
-    1o/2o tempo).
+    chutes/impedimentos (over-under), handicap (gols/escanteios/cartoes),
+    par/impar, clean sheet e vitoria sem sofrer gol -- ver
+    stats_model.classify_market() pra lista completa e o que fica de fora
+    (jogador individual, placar exato, 1o/2o tempo). 1X2, dupla chance e
+    empate anula aposta (_RESULT_FAMILIES acima) sao classificados mas
+    descartados de proposito antes de virar candidato -- mercado de
+    resultado excluido por decisao de produto (2026-07-24). Handicap
+    Asiatico de gols continua disponivel normalmente (pedido explicito).
 
     `context_data` (saida de context_model.build_context), `matchup_data`
     (saida de team_profile_model.compare_matchup), `news_data` (saida de
@@ -128,6 +139,13 @@ def analyze_fixture_markets(
 
     candidates = []
     for (family, scope), entries in groups.items():
+        if family in _RESULT_FAMILIES:
+            if debug:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": family,
+                    "reason": "mercado de resultado excluido por decisao de produto",
+                })
+            continue
         if family in _CARDS_FAMILIES:
             eligible, reason = referee_model.cards_market_eligible(referee_sig, game_intensity, config)
             if not eligible:

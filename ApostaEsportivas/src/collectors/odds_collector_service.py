@@ -108,8 +108,20 @@ BET_ID_PT_MAP: dict[int, str] = {
 # website/frontend/src/utils/marketTranslate.ts, checadas na ordem abaixo
 # (mais especifico primeiro) pra "corners asian handicap" nao cair em
 # "asian handicap" antes.
+#
+# Bug real encontrado em producao (2026-07-24): "Cards Asian Handicap" e
+# "Cards European Handicap" nao tinham entrada especifica aqui, entao
+# caiam no fallback generico "asian handicap" -> "Handicap Asiático" --
+# market_type interno saia certo (handicap_cards, via classify_market()
+# que le "card" no nome cru em ingles), mas o texto em PT mostrado pro
+# usuario dizia "Handicap Asiático" (implica gols) pra uma aposta que na
+# verdade e sobre CARTOES. "Corners European Handicap" tinha o mesmo gap
+# (so' a variante Asian de corners estava coberta).
 _MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
+    ("cards asian handicap", "Cartões Handicap Asiático"),
+    ("cards european handicap", "Cartões Handicap Asiático"),
     ("corners asian handicap", "Escanteios Handicap Asiático"),
+    ("corners european handicap", "Escanteios Handicap Asiático"),
     ("asian handicap", "Handicap Asiático"),
     ("corners over/under", "Escanteios Mais/Menos"),
     ("corners 1x2", "Escanteios 1x2"),
