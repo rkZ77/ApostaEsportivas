@@ -17,21 +17,42 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 _REFEREE_CARD_POINTS_BASELINE = 4.1
 
 
-def referee_signal(referee_stats: dict | None, config: PickEngineConfig = DEFAULT_CONFIG) -> dict:
+def referee_signal(
+    referee_stats: dict | None, config: PickEngineConfig = DEFAULT_CONFIG,
+    league_stats: dict | None = None,
+) -> dict:
     """Confiabilidade do dado de arbitro pra este fixture -- reliable=True
     so' com amostra minima (cards_referee_min_games) de jogos apitados na
     temporada; sem isso, os demais campos ficam None (nunca usa media com
-    amostra insuficiente, mesmo se referee_stats existir)."""
+    amostra insuficiente, mesmo se referee_stats existir).
+
+    `league_stats` (RefereeStatsService.get_league_stats(), opcional):
+    fallback quando o ARBITRO ESPECIFICO nao tem amostra confiavel -- usa a
+    media de cartoes da liga inteira em vez de bloquear o mercado, com
+    is_league_fallback=True marcado (pra quem for explicar o pick saber que
+    o sinal e' generico da competicao, nao do arbitro exato). So' entra se
+    a liga em si tiver amostra suficiente (mesmo minimo de jogos) -- sem
+    isso, reliable=False do mesmo jeito de antes."""
     games = referee_stats.get("games", 0) if referee_stats else 0
-    reliable = referee_stats is not None and games >= config.cards_referee_min_games
+    reliable_specific = referee_stats is not None and games >= config.cards_referee_min_games
+
+    source, is_league_fallback = referee_stats, False
+    if not reliable_specific:
+        league_games = league_stats.get("games", 0) if league_stats else 0
+        if league_stats is not None and league_games >= config.cards_referee_min_games:
+            source, is_league_fallback = league_stats, True
+            games = league_games
+
+    reliable = source is not None and games >= config.cards_referee_min_games
 
     def _f(key):
-        # referee_stats vem direto do psycopg2 (RealDictCursor) -- colunas
-        # NUMERIC do Postgres chegam como Decimal, nao float. Normaliza aqui
-        # (unico ponto de entrada do dado bruto no motor) pra nunca misturar
-        # Decimal com float mais adiante (bug real de producao: game_intensity
-        # fazia Decimal - float e estourava TypeError).
-        val = referee_stats.get(key) if reliable else None
+        # referee_stats/league_stats vem direto do psycopg2 (RealDictCursor)
+        # -- colunas NUMERIC do Postgres chegam como Decimal, nao float.
+        # Normaliza aqui (unico ponto de entrada do dado bruto no motor) pra
+        # nunca misturar Decimal com float mais adiante (bug real de
+        # producao: game_intensity fazia Decimal - float e estourava
+        # TypeError).
+        val = source.get(key) if reliable else None
         return float(val) if val is not None else None
 
     return {
@@ -40,6 +61,7 @@ def referee_signal(referee_stats: dict | None, config: PickEngineConfig = DEFAUL
         "avg_yellow": _f("avg_yellow"),
         "avg_red": _f("avg_red"),
         "avg_fouls": _f("avg_fouls"),
+        "is_league_fallback": is_league_fallback,
     }
 
 

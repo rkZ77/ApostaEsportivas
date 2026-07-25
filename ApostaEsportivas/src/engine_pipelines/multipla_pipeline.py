@@ -129,6 +129,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             )
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
+            league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
@@ -141,7 +142,8 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
-                referee_stats=referee_stats, league_id=fixture["league_id"], data_quality_score=quality["score"],
+                referee_stats=referee_stats, league_stats=league_stats,
+                league_id=fixture["league_id"], data_quality_score=quality["score"],
             )
             picks = rank_market_candidates(candidates)
             log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)

@@ -125,6 +125,7 @@ class AIPerformanceService:
         cur.execute("""
             SELECT
                 pv.market_type, pv.result, pv.confidence, pv.engine_debug,
+                pv.created_at,
                 ms.league_id AS league_id,
                 COALESCE(ms.home_red_cards, 0) + COALESCE(ms.away_red_cards, 0) AS red_cards
             FROM picks_vip pv
@@ -136,6 +137,7 @@ class AIPerformanceService:
 
             SELECT
                 pf.market_type, pf.result, pf.confidence, pf.engine_debug,
+                pf.created_at,
                 COALESCE(pf.league_id, ms.league_id) AS league_id,
                 COALESCE(ms.home_red_cards, 0) + COALESCE(ms.away_red_cards, 0) AS red_cards
             FROM picks_free pf
