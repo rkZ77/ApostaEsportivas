@@ -55,6 +55,7 @@ def analyze_fixture_markets(
     news_data: dict | None = None,
     team_strength_data: dict | None = None,
     referee_stats: dict | None = None,
+    league_stats: dict | None = None,
     league_id: int | None = None,
     data_quality_score: float | None = None,
     debug: bool = False,
@@ -127,7 +128,7 @@ def analyze_fixture_markets(
         calibration_data = calibration.get_market_calibration()
     ctx_score = context_model.context_score(context_data) if context_data else None
     news_score = news_model.news_score(news_data) if news_data else None
-    referee_sig = referee_model.referee_signal(referee_stats, config)
+    referee_sig = referee_model.referee_signal(referee_stats, config, league_stats=league_stats)
     game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
 
     groups: dict[tuple, list] = {}

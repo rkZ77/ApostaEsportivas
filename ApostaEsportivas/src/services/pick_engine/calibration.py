@@ -25,8 +25,20 @@ hit-rate. "evento_atipico" (cartao vermelho no jogo) e "variancia_esperada"
 (motor ja tinha descontado confidence por dispersao alta) saem do calculo
 inteiramente -- nao sao sinal de erro sistematico do modelo, contar contra
 a calibracao ali seria aprender com ruido em vez de sinal real."""
+from datetime import datetime, timezone
+
 from services.ai_performance_service import AIPerformanceService
 from services.pick_engine import red_analysis
+
+# Picks anteriores a esta data foram gerados com bugs reais de calculo de
+# taxa ja corrigidos (cartao vermelho contando igual a amarelo; empate em
+# linha redonda contando como vitoria em vez de PUSH -- ver stats_model.py).
+# Confidence declarada nesses picks veio inflada/deflacionada por bug, nao
+# por excesso/falta de confianca real do modelo -- deixar a calibracao
+# aprender com esses gap"s ensinaria o motor a compensar um bug que ja nao
+# existe mais (penalidade duplicada). Cai fora do calculo ate o proprio
+# historico pos-fix acumular amostra suficiente organicamente.
+_CALIBRATION_CUTOFF = datetime(2026, 7, 25, tzinfo=timezone.utc)
 
 _MIN_N_FOR_ADJUSTMENT = 10
 _GAP_OVERCONFIDENT_THRESHOLD = 0.10
@@ -68,12 +80,23 @@ def _aggregate(rows: list) -> dict:
     return {"n": n, "hit": hit, "conf": conf, "gap": round(conf - hit, 3)}
 
 
+def _after_cutoff(row: dict) -> bool:
+    created_at = row.get("created_at")
+    if created_at is None:
+        return True  # sem data (dado antigo/teste) -- nao filtra por engano
+    if created_at.tzinfo is None:
+        created_at = created_at.replace(tzinfo=timezone.utc)
+    return created_at >= _CALIBRATION_CUTOFF
+
+
 def get_market_calibration(days: int = 60) -> dict:
     """Retorna {"by_market_league": {(market_type, league_id): {n,hit,conf,gap}},
     "by_market": {market_type: {n,hit,conf,gap}}} a partir das linhas cruas de
     ai_performance_service.get_calibration_rows(). Cada pipeline decide a
-    frequencia de refresh (nao ha cache aqui)."""
-    rows = AIPerformanceService().get_calibration_rows(days=days)
+    frequencia de refresh (nao ha cache aqui). Filtra fora picks anteriores
+    a _CALIBRATION_CUTOFF (ver comentario acima -- gerados com bug de taxa
+    ja corrigido, nao contam pra calibracao)."""
+    rows = [r for r in AIPerformanceService().get_calibration_rows(days=days) if _after_cutoff(r)]
     if not rows:
         return {"by_market_league": {}, "by_market": {}}
 
