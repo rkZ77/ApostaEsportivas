@@ -177,7 +177,7 @@ export default function SuggestionCard({
   return (
   <>
     <div
-      className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-2xl cursor-pointer transition-all duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
+      className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-lg cursor-pointer transition-all duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
       onClick={onClick}
     >
       {/* Accent top bar */}
@@ -209,7 +209,7 @@ export default function SuggestionCard({
       </div>
 
       {/* Hero: Odd | Stake | EV */}
-      <div className="flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+      <div className="font-mono flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
           <div className="text-3xl font-black text-green-400">
@@ -316,7 +316,7 @@ export default function SuggestionCard({
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
           <span className="text-zinc-600">Confiança</span>
-          <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
+          <span className={`font-mono ${pct >= 75 ? 'text-green-400 font-bold' : 'text-zinc-500'}`}>{pct}%</span>
         </div>
         <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
           <div
@@ -328,7 +328,7 @@ export default function SuggestionCard({
 
       {/* Reasoning snippet */}
       {fato && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-xl">
+        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
           <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
           <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-3">{fato}</span>
         </div>

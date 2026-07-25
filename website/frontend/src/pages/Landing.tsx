@@ -1,9 +1,13 @@
 import { Link } from 'react-router-dom'
 import { useState, useEffect, useRef } from 'react'
+import { motion } from 'framer-motion'
 import { Helmet } from 'react-helmet-async'
 import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
+import Marquee from '../components/ui/Marquee'
+import NumberTicker from '../components/ui/NumberTicker'
+import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 
 const TEAM_LOGO = (id?: number | null) =>
@@ -50,6 +54,104 @@ interface PublicData {
 // Helpers
 const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
 
+// Jogos que a IA vai analisar · lista real (nao um contador abstrato) dos proximos
+// jogos nas ligas cobertas. Tenta hoje primeiro, cai pro proximo dia com jogo se
+// hoje estiver vazio (fallback simples, sem a busca de 7 dias do CountdownTo7AM).
+interface UpcomingFixture {
+  fixture_id: number
+  home_team: string; away_team: string
+  home_team_id?: number; away_team_id?: number
+  league_name: string
+  match_datetime: string
+}
+function NextGamesPreview() {
+  const [games, setGames] = useState<UpcomingFixture[] | null>(null)
+  const [dateLabel, setDateLabel] = useState<string>('')
+
+  useEffect(() => {
+    const isoDate = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const fetchDay = (offset: number): Promise<UpcomingFixture[]> => {
+      const d = new Date()
+      d.setDate(d.getDate() + offset)
+      return api.get('/fixtures/today', { params: offset === 0 ? {} : { date: isoDate(d) } })
+        .then(r => (r.data ?? []) as UpcomingFixture[])
+        .catch(() => [] as UpcomingFixture[])
+    }
+    (async () => {
+      for (let offset = 0; offset <= 3; offset++) {
+        const found = await fetchDay(offset)
+        if (found.length > 0) {
+          const d = new Date()
+          d.setDate(d.getDate() + offset)
+          setDateLabel(offset === 0 ? 'Hoje' : d.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' }))
+          setGames(found.slice(0, 5))
+          return
+        }
+      }
+      setGames([])
+    })()
+  }, [])
+
+  if (!games || games.length === 0) return null
+
+  return (
+    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5">
+      <div className="flex items-center gap-2 mb-3">
+        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
+        <span className="text-green-400 font-bold font-mono text-xs">Jogos que a IA analisa · {dateLabel}</span>
+      </div>
+      <div className="space-y-1.5">
+        {games.map(g => (
+          <div key={g.fixture_id} className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2 font-mono">
+            <span className="text-[11px] text-zinc-500 tabular-nums shrink-0 w-9">
+              {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+            </span>
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 text-xs text-zinc-200">
+              <TeamLogo id={g.home_team_id} name={g.home_team} />
+              <span className="truncate">{g.home_team}</span>
+              <span className="text-zinc-600 shrink-0">x</span>
+              <TeamLogo id={g.away_team_id} name={g.away_team} />
+              <span className="truncate">{g.away_team}</span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
+// So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
+// mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
+function LiveTicker() {
+  const [items, setItems] = useState<RecentTip[]>([])
+  useEffect(() => {
+    api.get('/public/results', { params: { recent_limit: 50 } })
+      .then(r => setItems((r.data?.recent ?? []).filter((t: RecentTip) => t.result === 'GREEN').slice(0, 12)))
+      .catch(() => {})
+  }, [])
+
+  if (items.length === 0) return null
+
+  const chips = items.map((t, i) => {
+    const rs = getResultStyle(t.result)
+    return (
+      <div key={i} className="flex items-center gap-2 font-mono text-[11px] whitespace-nowrap">
+        <span className="text-zinc-600">{SRC_LBL[t.source] ?? t.source}</span>
+        <span className="text-zinc-300">{t.home_team_name}<span className="text-zinc-600"> x </span>{t.away_team_name ?? '--'}</span>
+        <span className="text-zinc-500">@{Number(t.odd).toFixed(2)}</span>
+        {rs && <span className={rs.text}>{rs.label}</span>}
+      </div>
+    )
+  })
+
+  return (
+    <div className="border-b border-zinc-800/60 bg-zinc-950/80 py-2">
+      <Marquee items={chips} />
+    </div>
+  )
+}
+
 // Indicador "hoje" · sem isso a home so mostrava estatistica agregada
 // historica, sem nenhum sinal de que a IA rodou HOJE especificamente
 // (jogos de hoje costumam ainda estar sem resultado, entao o card de
@@ -82,7 +184,7 @@ function SocialProofStats() {
       .catch(() => setLoaded(true))
   }, [])
 
-  if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-2xl animate-pulse" />
+  if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-md animate-pulse" />
 
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
   // summary.reds ja vem certo do backend (COUNT WHERE result='RED') -- NAO
@@ -105,20 +207,20 @@ function SocialProofStats() {
     <>
       <TodayBadge />
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-green-500">{winRate}%</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
+          <p className="font-mono text-xl font-bold text-green-500">{winRate != null && <NumberTicker value={Number(winRate)} suffix="%" />}</p>
           <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Win Rate</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-white">{summary.total}</p>
+        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
+          <p className="font-mono text-xl font-bold text-white"><NumberTicker value={summary.total} /></p>
           <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Picks</p>
         </div>
-        <div className="bg-zinc-900 border border-green-500/20 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-green-400">{summary.greens}</p>
+        <div className="bg-zinc-900 border border-green-500/20 rounded-md p-3 text-center">
+          <p className="font-mono text-xl font-bold text-green-400"><NumberTicker value={summary.greens} /></p>
           <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">GREEN</p>
         </div>
-        <div className="bg-zinc-900 border border-red-500/20 rounded-xl p-3 text-center">
-          <p className="text-xl font-black text-red-400">{reds}</p>
+        <div className="bg-zinc-900 border border-red-500/20 rounded-md p-3 text-center">
+          <p className="font-mono text-xl font-bold text-red-400"><NumberTicker value={reds} /></p>
           <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">RED</p>
         </div>
       </div>
@@ -132,12 +234,12 @@ function ThreeSteps() {
     <section id="como-funciona" className="py-20 bg-black border-b border-zinc-800/60">
       <div className="max-w-5xl mx-auto px-4">
         <div className="text-center mb-5">
-          <span className="inline-flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 text-green-400 text-xs font-bold px-3 py-1 rounded-full">
+          <span className="inline-flex items-center gap-1.5 font-mono text-green-400 text-xs font-bold border border-green-500/20 px-2.5 py-1 rounded-sm">
             <BrainCircuit className="w-3.5 h-3.5" />
             Como a IA decide cada pick
           </span>
         </div>
-        <h2 className="text-3xl md:text-4xl font-black text-center mb-4 leading-tight">
+        <h2 className="font-display text-3xl md:text-4xl font-semibold text-center mb-4 leading-tight">
           Nada de achismo. <span className="text-green-500">Só dados reais e matemática.</span>
         </h2>
         <p className="text-center text-zinc-400 text-sm max-w-2xl mx-auto mb-8 leading-relaxed">
@@ -148,7 +250,7 @@ function ThreeSteps() {
 
         <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
           {['Forma recente', 'Confronto direto', 'Odds de mercado', 'Valor esperado (EV)', 'Confiança mínima ≥ 60%'].map(t => (
-            <span key={t} className="text-xs text-zinc-400 bg-zinc-900 border border-zinc-800 px-3 py-1.5 rounded-full">
+            <span key={t} className="font-mono text-[11px] text-zinc-400 border border-zinc-800 px-2.5 py-1 rounded-sm">
               {t}
             </span>
           ))}
@@ -160,18 +262,18 @@ function ThreeSteps() {
             { n: '2', Icon: BrainCircuit, title: 'A IA faz a análise pesada', desc: 'A IA cruza estatística real de forma, confronto direto e odds de mercado, e só recomenda quando o valor esperado é positivo. Chega pronto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
-            <div key={n} className={`border rounded-2xl p-6 text-center ${border}`}>
-              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-2xl mb-4 ${iconBg}`}>
+            <div key={n} className={`border rounded-lg p-6 text-center ${border}`}>
+              <div className={`inline-flex items-center justify-center w-12 h-12 rounded-md mb-4 ${iconBg}`}>
                 <Icon className={`w-6 h-6 ${color}`} />
               </div>
-              <div className={`text-sm font-black ${color} mb-2 opacity-60`}>{n}</div>
-              <h3 className="text-base font-black text-white mb-2">{title}</h3>
+              <div className={`font-mono text-sm font-bold ${color} mb-2 opacity-60`}>0{n}</div>
+              <h3 className="font-display text-base font-semibold text-white mb-2">{title}</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
             </div>
           ))}
         </div>
         <div className="text-center mt-8">
-          <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-xl text-sm transition-colors">
+          <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-md text-sm transition-colors">
             Começar agora
           </Link>
         </div>
@@ -192,7 +294,7 @@ function StickyMobileCTA() {
           2 dias grátis · Brasileirão + Premier League
         </p>
       </div>
-      <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-xl transition-colors whitespace-nowrap">
+      <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-md transition-colors whitespace-nowrap">
         Criar conta
       </Link>
       <button onClick={() => setDismissed(true)} className="text-zinc-600 hover:text-zinc-400 p-1 shrink-0" aria-label="Fechar">
@@ -297,7 +399,7 @@ function RecentResults() {
             <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : recent10.length > 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-2xl overflow-hidden">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
             <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-y-1">
               <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 10 dicas finalizadas</span>
               {(todayGreens > 0 || todayReds > 0) && (
@@ -398,28 +500,27 @@ function FreePickTeaserCard() {
 
   return (
     <div className="relative">
-      <div className="absolute -inset-3 bg-gradient-to-br from-green-500/15 to-yellow-400/10 rounded-3xl blur-xl" />
-      <div className="relative bg-zinc-950 border border-green-500/30 rounded-2xl p-6 sm:p-8 text-center">
-        <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-1.5 mb-5 flex-wrap justify-center">
+      <div className="relative bg-zinc-950 border border-green-500/30 rounded-lg p-6 sm:p-8 text-center">
+        <div className="inline-flex items-center gap-2 font-mono border border-green-500/20 rounded-sm px-3 py-1.5 mb-5 flex-wrap justify-center">
           <Gift className="w-3.5 h-3.5 text-green-400" />
-          <span className="text-green-400 text-xs font-bold">Dica do Dia · grátis, sem precisar de conta</span>
+          <span className="text-green-400 text-[11px] font-bold">Dica do Dia · grátis, sem precisar de conta</span>
           {rs && (
-            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full border ${rs.bg} ${rs.border} ${rs.text}`}>
+            <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-sm border ${rs.bg} ${rs.border} ${rs.text}`}>
               {rs.label} {rs.emoji}
             </span>
           )}
         </div>
-        <p className="text-lg sm:text-xl font-black text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
+        <p className="font-display text-lg sm:text-xl font-semibold text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
           <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
           {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
           <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
         </p>
-        <p className="text-zinc-500 text-xs mb-6">
+        <p className="text-zinc-500 text-xs mb-6 font-mono">
           Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
         </p>
         <Link
           to={`/p/free/${pick.id}`}
-          className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-xl text-sm transition-colors"
+          className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-6 py-3 rounded-md text-sm transition-colors"
         >
           Ver a análise completa
           <ArrowRight className="w-4 h-4" />
@@ -439,7 +540,8 @@ function FreePickTeaserCard() {
 function FreePickTeaser() {
   return (
     <section className="py-14 md:hidden">
-      <div className="max-w-2xl mx-auto px-4">
+      <div className="max-w-2xl mx-auto px-4 space-y-6">
+        <NextGamesPreview />
         <FreePickTeaserCard />
       </div>
     </section>
@@ -481,7 +583,7 @@ function LeaderboardTeaser() {
         ) : (
           <div className="space-y-3">
             {leaders.slice(0, 3).map((l, i) => (
-              <div key={i} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-2xl px-5 py-4">
+              <div key={i} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-lg px-5 py-4">
                 <span className={`text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-zinc-800 text-zinc-400'}`}>
                   {i + 1}
                 </span>
@@ -518,47 +620,6 @@ function LeaderboardTeaser() {
   )
 }
 
-// ── Bastidores da IA ─────────────────────────────────────────────────────
-const BAST = [
-  { text: 'Coletando dados dos jogos...', val: 'jogos do dia' },
-  { text: 'Analisando estatísticas...', val: '18.412 dados' },
-  { text: 'Calculando valor esperado (EV)...', val: 'edge positivo' },
-  { text: 'Validando confiança mínima...', val: '≥ 60%' },
-  { text: 'Gerando picks do dia...', val: '' },
-]
-function BastidoresAnimation() {
-  const [step, setStep] = useState(0)
-  const [picks, setPicks] = useState(0)
-  useEffect(() => {
-    const t = setInterval(() => setStep(s => (s + 1) % BAST.length), 1100)
-    return () => clearInterval(t)
-  }, [])
-  useEffect(() => {
-    if (step !== BAST.length - 1) { setPicks(0); return }
-    let n = 0
-    const t = setInterval(() => { n++; setPicks(n); if (n >= 4) clearInterval(t) }, 220)
-    return () => clearInterval(t)
-  }, [step])
-  return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-2xl p-5 font-mono text-xs space-y-2">
-      <div className="flex items-center gap-2 mb-3">
-        <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-        <span className="text-green-400 font-bold">Pick IA Engine · rodando agora</span>
-      </div>
-      {BAST.map(({ text, val }, i) => (
-        <div key={i} className={`flex items-center justify-between gap-2 transition-all duration-300 ${i <= step ? 'opacity-100' : 'opacity-15'}`}>
-          <span className={i < step ? 'text-zinc-500' : i === step ? 'text-white' : 'text-zinc-700'}>
-            <span className="text-green-500 mr-1.5">{i < step ? '✓' : i === step ? '>' : ' '}</span>{text}
-          </span>
-          <span className="text-green-400 shrink-0 text-[10px]">
-            {i < step ? val : (i === step && step === BAST.length - 1 && picks > 0) ? `${picks} picks` : ''}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
-
 
 // Landing
 export default function Landing() {
@@ -589,8 +650,8 @@ export default function Landing() {
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" width={36} height={36} className="w-9 h-9 rounded-full object-cover" />
-            <span className="font-black text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
-            <span className="hidden sm:inline-flex items-center gap-1.5 bg-yellow-400/10 border border-yellow-400/20 text-yellow-400 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+            <span className="font-display font-semibold text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
+            <span className="hidden sm:inline-flex items-center gap-1.5 font-mono border border-zinc-800 text-zinc-500 text-[10px] px-2 py-0.5 rounded-sm">
               <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
               Brasileirão · Premier League
             </span>
@@ -600,11 +661,11 @@ export default function Landing() {
             <a href="#como-funciona" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
             <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
             <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
-            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-xl transition-colors hidden sm:block">
+            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-md transition-colors hidden sm:block">
               Criar conta grátis
             </Link>
             {/* Mobile: CTA + hambúrguer */}
-            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-xl transition-colors sm:hidden">
+            <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-4 py-2 rounded-md transition-colors sm:hidden">
               Grátis 2 dias
             </Link>
             <button
@@ -621,20 +682,20 @@ export default function Landing() {
         {menuOpen && (
           <div className="sm:hidden border-t border-zinc-800 bg-black/98 px-4 py-3 space-y-1">
             <a href="#resultados" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
               Resultados
             </a>
             <a href="#como-funciona" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
               Como funciona
             </a>
             <a href="#planos" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-xl text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
               Planos
             </a>
             <div className="border-t border-zinc-800 pt-2 mt-1">
               <Link to="/login" onClick={() => setMenuOpen(false)}
-                className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-xl bg-green-500 hover:bg-green-400 text-black transition-colors text-sm font-black">
+                className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-md bg-green-500 hover:bg-green-400 text-black transition-colors text-sm font-black">
                 Entrar na conta
               </Link>
             </div>
@@ -642,45 +703,49 @@ export default function Landing() {
         )}
       </nav>
 
+      <LiveTicker />
+
       <section className="relative overflow-hidden">
-        {/* Background gradients */}
-        <div className="absolute inset-0 bg-gradient-to-br from-green-500/6 via-transparent to-transparent" />
+        {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
+        <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
 
             {/* Texto */}
             <div>
-              {/* Badge AO VIVO */}
-              <div className="inline-flex items-center gap-2 mb-6">
-                <Trophy className="w-6 h-6 text-yellow-400" />
-                <span className="bg-yellow-400/10 border border-yellow-400/30 text-yellow-400 text-xs font-semibold px-3 py-1 rounded-full inline-flex items-center gap-1.5">
-                  <span className="w-1.5 h-1.5 bg-yellow-400 rounded-full animate-pulse" />
-                  Brasileirão e Premier League ao vivo
-                </span>
+              {/* Status line */}
+              <div className="inline-flex items-center gap-2 mb-6 font-mono text-[11px] text-zinc-500 border border-zinc-800 rounded-sm px-2.5 py-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-yellow-400 animate-pulse shrink-0" />
+                Brasileirão · Premier League · cobertura ativa
               </div>
 
-              <h1 className="text-4xl md:text-5xl font-black leading-[1.1] mb-5 tracking-tight">
-                Picks de futebol
-                <br />
-                <span className="text-green-500">gerados por IA,</span>
-                <br />
-                entregues todo dia.
+              <h1 className="font-display text-4xl md:text-5xl font-semibold leading-[1.1] mb-5 tracking-tight">
+                {['Picks de futebol', 'gerados por IA,', 'entregues todo dia.'].map((line, i) => (
+                  <motion.span
+                    key={line}
+                    className={`block ${i === 1 ? 'text-green-500' : ''}`}
+                    initial={{ opacity: 0, y: 14 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5, delay: i * 0.1, ease: 'easeOut' }}
+                  >
+                    {line}
+                  </motion.span>
+                ))}
               </h1>
 
-              <p className="text-zinc-400 text-base leading-relaxed mb-8">
+              <p className="text-zinc-400 text-base leading-relaxed mb-5">
                 A IA analisa cada jogo do Brasileirão e da Premier League com estatística real,
                 forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
                 toda manhã. De graça pra começar.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 mb-8">
-                <Link to="/login?mode=register"
-                  className="bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
+                <ShimmerButton to="/login?mode=register">
                   Criar conta · 2 dias VIP grátis
-                </Link>
+                </ShimmerButton>
                 <a href="#resultados"
-                  className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-xl text-sm transition-colors text-center">
+                  className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-md text-sm transition-colors text-center">
                   Ver resultados reais
                 </a>
               </div>
@@ -688,17 +753,12 @@ export default function Landing() {
               <SocialProofStats />
             </div>
 
-            {/* Engine rodando ao vivo + Dica do Dia real -- preenche a coluna,
+            {/* Jogos reais que a IA analisa + Dica do Dia real -- preenche a coluna,
                 nao mockado. So desktop; no mobile o FreePickTeaser (secao cheia
                 logo abaixo do hero) cobre o mesmo conteudo pra quem acessa
                 por Android/Safari web. */}
             <div className="hidden md:flex md:flex-col md:gap-6">
-              <div className="relative">
-                <div className="absolute -inset-4 bg-gradient-to-br from-green-500/10 to-yellow-400/10 rounded-3xl blur-xl" />
-                <div className="relative">
-                  <BastidoresAnimation />
-                </div>
-              </div>
+              <NextGamesPreview />
               <FreePickTeaserCard />
             </div>
           </div>
@@ -740,23 +800,23 @@ export default function Landing() {
                   </li>
                 ))}
               </ul>
-              <Link to="/login?mode=register" className="inline-block bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 font-bold px-6 py-3 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="inline-block bg-green-500/10 border border-green-500/30 hover:bg-green-500/20 text-green-400 font-bold px-6 py-3 rounded-md text-sm transition-colors">
                 Experimentar o agente IA
               </Link>
             </div>
 
             {/* Demo chat */}
-            <div className="bg-zinc-950 border border-zinc-800 rounded-2xl overflow-hidden">
+            <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
               <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-sm font-black text-white">Agente PickIA</span>
+                  <span className="font-display text-sm font-semibold text-white">Agente PickIA</span>
                 </div>
-                <span className="text-xs text-zinc-500 bg-zinc-800 px-2 py-0.5 rounded">Futebol · IA</span>
+                <span className="font-mono text-[10px] text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-sm">Futebol · IA</span>
               </div>
               <div className="p-4 space-y-3 min-h-[260px]">
                 <div className="flex justify-end">
-                  <div className="bg-green-600 text-white text-sm px-4 py-2.5 rounded-2xl rounded-tr-sm max-w-[80%]">
+                  <div className="bg-green-600 text-white text-sm px-4 py-2.5 rounded-md rounded-tr-sm max-w-[80%]">
                     {chatMessages[chatDemo].q}
                   </div>
                 </div>
@@ -766,13 +826,13 @@ export default function Landing() {
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
                     </svg>
                   </div>
-                  <div className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm px-4 py-2.5 rounded-2xl rounded-tl-sm max-w-[85%] leading-relaxed">
+                  <div className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm px-4 py-2.5 rounded-md rounded-tl-sm max-w-[85%] leading-relaxed">
                     {chatMessages[chatDemo].a}
                   </div>
                 </div>
               </div>
               <div className="px-4 pb-4">
-                <div className="bg-zinc-900 border border-zinc-700 rounded-xl px-3 py-2.5 flex items-center gap-2">
+                <div className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 flex items-center gap-2">
                   <span className="text-zinc-600 text-sm flex-1">Pergunte sobre qualquer jogo...</span>
                   <div className="w-7 h-7 bg-green-600 rounded-lg flex items-center justify-center">
                     <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -789,7 +849,7 @@ export default function Landing() {
       <section id="planos" className="py-24">
         <div className="max-w-4xl mx-auto px-4">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-black mb-3">Comece de graça, evolua quando quiser</h2>
+            <h2 className="font-display text-3xl font-semibold mb-3">Comece de graça, evolua quando quiser</h2>
             <p className="text-zinc-400 text-sm max-w-md mx-auto">
               Teste 2 dias com acesso VIP completo. Depois escolha seu plano.
             </p>
@@ -797,9 +857,9 @@ export default function Landing() {
 
           <div className="grid md:grid-cols-3 gap-5">
             {/* Free */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-7">
-              <span className="inline-block text-xs text-zinc-400 font-semibold bg-zinc-800 px-2.5 py-1 rounded-lg mb-3">Free</span>
-              <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
+            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-7">
+              <span className="badge-free mb-3">Free</span>
+              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 0</p>
               <p className="text-zinc-500 text-xs mb-6">Para sempre</p>
               <div className="space-y-2.5 mb-8">
                 {[
@@ -818,21 +878,19 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/login?mode=register" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-md text-sm transition-colors">
                 Criar conta grátis
               </Link>
             </div>
 
             {/* Trial · destaque */}
-            <div className="relative bg-zinc-900 border border-green-500/50 rounded-2xl p-7 overflow-hidden">
+            <div className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-7 overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
-              <div className="absolute top-3.5 right-4">
-                <span className="bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-full uppercase">
-                  Começar agora
-                </span>
+              <div className="absolute top-3.5 right-4 font-mono text-[10px] font-bold text-green-400 border border-green-500/30 px-2 py-1 rounded-sm uppercase">
+                Começar agora
               </div>
-              <span className="inline-block text-xs text-green-400 font-semibold bg-green-500/10 border border-green-500/20 px-2.5 py-1 rounded-lg mb-3">Teste grátis</span>
-              <p className="text-3xl font-black text-white mb-0.5">R$ 0</p>
+              <span className="badge-green mb-3">Teste grátis</span>
+              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 0</p>
               <p className="text-zinc-400 text-xs mb-6">2 dias completos · Sem compromisso</p>
               <div className="space-y-2.5 mb-8">
                 {[
@@ -851,16 +909,16 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/login?mode=register" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-xl text-sm transition-colors">
+              <Link to="/login?mode=register" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-md text-sm transition-colors">
                 Ativar teste gratuito
               </Link>
             </div>
 
             {/* VIP */}
-            <div className="bg-zinc-900 border border-yellow-400/30 rounded-2xl p-7 overflow-hidden relative">
+            <div className="bg-zinc-900 border border-yellow-400/30 rounded-lg p-7 overflow-hidden relative">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
-              <span className="inline-block text-xs text-yellow-400 font-semibold bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-1 rounded-lg mb-3">VIP</span>
-              <p className="text-3xl font-black text-white mb-0.5">R$ 39,90<span className="text-base font-semibold text-zinc-500">/mês</span></p>
+              <span className="badge-trial mb-3">VIP</span>
+              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 39,90<span className="text-base font-semibold text-zinc-500">/mês</span></p>
               <p className="text-zinc-500 text-xs mb-1">Menos de R$1,33 por dia</p>
               <p className="text-zinc-600 text-[10px] mb-6">Menos que uma aposta perdida</p>
               <div className="space-y-2.5 mb-8">
@@ -878,7 +936,7 @@ export default function Landing() {
                   </div>
                 ))}
               </div>
-              <Link to="/planos" className="block text-center bg-yellow-400/10 border border-yellow-400/30 hover:bg-yellow-400/20 text-yellow-400 font-black py-2.5 rounded-xl text-sm transition-colors">
+              <Link to="/planos" className="block text-center bg-yellow-400/10 border border-yellow-400/30 hover:bg-yellow-400/20 text-yellow-400 font-black py-2.5 rounded-md text-sm transition-colors">
                 Ver planos VIP
               </Link>
             </div>
