@@ -53,6 +53,11 @@ class PickEngineConfig:
     line_weight_conservative: float = 0.15
     line_weight_bookmakers: float = 0.10
     line_weight_stability: float = 0.15
+    # Linha redonda (sem .5) pode empatar exato com o resultado e virar
+    # PUSH -- nunca acontece numa linha .5. Penalidade leve no line_score
+    # (nao um filtro/gate) pra desempatar a favor da .5 quando as duas
+    # opcoes tem merito estatistico parecido (pedido do usuario 2026-07-25).
+    round_line_push_penalty: float = 0.05
     # bookmakers_count satura o bonus em N casas (mais que isso nao soma mais)
     bookmakers_bonus_saturation: int = 5
 

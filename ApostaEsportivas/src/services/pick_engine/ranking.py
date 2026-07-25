@@ -66,12 +66,30 @@ def _stability_bonus(candidate: dict) -> float:
     return round(max(0.0, 1.0 - stability["instability"]), 4)
 
 
+def _round_line_penalty(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
+    """Linha redonda (sem .5, ex. 'Under 10') pode empatar exato com o
+    resultado -- PUSH na graduacao real (nem GREEN nem RED, ver
+    ai_result_checker_service.py::evaluate_asian). taxa_real ja vem
+    corrigida pra nao contar esse empate como vitoria (stats_model.py,
+    weighted_rate ignora push na amostra), mas duas linhas com taxa
+    parecida ainda merecem desempate a favor da .5 -- ela nunca produz
+    PUSH, e' sempre GREEN ou RED. Penalidade leve (nao elimina a linha
+    redonda se ela for claramente melhor, so' desempata) -- pedido do
+    usuario 2026-07-25: preferir 'Over 8.5' a 'Over 8'/'Under 9' quando
+    estatisticamente equivalentes."""
+    line_val = candidate.get("_line_val")
+    if line_val is None or line_val % 1 != 0:
+        return 0.0
+    return config.round_line_push_penalty
+
+
 def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """Pontuacao de linha (dentro de um mercado ja escolhido por
     estatistica): taxa real + edge + faixa conservadora de odd + consenso
-    de bookmakers + estabilidade historica da linha. E aqui, e so aqui,
-    que a odd participa da decisao -- final_score() (escolha do MERCADO)
-    nao usa EV/odd.
+    de bookmakers + estabilidade historica da linha, menos uma pequena
+    penalidade se a linha for redonda (risco de PUSH -- ver
+    _round_line_penalty). E aqui, e so aqui, que a odd participa da
+    decisao -- final_score() (escolha do MERCADO) nao usa EV/odd.
 
     Variancia e Data Quality Score deliberadamente NAO entram aqui --
     sao constantes pra todos os candidatos do mesmo mercado/fixture
@@ -80,14 +98,14 @@ def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> f
     conservative = _conservative_bonus(candidate["odd"], config)
     bookmakers = _bookmakers_bonus(candidate.get("bookmakers_count", 1), config)
     stability = _stability_bonus(candidate)
-    return round(
+    score = (
         candidate["taxa_real"] * config.line_weight_taxa
         + edge_norm * config.line_weight_edge
         + conservative * config.line_weight_conservative
         + bookmakers * config.line_weight_bookmakers
-        + stability * config.line_weight_stability,
-        4,
+        + stability * config.line_weight_stability
     )
+    return round(max(score - _round_line_penalty(candidate, config), 0.0), 4)
 
 
 def evaluate_all_lines(
