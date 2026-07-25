@@ -123,6 +123,14 @@ _MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
     ("corners asian handicap", "Escanteios Handicap Asiático"),
     ("corners european handicap", "Escanteios Handicap Asiático"),
     ("asian handicap", "Handicap Asiático"),
+    # "Odd/Even" nao tinha NENHUMA traducao (nem aqui nem em BET_ID_PT_MAP),
+    # entao ia pro site cru em ingles -- confuso porque "odd" em ingles
+    # (impar) colide visualmente com "odd" em portugues (a odd/coeficiente
+    # da aposta): usuario via "Odd/Even Odd @ 2.02" e nao dava pra saber
+    # que o primeiro "Odd" e' a selecao (impar) e o numero e' o coeficiente.
+    ("corners odd/even", "Escanteios Par/Ímpar"),
+    ("odd/even", "Par/Ímpar"),
+    ("odd or even", "Par/Ímpar"),
     ("corners over/under", "Escanteios Mais/Menos"),
     ("corners 1x2", "Escanteios 1x2"),
     ("home corners over/under", "Escanteios Casa Mais/Menos"),

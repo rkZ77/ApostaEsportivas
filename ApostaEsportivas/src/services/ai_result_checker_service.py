@@ -54,10 +54,16 @@ class AIResultCheckerService:
             "away_yellow":   ay,
             "home_red":      hr,
             "away_red":      ar,
-            "home_cards":    hy + hr,
-            "away_cards":    ay + ar,
+            # cartao vermelho vale 2 pontos (mesma convencao usada pra
+            # calcular a taxa historica em stats_model._cards_points --
+            # gradear com uma regra e prever com outra deixaria a
+            # confidence do pick sem relacao com o que de fato decide o
+            # resultado real. "home_yellow"/"away_yellow"/"total_yellow"
+            # acima continuam contagem pura, pros mercados so' de amarelo).
+            "home_cards":    hy + 2 * hr,
+            "away_cards":    ay + 2 * ar,
             "status":        row[12],
-            "total_cards":   hy + hr + ay + ar,
+            "total_cards":   hy + 2 * hr + ay + 2 * ar,
             "total_yellow":  hy + ay,
             "total_red":     hr + ar,
             "home_goals_ht": hg_ht,

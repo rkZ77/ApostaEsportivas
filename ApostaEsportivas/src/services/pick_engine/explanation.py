@@ -95,10 +95,12 @@ def build_explanation(candidate: dict) -> dict:
     referee_sig = candidate.get("referee_signal")
     intensity = candidate.get("game_intensity")
     if referee_sig and intensity:
+        avg_red = referee_sig.get("avg_red") or 0.0
         positive_factors.append(
-            f"Árbitro com média de {referee_sig['avg_yellow']} cartões amarelos/jogo "
-            f"em {referee_sig['games']} jogos na temporada · contexto de jogo "
-            f"classificado como '{intensity['label']}' (score {intensity['score']*100:.0f}%)"
+            f"Árbitro com média de {referee_sig['avg_yellow']} cartões amarelos e "
+            f"{avg_red} vermelhos/jogo em {referee_sig['games']} jogos na temporada · "
+            f"contexto de jogo classificado como '{intensity['label']}' "
+            f"(score {intensity['score']*100:.0f}%)"
         )
 
     news = candidate.get("news_raw")

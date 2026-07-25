@@ -371,16 +371,20 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return float(hc + ac), "Escanteios", direction
 
     # ── Cards ──
+    # Vermelho vale 2 pontos (mesma convencao de stats_model._cards_points
+    # e ai_result_checker_service.py -- gradear ao vivo com uma regra
+    # diferente da usada na taxa histórica do motor deixaria o "GREEN
+    # provisório" do ticker divergente do resultado final do job batch).
     if is_cards:
         hy = home_stats.get("Yellow Cards", 0)
         hr = home_stats.get("Red Cards", 0)
         ay = away_stats.get("Yellow Cards", 0)
         ar = away_stats.get("Red Cards", 0)
         if "casa" in m or "home" in m:
-            return float(hy + hr), "Cartões Casa", direction
+            return float(hy + 2 * hr), "Cartões Casa", direction
         if any(k in m for k in ["fora", "away", "visitante"]):
-            return float(ay + ar), "Cartões Fora", direction
-        return float(hy + hr + ay + ar), "Cartões", direction
+            return float(ay + 2 * ar), "Cartões Fora", direction
+        return float(hy + 2 * hr + ay + 2 * ar), "Cartões", direction
 
     # ── Fouls ──
     if is_fouls:
@@ -699,8 +703,9 @@ def _calc_result(market: str, line: str, cur_val: float | None,
             home_val = home_stats.get("Corner Kicks", 0)
             away_val = away_stats.get("Corner Kicks", 0)
         else:
-            home_val = home_stats.get("Yellow Cards", 0) + home_stats.get("Red Cards", 0)
-            away_val = away_stats.get("Yellow Cards", 0) + away_stats.get("Red Cards", 0)
+            # vermelho vale 2 (mesma convencao de _cards_points/is_cards acima)
+            home_val = home_stats.get("Yellow Cards", 0) + 2 * home_stats.get("Red Cards", 0)
+            away_val = away_stats.get("Yellow Cards", 0) + 2 * away_stats.get("Red Cards", 0)
         return _resolve_asian_handicap(side, handicap, home_val, away_val)
 
     # ── Mercados estatísticos (gols, escanteios, cartões…) ────────────────────

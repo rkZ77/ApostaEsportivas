@@ -48,6 +48,12 @@ def run_migrations():
         "ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;",
         "ALTER TABLE picks_vip   ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
         "ALTER TABLE picks_free  ADD COLUMN IF NOT EXISTS engine_debug JSONB;",
+        # Trava contra duplicata de multipla (achado real 2026-07-25: pipeline
+        # rodou 2x quase simultaneo, o check "ja existe multipla hoje" em
+        # Python e' select-then-insert e nao pega corrida entre 2 execucoes
+        # concorrentes -- so um indice unico no banco impede de verdade,
+        # ON CONFLICT no INSERT absorve a segunda tentativa sem erro).
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique ON picks_multiplas (match_date);",
     ]
     conn = get_connection()
     cur = conn.cursor()
