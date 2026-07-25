@@ -87,9 +87,13 @@ def _fixtures_with_odds_in_range(cur) -> list:
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
+    # Fase 1.6 (2026-07-25): jogos anteriores a uma mudanca estrutural
+    # marcada (troca de tecnico/elenco relevante) nao entram no historico --
+    # ver teams.structural_change_date / MatchStatsService.get_structural_change_date.
+    since_date = match_stats.get_structural_change_date(team_id)
     if cp.is_national_team_league(league_id):
-        return match_stats.get_last_n_all_competitions(team_id)
-    return match_stats.get_all_matches_full(team_id, season, league_id)
+        return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
+    return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
 def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple | None:
@@ -134,8 +138,10 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
             structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
             referee_stats=referee_stats, context_data=context_data,
         )
+        integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(last10_home, last10_away)
         quality = dv.data_quality_score(
             {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
+            integrity_validation=integrity_val, outlier_info=outlier_info,
         )
 
         candidates = analyze_fixture_markets(

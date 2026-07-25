@@ -121,13 +121,23 @@ class MatchStatsService:
     # Últimos 10 jogos (CASA + FORA) da liga + temporada
     # Inclui opponent_name e opponent_rank via join com league_standings
     ##########################################################################
-    def get_all_matches_full(self, team_id, season, league_id, before_date=None):
+    def get_all_matches_full(self, team_id, season, league_id, before_date=None, since_date=None):
         """before_date (opcional): só jogos com match_date < before_date --
         usado por backtests pra evitar vazar resultado futuro no histórico
-        de um fixture já encerrado. None (padrão) preserva o comportamento
-        atual (últimos 15 jogos existentes no banco)."""
+        de um fixture já encerrado. since_date (opcional, Fase 1.6 do plano
+        de implementação 2026-07-25): só jogos com match_date >= since_date
+        -- usado quando o time tem uma mudança estrutural marcada (troca de
+        técnico/elenco relevante, ver teams.structural_change_date) pra não
+        deixar jogos de ANTES da mudança contaminar a taxa histórica. Os
+        dois filtros são independentes e podem coexistir. None (padrão)
+        preserva o comportamento atual (últimos 15 jogos existentes)."""
         date_filter = "AND ms.match_date < %s" if before_date else ""
-        params = (team_id, team_id, team_id, season, league_id) + ((before_date,) if before_date else ())
+        since_filter = "AND ms.match_date >= %s" if since_date else ""
+        params = (
+            (team_id, team_id, team_id, season, league_id)
+            + ((before_date,) if before_date else ())
+            + ((since_date,) if since_date else ())
+        )
         return self._query(f"""
             SELECT
                 ms.match_date,
@@ -157,6 +167,7 @@ class MatchStatsService:
               AND ms.season = %s
               AND ms.league_id = %s
               {date_filter}
+              {since_filter}
             ORDER BY ms.match_date DESC
             LIMIT 15;
         """, params)
@@ -182,13 +193,20 @@ class MatchStatsService:
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################
-    def get_last_n_all_competitions(self, team_id, limit=15, before_date=None):
+    def get_last_n_all_competitions(self, team_id, limit=15, before_date=None, since_date=None):
         """before_date (opcional): só jogos com match_date < before_date --
         usado por backtests pra evitar vazar resultado futuro no histórico
-        de um fixture já encerrado. None (padrão) preserva o comportamento
-        atual (últimos N jogos existentes no banco)."""
+        de um fixture já encerrado. since_date (opcional, Fase 1.6): só
+        jogos com match_date >= since_date, ver get_all_matches_full().
+        None (padrão) preserva o comportamento atual."""
         date_filter = "AND ms.match_date < %s" if before_date else ""
-        params = (team_id, team_id) + ((before_date,) if before_date else ()) + (limit,)
+        since_filter = "AND ms.match_date >= %s" if since_date else ""
+        params = (
+            (team_id, team_id)
+            + ((before_date,) if before_date else ())
+            + ((since_date,) if since_date else ())
+            + (limit,)
+        )
         return self._query(f"""
             SELECT
                 ms.match_date,
@@ -211,9 +229,26 @@ class MatchStatsService:
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status = 'FT'
               {date_filter}
+              {since_filter}
             ORDER BY ms.match_date DESC
             LIMIT %s;
         """, params)
+
+    ##########################################################################
+    # Mudanca estrutural (Fase 1.6 do plano de implementacao, 2026-07-25):
+    # flag manual pra "zerar" jogos anteriores a troca de tecnico/elenco
+    # relevante -- ver teams.structural_change_date. Marcacao e' processo
+    # manual (quem decide que o time mudou o suficiente pra justificar),
+    # nao deteccao automatica (isso seria Fase 3, changepoint formal).
+    ##########################################################################
+    def get_structural_change_date(self, team_id):
+        row = self._query(
+            "SELECT structural_change_date FROM teams WHERE team_id = %s",
+            (team_id,),
+        )
+        if not row or not row[0].get("structural_change_date"):
+            return None
+        return row[0]["structural_change_date"]
 
     ##########################################################################
     # Ponderação por qualidade do adversário

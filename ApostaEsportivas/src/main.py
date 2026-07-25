@@ -54,16 +54,62 @@ def run_migrations():
         # concorrentes -- so um indice unico no banco impede de verdade,
         # ON CONFLICT no INSERT absorve a segunda tentativa sem erro).
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique ON picks_multiplas (match_date);",
+        # Fase 1.6 do plano de implementacao (2026-07-25): flag manual de
+        # mudanca estrutural (troca de tecnico/elenco relevante) -- jogos
+        # anteriores a essa data saem do historico usado pra taxa (ver
+        # MatchStatsService.get_structural_change_date). NULL = sem mudanca
+        # marcada, comportamento identico a hoje.
+        "ALTER TABLE teams ADD COLUMN IF NOT EXISTS structural_change_date DATE;",
+        # Fase 1.5 do plano de implementacao (2026-07-25): captura de
+        # Closing Line Value -- tabela append-only (odds_values e' upsert e
+        # perderia o valor de fechamento). Ver capture_closing_odds.py.
+        """CREATE TABLE IF NOT EXISTS closing_odds (
+            id            SERIAL PRIMARY KEY,
+            fixture_id    INTEGER NOT NULL,
+            market_id     INTEGER,
+            market_type   TEXT,
+            line          TEXT,
+            closing_odd   NUMERIC,
+            bookmaker     TEXT,
+            captured_at   TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_closing_odds_fixture ON closing_odds (fixture_id);",
+        # Fase 1.7 do plano de implementacao (2026-07-25): historico de
+        # execucoes de backtest, pra comparar metricas entre mudancas de
+        # config/pesos ao longo do tempo em vez de so o resultado da
+        # ultima rodada.
+        """CREATE TABLE IF NOT EXISTS backtest_runs (
+            id              SERIAL PRIMARY KEY,
+            run_label       TEXT,
+            commit_sha      TEXT,
+            date_range_start DATE,
+            date_range_end   DATE,
+            config_snapshot JSONB,
+            brier_score     NUMERIC,
+            log_loss        NUMERIC,
+            ece             NUMERIC,
+            roi             NUMERIC,
+            yield_pct       NUMERIC,
+            n_picks         INTEGER,
+            created_at      TIMESTAMP DEFAULT NOW()
+        );""",
     ]
     conn = get_connection()
     cur = conn.cursor()
     for sql in migrations:
         try:
             cur.execute(sql)
+            conn.commit()
             print(f"[MIGRATE] OK: {sql.strip()}")
         except Exception as e:
+            # Bug real corrigido 2026-07-25: sem rollback aqui, uma falha
+            # (ex.: indice unico batendo em dado duplicado preexistente)
+            # deixava a transacao inteira "abortada" no Postgres -- toda
+            # migracao SEGUINTE na lista falhava em cascata com "current
+            # transaction is aborted", mesmo sendo um ALTER TABLE
+            # completamente independente e valido.
+            conn.rollback()
             print(f"[MIGRATE] ERRO: {e}")
-    conn.commit()
     cur.close()
     conn.close()
     print("[MIGRATE] Migrações concluídas.\n")

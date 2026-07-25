@@ -225,6 +225,37 @@ def detect_outliers(family: str, scope: str, last10_home: list, last10_away: lis
 
 
 # ============================================================
+# 4b. AGREGACAO POR FIXTURE (P1.2 -- liga integrity/outlier no DQS)
+# ============================================================
+# Familias com leitura de valor bruto (mesmo escopo de variance_model.
+# _VALUE_FAMILIES) -- outlier e' por familia, mas o Data Quality Score e'
+# computado 1x por fixture (nao por mercado) nos pipelines hoje; agregar
+# aqui evita reestruturar o call site pra virar por-familia.
+_OUTLIER_CHECK_FAMILIES = ("goals", "corners", "cards")
+
+
+def aggregate_fixture_quality_checks(last10_home: list, last10_away: list) -> tuple[dict, dict]:
+    """Roda validate_statistics_integrity() (nivel fixture, cobre todas as
+    familias de uma vez) e detect_outliers() (por familia, agregado aqui)
+    pros dois times, devolve (integrity_validation, outlier_info) prontos
+    pra passar em data_quality_score(). Bug real corrigido 2026-07-25: as
+    duas funcoes existiam e nunca eram chamadas por nenhum pipeline --
+    data_quality_score() rodava sempre com os dois componentes travados em
+    100.0 (25% do peso do score cego a outlier/inconsistencia real)."""
+    integrity = validate_statistics_integrity(last10_home + last10_away)
+
+    outliers, checked = [], 0
+    for family in _OUTLIER_CHECK_FAMILIES:
+        for scope in ("home", "away"):
+            info = detect_outliers(family, scope, last10_home, last10_away)
+            outliers.extend(info["outliers"])
+            checked += info["checked"]
+    outlier_info = {"outliers": outliers, "outlier_count": len(outliers), "checked": checked}
+
+    return integrity, outlier_info
+
+
+# ============================================================
 # 5. DATA QUALITY SCORE (0-100)
 # ============================================================
 _W_HISTORY = 0.40
