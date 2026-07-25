@@ -49,9 +49,18 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
 
     hit_fn(match) -> valor numerico (0/1 para taxa de ocorrencia, ou um
     float para medias) ja lido no contexto correto (casa/fora) pelo
-    chamador.
-    """
-    n = len(matches)
+    chamador, ou None quando o jogo NAO conta pra taxa (push/empate exato
+    numa linha redonda -- nem acerto nem erro). Bug real corrigido
+    2026-07-25: antes hit_fn nao tinha como sinalizar push, entao um jogo
+    empatado na linha (ex.: 10 escanteios numa linha "Under 10") virava
+    VITORIA automatica pro lado Under -- a graduacao real (evaluate_asian()
+    em ai_result_checker_service.py) sempre tratou esse caso como PUSH,
+    entao a taxa historica saia inflada (Under) ou deflacionada (Over)
+    exatamente nos jogos que empatavam a linha. amostra abaixo reflete a
+    contagem POS-filtro (jogos push nao contam nem a favor da confianca)."""
+    scored = [(m, hit_fn(m)) for m in matches]
+    counted = [(m, v) for m, v in scored if v is not None]
+    n = len(counted)
     quality = sample_quality(n, config)
     if n == 0:
         return {
@@ -59,13 +68,13 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
             "amostra": 0, "amostra_label": quality["label"], "Q": quality["Q"],
         }
 
-    values = [hit_fn(m) for m in matches]
+    values = [v for _, v in counted]
     taxa_bruta = sum(values) / n
 
     weights = [
         opponent_weight(m.get("opponent_rank"), config)
         * temporal_decay_weight(m["match_date"], reference_date, config)
-        for m in matches
+        for m, _ in counted
     ]
     total_weight = sum(weights)
     taxa_ponderada = (
@@ -305,9 +314,14 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
     except (TypeError, ValueError):
         return None
     is_over = direction == "over"
+    is_round_line = line_val % 1 == 0
 
     def hit_fn(m):
         stat = _extract_stat(m, family, scope)
+        # linha redonda (sem .5) e stat bate exato -- PUSH na graduacao
+        # real (evaluate_asian), nao conta nem a favor nem contra aqui.
+        if is_round_line and stat == line_val:
+            return None
         over = 1 if stat > line_val else 0
         return over if is_over else 1 - over
 
@@ -366,8 +380,17 @@ def line_stability(family: str, scope: str, value: str, line_str: str,
     mid = len(sorted_pool) // 2
     recent_half, older_half = sorted_pool[:mid], sorted_pool[mid:]
 
-    recent_rate = sum(hit_fn(m) for m in recent_half) / len(recent_half)
-    older_rate = sum(hit_fn(m) for m in older_half) / len(older_half)
+    def _half_rate(half):
+        # hit_fn pode devolver None (push/empate exato em linha redonda) --
+        # mesmo tratamento de weighted_rate, exclui da amostra em vez de
+        # contar como acerto ou erro.
+        vals = [v for v in (hit_fn(m) for m in half) if v is not None]
+        return sum(vals) / len(vals) if vals else None
+
+    recent_rate = _half_rate(recent_half)
+    older_rate = _half_rate(older_half)
+    if recent_rate is None or older_rate is None:
+        return None
     instability = round(abs(recent_rate - older_rate), 4)
 
     return {
