@@ -99,6 +99,22 @@ def run_migrations():
             n_picks         INTEGER,
             created_at      TIMESTAMP DEFAULT NOW()
         );""",
+        # Pedido do usuario 2026-07-26: nao quer mercado nenhum ficando de
+        # fora silenciosamente -- odds_collector_service.py agora registra
+        # aqui todo bet_name pra o qual stats_model.classify_market()
+        # devolve None (inclui tanto mercado novo/renomeado da API quanto
+        # os ja excluidos de proposito, ex. placar exato -- a tabela nao
+        # distingue os dois casos, revisao periodica que decide). Serve pra
+        # revisao periodica (dashboard/consulta manual) em vez de precisar
+        # descobrir mercado novo da API na unha, olhando fixture por fixture
+        # como foi feito nesta sessao.
+        """CREATE TABLE IF NOT EXISTS pick_engine_unclassified_markets (
+            bet_name          TEXT PRIMARY KEY,
+            times_seen        INTEGER DEFAULT 1,
+            sample_fixture_id INTEGER,
+            first_seen        TIMESTAMP DEFAULT NOW(),
+            last_seen         TIMESTAMP DEFAULT NOW()
+        );""",
     ]
     conn = get_connection()
     cur = conn.cursor()

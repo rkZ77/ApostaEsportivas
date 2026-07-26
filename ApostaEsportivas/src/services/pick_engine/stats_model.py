@@ -131,6 +131,11 @@ _FAMILY_STAT_FIELDS = {
     "shots":            {"total": None, "home": "home_total_shots", "away": "away_total_shots"},
     "shots_on_target":  {"total": None, "home": "home_shots_on",    "away": "away_shots_on"},
     "offsides":         {"total": None, "home": "home_offsides",    "away": "away_offsides"},
+    # Faltas -- dado ja existia em match_statistics (home_fouls/away_fouls)
+    # desde antes, nunca tinha sido ligado ao motor (pedido do usuario
+    # 2026-07-26 pra cobrir mercado que a API ja oferece e o dado ja
+    # sustenta). Sem coluna "total_X" pronta, mesmo padrao de shots/offsides.
+    "fouls":            {"total": None, "home": "home_fouls",      "away": "away_fouls"},
 }
 
 
@@ -154,11 +159,45 @@ def classify_market(market_name: str):
       Winning Margin, Method of Victory, Race To, Highest Scoring Half,
       Game Decided After Penalties/Extra Time, etc.) -- ordem dos checks
       abaixo e do mais especifico pro mais generico; qualquer coisa que
-      nao bater cai em None por padrao (nunca advinha)."""
+      nao bater cai em None por padrao (nunca advinha).
+    - "Handicap Result" (bet_id 9) -- 3-way (Home/Draw/Away com handicap
+      aplicado), estrutura diferente do Handicap Asiatico 2-way; achado
+      real 2026-07-26, ver comentario na checagem "handicap" abaixo.
+    - "Multicorners" (bet_id 249) -- linhas (18.5-29.5+) fora de escala do
+      total_corners real de uma partida; produto exato nao documentado
+      pela API, exclui por seguranca em vez de advinhar."""
     name = market_name.lower()
 
     if "handicap" in name:
         if "half" in name:
+            return None
+        # "Handicap Result" (API bet_id 9) -- achado real 2026-07-26: e' um
+        # mercado 3-VIAS (Home/Draw/Away apos aplicar o handicap, ex. "Draw
+        # -1", "Home -1"), estrutura DIFERENTE do Handicap Asiatico normal
+        # (2-vias, sem opcao de empate). _parse_side_handicap so aceita
+        # side em ("home","away","draw") mas compute_taxa descarta "draw"
+        # (side not in ("home","away")) silenciosamente, entao so' as
+        # selecoes Home/Away sobreviviam, sendo calculadas com a MESMA
+        # formula do Handicap Asiatico (handicap_taxa) como se fossem o
+        # mesmo produto -- nao sao (odds de um 3-vias refletem a massa de
+        # probabilidade que vai pro empate, Handicap Asiatico nao tem essa
+        # terceira opcao). Tambem nao tinha traducao PT nenhuma (ia cru pro
+        # site). Excluido por ser, na pratica, o exemplo mais direto de
+        # "handicap que e' resultado disfarcado" que o usuario ja tinha
+        # pedido pra tirar.
+        if "result" in name:
+            return None
+        # "European Handicap" -- achado real 2026-07-26 (varredura completa
+        # de mercados): "Corners. European Handicap" TAMBEM tem valores
+        # "Draw -1"/"Draw -2" etc (3-way, mesma estrutura de "Handicap
+        # Result" acima), diferente de "Corners Asian Handicap" (2-way,
+        # sem Draw -- confirmado nos dados reais). O fix de 2026-07-24 so
+        # corrigiu o ROTULO em PT (mostrava "Handicap Asiatico" errado pra
+        # cartoes/escanteios), nao tinha percebido que European e' uma
+        # estrutura de mercado diferente da Asian, nao so' um nome
+        # alternativo pra mesma coisa. Exclui pelo mesmo motivo de
+        # "Handicap Result".
+        if "european" in name:
             return None
         if "corner" in name:
             return ("handicap_corners", "total")
@@ -203,7 +242,30 @@ def classify_market(market_name: str):
     # nao sao over/under simples (ex: "Corners 1x2", "Corners. Total
     # (Range)", "Corners Race To", "Shots.1x2") -- checa antes dos
     # fallbacks genericos de corner/card/goal/shot abaixo.
-    if any(kw in name for kw in ("1x2", "race to", "range", "3 way", "highest scoring")):
+    #
+    # "between" pega mercados de JANELA DE TEMPO (ex.: "Cards over/under
+    # between 0 and 10 m", "Corners. total between 0 and 10m") -- achado
+    # real 2026-07-26 na varredura completa: caia no fallback generico de
+    # cards/corners (contagem de PARTIDA INTEIRA, media ~4-5 cartoes/~10
+    # escanteios) comparado contra um recorte de so' 10 minutos de jogo,
+    # escala completamente incompativel (mesma familia de bug do
+    # Multicorners). Hoje e' inofensivo na pratica (o value vem "Over"/
+    # "Under" sem numero, o parse de linha falha e descarta sozinho) mas
+    # fica exposto se a API um dia mandar a linha numerica de verdade --
+    # exclui na classificacao pra nao depender desse acidente de formato.
+    if any(kw in name for kw in ("1x2", "race to", "range", "3 way", "highest scoring", "between")):
+        return None
+
+    # "Multicorners" (API bet_id 249) -- achado real 2026-07-26: linhas de
+    # 18.5 ate 29.5+, muito acima do total_corners real de UMA partida
+    # (historico gira em ~8-12). Contem "corner" como substring e cairia no
+    # fallback generico abaixo, comparando essas linhas absurdas contra o
+    # historico normal de escanteios -- qualquer "Under" nessa faixa bateria
+    # ~100% das vezes por pura incompatibilidade de escala (nao e' sinal
+    # real), mesma classe do bug "chute no alvo vs chute total" ja corrigido
+    # antes. Produto exato que "Multicorners" representa nao esta claro nem
+    # documentado pela API -- na duvida, exclui em vez de advinhar.
+    if "multicorners" in name:
         return None
 
     if "corner" in name:
@@ -231,6 +293,20 @@ def classify_market(market_name: str):
             return ("offsides", "away")
         return ("offsides", "total")
 
+    if "foul" in name:
+        # "Player Fouls Committed" (Bet365, achado real 2026-07-26 rodando
+        # validacao contra fixture real) e' prop por JOGADOR (value_name
+        # vira nome de jogador, ex. "Ademir - 1+"), nao total do time --
+        # mesmo motivo de exclusao de jogador individual ja documentado no
+        # topo desta funcao (shots ja tem o mesmo guard "player not in name").
+        if "player" in name or "half" in name:
+            return None
+        if "home" in name:
+            return ("fouls", "home")
+        if "away" in name:
+            return ("fouls", "away")
+        return ("fouls", "total")
+
     if "shot" in name and "player" not in name and "half" not in name:
         # "Total ShotOnGoal"/"Shot On Target"/"ShotsOnTarget" etc -- variantes
         # com e sem espaco, e com "goal" ou "target" -- sao chutes NO ALVO
@@ -256,6 +332,14 @@ def classify_market(market_name: str):
         return ("shots", "total")
 
     if "goal" in name:
+        # "Goalkeeper Saves" contem a substring "goal" (de "Goalkeeper"),
+        # nao tem nada a ver com o mercado de gols -- mesma classe do bug
+        # real ja corrigido pra "Total ShotOnGoal" caindo em "goals" (ver
+        # comentario de shots acima). Jogador individual (goleiro, artilheiro
+        # etc.) fica fora de escopo por decisao explicita ja documentada no
+        # topo desta funcao -- nao ha historico por jogador no sistema hoje.
+        if "keeper" in name:
+            return None
         if "half" in name or "method" in name or "scorer" in name or "exact" in name or "number of" in name:
             return None
         if "home" in name:
@@ -336,6 +420,17 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
     try:
         line_val = float(line_str)
     except (TypeError, ValueError):
+        return None
+    # Linha de quarto (.25/.75, ex: "Goal Line" Over 1.25/1.75 -- variante
+    # asiatica de over/under total) -- mesmo problema ja corrigido em
+    # handicap_taxa: e' uma aposta dividida em 2 metades com resultado
+    # possivel de win/push/loss por metade que esta comparacao binaria (`>`)
+    # nao modela direito. Aqui o sinal costuma sair certo (nao vira "vitoria
+    # disfarcada de resultado" como no caso do handicap +0.25), mas a
+    # MAGNITUDE fica imprecisa (conta meia-vitoria/meia-derrota como
+    # inteira) -- consistente excluir aqui tambem em vez de sustentar taxa
+    # aproximada com confidence que assume precisao exata.
+    if round(abs(line_val) % 1, 2) in (0.25, 0.75):
         return None
     is_over = direction == "over"
     is_round_line = line_val % 1 == 0
@@ -524,8 +619,27 @@ def handicap_taxa(family: str, side: str, handicap: float, last10_home: list, la
     real de cada jogo historico (gols/escanteios/cartoes -- so troca o
     field) e combina os dois pools do mesmo jeito de outcome_taxa: o
     mesmo hit_fn mede, no pool casa, a tendencia do mandante atual, e no
-    pool fora, a tendencia do adversario historico do visitante atual."""
+    pool fora, a tendencia do adversario historico do visitante atual.
+
+    Linha de QUARTO de gol (.25/.75, ex: 'Home +0.25') fica de fora --
+    bug real encontrado em producao (2026-07-26): handicap de quarto e' na
+    verdade uma aposta dividida em 2 metades (ex: +0.25 = metade da banca
+    em +0 e metade em +0.5), com resultados possiveis de win/push/loss por
+    metade que este hit_fn binario (`>`) nao modela. Pra +0.25 especifico,
+    um EMPATE conta como HIT TOTAL (0+0.25 > 0), o que faz a taxa medir
+    literalmente "mandante nao perde" -- mesmo criterio de draw_no_bet/
+    double_chance 1X, que ja foi excluido do pool por ser mercado de
+    resultado (_RESULT_FAMILIES em orchestrator.py). Era por isso que a
+    mesma linha 'Home +0.25' vencia em quase toda fixture (Remo, Londrina,
+    Gremio, Sao Bernardo, Bahia no mesmo dia): nao estava testando margem
+    de gols, estava testando resultado disfarcado de handicap. Linha
+    inteira/.5 nao tem esse problema (.5 nunca empata na linha; linha
+    inteira tem push real no empate exato, mas o hit_fn conta como MISS,
+    nao como hit -- vies pra baixo, conhecido e nao corrigido aqui por ser
+    bem mais raro que o caso .25/.75 e nao inflar taxa)."""
     if side not in ("home", "away"):
+        return None
+    if round(abs(handicap) % 1, 2) in (0.25, 0.75):
         return None
 
     if family == "cards":
@@ -647,7 +761,7 @@ def compute_taxa(family: str, scope: str, value: str, line_str: str,
     parsing de value proprio (3-way, side+handicap, odd/even)."""
     direction = (value or "").strip().lower()
 
-    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides"):
+    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls"):
         return market_taxa(family, scope, value, line_str, last10_home, last10_away, reference_date, config)
 
     if family == "outcome":
@@ -706,6 +820,7 @@ _SCORED_CONCEDED_FIELDS = {
     "goals":   ("home_goals", "away_goals"),
     "corners": ("home_corners", "away_corners"),
     "cards":   ("home_yellow_cards", "away_yellow_cards"),
+    "fouls":   ("home_fouls", "away_fouls"),
 }
 
 

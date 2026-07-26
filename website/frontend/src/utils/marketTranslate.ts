@@ -56,6 +56,11 @@ const MARKET_PT: Record<string, string> = {
   'odd/even': 'Par/Ímpar',
   'odd or even': 'Par/Ímpar',
   'corners odd/even': 'Escanteios Par/Ímpar',
+  // Faltas -- nome cru da API vem "Fouls. Home/Away/[nada] Total".
+  'fouls. home total': 'Faltas Casa Mais/Menos',
+  'fouls. away total': 'Faltas Visitante Mais/Menos',
+  'fouls. total': 'Faltas Mais/Menos',
+  'fouls': 'Faltas Mais/Menos',
   'to qualify': 'Classificação',
   'to qualify - extra time': 'Classificação (Prorrogação)',
 }
@@ -122,6 +127,10 @@ const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'over/under':            _ouOr('o total da partida'),
   'corners odd/even':      lineTxt => `Dá GREEN se o total de escanteios da partida (somando os dois times) for um número ${lineTxt === 'Ímpar' ? 'ímpar' : 'par'}.`,
   'odd/even':              lineTxt => `Dá GREEN se o total de gols da partida (somando os dois times) for um número ${lineTxt === 'Ímpar' ? 'ímpar' : 'par'}. Não importa quem vence, só a contagem total.`,
+  'fouls. home total':     _ouOr('o total de faltas cometidas só pela equipe da casa'),
+  'fouls. away total':     _ouOr('o total de faltas cometidas só pela equipe visitante'),
+  'fouls. total':          _ouOr('o total de faltas da partida (somando os dois times)'),
+  'fouls':                 _ouOr('o total de faltas da partida (somando os dois times)'),
 }
 
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */

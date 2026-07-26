@@ -18,6 +18,34 @@ _CARDS_FAMILIES = ("cards", "handicap_cards")
 # chance/empate anula que devem sumir do pool.
 _RESULT_FAMILIES = ("outcome", "double_chance", "draw_no_bet")
 
+# Par/Impar (gols e escanteios) -- excluido do pool por propriedade
+# matematica do mercado, nao por decisao de gosto: pra uma contagem
+# Poisson(lambda) (gols/escanteios de uma partida), P(par) = (1+e^-2*lambda)/2.
+# Pra lambda tipico de gols (~2.5-3.5) isso da P(par) entre ~50.0% e ~50.7%;
+# pra escanteios (~9-12) a diferenca e' praticamente zero (e^-2*lambda ~ 0).
+# Ou seja: NENHUM time, por melhor ou pior que seja ofensiva/defensivamente,
+# desloca esse mercado de forma relevante pra longe de 50/50 -- e' o oposto
+# de over/under, que reflete a media diretamente. O problema real (achado
+# 2026-07-26, pick de Odd/Even gerado pro jogo do Mirassol parecendo
+# aleatorio): _extract_stat/weighted_rate calculam taxa empirica numa
+# amostra de ~10 jogos como fariam pra qualquer outro mercado, mas:
+# (1) odd_even_goals/odd_even_corners NAO batem em probability_model.
+# _POISSON_FAMILIES (que so' reconhece "goals"/"corners"/"cards" literal),
+# entao NUNCA recebem o termo M (model_fit_adjustment) que pegaria esse
+# tipo de contradicao estatistica pra outras familias;
+# (2) por ser mercado raro/novo, calibration.get_prior() nao tem amostra
+# historica suficiente ainda pra esse market_type, get_prior() retorna None
+# e bayesian_model.shrink_taxa() devolve a taxa empirica SEM encolher.
+# Resultado: um desvio de amostra pequena (n~10, p~0.5, erro padrao ~15.8pp
+# -- bater 70-80% "por sorte" e' estatisticamente comum) passa direto pelos
+# 2 unicos filtros que existem hoje pra pegar isso, e ainda compete pelo
+# slot da categoria "goals"/"corners" no ranking final (correlation_group)
+# contra um over/under de verdade, que tem sinal real. Nao ha fix de
+# calibracao que resolva isso de forma robusta (o teto real de desvio de
+# 50/50 e' baixo demais pra sustentar um edge), entao o mercado sai do pool
+# igual _RESULT_FAMILIES acima.
+_NEAR_COINFLIP_FAMILIES = ("odd_even_goals", "odd_even_corners")
+
 _OPPOSITE_VALUE = {
     "over": "under", "under": "over",
     "yes": "no", "no": "yes", "sim": "não", "não": "sim", "nao": "sim",
@@ -63,15 +91,17 @@ def analyze_fixture_markets(
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
     (classify_market()) disponivel nas odds ja estruturadas
     (services.odds_service.OddsService.load_odds_structured), a partir do
-    historico ja carregado. Cobre gols/escanteios/cartoes/ambas marcam/
+    historico ja carregado. Cobre gols/escanteios/cartoes/faltas/ambas marcam/
     chutes/impedimentos (over-under), handicap (gols/escanteios/cartoes),
-    par/impar, clean sheet e vitoria sem sofrer gol -- ver
-    stats_model.classify_market() pra lista completa e o que fica de fora
-    (jogador individual, placar exato, 1o/2o tempo). 1X2, dupla chance e
-    empate anula aposta (_RESULT_FAMILIES acima) sao classificados mas
-    descartados de proposito antes de virar candidato -- mercado de
-    resultado excluido por decisao de produto (2026-07-24). Handicap
-    Asiatico de gols continua disponivel normalmente (pedido explicito).
+    clean sheet e vitoria sem sofrer gol -- ver stats_model.classify_market()
+    pra lista completa e o que fica de fora (jogador individual, placar
+    exato, 1o/2o tempo). 1X2, dupla chance e empate anula aposta
+    (_RESULT_FAMILIES acima) sao classificados mas descartados de proposito
+    antes de virar candidato -- mercado de resultado excluido por decisao de
+    produto (2026-07-24). Handicap Asiatico de gols continua disponivel
+    normalmente (pedido explicito). Par/impar (_NEAR_COINFLIP_FAMILIES acima)
+    tambem e' classificado mas descartado -- mercado matematicamente proximo
+    de 50/50 independente dos times, ver comentario da constante (2026-07-26).
 
     `context_data` (saida de context_model.build_context), `matchup_data`
     (saida de team_profile_model.compare_matchup), `news_data` (saida de
@@ -145,6 +175,15 @@ def analyze_fixture_markets(
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": family,
                     "reason": "mercado de resultado excluido por decisao de produto",
+                })
+            continue
+        if family in _NEAR_COINFLIP_FAMILIES:
+            if debug:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": family,
+                    "reason": "par/impar e matematicamente proximo de 50/50 (paridade Poisson); "
+                              "sem sinal Poisson nem prior calibrado, taxa empirica de amostra "
+                              "pequena passa como se fosse edge real",
                 })
             continue
         if family in _CARDS_FAMILIES:

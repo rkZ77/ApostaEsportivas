@@ -18,7 +18,7 @@ por partida raramente passam de ~20, entao isso e trivial sem precisar de
 scipy/numpy (nenhuma das duas e dependencia hoje do projeto)."""
 import math
 
-_POISSON_FAMILIES = {"goals", "corners", "cards"}
+_POISSON_FAMILIES = {"goals", "corners", "cards", "fouls"}
 
 
 def poisson_pmf(k: int, lam: float) -> float:
