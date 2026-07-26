@@ -5,6 +5,7 @@ import requests
 from psycopg2.extras import execute_batch
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
+from services.pick_engine.stats_model import classify_market
 
 load_dotenv(find_dotenv())
 
@@ -131,6 +132,12 @@ _MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
     ("corners odd/even", "Escanteios Par/Ímpar"),
     ("odd/even", "Par/Ímpar"),
     ("odd or even", "Par/Ímpar"),
+    # Faltas -- nome cru da API vem "Fouls. Home/Away/[nada] Total"
+    # (2026-07-26, mercado novo ligado ao motor).
+    ("fouls. home total", "Faltas Casa Mais/Menos"),
+    ("fouls. away total", "Faltas Visitante Mais/Menos"),
+    ("fouls. total", "Faltas Mais/Menos"),
+    ("fouls", "Faltas Mais/Menos"),
     ("corners over/under", "Escanteios Mais/Menos"),
     ("corners 1x2", "Escanteios 1x2"),
     ("home corners over/under", "Escanteios Casa Mais/Menos"),
@@ -166,12 +173,21 @@ def detect_market_type(bet_id: int, bet_name: str) -> str:
         return MARKET_TYPE_MAP[bet_id]
 
     name = bet_name.lower()
+    if "foul" in name:
+        return "fouls"
     if "shot" in name:
         return "shots"
     if "corner" in name:
         return "corners"
     if "card" in name or "yellow" in name:
         return "cards"
+    # "Goalkeeper Saves" contem "goal" como substring (de "Goalkeeper") --
+    # mesmo bug ja corrigido em stats_model.classify_market() (2026-07-26),
+    # aplicado aqui tambem pra nao divergir (este market_type so alimenta
+    # exibicao/listagem de mercado bruto, nao decide pick, mas o objetivo
+    # e' NUNCA ter 2 classificadores discordando sobre o que e' "gols").
+    if "keeper" in name:
+        return "unknown"
     if "goal" in name or "total - home" in name or "total - away" in name:
         return "goals"
     if "both teams score" in name or "btts" in name:
@@ -315,6 +331,39 @@ class OddsCollectorService:
 
                     market_row_id = cur.fetchone()[0]
                     market_map[(bk["id"], bet["id"])] = market_row_id
+
+                    # Pedido do usuario 2026-07-26: registrar todo bet_name
+                    # que o motor (stats_model.classify_market) ainda nao
+                    # reconhece, pra pegar mercado novo/renomeado da API sem
+                    # precisar caçar fixture por fixture na mao (foi assim
+                    # que "Fouls"/"Goalkeeper Saves" foram descobertos nesta
+                    # sessao). Nao distingue "nunca visto" de "excluido de
+                    # proposito" (ex. placar exato) -- revisao periodica que
+                    # decide, ver pick_engine_unclassified_markets.
+                    if classify_market(bet["name"]) is None:
+                        # SAVEPOINT isola essa feature auxiliar do resto da
+                        # transacao -- run_migrations() nao roda sozinho em
+                        # prod apos deploy (gap ja conhecido, precisa
+                        # `DB_ENV=prod python main.py setup` manual), entao
+                        # se este INSERT rodar antes da tabela existir, sem
+                        # savepoint o `except` generico la embaixo (linha
+                        # ~453) faria ROLLBACK da transacao INTEIRA e
+                        # perderia os odds_markets/odds_values legitimos
+                        # que ja tinham sido inseridos nesta mesma fixture --
+                        # uma feature de diagnostico nao pode derrubar a
+                        # coleta de odds de verdade.
+                        try:
+                            cur.execute("SAVEPOINT sp_unclassified_market")
+                            cur.execute("""
+                                INSERT INTO pick_engine_unclassified_markets
+                                    (bet_name, sample_fixture_id)
+                                VALUES (%s, %s)
+                                ON CONFLICT (bet_name) DO UPDATE SET
+                                    times_seen = pick_engine_unclassified_markets.times_seen + 1,
+                                    last_seen  = NOW()
+                            """, (bet["name"], fixture_id))
+                        except Exception:
+                            cur.execute("ROLLBACK TO SAVEPOINT sp_unclassified_market")
 
             # --------------------------------------------------
             # 3. UPSERT VALUES (ODDS)

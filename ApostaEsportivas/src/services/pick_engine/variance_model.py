@@ -11,7 +11,7 @@ from services.pick_engine.stats_model import _extract_stat, pool_and_field
 # Familias com leitura direta de valor bruto por partida (nao 0/1) -- btts/
 # outcome/handicap/etc nao tem "o valor daquele jogo", so um hit binario,
 # entao variancia nao se aplica a elas.
-_VALUE_FAMILIES = {"goals", "corners", "cards", "shots", "shots_on_target", "offsides"}
+_VALUE_FAMILIES = {"goals", "corners", "cards", "shots", "shots_on_target", "offsides", "fouls"}
 
 
 def variance_stats(family: str, scope: str, last10_home: list, last10_away: list) -> dict | None:
