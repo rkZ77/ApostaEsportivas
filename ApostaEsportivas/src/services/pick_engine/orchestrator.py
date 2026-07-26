@@ -99,7 +99,9 @@ def analyze_fixture_markets(
     (_RESULT_FAMILIES acima) sao classificados mas descartados de proposito
     antes de virar candidato -- mercado de resultado excluido por decisao de
     produto (2026-07-24). Handicap Asiatico de gols continua disponivel
-    normalmente (pedido explicito). Par/impar (_NEAR_COINFLIP_FAMILIES acima)
+    (pedido explicito) mas so' a partir de |linha|>=1.0 -- +-0.5 e' excluido
+    dentro de stats_model.handicap_taxa() por ser matematicamente identico
+    a Dupla Chance/1X2 (achado real 2026-07-26). Par/impar (_NEAR_COINFLIP_FAMILIES acima)
     tambem e' classificado mas descartado -- mercado matematicamente proximo
     de 50/50 independente dos times, ver comentario da constante (2026-07-26).
 
