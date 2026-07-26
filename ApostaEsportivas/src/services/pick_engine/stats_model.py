@@ -636,10 +636,25 @@ def handicap_taxa(family: str, side: str, handicap: float, last10_home: list, la
     inteira/.5 nao tem esse problema (.5 nunca empata na linha; linha
     inteira tem push real no empate exato, mas o hit_fn conta como MISS,
     nao como hit -- vies pra baixo, conhecido e nao corrigido aqui por ser
-    bem mais raro que o caso .25/.75 e nao inflar taxa)."""
+    bem mais raro que o caso .25/.75 e nao inflar taxa).
+
+    MAS pra family='goals' especificamente, handicap=+-0.5 tem um problema
+    DIFERENTE, achado real 2026-07-26 (usuario percebeu direto no pick de
+    Gremio x Fluminense): 'Home +0.5' e' matematicamente IDENTICO a Dupla
+    Chance 1X (home_gols+0.5>away_gols equivale a home nao perder -- testado
+    contra toda combinacao de placar 0-5 x 0-5, zero divergencia), e 'Home
+    -0.5' e' identico a Resultado Final Casa (1X2). Nao e' aproximacao, e'
+    a MESMA aposta com nome de handicap -- exatamente o mercado de
+    resultado que _RESULT_FAMILIES ja exclui, so' que disfarçado. So' a
+    partir de +-1.0 o handicap de gols vira aposta genuina de margem (ex.:
+    +1.5 tambem cobre "perde por so 1", que nao existe em nenhum mercado de
+    resultado simples). Escanteios/cartoes NAO tem esse problema (nao existe
+    "1X2 de escanteios" banido pra duplicar), entao so' exclui pra 'goals'."""
     if side not in ("home", "away"):
         return None
     if round(abs(handicap) % 1, 2) in (0.25, 0.75):
+        return None
+    if family == "goals" and round(abs(handicap), 2) == 0.5:
         return None
 
     if family == "cards":
