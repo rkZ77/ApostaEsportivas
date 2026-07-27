@@ -9,6 +9,7 @@ import Marquee from '../components/ui/Marquee'
 import NumberTicker from '../components/ui/NumberTicker'
 import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { fadeInUp, staggerContainer } from '../lib/motion'
 
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
@@ -46,7 +47,7 @@ interface RecentTip {
   source: string
 }
 interface PublicData {
-  summary: { total: number; greens: number; profit: number; roi: number }
+  summary: { total: number; greens: number; reds: number; profit: number; roi: number }
   recent: RecentTip[]
   counts?: { vip_total: number; free_total: number; multipla_total: number; alavancagem_total: number }
 }
@@ -123,13 +124,10 @@ function NextGamesPreview() {
 // Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
 // So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
 // mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
-function LiveTicker() {
-  const [items, setItems] = useState<RecentTip[]>([])
-  useEffect(() => {
-    api.get('/public/results', { params: { recent_limit: 50 } })
-      .then(r => setItems((r.data?.recent ?? []).filter((t: RecentTip) => t.result === 'GREEN').slice(0, 12)))
-      .catch(() => {})
-  }, [])
+// Recebe os dados via prop (buscados 1x em Landing) -- antes eram 3 fetches
+// separados em /public/results (aqui, em SocialProofStats e em RecentResults).
+function LiveTicker({ recent }: { recent: RecentTip[] }) {
+  const items = recent.filter(t => t.result === 'GREEN').slice(0, 12)
 
   if (items.length === 0) return null
 
@@ -175,15 +173,8 @@ function TodayBadge() {
 }
 
 // Social proof stats · bloco de 4 métricas em tempo real
-function SocialProofStats() {
-  const [summary, setSummary] = useState<{ total: number; greens: number; reds: number; profit: number } | null>(null)
-  const [loaded, setLoaded] = useState(false)
-  useEffect(() => {
-    api.get('/public/results')
-      .then(r => { setSummary(r.data?.summary ?? null); setLoaded(true) })
-      .catch(() => setLoaded(true))
-  }, [])
-
+// Recebe summary via prop (mesmo fetch de /public/results reaproveitado de Landing)
+function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] | null; loaded: boolean }) {
   if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-md animate-pulse" />
 
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
@@ -256,22 +247,28 @@ function ThreeSteps() {
           ))}
         </div>
 
-        <div className="grid md:grid-cols-3 gap-5">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+          className="grid md:grid-cols-3 gap-5"
+        >
           {([
             { n: '1', Icon: UserPlus, title: 'Cria sua conta', desc: 'Cadastro em menos de 1 minuto. Ganhe 2 dias de acesso VIP completo para testar tudo.', color: 'text-green-500', border: 'border-green-500/20', iconBg: 'bg-green-500/10' },
             { n: '2', Icon: BrainCircuit, title: 'A IA faz a análise pesada', desc: 'A IA cruza estatística real de forma, confronto direto e odds de mercado, e só recomenda quando o valor esperado é positivo. Chega pronto no app: VIP, Múltiplas e Alavancagem.', color: 'text-blue-400', border: 'border-blue-400/20', iconBg: 'bg-blue-400/10' },
             { n: '3', Icon: TrendingUp, title: 'Acompanha e lucra', desc: 'Veja o resultado de cada pick em tempo real. Histórico completo, transparência total e estratégia de banca.', color: 'text-yellow-400', border: 'border-yellow-400/20', iconBg: 'bg-yellow-400/10' },
           ] as const).map(({ n, Icon, title, desc, color, border, iconBg }) => (
-            <div key={n} className={`border rounded-lg p-6 text-center ${border}`}>
+            <motion.div key={n} variants={fadeInUp} whileHover={{ y: -3 }} className={`border rounded-lg p-6 text-center ${border}`}>
               <div className={`inline-flex items-center justify-center w-12 h-12 rounded-md mb-4 ${iconBg}`}>
                 <Icon className={`w-6 h-6 ${color}`} />
               </div>
               <div className={`font-mono text-sm font-bold ${color} mb-2 opacity-60`}>0{n}</div>
               <h3 className="font-display text-base font-semibold text-white mb-2">{title}</h3>
               <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
         <div className="text-center mt-8">
           <Link to="/login?mode=register" className="inline-flex items-center gap-2 bg-green-500 hover:bg-green-400 text-black font-black px-7 py-3 rounded-md text-sm transition-colors">
             Começar agora
@@ -328,9 +325,15 @@ function ActiveLeagues() {
             hoje a IA já analisa:
           </p>
         </div>
-        <div className="flex flex-wrap items-center justify-center gap-8">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+          className="flex flex-wrap items-center justify-center gap-8"
+        >
           {leagues.map(({ league_id, name, logo_url }) => (
-            <div key={league_id} className="flex flex-col items-center gap-2">
+            <motion.div key={league_id} variants={fadeInUp} className="flex flex-col items-center gap-2">
               <img
                 src={logo_url}
                 alt={name}
@@ -343,9 +346,9 @@ function ActiveLeagues() {
                 <p className="text-xs font-semibold text-zinc-300 leading-tight">{name}</p>
                 <p className="text-[10px] text-green-500 font-bold">Ativo</p>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
     </section>
   )
@@ -362,18 +365,8 @@ function TeamLogo({ id, name }: { id?: number | null; name: string }) {
 }
 
 // Últimos 6 resultados
-function RecentResults() {
-  const [data, setData] = useState<PublicData | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api.get('/public/results')
-      .then(r => setData(r.data))
-      .catch(() => setData(null))
-      .finally(() => setLoading(false))
-  }, [])
-
-  const s = data?.summary
+// Recebe data/loading via prop (mesmo fetch de /public/results reaproveitado de Landing)
+function RecentResults({ data, loading }: { data: PublicData | null; loading: boolean }) {
   const recent10 = (data?.recent ?? []).slice(0, 10)
   // Resumo do dia mais recente dentro da janela mostrada -- sem isso uma
   // sequência de RED (escanteios/cartões travam cedo, GREEN só no FT) podia
@@ -399,7 +392,13 @@ function RecentResults() {
             <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : recent10.length > 0 ? (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden">
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+            transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+            className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden"
+          >
             <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-y-1">
               <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 10 dicas finalizadas</span>
               {(todayGreens > 0 || todayReds > 0) && (
@@ -463,7 +462,7 @@ function RecentResults() {
                 Criar conta grátis
               </Link>
             </div>
-          </div>
+          </motion.div>
         ) : (
           <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
         )}
@@ -581,9 +580,15 @@ function LeaderboardTeaser() {
             <div className="w-6 h-6 border-2 border-zinc-700 border-t-yellow-400 rounded-full animate-spin" />
           </div>
         ) : (
-          <div className="space-y-3">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+            className="space-y-3"
+          >
             {leaders.slice(0, 3).map((l, i) => (
-              <div key={i} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-lg px-5 py-4">
+              <motion.div key={i} variants={fadeInUp} whileHover={{ y: -2 }} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-lg px-5 py-4">
                 <span className={`text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-zinc-800 text-zinc-400'}`}>
                   {i + 1}
                 </span>
@@ -606,9 +611,9 @@ function LeaderboardTeaser() {
                   <p className="text-base font-black text-white">{l.win_rate}%</p>
                   <p className="text-[10px] text-zinc-600">Win rate</p>
                 </div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         )}
         <div className="text-center mt-6">
           <Link to="/login" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
@@ -629,6 +634,17 @@ export default function Landing() {
   useEffect(() => {
     const t = setInterval(() => setChatDemo(n => (n + 1) % 3), 3000)
     return () => clearInterval(t)
+  }, [])
+
+  // Fetch único de /public/results (recent_limit=50 cobre LiveTicker, SocialProofStats
+  // e RecentResults) -- antes eram 3 chamadas separadas pro mesmo endpoint.
+  const [publicData, setPublicData] = useState<PublicData | null>(null)
+  const [publicDataLoaded, setPublicDataLoaded] = useState(false)
+  useEffect(() => {
+    api.get('/public/results', { params: { recent_limit: 50 } })
+      .then(r => setPublicData(r.data))
+      .catch(() => setPublicData(null))
+      .finally(() => setPublicDataLoaded(true))
   }, [])
 
   const chatMessages = [
@@ -699,7 +715,7 @@ export default function Landing() {
         )}
       </nav>
 
-      <LiveTicker />
+      <LiveTicker recent={publicData?.recent ?? []} />
 
       <section className="relative overflow-hidden">
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
@@ -730,7 +746,7 @@ export default function Landing() {
                 toda manhã. De graça pra começar.
               </p>
 
-              <div className="flex flex-col sm:flex-row gap-3 mb-8">
+              <div className="flex flex-col sm:flex-row gap-3 mb-3">
                 <ShimmerButton to="/login?mode=register">
                   Criar conta · 2 dias VIP grátis
                 </ShimmerButton>
@@ -740,7 +756,12 @@ export default function Landing() {
                 </a>
               </div>
 
-              <SocialProofStats />
+              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mb-8">
+                <Check />
+                Sem cartão de crédito · cancele quando quiser
+              </p>
+
+              <SocialProofStats summary={publicData?.summary ?? null} loaded={publicDataLoaded} />
             </div>
 
             {/* Jogos reais que a IA analisa + Dica do Dia real -- preenche a coluna,
@@ -757,7 +778,7 @@ export default function Landing() {
 
       <FreePickTeaser />
 
-      <RecentResults />
+      <RecentResults data={publicData} loading={!publicDataLoaded} />
 
       <ThreeSteps />
 
@@ -845,9 +866,15 @@ export default function Landing() {
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-5">
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+            className="grid md:grid-cols-3 gap-5"
+          >
             {/* Free */}
-            <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-7">
+            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-zinc-900 border border-zinc-800 rounded-lg p-7">
               <span className="badge-free mb-3">Free</span>
               <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 0</p>
               <p className="text-zinc-500 text-xs mb-6">Para sempre</p>
@@ -871,10 +898,10 @@ export default function Landing() {
               <Link to="/login?mode=register" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-md text-sm transition-colors">
                 Criar conta grátis
               </Link>
-            </div>
+            </motion.div>
 
             {/* Trial · destaque */}
-            <div className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-7 overflow-hidden">
+            <motion.div variants={fadeInUp} whileHover={{ y: -5 }} className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-7 overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
               <div className="absolute top-3.5 right-4 font-mono text-[10px] font-bold text-green-400 border border-green-500/30 px-2 py-1 rounded-sm uppercase">
                 Começar agora
@@ -902,10 +929,10 @@ export default function Landing() {
               <Link to="/login?mode=register" className="block text-center bg-green-500 hover:bg-green-400 text-black font-black py-2.5 rounded-md text-sm transition-colors">
                 Ativar teste gratuito
               </Link>
-            </div>
+            </motion.div>
 
             {/* VIP */}
-            <div className="bg-zinc-900 border border-yellow-400/30 rounded-lg p-7 overflow-hidden relative">
+            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-zinc-900 border border-yellow-400/30 rounded-lg p-7 overflow-hidden relative">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
               <span className="badge-trial mb-3">VIP</span>
               <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 39,90<span className="text-base font-semibold text-zinc-500">/mês</span></p>
@@ -929,8 +956,8 @@ export default function Landing() {
               <Link to="/planos" className="block text-center bg-yellow-400/10 border border-yellow-400/30 hover:bg-yellow-400/20 text-yellow-400 font-black py-2.5 rounded-md text-sm transition-colors">
                 Ver planos VIP
               </Link>
-            </div>
-          </div>
+            </motion.div>
+          </motion.div>
         </div>
       </section>
 
