@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { SlidersHorizontal, X, ChevronDown } from 'lucide-react'
 
 export interface FilterOption { value: string; label: string; icon?: React.ReactNode }
@@ -61,16 +62,29 @@ export default function FilterPanel({
         </button>
 
         {!open && activeChips.map(chip => (
-          <span key={chip.key} className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${c.chip}`}>
+          <motion.span
+            key={chip.key}
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            className={`flex items-center gap-1 text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${c.chip}`}
+          >
             {chip.label}
             <button onClick={chip.onClear} className="hover:opacity-70" aria-label={`Remover filtro ${chip.label}`}>
               <X className="w-3 h-3" />
             </button>
-          </span>
+          </motion.span>
         ))}
       </div>
 
+      <AnimatePresence initial={false}>
       {open && (
+        <motion.div
+          initial={{ opacity: 0, height: 0 }}
+          animate={{ opacity: 1, height: 'auto' }}
+          exit={{ opacity: 0, height: 0 }}
+          transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
+          className="overflow-hidden"
+        >
         <div className="mt-2 card p-4 space-y-4 border-zinc-800">
           {groups.map(g => (
             <div key={g.key}>
@@ -123,7 +137,9 @@ export default function FilterPanel({
             </button>
           </div>
         </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

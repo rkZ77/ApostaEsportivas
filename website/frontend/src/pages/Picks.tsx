@@ -1,5 +1,7 @@
 ﻿import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
@@ -99,13 +101,12 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
         {tabs.map(t => {
           const count = counts?.[t.key]
           return (
-            <button
+            <motion.button
               key={t.key}
+              whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
-              className={`px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold border-b-2 transition-colors mr-1 whitespace-nowrap flex-shrink-0 ${
-                tab === t.key
-                  ? 'border-green-500 text-white'
-                  : 'border-transparent text-zinc-500 hover:text-zinc-300'
+              className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
+                tab === t.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
               }`}
             >
               {t.label}
@@ -129,7 +130,12 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
                   {count}
                 </span>
               )}
-            </button>
+              {tab === t.key ? (
+                <motion.div layoutId="picks-tab-underline" className="absolute left-0 right-0 -bottom-px h-0.5 bg-green-500" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
+              ) : (
+                <div className="absolute left-0 right-0 -bottom-px h-0.5 bg-transparent" />
+              )}
+            </motion.button>
           )
         })}
       </div>
@@ -393,8 +399,12 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
 
   return (
   <>
-    <div
-      className={`relative overflow-hidden bg-zinc-950 border rounded-lg transition-all duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
+    <motion.div
+      variants={fadeInUp}
+      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      className={`relative overflow-hidden bg-zinc-950 border rounded-lg transition-colors duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
     >
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
@@ -567,7 +577,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
+    <AnimatePresence>
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
@@ -580,11 +591,17 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
         error={apiError}
       />
     )}
+    </AnimatePresence>
+    <AnimatePresence>
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
+      <motion.div
+        variants={toastUp} initial="hidden" animate="visible" exit="exit"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+      >
         Pick registrado com sucesso!
-      </div>
+      </motion.div>
     )}
+    </AnimatePresence>
   </>
   )
 }
@@ -685,8 +702,12 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
 
   return (
   <>
-    <div
-      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-lg cursor-pointer transition-all duration-200 group"
+    <motion.div
+      variants={fadeInUp}
+      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-lg cursor-pointer transition-colors duration-200 group"
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -874,7 +895,8 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
         </div>
       </div>
-    </div>
+    </motion.div>
+    <AnimatePresence>
     {showModal && (
       <ApostaModal
         pickOdd={Number(m.total_odd)}
@@ -886,11 +908,17 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
         error={apiError}
       />
     )}
+    </AnimatePresence>
+    <AnimatePresence>
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
+      <motion.div
+        variants={toastUp} initial="hidden" animate="visible" exit="exit"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+      >
         Pick registrado com sucesso!
-      </div>
+      </motion.div>
     )}
+    </AnimatePresence>
   </>
   )
 }
@@ -967,8 +995,12 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
 
   return (
   <>
-    <div
-      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-lg cursor-pointer transition-all duration-200 group"
+    <motion.div
+      variants={fadeInUp}
+      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-lg cursor-pointer transition-colors duration-200 group"
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1133,7 +1165,8 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
           <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
         </div>
       </div>
-    </div>
+    </motion.div>
+    <AnimatePresence>
     {showModal && (
       <ApostaModal
         pickOdd={Number(pick.odd_combined)}
@@ -1145,11 +1178,17 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
         error={apiError}
       />
     )}
+    </AnimatePresence>
+    <AnimatePresence>
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
+      <motion.div
+        variants={toastUp} initial="hidden" animate="visible" exit="exit"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+      >
         Pick registrado com sucesso!
-      </div>
+      </motion.div>
     )}
+    </AnimatePresence>
   </>
   )
 }
@@ -1639,7 +1678,9 @@ export default function Picks() {
 
   return (
     <div className="min-h-screen bg-black">
+      <AnimatePresence>
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
+      </AnimatePresence>
 
       {/* Modal de boas-vindas · configura banca */}
       {showBancaModal && (
@@ -1789,8 +1830,9 @@ export default function Picks() {
           }}
         />
 
+        <AnimatePresence mode="wait">
         {tab === 'hoje' && (
-          <>
+          <motion.div key="hoje" variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {todayLoading ? <Spinner /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar picks</p>
@@ -1863,11 +1905,11 @@ export default function Picks() {
                     />
                     {!canSeeVip ? <VipLockOverlay color="yellow" /> : (
                       <>
-                        <div className="grid gap-4 md:grid-cols-2">
+                        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
                           {vips.slice(0, 4).map((s: any) => (
                             <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
-                        </div>
+                        </motion.div>
                         {vips.length > 4 && (
                           <button
                             onClick={() => setTab('vip')}
@@ -1890,9 +1932,9 @@ export default function Picks() {
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
                         {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
-                      </div>
+                      </motion.div>
                     )}
                   </section>
                 )
@@ -1932,11 +1974,11 @@ export default function Picks() {
             </div>
           )
         }
-          </>
+          </motion.div>
         )}
 
         {tab === 'pick_seguro' && (
-          <div className="space-y-6">
+          <motion.div key="pick_seguro" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-green-500/20 bg-green-500/5">
               <p className="font-display text-sm font-black text-green-400 mb-3">O que é o Pick do Dia Free?</p>
@@ -1977,11 +2019,11 @@ export default function Picks() {
               className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
-          </div>
+          </motion.div>
         )}
 
         {tab === 'vip' && (
-          <div className="space-y-6">
+          <motion.div key="vip" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-yellow-400/20 bg-yellow-400/5">
               <p className="font-display text-sm font-black text-yellow-400 mb-3">O que são os Picks VIP?</p>
@@ -2039,11 +2081,11 @@ export default function Picks() {
                   <>
                     {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} />}
                     {filteredVips.length > 0 ? (
-                      <div className="grid gap-4 md:grid-cols-2">
+                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
                         {filteredVips.map((s: any) => (
                           <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
-                      </div>
+                      </motion.div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
                         <p className="text-zinc-500 text-sm font-semibold">{leagueFilter || vipResultFilter ? 'Nenhum pick encontrado com esse filtro.' : 'Picks VIP do dia ainda não gerados.'}</p>
@@ -2060,11 +2102,11 @@ export default function Picks() {
               className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
-          </div>
+          </motion.div>
         )}
 
         {tab === 'multiplas' && (
-          <div className="space-y-6">
+          <motion.div key="multiplas" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             {/* O que é */}
             <div className="card p-5 border-blue-400/20 bg-blue-400/5">
               <p className="font-display text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
@@ -2097,9 +2139,9 @@ export default function Picks() {
               <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia · ${todayDateStr}`} />
               {!canSeeVip ? <VipLockOverlay color="blue" /> : todayLoading ? <Spinner /> : (
                 today?.multiplas?.length > 0 ? (
-                  <div className="space-y-4">
+                  <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
                     {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
-                  </div>
+                  </motion.div>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
                     <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
@@ -2114,11 +2156,11 @@ export default function Picks() {
               className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
-          </div>
+          </motion.div>
         )}
 
         {tab === 'alavancagem' && (
-          <div className="space-y-6">
+          <motion.div key="alavancagem" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-6">
             {/* Como funciona */}
             <div className="card p-5 border-orange-500/20 bg-orange-500/5">
               <p className="font-display text-sm font-black text-orange-400 mb-3">Como funciona a Alavancagem?</p>
@@ -2376,8 +2418,9 @@ export default function Picks() {
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
-          </div>
+          </motion.div>
         )}
+        </AnimatePresence>
         <div className={tab !== 'aovivo' ? 'hidden' : ''}>
           <LivePicks isActive={tab === 'aovivo'} unitValue={bancaSummary?.unit_value} />
         </div>

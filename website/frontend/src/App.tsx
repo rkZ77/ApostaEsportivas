@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react'
+import { AnimatePresence } from 'framer-motion'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
@@ -120,9 +121,11 @@ function GlobalModals() {
     if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
   }, [user?.id])
 
-  return showMonthlyClose
-    ? <MonthlyCloseModal onClose={() => setShowMonthlyClose(false)} />
-    : null
+  return (
+    <AnimatePresence>
+      {showMonthlyClose && <MonthlyCloseModal onClose={() => setShowMonthlyClose(false)} />}
+    </AnimatePresence>
+  )
 }
 
 // Redireciona apenas usuários recém-cadastrados para /como-funciona

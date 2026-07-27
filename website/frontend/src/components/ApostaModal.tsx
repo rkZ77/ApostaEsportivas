@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
+import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 
 const HOUSES = ['Superbet', 'Bet365', 'Betano', 'Outra']
 
@@ -40,17 +42,23 @@ export default function ApostaModal({
   }
 
   return (
-    <div
+    <motion.div
+      variants={backdropFade}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4 bg-black/70 backdrop-blur-sm"
       onClick={onCancel}
     >
-      <div
+      <motion.div
+        variants={sheetUp}
         className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-lg overflow-y-auto max-h-[92dvh]"
         onClick={e => e.stopPropagation()}
       >
+        <AnimatePresence mode="wait">
         {overrideStep ? (
           /* ── Tela de confirmação ao exceder sugestão ── */
-          <div className="p-5">
+          <motion.div key="override" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
             <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-md p-4 mb-5">
               <p className="text-yellow-400 font-black text-sm mb-1">Stake acima do recomendado</p>
               <p className="text-yellow-200 text-xs leading-relaxed">
@@ -74,10 +82,10 @@ export default function ApostaModal({
                 {loading ? '...' : 'Estou ciente'}
               </button>
             </div>
-          </div>
+          </motion.div>
         ) : (
           /* ── Tela principal ── */
-          <div className="p-5">
+          <motion.div key="main" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
             <h3 className="text-white font-black text-sm mb-1">Registrar aposta</h3>
             <p className="text-zinc-500 text-xs mb-4">Informe onde e como você apostou.</p>
 
@@ -180,9 +188,10 @@ export default function ApostaModal({
                 {loading ? '...' : exceedsSuggested ? `Apostar ${units}u` : 'Registrar aposta'}
               </button>
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
-    </div>
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   )
 }

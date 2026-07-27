@@ -1,11 +1,13 @@
 import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
 import BackButton from '../components/BackButton'
+import { backdropFade, dialogScale, tabFade } from '../lib/motion'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
@@ -265,29 +267,32 @@ export default function Fixtures() {
               { key: 'jogos',       label: 'Jogos' },
               { key: 'estatistica', label: 'Estatísticas' },
             ] as { key: PageTab; label: string }[]).map(t => (
-              <button
+              <motion.button
                 key={t.key}
+                whileTap={{ scale: 0.95 }}
                 onClick={() => setPageTab(t.key)}
-                className={`px-4 py-2.5 text-sm font-semibold transition-colors border-b-2 -mb-px ${
-                  pageTab === t.key
-                    ? 'text-white border-green-500'
-                    : 'text-zinc-500 border-transparent hover:text-zinc-300'
+                className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
+                  pageTab === t.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
                 }`}
               >
                 {t.label}
-              </button>
+                {pageTab === t.key && (
+                  <motion.div layoutId="fixtures-tab-underline" className="absolute left-0 right-0 -bottom-px h-0.5 bg-green-500" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
+                )}
+              </motion.button>
             ))}
           </div>
         </div>
       </div>
 
+      <AnimatePresence mode="wait">
       {pageTab === 'estatistica' && (
-        <main className="max-w-5xl mx-auto px-4 py-6">
+        <motion.main key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="max-w-5xl mx-auto px-4 py-6">
           <EstatisticasContent />
-        </main>
+        </motion.main>
       )}
 
-      {pageTab === 'jogos' && <main className="max-w-5xl mx-auto px-4 py-6">
+      {pageTab === 'jogos' && <motion.main key="jogos" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Banner informativo */}
         <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 mb-5">
@@ -472,20 +477,26 @@ export default function Fixtures() {
             })}
           </div>
         )}
-      </main>}
+      </motion.main>}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {statsFixture && (
         <FixtureStatsModal
           fixture={statsFixture}
           onClose={() => setStatsFixture(null)}
         />
       )}
+      </AnimatePresence>
 
       {/* Lock modal para usuários free */}
+      <AnimatePresence>
       {lockPrompt && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+        <motion.div
+          variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
           onClick={() => setLockPrompt(false)}>
-          <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
+          <motion.div variants={dialogScale} className="bg-zinc-950 border border-zinc-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
             onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -504,9 +515,10 @@ export default function Fixtures() {
               className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
               Fechar
             </button>
-          </div>
-        </div>
+          </motion.div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

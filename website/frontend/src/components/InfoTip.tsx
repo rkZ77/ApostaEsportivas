@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Info } from 'lucide-react'
+import { popIn } from '../lib/motion'
 
 const TIP_WIDTH = 240
 
@@ -53,14 +55,22 @@ export default function InfoTip({ text, className = '' }: { text: string; classN
       >
         <Info className="w-3.5 h-3.5" />
       </button>
-      {open && pos && createPortal(
-        <div
-          onClick={e => e.stopPropagation()}
-          style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_WIDTH, transform: 'translateY(-100%)' }}
-          className="z-50 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] leading-relaxed text-zinc-300 shadow-xl"
-        >
-          {text}
-        </div>,
+      {createPortal(
+        <AnimatePresence>
+          {open && pos && (
+            <motion.div
+              variants={popIn}
+              initial="hidden"
+              animate="visible"
+              exit="exit"
+              onClick={e => e.stopPropagation()}
+              style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_WIDTH, transform: 'translateY(-100%)', transformOrigin: 'bottom center' }}
+              className="z-50 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] leading-relaxed text-zinc-300 shadow-xl"
+            >
+              {text}
+            </motion.div>
+          )}
+        </AnimatePresence>,
         document.body,
       )}
     </span>

@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
+import { motion } from 'framer-motion'
 import { Lightbulb, Crown, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
 import api from '../services/api'
 import BackButton from '../components/BackButton'
+import NumberTicker from '../components/ui/NumberTicker'
 
 const PLAN_DAYS: Record<string, number> = {
   trial: 2, mensal: 30, trimestral: 90, semestral: 180, anual: 365,
@@ -201,9 +203,11 @@ export default function Planos() {
                   <span>{remaining} / {totalDays} dias</span>
                 </div>
                 <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
-                    style={{ width: `${pct}%` }}
+                  <motion.div
+                    className={`h-full rounded-full ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${pct}%` }}
+                    transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                   />
                 </div>
               </div>
@@ -366,7 +370,7 @@ export default function Planos() {
                 { label: 'Dias ganhos', value: referral.days_earned,      color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="bg-zinc-800/60 rounded-md p-3 text-center">
-                  <p className={`font-mono text-2xl font-black ${color}`}>{value}</p>
+                  <NumberTicker value={value} className={`font-mono text-2xl font-black ${color}`} />
                   <p className="text-zinc-500 text-xs mt-0.5">{label}</p>
                 </div>
               ))}

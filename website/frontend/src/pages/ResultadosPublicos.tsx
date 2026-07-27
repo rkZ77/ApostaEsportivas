@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -160,6 +161,7 @@ export default function ResultadosPublicos() {
           </nav>
         )}
 
+        <AnimatePresence>
         {detailPick && (
           <SuggestionDetail
             id={detailPick.id}
@@ -167,6 +169,7 @@ export default function ResultadosPublicos() {
             onClose={() => setDetailPick(null)}
           />
         )}
+        </AnimatePresence>
 
         <main className="max-w-5xl mx-auto px-4 py-10">
           <div className="mb-4">

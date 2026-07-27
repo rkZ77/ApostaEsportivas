@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface DayData {
   match_date: string
@@ -114,10 +115,16 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
         })}
 
         {/* fill area */}
-        <path d={fillPath} fill={fillClr} />
+        <motion.path
+          d={fillPath} fill={fillClr}
+          initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.4 }}
+        />
 
         {/* line */}
-        <path d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        <motion.path
+          d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+          initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
+        />
 
         {/* hover hit areas */}
         {points.map((v, i) => (
@@ -146,7 +153,10 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
 
         {/* last dot (always) */}
         {hoverIdx === null && (
-          <circle cx={px(points.length - 1)} cy={py(last)} r="3.5" fill={color} />
+          <motion.circle
+            cx={px(points.length - 1)} cy={py(last)} r="3.5" fill={color}
+            initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.9, type: 'spring', stiffness: 400, damping: 15 }}
+          />
         )}
 
         {/* X-axis date labels */}
@@ -165,8 +175,13 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
       </svg>
 
       {/* Tooltip floating */}
+      <AnimatePresence>
       {hoverIdx !== null && hv !== null && (
-        <div
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={{ duration: 0.12 }}
           className="pointer-events-none absolute top-2 text-xs font-black px-2 py-1 rounded-lg border"
           style={{
             left: `${(px(hoverIdx) / W) * 100}%`,
@@ -177,8 +192,9 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
           }}
         >
           {fmtDate(dates[hoverIdx])} · {fmtVal(hv)}
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }

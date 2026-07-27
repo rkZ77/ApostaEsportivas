@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 
 interface DayData {
   match_date: string
@@ -74,20 +75,26 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
           return (
             <g key={d.match_date}>
               {/* Total bar (background) */}
-              <rect
-                x={tx} y={barY(d.total)}
-                width={barW} height={totalH}
+              <motion.rect
+                x={tx}
+                width={barW}
                 rx="2"
                 fill={isHov ? '#3f3f46' : '#27272a'}
+                initial={{ height: 0, y: PT + innerH }}
+                animate={{ height: totalH, y: barY(d.total) }}
+                transition={{ duration: 0.4, delay: i * 0.015, ease: [0.16, 1, 0.3, 1] }}
               />
               {/* Greens bar (foreground) */}
               {d.greens > 0 && (
-                <rect
-                  x={tx} y={barY(d.greens)}
-                  width={barW} height={greenH}
+                <motion.rect
+                  x={tx}
+                  width={barW}
                   rx="2"
                   fill={isHov ? '#4ade80' : '#22c55e'}
                   opacity={isHov ? 1 : 0.85}
+                  initial={{ height: 0, y: PT + innerH }}
+                  animate={{ height: greenH, y: barY(d.greens) }}
+                  transition={{ duration: 0.4, delay: i * 0.015 + 0.1, ease: [0.16, 1, 0.3, 1] }}
                 />
               )}
               {/* Hit area */}
@@ -117,8 +124,13 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
       </svg>
 
       {/* Tooltip */}
+      <AnimatePresence>
       {hoverIdx !== null && hovered && (
-        <div
+        <motion.div
+          initial={{ opacity: 0, scale: 0.9 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.9 }}
+          transition={{ duration: 0.12 }}
           className="pointer-events-none absolute top-1 z-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-xs shadow-xl"
           style={{
             left: `${((barX(hoverIdx) + barW / 2) / W) * 100}%`,
@@ -137,8 +149,9 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
               </>
             )}
           </div>
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
 
       {/* Legend */}
       <div className="flex items-center gap-4 mt-2 justify-end">

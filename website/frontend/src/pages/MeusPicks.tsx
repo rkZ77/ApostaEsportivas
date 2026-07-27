@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { tabFade, toastUp } from '../lib/motion'
 import api from '../services/api'
 import Navbar from '../components/Navbar'
 import { translateMarket, explainMarket } from '../utils/marketTranslate'
@@ -163,6 +165,7 @@ export default function MeusPicks() {
     <div className="min-h-screen bg-black">
       <Navbar />
 
+      <AnimatePresence>
       {detailPick && (
         <SuggestionDetail
           id={detailPick.id}
@@ -170,6 +173,7 @@ export default function MeusPicks() {
           onClose={() => setDetailPick(null)}
         />
       )}
+      </AnimatePresence>
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -295,7 +299,8 @@ export default function MeusPicks() {
 
             {/* Tabs */}
             <div className="flex gap-2">
-              <button
+              <motion.button
+                whileTap={{ scale: 0.96 }}
                 onClick={() => changeTab('pendentes')}
                 className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'pendentes'
@@ -304,8 +309,9 @@ export default function MeusPicks() {
                 }`}
               >
                 Pendentes ({pendentes.length})
-              </button>
-              <button
+              </motion.button>
+              <motion.button
+                whileTap={{ scale: 0.96 }}
                 onClick={() => changeTab('resolvidos')}
                 className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'resolvidos'
@@ -314,10 +320,12 @@ export default function MeusPicks() {
                 }`}
               >
                 Resolvidos ({resolvidos.length})
-              </button>
+              </motion.button>
             </div>
 
             {/* Lista */}
+            <AnimatePresence mode="wait">
+            <motion.div key={tab} variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {filteredTabEntries.length === 0 ? (
               <div className="card p-12 text-center border-dashed">
                 <p className="text-zinc-500 text-sm font-semibold mb-2">
@@ -480,16 +488,23 @@ export default function MeusPicks() {
                 )}
               </>
             )}
+            </motion.div>
+            </AnimatePresence>
 
           </div>
         )}
       </main>
 
+      <AnimatePresence>
       {showRemoved && (
-        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap">
+        <motion.div
+          variants={toastUp} initial="hidden" animate="visible" exit="exit"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        >
           Pick removido da sua banca
-        </div>
+        </motion.div>
       )}
+      </AnimatePresence>
     </div>
   )
 }
