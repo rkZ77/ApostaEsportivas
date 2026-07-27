@@ -1,6 +1,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { TrendingUp, Info } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { backdropFade, dialogScale } from '../lib/motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Navbar from '../components/Navbar'
@@ -11,6 +13,7 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
 import FilterPanel from '../components/FilterPanel'
+import NumberTicker from '../components/ui/NumberTicker'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -69,8 +72,11 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
 
   if (locked) {
     return (
-      <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}>
-        <div className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
+      <motion.div
+        variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+        className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4" onClick={onClose}
+      >
+        <motion.div variants={dialogScale} className="bg-zinc-900 border border-zinc-700 rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           onClick={e => e.stopPropagation()}>
           <h2 className="text-white font-black text-lg mb-2">Já configurada este mês</h2>
           <p className="text-zinc-400 text-sm leading-relaxed mb-4">
@@ -84,14 +90,17 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
             </button>
             <button onClick={onClose} className="btn-ghost w-full py-2.5 text-sm">Entendi</button>
           </div>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     )
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4">
-      <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
+    <motion.div
+      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
+    >
+      <motion.div variants={dialogScale} className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
         <h2 className="text-white font-black text-lg mb-1">Configurar banca</h2>
         <p className="text-zinc-500 text-xs mb-5">Define banca, unidade e meta como um tipster profissional.</p>
 
@@ -183,8 +192,8 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
           </button>
           <button onClick={onClose} className="btn-ghost flex-1 py-2.5 text-sm">Cancelar</button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -282,6 +291,7 @@ export default function Banca() {
     <div className="min-h-screen bg-black">
       <Navbar />
 
+      <AnimatePresence>
       {showSetup && (
         <SetupModal
           current={{ start: data?.bankroll_start ?? 100, goal: data?.bankroll_goal ?? null, unitValue: data?.unit_value ?? 1 }}
@@ -291,7 +301,9 @@ export default function Banca() {
           onWithdraw={() => navigate('/banca/saque')}
         />
       )}
+      </AnimatePresence>
 
+      <AnimatePresence>
       {detailPick && (
         <SuggestionDetail
           id={detailPick.id}
@@ -299,6 +311,7 @@ export default function Banca() {
           onClose={() => setDetailPick(null)}
         />
       )}
+      </AnimatePresence>
 
       <div className="bg-zinc-950 border-b border-zinc-800">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
@@ -369,13 +382,15 @@ export default function Banca() {
               {[
                 {
                   label: 'Banca atual',
-                  value: fmtSigned(data?.total_pnl ?? 0),
+                  value: data?.total_pnl ?? 0,
+                  formatter: (v: number) => fmtSigned(v),
                   color: (data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400',
                   sub: `${fmtBRL(current)} banca total`,
                 },
                 {
                   label: 'Yield (tipster)',
-                  value: `${(data?.yield_roi ?? 0) >= 0 ? '+' : ''}${data?.yield_roi ?? 0}%`,
+                  value: data?.yield_roi ?? 0,
+                  formatter: (v: number) => `${v >= 0 ? '+' : ''}${Math.round(v)}%`,
                   color: (data?.yield_roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400',
                   sub: data?.ia_roi != null
                     ? `ROI da IA: ${data.ia_roi >= 0 ? '+' : ''}${data.ia_roi}%`
@@ -383,19 +398,21 @@ export default function Banca() {
                 },
                 {
                   label: 'Win rate',
-                  value: `${data?.win_rate ?? 0}%`,
+                  value: data?.win_rate ?? 0,
+                  formatter: (v: number) => `${Math.round(v)}%`,
                   color: (data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400',
                   sub: `${data?.greens ?? 0}G / ${data?.reds ?? 0}R de ${data?.total_resolved ?? 0}`,
                 },
                 {
                   label: 'Ganho p/ unidade',
-                  value: `${ganhoUnidades >= 0 ? '+' : ''}${ganhoUnidades.toFixed(1)}u`,
+                  value: ganhoUnidades,
+                  formatter: (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}u`,
                   color: ganhoUnidades >= 0 ? 'text-green-500' : 'text-red-400',
                   sub: 'excl. alavancagem',
                 },
-              ].map(({ label, value, color, sub }) => (
+              ].map(({ label, value, formatter, color, sub }) => (
                 <div key={label} className="stat-card text-center">
-                  <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
+                  <NumberTicker value={value} formatter={formatter} className={`font-mono text-3xl font-black ${color}`} />
                   <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
                   <div className="text-[10px] text-zinc-700 mt-0.5">{sub}</div>
                 </div>
@@ -424,9 +441,11 @@ export default function Banca() {
                   </span>
                 </div>
                 <div className="bg-zinc-800 rounded-full h-3 overflow-hidden">
-                  <div
-                    className={`h-3 rounded-full transition-all duration-500 ${goalPct >= 100 ? 'bg-green-400' : 'bg-green-500'}`}
-                    style={{ width: `${Math.max(2, goalPct)}%` }}
+                  <motion.div
+                    className={`h-3 rounded-full ${goalPct >= 100 ? 'bg-green-400' : 'bg-green-500'}`}
+                    initial={{ width: 0 }}
+                    animate={{ width: `${Math.max(2, goalPct)}%` }}
+                    transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
                   />
                 </div>
                 <p className="text-xs text-zinc-600 mt-2">

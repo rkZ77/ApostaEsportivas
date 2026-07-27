@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react'
+import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import api from '../services/api'
+import { backdropFade, sheetUp } from '../lib/motion'
 
 type Tab = 'geral' | 'gols' | 'escanteios' | 'cartoes'
 type Ctx = 'all' | 'home' | 'away'
@@ -351,9 +353,13 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
   ]
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}>
+    <motion.div
+      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}
+    >
       <div className="absolute inset-0 bg-black/70" />
-      <div
+      <motion.div
+        variants={sheetUp}
         className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[92vh] flex flex-col"
         onClick={e => e.stopPropagation()}
       >
@@ -521,7 +527,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
             </div>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

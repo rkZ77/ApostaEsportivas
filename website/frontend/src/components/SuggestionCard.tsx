@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence, motion } from 'framer-motion'
+import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
@@ -176,8 +178,12 @@ export default function SuggestionCard({
 
   return (
   <>
-    <div
-      className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-lg cursor-pointer transition-all duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
+    <motion.div
+      variants={fadeInUp}
+      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
+      whileTap={{ scale: 0.985 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 28 }}
+      className={`relative overflow-hidden bg-zinc-950 border border-zinc-800 rounded-lg cursor-pointer transition-colors duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
       onClick={onClick}
     >
       {/* Accent top bar */}
@@ -337,7 +343,8 @@ export default function SuggestionCard({
       {/* Footer */}
       <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
         {!s.result ? (
-          <button
+          <motion.button
+            whileTap={{ scale: 0.95 }}
             onClick={banca ? handleFollow : () => navigate('/banca')}
             disabled={following || followed}
             className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
@@ -349,7 +356,7 @@ export default function SuggestionCard({
             }`}
           >
             {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </button>
+          </motion.button>
         ) : <span />}
         <div className="flex items-center gap-3 ml-auto">
           <button
@@ -372,8 +379,9 @@ export default function SuggestionCard({
           )}
         </div>
       </div>
-    </div>
+    </motion.div>
 
+    <AnimatePresence>
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
@@ -386,11 +394,17 @@ export default function SuggestionCard({
         error={apiError}
       />
     )}
+    </AnimatePresence>
+    <AnimatePresence>
     {showSuccess && (
-      <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap">
+      <motion.div
+        variants={toastUp} initial="hidden" animate="visible" exit="exit"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap"
+      >
         Pick registrado com sucesso!
-      </div>
+      </motion.div>
     )}
+    </AnimatePresence>
   </>
   )
 }

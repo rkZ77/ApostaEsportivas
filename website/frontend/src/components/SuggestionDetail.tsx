@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
 import { getResultStyle } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
+import { backdropFade, drawerRight } from '../lib/motion'
 
 interface StatBlock {
   context_type: string
@@ -172,12 +174,20 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   })()
 
   return (
-    <div className="fixed inset-0 z-[60] flex" onClick={onClose}>
+    <motion.div
+      variants={backdropFade}
+      initial="hidden"
+      animate="visible"
+      exit="exit"
+      className="fixed inset-0 z-[60] flex"
+      onClick={onClose}
+    >
       {/* overlay */}
       <div className="flex-1 bg-black/70 backdrop-blur-sm hidden sm:block" />
 
       {/* panel · full screen mobile, side panel desktop */}
-      <div
+      <motion.div
+        variants={drawerRight}
         className="w-full sm:max-w-lg bg-zinc-950 sm:border-l border-zinc-800 flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
@@ -702,7 +712,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             </>
           )}
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }

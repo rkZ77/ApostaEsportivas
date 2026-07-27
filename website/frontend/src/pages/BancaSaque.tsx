@@ -1,8 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import Navbar from '../components/Navbar'
 import BackButton from '../components/BackButton'
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
+import NumberTicker from '../components/ui/NumberTicker'
 
 export default function BancaSaque() {
   const [current, setCurrent]         = useState(0)
@@ -71,7 +73,7 @@ export default function BancaSaque() {
           <div className="space-y-6">
             <div className="card p-5">
               <p className="text-xs text-zinc-500 uppercase font-semibold mb-1">Banca atual</p>
-              <p className="font-mono text-3xl font-black text-white">{fmtBRL(current)}</p>
+              <NumberTicker value={current} formatter={fmtBRL} className="font-mono text-3xl font-black text-white" />
             </div>
 
             <div className="card p-5">
@@ -82,12 +84,22 @@ export default function BancaSaque() {
                 className="input w-full" placeholder="Ex: 500" autoFocus
               />
 
+              <AnimatePresence>
               {amountNum > 0 && (
-                <div className="mt-3 bg-zinc-800/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
-                  <span className="text-zinc-400">Banca depois do saque</span>
-                  <span className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-white'}`}>{fmtBRL(newBanca)}</span>
-                </div>
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="overflow-hidden"
+                >
+                  <div className="mt-3 bg-zinc-800/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
+                    <span className="text-zinc-400">Banca depois do saque</span>
+                    <NumberTicker value={newBanca} formatter={fmtBRL} className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-white'}`} />
+                  </div>
+                </motion.div>
               )}
+              </AnimatePresence>
 
               {err && <p className="text-red-400 text-xs mt-3">{err}</p>}
 
