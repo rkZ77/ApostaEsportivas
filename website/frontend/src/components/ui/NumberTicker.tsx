@@ -8,12 +8,15 @@ export default function NumberTicker({
   suffix = '',
   prefix = '',
   className,
+  formatter,
 }: {
   value: number
   decimals?: number
   suffix?: string
   prefix?: string
   className?: string
+  /** Formatação custom (ex: fmtBRL p/ "R$ 1.234,56") · sobrepõe prefix/suffix/decimals */
+  formatter?: (v: number) => string
 }) {
   const ref = useRef<HTMLSpanElement>(null)
   const motionValue = useMotionValue(0)
@@ -26,9 +29,9 @@ export default function NumberTicker({
 
   useEffect(() => {
     return springValue.on('change', v => {
-      if (ref.current) ref.current.textContent = `${prefix}${v.toFixed(decimals)}${suffix}`
+      if (ref.current) ref.current.textContent = formatter ? formatter(v) : `${prefix}${v.toFixed(decimals)}${suffix}`
     })
-  }, [springValue, decimals, prefix, suffix])
+  }, [springValue, decimals, prefix, suffix, formatter])
 
-  return <span ref={ref} className={className}>{prefix}0{suffix}</span>
+  return <span ref={ref} className={className}>{formatter ? formatter(0) : `${prefix}0${suffix}`}</span>
 }

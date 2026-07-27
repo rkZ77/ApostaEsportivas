@@ -1,7 +1,32 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { CalendarClock } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
+
+/** Cada dígito do relógio troca com um leve flip vertical, em vez de trocar instantaneamente */
+function TickingClock({ value, className }: { value: string; className?: string }) {
+  return (
+    <div className={className}>
+      {value.split('').map((char, i) => (
+        <span key={i} className="inline-flex overflow-hidden relative" style={{ verticalAlign: 'top', height: '1em' }}>
+          <AnimatePresence mode="popLayout" initial={false}>
+            <motion.span
+              key={char + i}
+              initial={{ y: '-100%', opacity: 0 }}
+              animate={{ y: '0%', opacity: 1 }}
+              exit={{ y: '100%', opacity: 0 }}
+              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
+              className="inline-block"
+            >
+              {char}
+            </motion.span>
+          </AnimatePresence>
+        </span>
+      ))}
+    </div>
+  )
+}
 
 interface Fixture {
   fixture_id: number
@@ -161,7 +186,7 @@ export default function CountdownTo7AM() {
   return (
     <div className="card p-8 text-center border-zinc-800">
       <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
-      <div className="font-mono text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3">{timeLeft}</div>
+      <TickingClock value={timeLeft} className="font-mono text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3" />
       <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">

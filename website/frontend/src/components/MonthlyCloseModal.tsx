@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
+import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 
 function getLastMonthKey(): string {
   const now = new Date()
@@ -207,8 +209,11 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   ].filter(d => d.value > 0)
 
   return (
-    <div className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center">
-      <div className="bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl overflow-y-auto max-h-[92dvh]">
+    <motion.div
+      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+      className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center"
+    >
+      <motion.div variants={sheetUp} className="bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl overflow-y-auto max-h-[92dvh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -240,9 +245,10 @@ export default function MonthlyCloseModal({ onClose }: Props) {
           )}
         </div>
 
+        <AnimatePresence mode="wait">
         {/* ── STEP: SUMMARY ── */}
         {step === 'summary' && (
-          <>
+          <motion.div key="summary" variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {/* Bloco P&L */}
             <div className={`mx-5 rounded-xl px-4 py-4 mb-3 border ${accentBg}`}>
               <div className={`flex items-center gap-2 mb-1 ${accent}`}>
@@ -364,12 +370,12 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 Fechar sem alterar
               </button>
             </div>
-          </>
+          </motion.div>
         )}
 
         {/* ── STEP: EDIT ── */}
         {step === 'edit' && (
-          <div className="px-5 pb-6 pt-1 space-y-3">
+          <motion.div key="edit" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="px-5 pb-6 pt-1 space-y-3">
             <p className="text-sm text-zinc-400 leading-snug">
               Confirme o valor que será a sua nova banca de entrada para o próximo mês.
             </p>
@@ -403,22 +409,28 @@ export default function MonthlyCloseModal({ onClose }: Props) {
             >
               Voltar
             </button>
-          </div>
+          </motion.div>
         )}
 
         {/* ── STEP: SUCCESS ── */}
         {step === 'success' && (
-          <div className="px-5 pb-10 pt-2 flex flex-col items-center text-center gap-4">
-            <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+          <motion.div key="success" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="px-5 pb-10 pt-2 flex flex-col items-center text-center gap-4">
+            <motion.div
+              initial={{ scale: 0.5, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+              className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center"
+            >
               <Check className="w-9 h-9 text-green-400" />
-            </div>
+            </motion.div>
             <div>
               <p className="text-white font-black text-2xl mb-1">{fmtBRL(savedValue)}</p>
               <p className="text-zinc-400 text-sm">Nova banca definida com sucesso</p>
             </div>
-          </div>
+          </motion.div>
         )}
-      </div>
-    </div>
+        </AnimatePresence>
+      </motion.div>
+    </motion.div>
   )
 }

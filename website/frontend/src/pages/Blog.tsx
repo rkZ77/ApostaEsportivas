@@ -1,9 +1,11 @@
 import { Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
+import { motion } from 'framer-motion'
 import { BookOpen } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
 import { POSTS } from '../blog/registry'
+import { fadeInUp, staggerContainer } from '../lib/motion'
 
 function formatDate(iso: string): string {
   const [year, month, day] = iso.split('-')
@@ -42,25 +44,26 @@ export default function Blog() {
           {POSTS.length === 0 ? (
             <p className="text-zinc-500 text-sm text-center py-12">Nenhum artigo publicado ainda.</p>
           ) : (
-            <div className="space-y-4">
+            <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
               {POSTS.map((post) => (
-                <Link
-                  key={post.slug}
-                  to={`/blog/${post.slug}`}
-                  className="block border border-zinc-800 bg-zinc-900/40 hover:border-green-500/40 hover:bg-zinc-900 rounded-lg p-5 transition-colors"
-                >
-                  <div className="flex items-center gap-2 mb-2">
-                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-green-500/10 text-green-400 border border-green-500/20">
-                      {post.category}
-                    </span>
-                    <span className="text-zinc-600 text-xs">{formatDate(post.publishedAt)}</span>
-                    <span className="text-zinc-600 text-xs">· {post.readingTime} min de leitura</span>
-                  </div>
-                  <h2 className="text-white font-black text-lg mb-1.5 leading-snug">{post.title}</h2>
-                  <p className="text-zinc-400 text-sm leading-relaxed">{post.description}</p>
-                </Link>
+                <motion.div key={post.slug} variants={fadeInUp} whileHover={{ y: -2 }}>
+                  <Link
+                    to={`/blog/${post.slug}`}
+                    className="block border border-zinc-800 bg-zinc-900/40 hover:border-green-500/40 hover:bg-zinc-900 rounded-lg p-5 transition-colors"
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-green-500/10 text-green-400 border border-green-500/20">
+                        {post.category}
+                      </span>
+                      <span className="text-zinc-600 text-xs">{formatDate(post.publishedAt)}</span>
+                      <span className="text-zinc-600 text-xs">· {post.readingTime} min de leitura</span>
+                    </div>
+                    <h2 className="text-white font-black text-lg mb-1.5 leading-snug">{post.title}</h2>
+                    <p className="text-zinc-400 text-sm leading-relaxed">{post.description}</p>
+                  </Link>
+                </motion.div>
               ))}
-            </div>
+            </motion.div>
           )}
         </div>
       </div>

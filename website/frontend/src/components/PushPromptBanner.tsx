@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { usePushNotification } from '../hooks/usePushNotification'
+import { toastUp } from '../lib/motion'
 
 const LS_KEY = 'pickia_push_dismissed_at'
 const RESNOOZE_DAYS = 14
@@ -51,31 +53,40 @@ export default function PushPromptBanner() {
     setVisible(false)
   }
 
-  if (!visible) return null
-
   return (
-    <div className="fixed bottom-40 left-0 right-0 z-[9990] flex justify-center px-4 pointer-events-none">
-      <div className="pointer-events-auto w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-4 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
-          <Bell className="w-4 h-4 text-green-400" />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-black text-white leading-snug">Ativar notificações</p>
-          <p className="text-xs text-zinc-500 truncate">Aviso quando os picks do dia saírem</p>
-        </div>
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={handleActivate}
-            disabled={activating}
-            className="px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-400 text-black text-xs font-black transition-colors disabled:opacity-50"
-          >
-            {activating ? '...' : 'Ativar'}
-          </button>
-          <button onClick={dismiss} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-      </div>
-    </div>
+    <AnimatePresence>
+      {visible && (
+        <motion.div
+          variants={toastUp}
+          initial="hidden"
+          animate="visible"
+          exit="exit"
+          className="fixed bottom-40 left-0 right-0 z-[9990] flex justify-center px-4 pointer-events-none"
+        >
+          <div className="pointer-events-auto w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-2xl shadow-2xl px-4 py-4 flex items-center gap-3">
+            <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
+              <Bell className="w-4 h-4 text-green-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-black text-white leading-snug">Ativar notificações</p>
+              <p className="text-xs text-zinc-500 truncate">Aviso quando os picks do dia saírem</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <motion.button
+                whileTap={{ scale: 0.95 }}
+                onClick={handleActivate}
+                disabled={activating}
+                className="px-3 py-1.5 rounded-lg bg-green-500 hover:bg-green-400 text-black text-xs font-black transition-colors disabled:opacity-50"
+              >
+                {activating ? '...' : 'Ativar'}
+              </motion.button>
+              <button onClick={dismiss} className="w-7 h-7 flex items-center justify-center text-zinc-500 hover:text-white transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
   )
 }

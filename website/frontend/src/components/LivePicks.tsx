@@ -1,6 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { Radio, ChevronDown } from 'lucide-react'
 import api from '../services/api'
+import { backdropFade, sheetUp } from '../lib/motion'
 
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 const LIVE_SET     = new Set(['1H', 'HT', '2H', 'ET', 'BT', 'P', 'SUSP', 'INT'])
@@ -251,8 +253,11 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}>
-      <div className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-lg p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
+    <motion.div
+      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/70 backdrop-blur-sm px-4" onClick={onClose}
+    >
+      <motion.div variants={sheetUp} className="w-full max-w-sm bg-zinc-900 border border-zinc-700 rounded-lg p-5 space-y-4 overflow-y-auto max-h-[92dvh]" onClick={e => e.stopPropagation()}>
         <div>
           <p className="font-bold text-white text-sm">Registrar Cashout</p>
           <p className="text-xs text-zinc-500 mt-0.5">
@@ -305,8 +310,8 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
             {loading ? 'Salvando...' : 'Confirmar'}
           </button>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -600,6 +605,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
         </div>
       )}
 
+      <AnimatePresence>
       {showCashout && (
         <CashoutModal
           pick={pick}
@@ -608,6 +614,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
           onDone={() => { setShowCashout(false); onRefresh() }}
         />
       )}
+      </AnimatePresence>
     </div>
   )
 }

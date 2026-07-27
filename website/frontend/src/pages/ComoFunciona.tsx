@@ -1,7 +1,9 @@
 import { useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
 import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
 import Navbar from '../components/Navbar'
 import Footer from '../components/Footer'
+import { fadeInUp, staggerContainer } from '../lib/motion'
 
 const features = [
   {
@@ -120,9 +122,15 @@ export default function ComoFunciona() {
 
       {/* Feature cards */}
       <div className="max-w-3xl mx-auto px-4 pb-8">
-        <div className="space-y-4">
+        <motion.div
+          variants={staggerContainer}
+          initial="hidden"
+          whileInView="visible"
+          viewport={{ once: true, margin: '0px 0px -80px 0px' }}
+          className="space-y-4"
+        >
           {features.map(({ icon: Icon, color, bg, badge, title, desc, items }) => (
-            <div key={title} className={`border rounded-lg p-5 ${bg}`}>
+            <motion.div key={title} variants={fadeInUp} whileHover={{ y: -2 }} className={`border rounded-lg p-5 ${bg}`}>
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-zinc-900 border border-zinc-800`}>
                   <Icon className={`w-5 h-5 ${color}`} />
@@ -147,9 +155,9 @@ export default function ComoFunciona() {
                   </ul>
                 </div>
               </div>
-            </div>
+            </motion.div>
           ))}
-        </div>
+        </motion.div>
       </div>
 
       {/* CTA */}

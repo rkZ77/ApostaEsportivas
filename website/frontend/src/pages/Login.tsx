@@ -1,4 +1,5 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -6,6 +7,7 @@ import { maskPhone } from '../utils/format'
 import api from '../services/api'
 import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 import { getPasswordStrength } from '../utils/passwordStrength'
+import { tabFade } from '../lib/motion'
 
 function formatCPF(v: string) {
   const d = v.replace(/\D/g, '').slice(0, 11)
@@ -301,24 +303,29 @@ export default function Login() {
                     ))}
                   </div>
 
+                  <AnimatePresence mode="wait">
                   {loginMethod === 'username' && (
-                    <input id="login-identifier" type="text" value={loginUsername}
+                    <motion.input key="username" variants={tabFade} initial="hidden" animate="visible" exit="exit"
+                      id="login-identifier" type="text" value={loginUsername}
                       onChange={e => setLoginUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                       required className="input w-full" placeholder="seu_usuario"
                       autoComplete="username" maxLength={20} autoFocus />
                   )}
                   {loginMethod === 'email' && (
-                    <input id="login-identifier" type="email" value={loginEmail}
+                    <motion.input key="email" variants={tabFade} initial="hidden" animate="visible" exit="exit"
+                      id="login-identifier" type="email" value={loginEmail}
                       onChange={e => setLoginEmail(e.target.value)}
                       required className="input w-full" placeholder="seu@email.com"
                       autoComplete="email" autoFocus />
                   )}
                   {loginMethod === 'cpf' && (
-                    <input id="login-identifier" type="text" value={loginCpf}
+                    <motion.input key="cpf" variants={tabFade} initial="hidden" animate="visible" exit="exit"
+                      id="login-identifier" type="text" value={loginCpf}
                       onChange={e => handleLoginCpf(e.target.value)}
                       required className="input w-full" placeholder="000.000.000-00"
                       inputMode="numeric" autoComplete="off" autoFocus />
                   )}
+                  </AnimatePresence>
                 </div>
               </>
             )}
@@ -478,11 +485,19 @@ export default function Login() {
               <Turnstile ref={turnstileRef} onVerify={setCaptchaToken} />
             )}
 
+            <AnimatePresence>
             {error && (
-              <div className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 text-sm">
+              <motion.div
+                initial={{ opacity: 0, y: -6, x: 0 }}
+                animate={{ opacity: 1, y: 0, x: [0, -6, 6, -4, 4, 0] }}
+                exit={{ opacity: 0, y: -6 }}
+                transition={{ x: { duration: 0.4 }, default: { duration: 0.2 } }}
+                className="bg-red-500/10 border border-red-500/30 text-red-400 rounded-lg px-4 py-3 text-sm"
+              >
                 {error}
-              </div>
+              </motion.div>
             )}
+            </AnimatePresence>
 
             <button type="submit" disabled={loading} className="btn-primary w-full text-center mt-2">
               {loading ? 'Aguarde...' : mode === 'login' ? 'Entrar' : regStep === 1 ? 'Continuar' : 'Ativar 2 dias VIP grátis'}

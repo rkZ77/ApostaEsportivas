@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { motion } from 'framer-motion'
 import { CheckCircle, XCircle, Check, Clock } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
 import Navbar from '../components/Navbar'
@@ -57,9 +58,14 @@ function SuccessPage() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
-        <div className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto"
+        >
           <CheckCircle className="w-10 h-10 text-green-400" />
-        </div>
+        </motion.div>
         <h1 className="text-2xl font-black text-white">Pagamento aprovado!</h1>
         <p className="text-zinc-400">Seu plano VIP foi ativado. Bem-vindo!</p>
         {!ready
@@ -76,9 +82,14 @@ function FailurePage() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
-        <div className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          className="w-20 h-20 rounded-full bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto"
+        >
           <XCircle className="w-10 h-10 text-red-400" />
-        </div>
+        </motion.div>
         <h1 className="text-2xl font-black text-white">Pagamento recusado</h1>
         <p className="text-zinc-400">Houve um problema com o pagamento. Tente novamente.</p>
         <button onClick={() => navigate('/checkout')} className="btn-primary px-8 py-3">
@@ -109,9 +120,14 @@ function PendingPage() {
   return (
     <div className="min-h-screen bg-black flex items-center justify-center px-4">
       <div className="text-center space-y-4">
-        <div className="w-20 h-20 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center mx-auto">
+        <motion.div
+          initial={{ scale: 0.5, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 20 }}
+          className="w-20 h-20 rounded-full bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center mx-auto"
+        >
           <Clock className="w-9 h-9 text-yellow-400" />
-        </div>
+        </motion.div>
         <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
         <p className="text-zinc-400">Seu pagamento está sendo processado.</p>
         <div className="bg-zinc-900 border border-zinc-800 rounded-md px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
@@ -207,10 +223,13 @@ export default function Checkout() {
           <h2 className="text-white font-bold mb-3">Escolha o período</h2>
           <div className="grid grid-cols-2 gap-3">
             {PLANS.map(plan => (
-              <button
+              <motion.button
                 key={plan.id}
+                whileTap={{ scale: 0.97 }}
+                animate={{ scale: selectedPlan === plan.id ? 1.02 : 1 }}
+                transition={{ type: 'spring', stiffness: 400, damping: 25 }}
                 onClick={() => setSelectedPlan(plan.id)}
-                className={`relative text-left p-4 rounded-md border-2 transition-all
+                className={`relative text-left p-4 rounded-md border-2 transition-colors
                   ${selectedPlan === plan.id
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'}`}
@@ -235,7 +254,7 @@ export default function Checkout() {
                 <div className="font-mono text-zinc-500 text-xs mt-0.5">
                   R$ {plan.pricePerMonth.toFixed(2).replace('.', ',')}/mês
                 </div>
-              </button>
+              </motion.button>
             ))}
           </div>
         </div>
