@@ -5,7 +5,6 @@ import { Helmet } from 'react-helmet-async'
 import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
-import Marquee from '../components/ui/Marquee'
 import NumberTicker from '../components/ui/NumberTicker'
 import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -29,6 +28,21 @@ function X() {
   return (
     <svg className="w-4 h-4 text-zinc-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  )
+}
+function SoccerBall({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24">
+      <circle cx="12" cy="12" r="10" fill="#fafafa" stroke="#18181b" strokeWidth="1.1" />
+      <polygon points="12,7.4 15.3,9.8 14.1,13.7 9.9,13.7 8.7,9.8" fill="#18181b" />
+      <g stroke="#18181b" strokeWidth="1" strokeLinecap="round">
+        <line x1="12" y1="7.4" x2="12" y2="3" />
+        <line x1="15.3" y1="9.8" x2="19.6" y2="7.1" />
+        <line x1="14.1" y1="13.7" x2="16.4" y2="18.6" />
+        <line x1="9.9" y1="13.7" x2="7.6" y2="18.6" />
+        <line x1="8.7" y1="9.8" x2="4.4" y2="7.1" />
+      </g>
     </svg>
   )
 }
@@ -118,35 +132,6 @@ function NextGamesPreview() {
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-// Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
-// So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
-// mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
-// Recebe os dados via prop (buscados 1x em Landing) -- antes eram 3 fetches
-// separados em /public/results (aqui, em SocialProofStats e em RecentResults).
-function LiveTicker({ recent }: { recent: RecentTip[] }) {
-  const items = recent.filter(t => t.result === 'GREEN').slice(0, 12)
-
-  if (items.length === 0) return null
-
-  const chips = items.map((t, i) => {
-    const rs = getResultStyle(t.result)
-    return (
-      <div key={i} className="flex items-center gap-2 font-mono text-[11px] whitespace-nowrap">
-        <span className="text-zinc-600">{SRC_LBL[t.source] ?? t.source}</span>
-        <span className="text-zinc-300">{t.home_team_name}<span className="text-zinc-600"> x </span>{t.away_team_name ?? '--'}</span>
-        <span className="text-zinc-500">@{Number(t.odd).toFixed(2)}</span>
-        {rs && <span className={rs.text}>{rs.label}</span>}
-      </div>
-    )
-  })
-
-  return (
-    <div className="border-b border-zinc-800/60 bg-zinc-950/80 py-2">
-      <Marquee items={chips} />
     </div>
   )
 }
@@ -637,8 +622,8 @@ export default function Landing() {
     return () => clearInterval(t)
   }, [])
 
-  // Fetch único de /public/results (recent_limit=50 cobre LiveTicker, SocialProofStats
-  // e RecentResults) -- antes eram 3 chamadas separadas pro mesmo endpoint.
+  // Fetch único de /public/results (recent_limit=50 cobre SocialProofStats e
+  // RecentResults) -- antes eram 3 chamadas separadas pro mesmo endpoint.
   const [publicData, setPublicData] = useState<PublicData | null>(null)
   const [publicDataLoaded, setPublicDataLoaded] = useState(false)
   useEffect(() => {
@@ -650,11 +635,13 @@ export default function Landing() {
 
   // Scroll-driven (GSAP ScrollTrigger, nao entrance-on-view como o resto do
   // site que usa framer-motion) -- barra de progresso da pagina + parallax
-  // sutil no grid de fundo do hero. gsap.matchMedia desliga tudo em
-  // prefers-reduced-motion, e ctx.revert() limpa os ScrollTriggers no unmount
-  // (evita instancias duplicadas no double-invoke do StrictMode em dev).
+  // sutil no grid de fundo do hero + bola de futebol rolando/girando no hero.
+  // gsap.matchMedia desliga tudo em prefers-reduced-motion, e ctx.revert()
+  // limpa os ScrollTriggers no unmount (evita instancias duplicadas no
+  // double-invoke do StrictMode em dev).
   const heroSectionRef = useRef<HTMLElement>(null)
   const heroGridRef = useRef<HTMLDivElement>(null)
+  const heroBallRef = useRef<HTMLDivElement>(null)
   const progressBarRef = useRef<HTMLDivElement>(null)
   useEffect(() => {
     const ctx = gsap.context(() => {
@@ -671,6 +658,20 @@ export default function Landing() {
         if (heroSectionRef.current && heroGridRef.current) {
           gsap.to(heroGridRef.current, {
             yPercent: 15,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroSectionRef.current,
+              start: 'top top',
+              end: 'bottom top',
+              scrub: true,
+            },
+          })
+        }
+        if (heroSectionRef.current && heroBallRef.current) {
+          gsap.to(heroBallRef.current, {
+            rotation: 720,
+            y: 220,
+            x: -60,
             ease: 'none',
             scrollTrigger: {
               trigger: heroSectionRef.current,
@@ -763,11 +764,14 @@ export default function Landing() {
       {/* Progresso de leitura da pagina · preenche conforme o scroll (GSAP ScrollTrigger) */}
       <div ref={progressBarRef} className="fixed top-16 inset-x-0 h-0.5 bg-green-500 origin-left scale-x-0 z-40 pointer-events-none" aria-hidden="true" />
 
-      <LiveTicker recent={publicData?.recent ?? []} />
-
       <section ref={heroSectionRef} className="relative overflow-hidden">
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente. Parallax leve via GSAP. */}
         <div ref={heroGridRef} className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
+
+        {/* Bola de futebol rolando/girando com o scroll do hero (GSAP ScrollTrigger) */}
+        <div ref={heroBallRef} className="absolute top-6 right-6 md:right-10 w-12 h-12 md:w-16 md:h-16 pointer-events-none z-10 drop-shadow-[0_8px_20px_rgba(0,0,0,0.5)]">
+          <SoccerBall className="w-full h-full" />
+        </div>
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
