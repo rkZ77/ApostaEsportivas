@@ -635,10 +635,12 @@ export default function Landing() {
 
   // Scroll-driven (GSAP ScrollTrigger, nao entrance-on-view como o resto do
   // site que usa framer-motion) -- barra de progresso da pagina + parallax
-  // sutil no grid de fundo do hero + bola de futebol rolando/girando no hero.
-  // gsap.matchMedia desliga tudo em prefers-reduced-motion, e ctx.revert()
-  // limpa os ScrollTriggers no unmount (evita instancias duplicadas no
-  // double-invoke do StrictMode em dev).
+  // sutil no grid de fundo do hero + bola de futebol fixa no canto, girando
+  // com o progresso da pagina inteira (nao so o hero -- presa a faixa curta
+  // do hero, o giro terminava rapido demais e sumia de vista, "sem fazer
+  // nada" pra quem rolava normal). gsap.matchMedia desliga tudo em
+  // prefers-reduced-motion, e ctx.revert() limpa os ScrollTriggers no
+  // unmount (evita instancias duplicadas no double-invoke do StrictMode em dev).
   const heroSectionRef = useRef<HTMLElement>(null)
   const heroGridRef = useRef<HTMLDivElement>(null)
   const heroBallRef = useRef<HTMLDivElement>(null)
@@ -668,31 +670,23 @@ export default function Landing() {
             },
           })
         }
-        // Bola: flutuacao continua (roda mesmo parada, pra quem nao rola a
-        // pagina de cara) num elemento interno + giro/deslocamento extra
-        // atrelado ao scroll num elemento externo -- duas transforms em nos
-        // diferentes pra nao brigar pela mesma propriedade no mesmo alvo.
+        // Bola: flutuacao continua num elemento interno (roda mesmo parado)
+        // + giro atrelado ao scroll da pagina toda num elemento externo --
+        // dois nos diferentes pra nao brigar pela mesma transform.
         if (heroBallIdleRef.current) {
           gsap.to(heroBallIdleRef.current, {
-            y: -10,
+            y: -8,
             duration: 1.8,
             ease: 'sine.inOut',
             repeat: -1,
             yoyo: true,
           })
         }
-        if (heroSectionRef.current && heroBallRef.current) {
+        if (heroBallRef.current) {
           gsap.to(heroBallRef.current, {
-            rotation: 360,
-            y: 160,
-            x: -40,
+            rotation: 1080,
             ease: 'none',
-            scrollTrigger: {
-              trigger: heroSectionRef.current,
-              start: 'top top',
-              end: 'bottom top',
-              scrub: 0.6,
-            },
+            scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.6 },
           })
         }
       })
@@ -778,20 +772,19 @@ export default function Landing() {
       {/* Progresso de leitura da pagina · preenche conforme o scroll (GSAP ScrollTrigger) */}
       <div ref={progressBarRef} className="fixed top-16 inset-x-0 h-0.5 bg-green-500 origin-left scale-x-0 z-40 pointer-events-none" aria-hidden="true" />
 
+      {/* Bola de futebol fixa no canto · gira com o progresso da pagina inteira
+          e flutua sozinha mesmo parada. Glow verde discreto (mesma linguagem de
+          "ao vivo" usada no resto do site), sem afogar o desenho da bola. */}
+      <div ref={heroBallRef} className="fixed top-20 right-4 md:right-8 w-11 h-11 md:w-14 md:h-14 pointer-events-none z-30">
+        <div ref={heroBallIdleRef} className="relative w-full h-full">
+          <div className="absolute -inset-1 rounded-full bg-green-500/25 blur-sm animate-pulse" />
+          <SoccerBall className="relative w-full h-full drop-shadow-[0_4px_14px_rgba(0,0,0,0.6)]" />
+        </div>
+      </div>
+
       <section ref={heroSectionRef} className="relative overflow-hidden">
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente. Parallax leve via GSAP. */}
         <div ref={heroGridRef} className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
-
-        {/* Bola de futebol · flutua sozinha (mesmo sem rolar a pagina) e ganha
-            giro/deslocamento extra atrelado ao scroll do hero (GSAP ScrollTrigger).
-            Glow verde pulsante reaproveita a linguagem de "ao vivo" ja usada no
-            resto do site (pontinho verde com animate-pulse). */}
-        <div ref={heroBallRef} className="absolute top-6 right-6 md:right-10 w-12 h-12 md:w-16 md:h-16 pointer-events-none z-10">
-          <div ref={heroBallIdleRef} className="relative w-full h-full">
-            <div className="absolute inset-0 -m-3 rounded-full bg-green-500/25 blur-md animate-pulse" />
-            <SoccerBall className="relative w-full h-full drop-shadow-[0_8px_20px_rgba(0,0,0,0.5)]" />
-          </div>
-        </div>
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
