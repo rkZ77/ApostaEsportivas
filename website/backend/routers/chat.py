@@ -12,18 +12,10 @@ from database import get_connection
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/chat", tags=["chat"])
 
-# Rate limit: máx 10 msgs por usuário por 60 segundos (evita spam caro na API Anthropic)
+# Rate limit: máx 10 msgs por usuário por 60 segundos (evita spam no endpoint)
 _chat_rate: dict[str, list[float]] = defaultdict(list)
 _CHAT_LIMIT  = 10
 _CHAT_WINDOW = 60
-
-# Limite diário adicional só pro plano free (decisão do usuário: manter o chat
-# aberto pra todo mundo como "gostinho" da IA, mas sem deixar uma conta free
-# ilimitada bater o burst limit repetidamente o dia todo). VIP/trial/admin
-# seguem só com o burst limit acima.
-_chat_daily: dict[str, list[float]] = defaultdict(list)
-_CHAT_FREE_DAILY_LIMIT  = 20
-_CHAT_FREE_DAILY_WINDOW = 86400
 
 # Importação direta do pacote futebol_agent
 try:
@@ -34,6 +26,14 @@ except Exception as _e:
     _AGENT_OK = False
     run_agent = None  # type: ignore
     logger.warning(f"futebol_agent não carregado: {_e}")
+
+from futebol_agent.faq import match_faq
+
+_UPGRADE_NUDGE = (
+    "Essa pergunta precisa de análise ao vivo (estatísticas, odds, jogos em tempo real), "
+    "disponível só pra assinantes VIP ou trial.\n\n"
+    "Assine o VIP ou ative seu trial gratuito de 2 dias em Perfil → Ativar Trial pra ter acesso completo."
+)
 
 
 class ChatMessage(BaseModel):
@@ -231,9 +231,6 @@ def _get_site_context(user_id: int) -> str:
 
 @router.post("")
 async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)):
-    if not _AGENT_OK or run_agent is None:
-        raise HTTPException(503, "Agente indisponível. Configure ANTHROPIC_API_KEY.")
-
     # Rate limit por usuário
     uid = str(current_user["id"])
     now = time.time()
@@ -241,16 +238,6 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     if len(_chat_rate[uid]) >= _CHAT_LIMIT:
         raise HTTPException(429, f"Limite de {_CHAT_LIMIT} mensagens por minuto atingido. Aguarde.")
     _chat_rate[uid].append(now)
-
-    if current_user.get("plan") not in ("vip", "trial", "admin"):
-        _chat_daily[uid] = [t for t in _chat_daily[uid] if now - t < _CHAT_FREE_DAILY_WINDOW]
-        if len(_chat_daily[uid]) >= _CHAT_FREE_DAILY_LIMIT:
-            raise HTTPException(
-                429,
-                f"Limite de {_CHAT_FREE_DAILY_LIMIT} mensagens por dia atingido no plano Free. "
-                f"Assine o VIP para chat ilimitado.",
-            )
-        _chat_daily[uid].append(now)
 
     if not body.messages:
         raise HTTPException(400, "Nenhuma mensagem enviada")
@@ -265,6 +252,30 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
     _MAX_MSG_LEN = 2000
     if len(user_text) > _MAX_MSG_LEN:
         raise HTTPException(400, f"Mensagem muito longa (máx {_MAX_MSG_LEN} caracteres)")
+
+    async def _stream_text(text: str):
+        chunk_size = 35
+        first = True
+        for i in range(0, len(text), chunk_size):
+            chunk = text[i:i + chunk_size]
+            yield f"data: {json.dumps({'type': 'chunk', 'text': chunk, 'first': first})}\n\n"
+            first = False
+            await asyncio.sleep(0.012)
+        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+
+    # Perguntas sobre o site/planos são resolvidas por fuzzy-match local, sem custo de
+    # IA — liberado pra qualquer plano, inclusive free, sem limite diário
+    faq_answer = match_faq(user_text)
+    if faq_answer:
+        return StreamingResponse(_stream_text(faq_answer), media_type="text/event-stream")
+
+    # Análise real de jogos (tools + Claude) é exclusiva de quem paga — free só tem
+    # acesso ao FAQ acima, pra não gerar custo de API
+    if current_user.get("plan") not in ("vip", "trial", "admin"):
+        return StreamingResponse(_stream_text(_UPGRADE_NUDGE), media_type="text/event-stream")
+
+    if not _AGENT_OK or run_agent is None:
+        raise HTTPException(503, "Agente indisponível. Configure ANTHROPIC_API_KEY.")
 
     history = [
         {"role": m.role, "content": m.content}
@@ -281,19 +292,12 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
 
         try:
             response_text, _ = await run_agent(full_message, history)
-
-            chunk_size = 35
-            first = True
-            for i in range(0, len(response_text), chunk_size):
-                chunk = response_text[i:i + chunk_size]
-                yield f"data: {json.dumps({'type': 'chunk', 'text': chunk, 'first': first})}\n\n"
-                first = False
-                await asyncio.sleep(0.012)
+            async for evt in _stream_text(response_text):
+                yield evt
 
         except Exception as e:
             logger.error("Erro no agente: %s", e, exc_info=True)
             yield f"data: {json.dumps({'type': 'chunk', 'text': 'Erro ao processar sua mensagem. Tente novamente.', 'first': True})}\n\n"
-
-        yield f"data: {json.dumps({'type': 'done'})}\n\n"
+            yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
