@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react'
+import { useRef, useEffect } from 'react'
 import { Zap } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
@@ -6,11 +6,7 @@ import Avatar from '../components/Avatar'
 import BackButton from '../components/BackButton'
 import { useAuth } from '../context/AuthContext'
 import { useCookieBannerVisible } from '../hooks/useCookieBannerVisible'
-
-interface Message {
-  role: 'user' | 'assistant'
-  content: string
-}
+import { useAgentChat } from '../hooks/useAgentChat'
 
 const SUGGESTIONS = [
   'Quais os picks do site pra hoje?',
@@ -54,10 +50,7 @@ function AgentMessage({ content, loading, statusText }: { content: string; loadi
 
 export default function Agente() {
   const { user, isVip, isAdmin } = useAuth()
-  const [messages, setMessages] = useState<Message[]>([])
-  const [input, setInput] = useState('')
-  const [loading, setLoading] = useState(false)
-  const [statusText, setStatusText] = useState('')
+  const { messages, input, setInput, loading, statusText, sendMessage: sendMessageBase } = useAgentChat()
   const bottomRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const cookieBannerVisible = useCookieBannerVisible()
@@ -67,89 +60,8 @@ export default function Agente() {
   }, [messages, loading])
 
   const sendMessage = async (text?: string) => {
-    const content = (text ?? input).trim()
-    if (!content || loading) return
-
-    const userMsg: Message = { role: 'user', content }
-    const newMessages = [...messages, userMsg]
-    setMessages(newMessages)
-    setInput('')
-    setLoading(true)
-    setStatusText('')
-
-    // Adiciona mensagem assistente vazia (mostrará loading)
-    setMessages(prev => [...prev, { role: 'assistant', content: '' }])
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        credentials: 'include',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ messages: newMessages }),
-      })
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({}))
-        throw new Error(err.detail ?? 'Erro na resposta do servidor')
-      }
-
-      const reader = response.body!.getReader()
-      const decoder = new TextDecoder()
-      let buffer = ''
-      let started = false
-
-      while (true) {
-        const { done, value } = await reader.read()
-        if (done) break
-        buffer += decoder.decode(value, { stream: true })
-
-        const lines = buffer.split('\n')
-        buffer = lines.pop() ?? ''
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue
-          const raw = line.slice(6).trim()
-          if (!raw) continue
-
-          let event: any
-          try { event = JSON.parse(raw) } catch { continue }
-
-          if (event.type === 'status') {
-            setStatusText(event.text)
-          } else if (event.type === 'chunk') {
-            if (event.first) {
-              setStatusText('')
-              started = true
-            }
-            setMessages(prev => {
-              const updated = [...prev]
-              updated[updated.length - 1] = {
-                ...updated[updated.length - 1],
-                content: updated[updated.length - 1].content + event.text,
-              }
-              return updated
-            })
-          } else if (event.type === 'done') {
-            break
-          }
-        }
-      }
-    } catch (err: any) {
-      setMessages(prev => {
-        const updated = [...prev]
-        updated[updated.length - 1] = {
-          ...updated[updated.length - 1],
-          content: `Erro: ${err.message ?? 'Falha na conexão'}`,
-        }
-        return updated
-      })
-    } finally {
-      setLoading(false)
-      setStatusText('')
-      inputRef.current?.focus()
-    }
+    await sendMessageBase(text)
+    inputRef.current?.focus()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
