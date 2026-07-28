@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
-import WhatsAppButton from './components/WhatsAppButton'
+import AgenteButton from './components/AgenteButton'
 import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
@@ -148,7 +148,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <WhatsAppButton />
+          <AgenteButton />
           <CookieBanner />
           <UpdateBanner />
           <ErrorToast />

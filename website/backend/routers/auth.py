@@ -37,7 +37,7 @@ from auth_utils import (
     create_access_token, create_refresh_token,
     set_auth_cookies, set_access_cookie, clear_auth_cookies,
     get_current_user, decode_token,
-    REFRESH_COOKIE_NAME,
+    REFRESH_COOKIE_NAME, COOKIE_NAME, oauth2_scheme,
 )
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
@@ -645,7 +645,29 @@ def login(body: LoginBody, response: Response, request: Request):
 
 
 @router.post("/logout")
-def logout(response: Response):
+def logout(request: Request, response: Response, bearer: str | None = Depends(oauth2_scheme)):
+    """Além de limpar os cookies no navegador, gira o session_token no banco --
+    sem isso, um access token já emitido (ex: copiado por XSS, ou em uso via
+    Bearer no mobile) continuava válido por até 12h mesmo depois do logout,
+    já que só o cookie local era apagado, nunca a sessão no servidor."""
+    token = request.cookies.get(COOKIE_NAME) or bearer
+    if token:
+        try:
+            payload = decode_token(token)
+            user_id = payload.get("sub")
+        except HTTPException:
+            user_id = None
+        if user_id:
+            conn = get_connection()
+            cur = conn.cursor()
+            try:
+                cur.execute(
+                    "UPDATE users SET session_token = %s WHERE id = %s",
+                    (hashlib.sha256(secrets.token_hex(32).encode()).hexdigest(), user_id),
+                )
+                conn.commit()
+            finally:
+                cur.close(); conn.close()
     clear_auth_cookies(response)
     return {"status": "ok"}
 

@@ -5,7 +5,6 @@ import { Helmet } from 'react-helmet-async'
 import { Menu, X as XIcon, UserPlus, TrendingUp, Trophy, Gift, ArrowRight, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import Footer from '../components/Footer'
-import Marquee from '../components/ui/Marquee'
 import NumberTicker from '../components/ui/NumberTicker'
 import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -117,35 +116,6 @@ function NextGamesPreview() {
           </div>
         ))}
       </div>
-    </div>
-  )
-}
-
-// Ticker ao vivo · fita de GREENs reais rolando, no lugar do badge de pilula "ao vivo"
-// So mostra GREEN aqui (vitrine pra quem ainda nao conhece) -- o RED entra sem filtro
-// mais abaixo em "Resultados reais, verificaveis", que e a secao de transparencia total.
-// Recebe os dados via prop (buscados 1x em Landing) -- antes eram 3 fetches
-// separados em /public/results (aqui, em SocialProofStats e em RecentResults).
-function LiveTicker({ recent }: { recent: RecentTip[] }) {
-  const items = recent.filter(t => t.result === 'GREEN').slice(0, 12)
-
-  if (items.length === 0) return null
-
-  const chips = items.map((t, i) => {
-    const rs = getResultStyle(t.result)
-    return (
-      <div key={i} className="flex items-center gap-2 font-mono text-[11px] whitespace-nowrap">
-        <span className="text-zinc-600">{SRC_LBL[t.source] ?? t.source}</span>
-        <span className="text-zinc-300">{t.home_team_name}<span className="text-zinc-600"> x </span>{t.away_team_name ?? '--'}</span>
-        <span className="text-zinc-500">@{Number(t.odd).toFixed(2)}</span>
-        {rs && <span className={rs.text}>{rs.label}</span>}
-      </div>
-    )
-  })
-
-  return (
-    <div className="border-b border-zinc-800/60 bg-zinc-950/80 py-2">
-      <Marquee items={chips} />
     </div>
   )
 }
@@ -636,8 +606,8 @@ export default function Landing() {
     return () => clearInterval(t)
   }, [])
 
-  // Fetch único de /public/results (recent_limit=50 cobre LiveTicker, SocialProofStats
-  // e RecentResults) -- antes eram 3 chamadas separadas pro mesmo endpoint.
+  // Fetch único de /public/results (recent_limit=50 cobre SocialProofStats e
+  // RecentResults) -- antes eram 3 chamadas separadas pro mesmo endpoint.
   const [publicData, setPublicData] = useState<PublicData | null>(null)
   const [publicDataLoaded, setPublicDataLoaded] = useState(false)
   useEffect(() => {
@@ -714,8 +684,6 @@ export default function Landing() {
           </div>
         )}
       </nav>
-
-      <LiveTicker recent={publicData?.recent ?? []} />
 
       <section className="relative overflow-hidden">
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
