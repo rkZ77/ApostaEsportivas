@@ -4,9 +4,12 @@ import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X, BookOpen,
+  LogOut, Menu, X, BookOpen, MessageCircle,
 } from 'lucide-react'
 import Avatar from './Avatar'
+
+const WA_SUPPORT_LINK =
+  'https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA.'
 
 const planBadge: Record<string, string> = {
   free:  'badge-free',
@@ -137,6 +140,10 @@ export default function Navbar() {
                         <Avatar name={user?.name ?? ''} size="sm" />
                         Meu perfil
                       </Link>
+                      <a href={WA_SUPPORT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                        <MessageCircle className="w-4 h-4 text-green-400" />
+                        Suporte
+                      </a>
                     </div>
                     <div className="border-t border-zinc-800 py-1">
                       <button
@@ -262,6 +269,15 @@ export default function Navbar() {
             <BookOpen className="w-4 h-4 text-green-400" />
             Como funciona
           </Link>
+          <a
+            href={WA_SUPPORT_LINK}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+          >
+            <MessageCircle className="w-4 h-4 text-green-400" />
+            Suporte
+          </a>
           <button
             onClick={async () => { await logout(); navigate('/login') }}
             className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-colors"
