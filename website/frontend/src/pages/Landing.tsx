@@ -9,7 +9,6 @@ import NumberTicker from '../components/ui/NumberTicker'
 import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { fadeInUp, staggerContainer } from '../lib/motion'
-import { gsap, ScrollTrigger } from '../lib/gsapScroll'
 
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
@@ -31,22 +30,31 @@ function X() {
     </svg>
   )
 }
-function SoccerBall({ className }: { className?: string }) {
+function GoalFrame({ className }: { className?: string }) {
   return (
-    <svg className={className} viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="10" fill="#fafafa" stroke="#18181b" strokeWidth="1.1" />
-      <polygon points="12,7.4 15.3,9.8 14.1,13.7 9.9,13.7 8.7,9.8" fill="#18181b" />
-      <g stroke="#18181b" strokeWidth="1" strokeLinecap="round">
-        <line x1="12" y1="7.4" x2="12" y2="3" />
-        <line x1="15.3" y1="9.8" x2="19.6" y2="7.1" />
-        <line x1="14.1" y1="13.7" x2="16.4" y2="18.6" />
-        <line x1="9.9" y1="13.7" x2="7.6" y2="18.6" />
-        <line x1="8.7" y1="9.8" x2="4.4" y2="7.1" />
+    <svg className={className} viewBox="0 0 64 52" fill="none">
+      <rect x="3" y="3" width="58" height="42" rx="1" stroke="currentColor" strokeWidth="2.5" />
+      <g stroke="currentColor" strokeWidth="0.6" opacity="0.55">
+        {[11, 19, 27, 35, 43, 51].map(x => <line key={`v${x}`} x1={x} y1="3" x2={x} y2="45" />)}
+        {[11, 19, 27, 35].map(y => <line key={`h${y}`} x1="3" y1={y} x2="61" y2={y} />)}
       </g>
     </svg>
   )
 }
 
+// Gol decorativo nas laterais vazias do hero em telas bem largas · pulso
+// continuo (opacidade + leve escala), sem depender de scroll pra ter vida.
+function GoalDecor({ side }: { side: 'left' | 'right' }) {
+  return (
+    <motion.div
+      className={`hidden 2xl:block absolute top-1/2 -translate-y-1/2 ${side === 'left' ? 'left-10' : 'right-10'} w-36 h-28 text-zinc-700 pointer-events-none`}
+      animate={{ opacity: [0.45, 0.8, 0.45], scale: [1, 1.03, 1] }}
+      transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut', delay: side === 'right' ? 1.5 : 0 }}
+    >
+      <GoalFrame className="w-full h-full" />
+    </motion.div>
+  )
+}
 // Tipos
 interface RecentTip {
   match_date: string
@@ -633,74 +641,6 @@ export default function Landing() {
       .finally(() => setPublicDataLoaded(true))
   }, [])
 
-  // Scroll-driven (GSAP ScrollTrigger, nao entrance-on-view como o resto do
-  // site que usa framer-motion) -- barra de progresso da pagina + parallax
-  // sutil no grid de fundo do hero + bola de futebol fixa no canto, girando
-  // com o progresso da pagina inteira (nao so o hero -- presa a faixa curta
-  // do hero, o giro terminava rapido demais e sumia de vista, "sem fazer
-  // nada" pra quem rolava normal). gsap.matchMedia desliga tudo em
-  // prefers-reduced-motion, e ctx.revert() limpa os ScrollTriggers no
-  // unmount (evita instancias duplicadas no double-invoke do StrictMode em dev).
-  const heroSectionRef = useRef<HTMLElement>(null)
-  const heroGridRef = useRef<HTMLDivElement>(null)
-  const heroBallRef = useRef<HTMLDivElement>(null)
-  const heroBallIdleRef = useRef<HTMLDivElement>(null)
-  const progressBarRef = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      const mm = gsap.matchMedia()
-      mm.add('(prefers-reduced-motion: no-preference)', () => {
-        if (progressBarRef.current) {
-          gsap.set(progressBarRef.current, { scaleX: 0 })
-          gsap.to(progressBarRef.current, {
-            scaleX: 1,
-            ease: 'none',
-            scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: true },
-          })
-        }
-        if (heroSectionRef.current && heroGridRef.current) {
-          gsap.to(heroGridRef.current, {
-            yPercent: 15,
-            ease: 'none',
-            scrollTrigger: {
-              trigger: heroSectionRef.current,
-              start: 'top top',
-              end: 'bottom top',
-              scrub: true,
-            },
-          })
-        }
-        // Bola: flutuacao continua num elemento interno (roda mesmo parado)
-        // + giro atrelado ao scroll da pagina toda num elemento externo --
-        // dois nos diferentes pra nao brigar pela mesma transform.
-        if (heroBallIdleRef.current) {
-          gsap.to(heroBallIdleRef.current, {
-            y: -8,
-            duration: 1.8,
-            ease: 'sine.inOut',
-            repeat: -1,
-            yoyo: true,
-          })
-        }
-        if (heroBallRef.current) {
-          gsap.to(heroBallRef.current, {
-            rotation: 1080,
-            ease: 'none',
-            scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: 0.6 },
-          })
-        }
-      })
-    })
-    return () => ctx.revert()
-  }, [])
-
-  // Alturas mudam depois que os fetches assincronos (jogos, dica gratis,
-  // resultados) resolvem -- sem o refresh os pontos de start/end do
-  // ScrollTrigger calculados no mount ficam desatualizados.
-  useEffect(() => {
-    if (publicDataLoaded) ScrollTrigger.refresh()
-  }, [publicDataLoaded])
-
   const chatMessages = [
     { q: 'Qual o melhor pick para hoje no Brasileirão?', a: 'Analisando os jogos do Brasileirão de hoje... Flamengo x Palmeiras: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambos os times marcaram em 80% dos confrontos recentes.' },
     { q: 'Como está a forma do Flamengo nos últimos 5 jogos?', a: 'Flamengo: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da liga. Pick recomendado: Gols Over 1.5.' },
@@ -769,22 +709,13 @@ export default function Landing() {
         )}
       </nav>
 
-      {/* Progresso de leitura da pagina · preenche conforme o scroll (GSAP ScrollTrigger) */}
-      <div ref={progressBarRef} className="fixed top-16 inset-x-0 h-0.5 bg-green-500 origin-left scale-x-0 z-40 pointer-events-none" aria-hidden="true" />
+      <section className="relative overflow-hidden">
+        {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
+        <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
 
-      {/* Bola de futebol fixa no canto · gira com o progresso da pagina inteira
-          e flutua sozinha mesmo parada. Glow verde discreto (mesma linguagem de
-          "ao vivo" usada no resto do site), sem afogar o desenho da bola. */}
-      <div ref={heroBallRef} className="fixed top-20 right-4 md:right-8 w-11 h-11 md:w-14 md:h-14 pointer-events-none z-30">
-        <div ref={heroBallIdleRef} className="relative w-full h-full">
-          <div className="absolute -inset-1 rounded-full bg-green-500/25 blur-sm animate-pulse" />
-          <SoccerBall className="relative w-full h-full drop-shadow-[0_4px_14px_rgba(0,0,0,0.6)]" />
-        </div>
-      </div>
-
-      <section ref={heroSectionRef} className="relative overflow-hidden">
-        {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente. Parallax leve via GSAP. */}
-        <div ref={heroGridRef} className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
+        {/* Gols decorativos nas laterais vazias (telas bem largas) */}
+        <GoalDecor side="left" />
+        <GoalDecor side="right" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
