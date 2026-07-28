@@ -30,31 +30,7 @@ function X() {
     </svg>
   )
 }
-function GoalFrame({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 64 52" fill="none">
-      <rect x="3" y="3" width="58" height="42" rx="1" stroke="currentColor" strokeWidth="2.5" />
-      <g stroke="currentColor" strokeWidth="0.6" opacity="0.55">
-        {[11, 19, 27, 35, 43, 51].map(x => <line key={`v${x}`} x1={x} y1="3" x2={x} y2="45" />)}
-        {[11, 19, 27, 35].map(y => <line key={`h${y}`} x1="3" y1={y} x2="61" y2={y} />)}
-      </g>
-    </svg>
-  )
-}
 
-// Gol decorativo nas laterais vazias do hero em telas bem largas · pulso
-// continuo (opacidade + leve escala), sem depender de scroll pra ter vida.
-function GoalDecor({ side }: { side: 'left' | 'right' }) {
-  return (
-    <motion.div
-      className={`hidden 2xl:block absolute top-1/2 -translate-y-1/2 ${side === 'left' ? 'left-10' : 'right-10'} w-36 h-28 text-zinc-700 pointer-events-none`}
-      animate={{ opacity: [0.45, 0.8, 0.45], scale: [1, 1.03, 1] }}
-      transition={{ duration: 3.4, repeat: Infinity, ease: 'easeInOut', delay: side === 'right' ? 1.5 : 0 }}
-    >
-      <GoalFrame className="w-full h-full" />
-    </motion.div>
-  )
-}
 // Tipos
 interface RecentTip {
   match_date: string
@@ -712,10 +688,6 @@ export default function Landing() {
       <section className="relative overflow-hidden">
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
         <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
-
-        {/* Gols decorativos nas laterais vazias (telas bem largas) */}
-        <GoalDecor side="left" />
-        <GoalDecor side="right" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
