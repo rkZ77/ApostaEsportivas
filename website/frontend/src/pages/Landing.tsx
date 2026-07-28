@@ -10,6 +10,7 @@ import NumberTicker from '../components/ui/NumberTicker'
 import ShimmerButton from '../components/ui/ShimmerButton'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { fadeInUp, staggerContainer } from '../lib/motion'
+import { gsap, ScrollTrigger } from '../lib/gsapScroll'
 
 const TEAM_LOGO = (id?: number | null) =>
   id ? `/api/proxy/team/${id}.png` : null
@@ -647,6 +648,50 @@ export default function Landing() {
       .finally(() => setPublicDataLoaded(true))
   }, [])
 
+  // Scroll-driven (GSAP ScrollTrigger, nao entrance-on-view como o resto do
+  // site que usa framer-motion) -- barra de progresso da pagina + parallax
+  // sutil no grid de fundo do hero. gsap.matchMedia desliga tudo em
+  // prefers-reduced-motion, e ctx.revert() limpa os ScrollTriggers no unmount
+  // (evita instancias duplicadas no double-invoke do StrictMode em dev).
+  const heroSectionRef = useRef<HTMLElement>(null)
+  const heroGridRef = useRef<HTMLDivElement>(null)
+  const progressBarRef = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    const ctx = gsap.context(() => {
+      const mm = gsap.matchMedia()
+      mm.add('(prefers-reduced-motion: no-preference)', () => {
+        if (progressBarRef.current) {
+          gsap.set(progressBarRef.current, { scaleX: 0 })
+          gsap.to(progressBarRef.current, {
+            scaleX: 1,
+            ease: 'none',
+            scrollTrigger: { trigger: document.body, start: 'top top', end: 'bottom bottom', scrub: true },
+          })
+        }
+        if (heroSectionRef.current && heroGridRef.current) {
+          gsap.to(heroGridRef.current, {
+            yPercent: 15,
+            ease: 'none',
+            scrollTrigger: {
+              trigger: heroSectionRef.current,
+              start: 'top top',
+              end: 'bottom top',
+              scrub: true,
+            },
+          })
+        }
+      })
+    })
+    return () => ctx.revert()
+  }, [])
+
+  // Alturas mudam depois que os fetches assincronos (jogos, dica gratis,
+  // resultados) resolvem -- sem o refresh os pontos de start/end do
+  // ScrollTrigger calculados no mount ficam desatualizados.
+  useEffect(() => {
+    if (publicDataLoaded) ScrollTrigger.refresh()
+  }, [publicDataLoaded])
+
   const chatMessages = [
     { q: 'Qual o melhor pick para hoje no Brasileirão?', a: 'Analisando os jogos do Brasileirão de hoje... Flamengo x Palmeiras: Gols Over 2.5 @ 1.82 com 74% de confiança. Ambos os times marcaram em 80% dos confrontos recentes.' },
     { q: 'Como está a forma do Flamengo nos últimos 5 jogos?', a: 'Flamengo: 4V 1E 0D nos últimos 5. Média de 2.4 gols por jogo, 1.2 sofridos. Força ofensiva acima da média da liga. Pick recomendado: Gols Over 1.5.' },
@@ -715,11 +760,14 @@ export default function Landing() {
         )}
       </nav>
 
+      {/* Progresso de leitura da pagina · preenche conforme o scroll (GSAP ScrollTrigger) */}
+      <div ref={progressBarRef} className="fixed top-16 inset-x-0 h-0.5 bg-green-500 origin-left scale-x-0 z-40 pointer-events-none" aria-hidden="true" />
+
       <LiveTicker recent={publicData?.recent ?? []} />
 
-      <section className="relative overflow-hidden">
-        {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
-        <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
+      <section ref={heroSectionRef} className="relative overflow-hidden">
+        {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente. Parallax leve via GSAP. */}
+        <div ref={heroGridRef} className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
 
         <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
