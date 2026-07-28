@@ -38,7 +38,8 @@ _FAQ: list[dict] = [
         "perguntas": [
             "quais os planos", "quanto custa o vip", "preço do vip", "valores das assinaturas",
             "quanto custa a assinatura", "planos disponiveis", "quanto é pra assinar",
-            "qual o valor do plano", "quanto custa ser vip", "preços",
+            "qual o valor do plano", "quanto custa ser vip", "preços", "me fala sobre os planos",
+            "me responda sobre os planos", "me explica os planos", "quero saber sobre os planos",
         ],
         "resposta": None,
     },
