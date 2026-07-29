@@ -25,8 +25,9 @@ from services.odds_service import OddsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates
 from services.pick_engine import consensus
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "logs")
-LOG_PATH = os.path.join(LOG_DIR, "shadow_consensus.jsonl")
+from utils.paths import LOGS_DIR as LOG_DIR, log_path
+
+LOG_PATH = log_path("shadow_consensus.jsonl")
 
 
 def _today_ai_picks(cur) -> list:

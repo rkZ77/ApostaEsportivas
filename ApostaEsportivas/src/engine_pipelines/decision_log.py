@@ -13,8 +13,9 @@ import os
 import json
 from datetime import datetime
 
-LOG_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "logs")
-LOG_PATH = os.path.join(LOG_DIR, "engine_decisions.jsonl")
+from utils.paths import LOGS_DIR as LOG_DIR, log_path
+
+LOG_PATH = log_path("engine_decisions.jsonl")
 
 
 def _candidate_summary(c: dict) -> dict:
