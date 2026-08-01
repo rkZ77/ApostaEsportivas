@@ -314,20 +314,31 @@ def classify_market(market_name: str):
             return ("fouls", "away")
         return ("fouls", "total")
 
-    # Defesas de goleiro (bet_id 267/268/274/315/318/319 no bet_markets_map).
-    # Vem antes de "shot" de proposito: "Goalkeeper Saves" nao contem "shot",
-    # mas manter a ordem deixa explicito que save e' familia propria e nao
-    # variante de chute.
+    # Defesas de goleiro: FORA DE ESCOPO do motor de mercado de time.
+    #
+    # Eu tinha classificado como familia de time ("saves", total/home/away)
+    # em 2026-08-01, assumindo over/under de equipe. A primeira coleta real
+    # com jogo da Copa do Brasil desmentiu: a Betano manda bet_id 267
+    # "Goalkeeper Saves" como PROP DE JOGADOR, com value_name no formato
+    # "<nome do goleiro> - <N>" ("Everson - 1", "Leo Jardim - 3"), ou seja
+    # "N ou mais defesas DESSE goleiro" -- nao existe linha de time ali.
+    #
+    # Na pratica o motor ja descartava, porque "Everson - 1" nao parseia como
+    # over/under; mas descartava por acidente de parse, nao por decisao. Aqui
+    # vira explicito, mesmo tratamento que "Player Fouls Committed" ja tinha.
+    #
+    # O caminho certo pra esse mercado NAO e' este: e' dado por jogador
+    # (player_match_stats.saves, tabela criada em 2026-08-01) somado ao
+    # goalkeeper_model, que ja estima P(defesas > linha) por Binomial
+    # Negativa. Enquanto isso nao existir como pipeline, melhor nao gerar
+    # candidato nenhum do que gerar em cima de campo de time que nao
+    # corresponde ao que a casa esta oferecendo.
+    #
+    # 268/274 (Home/Away Goalkeeper Saves) e 315/318/319 (Saves Total, O/U)
+    # nao apareceram em nenhuma das 3 fixtures coletadas -- pode ser que
+    # sejam de time, mas nao da pra afirmar sem ver. Ficam de fora junto.
     if "save" in name or "goalkeeper" in name:
-        # Mesmo guard das outras familias: prop de jogador individual tem
-        # value_name com nome de jogador, nao linha over/under do time.
-        if "player" in name or "half" in name:
-            return None
-        if "home" in name:
-            return ("saves", "home")
-        if "away" in name:
-            return ("saves", "away")
-        return ("saves", "total")
+        return None
 
     if "shot" in name and "player" not in name and "half" not in name:
         # "Total ShotOnGoal"/"Shot On Target"/"ShotsOnTarget" etc -- variantes
