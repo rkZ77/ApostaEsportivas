@@ -9,6 +9,8 @@ guloso deterministico: ordena candidatos elegiveis por Score Final, testa
 combinacoes de fixtures diferentes ate achar uma cujo produto real das
 odds (nunca um valor "esperado") caia na faixa exigida."""
 import json
+import textwrap
+import traceback
 import itertools
 from datetime import datetime
 
@@ -171,7 +173,10 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
         except Exception as e:
+            # Stack trace completo: sem ele, "pulou 8 fixtures" nao diz
+            # ONDE quebrou -- e o caminho de gravacao mudou em 2026-08-01.
             print(f"[MULTIPLA_ENGINE] Erro no fixture {fixture['fixture_id']}, pulando: {e}")
+            print(textwrap.indent(traceback.format_exc(), "    "))
             continue
 
     return legs
