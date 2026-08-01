@@ -50,7 +50,15 @@ class CompetitionProfile:
 # Eliminatorias de Copa do Mundo + outros qualificatorios (espelha
 # match_stats_service.NATIONAL_TEAM_LEAGUE_IDS e
 # national_team_profile_service._classify_competition)
-_QUALIFIERS_IDS = {31, 32, 33, 34, 35, 36, 37, 38, 39, 882, 780}
+# BUG CORRIGIDO 2026-08-01: o 39 estava nesta lista, mas 39 e' a Premier
+# League -- esta cadastrada com esse id na propria tabela `leagues` do
+# projeto. Ela vinha sendo tratada como eliminatoria de SELECAO: historico
+# multi-competicao, perfil de selecao nacional e grupo de peso
+# "Eliminatorias". Nao chegou a causar dano porque ainda nao ha nenhum jogo
+# de liga 39 em match_statistics; teria mordido no primeiro jogo coletado.
+# O id veio herdado de match_stats_service.NATIONAL_TEAM_LEAGUE_IDS, que a
+# refatoracao de Prioridade 1 espelhou sem revisar item a item.
+_QUALIFIERS_IDS = {31, 32, 33, 34, 35, 36, 37, 38, 882, 780}
 
 _PROFILES: dict[int, CompetitionProfile] = {
     1:  CompetitionProfile(1,  "INTERNATIONAL_TOURNAMENT", neutral_venue=True,  is_national_team=True, competition_weight_group="Copa do Mundo"),
@@ -62,7 +70,43 @@ _PROFILES: dict[int, CompetitionProfile] = {
     11: CompetitionProfile(11, "QUALIFIERS",               neutral_venue=False, is_national_team=True, competition_weight_group="Amistoso/Outra"),
     71: CompetitionProfile(71, "LEAGUE", neutral_venue=False, is_national_team=False),
     72: CompetitionProfile(72, "LEAGUE", neutral_venue=False, is_national_team=False),
+    # Ligas europeias cobertas (ver tabela `leagues`). Estavam caindo no
+    # _DEFAULT, que ja' dava LEAGUE/nao-selecao -- o efeito pratico e' o
+    # mesmo, mas explicitas elas param de depender do fallback e o 39 nao
+    # volta a ser confundido com eliminatoria.
+    39:  CompetitionProfile(39,  "LEAGUE", neutral_venue=False, is_national_team=False),
+    78:  CompetitionProfile(78,  "LEAGUE", neutral_venue=False, is_national_team=False),
+    140: CompetitionProfile(140, "LEAGUE", neutral_venue=False, is_national_team=False),
+    # Copas de clube (2026-08-01). Mata-mata nao acumula jogo suficiente
+    # DENTRO da propria competicao pra sustentar analise: a base real mostra
+    # 20 jogos/time no Brasileirao contra 1 a 4 em toda competicao de copa,
+    # e data_validation.validate_history exige minimo de 5. Por isso elas
+    # entram com CLUB_CUP, que faz o historico vir de todas as competicoes
+    # (ver uses_all_competitions_history).
+    #
+    # competition_weight_group fica None de proposito: aquele campo alimenta
+    # national_team_profile_service.WEIGHTS, que e' indexado direto
+    # (WEIGHTS[comp_type]) -- string nova ali viraria KeyError no fluxo de
+    # selecao. O peso de copa de clube e' cross_competition_weight, abaixo.
+    73: CompetitionProfile(73, "CLUB_CUP", neutral_venue=False, is_national_team=False),
+    13: CompetitionProfile(13, "CLUB_CUP", neutral_venue=False, is_national_team=False),
 }
+
+# Peso do jogo conforme a competicao de ORIGEM, usado ao montar historico
+# multi-competicao. Um 4x0 na Copa do Brasil contra time de divisao inferior
+# nao vale o mesmo que 4x0 no Brasileirao -- sem isso, abrir o historico pra
+# todas as competicoes trocaria "amostra pequena" por "amostra enviesada".
+#
+# Ainda NAO esta conectado ao calculo: entra junto com a ponderacao no
+# stats_model, que e' mudanca de Score Final e exige o registro de impacto
+# que o usuario pediu antes de mexer em Score Final.
+_CROSS_COMPETITION_WEIGHT: dict[int, float] = {
+    71: 1.00,   # Brasileirao A -- referencia
+    72: 0.85,   # Brasileirao B
+    13: 1.00,   # Libertadores -- nivel comparavel a Serie A
+    73: 0.75,   # Copa do Brasil -- entra time de divisao inferior
+}
+_DEFAULT_CROSS_WEIGHT = 0.80
 for _qid in _QUALIFIERS_IDS:
     _PROFILES[_qid] = CompetitionProfile(
         _qid, "QUALIFIERS", neutral_venue=False, is_national_team=True, competition_weight_group="Eliminatórias"
@@ -79,6 +123,28 @@ def get_profile(league_id) -> CompetitionProfile:
 
 def is_national_team_league(league_id) -> bool:
     return get_profile(league_id).is_national_team
+
+
+def is_club_cup(league_id) -> bool:
+    return get_profile(league_id).type == "CLUB_CUP"
+
+
+def uses_all_competitions_history(league_id) -> bool:
+    """Historico deve vir de TODAS as competicoes do time, nao so' desta.
+
+    Vale pra selecao (sempre valeu) e agora tambem pra copa de clube. O
+    motivo e' o mesmo nos dois casos: a competicao em si nao acumula jogo
+    suficiente. Selecao joga pouco por natureza; mata-mata idem. Travar o
+    historico na propria competicao faz validate_history reprovar a fixture
+    inteira, em silencio -- o pick nunca aparece e nada indica o porque.
+    """
+    perfil = get_profile(league_id)
+    return perfil.is_national_team or perfil.type == "CLUB_CUP"
+
+
+def cross_competition_weight(league_id) -> float:
+    """Peso do jogo pela competicao de origem, ao misturar historico."""
+    return _CROSS_COMPETITION_WEIGHT.get(league_id, _DEFAULT_CROSS_WEIGHT)
 
 
 def is_neutral_venue(league_id) -> bool:
