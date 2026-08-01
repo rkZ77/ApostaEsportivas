@@ -18,9 +18,12 @@ DEFAULT_PROVIDERS = {
     "alavancagem": "anthropic",
     "vip": "openai",
     "multipla": "openai",
-    # Pipeline de defesas de goleiro, ainda por escrever. A chave tem que ser
-    # a mesma passada em review_gate(...) la, senao cai no default anthropic.
     "goleiros": "openai",
+    # Faltas fica no Claude junto com os outros fluxos de volume: o pick sai
+    # de tabela empirica medida, nao de score composto, entao o parecer da IA
+    # aqui e' checagem de contexto (classico, decisao ja definida, elenco
+    # reserva) -- nao precisa do modelo mais caro pra isso.
+    "faltas": "anthropic",
 }
 
 # Nao existe default de modelo pra OpenAI: o ID tem que vir do env. Chutar um
