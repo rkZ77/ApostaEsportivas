@@ -10,6 +10,8 @@ from services.pick_engine.ranking import (
     rank_all_candidates_debug, select_final_picks_debug, evaluate_all_lines,
 )
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG, DICA_CONFIG
+from services.pick_engine.staking import calculate_stake
+from services.pick_engine.ai_review import AIReviewGate, AIReviewSettings, review_gate
 from services.pick_engine import (
     context_model, team_profile_model, competition_profile,
     probability_model, variance_model, team_strength, data_validation,
@@ -28,6 +30,10 @@ __all__ = [
     "PickEngineConfig",
     "DEFAULT_CONFIG",
     "DICA_CONFIG",
+    "calculate_stake",
+    "AIReviewGate",
+    "AIReviewSettings",
+    "review_gate",
     "context_model",
     "team_profile_model",
     "competition_profile",

@@ -11,14 +11,16 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.standings_service import StandingsService
 from services.referee_stats_service import RefereeStatsService
-from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
+from services.pick_engine.ai_review import review_gate
+from services.pick_engine.staking import calculate_stake
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
+
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
@@ -46,7 +48,7 @@ def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_
 
 
 def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None) -> bool:
-    stake_pct, stake_units = AISuggestionsService.calculate_stake(
+    stake_pct, stake_units = calculate_stake(
         confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="vip",
     )
     reasoning = explain(pick)
@@ -54,8 +56,10 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # confidence) -- usado depois por services/pick_engine/red_analysis.py
     # pra distinguir, se este pick der RED, erro real de evento imprevisivel
     # antes de contar contra a calibracao (services/pick_engine/calibration.py).
+    engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
+    engine_debug_data["ai_review"] = pick.get("ai_review")
     engine_debug = json.dumps(
-        homologation.build_score_breakdown_section(pick, data_quality_score),
+        engine_debug_data,
         default=str, ensure_ascii=False,
     )
 
@@ -148,6 +152,11 @@ def run_vip_engine():
                 continue
 
             best = next((p for p in picks if p.get("is_best_pick")), picks[0])
+            best = {**best, "data_quality_score": quality["score"]}
+            reviewed = review_gate("vip").apply([best], "vip", fixture)
+            if not reviewed:
+                continue
+            best = reviewed[0]
             if _save_pick(cur, fixture, best, quality["score"]):
                 conn.commit()
                 saved += 1

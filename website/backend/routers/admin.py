@@ -260,6 +260,7 @@ async def _run_and_track(command: str, script: str):
     timeout = _PIPELINE_TIMEOUTS.get(command, _PIPELINE_TIMEOUTS["default"])
     try:
         env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
+        env["AI_REVIEW_ENV"] = "dev" if command.startswith("dev_") else "prod"
         if command.startswith("dev_"):
             env = _dev_env(env)
         proc = await asyncio.create_subprocess_exec(
@@ -329,6 +330,42 @@ async def _run_dev_pipeline():
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
+
+
+@router.get("/ai-review-status")
+def ai_review_status(current_user: dict = Depends(require_admin)):
+    """Resumo persistido das revisoes, inclusive depois de restart do Railway."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""SELECT
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours') AS reviews_24h,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND decision = 'reject') AS rejected_24h,
+            COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours' AND cached) AS cache_hits_24h,
+            COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) AS reviews_today
+        FROM ai_pick_review_events""")
+        summary = dict(cur.fetchone())
+        cur.execute("""SELECT pipeline, mode, provider, model, status, decision, risk_level,
+                              cached, review, created_at
+                       FROM ai_pick_review_events
+                       ORDER BY created_at DESC LIMIT 25""")
+        events = [dict(row) for row in cur.fetchall()]
+        return {
+            "config": {
+                "environment": os.getenv("AI_REVIEW_ENV", "prod"),
+                "mode": os.getenv("AI_REVIEW_MODE_PROD", os.getenv("AI_REVIEW_MODE", "off")),
+                "daily_limit": int(os.getenv("AI_REVIEW_DAILY_LIMIT_PROD", os.getenv("AI_REVIEW_DAILY_LIMIT", "15"))),
+            },
+            "summary": summary,
+            "events": events,
+        }
+    except Exception as error:
+        if "ai_pick_review_events" in str(error):
+            return {"config": {"mode": "off"}, "summary": {}, "events": [], "migration_pending": True}
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 @router.get("/pipeline-status-public")
