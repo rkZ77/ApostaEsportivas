@@ -257,7 +257,7 @@ LIST_LIMIT   = 40
 PURGE_DAYS   = 60   # notificações lidas mais velhas que isso são descartadas
 
 
-def _fmt_brl(value: float) -> str:
+def fmt_brl(value: float) -> str:
     """R$ 1.234,56 · pt-BR sem depender de locale instalado no container."""
     s = f"{abs(value):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
     return f"{'-' if value < 0 else ''}R$ {s}"
@@ -361,7 +361,7 @@ def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
             parts = [p for p in (market,) if p]
             if pnl_r is not None:
                 sign = "+" if pnl_r >= 0 else ""
-                parts.append(f"{sign}{_fmt_brl(pnl_r)} ({sign}{profit_u:.2f}u)")
+                parts.append(f"{sign}{fmt_brl(pnl_r)} ({sign}{profit_u:.2f}u)")
             create_notification(
                 cur, f["user_id"], TYPE_PICK_RESULT,
                 title=f"{label} · {match_label}",

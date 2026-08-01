@@ -105,8 +105,9 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
-            {/* Sino · visível em qualquer largura */}
-            <NotificationBell />
+            {/* Sino · qualquer largura, mas só logado (Navbar também roda em
+                páginas públicas como Blog e Resultados) */}
+            {user && <NotificationBell />}
 
             {/* Avatar dropdown · desktop */}
             <div className="relative hidden sm:block">

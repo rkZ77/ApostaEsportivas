@@ -1010,6 +1010,15 @@ MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 
 
+# Usuários cujo mês anterior já foi checado. Sem isso, cada listagem de
+# notificações · e o sino faz poll de 60s · refaria as queries de estatística do
+# mês inteiro pra quem não seguiu pick nenhum (esse caso nunca cria linha, então
+# nunca sairia pelo caminho barato). Memória do processo: reinício custa no
+# máximo uma recontagem por usuário. Zera na virada do mês pra não crescer.
+_monthly_close_checked: set[tuple[int, str]] = set()
+_monthly_close_checked_month = ""
+
+
 def _last_month_key() -> str:
     """Mês anterior 'YYYY-MM' no fuso de Brasília · o mês que o fechamento cobre."""
     today = datetime.now(BR_TZ).date()
@@ -1030,16 +1039,25 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
     (dois SELECTs em índice único) sempre que já existe ou já foi resolvido · o
     cálculo do mês só roda uma vez por usuário por mês.
     """
-    from routers.notifications import TYPE_MONTHLY_CLOSE, create_notification, _fmt_brl
+    from routers.notifications import TYPE_MONTHLY_CLOSE, create_notification, fmt_brl
+
+    global _monthly_close_checked_month
 
     month_key  = _last_month_key()
     dedupe_key = f"monthly_close:{month_key}"
+
+    if month_key != _monthly_close_checked_month:
+        _monthly_close_checked.clear()
+        _monthly_close_checked_month = month_key
+    elif (user_id, month_key) in _monthly_close_checked:
+        return
 
     cur.execute(
         "SELECT 1 FROM notifications WHERE user_id = %s AND dedupe_key = %s",
         (user_id, dedupe_key),
     )
     if cur.fetchone():
+        _monthly_close_checked.add((user_id, month_key))
         return
 
     cur.execute(
@@ -1047,11 +1065,13 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
         (user_id, month_key),
     )
     if cur.fetchone():
+        _monthly_close_checked.add((user_id, month_key))
         return
 
     cur.execute("SELECT unit_value FROM user_banca WHERE user_id = %s", (user_id,))
     row = cur.fetchone()
     if not row:
+        _monthly_close_checked.add((user_id, month_key))
         return  # nunca configurou banca · não tem fechamento pra mostrar
     unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
 
@@ -1060,6 +1080,7 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
     alav  = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
     has_alav_activity = bool(alav) and (alav["greens_this_month"] > 0 or alav["reds_this_month"] > 0)
     if stats["total_followed"] == 0 and not has_alav_activity:
+        _monthly_close_checked.add((user_id, month_key))
         return  # mês sem movimento nenhum
 
     pnl   = stats["total_pnl"]
@@ -1069,11 +1090,12 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
         cur, user_id, TYPE_MONTHLY_CLOSE,
         title=f"Fechamento de {label}",
         dedupe_key=dedupe_key,
-        body=f"{sign}{_fmt_brl(pnl)} no mês · {stats['greens']}G/{stats['reds']}R. "
+        body=f"{sign}{fmt_brl(pnl)} no mês · {stats['greens']}G/{stats['reds']}R. "
              f"Confirme sua banca pra começar o mês novo.",
         url="/banca",
         payload={"month_key": month_key, "month_label": label, "total_pnl": pnl},
     )
+    _monthly_close_checked.add((user_id, month_key))
 
 
 def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end: str) -> Optional[dict]:
