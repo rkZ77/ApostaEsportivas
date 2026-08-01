@@ -198,3 +198,12 @@ class PlayerStatsCollectorService:
         conn.close()
         print(f"[PLAYER_STATS] {len(fixtures)} fixtures pendentes (limite {limite}).")
         return self.coletar(fixtures)
+
+
+if __name__ == "__main__":
+    # Executavel direto pra o painel Admin poder disparar (ele roda scripts
+    # por caminho, nao importa modulo). Limite pelo argv ou PLAYER_STATS_LIMIT.
+    import sys
+
+    limite_arg = sys.argv[1] if len(sys.argv) > 1 else os.getenv("PLAYER_STATS_LIMIT", "50")
+    PlayerStatsCollectorService().coletar_pendentes(limite=int(limite_arg))

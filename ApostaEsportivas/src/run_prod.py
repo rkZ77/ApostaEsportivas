@@ -47,6 +47,7 @@ OPCOES = {
     "6": ("Gerar alavancagem (motor)",        "alavancagem"),
     "7": ("Atualizar resultados (VIP+Free+Mult+Alav)", "resultados"),
     "8": ("Tudo: jogos + odds + picks",       "tudo"),
+    "9": ("Estatistica de jogador (API)",    "player_stats"),
 }
 
 
@@ -78,6 +79,8 @@ def run(cmd: str, mode: str = "fast"):
         main_module.cmd_resultados()
     elif cmd == "tudo":
         main_module.cmd_tudo(mode=mode)
+    elif cmd == "player_stats":
+        main_module.cmd_player_stats()
     else:
         print(f"Comando desconhecido: '{cmd}'")
 

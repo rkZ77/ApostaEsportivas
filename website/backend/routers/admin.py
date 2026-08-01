@@ -186,6 +186,11 @@ _PIPELINE_SCRIPTS = {
     "gerar_multipla":       os.path.join("engine_pipelines", "multipla_pipeline.py"),
     "gerar_alavancagem":    os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
+    # Estatistica por jogador (/fixtures/players). Fora do "Rodar Tudo" de
+    # proposito: gasta 1 requisicao da API por fixture e disputa a mesma cota
+    # diaria da coleta de odds. Botao separado, sob demanda.
+    "player_stats":         os.path.join("collectors", "player_stats_collector_service.py"),
+    "dev_player_stats":     os.path.join("collectors", "player_stats_collector_service.py"),
     # Fase de homologacao/validacao (compara motor vs IA em uma base DEV
     # separada, ANTES de promover mudanca pro motor de producao acima) --
     # prefixo "dev_" sinaliza que _run_and_track() precisa injetar DB_ENV=dev

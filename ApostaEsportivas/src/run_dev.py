@@ -41,6 +41,7 @@ OPCOES = {
     "7": ("Atualizar resultados",             "resultados"),
     "8": ("Tudo: jogos + odds + picks",       "tudo"),
     "9": ("Modo sombra (log IA vs motor)",    "shadow"),
+    "10": ("Estatistica de jogador (API)",   "player_stats"),
 }
 
 
@@ -74,6 +75,8 @@ def run(cmd: str):
         main_module.cmd_shadow()
     elif cmd == "tudo":
         main_module.cmd_tudo()
+    elif cmd == "player_stats":
+        main_module.cmd_player_stats()
     else:
         print(f"Comando desconhecido: '{cmd}'")
 
