@@ -114,7 +114,23 @@ class DataCollectorMain:
         print("[STAGE 3] Atualizando classificação das ligas...")
         self._get_standings_collector().process_all()
 
-    def run_stage_4(self, mode="fast", days=3, collect_wc_friendlies=True, wc_mode="fast"):
+    # DESLIGADO POR PADRAO EM 2026-08-01. A Copa do Mundo acabou; o proximo
+    # torneio e' em 4 anos. Antes disso, `collect_wc_friendlies=True` fazia
+    # TODA rodada diaria coletar 15 jogos recentes de cada uma das 48
+    # selecoes, buscando estatistica de cada jogo individualmente:
+    #
+    #     48 selecoes x (1 chamada de jogos + 15 de estatistica) = ~768
+    #     requisicoes por dia
+    #
+    # Era o maior consumidor de cota da API-Football do projeto inteiro, pra
+    # alimentar competicao encerrada. Com a cota estourada, a coleta de
+    # jogos e de ODDS das ligas ativas parava de rodar -- o motor ficava sem
+    # o insumo do produto real.
+    #
+    # Nao apaguei o collector nem a liga 1 da tabela `leagues`: o historico
+    # ja coletado continua valendo, e reativar e' so passar
+    # collect_wc_friendlies=True quando a proxima Copa chegar.
+    def run_stage_4(self, mode="fast", days=3, collect_wc_friendlies=False, wc_mode="fast"):
         print("[STAGE 4] Estatísticas de jogos finalizados...")
 
         service = self._get_match_stats()
@@ -158,7 +174,7 @@ class DataCollectorMain:
         conn.close()
         return teams
 
-    def run_stage_5(self, mode="recent", days=3, wc_last_n=15):
+    def run_stage_5(self, mode="recent", days=3, wc_last_n=15, process_wc_teams=False):
         print("[STAGE 5] Calculando médias agregadas...")
         aggregator = self._get_team_aggregator()
 
@@ -167,8 +183,14 @@ class DataCollectorMain:
         else:
             aggregator.update_recent_teams_statistics(days=days)
 
-        # Seleções da Copa: sempre busca da tabela teams (independe do Stage 4)
-        # Usa últimos N jogos misturando amistosos + Copa do Mundo
+        # Selecoes da Copa: desligado por padrao junto com o stage 4 (ver
+        # comentario la). Este bloco nao chama a API, mas recalcular media de
+        # 48 selecoes de competicao encerrada a cada rodada e' processamento
+        # e escrita no banco sem nenhum consumidor.
+        if not process_wc_teams:
+            print("[STAGE 5] Selecoes da Copa: pulado (competicao encerrada).\n")
+            return
+
         wc_teams = getattr(self, 'wc_teams', None) or self._get_wc_teams_from_db()
 
         if wc_teams:
