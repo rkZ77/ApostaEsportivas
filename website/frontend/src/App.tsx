@@ -111,10 +111,23 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return <Navigate to="/picks" replace />
 }
 
+// Rotas onde o fechamento pode pular na frente do usuário. Lista de permissão,
+// não de bloqueio: GlobalModals vive fora do <Routes>, então sem isso o popup
+// aparece em TUDO · landing, blog, termos, link público de pick compartilhado.
+// Quem está logado e cai na home (admin não é redirecionado pra /picks) levava
+// o modal por cima da página de vendas. /checkout fica de fora de propósito:
+// não se interrompe um pagamento em andamento.
+const MONTHLY_CLOSE_ROUTES = [
+  '/picks', '/banca', '/meus-picks', '/fixtures', '/estatisticas', '/agente', '/profile', '/admin',
+]
+
 function GlobalModals() {
   const { user } = useAuth()
+  const { pathname } = useLocation()
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
   const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose } = useNotifications()
+
+  const inAppRoute = MONTHLY_CLOSE_ROUTES.some(r => pathname === r || pathname.startsWith(`${r}/`))
 
   // Abre sozinho no primeiro acesso depois da virada do mês. O gatilho é a
   // notificação do servidor ainda não lida, então isso vale por conta (não por
@@ -122,8 +135,8 @@ function GlobalModals() {
   // sino até a banca ser confirmada.
   useEffect(() => {
     if (!user) return
-    if (isPreview || pendingMonthlyClose) openMonthlyClose()
-  }, [user?.id, pendingMonthlyClose?.id, isPreview, openMonthlyClose])
+    if (isPreview || (pendingMonthlyClose && inAppRoute)) openMonthlyClose()
+  }, [user?.id, pendingMonthlyClose?.id, inAppRoute, isPreview, openMonthlyClose])
 
   return (
     <AnimatePresence>
