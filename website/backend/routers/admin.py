@@ -1,6 +1,7 @@
 import os
 import sys
 import asyncio
+import logging
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -309,6 +310,63 @@ async def _run_tudo():
             _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
             return
     _pipeline_status["tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline completo!", "error": None}
+    _notificar_picks_publicados()
+
+
+def _notificar_picks_publicados():
+    """Push + item no sino + limpeza de notificacao velha, depois que o
+    pipeline gerou os picks do dia.
+
+    Isso vivia no scheduler (_job_run_daily_pipeline), removido em 2026-08-01.
+    Como agora o pipeline SO' roda por disparo manual, sem mover isso pra ca o
+    usuario geraria os picks e ninguem seria avisado -- justamente o oposto do
+    que ele quer ao publicar no horario que escolher.
+
+    Cada bloco engole a propria excecao de proposito: falha de push ou de
+    notificacao nao pode fazer o pipeline (que ja gravou os picks) parecer que
+    falhou.
+    """
+    logger = logging.getLogger(__name__)
+
+    try:
+        from routers.notifications import send_push_to_all_vip
+
+        send_push_to_all_vip(
+            title="Picks do dia publicados",
+            body="Seus picks de hoje estao disponiveis. Confira agora!",
+            url="/picks",
+        )
+    except Exception as push_err:
+        logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", push_err)
+
+    # In-app: o push some da bandeja e nao volta, o item do sino fica pra quem
+    # so' abriu o site mais tarde (ou nunca aceitou push).
+    try:
+        from zoneinfo import ZoneInfo
+
+        from routers.notifications import TYPE_NEW_PICKS, notify_all_users
+
+        today_key = datetime.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
+        created = notify_all_users(
+            TYPE_NEW_PICKS,
+            title="Picks do dia publicados",
+            dedupe_key=f"new_picks:{today_key}",
+            body="Os picks de hoje ja estao disponiveis.",
+            url="/picks",
+            payload={"date": today_key},
+        )
+        logger.info("[NOTIF] Picks do dia: %d notificacoes criadas.", created)
+    except Exception as notif_err:
+        logger.warning("[NOTIF] Erro ao criar notificacoes pos-pipeline: %s", notif_err)
+
+    try:
+        from routers.notifications import purge_old_notifications
+
+        removed = purge_old_notifications()
+        if removed:
+            logger.info("[NOTIF] %d notificacoes antigas descartadas.", removed)
+    except Exception as purge_err:
+        logger.warning("[NOTIF] Erro na limpeza de notificacoes: %s", purge_err)
 
 
 async def _run_dev_pipeline():
@@ -722,7 +780,9 @@ def admin_stats(current_user: dict = Depends(require_admin)):
 
 @router.post("/resolve-picks")
 def admin_resolve_picks(current_user: dict = Depends(require_admin)):
-    """Dispara manualmente o resolver de picks pendentes (mesmo job do scheduler)."""
+    """Resolve os picks pendentes. Unica forma de resolver em lote desde que o
+    scheduler foi removido (2026-08-01) -- fora daqui, o resultado so' e' salvo
+    de forma oportunista quando alguem abre a aba de picks ao vivo."""
     from routers.live import resolve_all_pending
     result = resolve_all_pending()
     return {"ok": True, "resolved": result}
@@ -731,7 +791,8 @@ def admin_resolve_picks(current_user: dict = Depends(require_admin)):
 @router.post("/reverify-stats-results")
 def admin_reverify_stats_results(current_user: dict = Depends(require_admin)):
     """Dispara manualmente a reconferência de escanteios/cartões já resolvidos
-    (mesmo job do scheduler, ver routers.live.reverify_recent_stats_results)."""
+    (ver routers.live.reverify_recent_stats_results). Rodava de 3 em 3h no
+    scheduler, removido em 2026-08-01 -- agora so' por aqui."""
     from routers.live import reverify_recent_stats_results
     result = reverify_recent_stats_results()
     return {"ok": True, **result}

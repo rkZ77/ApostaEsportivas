@@ -37,6 +37,49 @@ class FixtureStatusSyncService:
             "referee": fixture.get("referee"),
         }
 
+    # Limite da API-Football pro parametro `ids`: 20 fixtures por chamada.
+    BULK_SIZE = 20
+
+    def fetch_statuses_bulk(self, fixture_ids):
+        """Status de ate 20 fixtures por requisicao, via /fixtures?ids=1-2-3.
+
+        Substitui o /fixtures?id=X um-a-um: com 80 fixtures na tabela eram 80
+        requisicoes por rodada, agora sao 4. Mesmo recurso que routers/live.py
+        ja usava em _fetch_fixtures_bulk.
+
+        Devolve {fixture_id: dados}. Fixture que a API nao retornar simplesmente
+        nao aparece no dict -- o chamador trata como "nao encontrado", igual ao
+        None do fetch_fixture_status.
+        """
+        out = {}
+        ids = list(fixture_ids)
+
+        for i in range(0, len(ids), self.BULK_SIZE):
+            lote = ids[i:i + self.BULK_SIZE]
+            try:
+                r = requests.get(
+                    API_URL, headers=HEADERS,
+                    params={"ids": "-".join(str(f) for f in lote)}, timeout=20,
+                )
+                r.raise_for_status()
+                response = r.json().get("response", [])
+            except Exception as e:
+                print(f"[STATUS] Erro no lote {lote}: {e}")
+                continue
+
+            for item in response:
+                fixture = item.get("fixture") or {}
+                fid = fixture.get("id")
+                if fid is None:
+                    continue
+                out[fid] = {
+                    "status": fixture["status"]["short"],
+                    "match_datetime": fixture["date"],
+                    "referee": fixture.get("referee"),
+                }
+
+        return out
+
     def update_fixture_status(self, fixture_id, data):
         conn = get_connection()
         cur = conn.cursor()
@@ -61,17 +104,24 @@ class FixtureStatusSyncService:
         conn.close()
 
     def delete_fixture(self, fixture_id):
+        self.delete_fixtures([fixture_id])
+
+    def delete_fixtures(self, fixture_ids):
+        """Deleta em uma query só. Era uma conexão nova por fixture."""
+        if not fixture_ids:
+            return
+
         conn = get_connection()
         cur = conn.cursor()
 
-        cur.execute("DELETE FROM fixtures WHERE fixture_id = %s",
-                    (fixture_id,))
+        cur.execute("DELETE FROM fixtures WHERE fixture_id = ANY(%s)",
+                    (list(fixture_ids),))
 
         conn.commit()
         cur.close()
         conn.close()
 
-        print(f"[DELETE] Fixture {fixture_id} removido do banco.")
+        print(f"[DELETE] {len(fixture_ids)} fixture(s) removido(s) do banco.")
 
     def process_all_fixtures(self):
         conn = get_connection()
@@ -85,15 +135,27 @@ class FixtureStatusSyncService:
 
         print(f"[STATUS] Encontrados {len(fixture_rows)} fixtures...")
 
-        for fixture_id, status, match_datetime in fixture_rows:
+        # 1️⃣ JÁ FINALIZADOS NO BANCO → DELETAR DIRETO, SEM CHAMAR API
+        ja_finalizados = [fid for fid, status, _ in fixture_rows
+                          if status in FINALIZED_STATUSES]
+        if ja_finalizados:
+            self.delete_fixtures(ja_finalizados)
 
-            # 1️⃣ JÁ FINALIZADOS NO BANCO → DELETAR DIRETO, SEM CHAMAR API
-            if status in FINALIZED_STATUSES:
-                self.delete_fixture(fixture_id)
-                continue
+        # 2️⃣ NÃO FINALIZADOS → ATUALIZAR VIA API, EM LOTE
+        # Era uma requisição por fixture (/fixtures?id=X). Com a tabela cheia
+        # (todos os jogos NS das 7 ligas) isso sozinho passava de 60 requisições
+        # por rodada do pipeline. Em lote de 20 vira 3 ou 4.
+        pendentes = [fid for fid, status, _ in fixture_rows
+                     if status not in FINALIZED_STATUSES]
+        if not pendentes:
+            print("[STATUS] Processamento concluído.")
+            return
 
-            # 2️⃣ NÃO FINALIZADOS → ATUALIZAR VIA API
-            updated = self.fetch_fixture_status(fixture_id)
+        atualizados = self.fetch_statuses_bulk(pendentes)
+
+        a_deletar = []
+        for fixture_id in pendentes:
+            updated = atualizados.get(fixture_id)
 
             if not updated:
                 print(f"[STATUS] Fixture {fixture_id} não encontrado na API.")
@@ -101,9 +163,12 @@ class FixtureStatusSyncService:
 
             # 3️⃣ SE JÁ FINALIZOU → DELETA DIRETO; SENÃO ATUALIZA
             if updated["status"] in FINALIZED_STATUSES:
-                self.delete_fixture(fixture_id)
+                a_deletar.append(fixture_id)
             else:
                 self.update_fixture_status(fixture_id, updated)
                 print(f"[STATUS] Atualizado fixture {fixture_id} → {updated['status']}")
+
+        if a_deletar:
+            self.delete_fixtures(a_deletar)
 
         print("[STATUS] Processamento concluído.")

@@ -84,7 +84,26 @@ class MatchStatisticsSyncService:
             print("[MATCH_STATS] AVISO: tabela 'teams' está vazia ou sem times para as ligas cadastradas · nenhum jogo será carregado.")
             print("[MATCH_STATS] Execute o Stage 1 (sync de times) antes do Stage 4.")
 
+        # Jogos cuja estatística já está no banco E já estabilizou. Sem isso o
+        # Stage 4 rebaixava /fixtures/statistics de TODO jogo finalizado da
+        # janela (ATUALIZAR_JOGOS_DAYS, padrão 7), todo dia -- o mesmo jogo era
+        # baixado 7 vezes, uma requisição cada.
+        #
+        # O corte é `last_updated > match_date + 24h` em vez de "existe no
+        # banco" porque a API-Football revisa contagem de escanteios/cartões
+        # algumas horas depois do apito final (é a razão de existir o
+        # reverify_recent_stats_results em routers/live.py). Com essa regra cada
+        # jogo é coletado no máximo 2 vezes: logo após o FT e uma vez no dia
+        # seguinte, que é quando o número já não muda mais.
+        self.cur.execute("""
+            SELECT fixture_id FROM match_statistics
+            WHERE last_updated IS NOT NULL
+              AND last_updated > match_date + INTERVAL '24 hours'
+        """)
+        settled_fixture_ids = {row[0] for row in self.cur.fetchall()}
+
         fixtures = []
+        skipped = 0
 
         if use_date_filter:
             limit_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -123,6 +142,10 @@ class MatchStatisticsSyncService:
                 if home_id not in valid_team_ids or away_id not in valid_team_ids:
                     continue
 
+                if fixture["id"] in settled_fixture_ids:
+                    skipped += 1
+                    continue
+
                 fixtures.append({
                     "fixture_id": fixture["id"],
                     "league_id": lg["league_id"],
@@ -136,7 +159,8 @@ class MatchStatisticsSyncService:
                     "referee": fixture.get("referee"),
                 })
 
-        print(f"[INFO] {len(fixtures)} jogos carregados")
+        print(f"[INFO] {len(fixtures)} jogos carregados "
+              f"({skipped} pulados · estatística já estabilizada no banco)")
         return fixtures
 
     def _fetch_match_stats(self, fixture_id):

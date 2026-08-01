@@ -1585,7 +1585,9 @@ def reverify_recent_stats_results() -> dict:
     contagem depois do apito final (achado real: pick #1495 resolvida GREEN
     no momento exato do FT, mas a contagem final de escanteios so' estabilizou
     depois -- resolve_all_pending so' olha picks PENDENTES, uma vez gravado o
-    resultado nunca era reconferido). Roda de hora em hora via scheduler.
+    resultado nunca era reconferido). Sem gatilho automatico desde que o
+    scheduler foi removido (2026-08-01): disparar por
+    POST /api/admin/reverify-stats-results.
     """
     conn = get_connection()
     cur  = conn.cursor()
