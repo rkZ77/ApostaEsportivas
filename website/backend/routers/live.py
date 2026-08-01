@@ -820,6 +820,27 @@ def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, c
     logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
 
 
+def _save_market_pick_result(tabela: str, pick_id: int, pick_type: str,
+                             result: str, odd: float, conn) -> None:
+    """Grava resultado nas tabelas de mercado proprio (picks_faltas,
+    picks_goleiros).
+
+    Separado de _save_single_result porque aquele resolve o nome da tabela a
+    partir de pick_type ('vip' -> picks_vip, qualquer outra coisa ->
+    picks_free) -- passar 'faltas' por la gravaria silenciosamente na
+    picks_free. O nome da tabela vem so de chamada interna, nunca de entrada
+    do usuario.
+    """
+    profit = _profit_for_result(result, odd)
+    c = conn.cursor()
+    c.execute(f"UPDATE {tabela} SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+              (result, profit, pick_id))
+    _sync_followed_result(pick_id, pick_type, result, c)
+    conn.commit()
+    c.close()
+    logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
+
+
 def _multipla_combined_result(legs_results: list[str | None]) -> str | None:
     """Resultado combinado de uma múltipla: qualquer RED → RED, qualquer HALF → propaga."""
     if any(r is None for r in legs_results):
@@ -1390,7 +1411,8 @@ def resolve_all_pending() -> dict:
     """
     conn = get_connection()
     cur  = conn.cursor()
-    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0}
+    resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
+                      "faltas": 0, "goleiros": 0}
     # Picks de jogos que ainda nem começaram não têm nada pra resolver --
     # sem esse filtro o job (roda a cada 5 min, 24/7) reconsultava a
     # API-Football pra TODO pick pendente do sistema, inclusive os
@@ -1560,6 +1582,72 @@ def resolve_all_pending() -> dict:
                     logger.error("[AUTO-RESULT] alavancagem #%s erro: %s", p["id"], e)
         except Exception as e:
             logger.error("[AUTO-RESULT] alavancagem query erro: %s", e)
+
+        # ── FALTAS ───────────────────────────────────────────────────────────
+        # Reaproveita a maquina existente: market "Fouls. Total" casa a
+        # keyword "foul" em _stat_for_market, que soma home_fouls+away_fouls,
+        # e a linha "Over 22.5" parseia normal em _calc_result.
+        try:
+            cur.execute("""
+                SELECT id, fixture_id, market, market_type, line, odd,
+                       home_team, away_team, home_team_id, away_team_id
+                FROM picks_faltas
+                WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
+            """, (today_br,))
+            for p in cur.fetchall():
+                try:
+                    odd = float(p["odd"] or 1)
+                    leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
+                                      p["home_team"], p["away_team"],
+                                      p["home_team_id"], p["away_team_id"], odd,
+                                      market_type=p.get("market_type"))
+                    if leg["is_ft"] or leg["is_locked"]:
+                        res = _calc_result(p["market"], p["line"],
+                                           leg["current_val"], leg["home_goals"], leg["away_goals"],
+                                           market_type=p.get("market_type"),
+                                           home_team=p["home_team"], away_team=p["away_team"],
+                                           home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"))
+                        if res:
+                            _save_market_pick_result("picks_faltas", p["id"], "faltas", res, odd, conn)
+                            resolved["faltas"] += 1
+                except Exception as e:
+                    logger.error("[AUTO-RESULT] faltas #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RESULT] faltas query erro: %s", e)
+
+        # ── DEFESAS DE GOLEIRO ───────────────────────────────────────────────
+        # Prop de JOGADOR: nao da' pra usar o caminho de time. O total de
+        # defesas em match_statistics soma os dois goleiros do time e daria
+        # GREEN errado sempre que houvesse substituicao. A fonte certa e'
+        # player_match_stats.saves daquele jogador naquele fixture -- que ja
+        # esta no banco (o collector roda como parte da coleta), entao aqui
+        # nao ha nenhuma chamada de API.
+        try:
+            cur.execute("""
+                SELECT pg.id, pg.line_value, pg.odd, pg.player_name,
+                       pms.saves
+                FROM picks_goleiros pg
+                JOIN player_match_stats pms
+                  ON pms.fixture_id = pg.fixture_id
+                 AND pms.player_id  = pg.player_id
+                WHERE pg.result IS NULL
+                  AND pg.match_date <= %s
+                  AND pms.saves IS NOT NULL
+            """, (today_br,))
+            for p in cur.fetchall():
+                try:
+                    linha = int(p["line_value"] or 0)
+                    # "N ou mais defesas": GREEN quando saves >= N. Nunca
+                    # empata (a linha e' inteira e o mercado e' "ou mais"),
+                    # entao nao existe PUSH aqui.
+                    res = "GREEN" if int(p["saves"]) >= linha else "RED"
+                    _save_market_pick_result(
+                        "picks_goleiros", p["id"], "goleiros", res, float(p["odd"] or 1), conn)
+                    resolved["goleiros"] += 1
+                except Exception as e:
+                    logger.error("[AUTO-RESULT] goleiros #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RESULT] goleiros query erro: %s", e)
 
     finally:
         cur.close()
