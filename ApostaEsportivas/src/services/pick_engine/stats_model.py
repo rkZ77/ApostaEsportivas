@@ -136,6 +136,13 @@ _FAMILY_STAT_FIELDS = {
     # 2026-07-26 pra cobrir mercado que a API ja oferece e o dado ja
     # sustenta). Sem coluna "total_X" pronta, mesmo padrao de shots/offsides.
     "fouls":            {"total": None, "home": "home_fouls",      "away": "away_fouls"},
+    # Defesas de goleiro (2026-08-01). ATENCAO AO LADO: home_goalkeeper_saves
+    # sao as defesas do goleiro DA CASA, feitas contra os chutes do VISITANTE.
+    # A relacao e' quase mecanica -- defesas = 0.678 x chutes no alvo sofridos,
+    # correlacao 0.88 medida em 1892 atuacoes -- entao quem prediz defesa do
+    # mandante e' o volume ofensivo do adversario, nao o do proprio time.
+    # Ver services/pick_engine/goalkeeper_model.py.
+    "saves":            {"total": None, "home": "home_goalkeeper_saves", "away": "away_goalkeeper_saves"},
 }
 
 
@@ -306,6 +313,21 @@ def classify_market(market_name: str):
         if "away" in name:
             return ("fouls", "away")
         return ("fouls", "total")
+
+    # Defesas de goleiro (bet_id 267/268/274/315/318/319 no bet_markets_map).
+    # Vem antes de "shot" de proposito: "Goalkeeper Saves" nao contem "shot",
+    # mas manter a ordem deixa explicito que save e' familia propria e nao
+    # variante de chute.
+    if "save" in name or "goalkeeper" in name:
+        # Mesmo guard das outras familias: prop de jogador individual tem
+        # value_name com nome de jogador, nao linha over/under do time.
+        if "player" in name or "half" in name:
+            return None
+        if "home" in name:
+            return ("saves", "home")
+        if "away" in name:
+            return ("saves", "away")
+        return ("saves", "total")
 
     if "shot" in name and "player" not in name and "half" not in name:
         # "Total ShotOnGoal"/"Shot On Target"/"ShotsOnTarget" etc -- variantes
@@ -776,7 +798,7 @@ def compute_taxa(family: str, scope: str, value: str, line_str: str,
     parsing de value proprio (3-way, side+handicap, odd/even)."""
     direction = (value or "").strip().lower()
 
-    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls"):
+    if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls", "saves"):
         return market_taxa(family, scope, value, line_str, last10_home, last10_away, reference_date, config)
 
     if family == "outcome":
@@ -836,6 +858,10 @@ _SCORED_CONCEDED_FIELDS = {
     "corners": ("home_corners", "away_corners"),
     "cards":   ("home_yellow_cards", "away_yellow_cards"),
     "fouls":   ("home_fouls", "away_fouls"),
+    # Defesas: "feitos" e o que o goleiro defende, "cedidos" o que o
+    # goleiro adversario defende -- a validacao cruzada feitos-vs-cedidos
+    # vale igual, so o significado muda.
+    "saves":   ("home_goalkeeper_saves", "away_goalkeeper_saves"),
 }
 
 
