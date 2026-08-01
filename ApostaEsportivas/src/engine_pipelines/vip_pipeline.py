@@ -4,6 +4,8 @@ so em dev). Espelha gerar_sugestao_vip.py + ai_suggestions_service.py na
 estrutura de dados salva em picks_vip, mas sem IA: mercado/linha/confidence/
 EV/probability vem do pick_engine, reasoning vem de pick_engine.explain()."""
 import json
+import textwrap
+import traceback
 
 from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
@@ -171,7 +173,10 @@ def run_vip_engine():
 
         except Exception as e:
             conn.rollback()
+            # Stack trace completo: sem ele, "pulou 8 fixtures" nao diz
+            # ONDE quebrou -- e o caminho de gravacao mudou em 2026-08-01.
             print(f"[VIP_ENGINE] Erro no fixture {fixture['fixture_id']}, pulando: {e}")
+            print(textwrap.indent(traceback.format_exc(), "    "))
             continue
 
     cur.close()

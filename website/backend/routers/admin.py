@@ -186,6 +186,11 @@ _PIPELINE_SCRIPTS = {
     "gerar_free":           os.path.join("engine_pipelines", "dica_pipeline.py"),
     "gerar_multipla":       os.path.join("engine_pipelines", "multipla_pipeline.py"),
     "gerar_alavancagem":    os.path.join("engine_pipelines", "alavancagem_pipeline.py"),
+    # Faltas e defesas de goleiro (2026-08-01). Nao passam pelo caminho
+    # generico do motor: usam modelo proprio (fouls_model / goalkeeper_model),
+    # medido contra 946 jogos reais. Ver a docstring de cada pipeline.
+    "gerar_faltas":         os.path.join("engine_pipelines", "faltas_pipeline.py"),
+    "gerar_goleiros":       os.path.join("engine_pipelines", "goleiros_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
     # Estatistica por jogador (/fixtures/players). Fora do "Rodar Tudo" de
     # proposito: gasta 1 requisicao da API por fixture e disputa a mesma cota
@@ -222,7 +227,8 @@ _PIPELINE_TIMEOUTS = {
     "default":         300.0,   # 5 min para os demais
 }
 
-_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free", "gerar_multipla", "gerar_alavancagem"]
+_TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
+               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros"]
 
 _STEP_LABELS = {
     "atualizar_jogos":   "Atualizando jogos",
@@ -231,6 +237,8 @@ _STEP_LABELS = {
     "gerar_free":        "Gerando pick gratuito",
     "gerar_multipla":    "Gerando múltipla",
     "gerar_alavancagem": "Gerando alavancagem",
+    "gerar_faltas":      "Gerando picks de faltas",
+    "gerar_goleiros":    "Gerando defesas de goleiro",
 }
 
 

@@ -195,6 +195,84 @@ def run_migrations():
         "CREATE INDEX IF NOT EXISTS idx_pms_fixture     ON player_match_stats (fixture_id);",
         # Goleiro com defesas > 0 e' o recorte quente do modelo de defesas.
         "CREATE INDEX IF NOT EXISTS idx_pms_saves ON player_match_stats (player_id, match_date DESC) WHERE saves IS NOT NULL;",
+        # ── Pipelines proprios de FALTAS e DEFESAS (2026-08-01) ──────────────
+        # Tabelas separadas em vez de mais linhas em picks_vip/picks_free: os
+        # dois mercados tem chave de negocio diferente (faltas e' por jogo,
+        # defesa e' por GOLEIRO) e nao disputam o slot unico diario da Dica.
+        #
+        # Colunas espelham picks_free de proposito -- e' o formato que o
+        # frontend, o ledger e o resolvedor de resultado ja sabem ler.
+        """CREATE TABLE IF NOT EXISTS picks_faltas (
+            id            SERIAL PRIMARY KEY,
+            fixture_id    INTEGER,
+            match_date    DATE,
+            home_team     TEXT,
+            away_team     TEXT,
+            home_team_id  INTEGER,
+            away_team_id  INTEGER,
+            league_id     INTEGER,
+            league_name   TEXT,
+            market        TEXT,
+            market_type   VARCHAR(40) DEFAULT 'fouls',
+            line          TEXT,
+            odd           NUMERIC,
+            bet_house     TEXT,
+            market_id     INTEGER,
+            confidence    NUMERIC,
+            prob_real     NUMERIC,
+            edge          NUMERIC,
+            reasoning     TEXT,
+            stake_pct     NUMERIC,
+            stake_units   INTEGER,
+            engine_debug  JSONB,
+            result        TEXT,
+            profit        NUMERIC,
+            created_at    TIMESTAMP DEFAULT NOW()
+        );""",
+        # Um pick de faltas por jogo por dia. O motor avalia varios fixtures,
+        # mas nao pode gravar o mesmo jogo duas vezes se rodar de novo --
+        # mesma trava (indice unico, nao check em Python) que resolveu a
+        # duplicata de multipla em 2026-07-25.
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_faltas_dia_fixture ON picks_faltas (match_date, fixture_id);",
+        "CREATE INDEX IF NOT EXISTS idx_picks_faltas_pendentes ON picks_faltas (match_date) WHERE result IS NULL;",
+        # Defesas e' prop de JOGADOR (achado com coleta real em 2026-08-01: a
+        # Betano manda bet_id 267 como "<goleiro> - <N>", nunca linha de time).
+        # Por isso esta tabela tem player_id/player_name/team_id, que
+        # picks_faltas nao precisa.
+        """CREATE TABLE IF NOT EXISTS picks_goleiros (
+            id            SERIAL PRIMARY KEY,
+            fixture_id    INTEGER,
+            match_date    DATE,
+            home_team     TEXT,
+            away_team     TEXT,
+            home_team_id  INTEGER,
+            away_team_id  INTEGER,
+            league_id     INTEGER,
+            league_name   TEXT,
+            player_id     BIGINT,
+            player_name   TEXT,
+            team_id       INTEGER,
+            team_name     TEXT,
+            market        TEXT,
+            market_type   VARCHAR(40) DEFAULT 'saves',
+            line          TEXT,
+            line_value    NUMERIC,
+            odd           NUMERIC,
+            bet_house     TEXT,
+            market_id     INTEGER,
+            confidence    NUMERIC,
+            prob_real     NUMERIC,
+            edge          NUMERIC,
+            reasoning     TEXT,
+            stake_pct     NUMERIC,
+            stake_units   INTEGER,
+            engine_debug  JSONB,
+            result        TEXT,
+            profit        NUMERIC,
+            created_at    TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_goleiros_dia_jogador ON picks_goleiros (match_date, fixture_id, player_id);",
+        "CREATE INDEX IF NOT EXISTS idx_picks_goleiros_pendentes ON picks_goleiros (match_date) WHERE result IS NULL;",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -275,6 +353,16 @@ def cmd_alavancagem():
     run_alavancagem_engine()
 
 
+def cmd_faltas():
+    from engine_pipelines.faltas_pipeline import run_faltas_engine
+    run_faltas_engine()
+
+
+def cmd_goleiros():
+    from engine_pipelines.goleiros_pipeline import run_goleiros_engine
+    run_goleiros_engine()
+
+
 def cmd_resultados():
     from atualizar_resultados_sugestoes import AIUpdateResultsMain
     AIUpdateResultsMain().update_all_results()
@@ -317,10 +405,20 @@ def cmd_tudo(mode: str = "fast"):
     print("\n─── [5/7] MÚLTIPLA ─────────────────────────────────────")
     cmd_multiplas()
 
-    print("\n─── [6/7] ALAVANCAGEM ──────────────────────────────────")
+    print("\n─── [6/9] ALAVANCAGEM ──────────────────────────────────")
     cmd_alavancagem()
 
-    print("\n─── [7/7] RESULTADOS ───────────────────────────────────")
+    print("\n─── [7/9] FALTAS ───────────────────────────────────────")
+    cmd_faltas()
+
+    # Goleiros entra no pipeline mesmo dependendo de player_match_stats: se a
+    # tabela estiver vazia ele avisa e sai sem gravar (custo zero, nenhuma
+    # chamada de API). Deixar de fora exigiria lembrar de rodar na mao no dia
+    # em que o historico ficasse pronto.
+    print("\n─── [8/9] DEFESAS DE GOLEIRO ───────────────────────────")
+    cmd_goleiros()
+
+    print("\n─── [9/9] RESULTADOS ───────────────────────────────────")
     cmd_resultados()
 
     total = time.perf_counter() - t0
@@ -340,6 +438,8 @@ Comandos disponíveis:
   dica             Gera pick free (Dica do Dia)
   multiplas        Gera múltipla do dia
   alavancagem      Gera pick de alavancagem
+  faltas           Gera picks de faltas (Over 22.5 total do jogo)
+  goleiros         Gera picks de defesas por goleiro (prop de jogador)
   resultados       Atualiza resultados de todos os picks
   ligas            Atualiza perfis de ligas (IA)
   tudo [full]      Pipeline completo na ordem correta
@@ -382,6 +482,12 @@ if __name__ == "__main__":
 
     elif cmd == "alavancagem":
         cmd_alavancagem()
+
+    elif cmd == "faltas":
+        cmd_faltas()
+
+    elif cmd == "goleiros":
+        cmd_goleiros()
 
     elif cmd == "resultados":
         cmd_resultados()
