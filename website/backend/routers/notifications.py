@@ -4,9 +4,9 @@ import struct
 import time
 import base64
 import logging
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Any
 from database import get_connection
 from auth_utils import get_current_user
 
@@ -240,3 +240,294 @@ def send_push_to_all_vip(title: str, body: str, url: str = "/picks"):
             pass
 
     logger.info("[PUSH] %d enviados, %d expirados removidos.", ok_count, len(expired))
+
+
+# ── Notificações in-app (o sino da navbar) ────────────────────────────────────
+# Push é entrega, isto é histórico: o push some da bandeja do sistema e não
+# volta, então tudo que importa também vira linha em `notifications` pra o
+# usuário reencontrar depois. Foi exatamente o buraco do fechamento mensal,
+# que vivia só num localStorage e sumia pra sempre ao fechar o popup.
+
+TYPE_MONTHLY_CLOSE = "monthly_close"
+TYPE_NEW_PICKS     = "new_picks"
+TYPE_PICK_LIVE     = "pick_live"
+TYPE_PICK_RESULT   = "pick_result"
+
+LIST_LIMIT   = 40
+PURGE_DAYS   = 60   # notificações lidas mais velhas que isso são descartadas
+
+
+def _fmt_brl(value: float) -> str:
+    """R$ 1.234,56 · pt-BR sem depender de locale instalado no container."""
+    s = f"{abs(value):,.2f}".replace(",", "_").replace(".", ",").replace("_", ".")
+    return f"{'-' if value < 0 else ''}R$ {s}"
+
+
+def create_notification(cur, user_id: int, ntype: str, title: str, dedupe_key: str,
+                        body: Optional[str] = None, url: Optional[str] = None,
+                        payload: Optional[dict] = None) -> None:
+    """
+    Cria (ou atualiza) uma notificação usando o cursor/transação do chamador.
+
+    `dedupe_key` é obrigatório: todos os geradores rodam mais de uma vez sobre
+    o mesmo evento (poll de 60s, revisão tardia de resultado pelo provedor,
+    recálculo do fechamento a cada request) e sem ele o sino viraria uma pilha
+    de repetições. Em conflito o conteúdo é atualizado mas `read_at` é
+    preservado: um resultado corrigido não volta a piscar como não lido pra
+    quem já tinha visto o item.
+    """
+    cur.execute("""
+        INSERT INTO notifications (user_id, type, title, body, url, payload, dedupe_key)
+        VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+        ON CONFLICT (user_id, dedupe_key) DO UPDATE
+           SET title   = EXCLUDED.title,
+               body    = EXCLUDED.body,
+               url     = EXCLUDED.url,
+               payload = EXCLUDED.payload
+    """, (user_id, ntype, title[:160], body, url,
+          json.dumps(payload) if payload is not None else None, dedupe_key))
+
+
+def notify_all_users(ntype: str, title: str, dedupe_key: str,
+                     body: Optional[str] = None, url: Optional[str] = None,
+                     payload: Optional[dict] = None) -> int:
+    """Cria a mesma notificação pra toda a base, numa query só. Abre conexão própria."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO notifications (user_id, type, title, body, url, payload, dedupe_key)
+            SELECT u.id, %s, %s, %s, %s, %s::jsonb, %s FROM users u
+            ON CONFLICT (user_id, dedupe_key) DO NOTHING
+        """, (ntype, title[:160], body, url,
+              json.dumps(payload) if payload is not None else None, dedupe_key))
+        count = cur.rowcount
+        conn.commit()
+        return count
+    finally:
+        cur.close()
+        conn.close()
+
+
+def notify_pick_result(cur, pick_id: int, pick_type: str, result: str) -> None:
+    """
+    Avisa todo mundo que seguiu o pick que ele foi resolvido, com o P&L real da
+    entrada de cada um (odd declarada e cashout entram na conta, então dois
+    usuários no mesmo pick podem receber números diferentes · é por design,
+    ver _compute_follow_pnl).
+
+    Roda dentro da transação que grava o resultado. Nunca propaga exceção: o
+    caminho crítico aqui é salvar o resultado do pick, notificação é acessório.
+    """
+    try:
+        from routers.banca import _resolve_pick, _compute_follow_pnl
+
+        pick = _resolve_pick(cur, pick_id, pick_type)
+        if not pick:
+            return
+        # Fallback pro resultado recém-gravado: alguns call sites usam
+        # "UPDATE ... WHERE result IS NULL", então a leitura pode vir vazia.
+        if not pick.get("result"):
+            pick["result"] = result
+
+        cur.execute("""
+            SELECT uf.user_id, uf.stake_units, uf.actual_odd, uf.cashout_amount,
+                   COALESCE(ub.unit_value, 1) AS unit_value
+            FROM user_followed_picks uf
+            LEFT JOIN user_banca ub ON ub.user_id = uf.user_id
+            WHERE uf.pick_id = %s AND uf.pick_type = %s
+        """, (pick_id, pick_type))
+        followers = [dict(r) for r in cur.fetchall()]
+        if not followers:
+            return
+
+        home, away = pick.get("home_team_name"), pick.get("away_team_name")
+        if pick_type == "multipla":
+            match_label = "Múltipla do dia"
+        elif pick_type == "alavancagem":
+            match_label = "Alavancagem"
+        elif home and away:
+            match_label = f"{home} x {away}"
+        else:
+            match_label = "Pick seguido"
+
+        market = " ".join(str(p) for p in (pick.get("market"), pick.get("line")) if p).strip()
+
+        for f in followers:
+            unit_value = float(f["unit_value"] or 1)
+            label, profit_u, pnl_r = _compute_follow_pnl(pick, f, unit_value)
+            if label is None:
+                continue
+            parts = [p for p in (market,) if p]
+            if pnl_r is not None:
+                sign = "+" if pnl_r >= 0 else ""
+                parts.append(f"{sign}{_fmt_brl(pnl_r)} ({sign}{profit_u:.2f}u)")
+            create_notification(
+                cur, f["user_id"], TYPE_PICK_RESULT,
+                title=f"{label} · {match_label}",
+                dedupe_key=f"pick_result:{pick_type}:{pick_id}",
+                body=" · ".join(parts) or None,
+                url="/banca",
+                payload={
+                    "pick_id":      pick_id,
+                    "pick_type":    pick_type,
+                    "result":       label,
+                    "profit_units": round(profit_u, 4) if profit_u is not None else None,
+                    "pnl":          round(pnl_r, 2) if pnl_r is not None else None,
+                },
+            )
+    except Exception as e:
+        logger.warning("[NOTIF] Falha ao notificar resultado de %s #%s: %s", pick_type, pick_id, e)
+
+
+def notify_picks_went_live(user_id: int, live_items: list[dict]) -> None:
+    """
+    Marca no sino os picks seguidos que entraram em jogo. Chamado pelo próprio
+    GET /live/my-picks (que o front já consulta a cada 60s) em vez de um job
+    dedicado: o dado de "está ao vivo agora" só existe depois do enrich, e
+    duplicar isso num scheduler significaria pagar as mesmas chamadas de API
+    de novo. O dedupe_key por pick garante um aviso só por pick.
+    """
+    if not live_items:
+        return
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        for item in live_items:
+            pick_type = item.get("pick_type")
+            pick_id   = item.get("pick_id")
+            if pick_id is None:
+                continue
+            if pick_type == "multipla":
+                label = "Múltipla do dia"
+            elif pick_type == "alavancagem":
+                label = "Alavancagem"
+            else:
+                home, away = item.get("home_team"), item.get("away_team")
+                label = f"{home} x {away}" if home and away else "Pick seguido"
+            create_notification(
+                cur, user_id, TYPE_PICK_LIVE,
+                title=f"Começou · {label}",
+                dedupe_key=f"pick_live:{pick_type}:{pick_id}",
+                body="Seu pick está em jogo. Acompanhe ao vivo.",
+                url="/picks?tab=ao-vivo",
+                payload={"pick_id": pick_id, "pick_type": pick_type},
+            )
+        conn.commit()
+    except Exception as e:
+        logger.warning("[NOTIF] Falha ao notificar picks ao vivo do user %s: %s", user_id, e)
+        conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def purge_old_notifications() -> int:
+    """Descarta notificações já lidas com mais de PURGE_DAYS. Chamado pelo scheduler."""
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "DELETE FROM notifications WHERE read_at IS NOT NULL "
+            f"AND created_at < NOW() - INTERVAL '{PURGE_DAYS} days'"
+        )
+        removed = cur.rowcount
+        conn.commit()
+        return removed
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ── Endpoints do sino ─────────────────────────────────────────────────────────
+
+@router.get("")
+def list_notifications(
+    current_user: dict = Depends(get_current_user),
+    limit: int = Query(LIST_LIMIT, ge=1, le=LIST_LIMIT),
+):
+    """Lista do sino + contagem de não lidas."""
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        # O fechamento do mês anterior é gerado sob demanda aqui (não por job):
+        # depende do histórico de picks seguidos de cada usuário e a checagem
+        # sai barata quando já existe (dois SELECTs por índice único).
+        try:
+            from routers.banca import sync_monthly_close_notification
+            sync_monthly_close_notification(cur, user_id)
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("[NOTIF] Falha no sync do fechamento mensal (user %s): %s", user_id, e)
+
+        cur.execute("""
+            SELECT id, type, title, body, url, payload, read_at, created_at
+            FROM notifications
+            WHERE user_id = %s
+            ORDER BY created_at DESC, id DESC
+            LIMIT %s
+        """, (user_id, limit))
+        items: list[dict[str, Any]] = []
+        for r in cur.fetchall():
+            d = dict(r)
+            payload = d.get("payload")
+            if isinstance(payload, str):
+                try:    payload = json.loads(payload)
+                except Exception: payload = None
+            items.append({
+                "id":         d["id"],
+                "type":       d["type"],
+                "title":      d["title"],
+                "body":       d["body"],
+                "url":        d["url"],
+                "payload":    payload or {},
+                "read":       d["read_at"] is not None,
+                "created_at": d["created_at"].isoformat() if d["created_at"] else None,
+            })
+
+        cur.execute(
+            "SELECT COUNT(*) AS c FROM notifications WHERE user_id = %s AND read_at IS NULL",
+            (user_id,),
+        )
+        unread = cur.fetchone()["c"]
+        return {"items": items, "unread_count": unread}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/{notification_id}/read")
+def mark_notification_read(notification_id: int, current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        # user_id no WHERE: sem ele, um id chutado marcaria a notificação de outro.
+        cur.execute(
+            "UPDATE notifications SET read_at = NOW() "
+            "WHERE id = %s AND user_id = %s AND read_at IS NULL",
+            (notification_id, current_user["id"]),
+        )
+        conn.commit()
+        return {"ok": True}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/read-all")
+def mark_all_notifications_read(current_user: dict = Depends(get_current_user)):
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE notifications SET read_at = NOW() WHERE user_id = %s AND read_at IS NULL",
+            (current_user["id"],),
+        )
+        count = cur.rowcount
+        conn.commit()
+        return {"ok": True, "marked": count}
+    finally:
+        cur.close()
+        conn.close()

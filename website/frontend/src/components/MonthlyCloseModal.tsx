@@ -4,23 +4,12 @@ import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, A
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
+import { useNotifications } from '../context/NotificationContext'
 
-function getLastMonthKey(): string {
-  const now = new Date()
-  const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-  const m = now.getMonth() === 0 ? 12 : now.getMonth()
-  return `${y}-${String(m).padStart(2, '0')}`
-}
-
-const LS_KEY = 'pickia_monthly_close'
-
-export function shouldShowMonthlyClose(): boolean {
-  return localStorage.getItem(LS_KEY) !== getLastMonthKey()
-}
-
-export function dismissMonthlyClose() {
-  localStorage.setItem(LS_KEY, getLastMonthKey())
-}
+// Quem decide se este modal aparece é a notificação `monthly_close` do
+// servidor, não mais um localStorage por navegador. O modelo antigo perdia o
+// fechamento pra sempre quando o usuário fechava o popup (ou quando a chamada
+// falhava), e reabria de novo em cada aparelho diferente.
 
 interface AlavancagemMonthData {
   configured: boolean
@@ -84,9 +73,11 @@ interface Props {
 
 export default function MonthlyCloseModal({ onClose }: Props) {
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+  const { pendingMonthlyClose, markRead, refresh } = useNotifications()
 
   const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
   const [loading, setLoading] = useState(!isPreview)
+  const [failed, setFailed]   = useState(false)
   const [step, setStep]       = useState<Step>('summary')
   const [newBanca, setNewBanca] = useState('')
   const [saving, setSaving]   = useState(false)
@@ -97,13 +88,10 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   useEffect(() => {
     if (isPreview) return
     api.get('/banca/monthly-close')
-      .then(r => {
-        // Já fechado em outro dispositivo/sessão neste mês · não reabre o popup
-        // nem arrisca sobrescrever o registro histórico com uma nova confirmação.
-        if (r.data.already_closed) { dismissMonthlyClose(); onClose(); return }
-        setData(r.data)
-      })
-      .catch(() => { dismissMonthlyClose(); onClose() })
+      .then(r => setData(r.data))
+      // Erro de rede/servidor não pode mais "queimar" o mês: nada é marcado
+      // como visto, então o fechamento continua no sino pra tentar de novo.
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false))
   }, [])
 

@@ -667,6 +667,13 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                 stats["total_resolved"], stats["total_followed"], prev_unit,
             ))
 
+            # Fechamento resolvido: o item do sino vira histórico (lido) e para
+            # de reabrir o popup em qualquer aparelho.
+            cur.execute("""
+                UPDATE notifications SET read_at = COALESCE(read_at, NOW())
+                WHERE user_id = %s AND dedupe_key = %s
+            """, (user_id, f"monthly_close:{body.monthly_close_month_key}"))
+
         new_last_manual_month = _current_month_key() if manual_setup else None
         cur.execute("""
             INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value, last_manual_setup_month)
@@ -1003,6 +1010,72 @@ MONTH_NAMES = ["Janeiro","Fevereiro","Março","Abril","Maio","Junho",
                "Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"]
 
 
+def _last_month_key() -> str:
+    """Mês anterior 'YYYY-MM' no fuso de Brasília · o mês que o fechamento cobre."""
+    today = datetime.now(BR_TZ).date()
+    last = today.replace(day=1) - timedelta(days=1)
+    return f"{last.year:04d}-{last.month:02d}"
+
+
+def sync_monthly_close_notification(cur, user_id: int) -> None:
+    """
+    Garante o item "fechamento do mês passado" no sino do usuário.
+
+    Fonte de verdade do fechamento passou a ser esta notificação, não mais um
+    localStorage por navegador: antes, fechar o popup gravava a marca só naquele
+    aparelho (reaparecia no outro, sumia pra sempre se limpasse o navegador) e
+    qualquer erro de rede na abertura queimava o mês inteiro.
+
+    Chamada a cada listagem de notificações, então sai cedo pelo caminho barato
+    (dois SELECTs em índice único) sempre que já existe ou já foi resolvido · o
+    cálculo do mês só roda uma vez por usuário por mês.
+    """
+    from routers.notifications import TYPE_MONTHLY_CLOSE, create_notification, _fmt_brl
+
+    month_key  = _last_month_key()
+    dedupe_key = f"monthly_close:{month_key}"
+
+    cur.execute(
+        "SELECT 1 FROM notifications WHERE user_id = %s AND dedupe_key = %s",
+        (user_id, dedupe_key),
+    )
+    if cur.fetchone():
+        return
+
+    cur.execute(
+        "SELECT 1 FROM banca_monthly_closes WHERE user_id = %s AND month_key = %s",
+        (user_id, month_key),
+    )
+    if cur.fetchone():
+        return
+
+    cur.execute("SELECT unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+    row = cur.fetchone()
+    if not row:
+        return  # nunca configurou banca · não tem fechamento pra mostrar
+    unit_value = float(row["unit_value"]) if row["unit_value"] else 1.0
+
+    year, mo, month_start, month_end = _month_bounds(month_key)
+    stats = _compute_month_stats(cur, user_id, month_start, month_end, unit_value)
+    alav  = _get_alavancagem_month_stats(cur, user_id, month_start, month_end)
+    has_alav_activity = bool(alav) and (alav["greens_this_month"] > 0 or alav["reds_this_month"] > 0)
+    if stats["total_followed"] == 0 and not has_alav_activity:
+        return  # mês sem movimento nenhum
+
+    pnl   = stats["total_pnl"]
+    sign  = "+" if pnl >= 0 else ""
+    label = f"{MONTH_NAMES[mo-1]} {year}"
+    create_notification(
+        cur, user_id, TYPE_MONTHLY_CLOSE,
+        title=f"Fechamento de {label}",
+        dedupe_key=dedupe_key,
+        body=f"{sign}{_fmt_brl(pnl)} no mês · {stats['greens']}G/{stats['reds']}R. "
+             f"Confirme sua banca pra começar o mês novo.",
+        url="/banca",
+        payload={"month_key": month_key, "month_label": label, "total_pnl": pnl},
+    )
+
+
 def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end: str) -> Optional[dict]:
     """Progressão completa da série de alavancagem (banca atual da série) + quantos
     passos GREEN/RED aconteceram dentro do mês alvo. None se o usuário nunca configurou."""
@@ -1119,6 +1192,54 @@ def get_monthly_close(
             "alavancagem":      alav,
             "already_closed":   already_closed,
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/monthly-closes")
+def list_monthly_closes(current_user: dict = Depends(get_current_user), limit: int = Query(24, ge=1, le=60)):
+    """
+    Histórico de fechamentos já confirmados, do mais recente pro mais antigo.
+    A tabela guardava isso desde sempre e nenhuma tela lia · é o que dá pro
+    usuário a evolução mês a mês da banca dele.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT month_key, bankroll_start, bankroll_end, total_pnl,
+                   greens, reds, push, half_wins, half_loss,
+                   total_resolved, total_followed, unit_value, closed_at
+            FROM banca_monthly_closes
+            WHERE user_id = %s
+            ORDER BY month_key DESC
+            LIMIT %s
+        """, (current_user["id"], limit))
+        out = []
+        for r in cur.fetchall():
+            d = dict(r)
+            year, mo = int(d["month_key"][:4]), int(d["month_key"][5:7])
+            unit = float(d["unit_value"]) if d["unit_value"] else 0.0
+            pnl  = float(d["total_pnl"])
+            out.append({
+                "month_key":      d["month_key"],
+                "month_label":    f"{MONTH_NAMES[mo-1]} {year}",
+                "bankroll_start": float(d["bankroll_start"]),
+                "bankroll_end":   float(d["bankroll_end"]),
+                "total_pnl":      pnl,
+                "profit_units":   round(pnl / unit, 2) if unit else None,
+                "greens":         d["greens"],
+                "reds":           d["reds"],
+                "push":           d["push"],
+                "half_wins":      d["half_wins"],
+                "half_loss":      d["half_loss"],
+                "total_resolved": d["total_resolved"],
+                "total_followed": d["total_followed"],
+                "unit_value":     unit,
+                "closed_at":      d["closed_at"].isoformat() if d["closed_at"] else None,
+            })
+        return out
     finally:
         cur.close()
         conn.close()
