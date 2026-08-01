@@ -23,7 +23,6 @@ load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, public, social, suggestions
 from runtime_env import side_effects_note
-from scheduler import start_background_scheduler, start_expire_plans_task
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
 logging.basicConfig(
@@ -248,16 +247,27 @@ async def start_rate_store_cleanup():
     asyncio.create_task(_cleanup_rate_stores())
 
 
+# O scheduler.py foi REMOVIDO em 2026-08-01, por decisao do usuario: nada mais
+# roda sozinho neste backend, em nenhum ambiente (prod, noprod, dev). Sairam
+# junto os 5 jobs que existiam -- pipeline diario 00:10, resolve_picks 5min,
+# reverify_stats 3h, banca_reminder 1h e expire_plans 1h.
+#
+# Tudo continua disparavel na mao, que e' como o produto passa a operar (o
+# usuario gera os picks e publica no horario que quiser):
+#   - gerar picks .... POST /api/admin/run-pipeline {"command": "tudo"}
+#                      ou `python main.py tudo` na linha de comando
+#   - resolver picks . POST /api/admin/resolve-picks
+#   - reconferir ..... POST /api/admin/reverify-stats-results
+#
+# expire_plans nao deixou buraco: a expiracao de plano ja e' avaliada em
+# tempo de leitura (lazy expiry em auth_utils.py::get_current_user,
+# is_vip_active e require_vip, alem do login em routers/auth.py). O job so'
+# acertava a coluna no banco; sem ele, VIP vencido perde o acesso do mesmo
+# jeito, na requisicao seguinte.
 @app.on_event("startup")
-async def start_expire_plans():
-    start_expire_plans_task(logger)
-
-
-@app.on_event("startup")
-def run_migrations_and_scheduler():
+def run_startup_migrations_hook():
     logger.info("[STARTUP] %s", side_effects_note())
-    if run_startup_migrations(logger):
-        start_background_scheduler(logger)
+    run_startup_migrations(logger)
 
 
 @app.get("/api/health")

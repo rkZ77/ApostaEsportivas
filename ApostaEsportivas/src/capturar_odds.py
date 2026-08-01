@@ -18,11 +18,19 @@ class OddsMain:
         conn = get_connection()
         cur = conn.cursor()
 
+        # SO' o dia corrente. A janela era CURRENT_DATE + 2 dias, mas nenhum
+        # consumidor le' odd de jogo futuro: os quatro pipelines do motor
+        # filtram `match_datetime::date = CURRENT_DATE` (ver
+        # engine_pipelines/*.py). Como o run() da TRUNCATE em odds_values antes
+        # de coletar, a odd de D+1/D+2 era apagada no dia seguinte sem nunca ter
+        # sido lida -- e recoletada. Cada jogo tinha as odds baixadas em 3 dias
+        # seguidos, 2 requisicoes por vez (Bet365 + Betano): 6 requisicoes onde
+        # 2 bastam.
         cur.execute("""
             SELECT fixture_id
             FROM fixtures
             WHERE status IN ('NS', 'TBD')
-              AND match_datetime::date BETWEEN CURRENT_DATE AND CURRENT_DATE + INTERVAL '2 days'
+              AND match_datetime::date = CURRENT_DATE
         """)
 
         fixtures = [row[0] for row in cur.fetchall()]

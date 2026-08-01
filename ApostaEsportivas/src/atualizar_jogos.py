@@ -20,7 +20,7 @@ class DataCollectorMain:
         self.standings_collector = None
         self.match_stats = None
         self.team_aggregator = None
-        self.wc_teams = []
+        # (self.wc_teams removido junto com a coleta de amistosos da Copa)
 
     def _get_status_sync(self):
         if self.status_sync is None:
@@ -63,7 +63,26 @@ class DataCollectorMain:
     # ---------------------------------------------------------
 
     def run_reset(self):
-        print("\n[RESET] Apagando todos os dados de temporada...")
+        """Limpa dados de COLETA. NUNCA toca em pick.
+
+        REGRA DO USUARIO (2026-08-01): historico de pick nao se apaga, nunca.
+        Ate aqui as tabelas de pick estavam nesta lista -- entao
+        `python atualizar_jogos.py new_league`, o comando obvio pra cadastrar
+        liga nova, apagava picks_vip/picks_free/picks_multiplas. Com CASCADE,
+        levava junto picks_ledger e user_followed_picks.
+
+        A lista tinha ainda dois defeitos que reforcam que ninguem revisava
+        isso: picks_vip aparecia DUAS vezes e picks_alavancagem nao aparecia
+        -- os mesmos dois erros ja corrigidos uma vez antes e perdidos num
+        revert.
+
+        Coleta se recupera rodando o collector de novo; pick resolvido nao
+        volta, e ele e' a base de calibracao do motor (ai_performance_service
+        faz JOIN em match_statistics pra derivar hit-rate real). Se algum dia
+        precisar mesmo zerar pick, que seja um comando separado e explicito,
+        nao efeito colateral de "cadastrar liga nova".
+        """
+        print("\n[RESET] Apagando dados de coleta (picks preservados)...")
         conn = get_connection()
         cur = conn.cursor()
         cur.execute("""
@@ -77,10 +96,6 @@ class DataCollectorMain:
                 referee_stats,
                 referees,
                 historical_stats,
-                picks_vip,
-                picks_vip,
-                picks_multiplas,
-                picks_free,
                 odds_values,
                 odds_markets,
                 odds_bookmakers,
@@ -114,7 +129,16 @@ class DataCollectorMain:
         print("[STAGE 3] Atualizando classificação das ligas...")
         self._get_standings_collector().process_all()
 
-    def run_stage_4(self, mode="fast", days=3, collect_wc_friendlies=True, wc_mode="fast"):
+    # A coleta de amistosos das selecoes da Copa foi REMOVIDA em 2026-08-01.
+    # Toda rodada diaria buscava 15 jogos recentes de cada uma das 48
+    # selecoes, com uma chamada de estatistica por jogo: 48 x 16 = ~768
+    # requisicoes/dia pra alimentar competicao encerrada. Com a cota da
+    # API-Football estourada por isso, a coleta de jogos e de ODDS das ligas
+    # ATIVAS parava de rodar -- o motor ficava sem o insumo do produto real.
+    # A liga 1 continua em `leagues` e os 104 jogos ja coletados continuam
+    # em match_statistics: 77% do ledger de picks depende deles pra
+    # calibracao (ai_performance_service faz JOIN ali).
+    def run_stage_4(self, mode="fast", days=3):
         print("[STAGE 4] Estatísticas de jogos finalizados...")
 
         service = self._get_match_stats()
@@ -131,58 +155,15 @@ class DataCollectorMain:
             print("[MODE] FAST - últimos 3 dias")
             service.sync_all_finished_fixtures()
 
-        self.wc_teams = self._collect_world_cup_friendlies(wc_mode=wc_mode) if collect_wc_friendlies else []
 
-    def _collect_world_cup_friendlies(self, season=2026, wc_mode="fast"):
-        """
-        Coleta jogos recentes das seleções da Copa do Mundo.
-          wc_mode="fast" → padrão diário  (15 jogos por seleção)
-          wc_mode="full" → nova copa      (30 jogos por seleção)
-        """
-        WC_LIMITS = {"fast": 15, "full": 30}
-        limit = WC_LIMITS.get(wc_mode, 15)
-
-        from collectors.world_cup_friendlies_collector import WorldCupFriendliesCollector
-        print(f"\n[STAGE 4] Copa {season} | wc_mode={wc_mode} | {limit} jogos/seleção...")
-        collector = WorldCupFriendliesCollector()
-        teams = collector.collect_world_cup_friendlies(season=season, limit=limit)
-        return teams if teams else []
-
-    def _get_wc_teams_from_db(self, season=2026) -> list:
-        """Busca times da Copa do Mundo direto da tabela teams (league_id=1)."""
-        conn = get_connection()
-        cur = conn.cursor()
-        cur.execute("SELECT team_id FROM teams WHERE league_id = 1 AND season = %s", (season,))
-        teams = [row[0] for row in cur.fetchall()]
-        cur.close()
-        conn.close()
-        return teams
-
-    def run_stage_5(self, mode="recent", days=3, wc_last_n=15):
-        print("[STAGE 5] Calculando médias agregadas...")
+    def run_stage_5(self, mode="recent", days=3):
+        print("[STAGE 5] Calculando medias agregadas...")
         aggregator = self._get_team_aggregator()
-
         if mode == "full":
             aggregator.update_full_season_statistics()
         else:
             aggregator.update_recent_teams_statistics(days=days)
 
-        # Seleções da Copa: sempre busca da tabela teams (independe do Stage 4)
-        # Usa últimos N jogos misturando amistosos + Copa do Mundo
-        wc_teams = getattr(self, 'wc_teams', None) or self._get_wc_teams_from_db()
-
-        if wc_teams:
-            print(f"\n[STAGE 5] Médias das {len(wc_teams)} seleções da Copa (últimos {wc_last_n} jogos)...")
-            for team_id in wc_teams:
-                aggregator.process_national_team(
-                    team_id=team_id,
-                    season=2026,
-                    last_n=wc_last_n
-                )
-            print(f"[STAGE 5] Seleções da Copa atualizadas!\n")
-        else:
-            print("[STAGE 5] Nenhuma seleção da Copa encontrada na tabela teams.\n")
-    
 
     # ---------------------------------------------------------
     # PIPELINE
@@ -191,20 +172,19 @@ class DataCollectorMain:
     def run_new_league(self):
         print("\n========== NOVA LIGA · RESET + COLETA COMPLETA ==========\n")
         self.run_reset()
-        self.run_all(mode="full", wc_mode="full")
+        self.run_all(mode="full")
 
-    def run_all(self, mode=None, wc_mode=None, days=None):
+    def run_all(self, mode=None, days=None):
         """
-        mode/wc_mode/days podem ser passados explicitamente (ex: run_new_league)
+        mode/days podem ser passados explicitamente (ex: run_new_league)
         ou controlados via variável de ambiente, pra permitir um backfill pontual
         sem editar este arquivo (e sem risco de esquecer o "full" ligado depois):
           ATUALIZAR_JOGOS_MODE=custom (padrão, diário) → últimos ATUALIZAR_JOGOS_DAYS dias (7)
           ATUALIZAR_JOGOS_MODE=fast                    → últimos 3 dias (default do serviço)
           ATUALIZAR_JOGOS_MODE=full                    → temporada inteira (liga nova)
-          ATUALIZAR_JOGOS_WC_MODE=fast (padrão) | full → copa nova (30 jogos/seleção)
 
         Ex. backfill pontual sem editar código:
-          ATUALIZAR_JOGOS_MODE=full ATUALIZAR_JOGOS_WC_MODE=full python atualizar_jogos.py
+          ATUALIZAR_JOGOS_MODE=full python atualizar_jogos.py
         """
         print("\n========== DATA COLLECTOR ==========\n")
 
@@ -214,12 +194,10 @@ class DataCollectorMain:
         self.run_stage_3()
 
         mode = mode or os.getenv("ATUALIZAR_JOGOS_MODE", "custom")
-        wc_mode = wc_mode or os.getenv("ATUALIZAR_JOGOS_WC_MODE", "fast")
         days = days if days is not None else int(os.getenv("ATUALIZAR_JOGOS_DAYS", "7"))
-        wc_last_n = 30 if wc_mode == "full" else 15
 
-        self.run_stage_4(mode=mode, days=days, wc_mode=wc_mode)
-        self.run_stage_5(mode="full" if mode == "full" else "recent", days=days, wc_last_n=wc_last_n)
+        self.run_stage_4(mode=mode, days=days)
+        self.run_stage_5(mode="full" if mode == "full" else "recent", days=days)
 
         print("\n========== DATA COLLECTOR FINALIZADO ==========\n")
 
@@ -252,28 +230,24 @@ if __name__ == "__main__":
             # Ex: python atualizar_jogos.py 4 fast
             #     python atualizar_jogos.py 4 full
             #     python atualizar_jogos.py 4 custom 7
-            #     python atualizar_jogos.py 4 fast wc_full   ← copa nova
             mode    = sys.argv[2] if len(sys.argv) > 2 else "fast"
-            wc_mode = "full" if (len(sys.argv) > 3 and sys.argv[3] == "wc_full") else "fast"
 
             if mode == "full":
-                collector.run_stage_4(mode="full", wc_mode=wc_mode)
+                collector.run_stage_4(mode="full")
 
             elif mode == "custom":
-                days = int(sys.argv[3]) if (len(sys.argv) > 3 and sys.argv[3] != "wc_full") else 3
-                collector.run_stage_4(mode="custom", days=days, wc_mode=wc_mode)
+                days = int(sys.argv[3]) if (len(sys.argv) > 3 and True) else 3
+                collector.run_stage_4(mode="custom", days=days)
 
             else:
-                collector.run_stage_4(mode="fast", wc_mode=wc_mode)
+                collector.run_stage_4(mode="fast")
 
         elif stage == "5":
             # Ex: python atualizar_jogos.py 5
             #     python atualizar_jogos.py 5 full
-            #     python atualizar_jogos.py 5 recent 3 15   <- wc_last_n=15
             mode      = sys.argv[2] if len(sys.argv) > 2 else "recent"
             days      = int(sys.argv[3]) if len(sys.argv) > 3 else 3
-            wc_last_n = int(sys.argv[4]) if len(sys.argv) > 4 else 15
-            collector.run_stage_5(mode=mode, days=days, wc_last_n=wc_last_n)
+            collector.run_stage_5(mode=mode, days=days)
 
         elif stage == "reset":
             collector.run_reset()

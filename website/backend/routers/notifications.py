@@ -423,7 +423,8 @@ def notify_picks_went_live(user_id: int, live_items: list[dict]) -> None:
 
 
 def purge_old_notifications() -> int:
-    """Descarta notificações já lidas com mais de PURGE_DAYS. Chamado pelo scheduler."""
+    """Descarta notificações já lidas com mais de PURGE_DAYS. Chamado no fim do
+    pipeline manual (routers.admin::_notificar_picks_publicados)."""
     conn = get_connection()
     cur  = conn.cursor()
     try:
