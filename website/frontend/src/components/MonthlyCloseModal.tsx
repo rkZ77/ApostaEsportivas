@@ -5,6 +5,7 @@ import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 import { useNotifications } from '../context/NotificationContext'
+import { useAuth } from '../context/AuthContext'
 
 // Quem decide se este modal aparece é a notificação `monthly_close` do
 // servidor, não mais um localStorage por navegador. O modelo antigo perdia o
@@ -72,7 +73,10 @@ interface Props {
 }
 
 export default function MonthlyCloseModal({ onClose }: Props) {
-  const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+  const { isAdmin } = useAuth()
+  // Dados fabricados só pra admin · ver GlobalModals em App.tsx. Blindado aqui
+  // também porque o modal abre pelo sino e pela Banca, não só pelo popup.
+  const isPreview = isAdmin && new URLSearchParams(window.location.search).get('preview') === 'monthly'
   const { pendingMonthlyClose, markRead, refresh } = useNotifications()
 
   const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
