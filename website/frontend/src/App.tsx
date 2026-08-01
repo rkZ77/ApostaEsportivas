@@ -122,9 +122,12 @@ const MONTHLY_CLOSE_ROUTES = [
 ]
 
 function GlobalModals() {
-  const { user } = useAuth()
+  const { user, isAdmin } = useAuth()
   const { pathname } = useLocation()
-  const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+  // ?preview=monthly renderiza o modal com dados FABRICADOS (ferramenta de
+  // ajuste visual). Restrito a admin: qualquer usuário logado conseguia abrir
+  // e printar um fechamento de +R$ 187,50 que nunca existiu.
+  const isPreview = isAdmin && new URLSearchParams(window.location.search).get('preview') === 'monthly'
   const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose } = useNotifications()
 
   const inAppRoute = MONTHLY_CLOSE_ROUTES.some(r => pathname === r || pathname.startsWith(`${r}/`))
