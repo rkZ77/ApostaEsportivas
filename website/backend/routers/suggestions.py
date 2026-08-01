@@ -1964,3 +1964,105 @@ def get_results(
     finally:
         cur.close()
         conn.close()
+
+
+# ─── Faltas e Defesas de goleiro ────────────────────────────────────────────
+# Dois mercados com pipeline proprio (engine_pipelines/faltas_pipeline.py e
+# goleiros_pipeline.py, 2026-08-01), em tabelas separadas de picks_vip/free.
+# Sao VIP, como alavancagem: entram no pacote pago, nao no slot gratuito
+# diario (que segue sendo um pick so, a Dica do Dia).
+#
+# _safe_query em vez de cur.execute direto e' proposital: instancia que ainda
+# nao rodou a migracao das tabelas novas responde lista vazia em vez de 500
+# (o mesmo motivo pelo qual o resto deste modulo usa o helper).
+
+def _paginar(rows: list, offset: int, limit: int) -> dict:
+    return {"total": len(rows), "items": [dict(r) for r in rows[offset:offset + limit]]}
+
+
+@router.get("/faltas")
+def get_faltas(
+    current_user: dict = Depends(require_vip),
+    date_from:    Optional[str] = Query(None),
+    date_to:      Optional[str] = Query(None),
+    resultado:    Optional[str] = Query(None),
+    offset:       int = Query(0, ge=0),
+    limit:        int = Query(50, ge=1, le=200),
+):
+    """Historico de picks de faltas (Over 22.5 no total do jogo). VIP only."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        conditions, params = [], []
+        if date_from:
+            conditions.append("pf.match_date >= %s"); params.append(date_from)
+        if date_to:
+            conditions.append("pf.match_date <= %s"); params.append(date_to)
+        if resultado == "pending":
+            conditions.append("pf.result IS NULL")
+        elif resultado and resultado != "all":
+            conditions.append("pf.result = %s"); params.append(resultado)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        rows = _safe_query(cur, f"""
+            SELECT pf.id, pf.fixture_id, pf.match_date,
+                   pf.home_team, pf.away_team, pf.home_team_id, pf.away_team_id,
+                   pf.league_id, pf.market, pf.market_type, pf.line, pf.odd,
+                   pf.bet_house, pf.confidence, pf.prob_real, pf.edge,
+                   pf.reasoning, pf.stake_pct, pf.stake_units,
+                   pf.result, pf.profit, pf.created_at
+            FROM picks_faltas pf
+            {where}
+            ORDER BY pf.match_date DESC, pf.edge DESC
+        """, params)
+        return _paginar(rows, offset, limit)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/goleiros")
+def get_goleiros(
+    current_user: dict = Depends(require_vip),
+    date_from:    Optional[str] = Query(None),
+    date_to:      Optional[str] = Query(None),
+    resultado:    Optional[str] = Query(None),
+    offset:       int = Query(0, ge=0),
+    limit:        int = Query(50, ge=1, le=200),
+):
+    """Historico de picks de defesas de goleiro. VIP only.
+
+    E' prop de JOGADOR: cada linha traz player_name/team_name e a linha no
+    formato "N ou mais defesas". Nao existe versao por time desse mercado.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        conditions, params = [], []
+        if date_from:
+            conditions.append("pg.match_date >= %s"); params.append(date_from)
+        if date_to:
+            conditions.append("pg.match_date <= %s"); params.append(date_to)
+        if resultado == "pending":
+            conditions.append("pg.result IS NULL")
+        elif resultado and resultado != "all":
+            conditions.append("pg.result = %s"); params.append(resultado)
+        where = ("WHERE " + " AND ".join(conditions)) if conditions else ""
+
+        rows = _safe_query(cur, f"""
+            SELECT pg.id, pg.fixture_id, pg.match_date,
+                   pg.home_team, pg.away_team, pg.home_team_id, pg.away_team_id,
+                   pg.league_id, pg.player_id, pg.player_name,
+                   pg.team_id, pg.team_name,
+                   pg.market, pg.market_type, pg.line, pg.line_value, pg.odd,
+                   pg.bet_house, pg.confidence, pg.prob_real, pg.edge,
+                   pg.reasoning, pg.stake_pct, pg.stake_units,
+                   pg.result, pg.profit, pg.created_at
+            FROM picks_goleiros pg
+            {where}
+            ORDER BY pg.match_date DESC, pg.edge DESC
+        """, params)
+        return _paginar(rows, offset, limit)
+    finally:
+        cur.close()
+        conn.close()
