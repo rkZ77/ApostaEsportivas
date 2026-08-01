@@ -224,23 +224,35 @@ def _job_run_daily_pipeline(logger: logging.Logger):
         _send_pipeline_failure_alert(logger, str(e))
 
 
-def _job_run_dev_pipeline(logger: logging.Logger):
-    try:
-        from routers.admin import _pipeline_status, _run_dev_pipeline
+def scheduler_enabled() -> bool:
+    """Opt-in explicito. DESLIGADO por padrao desde 2026-08-01.
 
-        if _pipeline_status.get("dev_tudo", {}).get("status") == "running":
-            logger.info("[SCHEDULER] Pipeline DEV ja esta rodando, ignorando disparo duplicado.")
-            return
-        logger.info("[SCHEDULER] Iniciando pipeline DEV (00:10 BR)...")
-        asyncio.run(_run_dev_pipeline())
-        status = _pipeline_status.get("dev_tudo", {})
-        if status.get("status") == "error":
-            logger.error("[SCHEDULER] Pipeline DEV falhou: %s", status.get("error"))
-    except Exception as e:
-        logger.error("[SCHEDULER] Erro no pipeline DEV: %s", e)
+    Motivo: a cota da API-Football estourou (conta caiu pro FREE, 100 req/dia)
+    e o scheduler era o maior consumidor do sistema -- so' o resolve_picks de
+    5 em 5 min chegava a ~9.000 requisicoes/dia sozinho (288 execucoes x 1
+    fixture + 1 statistics por perna pendente, com o cache de processo de
+    20-60s sempre vencido nesse intervalo). Somava ainda um pipeline diario
+    extra quando DB_HOST_DEV existia no ambiente, e subia igual em toda
+    instancia que roda este backend (prod, noprod, dev).
+
+    Default OFF de proposito, ao contrario de SIDE_EFFECTS (ver runtime_env.py):
+    la o risco era producao parar de gerar picks em silencio por variavel
+    esquecida; aqui parar E' o comportamento desejado, e religar tem que ser
+    uma decisao consciente de quem ja conferiu a cota disponivel.
+
+    Pra religar: SCHEDULER=on no servico (e SO' no de producao).
+    """
+    return os.getenv("SCHEDULER", "off").strip().lower() in {"on", "1", "true", "yes"}
 
 
 def start_background_scheduler(logger: logging.Logger) -> None:
+    if not scheduler_enabled():
+        logger.info(
+            "[SCHEDULER] Nao iniciado - desligado por padrao (SCHEDULER=off). "
+            "Picks do dia so' saem por disparo manual no /admin ou "
+            "`python main.py tudo` na linha de comando."
+        )
+        return
     # Staging (noprod) aponta pro banco de producao de proposito. Se o
     # scheduler subisse la tambem, os jobs abaixo rodariam em duplicidade nas
     # tabelas reais e mandariam e-mail/push pros usuarios reais. Ver
@@ -268,20 +280,17 @@ def start_background_scheduler(logger: logging.Logger) -> None:
             id="daily_pipeline",
             misfire_grace_time=3600,
         )
-        dev_pipeline_enabled = bool(os.getenv("DB_HOST_DEV"))
-        if dev_pipeline_enabled:
-            scheduler.add_job(
-                lambda: _job_run_dev_pipeline(logger),
-                CronTrigger(hour=0, minute=10, timezone="America/Sao_Paulo"),
-                id="dev_daily_pipeline",
-                misfire_grace_time=3600,
-            )
+        # O job dev_daily_pipeline foi REMOVIDO em 2026-08-01. Ele disparava um
+        # SEGUNDO pipeline completo no mesmo horario (00:10 BR), de dentro do
+        # processo de producao, sempre que DB_HOST_DEV existisse no ambiente --
+        # dobrando o consumo da API-Football pra alimentar um banco de
+        # homologacao. Homologar pipeline agora e' disparo manual: botao no
+        # /admin ou `DB_ENV=dev python main.py tudo`.
         scheduler.start()
         logger.info(
-            "[SCHEDULER] Iniciado - lembrete banca 1h | resolve picks 5min | "
-            "reconfere escanteios/cartoes 3h | "
-            "pipeline diario (motor) ATIVADO 00:10 BR | homologacao DEV %s",
-            "ATIVADO 00:10 BR" if dev_pipeline_enabled else "desativada (sem DB_HOST_DEV)",
+            "[SCHEDULER] Iniciado (SCHEDULER=on) - lembrete banca 1h | "
+            "resolve picks 5min | reconfere escanteios/cartoes 3h | "
+            "pipeline diario (motor) 00:10 BR"
         )
     except Exception as e:
         logger.error("[SCHEDULER] Falha ao iniciar: %s", e)
