@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState, ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import api from '../services/api'
 import { useAuth } from './AuthContext'
 
@@ -9,7 +9,35 @@ const LS_KEY = 'lastSeenPickId'
 // poll mais rápido quando a aba está de fato aberta.
 const POLL_INTERVAL = 60_000
 
+export type NotificationType = 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result'
+
+export interface AppNotification {
+  id: number
+  type: NotificationType
+  title: string
+  body: string | null
+  url: string | null
+  payload: Record<string, any>
+  read: boolean
+  created_at: string | null
+}
+
 interface NotificationCtx {
+  // Sino
+  items: AppNotification[]
+  unreadCount: number
+  loading: boolean
+  refresh: () => Promise<void>
+  markRead: (id: number) => Promise<void>
+  markAllRead: () => Promise<void>
+  /** Fechamento do mês passado ainda não visto · é o que dispara o popup automático. */
+  pendingMonthlyClose: AppNotification | null
+  /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
+  monthlyCloseOpen: boolean
+  openMonthlyClose: () => void
+  closeMonthlyClose: () => void
+
+  // Sinais legados (bolinha verde na navbar e badges em Picks.tsx)
   hasNew: boolean
   markSeen: () => void
   liveCount: number
@@ -18,6 +46,16 @@ interface NotificationCtx {
 }
 
 const NotificationContext = createContext<NotificationCtx>({
+  items: [],
+  unreadCount: 0,
+  loading: false,
+  refresh: async () => {},
+  markRead: async () => {},
+  markAllRead: async () => {},
+  pendingMonthlyClose: null,
+  monthlyCloseOpen: false,
+  openMonthlyClose: () => {},
+  closeMonthlyClose: () => {},
   hasNew: false,
   markSeen: () => {},
   liveCount: 0,
@@ -46,12 +84,27 @@ function sendBrowserNotification(count: number, teams: string) {
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
-  const [hasNew, setHasNew] = useState(false)
+  const [items, setItems]     = useState<AppNotification[]>([])
+  const [unreadCount, setUnread] = useState(0)
+  const [loading, setLoading] = useState(false)
+  const [hasNew, setHasNew]   = useState(false)
   const [liveCount, setLiveCount] = useState(0)
   const [hasLive, setHasLive] = useState(false)
   const latestIdRef = useRef(0)
   // IDs dos picks ao vivo já notificados nesta sessão
   const seenLiveIds = useRef<Set<string>>(new Set())
+
+  // Lista do sino
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api.get('/notifications')
+      setItems(r.data.items ?? [])
+      setUnread(r.data.unread_count ?? 0)
+    } catch {
+      // Falha de rede não pode zerar a lista nem "queimar" nada: mantém o que
+      // já está em tela e tenta de novo no próximo ciclo.
+    }
+  }, [])
 
   // Picks novos
   const checkNew = () => {
@@ -93,6 +146,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!user) {
+      setItems([])
+      setUnread(0)
       setHasNew(false)
       setLiveCount(0)
       setHasLive(false)
@@ -100,11 +155,27 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
       return
     }
     requestBrowserPermission()
+    setLoading(true)
+    refresh().finally(() => setLoading(false))
     checkNew()
     checkLive()
-    const timer = setInterval(() => { checkNew(); checkLive() }, POLL_INTERVAL)
+    // /live/my-picks é quem cria as notificações de "entrou em jogo" no
+    // servidor, então o refresh do sino vem depois dele no mesmo ciclo.
+    const timer = setInterval(() => { checkNew(); checkLive(); refresh() }, POLL_INTERVAL)
     return () => clearInterval(timer)
-  }, [user])
+  }, [user, refresh])
+
+  const markRead = useCallback(async (id: number) => {
+    setItems(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)))
+    setUnread(prev => Math.max(0, prev - 1))
+    try { await api.post(`/notifications/${id}/read`) } catch { await refresh() }
+  }, [refresh])
+
+  const markAllRead = useCallback(async () => {
+    setItems(prev => prev.map(n => ({ ...n, read: true })))
+    setUnread(0)
+    try { await api.post('/notifications/read-all') } catch { await refresh() }
+  }, [refresh])
 
   const markSeen = () => {
     if (latestIdRef.current > 0) localStorage.setItem(LS_KEY, String(latestIdRef.current))
@@ -113,8 +184,18 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   const clearLive = () => setHasLive(false)
 
+  const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
+
+  const [monthlyCloseOpen, setMonthlyCloseOpen] = useState(false)
+  const openMonthlyClose  = useCallback(() => setMonthlyCloseOpen(true), [])
+  const closeMonthlyClose = useCallback(() => setMonthlyCloseOpen(false), [])
+
   return (
-    <NotificationContext.Provider value={{ hasNew, markSeen, liveCount, hasLive, clearLive }}>
+    <NotificationContext.Provider value={{
+      items, unreadCount, loading, refresh, markRead, markAllRead, pendingMonthlyClose,
+      monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
+      hasNew, markSeen, liveCount, hasLive, clearLive,
+    }}>
       {children}
     </NotificationContext.Provider>
   )

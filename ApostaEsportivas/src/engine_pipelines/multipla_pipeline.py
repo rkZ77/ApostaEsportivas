@@ -102,7 +102,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     # marcada (troca de tecnico/elenco relevante) nao entram no historico --
     # ver teams.structural_change_date / MatchStatsService.get_structural_change_date.
     since_date = match_stats.get_structural_change_date(team_id)
-    if cp.is_national_team_league(league_id):
+    # Copa de clube usa o mesmo caminho que selecao desde 2026-08-01:
+    # a competicao nao acumula jogo suficiente pra sustentar analise
+    # sozinha (ver competition_profile.uses_all_competitions_history).
+    if cp.uses_all_competitions_history(league_id):
         return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 

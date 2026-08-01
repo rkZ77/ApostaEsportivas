@@ -189,6 +189,36 @@ def _job_run_daily_pipeline(logger: logging.Logger):
                     )
                 except Exception as push_err:
                     logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", push_err)
+
+                # In-app: o push some da bandeja e nao volta, o item do sino fica
+                # pra quem so abriu o site mais tarde (ou nunca aceitou push).
+                try:
+                    from datetime import datetime as _dt
+                    from zoneinfo import ZoneInfo
+
+                    from routers.notifications import TYPE_NEW_PICKS, notify_all_users
+
+                    today_key = _dt.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
+                    created = notify_all_users(
+                        TYPE_NEW_PICKS,
+                        title="Picks do dia publicados",
+                        dedupe_key=f"new_picks:{today_key}",
+                        body="Os picks de hoje ja estao disponiveis.",
+                        url="/picks",
+                        payload={"date": today_key},
+                    )
+                    logger.info("[NOTIF] Picks do dia: %d notificacoes criadas.", created)
+                except Exception as notif_err:
+                    logger.warning("[NOTIF] Erro ao criar notificacoes pos-pipeline: %s", notif_err)
+
+                try:
+                    from routers.notifications import purge_old_notifications
+
+                    removed = purge_old_notifications()
+                    if removed:
+                        logger.info("[NOTIF] %d notificacoes antigas descartadas.", removed)
+                except Exception as purge_err:
+                    logger.warning("[NOTIF] Erro na limpeza de notificacoes: %s", purge_err)
     except Exception as e:
         logger.error("[SCHEDULER] Erro no pipeline diario: %s", e)
         _send_pipeline_failure_alert(logger, str(e))

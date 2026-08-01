@@ -202,6 +202,29 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_withdrawals_user ON banca_withdrawals(user_id, created_at DESC);")
+        # Central de notificacoes in-app (o sino da navbar). dedupe_key e' o que
+        # impede o mesmo evento de virar duas linhas quando o gerador roda de
+        # novo -- resultado corrigido por revisao tardia do provedor, poll de
+        # /live/my-picks batendo a cada 60s, fechamento mensal recalculado a
+        # cada request. Sempre criar via create_notification() em
+        # routers/notifications.py, nunca com INSERT solto.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS notifications (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                type        VARCHAR(30)  NOT NULL,
+                title       VARCHAR(160) NOT NULL,
+                body        TEXT,
+                url         VARCHAR(200),
+                payload     JSONB,
+                dedupe_key  VARCHAR(120) NOT NULL,
+                read_at     TIMESTAMP,
+                created_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, dedupe_key)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id) WHERE read_at IS NULL;")
         conn.commit()
         return True
     except Exception as e:

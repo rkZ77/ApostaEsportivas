@@ -7,6 +7,7 @@ import {
   LogOut, Menu, X, BookOpen, MessageCircle,
 } from 'lucide-react'
 import Avatar from './Avatar'
+import NotificationBell from './NotificationBell'
 
 const WA_SUPPORT_LINK =
   'https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA.'
@@ -104,6 +105,10 @@ export default function Navbar() {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Sino · qualquer largura, mas só logado (Navbar também roda em
+                páginas públicas como Blog e Resultados) */}
+            {user && <NotificationBell />}
+
             {/* Avatar dropdown · desktop */}
             <div className="relative hidden sm:block">
               <button

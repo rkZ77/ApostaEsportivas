@@ -140,6 +140,61 @@ def run_migrations():
             first_seen        TIMESTAMP DEFAULT NOW(),
             last_seen         TIMESTAMP DEFAULT NOW()
         );""",
+        # Estatistica POR JOGADOR por jogo (2026-08-01). Ate agora o projeto
+        # so tinha numero agregado por time em match_statistics -- nao existia
+        # nenhuma entidade de jogador no banco. Vem de /fixtures/players da
+        # API-Football.
+        #
+        # Destrava dois mercados pedidos pelo usuario:
+        # - faltas por jogador (fouls_committed / fouls_drawn)
+        # - defesas POR GOLEIRO (saves), hoje so' disponivel somado por time
+        #   em match_statistics.home_goalkeeper_saves -- com isso o
+        #   goalkeeper_model deixa de assumir que o time so' usou um goleiro.
+        #
+        # raw guarda o bloco de statistics original: a API muda/adiciona campo
+        # sem avisar, e reprocessar do raw e' mais barato que recoletar.
+        """CREATE TABLE IF NOT EXISTS player_match_stats (
+            id               BIGSERIAL PRIMARY KEY,
+            fixture_id       BIGINT  NOT NULL,
+            player_id        BIGINT  NOT NULL,
+            player_name      TEXT,
+            team_id          BIGINT,
+            team_name        TEXT,
+            league_id        INTEGER,
+            season           INTEGER,
+            match_date       DATE,
+            position         TEXT,
+            minutes          INTEGER,
+            rating           NUMERIC,
+            is_substitute    BOOLEAN,
+            shots_total      INTEGER,
+            shots_on         INTEGER,
+            goals_total      INTEGER,
+            goals_conceded   INTEGER,
+            assists          INTEGER,
+            saves            INTEGER,
+            passes_total     INTEGER,
+            passes_key       INTEGER,
+            tackles_total    INTEGER,
+            blocks           INTEGER,
+            interceptions    INTEGER,
+            duels_total      INTEGER,
+            duels_won        INTEGER,
+            dribbles_attempts INTEGER,
+            dribbles_success INTEGER,
+            fouls_drawn      INTEGER,
+            fouls_committed  INTEGER,
+            cards_yellow     INTEGER,
+            cards_red        INTEGER,
+            raw              JSONB,
+            created_at       TIMESTAMP DEFAULT NOW(),
+            UNIQUE (fixture_id, player_id)
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_pms_player_date ON player_match_stats (player_id, match_date DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_pms_team_date   ON player_match_stats (team_id, match_date DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_pms_fixture     ON player_match_stats (fixture_id);",
+        # Goleiro com defesas > 0 e' o recorte quente do modelo de defesas.
+        "CREATE INDEX IF NOT EXISTS idx_pms_saves ON player_match_stats (player_id, match_date DESC) WHERE saves IS NOT NULL;",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -182,6 +237,17 @@ def cmd_dados(mode: str = "fast"):
 def cmd_odds():
     from capturar_odds import OddsMain
     OddsMain().run()
+
+
+def cmd_player_stats(limite: str = "50"):
+    """Estatistica por jogador dos jogos ja encerrados que ainda nao tem.
+
+    Fora do cmd_tudo de proposito: consome 1 requisicao da API por fixture, e
+    a cota diaria ja e' disputada com a coleta de odds. Rodar sob demanda,
+    ajustando o limite conforme a cota disponivel no dia.
+    """
+    from collectors.player_stats_collector_service import PlayerStatsCollectorService
+    PlayerStatsCollectorService().coletar_pendentes(limite=int(limite))
 
 
 def cmd_vip():
@@ -301,6 +367,9 @@ if __name__ == "__main__":
 
     elif cmd == "odds":
         cmd_odds()
+
+    elif cmd == "player_stats":
+        cmd_player_stats(extra or "50")
 
     elif cmd == "vip":
         cmd_vip()

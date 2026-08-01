@@ -14,6 +14,7 @@ import { TeamLogo } from '../components/TeamLogo'
 import BackButton from '../components/BackButton'
 import FilterPanel from '../components/FilterPanel'
 import NumberTicker from '../components/ui/NumberTicker'
+import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -724,6 +725,8 @@ export default function Banca() {
                 </div>
               )
             })()}
+
+            <MonthlyCloseSection />
 
           </div>
         )}
