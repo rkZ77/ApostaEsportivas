@@ -26,6 +26,7 @@ for _key in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "DB_SSLMODE"
 os.environ["DB_ENV"] = "dev"
 
 from utils.db_utils import get_connection
+from utils.paths import log_path
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.pick_engine import (
@@ -49,7 +50,7 @@ _LEAGUE_PRIORITY = {
     61: 9, 94: 10, 88: 11, 13: 12, 11: 13, 71: 14, 72: 15,
 }
 
-_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "dica_homologation.jsonl")
+_LOG_PATH = log_path("dica_homologation.jsonl")
 
 
 def _fixtures_with_odds_in_range(cur) -> list:

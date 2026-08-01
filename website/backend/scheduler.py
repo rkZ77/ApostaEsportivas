@@ -4,6 +4,8 @@ import os
 
 import resend
 
+from runtime_env import side_effects_enabled, side_effects_note
+
 
 async def _job_expire_plans(logger: logging.Logger):
     while True:
@@ -28,6 +30,9 @@ async def _job_expire_plans(logger: logging.Logger):
 
 
 def start_expire_plans_task(logger: logging.Logger) -> None:
+    if not side_effects_enabled():
+        logger.info("[EXPIRE-PLANS] Nao iniciado - %s", side_effects_note())
+        return
     asyncio.create_task(_job_expire_plans(logger))
 
 
@@ -150,28 +155,70 @@ def _job_reverify_stats(logger: logging.Logger):
 
 def _job_run_daily_pipeline(logger: logging.Logger):
     try:
+        from database import LOCK_DAILY_PIPELINE, advisory_lock
         from routers.admin import _pipeline_status, _run_tudo
 
+        # _pipeline_status e' memoria do processo: so enxerga disparo duplicado
+        # dentro desta instancia. A trava no banco cobre o caso de dois
+        # processos distintos apontando pro mesmo banco (ver advisory_lock).
         if _pipeline_status.get("tudo", {}).get("status") == "running":
             logger.info("[SCHEDULER] Pipeline diario ja esta rodando, ignorando disparo duplicado.")
             return
-        logger.info("[SCHEDULER] Iniciando pipeline diario (00:10 BR)...")
-        asyncio.run(_run_tudo())
-        status = _pipeline_status.get("tudo", {})
-        if status.get("status") == "error":
-            logger.error("[SCHEDULER] Pipeline diario falhou: %s", status.get("error"))
-            _send_pipeline_failure_alert(logger, status.get("error") or "erro desconhecido")
-        else:
-            try:
-                from routers.notifications import send_push_to_all_vip
 
-                send_push_to_all_vip(
-                    title="Picks do dia publicados",
-                    body="Seus picks de hoje estao disponiveis. Confira agora!",
-                    url="/picks",
+        with advisory_lock(LOCK_DAILY_PIPELINE) as got_lock:
+            if not got_lock:
+                logger.warning(
+                    "[SCHEDULER] Outro processo ja esta rodando o pipeline diario "
+                    "neste banco. Ignorando este disparo."
                 )
-            except Exception as push_err:
-                logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", push_err)
+                return
+            logger.info("[SCHEDULER] Iniciando pipeline diario (00:10 BR)...")
+            asyncio.run(_run_tudo())
+            status = _pipeline_status.get("tudo", {})
+            if status.get("status") == "error":
+                logger.error("[SCHEDULER] Pipeline diario falhou: %s", status.get("error"))
+                _send_pipeline_failure_alert(logger, status.get("error") or "erro desconhecido")
+            else:
+                try:
+                    from routers.notifications import send_push_to_all_vip
+
+                    send_push_to_all_vip(
+                        title="Picks do dia publicados",
+                        body="Seus picks de hoje estao disponiveis. Confira agora!",
+                        url="/picks",
+                    )
+                except Exception as push_err:
+                    logger.warning("[PUSH] Erro ao enviar push pos-pipeline: %s", push_err)
+
+                # In-app: o push some da bandeja e nao volta, o item do sino fica
+                # pra quem so abriu o site mais tarde (ou nunca aceitou push).
+                try:
+                    from datetime import datetime as _dt
+                    from zoneinfo import ZoneInfo
+
+                    from routers.notifications import TYPE_NEW_PICKS, notify_all_users
+
+                    today_key = _dt.now(ZoneInfo("America/Sao_Paulo")).date().isoformat()
+                    created = notify_all_users(
+                        TYPE_NEW_PICKS,
+                        title="Picks do dia publicados",
+                        dedupe_key=f"new_picks:{today_key}",
+                        body="Os picks de hoje ja estao disponiveis.",
+                        url="/picks",
+                        payload={"date": today_key},
+                    )
+                    logger.info("[NOTIF] Picks do dia: %d notificacoes criadas.", created)
+                except Exception as notif_err:
+                    logger.warning("[NOTIF] Erro ao criar notificacoes pos-pipeline: %s", notif_err)
+
+                try:
+                    from routers.notifications import purge_old_notifications
+
+                    removed = purge_old_notifications()
+                    if removed:
+                        logger.info("[NOTIF] %d notificacoes antigas descartadas.", removed)
+                except Exception as purge_err:
+                    logger.warning("[NOTIF] Erro na limpeza de notificacoes: %s", purge_err)
     except Exception as e:
         logger.error("[SCHEDULER] Erro no pipeline diario: %s", e)
         _send_pipeline_failure_alert(logger, str(e))
@@ -194,6 +241,13 @@ def _job_run_dev_pipeline(logger: logging.Logger):
 
 
 def start_background_scheduler(logger: logging.Logger) -> None:
+    # Staging (noprod) aponta pro banco de producao de proposito. Se o
+    # scheduler subisse la tambem, os jobs abaixo rodariam em duplicidade nas
+    # tabelas reais e mandariam e-mail/push pros usuarios reais. Ver
+    # runtime_env.py.
+    if not side_effects_enabled():
+        logger.info("[SCHEDULER] Nao iniciado - %s", side_effects_note())
+        return
     try:
         from apscheduler.schedulers.background import BackgroundScheduler
         from apscheduler.triggers.cron import CronTrigger

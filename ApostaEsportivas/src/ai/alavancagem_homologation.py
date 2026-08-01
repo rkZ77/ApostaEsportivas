@@ -30,6 +30,7 @@ os.environ["DB_ENV"] = "dev"
 
 from datetime import datetime
 from utils.db_utils import get_connection
+from utils.paths import log_path
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.pick_engine import (
@@ -51,7 +52,7 @@ ODD_INDIVIDUAL_MAX = 1.65
 MAX_FIXTURES = 15
 MAX_CANDIDATES_FOR_COMBO = 12
 
-_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "alavancagem_homologation.jsonl")
+_LOG_PATH = log_path("alavancagem_homologation.jsonl")
 
 
 def _wc_fixtures_with_odds(cur) -> list:

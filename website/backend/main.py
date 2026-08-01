@@ -22,6 +22,7 @@ load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, public, social, suggestions
+from runtime_env import side_effects_note
 from scheduler import start_background_scheduler, start_expire_plans_task
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
@@ -254,6 +255,7 @@ async def start_expire_plans():
 
 @app.on_event("startup")
 def run_migrations_and_scheduler():
+    logger.info("[STARTUP] %s", side_effects_note())
     if run_startup_migrations(logger):
         start_background_scheduler(logger)
 

@@ -17,14 +17,16 @@ from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
-from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake -- classe nunca e instanciada aqui, so o @staticmethod, entao o client Anthropic (criado em __init__) nunca e construido
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine.ai_review import review_gate
+from services.pick_engine.staking import calculate_stake
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
+
 
 ODD_TOTAL_MIN = 2.00
 ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
@@ -100,7 +102,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     # marcada (troca de tecnico/elenco relevante) nao entram no historico --
     # ver teams.structural_change_date / MatchStatsService.get_structural_change_date.
     since_date = match_stats.get_structural_change_date(team_id)
-    if cp.is_national_team_league(league_id):
+    # Copa de clube usa o mesmo caminho que selecao desde 2026-08-01:
+    # a competicao nao acumula jogo suficiente pra sustentar analise
+    # sozinha (ver competition_profile.uses_all_competitions_history).
+    if cp.uses_all_competitions_history(league_id):
         return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
@@ -163,8 +168,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             for p in picks:
                 if (fixture["fixture_id"], p["market_type"]) in used_pairs:
                     continue
-                p["_fixture"] = fixture
-                legs.append(p)
+                legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
         except Exception as e:
             print(f"[MULTIPLA_ENGINE] Erro no fixture {fixture['fixture_id']}, pulando: {e}")
@@ -222,11 +226,12 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
             "bet_house": p["best_bookmaker"],
             "confidence": p["confidence"],
             "prob_real": p["taxa_real"],
+            "ai_review": p.get("ai_review"),
         })
 
     match_date = min(p["_fixture"]["match_datetime"] for p in legs).date()
     reasoning = " | ".join(explain(p) for p in legs)
-    stake_pct, stake_units = AISuggestionsService.calculate_stake(
+    stake_pct, stake_units = calculate_stake(
         confidence=score_combo, odd=odd_total, pick_type="multipla",
     )
 
@@ -283,6 +288,13 @@ def run_multipla_engine():
         return
 
     combo, score_combo, odd_total = result
+    reviewed = review_gate("multipla").apply(list(combo), "multipla")
+    if not reviewed:
+        print("[MULTIPLA_ENGINE] Combinacao vetada pela revisao de IA.")
+        cur.close()
+        conn.close()
+        return
+    combo = tuple(reviewed)
     _save_multipla(cur, combo, score_combo, odd_total)
     conn.commit()
     cur.close()

@@ -801,6 +801,11 @@ def _sync_followed_result(pick_id: int, pick_type: str, result: str, c) -> None:
         "UPDATE user_followed_picks SET result=%s WHERE pick_id=%s AND pick_type=%s",
         (result, pick_id, pick_type),
     )
+    # Ponto único por onde todo resultado passa (auto-save ao vivo, encerramento
+    # e revisão tardia do provedor), então o sino é alimentado aqui em vez de nos
+    # 6 call sites. notify_pick_result engole as próprias exceções.
+    from routers.notifications import notify_pick_result
+    notify_pick_result(c, pick_id, pick_type, result)
 
 
 def _save_single_result(pick_id: int, pick_type: str, result: str, odd: float, conn) -> None:
@@ -1362,6 +1367,14 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 })
 
     conn.close()
+
+    # Picks que entraram em jogo viram item no sino. Só abre conexão quando há
+    # de fato algo ao vivo · este endpoint é chamado a cada 60s por usuário
+    # logado (NotificationContext) e na maior parte do dia a lista é vazia.
+    live_now = [p for p in result if p.get("is_live") and not p.get("result")]
+    if live_now:
+        from routers.notifications import notify_picks_went_live
+        notify_picks_went_live(user_id, live_now)
 
     # Live picks first, then by date
     result.sort(key=lambda x: (0 if x.get("is_live") else 1, x.get("match_date", "")))

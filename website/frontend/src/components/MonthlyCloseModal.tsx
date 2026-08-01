@@ -4,23 +4,12 @@ import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, A
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
+import { useNotifications } from '../context/NotificationContext'
 
-function getLastMonthKey(): string {
-  const now = new Date()
-  const y = now.getMonth() === 0 ? now.getFullYear() - 1 : now.getFullYear()
-  const m = now.getMonth() === 0 ? 12 : now.getMonth()
-  return `${y}-${String(m).padStart(2, '0')}`
-}
-
-const LS_KEY = 'pickia_monthly_close'
-
-export function shouldShowMonthlyClose(): boolean {
-  return localStorage.getItem(LS_KEY) !== getLastMonthKey()
-}
-
-export function dismissMonthlyClose() {
-  localStorage.setItem(LS_KEY, getLastMonthKey())
-}
+// Quem decide se este modal aparece é a notificação `monthly_close` do
+// servidor, não mais um localStorage por navegador. O modelo antigo perdia o
+// fechamento pra sempre quando o usuário fechava o popup (ou quando a chamada
+// falhava), e reabria de novo em cada aparelho diferente.
 
 interface AlavancagemMonthData {
   configured: boolean
@@ -84,9 +73,11 @@ interface Props {
 
 export default function MonthlyCloseModal({ onClose }: Props) {
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
+  const { pendingMonthlyClose, markRead, refresh } = useNotifications()
 
   const [data, setData]       = useState<CloseData | null>(isPreview ? MOCK_DATA : null)
   const [loading, setLoading] = useState(!isPreview)
+  const [failed, setFailed]   = useState(false)
   const [step, setStep]       = useState<Step>('summary')
   const [newBanca, setNewBanca] = useState('')
   const [saving, setSaving]   = useState(false)
@@ -97,13 +88,10 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   useEffect(() => {
     if (isPreview) return
     api.get('/banca/monthly-close')
-      .then(r => {
-        // Já fechado em outro dispositivo/sessão neste mês · não reabre o popup
-        // nem arrisca sobrescrever o registro histórico com uma nova confirmação.
-        if (r.data.already_closed) { dismissMonthlyClose(); onClose(); return }
-        setData(r.data)
-      })
-      .catch(() => { dismissMonthlyClose(); onClose() })
+      .then(r => setData(r.data))
+      // Erro de rede/servidor não pode mais "queimar" o mês: nada é marcado
+      // como visto, então o fechamento continua no sino pra tentar de novo.
+      .catch(() => setFailed(true))
       .finally(() => setLoading(false))
   }, [])
 
@@ -118,7 +106,12 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     return () => clearTimeout(t)
   }, [step])
 
-  const handleClose = () => { dismissMonthlyClose(); onClose() }
+  // Fechar marca a notificação como lida (não reabre sozinho), mas ela continua
+  // no sino: enquanto a banca não for confirmada, o fechamento segue acessível.
+  const handleClose = () => {
+    if (pendingMonthlyClose) markRead(pendingMonthlyClose.id)
+    onClose()
+  }
 
   const parseBanca = () => {
     const raw = newBanca.replace(/\./g, '').replace(',', '.')
@@ -138,6 +131,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
       })
       setSavedValue(data.bankroll_current)
       setStep('success')
+      refresh()
     } catch { }
     finally { setSaving(false) }
   }
@@ -157,6 +151,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
       })
       setSavedValue(value)
       setStep('success')
+      refresh()
     } catch { }
     finally { setSaving(false) }
   }
@@ -184,12 +179,46 @@ export default function MonthlyCloseModal({ onClose }: Props) {
   if (loading) return null
 
   const hasAlavActivity = !!data?.alavancagem && (data.alavancagem.greens_this_month > 0 || data.alavancagem.reds_this_month > 0)
-  if (!data || (data.total_followed === 0 && !hasAlavActivity)) {
-    dismissMonthlyClose()
-    onClose()
-    return null
+
+  // Estado vazio explícito em vez de fechar sozinho: o modal também é aberto
+  // de propósito (sino e página Banca), e um popup que abre e some sem dizer
+  // nada parece bug.
+  if (failed || !data || (data.total_followed === 0 && !hasAlavActivity)) {
+    return (
+      <motion.div
+        variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+        className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center"
+      >
+        <motion.div variants={sheetUp} className="bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
+          <div className="px-5 pt-5 pb-2 flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[10px] font-black text-zinc-500 uppercase mb-0.5">Fechamento mensal</p>
+              <h2 className="text-white font-black text-xl">{data?.month_label ?? 'Mês passado'}</h2>
+            </div>
+            <button
+              onClick={failed ? onClose : handleClose}
+              aria-label="Fechar"
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-zinc-800 text-zinc-500 hover:text-white transition-colors shrink-0"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+          <p className="px-5 pb-5 text-sm text-zinc-400 leading-relaxed">
+            {failed
+              ? 'Não foi possível carregar seu fechamento agora. Ele continua no sino, tente de novo em instantes.'
+              : 'Você não seguiu nenhum pick nesse mês, então não há fechamento pra confirmar.'}
+          </p>
+          <div className="px-5 pb-6">
+            <button onClick={failed ? onClose : handleClose} className="btn-ghost w-full py-3 text-sm">
+              Fechar
+            </button>
+          </div>
+        </motion.div>
+      </motion.div>
+    )
   }
 
+  const readOnly  = data.already_closed
   const isProfit  = data.total_pnl >= 0
   const pnlAbs    = Math.abs(data.total_pnl)
   const ganhoU    = data.unit_value > 0 ? data.total_pnl / data.unit_value : 0
@@ -342,33 +371,49 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 {copied ? 'Copiado!' : 'Compartilhar resultado'}
               </button>
 
-              {/* Atualizar com o lucro · salva direto */}
-              <button
-                onClick={handleUpdateDirect}
-                disabled={saving}
-                className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
-              >
-                {saving
-                  ? 'Atualizando...'
-                  : <><span className="truncate">Atualizar banca para {fmtBRL(data.bankroll_current)}</span><ChevronRight className="w-4 h-4 shrink-0" /></>
-                }
-              </button>
+              {/* Já confirmado (aqui ou em outro aparelho): vira consulta. Reabrir a
+                  edição sobrescreveria o registro histórico do mês. */}
+              {readOnly ? (
+                <>
+                  <div className="flex items-center gap-2 justify-center text-zinc-500 text-xs font-semibold py-1">
+                    <Check className="w-4 h-4 shrink-0 text-green-500" />
+                    Banca já atualizada para esse fechamento
+                  </div>
+                  <button onClick={handleClose} className="btn-ghost w-full py-3 text-sm">
+                    Fechar
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* Atualizar com o lucro · salva direto */}
+                  <button
+                    onClick={handleUpdateDirect}
+                    disabled={saving}
+                    className="btn-primary w-full py-3 text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                  >
+                    {saving
+                      ? 'Atualizando...'
+                      : <><span className="truncate">Atualizar banca para {fmtBRL(data.bankroll_current)}</span><ChevronRight className="w-4 h-4 shrink-0" /></>
+                    }
+                  </button>
 
-              {/* Definir outro valor · abre input */}
-              <button
-                onClick={() => { setNewBanca(''); setStep('edit') }}
-                className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
-              >
-                Definir outro valor de banca
-                <ChevronRight className="w-4 h-4 shrink-0" />
-              </button>
+                  {/* Definir outro valor · abre input */}
+                  <button
+                    onClick={() => { setNewBanca(''); setStep('edit') }}
+                    className="btn-ghost w-full py-3 text-sm flex items-center justify-center gap-2"
+                  >
+                    Definir outro valor de banca
+                    <ChevronRight className="w-4 h-4 shrink-0" />
+                  </button>
 
-              <button
-                onClick={handleClose}
-                className="w-full py-2.5 text-zinc-600 hover:text-zinc-400 text-sm font-semibold transition-colors"
-              >
-                Fechar sem alterar
-              </button>
+                  <button
+                    onClick={handleClose}
+                    className="w-full py-2.5 text-zinc-600 hover:text-zinc-400 text-sm font-semibold transition-colors"
+                  >
+                    Fechar sem alterar
+                  </button>
+                </>
+              )}
             </div>
           </motion.div>
         )}

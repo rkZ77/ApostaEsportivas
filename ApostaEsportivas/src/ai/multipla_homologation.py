@@ -29,6 +29,7 @@ os.environ["DB_ENV"] = "dev"
 
 from datetime import datetime
 from utils.db_utils import get_connection
+from utils.paths import log_path
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -48,7 +49,7 @@ ODD_TOTAL_MAX = 3.00
 MAX_FIXTURES = 4
 MAX_CANDIDATES_FOR_COMBO = 12
 
-_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "multipla_homologation.jsonl")
+_LOG_PATH = log_path("multipla_homologation.jsonl")
 
 
 def _today_used_pairs(cur) -> set:

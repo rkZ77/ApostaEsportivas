@@ -11,9 +11,10 @@ from utils.db_utils import get_connection
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
-from ai.ai_suggestions_service import AISuggestionsService  # so o staticmethod calculate_stake
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import DICA_CONFIG
+from services.pick_engine.staking import calculate_stake
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -22,6 +23,7 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import ranking
 from services.referee_stats_service import RefereeStatsService
 from engine_pipelines.decision_log import log_decision
+
 
 WC_LEAGUE_ID = 1
 ODD_MIN = 1.39
@@ -91,7 +93,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     # marcada (troca de tecnico/elenco relevante) nao entram no historico --
     # ver teams.structural_change_date / MatchStatsService.get_structural_change_date.
     since_date = match_stats.get_structural_change_date(team_id)
-    if cp.is_national_team_league(league_id):
+    # Copa de clube usa o mesmo caminho que selecao desde 2026-08-01:
+    # a competicao nao acumula jogo suficiente pra sustentar analise
+    # sozinha (ver competition_profile.uses_all_competitions_history).
+    if cp.uses_all_competitions_history(league_id):
         return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
@@ -159,7 +164,7 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
 
         pick = next((p for p in picks if p.get("is_best_pick")), picks[0])
         if best_pick is None or pick["final_score"] > best_pick["final_score"]:
-            best_fixture, best_pick, best_quality = fixture, pick, quality["score"]
+            best_fixture, best_pick, best_quality = fixture, {**pick, "data_quality_score": quality["score"]}, quality["score"]
 
     if best_pick is None:
         return None
@@ -167,15 +172,17 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
 
 
 def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None):
-    stake_pct, stake_units = AISuggestionsService.calculate_stake(
+    stake_pct, stake_units = calculate_stake(
         confidence=pick["confidence"], odd=pick["odd"], ev=pick["ev"], pick_type="free",
     )
     reasoning = explain(pick)
     # Retrato do candidato no momento da escolha -- mesma logica de
     # engine_pipelines/vip_pipeline.py::_save_pick, usado depois por
     # services/pick_engine/red_analysis.py + calibration.py.
+    engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
+    engine_debug_data["ai_review"] = pick.get("ai_review")
     engine_debug = json.dumps(
-        homologation.build_score_breakdown_section(pick, data_quality_score),
+        engine_debug_data,
         default=str, ensure_ascii=False,
     )
 
@@ -249,6 +256,13 @@ def run_dica_engine():
         return
 
     fixture, pick, quality_score = result
+    reviewed = review_gate("dica").apply([pick], "dica", fixture)
+    if not reviewed:
+        print("[DICA_ENGINE] Pick vetado pela revisao de IA.")
+        cur.close()
+        conn.close()
+        return
+    pick = reviewed[0]
     _save_pick(cur, fixture, pick, quality_score)
     conn.commit()
     cur.close()

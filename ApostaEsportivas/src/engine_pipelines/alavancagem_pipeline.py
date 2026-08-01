@@ -25,12 +25,14 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
+
 
 # Alvo real da alavancagem ("odd 1.50"): 2-3 pernas de odd individual bem
 # baixa somando ~1.50 de odd combinada -- pedido explicito do usuario
@@ -118,7 +120,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     # marcada (troca de tecnico/elenco relevante) nao entram no historico --
     # ver teams.structural_change_date / MatchStatsService.get_structural_change_date.
     since_date = match_stats.get_structural_change_date(team_id)
-    if cp.is_national_team_league(league_id):
+    # Copa de clube usa o mesmo caminho que selecao desde 2026-08-01:
+    # a competicao nao acumula jogo suficiente pra sustentar analise
+    # sozinha (ver competition_profile.uses_all_competitions_history).
+    if cp.uses_all_competitions_history(league_id):
         return match_stats.get_last_n_all_competitions(team_id, since_date=since_date)
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
@@ -180,8 +185,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
             for p in picks:
                 if not (ODD_INDIVIDUAL_MIN <= p["odd"] <= ODD_INDIVIDUAL_MAX):
                     continue
-                p["_fixture"] = fixture
-                legs.append(p)
+                legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
         except Exception as e:
             print(f"[ALAVANCAGEM_ENGINE] Erro no fixture {fixture['fixture_id']}, pulando: {e}")
@@ -288,6 +292,13 @@ def run_alavancagem_engine():
         return
 
     combo, confidence_media, odd_combined = result
+    reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
+    if not reviewed:
+        print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")
+        cur.close()
+        conn.close()
+        return
+    combo = tuple(reviewed)
     tipo = _save_pick(cur, combo, confidence_media, odd_combined)
     conn.commit()
     cur.close()

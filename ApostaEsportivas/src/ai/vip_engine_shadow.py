@@ -29,6 +29,7 @@ for _key in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "DB_SSLMODE"
 os.environ["DB_ENV"] = "dev"
 
 from utils.db_utils import get_connection
+from utils.paths import log_path
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.pick_engine import (
@@ -42,7 +43,7 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import homologation as homolog
 from ai._homologation_common import append_jsonl, fetch_ai_pick_for_fixture
 
-_LOG_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "logs", "vip_engine_shadow.jsonl")
+_LOG_PATH = log_path("vip_engine_shadow.jsonl")
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:

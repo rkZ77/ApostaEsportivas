@@ -1,6 +1,15 @@
+# Dependencias do pipeline (ApostaEsportivas/src), pra rodar na maquina local.
+#
+# Em producao este arquivo NAO e' instalado: o Dockerfile copia src/ pra
+# /app/pipeline e o pipeline roda como subprocesso dentro do container do
+# backend, usando o que website/backend/requirements.txt instalou. Se entrar
+# dependencia nova aqui, ela precisa entrar la tambem.
+#
+# A lista anterior (httpx, pandas, numpy, scipy, playwright) nao tinha um
+# unico import no codigo -- era heranca de uma fase antiga do projeto.
+
+anthropic
+openai         # so services/league_analysis_service.py (comando "ligas")
+psycopg2-binary
+python-dotenv
 requests
-httpx
-pandas
-numpy
-scipy
-playwright

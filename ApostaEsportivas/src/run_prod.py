@@ -1,5 +1,18 @@
 """
-Wrapper prod: mapeia DB_HOST_PROD -> DB_HOST etc. e oferece menu interativo.
+Wrapper prod: mapeia DB_HOST_PROD -> DB_HOST etc. e oferece menu interativo
+(espelha run_dev.py). Com DB_ENV=prod, main.py::cmd_vip/cmd_dica/
+cmd_multiplas/cmd_alavancagem já roteiam sozinhos pro motor determinístico
+(engine_pipelines/ + services/pick_engine/) -- este wrapper só delega pra lá,
+sem duplicar lógica de dispatch.
+
+Até 2026-07-29 este arquivo tinha o próprio mapa de comandos, e ele ficou
+para trás no corte de IA em produção (2026-07-17): as opções "Gerar picks
+VIP", "Free", "múltipla" e "alavancagem" ainda importavam
+gerar_sugestao_vip.py / ai/*.py, ou seja, chamavam a Anthropic de verdade
+(custo real) em vez do motor. Mesmo bug que já tinha sido corrigido em
+routers/admin.py::_PIPELINE_SCRIPTS. Delegar pro main.py evita que aconteça
+uma terceira vez.
+
 Uso: python run_prod.py [comando]
      python run_prod.py          <- menu interativo
 """
@@ -21,15 +34,20 @@ for key in ("DB_HOST", "DB_PORT", "DB_NAME", "DB_USER", "DB_PASS", "DB_SSLMODE")
 
 os.environ["DB_ENV"] = "prod"
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import main as main_module  # noqa: E402  (import após setar DB_ENV)
+
 OPCOES = {
-    "1": ("Atualizar jogos (completo)",       "atualizar_jogos"),
-    "2": ("Capturar odds",                    "capturar_odds"),
-    "3": ("Gerar picks VIP",                  "gerar_vip"),
-    "4": ("Gerar pick Free (Dica do Dia)",    "gerar_free"),
-    "5": ("Gerar múltipla",                   "gerar_multipla"),
-    "6": ("Gerar alavancagem",                "gerar_alavancagem"),
-    "7": ("Atualizar resultados (VIP+Free+Mult+Alav)", "atualizar_resultados"),
+    "1": ("Atualizar jogos (completo)",       "dados"),
+    "2": ("Capturar odds",                    "odds"),
+    "3": ("Gerar picks VIP (motor)",          "vip"),
+    "4": ("Gerar pick Free (motor)",          "dica"),
+    "5": ("Gerar múltipla (motor)",           "multiplas"),
+    "6": ("Gerar alavancagem (motor)",        "alavancagem"),
+    "7": ("Atualizar resultados (VIP+Free+Mult+Alav)", "resultados"),
     "8": ("Tudo: jogos + odds + picks",       "tudo"),
+    "9": ("Estatistica de jogador (API)",    "player_stats"),
 }
 
 
@@ -44,76 +62,36 @@ def menu():
     return input("Escolha: ").strip()
 
 
-def run(script, args=None):
-    args = args or []
-
-    if script == "atualizar_jogos":
-        from atualizar_jogos import DataCollectorMain
-        collector = DataCollectorMain()
-        if not args:
-            collector.run_all()
-        else:
-            sys.argv = ["atualizar_jogos.py"] + args
-            import importlib.util, pathlib
-            spec = importlib.util.spec_from_file_location(
-                "atualizar_jogos",
-                pathlib.Path(__file__).parent / "atualizar_jogos.py"
-            )
-            mod = importlib.util.module_from_spec(spec)
-            spec.loader.exec_module(mod)
-
-    elif script == "capturar_odds":
-        from capturar_odds import OddsMain
-        OddsMain().run()
-
-    elif script == "gerar_vip":
-        from gerar_sugestao_vip import AIVipSuggestionsMain
-        AIVipSuggestionsMain().generate_vip_suggestions()
-
-    elif script == "gerar_free":
-        from ai.dica_do_dia_pipeline import run_dica_pipeline
-        result = run_dica_pipeline()
-        if result is None:
-            print("[MAIN] Nenhuma dica gerada hoje.")
-        else:
-            print(f"[MAIN] Dica: {result.get('home_team')} x {result.get('away_team')} | {result.get('market')} {result.get('line')} | odd {result.get('odd')}")
-
-    elif script == "gerar_multipla":
-        from gerar_sugestao_multiplas import MultiplaMain
-        MultiplaMain().run()
-
-    elif script == "gerar_alavancagem":
-        from ai.alavancagem_pipeline import run_alavancagem_pipeline
-        result = run_alavancagem_pipeline()
-        if result:
-            print("✅ Pick de alavancagem gerado com sucesso.")
-
-    elif script == "atualizar_resultados":
-        from atualizar_resultados_sugestoes import AIUpdateResultsMain
-        AIUpdateResultsMain().update_all_results()
-
-    elif script == "tudo":
-        print("\n>>> Atualizando jogos...")
-        run("atualizar_jogos")
-        print("\n>>> Capturando odds...")
-        run("capturar_odds")
-        print("\n>>> Gerando picks VIP...")
-        run("gerar_vip")
-        print("\n>>> Gerando pick Free...")
-        run("gerar_free")
-        print("\n>>> Gerando múltipla...")
-        run("gerar_multipla")
-        print("\n>>> Gerando alavancagem...")
-        run("gerar_alavancagem")
-        print("\n✅ Pipeline completo finalizado!")
+def run(cmd: str, mode: str = "fast"):
+    if cmd == "dados":
+        main_module.cmd_dados(mode=mode)
+    elif cmd == "odds":
+        main_module.cmd_odds()
+    elif cmd == "vip":
+        main_module.cmd_vip()
+    elif cmd == "dica":
+        main_module.cmd_dica()
+    elif cmd == "multiplas":
+        main_module.cmd_multiplas()
+    elif cmd == "alavancagem":
+        main_module.cmd_alavancagem()
+    elif cmd == "resultados":
+        main_module.cmd_resultados()
+    elif cmd == "tudo":
+        main_module.cmd_tudo(mode=mode)
+    elif cmd == "player_stats":
+        main_module.cmd_player_stats()
+    else:
+        print(f"Comando desconhecido: '{cmd}'")
 
 
 if __name__ == "__main__":
-    cmd = sys.argv[1] if len(sys.argv) > 1 else None
-    extra = sys.argv[2:]
+    arg = sys.argv[1] if len(sys.argv) > 1 else None
+    # "dados full" / "tudo full" -- mesmo extra que main.py aceita
+    extra = sys.argv[2].lower() if len(sys.argv) > 2 else ""
 
-    if cmd:
-        run(cmd, extra)
+    if arg:
+        run(arg, mode="full" if extra == "full" else "fast")
     else:
         while True:
             escolha = menu()
@@ -121,9 +99,9 @@ if __name__ == "__main__":
                 print("Saindo...")
                 break
             elif escolha in OPCOES:
-                _, script_name = OPCOES[escolha]
+                _, cmd_name = OPCOES[escolha]
                 print(f"\n>>> Rodando: {OPCOES[escolha][0]}...\n")
-                run(script_name)
+                run(cmd_name)
                 input("\nPressione Enter para voltar ao menu...")
             else:
                 print("Opção inválida.")

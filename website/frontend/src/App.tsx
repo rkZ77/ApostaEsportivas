@@ -3,13 +3,13 @@ import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react
 import { AnimatePresence } from 'framer-motion'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { NotificationProvider } from './context/NotificationContext'
+import { NotificationProvider, useNotifications } from './context/NotificationContext'
 import AgenteButton from './components/AgenteButton'
 import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
 import PushPromptBanner from './components/PushPromptBanner'
-import MonthlyCloseModal, { shouldShowMonthlyClose } from './components/MonthlyCloseModal'
+import MonthlyCloseModal from './components/MonthlyCloseModal'
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -114,16 +114,20 @@ function PublicRoute({ children }: { children: JSX.Element }) {
 function GlobalModals() {
   const { user } = useAuth()
   const isPreview = new URLSearchParams(window.location.search).get('preview') === 'monthly'
-  const [showMonthlyClose, setShowMonthlyClose] = useState(false)
+  const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose } = useNotifications()
 
+  // Abre sozinho no primeiro acesso depois da virada do mês. O gatilho é a
+  // notificação do servidor ainda não lida, então isso vale por conta (não por
+  // navegador) e fechar o popup não apaga mais o fechamento: ele continua no
+  // sino até a banca ser confirmada.
   useEffect(() => {
     if (!user) return
-    if (isPreview || shouldShowMonthlyClose()) setShowMonthlyClose(true)
-  }, [user?.id])
+    if (isPreview || pendingMonthlyClose) openMonthlyClose()
+  }, [user?.id, pendingMonthlyClose?.id, isPreview, openMonthlyClose])
 
   return (
     <AnimatePresence>
-      {showMonthlyClose && <MonthlyCloseModal onClose={() => setShowMonthlyClose(false)} />}
+      {monthlyCloseOpen && <MonthlyCloseModal onClose={closeMonthlyClose} />}
     </AnimatePresence>
   )
 }
