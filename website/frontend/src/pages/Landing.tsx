@@ -56,7 +56,7 @@ const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: '
 
 // Jogos que a IA vai analisar · lista real (nao um contador abstrato) dos proximos
 // jogos nas ligas cobertas. Tenta hoje primeiro, cai pro proximo dia com jogo se
-// hoje estiver vazio (fallback simples, sem a busca de 7 dias do CountdownTo7AM).
+// hoje estiver vazio (fallback simples, sem a busca de 7 dias do PicksPendingCard).
 interface UpcomingFixture {
   fixture_id: number
   home_team: string; away_team: string

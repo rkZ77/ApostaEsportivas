@@ -1,33 +1,20 @@
 import { useEffect, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
-import { CalendarClock } from 'lucide-react'
+import { CalendarClock, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
-/** Cada dígito do relógio troca com um leve flip vertical, em vez de trocar instantaneamente */
-function TickingClock({ value, className }: { value: string; className?: string }) {
-  return (
-    <div className={className}>
-      {value.split('').map((char, i) => (
-        <span key={i} className="inline-flex overflow-hidden relative" style={{ verticalAlign: 'top', height: '1em' }}>
-          <AnimatePresence mode="popLayout" initial={false}>
-            <motion.span
-              key={char + i}
-              initial={{ y: '-100%', opacity: 0 }}
-              animate={{ y: '0%', opacity: 1 }}
-              exit={{ y: '100%', opacity: 0 }}
-              transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-              className="inline-block"
-            >
-              {char}
-            </motion.span>
-          </AnimatePresence>
-        </span>
-      ))}
-    </div>
-  )
-}
-
+/**
+ * Estado da aba de picks quando ainda não há pick publicado hoje.
+ *
+ * Era uma contagem regressiva ("Picks chegam até às 12h · Brasília" com
+ * relógio tiquetaqueando). Removida em 2026-08-01: o pipeline deixou de rodar
+ * em horário fixo (o scheduler foi removido, o usuário gera e publica na hora
+ * que quiser), então prometer horário na tela seria mentira.
+ *
+ * O que ficou é o que continua verdadeiro sem depender de horário: quais jogos
+ * estão sendo analisados hoje, ou -- se não tem jogo nenhum nas ligas cobertas
+ * -- quais são os próximos.
+ */
 interface Fixture {
   fixture_id: number
   home_team: string; away_team: string
@@ -78,8 +65,7 @@ function groupByDate(games: Fixture[]): { dateLabel: string; games: Fixture[] }[
   }))
 }
 
-export default function CountdownTo7AM() {
-  const [timeLeft, setTimeLeft] = useState<string | null>(null)
+export default function PicksPendingCard() {
   // null = ainda carregando, 0 = confirmado sem jogo hoje, >0 = tem jogo
   const [todayCount, setTodayCount] = useState<number | null>(null)
   // Erro de rede não deve travar o componente em branco pra sempre --
@@ -89,24 +75,6 @@ export default function CountdownTo7AM() {
   const [todayGames, setTodayGames] = useState<Fixture[]>([])
   const [nextGames, setNextGames] = useState<Fixture[] | null>(null)
   const [leagueNames, setLeagueNames] = useState<string | null>(null)
-
-  useEffect(() => {
-    const update = () => {
-      const brNow = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-      if (brNow.getHours() >= 12) { setTimeLeft(null); return }
-      const target = new Date(brNow)
-      target.setHours(12, 0, 0, 0)
-      if (brNow >= target) target.setDate(target.getDate() + 1)
-      const diff = target.getTime() - brNow.getTime()
-      const h = Math.floor(diff / 3600000)
-      const m = Math.floor((diff % 3600000) / 60000)
-      const s = Math.floor((diff % 60000) / 1000)
-      setTimeLeft(`${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`)
-    }
-    update()
-    const t = setInterval(update, 1000)
-    return () => clearInterval(t)
-  }, [])
 
   useEffect(() => {
     api.get('/fixtures/today')
@@ -127,11 +95,10 @@ export default function CountdownTo7AM() {
   }, [todayCount])
 
   // Ainda checando se há jogo hoje (e não falhou) -- mostra nada por um instante,
-  // não a vida toda: se der erro, cai pro comportamento normal do contador.
+  // não a vida toda: se der erro, cai pro estado normal.
   if (todayCount === null && !todayCheckFailed) return null
 
-  // Sem jogo nenhum hoje nas ligas cobertas -- mostra os próximos em vez de
-  // uma contagem regressiva enganosa (nada vai chegar até as 12h nesse caso).
+  // Sem jogo nenhum hoje nas ligas cobertas -- mostra os próximos.
   // Se a checagem falhou, não sabemos se há jogo ou não -- assume que sim
   // (comportamento normal) em vez de esconder o card sem motivo aparente.
   if (todayCount === 0 && !todayCheckFailed) {
@@ -181,13 +148,13 @@ export default function CountdownTo7AM() {
     )
   }
 
-  if (timeLeft === null) return null
-
   return (
     <div className="card p-8 text-center border-zinc-800">
-      <p className="text-sm text-zinc-500 font-bold mb-4">Picks chegam até às 12h · Brasília</p>
-      <TickingClock value={timeLeft} className="font-mono text-4xl font-black text-green-400 tabular-nums tracking-tight mb-3" />
-      <p className="text-zinc-500 text-sm">A IA está analisando os jogos de hoje...</p>
+      <div className="w-11 h-11 rounded-full bg-zinc-800/80 flex items-center justify-center mx-auto mb-3">
+        <BrainCircuit className="w-5 h-5 text-zinc-400" />
+      </div>
+      <p className="text-sm text-zinc-200 font-bold mb-1">Os picks de hoje ainda não saíram</p>
+      <p className="text-zinc-500 text-sm">Assim que forem publicados você recebe um aviso.</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">
           <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2">

@@ -12,7 +12,7 @@ import Navbar from '../components/Navbar'
 import Avatar from '../components/Avatar'
 import Footer from '../components/Footer'
 import LivePicks from '../components/LivePicks'
-import CountdownTo7AM from '../components/CountdownTo7AM'
+import PicksPendingCard from '../components/PicksPendingCard'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
@@ -1216,8 +1216,8 @@ function Spinner() {
 
 interface PipelineStep { key: string; label: string; status: 'pending' | 'running' | 'done' | 'error' }
 
-// Mostra o progresso da geração dos picks (quando o pipeline diário está rodando),
-// com fallback para o contador regressivo enquanto ele ainda não começou.
+// Mostra o progresso da geração dos picks (quando o pipeline está rodando),
+// com fallback para o card de "ainda não saíram" enquanto ele não começou.
 function PipelineStatusCard() {
   const [status, setStatus] = useState<{ running: boolean; finished: boolean; steps: PipelineStep[] } | null>(null)
 
@@ -1232,7 +1232,7 @@ function PipelineStatusCard() {
   }, [])
 
   if (!status?.running) {
-    return <CountdownTo7AM />
+    return <PicksPendingCard />
   }
 
   return (
