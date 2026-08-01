@@ -40,6 +40,13 @@ interface Stats {
   }
 }
 
+interface AIReviewStatus {
+  config: { environment?: string; mode?: string; daily_limit?: number }
+  summary: { reviews_24h?: number; rejected_24h?: number; cache_hits_24h?: number; reviews_today?: number }
+  events: Array<{ pipeline: string; mode: string; provider: string; model: string; status: string; decision: string; risk_level: string | null; cached: boolean; review: { reasons?: string[] }; created_at: string }>
+  migration_pending?: boolean
+}
+
 const SUBSCRIPTION_TYPES = [
   { value: '',           label: ''          },
   { value: 'mensal',     label: 'Mensal'     },
@@ -78,6 +85,7 @@ export default function Admin() {
   const [newUser, setNewUser] = useState({ name: '', email: '', password: '', plan: 'free' })
   const [runningCmd, setRunningCmd] = useState<string | null>(null)
   const [pipelineStatus, setPipelineStatus] = useState<Record<string, { status: string; started_at: string | null; finished_at: string | null; error: string | null; log: string | null }>>({})
+  const [aiReviewStatus, setAiReviewStatus] = useState<AIReviewStatus | null>(null)
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
@@ -115,7 +123,10 @@ export default function Admin() {
   ] as const
 
   useEffect(() => {
-    const poll = () => api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
+    const poll = () => {
+      api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
+      api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
+    }
     poll()
     const id = setInterval(poll, 3000)
     return () => clearInterval(id)
@@ -369,6 +380,42 @@ export default function Admin() {
                 </div>
               )
             })}
+          </div>
+        </div>
+
+        {/* Revisão IA */}
+        <div className="card p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <div>
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase">Revisão por IA</h2>
+              <p className="text-[11px] text-zinc-600 mt-1">
+                {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
+                  `${aiReviewStatus?.config.mode ?? 'off'} · ${aiReviewStatus?.config.environment ?? 'prod'} · limite ${aiReviewStatus?.config.daily_limit ?? 0}/dia`}
+              </p>
+            </div>
+            <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
+              {aiReviewStatus?.config.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
+            </span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+            {[
+              ['Hoje', aiReviewStatus?.summary.reviews_today ?? 0],
+              ['24h', aiReviewStatus?.summary.reviews_24h ?? 0],
+              ['Vetos 24h', aiReviewStatus?.summary.rejected_24h ?? 0],
+              ['Cache 24h', aiReviewStatus?.summary.cache_hits_24h ?? 0],
+            ].map(([label, value]) => <div key={String(label)} className="rounded bg-zinc-900 px-3 py-2">
+              <p className="text-[10px] text-zinc-600 uppercase">{label}</p><p className="text-lg font-bold text-white">{value}</p>
+            </div>)}
+          </div>
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {(aiReviewStatus?.events ?? []).slice(0, 8).map((event, index) => (
+              <div key={`${event.created_at}-${index}`} className="text-[11px] rounded bg-zinc-950 px-2 py-1.5 flex gap-2 text-zinc-400">
+                <span className={event.decision === 'reject' ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>{event.decision === 'reject' ? 'VETADO' : 'OK'}</span>
+                <span>{event.pipeline}</span><span>{event.model}</span><span>{event.cached ? 'cache' : 'novo'}</span>
+                <span className="ml-auto truncate">{event.review?.reasons?.[0] ?? event.status}</span>
+              </div>
+            ))}
+            {!aiReviewStatus?.events?.length && <p className="text-xs text-zinc-600 py-2">Sem revisões registradas ainda.</p>}
           </div>
         </div>
 

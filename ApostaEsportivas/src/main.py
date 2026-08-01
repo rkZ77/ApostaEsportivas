@@ -80,6 +80,31 @@ def run_migrations():
             captured_at   TIMESTAMP DEFAULT NOW()
         );""",
         "CREATE INDEX IF NOT EXISTS idx_closing_odds_fixture ON closing_odds (fixture_id);",
+        """CREATE TABLE IF NOT EXISTS ai_pick_reviews (
+            cache_key TEXT PRIMARY KEY,
+            pipeline TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            review JSONB NOT NULL,
+            expires_at TIMESTAMP NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_ai_pick_reviews_expiry ON ai_pick_reviews (expires_at);",
+        """CREATE TABLE IF NOT EXISTS ai_pick_review_events (
+            id BIGSERIAL PRIMARY KEY,
+            cache_key TEXT NOT NULL,
+            pipeline TEXT NOT NULL,
+            mode TEXT NOT NULL,
+            provider TEXT NOT NULL,
+            model TEXT NOT NULL,
+            status TEXT NOT NULL,
+            decision TEXT NOT NULL,
+            risk_level TEXT,
+            cached BOOLEAN NOT NULL DEFAULT FALSE,
+            review JSONB NOT NULL,
+            created_at TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_ai_pick_review_events_created ON ai_pick_review_events (created_at DESC);",
         # Fase 1.7 do plano de implementacao (2026-07-25): historico de
         # execucoes de backtest, pra comparar metricas entre mudancas de
         # config/pesos ao longo do tempo em vez de so o resultado da

@@ -1,4 +1,5 @@
 import os
+from contextlib import contextmanager
 from urllib.parse import urlparse
 import psycopg2
 import psycopg2.extras
@@ -47,3 +48,41 @@ def get_connection():
         cursor_factory=psycopg2.extras.RealDictCursor,
         connect_timeout=10,
     )
+
+
+# Chave do pipeline diario. Numero arbitrario, so precisa ser estavel e nao
+# colidir com outra trava do mesmo banco.
+LOCK_DAILY_PIPELINE = 810_010
+
+
+@contextmanager
+def advisory_lock(key: int):
+    """Trava cooperativa no Postgres, escopo de sessao.
+
+    Serve pra quando mais de um processo aponta pro mesmo banco -- producao e
+    noprod (staging com dados de prod), ou duas replicas do mesmo servico.
+    Os dois acordam no mesmo minuto e disparam o mesmo job; quem nao pegar a
+    trava desiste. Diferente da flag SIDE_EFFECTS, isso protege mesmo se
+    ninguem configurar variavel nenhuma.
+
+    Cede True se a trava foi obtida, False se outro processo ja a tem. Nunca
+    bloqueia esperando (pg_TRY_advisory_lock).
+    """
+    conn = get_connection()
+    # Sem autocommit a sessao ficaria "idle in transaction" durante todo o
+    # pipeline (pode passar de meia hora), segurando recursos no servidor.
+    conn.autocommit = True
+    got = False
+    try:
+        with conn.cursor() as cur:
+            cur.execute("SELECT pg_try_advisory_lock(%s) AS locked", (key,))
+            got = bool(cur.fetchone()["locked"])
+        yield got
+    finally:
+        if got:
+            try:
+                with conn.cursor() as cur:
+                    cur.execute("SELECT pg_advisory_unlock(%s)", (key,))
+            except Exception:
+                pass  # fechar a conexao ja libera a trava de qualquer jeito
+        conn.close()

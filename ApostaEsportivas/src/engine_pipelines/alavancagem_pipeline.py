@@ -25,12 +25,14 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine.ai_review import review_gate
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from engine_pipelines.decision_log import log_decision
+
 
 # Alvo real da alavancagem ("odd 1.50"): 2-3 pernas de odd individual bem
 # baixa somando ~1.50 de odd combinada -- pedido explicito do usuario
@@ -180,8 +182,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
             for p in picks:
                 if not (ODD_INDIVIDUAL_MIN <= p["odd"] <= ODD_INDIVIDUAL_MAX):
                     continue
-                p["_fixture"] = fixture
-                legs.append(p)
+                legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
         except Exception as e:
             print(f"[ALAVANCAGEM_ENGINE] Erro no fixture {fixture['fixture_id']}, pulando: {e}")
@@ -288,6 +289,13 @@ def run_alavancagem_engine():
         return
 
     combo, confidence_media, odd_combined = result
+    reviewed = review_gate("alavancagem").apply(list(combo), "alavancagem")
+    if not reviewed:
+        print("[ALAVANCAGEM_ENGINE] Combinacao vetada pela revisao de IA.")
+        cur.close()
+        conn.close()
+        return
+    combo = tuple(reviewed)
     tipo = _save_pick(cur, combo, confidence_media, odd_combined)
     conn.commit()
     cur.close()
