@@ -58,6 +58,18 @@ const SUBSCRIPTION_TYPES = [
 const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
 type PlanFilter = typeof PLAN_FILTER[number]
 
+// Sub-paginas do /admin. "visao" primeiro por ser o resumo; "usuarios" logo
+// depois por ser o bloco mais usado no dia a dia -- antes ficava no fim de
+// uma coluna unica, a varias telas de rolagem no celular.
+const ABAS = [
+  { key: 'visao',      label: 'Visão geral' },
+  { key: 'usuarios',   label: 'Usuários'    },
+  { key: 'pipeline',   label: 'Pipeline'    },
+  { key: 'financeiro', label: 'Financeiro'  },
+  { key: 'picks',      label: 'Picks'       },
+] as const
+type AdminAba = typeof ABAS[number]['key']
+
 const planBadge = (plan: string) => {
   if (plan === 'vip')   return 'badge-vip'
   if (plan === 'trial') return 'badge-trial'
@@ -104,6 +116,12 @@ export default function Admin() {
   const [pickSearching, setPickSearching] = useState(false)
   const [settingResult, setSettingResult] = useState<number | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
+  // /admin#usuarios. Hash invalido cai na visao geral em vez de tela vazia.
+  const [aba, setAba] = useState<AdminAba>(() => {
+    const h = window.location.hash.replace('#', '') as AdminAba
+    return ABAS.some(a => a.key === h) ? h : 'visao'
+  })
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
 
@@ -119,6 +137,8 @@ export default function Admin() {
     { command: 'gerar_free',           label: 'Gerar Free'           },
     { command: 'gerar_multipla',       label: 'Gerar Múltipla'       },
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
+    { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
+    { command: 'gerar_goleiros',       label: 'Gerar Defesas'        },
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
@@ -297,6 +317,31 @@ export default function Admin() {
 
       <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
 
+        {/* Sub-paginas. A pagina inteira era uma coluna so' com 7 blocos
+            empilhados -- no celular dava varias telas de rolagem ate chegar
+            em usuarios, que e' o bloco mais usado. Hash na URL (#usuarios)
+            pra poder abrir/recarregar direto numa aba, mesmo padrao da
+            pagina de Picks. */}
+        <div className="relative mb-6 -mx-4">
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
+          <div className="flex border-b border-zinc-800 px-4 overflow-x-auto scrollbar-none">
+            {ABAS.map(a => (
+              <button
+                key={a.key}
+                onClick={() => { setAba(a.key); window.location.hash = a.key }}
+                className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
+                  aba === a.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {a.label}
+                <div className={`absolute left-0 right-0 -bottom-px h-0.5 ${aba === a.key ? 'bg-green-500' : 'bg-transparent'}`} />
+              </button>
+            ))}
+          </div>
+        </div>
+
+
+        {aba === 'pipeline' && (<>
         {/* Pipeline */}
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -418,7 +463,9 @@ export default function Admin() {
             {!aiReviewStatus?.events?.length && <p className="text-xs text-zinc-600 py-2">Sem revisões registradas ainda.</p>}
           </div>
         </div>
+        </>)}
 
+        {aba === 'visao' && (<>
         {/* Stats · usuários */}
         {stats && (
           <>
@@ -467,7 +514,9 @@ export default function Admin() {
             <AdminShareResults />
           </>
         )}
+        </>)}
 
+        {aba === 'financeiro' && (<>
         {/* Financeiro */}
         {revenue && (
           <div className="mb-6">
@@ -650,7 +699,9 @@ export default function Admin() {
             </>
           )}
         </div>
+        </>)}
 
+        {aba === 'picks' && (<>
         {/* REMOVED: Corrigir resultado de pick */}
         {false && <div className="card p-4 mb-6">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Corrigir Resultado de Pick</h2>
@@ -767,7 +818,9 @@ export default function Admin() {
             <p className="text-zinc-600 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
         </div>}
+        </>)}
 
+        {aba === 'usuarios' && (<>
         {/* Criar usuário */}
         {creating && (
           <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -997,6 +1050,7 @@ export default function Admin() {
             </div>
           ))}
         </div>
+        </>)}
 
       </main>
       <Footer />

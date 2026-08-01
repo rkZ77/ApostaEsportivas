@@ -65,7 +65,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
 }
 
 // Tipos
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'aovivo' | 'chat'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'aovivo' | 'chat'
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -84,6 +84,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
     { key: 'multiplas',    label: 'Múltiplas',       premiumOnly: true },
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
+    { key: 'mercados',     label: 'Mercados',         premiumOnly: true },
     {
       key: 'aovivo' as Tab, label: 'Minhas Apostas',
       badge: (liveCount ?? 0) > 0 ? String(liveCount) : 'LIVE',
@@ -1194,6 +1195,110 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
 }
 
 // Seção header
+// ─── Mercados com modelo proprio: faltas e defesas de goleiro ───────────────
+// Os dois ficam numa aba so' em vez de duas: a barra ja tem 6 abas e rola
+// horizontalmente no celular -- somar duas empurraria as ultimas pra fora da
+// primeira tela em qualquer aparelho.
+interface MercadoPick {
+  id: number
+  match_date: string
+  home_team: string; away_team: string
+  home_team_id?: number; away_team_id?: number
+  player_name?: string; team_name?: string
+  market: string; line: string
+  odd: number; bet_house?: string
+  prob_real?: number; edge?: number
+  reasoning?: string
+  stake_units?: number
+  result?: string | null
+}
+
+function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' }) {
+  const rs = getResultStyle(p.result)
+  const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
+  const edge = p.edge != null ? Number(p.edge) * 100 : null
+  return (
+    <div className="card p-4 sm:p-5 space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-1.5 text-sm text-zinc-200 font-medium min-w-0">
+            <TeamLogo id={p.home_team_id} name={p.home_team} size={18} />
+            <span className="truncate">{p.home_team}</span>
+            <span className="text-zinc-600 shrink-0">x</span>
+            <TeamLogo id={p.away_team_id} name={p.away_team} size={18} />
+            <span className="truncate">{p.away_team}</span>
+          </div>
+          <p className="text-[11px] text-zinc-600 mt-1 font-mono">
+            {new Date(`${p.match_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
+            {p.bet_house ? ` · ${p.bet_house}` : ''}
+          </p>
+        </div>
+        {rs && (
+          <span className={`shrink-0 text-[10px] font-black uppercase border px-1.5 py-0.5 rounded ${rs.bg} ${rs.border} ${rs.text}`}>
+            {rs.label}
+          </span>
+        )}
+      </div>
+
+      <div className="bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2.5">
+        <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-1">
+          {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
+        </p>
+        <p className="text-sm text-white font-bold">{p.line}</p>
+        {tipo === 'goleiros' && p.team_name && (
+          <p className="text-[11px] text-zinc-500 mt-0.5">{p.team_name}</p>
+        )}
+      </div>
+
+      <div className="grid grid-cols-3 gap-2 font-mono">
+        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
+          <div className="text-base font-black text-green-400">{Number(p.odd).toFixed(2)}</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5">Odd</div>
+        </div>
+        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
+          <div className="text-base font-black text-white">{prob != null ? `${prob.toFixed(0)}%` : '·'}</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5">Probabilidade</div>
+        </div>
+        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
+          <div className="text-base font-black text-green-400">{edge != null ? `${edge > 0 ? '+' : ''}${edge.toFixed(1)}%` : '·'}</div>
+          <div className="text-[10px] text-zinc-600 mt-0.5">Margem</div>
+        </div>
+      </div>
+
+      {p.reasoning && <p className="text-xs text-zinc-500 leading-relaxed">{p.reasoning}</p>}
+    </div>
+  )
+}
+
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando }: {
+  tipo: 'faltas' | 'goleiros'
+  titulo: string; cor: string; explicacao: string
+  picks: MercadoPick[] | null; carregando: boolean
+}) {
+  return (
+    <div>
+      <SectionHeader color={cor} label={titulo} badge="VIP" />
+      <p className="text-xs text-zinc-500 leading-relaxed mb-4">{explicacao}</p>
+      {carregando ? (
+        <Spinner />
+      ) : !picks || picks.length === 0 ? (
+        <div className="card p-6 text-center">
+          <p className="text-sm text-zinc-400 font-bold mb-1">Nenhum pick de {titulo.toLowerCase()} ainda</p>
+          <p className="text-xs text-zinc-600">
+            {tipo === 'goleiros'
+              ? 'Defesas é um mercado raro: aparece em menos de 1% dos jogos. Dia sem pick é o normal aqui.'
+              : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
+          </p>
+        </div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2">
+          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} />)}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function SectionHeader({ color, label, badge }: { color: string; label: string; badge?: string }) {
   return (
     <div className="flex items-center gap-3 mb-4">
@@ -1502,7 +1607,7 @@ export default function Picks() {
 
   useEffect(() => {
     const hash = location.hash.replace('#', '') as Tab
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','aovivo','chat']
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','aovivo','chat']
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
 
@@ -1523,6 +1628,10 @@ export default function Picks() {
   // Alavancagem
   const [alavFilters,  setAlavFilters]  = useState<AlavFilters>(defaultAlavFilters)
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
+  // null = ainda nao buscou (a aba carrega sob demanda, ver o efeito por aba)
+  const [faltas,    setFaltas]    = useState<MercadoPick[] | null>(null)
+  const [goleiros,  setGoleiros]  = useState<MercadoPick[] | null>(null)
+  const [mercadosLoading, setMercadosLoading] = useState(false)
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
   const [alavError,    setAlavError]    = useState(false)
@@ -1628,6 +1737,17 @@ export default function Picks() {
 
   useEffect(() => {
     if (tab === 'alavancagem'  && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
+    // Busca os dois em paralelo: sao independentes, e serializar somaria a
+    // latencia de duas chamadas antes de pintar qualquer coisa na tela.
+    if (tab === 'mercados' && canSeeVip && faltas === null && !mercadosLoading) {
+      setMercadosLoading(true)
+      Promise.all([
+        api.get('/suggestions/faltas',   { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
+        api.get('/suggestions/goleiros', { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
+      ])
+        .then(([f, g]) => { setFaltas(f); setGoleiros(g) })
+        .finally(() => setMercadosLoading(false))
+    }
   }, [tab, canSeeVip])
 
 
@@ -2418,6 +2538,36 @@ export default function Picks() {
               className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
               Ver todos os resultados
             </button>
+          </motion.div>
+        )}
+
+        {tab === 'mercados' && (
+          <motion.div key="mercados" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="space-y-8">
+            {!canSeeVip ? (
+              <div>
+                <SectionHeader color="bg-purple-400" label="Mercados" />
+                <VipLockOverlay color="purple" />
+              </div>
+            ) : (
+              <>
+                <MercadoSecao
+                  tipo="faltas"
+                  titulo="Faltas"
+                  cor="bg-purple-400"
+                  explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
+                  picks={faltas}
+                  carregando={mercadosLoading}
+                />
+                <MercadoSecao
+                  tipo="goleiros"
+                  titulo="Defesas de goleiro"
+                  cor="bg-sky-400"
+                  explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir."
+                  picks={goleiros}
+                  carregando={mercadosLoading}
+                />
+              </>
+            )}
           </motion.div>
         )}
         </AnimatePresence>
