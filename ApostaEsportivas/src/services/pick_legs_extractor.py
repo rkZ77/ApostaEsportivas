@@ -91,10 +91,21 @@ def fetch_alavancagem_legs(cur) -> list:
 
 
 def fetch_all_legs(cur) -> list:
-    """Todas as pernas das 4 tabelas, achatadas. cur precisa ser RealDictCursor."""
+    """Todas as pernas de todas as tabelas de picks, achatadas.
+    cur precisa ser RealDictCursor."""
     legs = []
     legs += fetch_vip_free_legs(cur, "picks_vip")
     legs += fetch_vip_free_legs(cur, "picks_free")
+    # picks_faltas e picks_goleiros usam exatamente as mesmas colunas de
+    # picks_free (home_team/away_team, prob_real, edge), entao reusam o mesmo
+    # extractor -- os condicionais la' dentro so' distinguem picks_vip.
+    # try/except porque instancia sem a migracao das tabelas novas nao pode
+    # deixar de sincronizar o ledger inteiro.
+    for tabela in ("picks_faltas", "picks_goleiros"):
+        try:
+            legs += fetch_vip_free_legs(cur, tabela)
+        except Exception:
+            cur.connection.rollback()
     legs += fetch_multiplas_legs(cur)
     legs += fetch_alavancagem_legs(cur)
     return legs

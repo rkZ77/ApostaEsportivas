@@ -65,6 +65,20 @@ def _q1(cur, sql, params=()):
         return None
 
 
+def _qualificar(date_cond: str, alias: str) -> str:
+    """Prefixa a coluna do filtro de data com o alias da tabela de picks.
+
+    `date_cond` chega como "AND TO_CHAR(match_date, 'YYYY-MM') = %s", sem
+    prefixo. Os builders que dao JOIN em match_statistics (que TAMBEM tem
+    match_date) viravam "column reference match_date is ambiguous" -- e o erro
+    nao aparecia em lugar nenhum: _collect_results roda cada sub-query isolada
+    e engole a falha, entao o tipo de pick sumia do historico filtrado por mes
+    em vez de dar erro. No sumario, que usa o UNION inteiro, o mes filtrado
+    voltava vazio.
+    """
+    return date_cond.replace("match_date", f"{alias}.match_date")
+
+
 def _sub_vip(date_cond: str) -> str:
     # league via match_statistics, nao fixtures -- fixtures e' so fila
     # operacional, o registro ja resolvido/graded quase sempre ja saiu de
@@ -82,7 +96,7 @@ def _sub_vip(date_cond: str) -> str:
         FROM picks_vip pv
         LEFT JOIN match_statistics ms ON ms.fixture_id = pv.fixture_id
         LEFT JOIN leagues l ON l.league_id = ms.league_id
-        WHERE pv.result IS NOT NULL {date_cond}
+        WHERE pv.result IS NOT NULL {_qualificar(date_cond, "pv")}
     """
 
 def _sub_free(date_cond: str) -> str:
@@ -107,7 +121,7 @@ def _sub_free(date_cond: str) -> str:
         LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
         LEFT JOIN match_statistics ms ON ms.fixture_id = pf.fixture_id
         LEFT JOIN leagues l ON l.league_id = COALESCE(pf.league_id, ms.league_id)
-        WHERE pf.result IS NOT NULL {date_cond}
+        WHERE pf.result IS NOT NULL {_qualificar(date_cond, "pf")}
     """
 
 def _sub_mult(date_cond: str) -> str:
@@ -141,15 +155,57 @@ def _sub_alav(date_cond: str) -> str:
         WHERE result IS NOT NULL {date_cond}
     """
 
+def _sub_mercado(tabela: str, source: str, rotulo: str):
+    """Builder pras tabelas de mercado proprio (picks_faltas, picks_goleiros).
+
+    A forma delas espelha picks_free -- um jogo, um mercado, uma odd -- entao o
+    SELECT e' o mesmo, so' muda a tabela. Fabrica em vez de duas funcoes
+    copiadas: e' o quarto lugar do projeto onde esse SELECT se repete, e cada
+    copia e' mais uma chance de faltas e goleiros divergirem em silencio.
+
+    Entrar aqui e' o que faz os dois mercados contarem no ROI publico, no
+    historico e nos filtros por tipo -- e' a fonte unica que todas as
+    estatisticas do site consomem.
+    """
+    def builder(date_cond: str) -> str:
+        # Sem JOIN em match_statistics de proposito. Os dois pipelines sempre
+        # gravam league_id, entao o fallback nao e' necessario -- e a tabela
+        # tambem tem uma coluna match_date, o que deixava o `date_cond` (que
+        # chega como "AND TO_CHAR(match_date, ...)", sem prefixo) ambiguo. O
+        # erro nao aparecia: _collect_results roda cada sub-query isolada e
+        # engole a falha, entao os dois mercados simplesmente sumiam do
+        # historico quando alguem filtrava por mes.
+        return f"""
+        SELECT p.match_date,
+               p.home_team AS home_team_name, p.away_team AS away_team_name,
+               COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
+               COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
+               p.market, p.line, p.odd,
+               p.result, p.profit,
+               1 AS stake,
+               '{source}' AS source,
+               p.league_id AS league_id,
+               COALESCE(l.name, '{rotulo}') AS league_name
+        FROM {tabela} p
+        LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+        LEFT JOIN leagues l ON l.league_id = p.league_id
+        WHERE p.result IS NOT NULL {_qualificar(date_cond, "p")}
+    """
+    return builder
+
+
 _SUB_BUILDERS = {
     "vip":        _sub_vip,
     "free":       _sub_free,
     "multiplas":  _sub_mult,
     "alavancagem":_sub_alav,
+    "faltas":     _sub_mercado("picks_faltas",   "faltas",   "Faltas"),
+    "goleiros":   _sub_mercado("picks_goleiros", "goleiros", "Defesas"),
 }
 
 def _build_union(date_cond: str, source: Optional[str]) -> str:
-    """Monta UNION ALL das 4 tabelas de picks com colunas normalizadas."""
+    """Monta UNION ALL das tabelas de picks (_SUB_BUILDERS) com colunas
+    normalizadas."""
     if source and source in _SUB_BUILDERS:
         return _SUB_BUILDERS[source](date_cond)
     return " UNION ALL ".join(fn(date_cond) for fn in _SUB_BUILDERS.values())
@@ -225,10 +281,15 @@ def public_results(
             date_cond   = ""
             date_params = ()
 
-        single = source in ("vip", "free", "multiplas", "alavancagem")
+        # Derivado de _SUB_BUILDERS, nunca de lista fixa: com a lista escrita
+        # na mao, registrar um mercado novo (faltas/goleiros, 2026-08-01)
+        # deixava o numero de placeholders defasado e o filtro por mes
+        # quebrava -- erro de contagem de parametro, nao de logica, o tipo que
+        # so aparece quando alguem filtra.
+        single = source in _SUB_BUILDERS
         union_sql = _build_union(date_cond, source if single else None)
-        # cada sub-query tem 1 placeholder; UNION de 4 precisa 4x
-        p = date_params if single else date_params * 4
+        # cada sub-query tem 1 placeholder; o UNION precisa de um por builder
+        p = date_params if single else date_params * len(_SUB_BUILDERS)
 
         # ── Sumário ───────────────────────────────────────────────────────────
         summary = _q1(cur, f"""
@@ -303,7 +364,9 @@ def public_results(
                 COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
                 COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
                 COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
-                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total
+                COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
+                COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
+                COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total
             FROM (
                 SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
                 UNION ALL
@@ -312,6 +375,10 @@ def public_results(
                 SELECT 'multipla'   AS source FROM picks_multiplas  WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'faltas'     AS source FROM picks_faltas     WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'goleiros'   AS source FROM picks_goleiros   WHERE result IS NOT NULL
             ) AS t
         """)
 
@@ -430,6 +497,8 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'free')        AS free,
                 COUNT(*) FILTER (WHERE t.source = 'multiplas')   AS multiplas,
                 COUNT(*) FILTER (WHERE t.source = 'alavancagem') AS alavancagem,
+                COUNT(*) FILTER (WHERE t.source = 'faltas')      AS faltas,
+                COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
                 COUNT(*)                                         AS total
             FROM (
                 SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = CURRENT_DATE
@@ -439,9 +508,14 @@ def public_today_summary():
                 SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = CURRENT_DATE
                 UNION ALL
                 SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = CURRENT_DATE
+                UNION ALL
+                SELECT 'faltas'      AS source FROM picks_faltas      WHERE match_date = CURRENT_DATE
+                UNION ALL
+                SELECT 'goleiros'    AS source FROM picks_goleiros    WHERE match_date = CURRENT_DATE
             ) t
         """)
-        return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0, "alavancagem": 0, "total": 0}
+        return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,
+                                      "alavancagem": 0, "faltas": 0, "goleiros": 0, "total": 0}
     finally:
         cur.close()
         conn.close()
