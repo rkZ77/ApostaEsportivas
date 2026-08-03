@@ -8,6 +8,7 @@ import textwrap
 import traceback
 
 from utils.db_utils import get_connection
+from utils.data_br import data_br_de
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -81,7 +82,7 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         ) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,NOW())
         ON CONFLICT (fixture_id) DO NOTHING
     """, (
-        fixture["fixture_id"], fixture["match_datetime"].date(),
+        fixture["fixture_id"], data_br_de(fixture["match_datetime"]),
         fixture["home_team_id"], fixture["away_team_id"],
         fixture["home_team"], fixture["away_team"],
         pick["market_name"], pick["value_label"], pick["odd"], pick["best_bookmaker"],

@@ -26,6 +26,7 @@ import json
 import re
 
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR, data_br
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
@@ -142,14 +143,14 @@ def _fixtures_de_hoje(cur) -> list:
     CURRENT_DATE`) -- se divergir daqui, o coletor de odds (que usa o mesmo
     predicado) nao tera' baixado odd pro jogo.
     """
-    cur.execute("""
+    cur.execute(f"""
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
             f.match_datetime, f.referee
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE f.match_datetime::date = CURRENT_DATE
+        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
         ORDER BY f.match_datetime
     """)
@@ -267,14 +268,14 @@ def _salvar(cur, c: dict) -> None:
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 
-    cur.execute("""
+    cur.execute(f"""
         INSERT INTO picks_faltas
             (fixture_id, match_date, home_team, away_team,
              home_team_id, away_team_id, league_id,
              market, market_type, line, odd, bet_house, market_id,
              confidence, prob_real, edge, reasoning,
              stake_pct, stake_units, engine_debug)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
+        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date, fixture_id) DO NOTHING
     """, (

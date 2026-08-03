@@ -3,6 +3,7 @@ import traceback
 from fastapi import APIRouter, HTTPException, Query
 from typing import Optional
 from database import get_connection
+from data_br import HOJE_BR, data_br
 
 logger = logging.getLogger(__name__)
 
@@ -491,7 +492,7 @@ def public_today_summary():
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        row = _q1(cur, """
+        row = _q1(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE t.source = 'vip')         AS vip,
                 COUNT(*) FILTER (WHERE t.source = 'free')        AS free,
@@ -501,17 +502,17 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
                 COUNT(*)                                         AS total
             FROM (
-                SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = CURRENT_DATE
+                SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = {HOJE_BR}
                 UNION ALL
-                SELECT 'free'        AS source FROM picks_free        WHERE match_date = CURRENT_DATE
+                SELECT 'free'        AS source FROM picks_free        WHERE match_date = {HOJE_BR}
                 UNION ALL
-                SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = CURRENT_DATE
+                SELECT 'multiplas'   AS source FROM picks_multiplas   WHERE match_date = {HOJE_BR}
                 UNION ALL
-                SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = CURRENT_DATE
+                SELECT 'alavancagem' AS source FROM picks_alavancagem WHERE match_date = {HOJE_BR}
                 UNION ALL
-                SELECT 'faltas'      AS source FROM picks_faltas      WHERE match_date = CURRENT_DATE
+                SELECT 'faltas'      AS source FROM picks_faltas      WHERE match_date = {HOJE_BR}
                 UNION ALL
-                SELECT 'goleiros'    AS source FROM picks_goleiros    WHERE match_date = CURRENT_DATE
+                SELECT 'goleiros'    AS source FROM picks_goleiros    WHERE match_date = {HOJE_BR}
             ) t
         """)
         return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,

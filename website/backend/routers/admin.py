@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
+from data_br import HOJE_BR, data_br
 from auth_utils import require_admin, hash_password, get_current_user
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
@@ -767,14 +768,14 @@ def admin_stats(current_user: dict = Depends(require_admin)):
         """)
         users_row = dict(cur.fetchone())
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 (SELECT COUNT(*) FROM picks_vip
-                 WHERE match_date = CURRENT_DATE)                            AS vip_picks,
+                 WHERE match_date = {HOJE_BR})                               AS vip_picks,
                 (SELECT COUNT(*) FROM picks_alavancagem
-                 WHERE match_date = CURRENT_DATE)                            AS alavancagem,
+                 WHERE match_date = {HOJE_BR})                               AS alavancagem,
                 (SELECT COUNT(*) FROM picks_free
-                 WHERE match_date = CURRENT_DATE)                            AS dica,
+                 WHERE match_date = {HOJE_BR})                               AS dica,
                 (SELECT COUNT(*) FROM picks_multiplas
                  WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
         """)
@@ -904,19 +905,19 @@ def admin_overview(current_user: dict = Depends(require_admin)):
                                ("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
             picks[rotulo] = uma(
                 f"SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE result IS NULL) AS pendentes "
-                f"FROM {tabela} WHERE match_date = CURRENT_DATE",
+                f"FROM {tabela} WHERE match_date = {HOJE_BR}",
                 {"n": 0, "pendentes": 0},
             )
 
         # Saude da coleta. Sem isso, "nao saiu pick hoje" fica indistinguivel
         # de "a coleta nem rodou" -- que sao problemas completamente
         # diferentes pra quem esta operando.
-        coleta = uma("""
+        coleta = uma(f"""
             SELECT (SELECT COUNT(*) FROM fixtures
-                     WHERE match_datetime::date = CURRENT_DATE)                AS jogos_hoje,
+                     WHERE {data_br('match_datetime')} = {HOJE_BR})            AS jogos_hoje,
                    (SELECT COUNT(*) FROM fixtures
-                     WHERE match_datetime::date = CURRENT_DATE
-                       AND status IN ('NS','TBD'))                             AS jogos_por_comecar,
+                     WHERE {data_br('match_datetime')} = {HOJE_BR}
+                       AND status IN ('NS','TBD'))                          AS jogos_por_comecar,
                    (SELECT COUNT(DISTINCT fixture_id) FROM odds_values)        AS jogos_com_odds,
                    (SELECT MAX(match_date) FROM match_statistics)              AS ultimo_jogo_coletado,
                    (SELECT COUNT(*) FROM leagues)                              AS ligas,
