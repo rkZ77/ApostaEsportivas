@@ -153,6 +153,17 @@
     @apply flex items-center gap-2 px-4 py-3;
   }
 
+  /* Casca comum dos 6 tipos de card de pick (VIP, free, multipla, alavancagem,
+     faltas, defesas). Delineada como o resto do sistema, nao preenchida.
+     A COR da borda fica com quem chama, porque ela codifica o tipo do pick:
+     ver PICK_TYPE_BORDER em utils/resultStyle.ts, mesma convencao dos badges. */
+  /* Sem `group` aqui: e' marcador pro group-hover: dos filhos, nao tem estilo
+     proprio, e o Tailwind recusa @apply nele. Vai na classe de quem chama. */
+  .pick-card {
+    @apply relative overflow-hidden bg-surface-0 border rounded-lg
+           transition-colors duration-1 ease-smooth;
+  }
+
   /* Ladrilho de numero: valor em mono grande, rotulo minusculo em versalete. */
   .stat-tile {
     @apply bg-surface-0 border border-line rounded-lg p-4 text-center;
