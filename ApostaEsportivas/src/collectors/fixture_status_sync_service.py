@@ -1,6 +1,7 @@
 ﻿import os
 import requests
-from datetime import datetime, date
+from datetime import datetime, date, timezone
+from zoneinfo import ZoneInfo
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
 
@@ -13,6 +14,24 @@ API_URL = "https://v3.football.api-sports.io/fixtures"
 FINALIZED_STATUSES = {
     "FT", "AET", "PEN", "CANC", "PST", "ABD", "WO"
 }
+
+TZ_BR = ZoneInfo("America/Sao_Paulo")
+
+
+def _para_br_naive(dt_str: str) -> datetime:
+    """ISO da API (UTC) -> datetime ingenuo em horario de Brasilia.
+
+    Este service gravava `fixture["date"]` CRU em fixtures.match_datetime,
+    enquanto o fixture_collector_service grava a mesma coluna convertida pra
+    Brasilia (convert_utc_to_br_naive). Duas convencoes na mesma coluna: o
+    valor final dependia de qual dos dois rodou por ultimo, e o horario do
+    jogo aparecia 3 horas adiantado sempre que o status sync tinha rodado
+    depois. Agora os dois gravam BR.
+    """
+    dt = datetime.fromisoformat((dt_str or "").replace("Z", "+00:00"))
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(TZ_BR).replace(tzinfo=None)
 
 
 class FixtureStatusSyncService:
@@ -33,7 +52,7 @@ class FixtureStatusSyncService:
 
         return {
             "status": fixture["status"]["short"],
-            "match_datetime": fixture["date"],
+            "match_datetime": _para_br_naive(fixture["date"]),
             "referee": fixture.get("referee"),
         }
 
@@ -74,7 +93,7 @@ class FixtureStatusSyncService:
                     continue
                 out[fid] = {
                     "status": fixture["status"]["short"],
-                    "match_datetime": fixture["date"],
+                    "match_datetime": _para_br_naive(fixture["date"]),
                     "referee": fixture.get("referee"),
                 }
 

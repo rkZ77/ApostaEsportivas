@@ -12,18 +12,26 @@ CURRENT_DATE`, entao rodar o pipeline nesse intervalo procurava os jogos do
 dia SEGUINTE e nao achava nada. Foi o que aconteceu em 2026-08-02: 4 jogos e
 10.659 odds no banco, e todos os pipelines dizendo "nenhum jogo de hoje".
 
-O segundo efeito e' pior porque nao depende da hora em que se roda:
-`match_datetime` guarda UTC (o coletor salva `fixture["date"]` da API, que vem
-em UTC, numa coluna `timestamp without time zone`). Um jogo as 21:30 de
-Brasilia fica gravado como 00:30 do dia seguinte -- ou seja, jogo noturno do
-Brasileirao era SEMPRE atribuido ao dia errado, em qualquer horario de
-execucao.
+QUAL COLUNA PRECISA DE CONVERSAO
+--------------------------------
+`fixtures.match_datetime` NAO precisa: o coletor ja grava em horario de
+Brasilia (`convert_utc_to_br_naive` em fixture_collector_service.py). Comparar
+direto: `f.match_datetime::date = HOJE_BR`. Converter de novo tiraria 3 horas
+e jogava pro dia anterior tudo que comeca entre 00:00 e 02:59 BR -- justamente
+os jogos de virada de meia-noite que o coletor faz questao de incluir.
+
+`match_statistics.match_date` E' UTC (aquele collector guarda o ISO da API sem
+converter). Essa sim precisa de `data_br()`.
+
+Duas convencoes na mesma base, cada uma escrita por um collector diferente.
+Antes de comparar data de uma coluna nova, conferir qual dos dois casos ela e'.
 
 COMO USAR
 ---------
     from utils.data_br import HOJE_BR, data_br
 
-    f"WHERE {data_br('f.match_datetime')} = {HOJE_BR}"
+    f"WHERE f.match_datetime::date = {HOJE_BR}"        # coluna ja em BR
+    f"WHERE {data_br('ms.match_date')} = {HOJE_BR}"    # coluna em UTC
 
 Sao fragmentos de SQL, nao parametros: entram por f-string. Nao recebem
 entrada de usuario -- `data_br` so' e' chamado com nome de coluna escrito no
