@@ -9,6 +9,8 @@ import math
 import pytest
 
 from services.pick_engine.fouls_model import (
+    LINHAS_SUPORTADAS,
+    prob_over,
     MEDIA_FALTAS_JOGO,
     MIN_JOGOS_ARBITRO,
     MIN_JOGOS_TIME,
@@ -57,17 +59,46 @@ def test_arbitro_sem_amostra_suficiente_e_ignorado():
 
 
 def test_faixas_reproduzem_o_backtest():
-    """Taxas medidas por faixa de previsao, sem lookahead."""
-    assert prob_over_225(19.0)[0] == pytest.approx(0.434)
-    assert prob_over_225(21.0)[0] == pytest.approx(0.353)
-    assert prob_over_225(23.0)[0] == pytest.approx(0.567)
-    assert prob_over_225(27.0)[0] == pytest.approx(0.734)
+    """Taxas medidas por faixa de previsao, sem lookahead.
+
+    Numeros da remedicao de 2026-08-02 (451 amostras validas, >=5 jogos
+    previos de cada lado). A tabela anterior usava faixas diferentes e uma
+    amostra menor -- foi refeita junto com a entrada das linhas de mercado.
+    """
+    assert prob_over_225(21.0)[0] == pytest.approx(0.480)
+    assert prob_over_225(23.0)[0] == pytest.approx(0.549)
+    assert prob_over_225(25.0)[0] == pytest.approx(0.560)
+    assert prob_over_225(27.0)[0] == pytest.approx(0.716)
+    assert prob_over_225(30.0)[0] == pytest.approx(0.792)
 
 
 def test_faixa_devolve_o_tamanho_da_amostra():
-    """Faixa de 51 jogos nao merece a mesma confianca que uma de 301."""
-    assert prob_over_225(21.0)[1] == 51
-    assert prob_over_225(27.0)[1] == 301
+    """Faixa de 50 jogos nao merece a mesma confianca que uma de 159."""
+    assert prob_over_225(21.0)[1] == 50
+    assert prob_over_225(30.0)[1] == 159
+
+
+def test_linhas_do_mercado_real_sao_avaliaveis():
+    """A coleta real (2026-08-02) mostrou que 22.5 NAO existe no mercado:
+    Fouls. Total sai em 24.5/25.5/26.5/28.5/29.5. Se o modelo voltar a
+    suportar so' 22.5, o pipeline gera zero pick -- foi o que aconteceu na
+    primeira validacao com dado real."""
+    for linha in (24.5, 25.5, 26.5):
+        assert linha in LINHAS_SUPORTADAS
+        assert prob_over(28.0, linha) is not None
+
+
+def test_probabilidade_cai_conforme_a_linha_sobe():
+    """Mesma previsao, linha mais alta: nunca pode ficar mais provavel."""
+    taxas = [prob_over(30.0, l)[0] for l in (22.5, 24.5, 25.5, 26.5)]
+    assert taxas == sorted(taxas, reverse=True)
+
+
+def test_linha_sem_faixa_medida_nao_interpola():
+    """28.5 aparece no mercado mas nao foi medida. Tem que devolver None em
+    vez de chutar por interpolacao -- a relacao nao e' parametrica."""
+    assert prob_over(30.0, 28.5) is None
+    assert analyze_fouls_market(15.0, 15.0, None, 8, 8, 0, odd=1.8, linha=28.5) is None
 
 
 def test_previsao_ausente_nao_vira_probabilidade():

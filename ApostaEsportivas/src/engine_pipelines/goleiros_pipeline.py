@@ -32,9 +32,11 @@ que esta quebrado.
 """
 import json
 import re
+import unicodedata
 
 from utils.db_utils import get_connection
 from services.match_stats_service import MatchStatsService
+from services.pick_engine import competition_profile as cp
 from services.odds_service import OddsService
 from services.pick_engine.goalkeeper_model import (
     MIN_OPPONENT_SAMPLE,
@@ -73,37 +75,70 @@ def _parse_valor(value_name: str) -> tuple[str, int] | None:
     return nome, int(m.group("n"))
 
 
+def _normalizar_nome(nome: str) -> str:
+    """Chave de comparacao de nome de jogador, sem acento e sem caixa.
+
+    A casa de aposta escreve "Joao Ricardo" e a API-Football grava "Joao
+    Ricardo" com til -- comparar cru descartava o goleiro como desconhecido.
+    Achado na validacao com dado real (fixture 1546848, Fortaleza).
+    """
+    sem_acento = unicodedata.normalize("NFKD", nome or "")
+    sem_acento = "".join(ch for ch in sem_acento if not unicodedata.combining(ch))
+    return " ".join(sem_acento.lower().split())
+
+
 def _goleiros_conhecidos(cur) -> dict:
     """{nome_normalizado: {player_id, team_id, saves_avg, jogos}} dos goleiros.
 
-    Sai de player_match_stats. Media de defesas so' conta atuacao com minutos
-    (goleiro reserva que nao entrou apareceria com 0 e afundaria a media).
+    NAO exige saves IS NOT NULL: o que este mapa resolve, e que e'
+    obrigatorio, e' o vinculo goleiro->time (sem ele nao da' pra saber de qual
+    adversario pegar o volume ofensivo). A media de defesas e' opcional no
+    modelo -- entra como segundo sinal quando existe. Exigir saves aqui
+    reduzia 112 goleiros conhecidos pra 49, descartando por falta de um dado
+    que o modelo nem precisa.
+
+    A media, quando existe, so' conta atuacao com minutos: goleiro reserva que
+    nao entrou apareceria com 0 e afundaria o numero.
     """
     cur.execute("""
         SELECT player_id,
-               MAX(player_name)                          AS player_name,
-               MAX(team_id)                              AS team_id,
-               MAX(team_name)                            AS team_name,
-               AVG(saves)::numeric(10,3)                 AS saves_avg,
-               COUNT(*)                                  AS jogos
+               MAX(player_name)                                          AS player_name,
+               MAX(team_id)                                              AS team_id,
+               MAX(team_name)                                            AS team_name,
+               AVG(saves) FILTER (WHERE saves IS NOT NULL
+                                    AND COALESCE(minutes, 0) > 0)::numeric(10,3) AS saves_avg,
+               COUNT(*)   FILTER (WHERE saves IS NOT NULL
+                                    AND COALESCE(minutes, 0) > 0)        AS jogos_com_defesa
         FROM player_match_stats
         WHERE position = 'G'
-          AND saves IS NOT NULL
-          AND COALESCE(minutes, 0) > 0
         GROUP BY player_id
     """)
     out = {}
     for r in cur.fetchall():
-        nome = (r[1] or "").strip().lower()
+        nome = _normalizar_nome(r[1])
         if not nome:
             continue
         out[nome] = {
             "player_id": r[0], "player_name": r[1],
             "team_id": r[2], "team_name": r[3],
             "saves_avg": float(r[4]) if r[4] is not None else None,
-            "jogos": int(r[5]),
+            "jogos": int(r[5] or 0),
         }
     return out
+
+
+def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> list:
+    """Historico do time, respeitando o perfil da competicao.
+
+    Mesma correcao do pipeline de faltas: em jogo de copa, filtrar so' pela
+    liga do fixture devolvia 1 jogo de historico -- abaixo do minimo de 5 que
+    o modelo exige, entao nenhum candidato passava.
+    """
+    since = match_stats.get_structural_change_date(team_id)
+    if cp.uses_all_competitions_history(fixture["league_id"]):
+        return match_stats.get_last_n_all_competitions(team_id, since_date=since)
+    return match_stats.get_all_matches_full(
+        team_id, fixture["season"], fixture["league_id"], since_date=since)
 
 
 def _media_chutes_no_alvo(historico: list, team_id: int) -> tuple[float | None, int]:
@@ -150,15 +185,16 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
                      match_stats: MatchStatsService,
                      odds_service: OddsService) -> list:
     """Candidatos de defesas pra um jogo (pode haver um por goleiro)."""
-    structured = odds_service.load_odds_structured(fixture["fixture_id"])
+    # RAW pelo mesmo motivo do pipeline de faltas: load_odds_structured
+    # agrupa por line_value e descarta o que nao parear como Over/Under.
+    # "Everson - 1" nao e' par de nada e sairia fora.
+    structured = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not structured:
         return []
 
     # Media de chutes no alvo de cada lado, calculada uma vez por jogo.
-    hist_casa = match_stats.get_all_matches_full(
-        fixture["home_team_id"], fixture["season"], fixture["league_id"])
-    hist_fora = match_stats.get_all_matches_full(
-        fixture["away_team_id"], fixture["season"], fixture["league_id"])
+    hist_casa = _historico(match_stats, fixture, fixture["home_team_id"])
+    hist_fora = _historico(match_stats, fixture, fixture["away_team_id"])
     chutes_casa, n_casa = _media_chutes_no_alvo(hist_casa, fixture["home_team_id"])
     chutes_fora, n_fora = _media_chutes_no_alvo(hist_fora, fixture["away_team_id"])
 
@@ -176,7 +212,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             continue
         nome_goleiro, n_defesas = parsed
 
-        info = goleiros.get(nome_goleiro.lower())
+        info = goleiros.get(_normalizar_nome(nome_goleiro))
         if not info:
             # Goleiro que ainda nao aparece em player_match_stats: sem o
             # vinculo com o time nao da' pra saber de qual adversario pegar
