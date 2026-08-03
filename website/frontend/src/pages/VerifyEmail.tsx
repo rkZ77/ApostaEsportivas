@@ -75,7 +75,7 @@ export default function VerifyEmail() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
 
         {state === 'loading' && (

@@ -637,6 +637,8 @@ _PICK_TABLES = {
     "free":        ("picks_free",        "home_team",      "away_team"),
     "multipla":    ("picks_multiplas",   "home_team_name", "away_team_name"),
     "alavancagem": ("picks_alavancagem", "home_team_1",    "away_team_1"),
+    "faltas":      ("picks_faltas",      "home_team",      "away_team"),
+    "goleiros":    ("picks_goleiros",    "home_team",      "away_team"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
@@ -665,15 +667,29 @@ def admin_search_picks(
             if date_to:
                 conds.append("match_date <= %s"); params.append(date_to)
             where = ("WHERE " + " AND ".join(conds)) if conds else ""
-            date_col = "match_date" if pt != "multipla" else "DATE(created_at AT TIME ZONE 'UTC')"
-            cur.execute(f"""
-                SELECT id, {home_col} AS home_team, {away_col} AS away_team,
-                       match_date, result
-                FROM {table}
-                {where}
-                ORDER BY match_date DESC, id DESC
-                LIMIT 50
-            """, params)
+            # Multipla e alavancagem nao tem coluna `market`/`line` unica (sao
+            # varias pernas), entao vao com rotulo fixo -- sem isso a query
+            # quebra e some do resultado inteiro.
+            if pt == "multipla":
+                mercado = "'Múltipla' AS market, NULL AS line, total_odd AS odd"
+            elif pt == "alavancagem":
+                mercado = "market_1 AS market, line_1 AS line, odd_combined AS odd"
+            else:
+                mercado = "market, line, odd"
+            try:
+                cur.execute(f"""
+                    SELECT id, {home_col} AS home_team, {away_col} AS away_team,
+                           match_date, result, profit, {mercado}
+                    FROM {table}
+                    {where}
+                    ORDER BY match_date DESC, id DESC
+                    LIMIT 50
+                """, params)
+            except Exception:
+                # Instancia sem a migracao das tabelas novas: pula esse tipo em
+                # vez de derrubar a busca inteira.
+                conn.rollback()
+                continue
             for r in cur.fetchall():
                 results.append({**dict(r), "pick_type": pt})
         results.sort(key=lambda x: (str(x.get("match_date") or ""), x["id"]), reverse=True)
