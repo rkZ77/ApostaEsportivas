@@ -20,6 +20,118 @@ export interface StoryImageInput {
   winRatePct?: number | null
 }
 
+// ── Tipografia ───────────────────────────────────────────────────────────
+// As mesmas duas famílias do site (index.css / tailwind.config): Space
+// Grotesk no display, JetBrains Mono nos números. Antes tudo era system-ui,
+// então a imagem compartilhada não parecia do mesmo produto que a página.
+//
+// Canvas não espera webfont carregar: se desenhar antes, cai no fallback
+// silenciosamente e o resultado varia por dispositivo. ensureFonts() força o
+// carregamento uma vez e é aguardado por todos os builders.
+const DISPLAY = '"Space Grotesk", system-ui, -apple-system, sans-serif'
+const MONO = '"JetBrains Mono", ui-monospace, monospace'
+const SANS = 'Inter, system-ui, -apple-system, sans-serif'
+
+// index.css carrega Space Grotesk e JetBrains Mono só até o peso 700; Inter
+// vai até 900. Pedir 900 numa família que não tem faz o navegador SIMULAR o
+// negrito (faux bold), e o traço sintetizado muda de aparelho pra aparelho --
+// a mesma pick sairia com espessura diferente em dois celulares. Por isso o
+// peso é limitado ao que existe de verdade em cada família.
+const clamp700 = (peso: number) => Math.min(peso, 700)
+
+const fontDisplay = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${DISPLAY}`
+const fontMono = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${MONO}`
+const fontSans = (peso: number, tam: number) => `${peso} ${tam}px ${SANS}`
+
+let fontesPromise: Promise<void> | null = null
+function ensureFonts(): Promise<void> {
+  if (fontesPromise) return fontesPromise
+  const fonts = (document as any).fonts
+  if (!fonts?.load) return (fontesPromise = Promise.resolve())
+  fontesPromise = Promise.all([
+    fonts.load('700 58px "Space Grotesk"'),
+    fonts.load('600 28px "Space Grotesk"'),
+    fonts.load('700 52px "JetBrains Mono"'),
+    fonts.load('500 24px "JetBrains Mono"'),
+    fonts.load('900 40px Inter'),
+    fonts.load('700 26px Inter'),
+  ])
+    .then(() => undefined)
+    // Falha de rede na fonte não pode impedir o compartilhamento: cai no
+    // fallback da própria stack CSS e segue.
+    .catch(() => undefined)
+  return fontesPromise
+}
+
+/**
+ * Fundo dos cards. Antes era um degradê preto + UM glow central redondo, igual
+ * nos quatro cards, o que deixava a imagem chapada.
+ *
+ * Agora: degradê de base, grade fina (mesma linguagem do `data-grid` do
+ * tailwind.config, que o site usa), dois glows em diagonal na cor de destaque
+ * (canto superior esquerdo e inferior direito) e uma vinheta que escurece as
+ * bordas. A diagonal é o que dá movimento -- glow centralizado e simétrico é
+ * justamente o que lê como estático.
+ */
+function drawBackground(ctx: CanvasRenderingContext2D, accentHex: string): void {
+  const bg = ctx.createLinearGradient(0, 0, W * 0.35, H)
+  bg.addColorStop(0, '#0a0a0c')
+  bg.addColorStop(0.55, '#000000')
+  bg.addColorStop(1, '#08080a')
+  ctx.fillStyle = bg
+  ctx.fillRect(0, 0, W, H)
+
+  ctx.save()
+  ctx.strokeStyle = `${accentHex}0f`
+  ctx.lineWidth = 1
+  const passo = 72
+  for (let x = 0; x <= W; x += passo) {
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
+  }
+  for (let y = 0; y <= H; y += passo) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
+  }
+  ctx.restore()
+
+  const glowTopo = ctx.createRadialGradient(W * 0.18, H * 0.16, 40, W * 0.18, H * 0.16, W * 0.95)
+  glowTopo.addColorStop(0, `${accentHex}3d`)
+  glowTopo.addColorStop(0.5, `${accentHex}12`)
+  glowTopo.addColorStop(1, 'transparent')
+  ctx.fillStyle = glowTopo
+  ctx.fillRect(0, 0, W, H)
+
+  const glowBase = ctx.createRadialGradient(W * 0.86, H * 0.82, 40, W * 0.86, H * 0.82, W * 0.85)
+  glowBase.addColorStop(0, `${accentHex}26`)
+  glowBase.addColorStop(1, 'transparent')
+  ctx.fillStyle = glowBase
+  ctx.fillRect(0, 0, W, H)
+
+  const vinheta = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78)
+  vinheta.addColorStop(0, 'transparent')
+  vinheta.addColorStop(1, 'rgba(0,0,0,0.72)')
+  ctx.fillStyle = vinheta
+  ctx.fillRect(0, 0, W, H)
+}
+
+/** Faixa fina de destaque no topo, com degradê que some nas pontas. */
+function drawTopAccent(ctx: CanvasRenderingContext2D, accentHex: string): void {
+  const barra = ctx.createLinearGradient(0, 0, W, 0)
+  barra.addColorStop(0, 'transparent')
+  barra.addColorStop(0.5, accentHex)
+  barra.addColorStop(1, 'transparent')
+  ctx.fillStyle = barra
+  ctx.fillRect(0, 0, W, 6)
+}
+
+/** Texto com brilho na própria cor -- usado nos números que são o destaque. */
+function withGlow(ctx: CanvasRenderingContext2D, cor: string, blur: number, fn: () => void): void {
+  ctx.save()
+  ctx.shadowColor = cor
+  ctx.shadowBlur = blur
+  fn()
+  ctx.restore()
+}
+
 function loadImage(src: string): Promise<HTMLImageElement | null> {
   return new Promise(resolve => {
     const img = new Image()
@@ -80,20 +192,14 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   if (!ctx) throw new Error('Canvas 2D não suportado')
 
   const rs = getResultStyle(input.result)
-  const accentHex = rs?.hex ?? '#00CC00'
+  // Pick ainda sem resultado usa a cor do TIPO (VIP amarelo, faltas roxo...)
+  // em vez do verde genérico -- assim o card já comunica a categoria de longe.
+  const typeHexBase = PICK_TYPE_HEX[input.pickType] ?? '#00CC00'
+  const accentHex = rs?.hex ?? typeHexBase
 
-  // Fundo
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#000000')
-  bg.addColorStop(1, '#09090b')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-
-  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 720)
-  glow.addColorStop(0, `${accentHex}33`)
-  glow.addColorStop(1, 'transparent')
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, H)
+  await ensureFonts()
+  drawBackground(ctx, accentHex)
+  drawTopAccent(ctx, accentHex)
 
   // Logo
   const logoImg = await loadImage('/logo.png')
@@ -109,7 +215,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
     ctx.drawImage(logoImg, W / 2 - 70, 100, 140, 140)
   }
   const brandY = logoImg ? 290 : 170
-  ctx.font = '900 58px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(900, 58)
   const pickW = ctx.measureText('Pick').width
   const iaW = ctx.measureText('IA').width
   ctx.textAlign = 'left'
@@ -122,7 +228,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   ctx.textAlign = 'center'
   const typeLabel = PICK_TYPE_LABEL[input.pickType] ?? 'VIP'
   const typeHex = PICK_TYPE_HEX[input.pickType] ?? '#facc15'
-  ctx.font = '800 30px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(800, 30)
   const badgeTextW = ctx.measureText(typeLabel.toUpperCase()).width
   const badgeW = badgeTextW + 80
   const badgeY = brandY + 56
@@ -139,7 +245,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   if (input.leagueName) {
     cursorY += 58
-    ctx.font = '600 28px system-ui, -apple-system, sans-serif'
+    ctx.font = fontSans(600, 28)
     ctx.fillStyle = '#71717a'
     ctx.fillText(fitText(ctx, input.leagueName, W - 160), W / 2, cursorY)
   }
@@ -155,14 +261,14 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   drawCircularLogo(ctx, homeLogo, W / 2 - 260, cursorY, logoSize)
   drawCircularLogo(ctx, awayLogo, W / 2 + 260, cursorY, logoSize)
 
-  ctx.font = '900 46px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(900, 46)
   ctx.fillStyle = '#ffffff'
   ctx.fillText(fitText(ctx, input.homeTeamName, 340), W / 2, cursorY - 88)
-  ctx.font = '700 30px system-ui, -apple-system, sans-serif'
+  ctx.font = fontSans(700, 30)
   ctx.fillStyle = '#52525b'
   ctx.fillText('vs', W / 2, cursorY + 14)
   if (input.awayTeamName) {
-    ctx.font = '900 46px system-ui, -apple-system, sans-serif'
+    ctx.font = fontDisplay(900, 46)
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitText(ctx, input.awayTeamName, 340), W / 2, cursorY + 110)
   }
@@ -171,7 +277,7 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   if (input.market) {
     const marketText = input.line ? `${input.market} · ${input.line}` : input.market
-    ctx.font = '800 36px system-ui, -apple-system, sans-serif'
+    ctx.font = fontDisplay(800, 36)
     const fitted = fitText(ctx, marketText, W - 240)
     const textW = ctx.measureText(fitted).width
     const boxW = Math.min(textW + 80, W - 120)
@@ -190,18 +296,27 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
 
   // Selo de resultado
   cursorY += 44
-  const resultLabel = rs ? `${rs.label} ${rs.emoji}` : 'A CONFIRMAR'
-  ctx.font = '900 72px system-ui, -apple-system, sans-serif'
+  const resultLabel = rs ? rs.label : 'A CONFIRMAR'
+  ctx.font = fontDisplay(900, 72)
   const resultTextW = ctx.measureText(resultLabel).width
   const resultBoxW = resultTextW + 120
+  // Preenchimento em degradê + brilho na borda: o selo é o elemento que
+  // decide se alguém para de rolar o feed, então é onde vale o peso visual.
+  const seloGrad = ctx.createLinearGradient(0, cursorY, 0, cursorY + 122)
+  seloGrad.addColorStop(0, `${accentHex}33`)
+  seloGrad.addColorStop(1, `${accentHex}14`)
   drawRoundedRect(ctx, W / 2 - resultBoxW / 2, cursorY, resultBoxW, 122, 26)
-  ctx.fillStyle = `${accentHex}22`
+  ctx.fillStyle = seloGrad
   ctx.fill()
-  ctx.strokeStyle = `${accentHex}88`
-  ctx.lineWidth = 3
-  ctx.stroke()
-  ctx.fillStyle = accentHex
-  ctx.fillText(resultLabel, W / 2, cursorY + 88)
+  withGlow(ctx, `${accentHex}aa`, 26, () => {
+    ctx.strokeStyle = accentHex
+    ctx.lineWidth = 3
+    ctx.stroke()
+  })
+  withGlow(ctx, `${accentHex}88`, 24, () => {
+    ctx.fillStyle = accentHex
+    ctx.fillText(resultLabel, W / 2, cursorY + 88)
+  })
   cursorY += 122
 
   // Estatísticas: odd, lucro e (se disponível) acerto geral do site
@@ -222,12 +337,20 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const statsX = W / 2 - totalW / 2
   stats.forEach((s, i) => {
     const cx = statsX + colW * i + colW / 2
-    ctx.font = '700 24px system-ui, -apple-system, sans-serif'
+    // Divisória fina entre as colunas: separa os números sem precisar de
+    // caixa em volta de cada um.
+    if (i > 0) {
+      ctx.fillStyle = 'rgba(255,255,255,0.10)'
+      ctx.fillRect(statsX + colW * i, cursorY - 26, 1, 92)
+    }
+    ctx.font = fontMono(700, 24)
     ctx.fillStyle = '#71717a'
     ctx.fillText(s.label, cx, cursorY)
-    ctx.font = '900 52px system-ui, -apple-system, sans-serif'
-    ctx.fillStyle = s.color
-    ctx.fillText(s.value, cx, cursorY + 58)
+    ctx.font = fontMono(900, 52)
+    withGlow(ctx, `${s.color}66`, 18, () => {
+      ctx.fillStyle = s.color
+      ctx.fillText(s.value, cx, cursorY + 58)
+    })
   })
 
   cursorY += 150
@@ -268,7 +391,7 @@ function computeShiftY(contentBottomUnshifted: number): number {
 }
 
 function drawFooterCredit(ctx: CanvasRenderingContext2D): void {
-  ctx.font = '600 23px system-ui, -apple-system, sans-serif'
+  ctx.font = fontSans(600, 23)
   ctx.fillStyle = '#3f3f46'
   ctx.textAlign = 'center'
   ctx.fillText('Pick IA · Tips por Inteligência Artificial', W / 2, CREDIT_Y)
@@ -280,7 +403,7 @@ function drawBrandHeader(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElemen
     ctx.drawImage(logoImg, W / 2 - 70, 100, 140, 140)
   }
   const brandY = logoImg ? 290 : 170
-  ctx.font = '900 58px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(900, 58)
   const pickW = ctx.measureText('Pick').width
   const iaW = ctx.measureText('IA').width
   ctx.textAlign = 'left'
@@ -294,7 +417,7 @@ function drawBrandHeader(ctx: CanvasRenderingContext2D, logoImg: HTMLImageElemen
 
 function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl: string): void {
   const pillLabel = '2 DIAS DE VIP GRÁTIS'
-  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(800, 28)
   const pillW = ctx.measureText(pillLabel).width + 64
   drawRoundedRect(ctx, W / 2 - pillW / 2, cursorY, pillW, 58, 29)
   ctx.fillStyle = '#00CC00'
@@ -306,7 +429,7 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
   // Instrução curta acima do link -- sem isso, quem vê o card fora do
   // Instagram (TikTok, print repostado, sem sticker de link clicável) não
   // sabe que precisa digitar o endereço no navegador.
-  ctx.font = '700 26px system-ui, -apple-system, sans-serif'
+  ctx.font = fontSans(700, 26)
   ctx.fillStyle = '#a1a1aa'
   ctx.fillText('Acesse agora:', W / 2, cursorY)
   cursorY += 48
@@ -316,7 +439,7 @@ function drawCtaFooter(ctx: CanvasRenderingContext2D, cursorY: number, shareUrl:
     catch { return shareUrl.replace(/^https?:\/\//, '').split('/')[0] }
   })()
   const linkText = fitText(ctx, displayDomain, W - 320)
-  ctx.font = '900 48px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(900, 48)
   const linkTextW = ctx.measureText(linkText).width
   const btnPadX = 56
   const btnW = linkTextW + btnPadX * 2
@@ -368,20 +491,9 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
 
   const accentHex = '#00CC00'
 
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#000000')
-  bg.addColorStop(1, '#09090b')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-
-  const glow = ctx.createRadialGradient(W / 2, 420, 40, W / 2, 420, 760)
-  glow.addColorStop(0, `${accentHex}44`)
-  glow.addColorStop(1, 'transparent')
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, H)
-
-  // Barra de destaque no topo -- mesmo padrao visual dos cards do site
-  // (SuggestionCard.tsx: gradiente via-green-500 na borda superior).
+  await ensureFonts()
+  drawBackground(ctx, accentHex)
+  drawTopAccent(ctx, accentHex)
   const topBar = ctx.createLinearGradient(0, 0, W, 0)
   topBar.addColorStop(0, 'transparent')
   topBar.addColorStop(0.5, accentHex)
@@ -400,7 +512,7 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
-  ctx.font = '800 30px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(800, 30)
   const badgeLabel = input.badgeLabel ?? 'RESULTADOS DA IA'
   const badgeTextW = ctx.measureText(badgeLabel).width
   const badgeW = badgeTextW + 80
@@ -424,13 +536,13 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   // uma delas e' o que ficava com o verde "diferente de antes".
   const resultGreen = '#4ade80'
   cursorY += 180
-  ctx.font = '900 220px system-ui, -apple-system, sans-serif'
+  ctx.font = fontMono(900, 220)
   ctx.shadowColor = `${resultGreen}99`
   ctx.shadowBlur = 40
   ctx.fillStyle = resultGreen
   ctx.fillText(`${Math.round(input.winRatePct)}%`, W / 2, cursorY)
   ctx.shadowBlur = 0
-  ctx.font = '700 34px system-ui, -apple-system, sans-serif'
+  ctx.font = fontSans(700, 34)
   ctx.fillStyle = '#a1a1aa'
   ctx.fillText('WIN RATE', W / 2, cursorY + 54)
 
@@ -447,16 +559,16 @@ export async function buildResultsStoryImage(input: ResultsStoryInput): Promise<
   const statsX = W / 2 - totalW / 2
   stats.forEach((s, i) => {
     const cx = statsX + colW * i + colW / 2
-    ctx.font = '700 26px system-ui, -apple-system, sans-serif'
+    ctx.font = fontSans(700, 26)
     ctx.fillStyle = '#71717a'
     ctx.fillText(s.label, cx, cursorY)
-    ctx.font = '900 58px system-ui, -apple-system, sans-serif'
+    ctx.font = fontDisplay(900, 58)
     ctx.fillStyle = s.color
     ctx.fillText(s.value, cx, cursorY + 64)
   })
 
   cursorY += 220
-  ctx.font = '600 28px system-ui, -apple-system, sans-serif'
+  ctx.font = fontSans(600, 28)
   ctx.fillStyle = '#52525b'
   ctx.fillText(input.footerText ?? 'Histórico 100% auditável e público', W / 2, cursorY)
 
@@ -493,17 +605,9 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
 
   const accentHex = '#facc15'
 
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#000000')
-  bg.addColorStop(1, '#09090b')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-
-  const glow = ctx.createRadialGradient(W / 2, 380, 40, W / 2, 380, 680)
-  glow.addColorStop(0, `${accentHex}22`)
-  glow.addColorStop(1, 'transparent')
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, H)
+  await ensureFonts()
+  drawBackground(ctx, accentHex)
+  drawTopAccent(ctx, accentHex)
 
   const logoImg = await loadImage('/logo.png')
   const games = input.games.slice(0, 8)
@@ -519,7 +623,7 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
-  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(800, 28)
   const badgeLabel = input.variant === 'amanha'
     ? 'JOGOS DE AMANHÃ · A IA VAI ANALISAR'
     : 'JOGOS DE HOJE · A IA JÁ ANALISOU'
@@ -566,18 +670,18 @@ export async function buildTodayGamesStoryImage(input: TodayGamesStoryInput): Pr
     const leagueFont = games.length > 6 ? '600 17px' : '600 20px'
 
     ctx.textAlign = 'center'
-    ctx.font = `${nameFont} system-ui, -apple-system, sans-serif`
+    ctx.font = `${nameFont} ${DISPLAY}`
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitText(ctx, g.homeTeamName, 300), W / 2, midY - boxHalf * 0.62)
-    ctx.font = `${vsFont} system-ui, -apple-system, sans-serif`
+    ctx.font = `${vsFont} ${SANS}`
     ctx.fillStyle = '#52525b'
     ctx.fillText('vs', W / 2, midY - boxHalf * 0.04)
-    ctx.font = `${nameFont} system-ui, -apple-system, sans-serif`
+    ctx.font = `${nameFont} ${DISPLAY}`
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitText(ctx, g.awayTeamName, 300), W / 2, midY + boxHalf * 0.5)
 
     if (g.leagueName) {
-      ctx.font = `${leagueFont} system-ui, -apple-system, sans-serif`
+      ctx.font = `${leagueFont} ${SANS}`
       ctx.fillStyle = '#71717a'
       ctx.fillText(fitText(ctx, g.leagueName, 260), W / 2, midY + boxHalf * 0.86)
     }
@@ -617,17 +721,8 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
   const accentHex = '#00CC00'
   const resultGreen = '#4ade80'
 
-  const bg = ctx.createLinearGradient(0, 0, 0, H)
-  bg.addColorStop(0, '#000000')
-  bg.addColorStop(1, '#09090b')
-  ctx.fillStyle = bg
-  ctx.fillRect(0, 0, W, H)
-
-  const glow = ctx.createRadialGradient(W / 2, 380, 40, W / 2, 380, 700)
-  glow.addColorStop(0, `${accentHex}33`)
-  glow.addColorStop(1, 'transparent')
-  ctx.fillStyle = glow
-  ctx.fillRect(0, 0, W, H)
+  await ensureFonts()
+  drawBackground(ctx, accentHex)
 
   const topBar = ctx.createLinearGradient(0, 0, W, 0)
   topBar.addColorStop(0, 'transparent')
@@ -649,7 +744,7 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
   const brandY = drawBrandHeader(ctx, logoImg)
 
   let cursorY = brandY + 56
-  ctx.font = '800 28px system-ui, -apple-system, sans-serif'
+  ctx.font = fontDisplay(800, 28)
   const badgeLabel = input.badgeLabel ?? 'RESULTADOS POR LIGA'
   const badgeTextW = ctx.measureText(badgeLabel).width
   const badgeW = badgeTextW + 72
@@ -682,18 +777,18 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
     drawCircularLogo(ctx, logos[i], 70 + 66, midY, logoSize)
 
     ctx.textAlign = 'left'
-    ctx.font = '800 32px system-ui, -apple-system, sans-serif'
+    ctx.font = fontDisplay(800, 32)
     ctx.fillStyle = '#ffffff'
     ctx.fillText(fitText(ctx, lg.leagueName, 420), 70 + 66 + logoSize / 2 + 30, midY - 8)
-    ctx.font = '600 22px system-ui, -apple-system, sans-serif'
+    ctx.font = fontSans(600, 22)
     ctx.fillStyle = '#71717a'
     ctx.fillText(`${lg.total} picks`, 70 + 66 + logoSize / 2 + 30, midY + 26)
 
     ctx.textAlign = 'right'
-    ctx.font = '900 40px system-ui, -apple-system, sans-serif'
+    ctx.font = fontDisplay(900, 40)
     ctx.fillStyle = lg.winRatePct >= 55 ? resultGreen : '#ffffff'
     ctx.fillText(`${Math.round(lg.winRatePct)}%`, W - 70 - 40, midY - 8)
-    ctx.font = '700 24px system-ui, -apple-system, sans-serif'
+    ctx.font = fontMono(700, 24)
     ctx.fillStyle = lg.profit >= 0 ? resultGreen : '#f87171'
     ctx.fillText(`${lg.profit >= 0 ? '+' : ''}${lg.profit.toFixed(1)}u`, W - 70 - 40, midY + 26)
     ctx.textAlign = 'center'
