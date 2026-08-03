@@ -228,17 +228,17 @@ export default function ResultadosPublicos() {
                   { label: 'Greens',    value: String(s.greens),         color: 'text-green-400' },
                   { label: 'Lucro (u)', value: `${profit != null && profit >= 0 ? '+' : ''}${profit?.toFixed(1) ?? '0'}u`, color: (profit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' },
                 ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-surface-0 border border-line rounded-lg p-4 text-center">
-                    <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">{label}</div>
+                  <div key={label} className="stat-tile">
+                    <div className={`stat-value ${color}`}>{value}</div>
+                    <div className="stat-label">{label}</div>
                   </div>
                 ))}
               </div>
 
               {/* Gráfico por dia */}
               {byDay.length > 1 && (
-                <div className="bg-surface-0 border border-line rounded-lg p-5 mb-8">
-                  <p className="text-sm text-ink-3 font-bold mb-4">Picks por dia</p>
+                <div className="panel p-5 mb-8">
+                  <p className="panel-label mb-4">Picks por dia</p>
                   <DailyGreensChart data={byDay} />
                 </div>
               )}
@@ -248,16 +248,16 @@ export default function ResultadosPublicos() {
                 const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
                 const filteredRecent = recentLeagueFilter ? recent.filter(t => t.league_name === recentLeagueFilter) : recent
                 return (
-                <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
-                  <div className="px-5 py-3 border-b border-line flex items-center justify-between">
-                    <span className="text-xs font-bold text-ink-2 uppercase">Picks recentes</span>
-                    <span className="text-[10px] text-ink-4">{recentTotal} resultados</span>
+                <div className="panel">
+                  <div className="panel-head">
+                    <span className="panel-label">Picks recentes</span>
+                    <span className="panel-meta">{recentTotal} resultados</span>
                   </div>
                   {recentLeagues.length > 1 && (
                     <div className="flex gap-2 flex-wrap px-4 pt-3">
                       <button
                         onClick={() => setRecentLeagueFilter('')}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${!recentLeagueFilter ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-line text-ink-3 hover:border-line-strong'}`}
+                        className={`pill ${!recentLeagueFilter ? 'pill-active' : ''}`}
                       >
                         Todas
                       </button>
@@ -265,7 +265,7 @@ export default function ResultadosPublicos() {
                         <button
                           key={lg}
                           onClick={() => setRecentLeagueFilter(lg === recentLeagueFilter ? '' : lg)}
-                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${recentLeagueFilter === lg ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-line text-ink-3 hover:border-line-strong'}`}
+                          className={`pill ${recentLeagueFilter === lg ? 'pill-active' : ''}`}
                         >
                           {lg}
                         </button>
