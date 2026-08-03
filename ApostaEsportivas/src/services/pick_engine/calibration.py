@@ -40,6 +40,10 @@ from services.pick_engine import red_analysis
 # historico pos-fix acumular amostra suficiente organicamente.
 _CALIBRATION_CUTOFF = datetime(2026, 7, 25, tzinfo=timezone.utc)
 
+# Amostra minima pra o hit-rate virar PRIOR do encolhimento bayesiano
+# (bayesian_model.shrink_taxa) -- ali o numero substitui a taxa empirica, entao
+# precisa de um piso duro. A CORRECAO de confidence nao usa mais este corte:
+# ver _evidence_weight.
 _MIN_N_FOR_ADJUSTMENT = 10
 _GAP_OVERCONFIDENT_THRESHOLD = 0.10
 _GAP_CONSERVATIVE_THRESHOLD = -0.05
@@ -47,6 +51,24 @@ _MIN_HIT_FOR_CONFIDENCE = 0.50
 _MIN_N_FOR_HIT_FLOOR = 15
 _CONSERVATIVE_BONUS = 0.02
 _HIT_FLOOR_PENALTY = -0.10
+
+# Forca do encolhimento da CORRECAO de confidence. Mesma constante e mesma
+# formula n/(n+k) que bayesian_model._DEFAULT_PRIOR_STRENGTH ja usa pra taxa --
+# aqui o "prior" e' "nao corrigir nada", entao a correcao entra proporcional a
+# evidencia acumulada em vez de tudo-ou-nada.
+#
+# Por que trocar o corte seco: com _MIN_N_FOR_ADJUSTMENT=10, n=9 recebia zero
+# correcao e n=10 recebia a correcao INTEIRA. Medido em producao em 2026-08-03,
+# dos 6 market_types com historico so' `corners` (n=10) passava do corte --
+# `cards`, com o pior gap de todos (+0.323: declarava 82% e acertava 50%),
+# ficava impune por ter n=2. E o gap de corners, +0.118 com n=10, e' MENOR que
+# o proprio erro-padrao do hit-rate nessa amostra (sqrt(.7*.3/10) = 0.145), ou
+# seja: a correcao inteira estava sendo aplicada em cima de ruido.
+#
+# Com n/(n+10): n=2 -> 17% da correcao, n=10 -> 50%, n=30 -> 75%, n=90 -> 90%.
+# Todo mercado passa a ser corrigido na medida do que a amostra dele sustenta,
+# e a correcao converge pro valor cheio conforme o historico cresce.
+_EVIDENCE_STRENGTH = 10
 
 # REDs nestas categorias nao contam pra hit-rate (nem como acerto, nem como
 # erro informativo) -- ver docstring do modulo.
@@ -114,19 +136,36 @@ def get_market_calibration(days: int = 60) -> dict:
     }
 
 
-def _resolve_stats(market_type: str, league_id: int | None, calibration: dict) -> dict | None:
+def _resolve_stats(market_type: str, league_id: int | None, calibration: dict,
+                    min_n: int = _MIN_N_FOR_ADJUSTMENT) -> dict | None:
     """Tenta (market_type, league_id) primeiro (amostra suficiente); cai pra
     market_type agregado (todas as ligas) se a liga especifica nao tiver dado
     ou amostra insuficiente. None se nem o agregado tiver amostra -- dado
-    insuficiente em qualquer granularidade, nao ha correcao pra aplicar."""
+    insuficiente em qualquer granularidade, nao ha correcao pra aplicar.
+
+    `min_n` e' parametro porque os dois consumidores exigem coisas diferentes:
+    get_prior() precisa de piso duro (o numero SUBSTITUI a taxa empirica),
+    calibration_adjustment() nao (a correcao ja entra encolhida por
+    _evidence_weight, entao amostra pequena vira correcao pequena, nao ausente)."""
     if league_id is not None:
         fine = calibration.get("by_market_league", {}).get((market_type, league_id))
-        if fine and fine.get("n", 0) >= _MIN_N_FOR_ADJUSTMENT:
+        if fine and fine.get("n", 0) >= min_n:
             return fine
     coarse = calibration.get("by_market", {}).get(market_type)
-    if coarse and coarse.get("n", 0) >= _MIN_N_FOR_ADJUSTMENT:
+    if coarse and coarse.get("n", 0) >= min_n:
         return coarse
     return None
+
+
+def _evidence_weight(n: int) -> float:
+    """Quanto da correcao a amostra sustenta: n/(n+k), de 0 a 1.
+
+    Mesma formula de encolhimento bayesiano de bayesian_model.shrink_taxa,
+    com o "prior" sendo nao corrigir nada. Substitui o corte seco em n>=10
+    -- ver comentario em _EVIDENCE_STRENGTH."""
+    if n <= 0:
+        return 0.0
+    return round(n / (n + _EVIDENCE_STRENGTH), 4)
 
 
 def get_prior(market_type: str, calibration: dict, league_id: int | None = None) -> float | None:
@@ -141,22 +180,34 @@ def get_prior(market_type: str, calibration: dict, league_id: int | None = None)
 
 def calibration_adjustment(market_type: str, calibration: dict, league_id: int | None = None) -> float:
     """Delta deterministico pra somar ao confidence bruto, baseado no
-    historico real desse market_type (com fallback por liga). Sempre 0 se
-    amostra insuficiente em qualquer granularidade (nao ha correcao sem dado)."""
-    stats = _resolve_stats(market_type, league_id, calibration)
+    historico real desse market_type (com fallback por liga), ENCOLHIDO pela
+    evidencia que a amostra sustenta (ver _evidence_weight).
+
+    Sem nenhum historico do mercado -> 0 (nao ha o que corrigir). Com
+    historico curto -> correcao pequena na direcao certa, em vez do zero
+    absoluto de antes. A granularidade fina (market_type, league_id) so' e'
+    usada quando tem amostra propria suficiente; senao cai pro agregado, e o
+    encolhimento usa o n da granularidade que de fato respondeu."""
+    # min_n=1: qualquer historico ja' informa alguma coisa. O peso da correcao
+    # e' que varia com n -- nao a existencia dela.
+    stats = _resolve_stats(market_type, league_id, calibration, min_n=1)
     if not stats:
         return 0.0
 
     gap = stats.get("gap", 0.0)
     hit = stats.get("hit", 0.0)
     n = stats["n"]
+    peso = _evidence_weight(n)
 
+    # Piso de hit-rate continua exigindo amostra robusta ANTES de disparar:
+    # e' a penalidade mais dura do modulo e nao pode ser acionada por um par
+    # de REDs em sequencia. Passando do piso, ainda entra encolhida.
     if hit < _MIN_HIT_FOR_CONFIDENCE and n >= _MIN_N_FOR_HIT_FLOOR:
-        return _HIT_FLOOR_PENALTY
+        return round(_HIT_FLOOR_PENALTY * peso, 4)
 
     if gap > _GAP_OVERCONFIDENT_THRESHOLD:
-        return -round(gap, 4)
+        return -round(gap * peso, 4)
     if gap < _GAP_CONSERVATIVE_THRESHOLD:
-        return _CONSERVATIVE_BONUS
+        return round(_CONSERVATIVE_BONUS * peso, 4)
 
     return 0.0

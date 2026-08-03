@@ -1102,9 +1102,10 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     alavancagem_map: dict = {}
     if alavancagem_ids:
         cur.execute("""
-            SELECT id, fixture_id_1, fixture_id_2,
+            SELECT id, fixture_id_1, fixture_id_2, fixture_id_3,
                    market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
                    market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
+                   market_3, market_type_3, line_3, odd_3, home_team_3, away_team_3,
                    odd_combined, result, match_date
             FROM picks_alavancagem WHERE id = ANY(%s)
         """, (alavancagem_ids,))
@@ -1113,8 +1114,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     # Batch fixture lookups for alavancagem team_ids
     alav_fixture_ids = set()
     for p in alavancagem_map.values():
-        if p["fixture_id_1"]: alav_fixture_ids.add(p["fixture_id_1"])
-        if p["fixture_id_2"]: alav_fixture_ids.add(p["fixture_id_2"])
+        for _i in (1, 2, 3):
+            if p[f"fixture_id_{_i}"]:
+                alav_fixture_ids.add(p[f"fixture_id_{_i}"])
 
     alav_fixture_map: dict = {}
     if alav_fixture_ids:
@@ -1183,7 +1185,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             if fid:
                 all_fixture_ids.add(fid)
     for p in alavancagem_map.values():
-        for i in (1, 2):
+        for i in (1, 2, 3):
             fid = p.get(f"fixture_id_{i}")
             if fid:
                 all_fixture_ids.add(fid)
@@ -1341,7 +1343,7 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 continue
 
             legs_out = []
-            for i in (1, 2):
+            for i in (1, 2, 3):
                 fid = p.get(f"fixture_id_{i}")
                 if not fid:
                     continue
@@ -1531,10 +1533,16 @@ def resolve_all_pending() -> dict:
 
         # ── ALAVANCAGEM ──────────────────────────────────────────────────────
         try:
+            # A perna 3 existe na tabela (tipo 'tripla') e nao era lida aqui:
+            # a tripla seria graduada so' pelas pernas 1 e 2 e paga com
+            # odd_combined das tres, virando GREEN indevido sempre que a 3
+            # perdesse. Mesmo furo que existia em
+            # services/ai_result_checker_alavancagem.py.
             cur.execute("""
-                SELECT id, fixture_id_1, fixture_id_2,
+                SELECT id, fixture_id_1, fixture_id_2, fixture_id_3,
                        market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
                        market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
+                       market_3, market_type_3, line_3, odd_3, home_team_3, away_team_3,
                        odd_combined
                 FROM picks_alavancagem
                 WHERE result IS NULL AND match_date <= %s
@@ -1542,7 +1550,7 @@ def resolve_all_pending() -> dict:
             for p in cur.fetchall():
                 try:
                     legs_out = []
-                    for i in (1, 2):
+                    for i in (1, 2, 3):
                         fid = p.get(f"fixture_id_{i}")
                         if not fid:
                             continue
@@ -1779,12 +1787,13 @@ def reverify_recent_stats_results() -> dict:
         except Exception as e:
             logger.error("[AUTO-RECHECK] multipla query erro: %s", e)
 
-        # ── ALAVANCAGEM (2 pernas em colunas separadas, resultado combinado) ────
+        # ── ALAVANCAGEM (ate 3 pernas em colunas separadas, resultado combinado) ─
         try:
             cur.execute("""
-                SELECT id, fixture_id_1, fixture_id_2,
+                SELECT id, fixture_id_1, fixture_id_2, fixture_id_3,
                        market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
                        market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
+                       market_3, market_type_3, line_3, odd_3, home_team_3, away_team_3,
                        odd_combined, result
                 FROM picks_alavancagem
                 WHERE result IS NOT NULL AND match_date BETWEEN %s AND %s
@@ -1792,11 +1801,11 @@ def reverify_recent_stats_results() -> dict:
             for p in cur.fetchall():
                 checked += 1
                 try:
-                    if p.get("market_type_1") not in _STATS_REVERIFY_MARKET_TYPES and \
-                       p.get("market_type_2") not in _STATS_REVERIFY_MARKET_TYPES:
+                    if not any(p.get(f"market_type_{i}") in _STATS_REVERIFY_MARKET_TYPES
+                               for i in (1, 2, 3)):
                         continue
                     legs_out = []
-                    for i in (1, 2):
+                    for i in (1, 2, 3):
                         fid = p.get(f"fixture_id_{i}")
                         if not fid:
                             continue

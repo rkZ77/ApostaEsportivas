@@ -876,31 +876,158 @@ _SCORED_CONCEDED_FIELDS = {
 }
 
 
-def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str):
+def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str,
+                         team_id: int | None = None):
     """Media do que o time FAZ (feitos) e do que CEDE (cedidos) no
     historico, no contexto correto (casa/fora). Base da validacao
     feitos-vs-cedidos: toda estimativa de total precisa ser validada
     cruzando feitos de um lado com cedidos do outro, nao so olhar se
-    jogos passados bateram a linha."""
+    jogos passados bateram a linha.
+
+    `team_id` resolve o lado POR PARTIDA (home_team_id == team_id). Sem ele
+    cai no `is_home_ctx` unico pra lista inteira, que so' e' correto quando
+    todos os jogos da lista tem o mesmo mando.
+
+    Por que isso importa: MatchStatsService.get_all_matches_full() filtra por
+    `(home_team_id = X OR away_team_id = X)` -- devolve os 15 jogos do time
+    MISTURANDO casa e fora. Com um is_home_ctx unico, metade das partidas era
+    lida na coluna errada: pro mandante lia-se `home_corners` tambem nos jogos
+    em que ele era visitante, ou seja, os escanteios DO ADVERSARIO entravam
+    como "feitos" dele. Mesmo bug que ja' tinha sido encontrado e corrigido em
+    offensive_efficiency() (ver docstring de la'), que nunca foi propagado
+    ate' aqui."""
     if not matches or family not in _SCORED_CONCEDED_FIELDS:
         return None, None
     n = len(matches)
+
+    def _lado(m):
+        """('home','away') quando o time e' o mandante NAQUELA partida."""
+        if team_id is None:
+            return ("home", "away") if is_home_ctx else ("away", "home")
+        return ("home", "away") if m.get("home_team_id") == team_id else ("away", "home")
+
     if family == "cards":
         # amarelo=1, vermelho=2 (ver _cards_points) -- mesma correcao do
         # bug de vermelho ignorado, aqui pro sinal de convergencia feitos
         # x cedidos em vez da taxa em si.
-        scored_side, conceded_side = ("home", "away") if is_home_ctx else ("away", "home")
-        scored = sum(_cards_points(m, scored_side) for m in matches) / n
-        conceded = sum(_cards_points(m, conceded_side) for m in matches) / n
-        return round(scored, 3), round(conceded, 3)
+        scored = conceded = 0.0
+        for m in matches:
+            s_side, c_side = _lado(m)
+            scored += _cards_points(m, s_side)
+            conceded += _cards_points(m, c_side)
+        return round(scored / n, 3), round(conceded / n, 3)
+
     home_f, away_f = _SCORED_CONCEDED_FIELDS[family]
-    scored_k, conceded_k = (home_f, away_f) if is_home_ctx else (away_f, home_f)
-    scored = sum((m.get(scored_k) or 0) for m in matches) / n
-    conceded = sum((m.get(conceded_k) or 0) for m in matches) / n
-    return round(scored, 3), round(conceded, 3)
+    scored = conceded = 0.0
+    for m in matches:
+        s_side, c_side = _lado(m)
+        scored += (m.get(home_f if s_side == "home" else away_f) or 0)
+        conceded += (m.get(home_f if c_side == "home" else away_f) or 0)
+    return round(scored / n, 3), round(conceded / n, 3)
 
 
-def expected_value_convergence(last10_home: list, last10_away: list, family: str, scope: str):
+# Familia -> (campo_feitos, campo_cedidos) em `team_statistics`. Essa tabela e'
+# mantida pelo collector (services/team_stats_aggregator_service.py) com media
+# ja' separada por context_type HOME/AWAY e `games_count` proprio -- ou seja, o
+# recorte de mando ja' vem correto e cobre mais jogos que os 15 de
+# get_all_matches_full(). Cartoes nao tem coluna "pontos" pronta: soma amarelo
+# + 2*vermelho pra bater com _cards_points.
+_TEAM_STATS_FIELDS = {
+    "goals":   ("avg_goals_for", "avg_goals_against"),
+    "corners": ("avg_corners_for", "avg_corners_against"),
+    "fouls":   ("avg_fouls_for", "avg_fouls_against"),
+    "saves":   ("avg_saves_for", "avg_saves_against"),
+}
+
+
+# Forca do encolhimento das medias de `team_statistics` em direcao a media da
+# liga. Escolhido varrendo k em {0,2,4,6,8,12} contra 506 jogos reais, sempre
+# usando so' partidas ANTERIORES a cada jogo (sem vazamento), medindo erro
+# absoluto medio contra o total que de fato aconteceu:
+#
+#   k       corners        goals         fouls
+#   0       -1.1%          +3.1%         -2.9%     <- sem encolher, PIORA em 2 de 3
+#   2       +1.6%          +4.0%         +1.3%
+#   4       +2.0%          +3.5%         +2.3%     <- adotado
+#   8       +1.7%          +2.8%         +2.8%
+#
+# (ganho vs. o comportamento de producao: media dos 15 jogos crus.) Entre k=2
+# e k=8 e' um plato dentro do ruido de 506 jogos -- k=4 fica no meio e vence
+# nas tres familias. O que NAO e' ruido e' k=0: cruzar feitos-x-cedidos sem
+# encolher perde da linha de base, porque a media de um time com 5 jogos no
+# mando nao sustenta o peso literal que recebia.
+#
+# Decaimento por recencia foi testado junto (meia-vida 30/45/60/90 dias) e nao
+# ajudou: o recorte de 15 jogos ja' cobre recencia, e nas listas por mando
+# (metade do tamanho) o decaimento so' joga amostra fora.
+_TEAM_STATS_SHRINK_K = 4
+
+
+def shrink_to_baseline(valor: float | None, amostra: int | None, baseline: float | None,
+                        k: int = _TEAM_STATS_SHRINK_K) -> float | None:
+    """Puxa `valor` na direcao de `baseline` proporcional a quao curta e' a
+    amostra: (n*valor + k*baseline) / (n+k). Mesma formula de encolhimento
+    bayesiano ja' usada em bayesian_model.shrink_taxa e em
+    calibration._evidence_weight -- aqui aplicada a uma MEDIA (escanteios por
+    jogo), nao a uma taxa. Sem baseline confiavel devolve o valor cru."""
+    if valor is None:
+        return None
+    if baseline is None or not amostra or k <= 0:
+        return valor
+    return round((amostra * valor + k * baseline) / (amostra + k), 3)
+
+
+# Familia -> (chave_casa, chave_fora) em get_league_baseline(). O baseline e'
+# sempre "o que o time FAZ naquele mando" -- serve tanto pra encolher os feitos
+# de um lado quanto os cedidos do outro, porque as duas estimativas miram a
+# MESMA quantidade (ex.: escanteios do mandante).
+_BASELINE_KEYS = {
+    "goals":   ("home_goals", "away_goals"),
+    "corners": ("home_corners", "away_corners"),
+    "cards":   ("home_cards", "away_cards"),
+    "fouls":   ("home_fouls", "away_fouls"),
+    "saves":   ("home_saves", "away_saves"),
+}
+
+
+def scored_conceded_from_team_stats(team_stats: dict | None, family: str):
+    """(feitos, cedidos, amostra) de uma linha de `team_statistics`, ou
+    (None, None, 0) se a familia nao estiver mapeada / a linha nao servir.
+
+    A agregacao ja' e' por mando (context_type) e sobre a temporada inteira,
+    entao nao sofre nem do recorte de 15 jogos nem da mistura casa/fora que
+    scored_conceded_avg() enfrenta. Em compensacao precisa ser encolhida --
+    ver _TEAM_STATS_SHRINK_K."""
+    if not team_stats or not team_stats.get("games_count"):
+        return None, None, 0
+    n = int(team_stats["games_count"])
+
+    if family == "cards":
+        try:
+            feitos = float(team_stats["avg_yellow_for"] or 0) + 2 * float(team_stats["avg_red_for"] or 0)
+            cedidos = float(team_stats["avg_yellow_against"] or 0) + 2 * float(team_stats["avg_red_against"] or 0)
+        except (KeyError, TypeError, ValueError):
+            return None, None, 0
+        return round(feitos, 3), round(cedidos, 3), n
+
+    campos = _TEAM_STATS_FIELDS.get(family)
+    if not campos:
+        return None, None, 0
+    f_key, a_key = campos
+    feitos, cedidos = team_stats.get(f_key), team_stats.get(a_key)
+    if feitos is None or cedidos is None:
+        return None, None, 0
+    try:
+        return round(float(feitos), 3), round(float(cedidos), 3), n
+    except (TypeError, ValueError):
+        return None, None, 0
+
+
+def expected_value_convergence(last10_home: list, last10_away: list, family: str, scope: str,
+                                home_team_id: int | None = None, away_team_id: int | None = None,
+                                team_stats_home: dict | None = None,
+                                team_stats_away: dict | None = None,
+                                league_baseline: dict | None = None):
     """Duas estimativas independentes do valor esperado para a partida,
     uma pelo que cada time costuma FAZER, outra pelo que costuma CEDER --
     se convergem (<=15% de diferenca), e sinal forte; se divergem, e
@@ -911,12 +1038,43 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
     scope='home' (ex. Total de Gols Casa): feitos do mandante vs cedidos
       do visitante fora (o adversario especifico deste jogo).
     scope='away': feitos do visitante fora vs cedidos do mandante em casa.
-    """
+
+    FONTE (2026-08-03): usa `team_statistics` quando as duas linhas chegam
+    (media por mando ja' agregada pelo collector, temporada inteira); cai pro
+    historico cru de get_all_matches_full() quando falta. A tabela existe e e'
+    atualizada todo dia desde sempre, mas so' era lida pelos pipelines de IA
+    -- quando a IA saiu de producao em 2026-07-17 ela ficou orfa, e o motor
+    passou a recalcular tudo dos 15 jogos crus. `source` no retorno diz qual
+    caminho respondeu."""
     if family not in _SCORED_CONCEDED_FIELDS:
         return None
 
-    h_scored, h_conceded = scored_conceded_avg(last10_home, True, family)
-    a_scored, a_conceded = scored_conceded_avg(last10_away, False, family)
+    h_scored, h_conceded, n_home = scored_conceded_from_team_stats(team_stats_home, family)
+    a_scored, a_conceded, n_away = scored_conceded_from_team_stats(team_stats_away, family)
+    source = "team_statistics"
+    amostra = None
+    if None in (h_scored, h_conceded, a_scored, a_conceded):
+        h_scored, h_conceded = scored_conceded_avg(last10_home, True, family, team_id=home_team_id)
+        a_scored, a_conceded = scored_conceded_avg(last10_away, False, family, team_id=away_team_id)
+        source = "historico_cru"
+    else:
+        # Encolhimento pra media da liga: SEM ele o cruzamento feitos-x-cedidos
+        # mede PIOR que a media dos 15 jogos crus (ver _TEAM_STATS_SHRINK_K).
+        # Os feitos do mandante e os cedidos do visitante miram a mesma
+        # quantidade (o que acontece do lado de CASA), entao ambos sao puxados
+        # pro mesmo baseline -- e vice-versa pro lado de fora.
+        base_casa = base_fora = None
+        if league_baseline:
+            k_casa, k_fora = _BASELINE_KEYS.get(family, (None, None))
+            base_casa = league_baseline.get(k_casa) if k_casa else None
+            base_fora = league_baseline.get(k_fora) if k_fora else None
+            base_casa = float(base_casa) if base_casa is not None else None
+            base_fora = float(base_fora) if base_fora is not None else None
+        h_scored = shrink_to_baseline(h_scored, n_home, base_casa)
+        a_conceded = shrink_to_baseline(a_conceded, n_away, base_casa)
+        a_scored = shrink_to_baseline(a_scored, n_away, base_fora)
+        h_conceded = shrink_to_baseline(h_conceded, n_home, base_fora)
+        amostra = min(n_home, n_away)
     if None in (h_scored, h_conceded, a_scored, a_conceded):
         return None
 
@@ -936,6 +1094,8 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
         "expected_value":    round((estimate_feitos + estimate_cedidos) / 2, 2),
         "converged":         diff_pct <= 0.15,
         "diff_pct":          round(diff_pct, 3),
+        "source":            source,
+        "amostra":           amostra,
     }
 
 
