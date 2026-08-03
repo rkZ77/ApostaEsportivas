@@ -43,6 +43,22 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   goleiros: '#38bdf8',
 }
 
+/**
+ * Borda do card de pick por tipo, na mesma convenção de cor do badge acima.
+ * Existe pra que os 6 tipos de card (VIP, free, múltipla, alavancagem, faltas,
+ * defesas) usem a casca `.pick-card` e se diferenciem só pela cor da borda,
+ * em vez de cada um trazer a sua própria casca.
+ */
+export const PICK_TYPE_BORDER: Record<string, string> = {
+  vip:         'border-green-500/20 hover:border-green-500/40',
+  free:        'border-green-500/20 hover:border-green-500/40',
+  multipla:    'border-blue-400/20 hover:border-blue-400/40',
+  multiplas:   'border-blue-400/20 hover:border-blue-400/40',
+  alavancagem: 'border-orange-400/20 hover:border-orange-400/40',
+  faltas:      'border-purple-400/20 hover:border-purple-400/40',
+  goleiros:    'border-sky-400/20 hover:border-sky-400/40',
+}
+
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */
 export const PICK_TYPE_CLS: Record<string, string> = {
   vip:         'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',

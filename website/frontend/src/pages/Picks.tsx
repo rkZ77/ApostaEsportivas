@@ -15,7 +15,7 @@ import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
@@ -405,7 +405,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`relative overflow-hidden bg-surface-0 border rounded-lg transition-colors duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
+      className={`pick-card group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
     >
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
@@ -708,7 +708,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="relative overflow-hidden bg-surface-0 border border-line hover:border-blue-500/30 rounded-lg cursor-pointer transition-colors duration-200 group"
+      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -1001,7 +1001,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="relative overflow-hidden bg-surface-0 border border-orange-500/20 hover:border-orange-500/40 rounded-lg cursor-pointer transition-colors duration-200 group"
+      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1218,7 +1218,7 @@ function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' 
   const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
   const edge = p.edge != null ? Number(p.edge) * 100 : null
   return (
-    <div className="card p-4 sm:p-5 space-y-3">
+    <div className={`pick-card p-4 sm:p-5 space-y-3 ${PICK_TYPE_BORDER[tipo]}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-1.5 text-sm text-ink-2 font-medium min-w-0">
@@ -1240,7 +1240,7 @@ function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' 
         )}
       </div>
 
-      <div className="bg-surface-0 border border-line rounded-md px-3 py-2.5">
+      <div className="bg-surface-1 border border-line rounded-md px-3 py-2.5">
         <p className="text-[10px] text-ink-4 uppercase font-semibold mb-1">
           {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
         </p>
