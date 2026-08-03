@@ -56,7 +56,7 @@ function SuccessPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
@@ -66,10 +66,10 @@ function SuccessPage() {
         >
           <CheckCircle className="w-10 h-10 text-green-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-white">Pagamento aprovado!</h1>
-        <p className="text-zinc-400">Seu plano VIP foi ativado. Bem-vindo!</p>
+        <h1 className="text-2xl font-black text-ink-1">Pagamento aprovado!</h1>
+        <p className="text-ink-2">Seu plano VIP foi ativado. Bem-vindo!</p>
         {!ready
-          ? <p className="text-zinc-600 text-sm animate-pulse">Ativando seu acesso VIP…</p>
+          ? <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso VIP…</p>
           : <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
         }
       </div>
@@ -80,7 +80,7 @@ function SuccessPage() {
 function FailurePage() {
   const navigate = useNavigate()
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
@@ -90,8 +90,8 @@ function FailurePage() {
         >
           <XCircle className="w-10 h-10 text-red-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-white">Pagamento recusado</h1>
-        <p className="text-zinc-400">Houve um problema com o pagamento. Tente novamente.</p>
+        <h1 className="text-2xl font-black text-ink-1">Pagamento recusado</h1>
+        <p className="text-ink-2">Houve um problema com o pagamento. Tente novamente.</p>
         <button onClick={() => navigate('/checkout')} className="btn-primary px-8 py-3">
           Tentar novamente
         </button>
@@ -118,7 +118,7 @@ function PendingPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
       <div className="text-center space-y-4">
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
@@ -128,12 +128,12 @@ function PendingPage() {
         >
           <Clock className="w-9 h-9 text-yellow-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-white">Pagamento em análise</h1>
-        <p className="text-zinc-400">Seu pagamento está sendo processado.</p>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-md px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
-          <p className="text-zinc-300 text-xs font-semibold">Previsão de ativação:</p>
-          <p className="text-zinc-500 text-xs">Pix: até 5 minutos</p>
-          <p className="text-zinc-500 text-xs">Boleto: até 3 dias úteis após compensação</p>
+        <h1 className="text-2xl font-black text-ink-1">Pagamento em análise</h1>
+        <p className="text-ink-2">Seu pagamento está sendo processado.</p>
+        <div className="bg-surface-1 border border-line rounded-md px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
+          <p className="text-ink-2 text-xs font-semibold">Previsão de ativação:</p>
+          <p className="text-ink-3 text-xs">Pix: até 5 minutos</p>
+          <p className="text-ink-3 text-xs">Boleto: até 3 dias úteis após compensação</p>
         </div>
         {activated
           ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
@@ -183,16 +183,16 @@ export default function Checkout() {
   const selected = PLANS.find(p => p.id === selectedPlan)!
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
 
       {/* Header */}
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
           <div>
-            <h1 className="text-base font-black text-white">Assinar VIP</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Acesso completo a todos os picks</p>
+            <h1 className="text-base font-black text-ink-1">Assinar VIP</h1>
+            <p className="text-ink-3 text-xs mt-0.5">Acesso completo a todos os picks</p>
           </div>
         </div>
       </div>
@@ -200,7 +200,7 @@ export default function Checkout() {
       <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
         {/* Benefícios */}
         <div className="card p-5">
-          <h2 className="text-white font-bold mb-4">O que você ganha no VIP</h2>
+          <h2 className="text-ink-1 font-bold mb-4">O que você ganha no VIP</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             {[
               'Todos os picks do dia',
@@ -210,7 +210,7 @@ export default function Checkout() {
               'Suporte ao Agente de IA',
               'Notificações de novos picks',
             ].map(benefit => (
-              <div key={benefit} className="flex items-center gap-2 text-sm text-zinc-300">
+              <div key={benefit} className="flex items-center gap-2 text-sm text-ink-2">
                 <Check className="w-4 h-4 text-green-500 shrink-0" />
                 {benefit}
               </div>
@@ -220,7 +220,7 @@ export default function Checkout() {
 
         {/* Seletor de plano */}
         <div>
-          <h2 className="text-white font-bold mb-3">Escolha o período</h2>
+          <h2 className="text-ink-1 font-bold mb-3">Escolha o período</h2>
           <div className="grid grid-cols-2 gap-3">
             {PLANS.map(plan => (
               <motion.button
@@ -232,10 +232,10 @@ export default function Checkout() {
                 className={`relative text-left p-4 rounded-md border-2 transition-colors
                   ${selectedPlan === plan.id
                     ? 'border-green-500 bg-green-500/5'
-                    : 'border-zinc-800 bg-zinc-900 hover:border-zinc-600'}`}
+                    : 'border-line bg-surface-1 hover:border-line-strong'}`}
               >
                 {plan.popular && (
-                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-white px-2 py-0.5 rounded-sm font-semibold">
+                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-ink-1 px-2 py-0.5 rounded-sm font-semibold">
                     Popular
                   </span>
                 )}
@@ -244,14 +244,14 @@ export default function Checkout() {
                     {plan.savings}
                   </span>
                 )}
-                <div className="text-white font-bold text-sm">{plan.label}</div>
-                <div className="text-zinc-500 text-xs mt-0.5">{plan.period}</div>
+                <div className="text-ink-1 font-bold text-sm">{plan.label}</div>
+                <div className="text-ink-3 text-xs mt-0.5">{plan.period}</div>
                 <div className="mt-2">
-                  <span className="font-mono text-white font-black text-xl">
+                  <span className="font-mono text-ink-1 font-black text-xl">
                     R$ {plan.price.toFixed(2).replace('.', ',')}
                   </span>
                 </div>
-                <div className="font-mono text-zinc-500 text-xs mt-0.5">
+                <div className="font-mono text-ink-3 text-xs mt-0.5">
                   R$ {plan.pricePerMonth.toFixed(2).replace('.', ',')}/mês
                 </div>
               </motion.button>
@@ -261,41 +261,41 @@ export default function Checkout() {
 
         {/* Resumo */}
         <div className="card p-5 space-y-3">
-          <h2 className="text-white font-bold">Resumo do pedido</h2>
+          <h2 className="text-ink-1 font-bold">Resumo do pedido</h2>
           <div className="flex justify-between text-sm">
-            <span className="text-zinc-400">Plano Picks: {selected.label}</span>
-            <span className="text-white font-semibold">
+            <span className="text-ink-2">Plano Picks: {selected.label}</span>
+            <span className="text-ink-1 font-semibold">
               R$ {selected.price.toFixed(2).replace('.', ',')}
             </span>
           </div>
-          <div className="flex justify-between text-sm pt-2 border-t border-zinc-800">
-            <span className="text-white font-bold">Total</span>
+          <div className="flex justify-between text-sm pt-2 border-t border-line">
+            <span className="text-ink-1 font-bold">Total</span>
             <span className="text-green-400 font-black text-lg">
               R$ {selected.price.toFixed(2).replace('.', ',')}
             </span>
           </div>
-          <p className="text-zinc-600 text-xs">
+          <p className="text-ink-4 text-xs">
             Pagamento processado com segurança via MercadoPago. Aceita cartão, Pix e boleto.
           </p>
         </div>
 
         {/* Aviso sobre tempo de ativação por método */}
-        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-4 space-y-2">
-          <p className="text-zinc-400 text-xs font-bold uppercase mb-1">Tempo de ativação por método</p>
+        <div className="bg-surface-1 border border-line rounded-md p-4 space-y-2">
+          <p className="text-ink-2 text-xs font-bold uppercase mb-1">Tempo de ativação por método</p>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-            <span className="text-zinc-300 font-semibold">Cartão de crédito:</span>
-            <span className="text-zinc-400">ativação imediata após aprovação</span>
+            <span className="text-ink-2 font-semibold">Cartão de crédito:</span>
+            <span className="text-ink-2">ativação imediata após aprovação</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
-            <span className="text-zinc-300 font-semibold">Pix:</span>
-            <span className="text-zinc-400">ativação em até 5 minutos após pagamento</span>
+            <span className="text-ink-2 font-semibold">Pix:</span>
+            <span className="text-ink-2">ativação em até 5 minutos após pagamento</span>
           </div>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-yellow-500 shrink-0" />
-            <span className="text-zinc-300 font-semibold">Boleto:</span>
-            <span className="text-zinc-400">ativação em até 3 dias úteis após compensação</span>
+            <span className="text-ink-2 font-semibold">Boleto:</span>
+            <span className="text-ink-2">ativação em até 3 dias úteis após compensação</span>
           </div>
         </div>
 
@@ -319,11 +319,11 @@ export default function Checkout() {
           )}
         </button>
 
-        <p className="text-zinc-600 text-xs text-center">
+        <p className="text-ink-4 text-xs text-center">
           Ao pagar, você concorda com os{' '}
-          <Link to="/termos" className="underline hover:text-zinc-400 transition-colors">termos de uso</Link>
+          <Link to="/termos" className="underline hover:text-ink-2 transition-colors">termos de uso</Link>
           {' '}e a{' '}
-          <Link to="/privacidade" className="underline hover:text-zinc-400 transition-colors">política de privacidade</Link>.
+          <Link to="/privacidade" className="underline hover:text-ink-2 transition-colors">política de privacidade</Link>.
         </p>
       </main>
     </div>

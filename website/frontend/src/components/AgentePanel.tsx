@@ -17,9 +17,9 @@ const SUGGESTIONS = [
 function TypingDots() {
   return (
     <span className="flex gap-1 items-center h-4">
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
     </span>
   )
 }
@@ -52,21 +52,21 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
       exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
       style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden origin-bottom-right"
+      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden origin-bottom-right"
     >
       {/* Header */}
-      <div className="shrink-0 px-4 py-3 border-b border-zinc-800 flex items-center gap-2.5 bg-zinc-900/60">
+      <div className="shrink-0 px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-1/60">
         <div className="w-8 h-8 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
           <Bot className="w-4 h-4 text-green-400" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-black text-white leading-none truncate">Agente PickIA</p>
-          <p className="text-[11px] text-zinc-500 mt-1">{loading ? 'Analisando...' : 'Online'}</p>
+          <p className="text-sm font-black text-ink-1 leading-none truncate">Agente PickIA</p>
+          <p className="text-[11px] text-ink-3 mt-1">{loading ? 'Analisando...' : 'Online'}</p>
         </div>
         <button
           onClick={onClose}
           aria-label="Fechar chat"
-          className="w-8 h-8 flex items-center justify-center rounded-full text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors shrink-0"
+          className="w-8 h-8 flex items-center justify-center rounded-full text-ink-3 hover:text-ink-1 hover:bg-surface-2 transition-colors shrink-0"
         >
           <XIcon className="w-4 h-4" />
         </button>
@@ -80,8 +80,8 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
             </div>
             {!user ? (
               <>
-                <p className="text-white font-bold text-sm mb-1.5">Entre na sua conta</p>
-                <p className="text-zinc-400 text-xs leading-relaxed mb-5">
+                <p className="text-ink-1 font-bold text-sm mb-1.5">Entre na sua conta</p>
+                <p className="text-ink-2 text-xs leading-relaxed mb-5">
                   Faça login pra conversar com o Agente IA sobre picks, banca e jogos ao vivo.
                 </p>
                 <Link to="/login" onClick={onClose} className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-5 py-2.5 rounded-md text-xs transition-colors">
@@ -90,8 +90,8 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               </>
             ) : (
               <>
-                <p className="text-white font-bold text-sm mb-1.5">Agente exclusivo VIP</p>
-                <p className="text-zinc-400 text-xs leading-relaxed mb-5">
+                <p className="text-ink-1 font-bold text-sm mb-1.5">Agente exclusivo VIP</p>
+                <p className="text-ink-2 text-xs leading-relaxed mb-5">
                   Disponível apenas para assinantes VIP. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
                 </p>
                 <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-5 py-2.5 rounded-md text-xs transition-colors">
@@ -107,7 +107,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
           <div className="flex-1 min-h-0 overflow-y-auto px-3 py-3 flex flex-col gap-3">
             {messages.length === 0 && (
               <div className="flex-1 flex flex-col items-center justify-center gap-4 py-4 text-center">
-                <p className="text-zinc-400 text-xs max-w-[220px]">
+                <p className="text-ink-2 text-xs max-w-[220px]">
                   Pergunte sobre os picks do dia, sua banca, alavancagem ou jogos ao vivo.
                 </p>
                 <div className="grid grid-cols-1 gap-1.5 w-full">
@@ -115,7 +115,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                     <button
                       key={s}
                       onClick={() => sendMessage(s)}
-                      className="text-left px-3 py-2 rounded-md bg-zinc-900 border border-zinc-800 hover:border-green-500/40 hover:bg-zinc-800 transition-colors text-xs text-zinc-300"
+                      className="text-left px-3 py-2 rounded-md bg-surface-1 border border-line hover:border-green-500/40 hover:bg-surface-2 transition-colors text-xs text-ink-2"
                     >
                       {s}
                     </button>
@@ -140,21 +140,21 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                   )}
                   <div className={`max-w-[82%] rounded-md px-3 py-2 text-xs leading-relaxed
                     ${msg.role === 'user'
-                      ? 'bg-green-600 text-white rounded-tr-sm'
-                      : 'bg-zinc-900 border border-zinc-800 rounded-tl-sm'}`}>
+                      ? 'bg-green-600 text-ink-1 rounded-tr-sm'
+                      : 'bg-surface-1 border border-line rounded-tl-sm'}`}>
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
                     ) : isLoadingMsg && !msg.content ? (
-                      <div className="text-zinc-400 flex items-center gap-2">
+                      <div className="text-ink-2 flex items-center gap-2">
                         <TypingDots />
-                        {statusText && <span className="text-zinc-500 text-[10px]">{statusText}</span>}
+                        {statusText && <span className="text-ink-3 text-[10px]">{statusText}</span>}
                       </div>
                     ) : (
-                      <div className="prose prose-invert prose-xs max-w-none text-zinc-200
-                        prose-p:my-1 prose-pre:bg-zinc-800 prose-pre:border prose-pre:border-zinc-700
+                      <div className="prose prose-invert prose-xs max-w-none text-ink-2
+                        prose-p:my-1 prose-pre:bg-surface-2 prose-pre:border prose-pre:border-line-strong
                         prose-pre:rounded-md prose-pre:text-[11px] prose-code:text-green-400
-                        prose-code:bg-zinc-800 prose-code:px-1 prose-code:rounded prose-strong:text-white
-                        prose-headings:text-white">
+                        prose-code:bg-surface-2 prose-code:px-1 prose-code:rounded prose-strong:text-ink-1
+                        prose-headings:text-ink-1">
                         <ReactMarkdown>{msg.content}</ReactMarkdown>
                       </div>
                     )}
@@ -166,7 +166,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
           </div>
 
           {/* Input */}
-          <div className="shrink-0 border-t border-zinc-800 px-3 py-2.5 flex gap-2 items-end bg-zinc-900/40">
+          <div className="shrink-0 border-t border-line px-3 py-2.5 flex gap-2 items-end bg-surface-1/40">
             <textarea
               ref={inputRef}
               value={input}
@@ -174,7 +174,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               onKeyDown={handleKeyDown}
               placeholder="Pergunte algo..."
               rows={1}
-              className="flex-1 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 text-xs text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
+              className="flex-1 bg-surface-1 border border-line-strong rounded-md px-3 py-2.5 text-xs text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50 resize-none"
               style={{ minHeight: '38px', maxHeight: '90px' }}
               disabled={loading}
             />
@@ -182,7 +182,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               aria-label="Enviar"
-              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
+              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-ink-1 shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

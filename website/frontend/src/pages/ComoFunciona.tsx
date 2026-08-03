@@ -93,12 +93,12 @@ export default function ComoFunciona() {
   return (
     <>
     <Navbar />
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-surface-0 text-ink-1">
       {/* Fechar */}
       <div className="sticky top-16 z-10 flex justify-end px-4 pt-4">
         <button
           onClick={handleClose}
-          className="flex items-center gap-1.5 text-zinc-400 hover:text-white bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2 text-xs font-semibold transition-colors"
+          className="flex items-center gap-1.5 text-ink-2 hover:text-ink-1 bg-surface-1 border border-line rounded-md px-3 py-2 text-xs font-semibold transition-colors"
         >
           <X className="w-3.5 h-3.5" />
           Fechar
@@ -114,7 +114,7 @@ export default function ComoFunciona() {
           Como a plataforma<br />
           <span className="text-green-500">funciona</span>
         </h1>
-        <p className="text-zinc-400 text-sm max-w-lg mx-auto leading-relaxed">
+        <p className="text-ink-2 text-sm max-w-lg mx-auto leading-relaxed">
           O PickIA usa inteligência artificial para gerar picks diários com base em dados estatísticos reais.
           Veja tudo que você tem disponível.
         </p>
@@ -132,22 +132,22 @@ export default function ComoFunciona() {
           {features.map(({ icon: Icon, color, bg, badge, title, desc, items }) => (
             <motion.div key={title} variants={fadeInUp} whileHover={{ y: -2 }} className={`border rounded-lg p-5 ${bg}`}>
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-zinc-900 border border-zinc-800`}>
+                <div className={`w-10 h-10 rounded-md flex items-center justify-center shrink-0 bg-surface-1 border border-line`}>
                   <Icon className={`w-5 h-5 ${color}`} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="font-display font-black text-white text-sm">{title}</span>
+                    <span className="font-display font-black text-ink-1 text-sm">{title}</span>
                     {badge && (
                       <span className={badge === 'VIP' ? 'badge-vip' : 'badge-free'}>
                         {badge}
                       </span>
                     )}
                   </div>
-                  <p className="text-zinc-400 text-xs leading-relaxed mb-3">{desc}</p>
+                  <p className="text-ink-2 text-xs leading-relaxed mb-3">{desc}</p>
                   <ul className="space-y-1">
                     {items.map(item => (
-                      <li key={item} className="flex items-center gap-2 text-xs text-zinc-300">
+                      <li key={item} className="flex items-center gap-2 text-xs text-ink-2">
                         <Check className={`w-3.5 h-3.5 shrink-0 ${color}`} />
                         {item}
                       </li>
@@ -162,14 +162,14 @@ export default function ComoFunciona() {
 
       {/* CTA */}
       <div className="max-w-3xl mx-auto px-4 pb-16 text-center">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-8">
+        <div className="bg-surface-1 border border-line rounded-lg p-8">
           <h2 className="text-xl font-black mb-2">Pronto para começar?</h2>
-          <p className="text-zinc-400 text-sm mb-6">
+          <p className="text-ink-2 text-sm mb-6">
             Os picks de hoje já estão disponíveis. Confira as análises da IA.
           </p>
           <button
             onClick={handleStart}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold px-8 py-3.5 rounded-md transition-colors text-sm"
+            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-ink-1 font-bold px-8 py-3.5 rounded-md transition-colors text-sm"
           >
             Ver picks de hoje
             <ArrowRight className="w-4 h-4" />

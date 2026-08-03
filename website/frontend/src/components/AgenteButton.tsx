@@ -17,9 +17,9 @@ function PanelFallback() {
   return (
     <div
       style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-zinc-950 border border-zinc-800 rounded-xl shadow-2xl shadow-black/60 flex items-center justify-center"
+      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-xl shadow-2xl shadow-black/60 flex items-center justify-center"
     >
-      <div className="w-6 h-6 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
     </div>
   )
 }
@@ -138,7 +138,7 @@ export default function AgenteButton() {
               <button
                 onClick={e => { e.stopPropagation(); if (wasDraggedRef.current) { wasDraggedRef.current = false; return }; setDismissed(true) }}
                 aria-label="Fechar atalho do Agente IA"
-                className="w-9 h-9 flex items-center justify-center rounded-full bg-zinc-800 border border-zinc-600 hover:bg-zinc-700 text-zinc-300 text-base font-black transition-colors shadow"
+                className="w-9 h-9 flex items-center justify-center rounded-full bg-surface-2 border border-line-strong hover:bg-surface-3 text-ink-2 text-base font-black transition-colors shadow"
               >
                 ×
               </button>

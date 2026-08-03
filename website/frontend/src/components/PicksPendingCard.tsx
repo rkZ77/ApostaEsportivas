@@ -104,37 +104,37 @@ export default function PicksPendingCard() {
   if (todayCount === 0 && !todayCheckFailed) {
     const groups = nextGames ? groupByDate(nextGames.slice(0, 8)) : []
     return (
-      <div className="card p-6 text-center border-zinc-800">
-        <div className="w-11 h-11 rounded-full bg-zinc-800/80 flex items-center justify-center mx-auto mb-3">
-          <CalendarClock className="w-5 h-5 text-zinc-400" />
+      <div className="card p-6 text-center border-line">
+        <div className="w-11 h-11 rounded-full bg-surface-2/80 flex items-center justify-center mx-auto mb-3">
+          <CalendarClock className="w-5 h-5 text-ink-2" />
         </div>
-        <p className="text-sm text-zinc-200 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
-        {leagueNames && <p className="text-zinc-600 text-xs mb-5">{leagueNames}</p>}
+        <p className="text-sm text-ink-2 font-bold mb-1">Sem jogos hoje nas ligas que cobrimos</p>
+        {leagueNames && <p className="text-ink-4 text-xs mb-5">{leagueNames}</p>}
         {nextGames === null ? (
           <div className="flex justify-center py-3">
-            <div className="w-5 h-5 border-2 border-zinc-700 border-t-zinc-400 rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-line-strong border-t-ink-3 rounded-full animate-spin" />
           </div>
         ) : groups.length === 0 ? (
-          <p className="text-zinc-600 text-xs">Nenhum próximo jogo agendado ainda.</p>
+          <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
           <div className="text-left space-y-4">
-            <p className="text-[10px] text-zinc-600 uppercase font-semibold">Próximos jogos</p>
+            <p className="text-[10px] text-ink-4 uppercase font-semibold">Próximos jogos</p>
             {groups.map(group => (
               <div key={group.dateLabel}>
-                <p className="text-[11px] text-zinc-500 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
+                <p className="text-[11px] text-ink-3 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
                 <div className="space-y-1.5">
                   {group.games.map(g => (
                     <div key={g.fixture_id}
-                      className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2.5 hover:border-zinc-700 transition-colors">
-                      <span className="font-mono text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                      className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5 hover:border-line-strong transition-colors">
+                      <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
                         {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                       </span>
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
-                        <span className="text-xs text-zinc-200 font-medium truncate">{g.home_team}</span>
-                        <span className="text-zinc-600 text-[11px] shrink-0">x</span>
+                        <span className="text-xs text-ink-2 font-medium truncate">{g.home_team}</span>
+                        <span className="text-ink-4 text-[11px] shrink-0">x</span>
                         <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
-                        <span className="text-xs text-zinc-200 font-medium truncate">{g.away_team}</span>
+                        <span className="text-xs text-ink-2 font-medium truncate">{g.away_team}</span>
                       </div>
                       <LeagueLogo id={g.league_id} name={g.league_name} />
                     </div>
@@ -149,30 +149,30 @@ export default function PicksPendingCard() {
   }
 
   return (
-    <div className="card p-8 text-center border-zinc-800">
-      <div className="w-11 h-11 rounded-full bg-zinc-800/80 flex items-center justify-center mx-auto mb-3">
-        <BrainCircuit className="w-5 h-5 text-zinc-400" />
+    <div className="card p-8 text-center border-line">
+      <div className="w-11 h-11 rounded-full bg-surface-2/80 flex items-center justify-center mx-auto mb-3">
+        <BrainCircuit className="w-5 h-5 text-ink-2" />
       </div>
-      <p className="text-sm text-zinc-200 font-bold mb-1">Os picks de hoje ainda não saíram</p>
-      <p className="text-zinc-500 text-sm">Assim que forem publicados você recebe um aviso.</p>
+      <p className="text-sm text-ink-2 font-bold mb-1">Os picks de hoje ainda não saíram</p>
+      <p className="text-ink-3 text-sm">Assim que forem publicados você recebe um aviso.</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">
-          <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2">
+          <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2">
             {todayGames.length} jogo{todayGames.length > 1 ? 's' : ''} sendo analisado{todayGames.length > 1 ? 's' : ''} hoje
           </p>
           <div className="space-y-1.5">
             {todayGames.map(g => (
               <div key={g.fixture_id}
-                className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2.5">
-                <span className="font-mono text-[11px] text-zinc-500 font-semibold tabular-nums shrink-0 w-9">
+                className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5">
+                <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
                   {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
                 </span>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
-                  <span className="text-xs text-zinc-200 font-medium truncate">{g.home_team}</span>
-                  <span className="text-zinc-600 text-[11px] shrink-0">x</span>
+                  <span className="text-xs text-ink-2 font-medium truncate">{g.home_team}</span>
+                  <span className="text-ink-4 text-[11px] shrink-0">x</span>
                   <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
-                  <span className="text-xs text-zinc-200 font-medium truncate">{g.away_team}</span>
+                  <span className="text-xs text-ink-2 font-medium truncate">{g.away_team}</span>
                 </div>
                 <LeagueLogo id={g.league_id} name={g.league_name} />
               </div>

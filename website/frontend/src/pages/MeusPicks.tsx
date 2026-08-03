@@ -20,7 +20,7 @@ const SOURCE_LBL: Record<string, string> = {
 }
 
 const pnlColor = (v: number | null) =>
-  v == null ? 'text-zinc-600' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-zinc-400'
+  v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
 
 export default function MeusPicks() {
   const navigate = useNavigate()
@@ -163,7 +163,7 @@ export default function MeusPicks() {
     : pageItems
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
 
       <AnimatePresence>
@@ -176,13 +176,13 @@ export default function MeusPicks() {
       )}
       </AnimatePresence>
 
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BackButton />
             <div>
-              <h1 className="text-base font-black text-white">Meus Picks</h1>
-              <p className="text-zinc-500 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
+              <h1 className="text-base font-black text-ink-1">Meus Picks</h1>
+              <p className="text-ink-3 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
             </div>
           </div>
         </div>
@@ -191,12 +191,12 @@ export default function MeusPicks() {
       <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : error ? (
           <div className="card p-10 text-center">
-            <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar seus picks</p>
-            <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+            <p className="text-ink-2 font-semibold mb-1">Erro ao carregar seus picks</p>
+            <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
             <button onClick={load} className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors">
               Tentar novamente
             </button>
@@ -220,7 +220,7 @@ export default function MeusPicks() {
                     className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-colors ${
                       daysBack === value
                         ? 'bg-green-500/15 border-green-500/50 text-green-400'
-                        : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                        : 'border-line-strong text-ink-3 hover:border-ink-4 hover:text-ink-2'
                     }`}
                   >
                     {label}
@@ -243,26 +243,26 @@ export default function MeusPicks() {
               return (
                 <div className="font-mono grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
-                    <div className="text-2xl font-black text-white">{periodEntries.length}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">Apostas</div>
+                    <div className="text-2xl font-black text-ink-1">{periodEntries.length}</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-zinc-400'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">
+                    <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">
                       {daysBack === 0 ? 'Total' : daysBack === 'thismonth' ? 'Este mês' : daysBack === 'lastmonth' ? 'Mês passado' : `Últimos ${daysBack}d`}
                     </div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>{wr}%</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">Win rate</div>
+                    <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-ink-2'}`}>{wr}%</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">Win rate</div>
                   </div>
                   <div className="card p-3 text-center border-green-500/20">
                     <div className="text-2xl font-black text-green-400">{greenCount}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">GREEN</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">GREEN</div>
                   </div>
                   <div className="card p-3 text-center border-red-500/20">
                     <div className="text-2xl font-black text-red-400">{redCount}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">RED</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">RED</div>
                   </div>
                 </div>
               )
@@ -288,7 +288,7 @@ export default function MeusPicks() {
               return (
                 <div className="card p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-semibold text-zinc-500 uppercase">Evolução da Banca</h3>
+                    <h3 className="text-xs font-semibold text-ink-3 uppercase">Evolução da Banca</h3>
                     <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                       {fmtSigned(pnl)}
                     </span>
@@ -306,7 +306,7 @@ export default function MeusPicks() {
                 className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'pendentes'
                     ? 'bg-yellow-400/10 border-yellow-400/30 text-yellow-400'
-                    : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    : 'border-line-strong text-ink-3 hover:border-ink-4 hover:text-ink-2'
                 }`}
               >
                 Pendentes ({pendentes.length})
@@ -317,7 +317,7 @@ export default function MeusPicks() {
                 className={`px-4 py-2 rounded-md text-sm font-bold border transition-colors ${
                   tab === 'resolvidos'
                     ? 'bg-green-500/10 border-green-500/30 text-green-400'
-                    : 'border-zinc-700 text-zinc-500 hover:border-zinc-500 hover:text-zinc-300'
+                    : 'border-line-strong text-ink-3 hover:border-ink-4 hover:text-ink-2'
                 }`}
               >
                 Resolvidos ({resolvidos.length})
@@ -329,10 +329,10 @@ export default function MeusPicks() {
             <motion.div key={tab} variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {filteredTabEntries.length === 0 ? (
               <div className="card p-12 text-center border-dashed">
-                <p className="text-zinc-500 text-sm font-semibold mb-2">
+                <p className="text-ink-3 text-sm font-semibold mb-2">
                   {tab === 'pendentes' ? 'Nenhuma aposta pendente' : 'Nenhuma aposta resolvida ainda'}
                 </p>
-                <p className="text-zinc-600 text-xs mb-4">
+                <p className="text-ink-4 text-xs mb-4">
                   Clique em "Apostar" nos picks para registrar suas apostas.
                 </p>
                 <button onClick={() => navigate('/picks')} className="btn-primary text-sm px-6 py-2.5">
@@ -343,17 +343,17 @@ export default function MeusPicks() {
               <>
                 {/* Navegação de dia · só aparece quando um filtro de período está ativo */}
                 {(typeof daysBack === 'number' ? daysBack > 0 : true) && uniqueDatesFiltered.length > 1 && (
-                  <div className="flex items-center justify-between bg-zinc-900 border border-zinc-800 rounded-md px-2 py-2">
+                  <div className="flex items-center justify-between bg-surface-1 border border-line rounded-md px-2 py-2">
                     <button
                       onClick={() => setDayOffset(o => o + 1)}
                       disabled={!hasPrev}
-                      className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
+                      className="flex items-center justify-center w-10 h-10 rounded-lg text-ink-3 hover:text-ink-2 hover:bg-surface-2 disabled:opacity-20 transition-colors"
                     >
                       <ChevronLeft className="w-5 h-5" />
                     </button>
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className="text-sm font-black text-white capitalize">{dayLabel(selectedKey)}</span>
+                        <span className="text-sm font-black text-ink-1 capitalize">{dayLabel(selectedKey)}</span>
                         {clampedOffset > 0 && (
                           <button
                             onClick={() => setDayOffset(0)}
@@ -363,12 +363,12 @@ export default function MeusPicks() {
                           </button>
                         )}
                       </div>
-                      <div className="text-[10px] text-zinc-600 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
+                      <div className="text-[10px] text-ink-4 mt-0.5">{pageItems.length} pick{pageItems.length !== 1 ? 's' : ''}</div>
                     </div>
                     <button
                       onClick={() => setDayOffset(o => o - 1)}
                       disabled={!hasNext}
-                      className="flex items-center justify-center w-10 h-10 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-zinc-800 disabled:opacity-20 transition-colors"
+                      className="flex items-center justify-center w-10 h-10 rounded-lg text-ink-3 hover:text-ink-2 hover:bg-surface-2 disabled:opacity-20 transition-colors"
                     >
                       <ChevronRight className="w-5 h-5" />
                     </button>
@@ -378,17 +378,17 @@ export default function MeusPicks() {
                 {/* Picks do dia */}
                 {pageItems.length === 0 ? (
                   <div className="card p-8 text-center border-dashed">
-                    <p className="text-zinc-600 text-sm">Nenhum pick neste dia.</p>
+                    <p className="text-ink-4 text-sm">Nenhum pick neste dia.</p>
                   </div>
                 ) : (
                   <div className="card overflow-hidden">
-                    <div className="divide-y divide-zinc-800/60">
+                    <div className="divide-y divide-line/60">
                       {displayItems.map((e: any) => {
                         return (
                           <button
                             key={e.id}
                             onClick={() => setDetailPick({ id: e.pick_id, pick_type: e.pick_type })}
-                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+                            className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors text-left"
                           >
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
@@ -396,7 +396,7 @@ export default function MeusPicks() {
                                   {SOURCE_LBL[e.pick_type] ?? e.pick_type}
                                 </span>
                                 <TeamLogo id={e.home_team_id} name={e.home_team_name ?? ''} size={16} />
-                                <span className="text-sm font-semibold text-white truncate">
+                                <span className="text-sm font-semibold text-ink-1 truncate">
                                   {e.home_team_name
                                     ? e.home_team_name
                                     : e.pick_type === 'multipla'
@@ -407,18 +407,18 @@ export default function MeusPicks() {
                                 </span>
                                 {e.away_team_name && (
                                   <>
-                                    <span className="text-zinc-600 text-xs shrink-0">vs</span>
+                                    <span className="text-ink-4 text-xs shrink-0">vs</span>
                                     <TeamLogo id={e.away_team_id} name={e.away_team_name} size={16} />
-                                    <span className="text-sm font-semibold text-white truncate">{e.away_team_name}</span>
+                                    <span className="text-sm font-semibold text-ink-1 truncate">{e.away_team_name}</span>
                                   </>
                                 )}
                               </div>
                               <div className="flex items-center gap-1 min-w-0">
-                                <p className="text-xs text-zinc-600 truncate">
+                                <p className="text-xs text-ink-4 truncate">
                                   {translateMarket(e.market) ?? ''}
                                   {e.line ? ` · ${e.line}` : ''}
                                   {e.actual_odd
-                                    ? <> · <span className="text-zinc-400">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-zinc-600"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
+                                    ? <> · <span className="text-ink-2">Odd {Number(e.actual_odd).toFixed(2)}</span>{Math.abs(Number(e.actual_odd) - Number(e.odd)) > 0.001 ? <span className="text-ink-4"> (pick: {Number(e.odd).toFixed(2)})</span> : null}</>
                                     : e.odd ? ` · Odd ${Number(e.odd).toFixed(2)}` : ''}
                                 </p>
                                 <InfoTip text={explainMarket(e.market, e.line)} className="shrink-0" />
@@ -429,7 +429,7 @@ export default function MeusPicks() {
                               {e.result ? (() => {
                                 const rs = getResultStyle(e.result)
                                 return (
-                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                                  <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-ink-3'}`}>
                                     {rs ? rs.label : e.result}
                                   </span>
                                 )
@@ -444,7 +444,7 @@ export default function MeusPicks() {
                               {tab === 'pendentes' && (
                                 <button
                                   onClick={ev => { ev.stopPropagation(); handleUnfollow(e.pick_id, e.pick_type) }}
-                                  className="flex items-center justify-center w-8 h-8 rounded-lg text-zinc-600 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0"
+                                  className="flex items-center justify-center w-8 h-8 rounded-lg text-ink-4 hover:text-red-400 hover:bg-red-400/10 transition-colors shrink-0"
                                   title="Remover pick"
                                 >
                                   <Trash2 className="w-3.5 h-3.5" />
@@ -464,15 +464,15 @@ export default function MeusPicks() {
                     <button
                       disabled={todayPage === 0}
                       onClick={() => setTodayPage(p => p - 1)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors"
                     >Ant</button>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-ink-3">
                       {todayPage * PAGE_SIZE + 1}–{Math.min((todayPage + 1) * PAGE_SIZE, filteredTabEntries.length)} de {filteredTabEntries.length}
                     </span>
                     <button
                       disabled={(todayPage + 1) * PAGE_SIZE >= filteredTabEntries.length}
                       onClick={() => setTodayPage(p => p + 1)}
-                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors"
                     >Próx</button>
                   </div>
                 )}
@@ -482,7 +482,7 @@ export default function MeusPicks() {
                   <button
                     onClick={loadMoreResolved}
                     disabled={loadingMore}
-                    className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold"
+                    className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 border border-line rounded-md hover:border-line-strong font-semibold"
                   >
                     {loadingMore ? 'Carregando...' : 'Carregar apostas mais antigas'}
                   </button>
@@ -500,7 +500,7 @@ export default function MeusPicks() {
       {showRemoved && (
         <motion.div
           variants={toastUp} initial="hidden" animate="visible" exit="exit"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
         >
           Pick removido da sua banca
         </motion.div>

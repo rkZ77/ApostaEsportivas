@@ -131,20 +131,20 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
           animate={{ opacity: 1, scale: 1 }}
           exit={{ opacity: 0, scale: 0.9 }}
           transition={{ duration: 0.12 }}
-          className="pointer-events-none absolute top-1 z-10 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-xs shadow-xl"
+          className="pointer-events-none absolute top-1 z-10 bg-surface-1 border border-line-strong rounded-md px-3 py-2 text-xs shadow-xl"
           style={{
             left: `${((barX(hoverIdx) + barW / 2) / W) * 100}%`,
             transform: hoverIdx > sorted.length * 0.65 ? 'translateX(-110%)' : 'translateX(8px)',
           }}
         >
-          <p className="text-zinc-400 font-semibold mb-1">{fmtDate(hovered.match_date)}</p>
+          <p className="text-ink-2 font-semibold mb-1">{fmtDate(hovered.match_date)}</p>
           <div className="font-mono flex items-center gap-2">
             <span className="text-green-400 font-black">{hovered.greens} green</span>
-            <span className="text-zinc-600">·</span>
-            <span className="text-zinc-300">{hovered.total} picks</span>
+            <span className="text-ink-4">·</span>
+            <span className="text-ink-2">{hovered.total} picks</span>
             {wr !== null && (
               <>
-                <span className="text-zinc-600">·</span>
+                <span className="text-ink-4">·</span>
                 <span className={`font-bold ${wr >= 60 ? 'text-green-400' : wr >= 45 ? 'text-yellow-400' : 'text-red-400'}`}>{wr}%</span>
               </>
             )}
@@ -157,11 +157,11 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
       <div className="flex items-center gap-4 mt-2 justify-end">
         <div className="flex items-center gap-1.5">
           <span className="w-3 h-3 rounded-sm bg-green-500 inline-block" />
-          <span className="text-[10px] text-zinc-500">Greens</span>
+          <span className="text-[10px] text-ink-3">Greens</span>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="w-3 h-3 rounded-sm bg-zinc-700 inline-block" />
-          <span className="text-[10px] text-zinc-500">Total picks</span>
+          <span className="w-3 h-3 rounded-sm bg-surface-3 inline-block" />
+          <span className="text-[10px] text-ink-3">Total picks</span>
         </div>
       </div>
     </div>

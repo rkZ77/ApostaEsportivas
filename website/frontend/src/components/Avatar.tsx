@@ -57,7 +57,7 @@ export default function Avatar({ name, imageUrl, size = 'md', className = '' }: 
   }
 
   return (
-    <div className={`${SIZE[size]} ${nameColor(name)} rounded-full flex items-center justify-center font-black text-white shrink-0 select-none ${className}`}>
+    <div className={`${SIZE[size]} ${nameColor(name)} rounded-full flex items-center justify-center font-black text-ink-1 shrink-0 select-none ${className}`}>
       {initials}
     </div>
   )

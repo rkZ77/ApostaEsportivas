@@ -75,16 +75,16 @@ export default function VerifyEmail() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-md bg-zinc-900 border border-zinc-800 rounded-lg p-8 text-center">
+    <div className="min-h-screen bg-surface-0 flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-surface-1 border border-line rounded-lg p-8 text-center">
 
         {state === 'loading' && (
           <>
             <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-5">
               <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">Verificando…</h1>
-            <p className="text-zinc-500 text-sm">Aguarde um momento.</p>
+            <h1 className="text-xl font-bold text-ink-1 mb-2">Verificando…</h1>
+            <p className="text-ink-3 text-sm">Aguarde um momento.</p>
           </>
         )}
 
@@ -95,11 +95,11 @@ export default function VerifyEmail() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">E-mail confirmado!</h1>
-            <p className="text-zinc-400 text-sm mb-6">Sua conta está ativa. Acessando seus picks…</p>
+            <h1 className="text-2xl font-bold text-ink-1 mb-2">E-mail confirmado!</h1>
+            <p className="text-ink-2 text-sm mb-6">Sua conta está ativa. Acessando seus picks…</p>
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-colors"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-ink-1 font-bold text-sm transition-colors"
             >
               Acessar picks
             </button>
@@ -113,13 +113,13 @@ export default function VerifyEmail() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">Link inválido</h1>
-            <p className="text-zinc-500 text-sm mb-6">{errMsg}</p>
+            <h1 className="text-xl font-bold text-ink-1 mb-2">Link inválido</h1>
+            <p className="text-ink-3 text-sm mb-6">{errMsg}</p>
             {user && (
               <button
                 onClick={handleResend}
                 disabled={resending || resent}
-                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
+                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
               >
                 {resent ? 'E-mail reenviado!' : resending ? 'Enviando…' : 'Reenviar e-mail de verificação'}
               </button>
@@ -134,12 +134,12 @@ export default function VerifyEmail() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
               </svg>
             </div>
-            <h1 className="text-xl font-bold text-white mb-2">Verifique seu e-mail</h1>
-            <p className="text-zinc-400 text-sm mb-1">
+            <h1 className="text-xl font-bold text-ink-1 mb-2">Verifique seu e-mail</h1>
+            <p className="text-ink-2 text-sm mb-1">
               Enviamos um link de confirmação para{' '}
-              <span className="text-white font-medium">{emailChanged || user?.email || 'seu e-mail'}</span>.
+              <span className="text-ink-1 font-medium">{emailChanged || user?.email || 'seu e-mail'}</span>.
             </p>
-            <p className="text-zinc-500 text-xs mb-6">Verifique também a pasta de spam.</p>
+            <p className="text-ink-3 text-xs mb-6">Verifique também a pasta de spam.</p>
 
             {resent && cooldown > 0 && (
               <p className="text-green-400 text-sm font-semibold mb-4">E-mail reenviado! Verifique também o spam.</p>
@@ -148,7 +148,7 @@ export default function VerifyEmail() {
             {/* CTA principal · acessar o site sem verificar */}
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors mb-3"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-ink-1 font-black text-sm transition-colors mb-3"
             >
               Acessar os Picks agora
             </button>
@@ -157,7 +157,7 @@ export default function VerifyEmail() {
                 <button
                   onClick={handleResend}
                   disabled={resending || cooldown > 0}
-                  className="flex-1 py-2.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-zinc-200 font-semibold text-xs transition-colors disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-md border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-2 font-semibold text-xs transition-colors disabled:opacity-50"
                 >
                   {resending ? 'Enviando…' : cooldown > 0 ? `Reenviar em ${cooldown}s` : 'Reenviar e-mail'}
                 </button>
@@ -174,7 +174,7 @@ export default function VerifyEmail() {
             {/* Formulário de troca de e-mail */}
             {showChangeEmail && (
               <form onSubmit={handleChangeEmail} className="mt-1 mb-4 text-left space-y-2">
-                <p className="text-zinc-400 text-xs font-semibold">Novo e-mail:</p>
+                <p className="text-ink-2 text-xs font-semibold">Novo e-mail:</p>
                 <input
                   type="email"
                   value={newEmail}
@@ -186,11 +186,11 @@ export default function VerifyEmail() {
                 {changeEmailErr && <p className="text-red-400 text-xs">{changeEmailErr}</p>}
                 <div className="flex gap-2">
                   <button type="submit" disabled={changingEmail}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
                     {changingEmail ? 'Salvando…' : 'Salvar e reenviar'}
                   </button>
                   <button type="button" onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}
-                    className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                    className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
                     Cancelar
                   </button>
                 </div>

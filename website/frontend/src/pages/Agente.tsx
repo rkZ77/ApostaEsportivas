@@ -20,9 +20,9 @@ const SUGGESTIONS = [
 function TypingDots() {
   return (
     <span className="flex gap-1 items-center h-4">
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
-      <span className="w-1.5 h-1.5 bg-zinc-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+      <span className="w-1.5 h-1.5 bg-ink-4 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
     </span>
   )
 }
@@ -30,19 +30,19 @@ function TypingDots() {
 function AgentMessage({ content, loading, statusText }: { content: string; loading: boolean; statusText: string }) {
   if (loading && !content) {
     return (
-      <div className="text-zinc-400 text-sm flex items-center gap-2">
+      <div className="text-ink-2 text-sm flex items-center gap-2">
         <TypingDots />
-        {statusText && <span className="text-zinc-500 text-xs">{statusText}</span>}
+        {statusText && <span className="text-ink-3 text-xs">{statusText}</span>}
       </div>
     )
   }
 
   return (
-    <div className="prose prose-invert prose-sm max-w-none text-zinc-200
-      prose-p:my-1 prose-pre:bg-zinc-800 prose-pre:border prose-pre:border-zinc-700
+    <div className="prose prose-invert prose-sm max-w-none text-ink-2
+      prose-p:my-1 prose-pre:bg-surface-2 prose-pre:border prose-pre:border-line-strong
       prose-pre:rounded-lg prose-pre:text-xs prose-code:text-green-400
-      prose-code:bg-zinc-800 prose-code:px-1 prose-code:rounded prose-strong:text-white
-      prose-headings:text-white">
+      prose-code:bg-surface-2 prose-code:px-1 prose-code:rounded prose-strong:text-ink-1
+      prose-headings:text-ink-1">
       <ReactMarkdown>{content}</ReactMarkdown>
     </div>
   )
@@ -76,7 +76,7 @@ export default function Agente() {
 
   if (!isVip && !isAdmin) {
     return (
-      <div className="min-h-screen bg-black flex flex-col">
+      <div className="min-h-screen bg-surface-0 flex flex-col">
         <Navbar />
         <div className="flex-1 flex items-center justify-center px-4 py-16">
           <div className="text-center max-w-sm">
@@ -85,8 +85,8 @@ export default function Agente() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h2 className="text-white font-black text-xl mb-2">Agente exclusivo VIP</h2>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+            <h2 className="text-ink-1 font-black text-xl mb-2">Agente exclusivo VIP</h2>
+            <p className="text-ink-2 text-sm mb-6 leading-relaxed">
               O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP.
             </p>
             <a href="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-3 rounded-md transition-colors text-sm">
@@ -99,23 +99,23 @@ export default function Agente() {
   }
 
   return (
-    <div className="h-screen bg-black flex flex-col overflow-hidden">
+    <div className="h-screen bg-surface-0 flex flex-col overflow-hidden">
       <Navbar />
 
       {/* Header */}
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
           <div className="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
             <span className="text-green-400 text-sm font-bold">AI</span>
           </div>
           <div>
-            <h1 className="text-base font-black text-white">Pick<span className="text-green-500">IA</span> Agent</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
+            <h1 className="text-base font-black text-ink-1">Pick<span className="text-green-500">IA</span> Agent</h1>
+            <p className="text-ink-3 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
-            <span className="text-zinc-500 text-xs">{loading ? 'Analisando...' : 'Online'}</span>
+            <span className="text-ink-3 text-xs">{loading ? 'Analisando...' : 'Online'}</span>
           </div>
         </div>
       </div>
@@ -128,8 +128,8 @@ export default function Agente() {
               <Zap className="w-8 h-8 text-green-400" />
             </div>
             <div className="text-center">
-              <h2 className="text-white font-bold text-lg">Olá, {user?.name?.split(' ')[0]}!</h2>
-              <p className="text-zinc-500 text-sm mt-1 max-w-xs">
+              <h2 className="text-ink-1 font-bold text-lg">Olá, {user?.name?.split(' ')[0]}!</h2>
+              <p className="text-ink-3 text-sm mt-1 max-w-xs">
                 Pergunte sobre os picks do dia, sua banca, alavancagem, desempenho do site, jogos ao vivo e muito mais.
               </p>
             </div>
@@ -138,7 +138,7 @@ export default function Agente() {
                 <button
                   key={s}
                   onClick={() => sendMessage(s)}
-                  className="text-left px-4 py-3 rounded-md bg-zinc-900 border border-zinc-800 hover:border-green-500/40 hover:bg-zinc-800 transition-all text-sm text-zinc-300"
+                  className="text-left px-4 py-3 rounded-md bg-surface-1 border border-line hover:border-green-500/40 hover:bg-surface-2 transition-all text-sm text-ink-2"
                 >
                   {s}
                 </button>
@@ -164,8 +164,8 @@ export default function Agente() {
               )}
               <div className={`max-w-[80%] sm:max-w-[75%] rounded-md px-4 py-3 text-sm leading-relaxed
                 ${msg.role === 'user'
-                  ? 'bg-green-600 text-white rounded-tr-sm'
-                  : 'bg-zinc-900 border border-zinc-800 rounded-tl-sm'}`}>
+                  ? 'bg-green-600 text-ink-1 rounded-tr-sm'
+                  : 'bg-surface-1 border border-line rounded-tl-sm'}`}>
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
                 ) : (
@@ -186,7 +186,7 @@ export default function Agente() {
       {/* Quando o CookieBanner (fixed bottom-0) ainda está visível, ele sobrepõe
           e bloqueia cliques aqui · reserva espaço extra embaixo pra textarea ficar
           acima da área coberta pelo banner. */}
-      <div className={`bg-zinc-950 border-t border-zinc-800 ${cookieBannerVisible ? 'pb-24 sm:pb-14' : ''}`}>
+      <div className={`bg-surface-0 border-t border-line ${cookieBannerVisible ? 'pb-24 sm:pb-14' : ''}`}>
         <div className="max-w-3xl mx-auto px-4 py-3 flex gap-2 items-end">
           <textarea
             ref={inputRef}
@@ -195,14 +195,14 @@ export default function Agente() {
             onKeyDown={handleKeyDown}
             placeholder="Pergunte sobre picks, banca, jogos ao vivo... (Enter para enviar)"
             rows={1}
-            className="flex-1 bg-zinc-900 border border-zinc-700 rounded-md px-4 py-3 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50 resize-none"
+            className="flex-1 bg-surface-1 border border-line-strong rounded-md px-4 py-3 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50 resize-none"
             style={{ minHeight: '48px', maxHeight: '120px' }}
             disabled={loading}
           />
           <button
             onClick={() => sendMessage()}
             disabled={!input.trim() || loading}
-            className="w-12 h-12 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
+            className="w-12 h-12 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-ink-1 shrink-0"
           >
             {loading ? (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
@@ -216,7 +216,7 @@ export default function Agente() {
             )}
           </button>
         </div>
-        <p className="text-center text-zinc-700 text-xs pb-2">Análises baseadas em dados reais da API-Football. Aposte com responsabilidade.</p>
+        <p className="text-center text-ink-4 text-xs pb-2">Análises baseadas em dados reais da API-Football. Aposte com responsabilidade.</p>
       </div>
     </div>
   )

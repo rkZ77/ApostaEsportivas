@@ -22,14 +22,14 @@ export default function CookieBanner() {
           animate={{ y: 0 }}
           exit={{ y: '100%' }}
           transition={{ type: 'spring', stiffness: 300, damping: 32 }}
-          className="fixed bottom-0 inset-x-0 z-40 bg-zinc-900 border-t border-zinc-800 px-4 py-4 sm:py-3"
+          className="fixed bottom-0 inset-x-0 z-40 bg-surface-1 border-t border-line px-4 py-4 sm:py-3"
           style={{ paddingBottom: 'calc(1rem + env(safe-area-inset-bottom))' }}
         >
           <div className="max-w-5xl mx-auto flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-6">
-            <p className="text-xs text-zinc-400 flex-1 leading-relaxed">
+            <p className="text-xs text-ink-2 flex-1 leading-relaxed">
               Usamos cookies essenciais para autenticação e funcionamento do site.
               Ao continuar, você concorda com nossa{' '}
-              <a href="/privacidade" className="underline text-zinc-300 hover:text-white transition-colors">
+              <a href="/privacidade" className="underline text-ink-2 hover:text-ink-1 transition-colors">
                 Política de Privacidade
               </a>.
             </p>

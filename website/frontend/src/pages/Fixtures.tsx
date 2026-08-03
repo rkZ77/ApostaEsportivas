@@ -42,7 +42,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
   return (
     <div className="flex items-center gap-1">
       <button onClick={prev} aria-label="Semana anterior"
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-3 hover:text-ink-1 hover:bg-surface-2 transition-colors text-sm shrink-0">
         ‹
       </button>
       <div ref={stripRef} className="flex gap-1 overflow-hidden">
@@ -58,7 +58,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
                   ? 'bg-green-500 text-black font-black shadow-lg shadow-green-500/20'
                   : isToday
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400 font-semibold'
-                  : 'text-zinc-400 hover:bg-zinc-800 hover:text-white'
+                  : 'text-ink-2 hover:bg-surface-2 hover:text-ink-1'
               }`}>
               <span className="text-[9px] uppercase leading-none mb-0.5">
                 {DAY_SHORT[dt.getDay()]}
@@ -69,7 +69,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
         })}
       </div>
       <button onClick={next} aria-label="Próxima semana"
-        className="w-7 h-7 flex items-center justify-center rounded-lg text-zinc-500 hover:text-white hover:bg-zinc-800 transition-colors text-sm shrink-0">
+        className="w-7 h-7 flex items-center justify-center rounded-lg text-ink-3 hover:text-ink-1 hover:bg-surface-2 transition-colors text-sm shrink-0">
         ›
       </button>
       {date !== TODAY && (
@@ -83,14 +83,14 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
 }
 
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
-  NS:   { label: 'Agendado',    color: 'text-zinc-400' },
+  NS:   { label: 'Agendado',    color: 'text-ink-2' },
   '1H': { label: 'AO VIVO 1T', color: 'text-green-400' },
   HT:   { label: 'Intervalo',  color: 'text-yellow-400' },
   '2H': { label: 'AO VIVO 2T', color: 'text-green-400' },
   ET:   { label: 'Prorr.',     color: 'text-orange-400' },
-  FT:   { label: 'Encerrado',  color: 'text-zinc-500' },
-  AET:  { label: 'Enc. Prorr.', color: 'text-zinc-500' },
-  PEN:  { label: 'Pênaltis',   color: 'text-zinc-500' },
+  FT:   { label: 'Encerrado',  color: 'text-ink-3' },
+  AET:  { label: 'Enc. Prorr.', color: 'text-ink-3' },
+  PEN:  { label: 'Pênaltis',   color: 'text-ink-3' },
   CANC: { label: 'Cancelado',  color: 'text-red-500' },
   PST:  { label: 'Adiado',     color: 'text-red-400' },
 }
@@ -226,18 +226,18 @@ export default function Fixtures() {
   const pickCount  = fixtures.filter(f => f.has_pick).length
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
 
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-5xl mx-auto px-4 pt-4 pb-0">
           {/* Título + badges */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-3">
               <BackButton />
               <div>
-                <h1 className="text-base font-black text-white">Jogos</h1>
-                <p className="text-zinc-500 text-xs mt-0.5 capitalize">{dateLabel}</p>
+                <h1 className="text-base font-black text-ink-1">Jogos</h1>
+                <p className="text-ink-3 text-xs mt-0.5 capitalize">{dateLabel}</p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -262,7 +262,7 @@ export default function Fixtures() {
             </div>
           )}
           {/* Page tabs */}
-          <div className="flex border-b border-zinc-800">
+          <div className="flex border-b border-line">
             {([
               { key: 'jogos',       label: 'Jogos' },
               { key: 'estatistica', label: 'Estatísticas' },
@@ -272,7 +272,7 @@ export default function Fixtures() {
                 whileTap={{ scale: 0.95 }}
                 onClick={() => setPageTab(t.key)}
                 className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  pageTab === t.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  pageTab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
                 }`}
               >
                 {t.label}
@@ -295,13 +295,13 @@ export default function Fixtures() {
       {pageTab === 'jogos' && <motion.main key="jogos" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="max-w-5xl mx-auto px-4 py-6">
 
         {/* Banner informativo */}
-        <div className="flex items-start gap-3 bg-zinc-900 border border-zinc-800 rounded-lg px-4 py-3 mb-5">
-          <svg className="w-4 h-4 text-zinc-500 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="flex items-start gap-3 bg-surface-1 border border-line rounded-lg px-4 py-3 mb-5">
+          <svg className="w-4 h-4 text-ink-3 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <div>
-            <p className="text-zinc-400 text-xs leading-relaxed">
-              Exibindo apenas jogos das <span className="text-white font-semibold">ligas monitoradas pela IA</span>.
+            <p className="text-ink-2 text-xs leading-relaxed">
+              Exibindo apenas jogos das <span className="text-ink-1 font-semibold">ligas monitoradas pela IA</span>.
               Os picks são gerados automaticamente antes de cada rodada e aparecem com o badge <span className="text-green-400 font-semibold">Pick IA</span> no jogo correspondente.
             </p>
           </div>
@@ -309,12 +309,12 @@ export default function Fixtures() {
 
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : fixtures.length === 0 ? (
           <div className="card p-12 text-center border-dashed">
-            <p className="text-zinc-600 text-sm">Nenhum jogo encontrado para esta data.</p>
-            <p className="text-zinc-700 text-xs mt-2">As ligas monitoradas não têm jogos programados neste dia.</p>
+            <p className="text-ink-4 text-sm">Nenhum jogo encontrado para esta data.</p>
+            <p className="text-ink-4 text-xs mt-2">As ligas monitoradas não têm jogos programados neste dia.</p>
           </div>
         ) : (
           <div className="space-y-5">
@@ -325,7 +325,7 @@ export default function Fixtures() {
 
                 {/* Cabeçalho da liga com logo + bandeira (clicável para recolher) */}
                 <div
-                  className={`px-4 py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-zinc-800/60 border-zinc-800'}`}
+                  className={`px-4 py-3 border-b flex items-center gap-2.5 cursor-pointer select-none ${isCopa ? 'bg-yellow-950/40 border-yellow-700/30' : 'bg-surface-2/60 border-line'}`}
                   onClick={() => toggleCollapse(league)}
                 >
                   {logo && (
@@ -334,9 +334,9 @@ export default function Fixtures() {
                       onError={e => (e.currentTarget.style.display = 'none')}
                       />
                   )}
-                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-zinc-300'}`}>{league}</span>
+                  <span className={`text-xs font-bold ${isCopa ? 'text-yellow-300' : 'text-ink-2'}`}>{league}</span>
                   {country && (
-                    <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{country}</span>
+                    <span className={`text-xs font-normal ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{country}</span>
                   )}
                   {flag && (
                     <img src={flag} alt={country ?? ''} width={18} height={13}
@@ -345,18 +345,18 @@ export default function Fixtures() {
                       />
                   )}
                   {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase ml-1">Copa do Mundo</span>}
-                  <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
+                  <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
                   <svg
-                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${collapsed.has(league) ? '-rotate-90' : ''} ${isCopa ? 'text-yellow-700' : 'text-zinc-600'}`}
+                    className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${collapsed.has(league) ? '-rotate-90' : ''} ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}
                     fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
                   </svg>
                 </div>
 
                 {/* Jogos */}
-                {!collapsed.has(league) && <div className="divide-y divide-zinc-800/50">
+                {!collapsed.has(league) && <div className="divide-y divide-line/50">
                   {games.map(f => {
-                    const st       = STATUS_MAP[f.status] ?? { label: f.status, color: 'text-zinc-500' }
+                    const st       = STATUS_MAP[f.status] ?? { label: f.status, color: 'text-ink-3' }
                     const live     = isLive(f.status)
                     const finished = isFinished(f.status)
                     const time     = f.match_datetime
@@ -368,7 +368,7 @@ export default function Fixtures() {
                     return (
                       <div key={f.fixture_id}>
                       <div
-                        className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
+                        className={`flex items-center gap-3 px-4 py-3 hover:bg-surface-2/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
                         onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
                       >
 
@@ -384,14 +384,14 @@ export default function Fixtures() {
                           ) : finished ? (
                             <span className={`text-xs ${st.color}`}>{st.label}</span>
                           ) : (
-                            <span className="font-mono text-sm font-bold text-zinc-300">{time}</span>
+                            <span className="font-mono text-sm font-bold text-ink-2">{time}</span>
                           )}
                         </div>
 
                         {/* Times + placar */}
                         <div className="flex-1 flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-                            <span className={`text-sm font-semibold truncate ${live ? 'text-white' : 'text-zinc-300'}`}>
+                            <span className={`text-sm font-semibold truncate ${live ? 'text-ink-1' : 'text-ink-2'}`}>
                               {f.home_team}
                             </span>
                             <TeamLogo id={f.home_team_id} name={f.home_team} side="left" />
@@ -400,22 +400,22 @@ export default function Fixtures() {
                           <div className="shrink-0 flex items-center gap-1.5">
                             {finished || live ? (
                               <>
-                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
+                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-surface-2 text-ink-1'}`}>
                                   {f.home_goals ?? 0}
                                 </span>
-                                <span className="text-zinc-600 text-xs">×</span>
-                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-zinc-800 text-white'}`}>
+                                <span className="text-ink-4 text-xs">×</span>
+                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-surface-2 text-ink-1'}`}>
                                   {f.away_goals ?? 0}
                                 </span>
                               </>
                             ) : (
-                              <span className="text-zinc-600 text-sm font-bold px-2">vs</span>
+                              <span className="text-ink-4 text-sm font-bold px-2">vs</span>
                             )}
                           </div>
 
                           <div className="flex items-center gap-2 flex-1 justify-start min-w-0">
                             <TeamLogo id={f.away_team_id} name={f.away_team} side="right" />
-                            <span className={`text-sm font-semibold truncate ${live ? 'text-white' : 'text-zinc-300'}`}>
+                            <span className={`text-sm font-semibold truncate ${live ? 'text-ink-1' : 'text-ink-2'}`}>
                               {f.away_team}
                             </span>
                           </div>
@@ -433,14 +433,14 @@ export default function Fixtures() {
                                 Pick IA
                               </span>
                               {f.pick_market && (
-                                <span className="text-[10px] text-zinc-500 max-w-[72px] truncate text-right">
+                                <span className="text-[10px] text-ink-3 max-w-[72px] truncate text-right">
                                   {f.pick_market}
                                 </span>
                               )}
                             </>
                           )}
                           {!canSeeStats && (
-                            <svg className="w-3 h-3 text-zinc-700 mt-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <svg className="w-3 h-3 text-ink-4 mt-auto" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
                             </svg>
                           )}
@@ -451,20 +451,20 @@ export default function Fixtures() {
                       {live && ls && (
                         <div className="font-mono px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
                           <div>
-                            <div className="text-[10px] text-zinc-500 uppercase mb-0.5">Esc</div>
-                            <div className="text-xs font-bold text-zinc-300">{ls.home_corners} <span className="text-zinc-600">-</span> {ls.away_corners}</div>
+                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Esc</div>
+                            <div className="text-xs font-bold text-ink-2">{ls.home_corners} <span className="text-ink-4">-</span> {ls.away_corners}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-zinc-500 uppercase mb-0.5">Fin</div>
-                            <div className="text-xs font-bold text-zinc-300">{ls.home_shots_on} <span className="text-zinc-600">-</span> {ls.away_shots_on}</div>
+                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Fin</div>
+                            <div className="text-xs font-bold text-ink-2">{ls.home_shots_on} <span className="text-ink-4">-</span> {ls.away_shots_on}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-zinc-500 uppercase mb-0.5">Cart</div>
-                            <div className="text-xs font-bold text-zinc-300">{ls.home_yellow} <span className="text-zinc-600">-</span> {ls.away_yellow}</div>
+                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Cart</div>
+                            <div className="text-xs font-bold text-ink-2">{ls.home_yellow} <span className="text-ink-4">-</span> {ls.away_yellow}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-zinc-500 uppercase mb-0.5">Posse</div>
-                            <div className="text-xs font-bold text-zinc-300">{ls.home_possession}% <span className="text-zinc-600">-</span> {ls.away_possession}%</div>
+                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Posse</div>
+                            <div className="text-xs font-bold text-ink-2">{ls.home_possession}% <span className="text-ink-4">-</span> {ls.away_possession}%</div>
                           </div>
                         </div>
                       )}
@@ -496,15 +496,15 @@ export default function Fixtures() {
           variants={backdropFade} initial="hidden" animate="visible" exit="exit"
           className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
           onClick={() => setLockPrompt(false)}>
-          <motion.div variants={dialogScale} className="bg-zinc-950 border border-zinc-800 rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
+          <motion.div variants={dialogScale} className="bg-surface-0 border border-line rounded-lg p-8 max-w-sm w-full text-center shadow-2xl overflow-y-auto max-h-[92dvh]"
             onClick={e => e.stopPropagation()}>
             <div className="w-14 h-14 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-4">
               <svg className="w-7 h-7 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-white font-black text-lg mb-2">Análise exclusiva VIP</h3>
-            <p className="text-zinc-400 text-sm mb-6 leading-relaxed">
+            <h3 className="text-ink-1 font-black text-lg mb-2">Análise exclusiva VIP</h3>
+            <p className="text-ink-2 text-sm mb-6 leading-relaxed">
               Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
             </p>
             <Link to="/checkout"
@@ -512,7 +512,7 @@ export default function Fixtures() {
               Assinar VIP
             </Link>
             <button onClick={() => setLockPrompt(false)}
-              className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+              className="text-ink-4 hover:text-ink-2 text-xs transition-colors">
               Fechar
             </button>
           </motion.div>

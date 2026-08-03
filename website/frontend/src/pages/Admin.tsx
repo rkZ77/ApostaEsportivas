@@ -349,27 +349,27 @@ export default function Admin() {
 
   if (loading) return (
     <><Navbar /><div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
     </div></>
   )
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="min-h-screen bg-surface-0 flex flex-col">
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-ink-1' : 'bg-red-600 text-ink-1'}`}>
           {toast.msg}
         </div>
       )}
       <Navbar />
 
       {/* Header */}
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <BackButton to="/picks" />
             <div>
-              <h1 className="text-xl font-black text-white">Painel Admin</h1>
-              <p className="text-zinc-500 text-sm">Gerenciar usuários e planos</p>
+              <h1 className="text-xl font-black text-ink-1">Painel Admin</h1>
+              <p className="text-ink-3 text-sm">Gerenciar usuários e planos</p>
             </div>
           </div>
           <button onClick={() => setCreating(v => !v)} className="btn-primary text-sm px-4 py-2">
@@ -387,13 +387,13 @@ export default function Admin() {
             pagina de Picks. */}
         <div className="relative mb-6 -mx-4">
           <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
-          <div className="flex border-b border-zinc-800 px-4 overflow-x-auto scrollbar-none">
+          <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
             {ABAS.map(a => (
               <button
                 key={a.key}
                 onClick={() => { setAba(a.key); window.location.hash = a.key }}
                 className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
-                  aba === a.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                  aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
                 }`}
               >
                 {a.label}
@@ -408,7 +408,7 @@ export default function Admin() {
         {/* Pipeline */}
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase">Pipeline</h2>
+            <h2 className="text-xs font-semibold text-ink-3 uppercase">Pipeline</h2>
             {(() => {
               const s = pipelineStatus['tudo']
               const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
@@ -425,14 +425,14 @@ export default function Admin() {
                   </button>
                   {s && (
                     <span
-                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-zinc-600'}`}
+                      className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-ink-4'}`}
                       onClick={() => setExpandedLog(expandedLog === 'tudo' ? null : 'tudo')}
                     >
                       {s.status === 'running' ? 'rodando...' : `último: ${s.finished_at ?? 's/d'}`}
                     </span>
                   )}
                   {expandedLog === 'tudo' && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-zinc-900 rounded p-2 max-w-sm whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    <pre className={`text-[10px] bg-surface-1 rounded p-2 max-w-sm whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
                       {s.error || s.log}
                     </pre>
                   )}
@@ -445,7 +445,7 @@ export default function Admin() {
             {PIPELINE_ACTIONS.map(({ command, label }, idx) => {
               const s = pipelineStatus[command]
               const isRunning = runningCmd === command || s?.status === 'running'
-              const borderCls = !s ? 'border-zinc-800'
+              const borderCls = !s ? 'border-line'
                 : s.status === 'running' ? 'border-yellow-500/50'
                 : s.status === 'ok'      ? 'border-green-500/40'
                 : 'border-red-500/50'
@@ -456,16 +456,16 @@ export default function Admin() {
               return (
                 <div key={command} className={`rounded-md border ${borderCls} ${bgCls} p-3 flex flex-col gap-2 transition-colors`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-zinc-600 font-mono font-bold">{String(idx + 1).padStart(2, '0')}</span>
-                    {!s                    && <span className="w-2 h-2 rounded-full bg-zinc-700" />}
+                    <span className="text-[10px] text-ink-4 font-mono font-bold">{String(idx + 1).padStart(2, '0')}</span>
+                    {!s                    && <span className="w-2 h-2 rounded-full bg-surface-3" />}
                     {s?.status === 'running' && <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />}
                     {s?.status === 'ok'      && <span className="w-2 h-2 rounded-full bg-green-500" />}
                     {s?.status === 'error'   && <span className="w-2 h-2 rounded-full bg-red-500" />}
                   </div>
-                  <p className="text-xs font-semibold text-zinc-300 leading-tight">{label}</p>
+                  <p className="text-xs font-semibold text-ink-2 leading-tight">{label}</p>
                   {s && !isRunning && (
                     <p
-                      className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-zinc-600'}`}
+                      className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-ink-4'}`}
                       onClick={() => setExpandedLog(expandedLog === command ? null : command)}
                     >
                       {s.status === 'error' ? '⚠ ver log' : s.finished_at ?? ''}
@@ -474,14 +474,14 @@ export default function Admin() {
                   <button
                     onClick={() => runPipeline(command)}
                     disabled={runningCmd !== null || isRunning}
-                    className="mt-auto text-[10px] px-2 py-1 rounded-lg border border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-white transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                    className="mt-auto text-[10px] px-2 py-1 rounded-lg border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                   >
                     {isRunning
-                      ? <><span className="w-2.5 h-2.5 border border-zinc-500 border-t-white rounded-full animate-spin" /> rodando</>
+                      ? <><span className="w-2.5 h-2.5 border border-ink-4 border-t-white rounded-full animate-spin" /> rodando</>
                       : '▶ rodar'}
                   </button>
                   {expandedLog === command && (s?.error || s?.log) && (
-                    <pre className={`text-[10px] bg-zinc-950 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-zinc-400'}`}>
+                    <pre className={`text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
                       {s.error || s.log}
                     </pre>
                   )}
@@ -495,8 +495,8 @@ export default function Admin() {
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase">Revisão por IA</h2>
-              <p className="text-[11px] text-zinc-600 mt-1">
+              <h2 className="text-xs font-semibold text-ink-3 uppercase">Revisão por IA</h2>
+              <p className="text-[11px] text-ink-4 mt-1">
                 {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
                   `${aiReviewStatus?.config.mode ?? 'off'} · ${aiReviewStatus?.config.environment ?? 'prod'} · limite ${aiReviewStatus?.config.daily_limit ?? 0}/dia`}
               </p>
@@ -511,19 +511,19 @@ export default function Admin() {
               ['24h', aiReviewStatus?.summary.reviews_24h ?? 0],
               ['Vetos 24h', aiReviewStatus?.summary.rejected_24h ?? 0],
               ['Cache 24h', aiReviewStatus?.summary.cache_hits_24h ?? 0],
-            ].map(([label, value]) => <div key={String(label)} className="rounded bg-zinc-900 px-3 py-2">
-              <p className="text-[10px] text-zinc-600 uppercase">{label}</p><p className="text-lg font-bold text-white">{value}</p>
+            ].map(([label, value]) => <div key={String(label)} className="rounded bg-surface-1 px-3 py-2">
+              <p className="text-[10px] text-ink-4 uppercase">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
             </div>)}
           </div>
           <div className="space-y-1 max-h-40 overflow-y-auto">
             {(aiReviewStatus?.events ?? []).slice(0, 8).map((event, index) => (
-              <div key={`${event.created_at}-${index}`} className="text-[11px] rounded bg-zinc-950 px-2 py-1.5 flex gap-2 text-zinc-400">
+              <div key={`${event.created_at}-${index}`} className="text-[11px] rounded bg-surface-0 px-2 py-1.5 flex gap-2 text-ink-2">
                 <span className={event.decision === 'reject' ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>{event.decision === 'reject' ? 'VETADO' : 'OK'}</span>
                 <span>{event.pipeline}</span><span>{event.model}</span><span>{event.cached ? 'cache' : 'novo'}</span>
                 <span className="ml-auto truncate">{event.review?.reasons?.[0] ?? event.status}</span>
               </div>
             ))}
-            {!aiReviewStatus?.events?.length && <p className="text-xs text-zinc-600 py-2">Sem revisões registradas ainda.</p>}
+            {!aiReviewStatus?.events?.length && <p className="text-xs text-ink-4 py-2">Sem revisões registradas ainda.</p>}
           </div>
         </div>
         </>)}
@@ -536,7 +536,7 @@ export default function Admin() {
         {overview?.api_football && (
           <div className="card p-4 mb-4">
             <div className="flex items-center justify-between mb-2 gap-3">
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase">Cota da API-Football</h2>
+              <h2 className="text-xs font-semibold text-ink-3 uppercase">Cota da API-Football</h2>
               <span className={`text-[10px] font-black uppercase border px-1.5 py-0.5 rounded ${
                 overview.api_football.ativo
                   ? 'text-green-400 bg-green-500/10 border-green-500/30'
@@ -550,16 +550,16 @@ export default function Admin() {
                 (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
                   : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
               }`}>{overview.api_football.usado ?? '·'}</span>
-              <span className="text-zinc-600 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
+              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
             </div>
-            <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+            <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
               <div className={`h-full rounded-full ${
                 (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
                   : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
               }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
             </div>
             {overview.api_football.expira_em && (
-              <p className="text-[11px] text-zinc-600 mt-2">
+              <p className="text-[11px] text-ink-4 mt-2">
                 Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
               </p>
             )}
@@ -570,7 +570,7 @@ export default function Admin() {
             indistinguível de "a coleta nem rodou". */}
         {overview?.coleta && (
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Coleta</h2>
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Coleta</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
@@ -580,14 +580,14 @@ export default function Admin() {
                 { label: 'Times',           value: overview.coleta.times },
                 { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
               ].map(({ label, value }) => (
-                <div key={label} className="bg-zinc-900 rounded-md px-3 py-2.5 text-center">
-                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-white' : 'text-zinc-700'}`}>{value}</div>
-                  <div className="text-[10px] text-zinc-500 uppercase mt-0.5">{label}</div>
+                <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
+                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
+                  <div className="text-[10px] text-ink-3 uppercase mt-0.5">{label}</div>
                 </div>
               ))}
             </div>
             {overview.coleta.ultimo_jogo_coletado && (
-              <p className="text-[11px] text-zinc-600 mt-3">
+              <p className="text-[11px] text-ink-4 mt-3">
                 Último jogo com estatística coletada:{' '}
                 {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
               </p>
@@ -603,14 +603,14 @@ export default function Admin() {
         {/* Picks de hoje, os 6 tipos */}
         {overview?.picks_hoje && (
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Picks de hoje</h2>
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Picks de hoje</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {Object.entries(overview.picks_hoje).map(([chave, c]) => (
-                <div key={chave} className="flex items-center gap-3 bg-zinc-900 rounded-md px-3 py-2.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.n > 0 ? 'bg-green-500' : 'bg-zinc-700'}`} />
+                <div key={chave} className="flex items-center gap-3 bg-surface-1 rounded-md px-3 py-2.5">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.n > 0 ? 'bg-green-500' : 'bg-surface-3'}`} />
                   <div className="min-w-0">
-                    <div className="font-mono text-white font-bold text-lg leading-none">{c.n}</div>
-                    <div className="text-zinc-500 text-[11px] mt-0.5 truncate">{PICK_LABEL[chave] ?? chave}</div>
+                    <div className="font-mono text-ink-1 font-bold text-lg leading-none">{c.n}</div>
+                    <div className="text-ink-3 text-[11px] mt-0.5 truncate">{PICK_LABEL[chave] ?? chave}</div>
                     {c.pendentes > 0 && (
                       <div className="text-[10px] text-orange-400 mt-0.5">{c.pendentes} pendente{c.pendentes > 1 ? 's' : ''}</div>
                     )}
@@ -625,20 +625,20 @@ export default function Admin() {
         <div className="grid gap-4 sm:grid-cols-2 mb-4">
           {overview?.financeiro && (
             <div className="card p-4">
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Receita do mês</h2>
+              <h2 className="text-xs font-semibold text-ink-3 uppercase mb-2">Receita do mês</h2>
               <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
-              <p className="text-[11px] text-zinc-600 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
+              <p className="text-[11px] text-ink-4 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
             </div>
           )}
           <div className="card p-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Último pipeline</h2>
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-2">Último pipeline</h2>
             {overview?.pipeline?.status ? (
               <>
                 <div className={`font-mono text-lg font-black ${
                   overview.pipeline.status === 'ok' ? 'text-green-400'
                     : overview.pipeline.status === 'running' ? 'text-blue-400' : 'text-red-400'
                 }`}>{overview.pipeline.status}</div>
-                <p className="text-[11px] text-zinc-600 mt-1">
+                <p className="text-[11px] text-ink-4 mt-1">
                   {overview.pipeline.finished_at ? `terminou às ${overview.pipeline.finished_at}` : 'em andamento'}
                 </p>
                 {overview.pipeline.error && (
@@ -646,7 +646,7 @@ export default function Admin() {
                 )}
               </>
             ) : (
-              <p className="text-sm text-zinc-600">
+              <p className="text-sm text-ink-4">
                 Nada rodou nesta instância ainda. Nada é agendado · dispare pela aba Pipeline.
               </p>
             )}
@@ -658,18 +658,18 @@ export default function Admin() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
               {[
-                { label: 'Total',         value: stats.total,         color: 'text-white' },
+                { label: 'Total',         value: stats.total,         color: 'text-ink-1' },
                 { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
                 { label: 'Trial',         value: stats.trial,          color: 'text-blue-400' },
-                { label: 'Free',          value: stats.free,           color: 'text-zinc-400' },
+                { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
                 { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
                 { label: 'Online hoje',   value: stats.ativos_hoje,    color: 'text-green-400' },
                 { label: 'Online 7 dias', value: stats.ativos_semana,  color: 'text-teal-400' },
-                { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-zinc-600' },
+                { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-3">
                   <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
-                  <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
+                  <div className="text-xs text-ink-3 uppercase mt-1">{label}</div>
                 </div>
               ))}
             </div>
@@ -686,19 +686,19 @@ export default function Admin() {
         {/* Financeiro */}
         {revenue && (
           <div className="mb-6">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Financeiro</h2>
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Financeiro</h2>
 
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
               {[
                 { label: 'Receita Total',    value: fmtBRL(revenue.total),        color: 'text-green-400' },
-                { label: 'Assinaturas',      value: String(revenue.count),        color: 'text-white'    },
+                { label: 'Assinaturas',      value: String(revenue.count),        color: 'text-ink-1'    },
                 { label: 'Ticket Médio',     value: fmtBRL(revenue.avg_ticket),   color: 'text-blue-400' },
                 { label: 'VIPs Ativos Agora',value: String(revenue.active_vip),                                                   color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-4">
                   <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-                  <div className="text-xs text-zinc-500 uppercase mt-1">{label}</div>
+                  <div className="text-xs text-ink-3 uppercase mt-1">{label}</div>
                 </div>
               ))}
             </div>
@@ -706,21 +706,21 @@ export default function Admin() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
               {/* Receita por mês */}
               <div className="card overflow-hidden lg:col-span-2">
-                <div className="px-4 py-3 border-b border-zinc-800">
-                  <span className="text-xs font-semibold text-zinc-500 uppercase">Receita por mês (últimos 12)</span>
+                <div className="px-4 py-3 border-b border-line">
+                  <span className="text-xs font-semibold text-ink-3 uppercase">Receita por mês (últimos 12)</span>
                 </div>
                 {revenue.monthly.length === 0 ? (
-                  <p className="text-center text-zinc-600 text-sm py-6">Sem dados.</p>
+                  <p className="text-center text-ink-4 text-sm py-6">Sem dados.</p>
                 ) : (() => {
                   const maxTotal = Math.max(...revenue.monthly.map(m => m.total), 1)
                   return (
                     <div className="overflow-x-auto">
                       <table className="w-full text-xs">
                         <thead>
-                          <tr className="border-b border-zinc-800">
-                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase">Mês</th>
-                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase">Receita</th>
-                            <th className="text-left text-zinc-500 font-medium px-4 py-2 uppercase">Vendas</th>
+                          <tr className="border-b border-line">
+                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Mês</th>
+                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Receita</th>
+                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Vendas</th>
                             <th className="w-32 px-4 py-2"></th>
                           </tr>
                         </thead>
@@ -730,14 +730,14 @@ export default function Admin() {
                             const label = new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
                             const pct = (m.total / maxTotal) * 100
                             return (
-                              <tr key={m.month} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
-                                <td className="px-4 py-2.5 text-zinc-300 font-medium capitalize">{label}</td>
+                              <tr key={m.month} className="border-b border-line/40 hover:bg-surface-1/40">
+                                <td className="px-4 py-2.5 text-ink-2 font-medium capitalize">{label}</td>
                                 <td className="px-4 py-2.5 text-green-400 font-semibold font-mono">
                                   {fmtBRL(m.total)}
                                 </td>
-                                <td className="px-4 py-2.5 text-zinc-400 font-mono">{m.count}</td>
+                                <td className="px-4 py-2.5 text-ink-2 font-mono">{m.count}</td>
                                 <td className="px-4 py-2.5">
-                                  <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                                  <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
                                     <div className="h-full bg-green-500 rounded-full transition-all" style={{ width: `${pct}%` }} />
                                   </div>
                                 </td>
@@ -753,11 +753,11 @@ export default function Admin() {
 
               {/* Por plano */}
               <div className="card overflow-hidden">
-                <div className="px-4 py-3 border-b border-zinc-800">
-                  <span className="text-xs font-semibold text-zinc-500 uppercase">Por plano</span>
+                <div className="px-4 py-3 border-b border-line">
+                  <span className="text-xs font-semibold text-ink-3 uppercase">Por plano</span>
                 </div>
                 {revenue.by_plan.length === 0 ? (
-                  <p className="text-center text-zinc-600 text-sm py-6">Sem dados.</p>
+                  <p className="text-center text-ink-4 text-sm py-6">Sem dados.</p>
                 ) : (() => {
                   const planColors: Record<string, string> = {
                     mensal: 'text-blue-400', trimestral: 'text-purple-400',
@@ -768,17 +768,17 @@ export default function Admin() {
                     <div className="p-4 space-y-4">
                       {revenue.by_plan.map(p => {
                         const pct = (p.total / maxTotal) * 100
-                        const color = planColors[p.plan] ?? 'text-zinc-400'
+                        const color = planColors[p.plan] ?? 'text-ink-2'
                         return (
                           <div key={p.plan}>
                             <div className="flex items-center justify-between mb-1">
                               <span className={`text-xs font-bold capitalize ${color}`}>{p.plan}</span>
                               <div className="font-mono text-right">
-                                <span className="text-xs text-white font-semibold">{fmtBRL(p.total)}</span>
-                                <span className="text-[10px] text-zinc-600 ml-1">({p.count}x)</span>
+                                <span className="text-xs text-ink-1 font-semibold">{fmtBRL(p.total)}</span>
+                                <span className="text-[10px] text-ink-4 ml-1">({p.count}x)</span>
                               </div>
                             </div>
-                            <div className="h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+                            <div className="h-1.5 bg-surface-2 rounded-full overflow-hidden">
                               <div className="h-full bg-green-500/60 rounded-full" style={{ width: `${pct}%` }} />
                             </div>
                           </div>
@@ -794,10 +794,10 @@ export default function Admin() {
 
         {/* Pagamentos */}
         <div className="card overflow-hidden mb-6">
-          <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase">Pagamentos</h2>
+          <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3 flex-wrap">
+            <h2 className="text-xs font-semibold text-ink-3 uppercase">Pagamentos</h2>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-zinc-600">{payments.length} registro(s)</span>
+              <span className="text-xs text-ink-4">{payments.length} registro(s)</span>
               <button
                 onClick={async () => {
                   const id = prompt('ID do pagamento MercadoPago:')
@@ -810,55 +810,55 @@ export default function Admin() {
                     showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
                   }
                 }}
-                className="px-2 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white hover:border-green-600 transition-colors"
+                className="px-2 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 hover:border-green-600 transition-colors"
               >
                 + Reprocessar pagamento
               </button>
             </div>
           </div>
           {paymentsLoading ? (
-            <div className="p-6 flex justify-center"><div className="w-5 h-5 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" /></div>
+            <div className="p-6 flex justify-center"><div className="w-5 h-5 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" /></div>
           ) : payments.length === 0 ? (
-            <p className="text-center text-zinc-600 text-sm py-6">Nenhum pagamento registrado.</p>
+            <p className="text-center text-ink-4 text-sm py-6">Nenhum pagamento registrado.</p>
           ) : (
             <>
               <div className="overflow-x-auto">
                 <table className="w-full text-xs">
                   <thead>
-                    <tr className="border-b border-zinc-800">
+                    <tr className="border-b border-line">
                       {['Data', 'Usuário', 'Plano', 'Valor', 'Método', 'Status', 'Expira'].map(h => (
-                        <th key={h} className="text-left text-zinc-500 font-medium px-4 py-2 uppercase whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left text-ink-3 font-medium px-4 py-2 uppercase whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
                   <tbody>
                     {paymentsPage_.map((p, i) => (
-                      <tr key={i} className="border-b border-zinc-800/40 hover:bg-zinc-900/40">
-                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
+                      <tr key={i} className="border-b border-line/40 hover:bg-surface-1/40">
+                        <td className="px-4 py-2 text-ink-3 whitespace-nowrap">{new Date(p.created_at).toLocaleDateString('pt-BR')}</td>
                         <td className="px-4 py-2">
-                          <div className="text-white font-medium">{p.user_name}</div>
-                          <div className="text-zinc-600">{p.user_email}</div>
+                          <div className="text-ink-1 font-medium">{p.user_name}</div>
+                          <div className="text-ink-4">{p.user_email}</div>
                         </td>
-                        <td className="px-4 py-2 capitalize text-zinc-300">{p.plan_key}</td>
+                        <td className="px-4 py-2 capitalize text-ink-2">{p.plan_key}</td>
                         <td className="px-4 py-2 text-green-400 font-semibold font-mono">R${Number(p.amount).toFixed(2)}</td>
-                        <td className="px-4 py-2 text-zinc-400">{p.payment_method ?? ''}</td>
+                        <td className="px-4 py-2 text-ink-2">{p.payment_method ?? ''}</td>
                         <td className="px-4 py-2">
                           <span className={p.status === 'approved' ? 'badge-green' : 'badge-free'}>
                             {p.status}
                           </span>
                         </td>
-                        <td className="px-4 py-2 text-zinc-500 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : ''}</td>
+                        <td className="px-4 py-2 text-ink-3 whitespace-nowrap">{p.expires_at ? new Date(p.expires_at).toLocaleDateString('pt-BR') : ''}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               {paymentsTotalPages > 1 && (
-                <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
-                  <span className="text-xs text-zinc-600">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
+                <div className="flex items-center justify-between px-4 py-3 border-t border-line">
+                  <span className="text-xs text-ink-4">Página {paymentsPageSafe + 1} de {paymentsTotalPages}</span>
                   <div className="flex gap-2">
-                    <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
-                    <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx</button>
+                    <button onClick={() => setPaymentsPage(p => Math.max(0, p - 1))} disabled={paymentsPageSafe === 0} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">← Ant</button>
+                    <button onClick={() => setPaymentsPage(p => Math.min(paymentsTotalPages - 1, p + 1))} disabled={paymentsPageSafe === paymentsTotalPages - 1} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">Próx</button>
                   </div>
                 </div>
               )}
@@ -873,8 +873,8 @@ export default function Admin() {
             dava pra chamar por fora. Sem scheduler, esta é a única forma de
             resolver pick em lote. */}
         <div className="card p-4 mb-4">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-1">Resultados</h2>
-          <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+          <h2 className="text-xs font-semibold text-ink-3 uppercase mb-1">Resultados</h2>
+          <p className="text-xs text-ink-3 mb-3 leading-relaxed">
             Nada roda agendado. Resolver marca GREEN/RED nos picks cujo jogo já
             terminou; reconferir corrige escanteios e cartões que a API revisou
             depois do apito.
@@ -919,7 +919,7 @@ export default function Admin() {
         </div>
 
         <div className="card p-4 mb-6">
-          <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Corrigir Resultado de Pick</h2>
+          <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Corrigir Resultado de Pick</h2>
           {(() => {
             const brt = (daysAgo = 0) => {
               const d = new Date()
@@ -938,7 +938,7 @@ export default function Admin() {
                 {shortcuts.map(s => (
                   <button key={s.label}
                     onClick={() => { setPickDateFrom(s.from); setPickDateTo(s.to) }}
-                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors touch-manipulation ${pickDateFrom === s.from && pickDateTo === s.to ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'}`}
+                    className={`text-[11px] px-2.5 py-1 rounded-lg border transition-colors touch-manipulation ${pickDateFrom === s.from && pickDateTo === s.to ? 'border-green-500/50 bg-green-500/10 text-green-400' : 'border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-2'}`}
                   >
                     {s.label}
                   </button>
@@ -948,7 +948,7 @@ export default function Admin() {
           })()}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase font-semibold">Time</label>
+              <label className="text-[10px] text-ink-3 uppercase font-semibold">Time</label>
               <input
                 className="input text-sm"
                 placeholder="Ex: Brasil, Flamengo..."
@@ -958,7 +958,7 @@ export default function Admin() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase font-semibold">Tipo</label>
+              <label className="text-[10px] text-ink-3 uppercase font-semibold">Tipo</label>
               <select className="input text-sm" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
                 <option value="">Todos</option>
                 <option value="vip">VIP</option>
@@ -970,11 +970,11 @@ export default function Admin() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase font-semibold">Data de</label>
+              <label className="text-[10px] text-ink-3 uppercase font-semibold">Data de</label>
               <input type="date" className="input text-sm" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-zinc-500 uppercase font-semibold">Data até</label>
+              <label className="text-[10px] text-ink-3 uppercase font-semibold">Data até</label>
               <input type="date" className="input text-sm" value={pickDateTo} onChange={e => setPickDateTo(e.target.value)} />
             </div>
           </div>
@@ -989,7 +989,7 @@ export default function Admin() {
                 const resultCls: Record<string, string> = {
                   GREEN: 'text-green-400 bg-green-400/10 border-green-500/30',
                   RED: 'text-red-400 bg-red-400/10 border-red-500/30',
-                  PUSH: 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30',
+                  PUSH: 'text-ink-2 bg-surface-3/40 border-line-strong/30',
                   'HALF-WIN': 'text-teal-400 bg-teal-400/10 border-teal-500/30',
                   'HALF-LOSS': 'text-orange-400 bg-orange-400/10 border-orange-500/30',
                 }
@@ -1000,25 +1000,25 @@ export default function Admin() {
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
                   faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
                 }
-                const resCls = p.result ? (resultCls[p.result] ?? 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30') : 'text-zinc-600 bg-zinc-900 border-zinc-800'
+                const resCls = p.result ? (resultCls[p.result] ?? 'text-ink-2 bg-surface-3/40 border-line-strong/30') : 'text-ink-4 bg-surface-1 border-line'
                 return (
-                  <div key={`${p.pick_type}-${p.id}`} className="bg-zinc-900 border border-zinc-800 rounded-xl p-3 flex flex-col gap-2">
+                  <div key={`${p.pick_type}-${p.id}`} className="bg-surface-1 border border-line rounded-xl p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-zinc-400 bg-zinc-700/40'}`}>{p.pick_type}</span>
-                        <span className="text-xs font-semibold text-white truncate">{p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}</span>
+                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-ink-2 bg-surface-3/40'}`}>{p.pick_type}</span>
+                        <span className="text-xs font-semibold text-ink-1 truncate">{p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}</span>
                       </div>
-                      <span className="text-[10px] text-zinc-500 shrink-0">{p.match_date ? new Date(p.match_date + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
+                      <span className="text-[10px] text-ink-3 shrink-0">{p.match_date ? new Date(p.match_date + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-black px-2 py-1 rounded border ${resCls}`}>{p.result ?? 'Pendente'}</span>
-                      <span className="text-zinc-600 text-xs">·</span>
-                      <span className="text-xs text-zinc-500 truncate flex-1">{p.market} {p.line ?? ''}</span>
+                      <span className="text-ink-4 text-xs">·</span>
+                      <span className="text-xs text-ink-3 truncate flex-1">{p.market} {p.line ?? ''}</span>
                       {p.odd != null && (
-                        <span className="font-mono text-xs text-zinc-400 shrink-0">@{Number(p.odd).toFixed(2)}</span>
+                        <span className="font-mono text-xs text-ink-2 shrink-0">@{Number(p.odd).toFixed(2)}</span>
                       )}
                       {p.profit != null && (
-                        <span className={`font-mono text-xs shrink-0 ${Number(p.profit) > 0 ? 'text-green-400' : Number(p.profit) < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                        <span className={`font-mono text-xs shrink-0 ${Number(p.profit) > 0 ? 'text-green-400' : Number(p.profit) < 0 ? 'text-red-400' : 'text-ink-3'}`}>
                           {Number(p.profit) > 0 ? '+' : ''}{Number(p.profit).toFixed(2)}u
                         </span>
                       )}
@@ -1027,7 +1027,7 @@ export default function Admin() {
                       disabled={settingResult === p.id}
                       value=""
                       onChange={e => { if (e.target.value) setPickResult(p, e.target.value) }}
-                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-sm text-zinc-300 focus:outline-none focus:border-green-500 disabled:opacity-40 touch-manipulation"
+                      className="w-full bg-surface-2 border border-line-strong rounded-lg px-3 py-2.5 text-sm text-ink-2 focus:outline-none focus:border-green-500 disabled:opacity-40 touch-manipulation"
                     >
                       <option value="">Alterar resultado...</option>
                       <option value="GREEN">GREEN</option>
@@ -1043,7 +1043,7 @@ export default function Admin() {
             </div>
           )}
           {pickResults.length === 0 && !pickSearching && (pickSearch || pickDateFrom) && (
-            <p className="text-zinc-600 text-xs text-center py-4">Nenhum pick encontrado.</p>
+            <p className="text-ink-4 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
         </div>
         </>)}
@@ -1063,7 +1063,7 @@ export default function Admin() {
             </select>
             <div className="flex gap-2">
               <button type="submit" className="btn-primary flex-1">Criar</button>
-              <button type="button" onClick={() => setCreating(false)} className="px-3 py-2 rounded-lg border border-zinc-700 text-zinc-400 hover:text-white text-sm transition-colors">✕</button>
+              <button type="button" onClick={() => setCreating(false)} className="px-3 py-2 rounded-lg border border-line-strong text-ink-2 hover:text-ink-1 text-sm transition-colors">✕</button>
             </div>
           </form>
         )}
@@ -1084,14 +1084,14 @@ export default function Admin() {
                 className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-colors border ${
                   planFilter === p
                     ? 'bg-green-500 border-green-500 text-black'
-                    : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'
+                    : 'border-line-strong text-ink-2 hover:border-ink-4'
                 }`}
               >
                 {p === 'todos' ? 'Todos' : p.toUpperCase()}
               </button>
             ))}
           </div>
-          <span className="text-zinc-600 text-xs self-center whitespace-nowrap">{filtered.length} usuário(s)</span>
+          <span className="text-ink-4 text-xs self-center whitespace-nowrap">{filtered.length} usuário(s)</span>
         </div>
 
         {/* Tabela · desktop */}
@@ -1099,23 +1099,23 @@ export default function Admin() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-zinc-800">
+                <tr className="border-b border-line">
                   {['Usuário', 'WhatsApp', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Último acesso', 'Ações'].map(h => (
-                    <th key={h} className="text-left text-zinc-500 font-medium px-4 py-3 uppercase text-xs whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left text-ink-3 font-medium px-4 py-3 uppercase text-xs whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredPage.map(u => (
-                  <tr key={u.id} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
+                  <tr key={u.id} className="border-b border-line/50 hover:bg-surface-1/50 transition-colors">
                     <td className="px-4 py-3">
-                      <div className="font-semibold text-white">{u.name}</div>
-                      <div className="text-zinc-500 text-xs">{u.email}</div>
+                      <div className="font-semibold text-ink-1">{u.name}</div>
+                      <div className="text-ink-3 text-xs">{u.email}</div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400 whitespace-nowrap">
+                    <td className="px-4 py-3 text-xs text-ink-2 whitespace-nowrap">
                       {u.phone
                         ? <span className="text-green-400">{u.phone}</span>
-                        : <span className="text-zinc-700">sem número</span>}
+                        : <span className="text-ink-4">sem número</span>}
                     </td>
                     <td className="px-4 py-3">
                       <span className={planBadge(u.plan)}>
@@ -1127,7 +1127,7 @@ export default function Admin() {
                         <select
                           value={u.subscription_type ?? ''}
                           onChange={e => setSubscriptionType(u.id, e.target.value)}
-                          className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500"
+                          className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-2 focus:outline-none focus:border-green-500"
                         >
                           {SUBSCRIPTION_TYPES.map(t => (
                             <option key={t.value} value={t.value}>{t.label}</option>
@@ -1138,15 +1138,15 @@ export default function Admin() {
                             type="date"
                             value={u.expires_at ? u.expires_at.slice(0, 10) : ''}
                             onChange={e => setExpiresAt(u.id, e.target.value)}
-                            className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-zinc-300 focus:outline-none focus:border-green-500 w-32"
+                            className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-2 focus:outline-none focus:border-green-500 w-32"
                           />
                           {expiryWarning(u.expires_at)}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-xs text-zinc-400 font-mono">
+                    <td className="px-4 py-3 text-xs text-ink-2 font-mono">
                       {u.bankroll_current != null
-                        ? <><div className="text-white font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-zinc-600">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
+                        ? <><div className="text-ink-1 font-semibold">R${u.bankroll_current.toFixed(0)}</div><div className="text-ink-4">{u.unit_value != null ? `U R$${u.unit_value.toFixed(0)}` : ''}</div></>
                         : null}
                     </td>
                     <td className="px-4 py-3">
@@ -1154,7 +1154,7 @@ export default function Admin() {
                         {u.active ? 'Ativo' : 'Inativo'}
                       </span>
                     </td>
-                    <td className="px-4 py-3 text-zinc-500 text-xs whitespace-nowrap">
+                    <td className="px-4 py-3 text-ink-3 text-xs whitespace-nowrap">
                       {new Date(u.created_at).toLocaleDateString('pt-BR')}
                     </td>
                     <td className="px-4 py-3 text-xs whitespace-nowrap">
@@ -1165,16 +1165,16 @@ export default function Admin() {
                         const days = Math.floor(diff / 86400000)
                         if (mins < 60)  return <span className="text-green-400 font-semibold">{mins}min atrás</span>
                         if (hrs  < 24)  return <span className="text-green-300">{hrs}h atrás</span>
-                        if (days < 7)   return <span className="text-zinc-400">{days}d atrás</span>
-                        return <span className="text-zinc-600">{new Date(u.last_login_at).toLocaleDateString('pt-BR')}</span>
-                      })() : <span className="text-zinc-700">nunca</span>}
+                        if (days < 7)   return <span className="text-ink-2">{days}d atrás</span>
+                        return <span className="text-ink-4">{new Date(u.last_login_at).toLocaleDateString('pt-BR')}</span>
+                      })() : <span className="text-ink-4">nunca</span>}
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex gap-2 items-center">
                         <select
                           value={u.plan}
                           onChange={e => setPlan(u.id, e.target.value)}
-                          className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none"
+                          className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-1 focus:outline-none"
                         >
                           <option value="free">Free</option>
                           <option value="trial">Trial</option>
@@ -1194,7 +1194,7 @@ export default function Admin() {
                         {u.active && (
                           <button
                             onClick={() => deleteUser(u.id, u.name)}
-                            className="text-xs px-2 py-1 rounded-lg border border-zinc-800 text-zinc-600 hover:border-red-800 hover:text-red-500 transition-colors"
+                            className="text-xs px-2 py-1 rounded-lg border border-line text-ink-4 hover:border-red-800 hover:text-red-500 transition-colors"
                             title="Desativar usuário"
                           >✕</button>
                         )}
@@ -1204,7 +1204,7 @@ export default function Admin() {
                 ))}
                 {filteredPage.length === 0 && (
                   <tr>
-                    <td colSpan={8} className="px-4 py-8 text-center text-zinc-600 text-sm">
+                    <td colSpan={8} className="px-4 py-8 text-center text-ink-4 text-sm">
                       Nenhum usuário encontrado.
                     </td>
                   </tr>
@@ -1212,11 +1212,11 @@ export default function Admin() {
               </tbody>
             </table>
             {usersTotalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-800">
-                <span className="text-xs text-zinc-600">Página {usersPageSafe + 1} de {usersTotalPages} · {filtered.length} usuário(s)</span>
+              <div className="flex items-center justify-between px-4 py-3 border-t border-line">
+                <span className="text-xs text-ink-4">Página {usersPageSafe + 1} de {usersTotalPages} · {filtered.length} usuário(s)</span>
                 <div className="flex gap-2">
-                  <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPageSafe === 0} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">← Ant</button>
-                  <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPageSafe === usersTotalPages - 1} className="px-3 py-1 text-xs rounded border border-zinc-700 text-zinc-400 hover:text-white disabled:opacity-30">Próx</button>
+                  <button onClick={() => setUsersPage(p => Math.max(0, p - 1))} disabled={usersPageSafe === 0} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">← Ant</button>
+                  <button onClick={() => setUsersPage(p => Math.min(usersTotalPages - 1, p + 1))} disabled={usersPageSafe === usersTotalPages - 1} className="px-3 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 disabled:opacity-30">Próx</button>
                 </div>
               </div>
             )}
@@ -1226,14 +1226,14 @@ export default function Admin() {
         {/* Cards · mobile */}
         <div className="flex flex-col gap-3 md:hidden">
           {filtered.length === 0 && (
-            <p className="text-center text-zinc-600 text-sm py-8">Nenhum usuário encontrado.</p>
+            <p className="text-center text-ink-4 text-sm py-8">Nenhum usuário encontrado.</p>
           )}
           {filteredPage.map(u => (
             <div key={u.id} className="card p-4">
               <div className="flex items-start justify-between mb-3">
                 <div>
-                  <div className="font-semibold text-white">{u.name}</div>
-                  <div className="text-zinc-500 text-xs mt-0.5">{u.email}</div>
+                  <div className="font-semibold text-ink-1">{u.name}</div>
+                  <div className="text-ink-3 text-xs mt-0.5">{u.email}</div>
                 </div>
                 <div className="flex items-center gap-2">
                   <span className={planBadge(u.plan)}>
@@ -1245,21 +1245,21 @@ export default function Admin() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-2 text-xs text-zinc-500 mb-3">
-                <div>Tipo: <span className="text-zinc-300">{u.subscription_type ?? ''}</span></div>
+              <div className="grid grid-cols-2 gap-2 text-xs text-ink-3 mb-3">
+                <div>Tipo: <span className="text-ink-2">{u.subscription_type ?? ''}</span></div>
                 <div className="flex items-center gap-1">
-                  Expira: <span className="text-zinc-300">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
+                  Expira: <span className="text-ink-2">{u.expires_at ? u.expires_at.slice(0, 10) : ''}</span>
                   {expiryWarning(u.expires_at)}
                 </div>
-                <div>Banca: <span className="font-mono text-zinc-300">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
-                <div>Cadastro: <span className="text-zinc-300">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
+                <div>Banca: <span className="font-mono text-ink-2">{u.bankroll_current != null ? `R$${u.bankroll_current.toFixed(0)}` : ''}</span></div>
+                <div>Cadastro: <span className="text-ink-2">{new Date(u.created_at).toLocaleDateString('pt-BR')}</span></div>
               </div>
 
               <div className="flex gap-2 flex-wrap">
                 <select
                   value={u.plan}
                   onChange={e => setPlan(u.id, e.target.value)}
-                  className="bg-zinc-800 border border-zinc-700 rounded-lg px-2 py-1 text-xs text-white focus:outline-none flex-1"
+                  className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-1 focus:outline-none flex-1"
                 >
                   <option value="free">Free</option>
                   <option value="trial">Trial</option>
@@ -1282,8 +1282,8 @@ export default function Admin() {
 
         {aba === 'ligas' && (<>
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-1">Cadastrar liga</h2>
-            <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-1">Cadastrar liga</h2>
+            <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
               buscado automaticamente · só preencha se a validação estiver fora.
             </p>
@@ -1323,29 +1323,29 @@ export default function Admin() {
           </div>
 
           <div className="card p-4">
-            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">
+            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">
               Ligas na coleta {ligas ? `(${ligas.length})` : ''}
             </h2>
             {!ligas ? (
-              <p className="text-sm text-zinc-600">Carregando...</p>
+              <p className="text-sm text-ink-4">Carregando...</p>
             ) : ligas.length === 0 ? (
-              <p className="text-sm text-zinc-600">Nenhuma liga cadastrada · o motor não tem o que coletar.</p>
+              <p className="text-sm text-ink-4">Nenhuma liga cadastrada · o motor não tem o que coletar.</p>
             ) : (
               <div className="space-y-2">
                 {ligas.map(l => (
                   <div key={l.league_id}
-                    className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2.5">
+                    className="flex items-center gap-3 bg-surface-1 border border-line rounded-md px-3 py-2.5">
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-sm text-white font-bold truncate">{l.name}</span>
-                        <span className="font-mono text-[10px] text-zinc-600">#{l.league_id} · {l.season}</span>
+                        <span className="text-sm text-ink-1 font-bold truncate">{l.name}</span>
+                        <span className="font-mono text-[10px] text-ink-4">#{l.league_id} · {l.season}</span>
                       </div>
-                      <div className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                      <div className="text-[11px] text-ink-3 mt-0.5 font-mono">
                         {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
                       </div>
                     </div>
                     <button
-                      className="text-xs text-red-400 hover:text-red-300 border border-zinc-800 hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
+                      className="text-xs text-red-400 hover:text-red-300 border border-line hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
                       onClick={async () => {
                         // Confirmacao explicita porque o efeito nao e' obvio
                         // pelo botao: para de COLETAR, mas o historico fica.
@@ -1368,8 +1368,8 @@ export default function Admin() {
                 ))}
               </div>
             )}
-            <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
-              Depois de cadastrar, rode <span className="text-zinc-400">Atualizar Jogos</span> na aba
+            <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
+              Depois de cadastrar, rode <span className="text-ink-2">Atualizar Jogos</span> na aba
               Pipeline pra coletar times e jogos da liga nova.
             </p>
           </div>
