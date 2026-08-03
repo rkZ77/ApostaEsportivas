@@ -1947,6 +1947,8 @@ export default function Picks() {
             vip:         (today?.vip ?? []).filter((s: any) => !s.result).length || undefined,
             multiplas:   (today?.multiplas ?? []).filter((m: any) => !m.result).length || undefined,
             alavancagem: today?.alavancagem && !today.alavancagem.result ? 1 : undefined,
+            mercados:    ([...(today?.faltas ?? []), ...(today?.goleiros ?? [])]
+                            .filter((p: any) => !p.result).length) || undefined,
           }}
         />
 
@@ -1988,7 +1990,7 @@ export default function Picks() {
               )}
 
               {/* Progresso da geração / countdown quando picks ainda não chegaram */}
-              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && (
+              {selectedOffset === 0 && !today?.dica_do_dia && !(today?.vip?.length) && !(today?.multiplas?.length) && !today?.alavancagem && !(today?.faltas?.length) && !(today?.goleiros?.length) && (
                 <PipelineStatusCard />
               )}
 
@@ -2088,6 +2090,27 @@ export default function Picks() {
                       </button>
                     </>
                   )}
+                </section>
+              )}
+
+              {/* Mercados do dia. So' renderiza quando ha' pick -- ao
+                  contrario da aba Mercados, aqui um card de "nada hoje" por
+                  mercado so' empurraria o conteudo util pra baixo. */}
+              {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0) && (
+                <section>
+                  <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {(today?.faltas ?? []).map((p: MercadoPick) => (
+                      <MercadoCard key={`f-${p.id}`} p={p} tipo="faltas" />
+                    ))}
+                    {(today?.goleiros ?? []).map((p: MercadoPick) => (
+                      <MercadoCard key={`g-${p.id}`} p={p} tipo="goleiros" />
+                    ))}
+                  </div>
+                  <button onClick={() => setTab('mercados')}
+                    className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700">
+                    Ver todos os mercados
+                  </button>
                 </section>
               )}
 

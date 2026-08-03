@@ -58,6 +58,33 @@ const SUBSCRIPTION_TYPES = [
 const PLAN_FILTER = ['todos', 'free', 'trial', 'vip', 'admin'] as const
 type PlanFilter = typeof PLAN_FILTER[number]
 
+interface ContagemPick { n: number; pendentes: number }
+interface Overview {
+  usuarios: Record<string, number>
+  picks_hoje: Record<string, ContagemPick>
+  coleta: {
+    jogos_hoje: number; jogos_por_comecar: number; jogos_com_odds: number
+    ultimo_jogo_coletado: string | null
+    ligas: number; times: number; estatisticas_jogador: number
+  }
+  financeiro: { receita_mes: number; pagamentos_mes: number }
+  api_football: {
+    plano: string | null; ativo: boolean | null; expira_em: string | null
+    usado: number | null; limite: number | null; pct: number | null
+  } | null
+  pipeline: { status?: string; started_at?: string | null; finished_at?: string | null; error?: string | null }
+}
+
+interface Liga {
+  league_id: number; name: string; season: number
+  times: number; jogos_coletados: number; jogos_agendados: number
+}
+
+const PICK_LABEL: Record<string, string> = {
+  vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas',
+  alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+}
+
 // Sub-paginas do /admin. "visao" primeiro por ser o resumo; "usuarios" logo
 // depois por ser o bloco mais usado no dia a dia -- antes ficava no fim de
 // uma coluna unica, a varias telas de rolagem no celular.
@@ -67,6 +94,7 @@ const ABAS = [
   { key: 'pipeline',   label: 'Pipeline'    },
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
+  { key: 'ligas',      label: 'Ligas'       },
 ] as const
 type AdminAba = typeof ABAS[number]['key']
 
@@ -116,6 +144,10 @@ export default function Admin() {
   const [pickSearching, setPickSearching] = useState(false)
   const [settingResult, setSettingResult] = useState<number | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [overview, setOverview] = useState<Overview | null>(null)
+  const [ligas, setLigas] = useState<Liga[] | null>(null)
+  const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
+  const [salvandoLiga, setSalvandoLiga] = useState(false)
   // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
   // /admin#usuarios. Hash invalido cai na visao geral em vez de tela vazia.
   const [aba, setAba] = useState<AdminAba>(() => {
@@ -174,8 +206,17 @@ export default function Admin() {
       .catch(() => {})
   }
 
+  const carregarOverview = () => {
+    api.get('/admin/overview').then(r => setOverview(r.data)).catch(() => {})
+  }
+  const carregarLigas = () => {
+    api.get('/admin/leagues').then(r => setLigas(r.data)).catch(() => setLigas([]))
+  }
+
   useEffect(() => {
     if (!isAdmin) { navigate('/picks'); return }
+    carregarOverview()
+    carregarLigas()
     reload()
     setPaymentsLoading(true)
     api.get('/admin/payments').then(r => setPayments(r.data)).catch(() => {}).finally(() => setPaymentsLoading(false))
@@ -466,6 +507,130 @@ export default function Admin() {
         </>)}
 
         {aba === 'visao' && (<>
+
+        {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
+            que ja parou o site inteiro por estouro, e o unico numero aqui
+            que vem de fora e nao da' pra descobrir olhando o banco. */}
+        {overview?.api_football && (
+          <div className="card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase">Cota da API-Football</h2>
+              <span className={`text-[10px] font-black uppercase border px-1.5 py-0.5 rounded ${
+                overview.api_football.ativo
+                  ? 'text-green-400 bg-green-500/10 border-green-500/30'
+                  : 'text-red-400 bg-red-500/10 border-red-500/30'
+              }`}>
+                {overview.api_football.plano ?? 'desconhecido'}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 font-mono">
+              <span className={`text-3xl font-black ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
+              }`}>{overview.api_football.usado ?? '·'}</span>
+              <span className="text-zinc-600 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
+            </div>
+            <div className="mt-2 h-1.5 bg-zinc-800 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
+              }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
+            </div>
+            {overview.api_football.expira_em && (
+              <p className="text-[11px] text-zinc-600 mt-2">
+                Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Saúde da coleta. Sem isso, "não saiu pick hoje" fica
+            indistinguível de "a coleta nem rodou". */}
+        {overview?.coleta && (
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Coleta</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
+                { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
+                { label: 'Jogos com odds',  value: overview.coleta.jogos_com_odds },
+                { label: 'Ligas',           value: overview.coleta.ligas },
+                { label: 'Times',           value: overview.coleta.times },
+                { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-zinc-900 rounded-md px-3 py-2.5 text-center">
+                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-white' : 'text-zinc-700'}`}>{value}</div>
+                  <div className="text-[10px] text-zinc-500 uppercase mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+            {overview.coleta.ultimo_jogo_coletado && (
+              <p className="text-[11px] text-zinc-600 mt-3">
+                Último jogo com estatística coletada:{' '}
+                {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+            {overview.coleta.estatisticas_jogador === 0 && (
+              <p className="text-[11px] text-orange-400 mt-1">
+                Sem estatística por jogador · o pipeline de defesas de goleiro não gera pick até rodar a coleta.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Picks de hoje, os 6 tipos */}
+        {overview?.picks_hoje && (
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Picks de hoje</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {Object.entries(overview.picks_hoje).map(([chave, c]) => (
+                <div key={chave} className="flex items-center gap-3 bg-zinc-900 rounded-md px-3 py-2.5">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.n > 0 ? 'bg-green-500' : 'bg-zinc-700'}`} />
+                  <div className="min-w-0">
+                    <div className="font-mono text-white font-bold text-lg leading-none">{c.n}</div>
+                    <div className="text-zinc-500 text-[11px] mt-0.5 truncate">{PICK_LABEL[chave] ?? chave}</div>
+                    {c.pendentes > 0 && (
+                      <div className="text-[10px] text-orange-400 mt-0.5">{c.pendentes} pendente{c.pendentes > 1 ? 's' : ''}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Receita do mês + último pipeline */}
+        <div className="grid gap-4 sm:grid-cols-2 mb-4">
+          {overview?.financeiro && (
+            <div className="card p-4">
+              <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Receita do mês</h2>
+              <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
+              <p className="text-[11px] text-zinc-600 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
+            </div>
+          )}
+          <div className="card p-4">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Último pipeline</h2>
+            {overview?.pipeline?.status ? (
+              <>
+                <div className={`font-mono text-lg font-black ${
+                  overview.pipeline.status === 'ok' ? 'text-green-400'
+                    : overview.pipeline.status === 'running' ? 'text-blue-400' : 'text-red-400'
+                }`}>{overview.pipeline.status}</div>
+                <p className="text-[11px] text-zinc-600 mt-1">
+                  {overview.pipeline.finished_at ? `terminou às ${overview.pipeline.finished_at}` : 'em andamento'}
+                </p>
+                {overview.pipeline.error && (
+                  <p className="text-[11px] text-red-400 mt-1 break-words">{overview.pipeline.error}</p>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-zinc-600">
+                Nada rodou nesta instância ainda. Nada é agendado · dispare pela aba Pipeline.
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Stats · usuários */}
         {stats && (
           <>
@@ -487,30 +652,9 @@ export default function Admin() {
               ))}
             </div>
 
-            {/* Picks de hoje */}
-            <div className="card p-4 mb-6">
-              <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Picks de hoje</h2>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                {[
-                  { label: 'VIP',         value: stats.picks_hoje.vip_picks,   target: '' },
-                  { label: 'Alavancagem', value: stats.picks_hoje.alavancagem, target: 1   },
-                  { label: 'Dica do Dia', value: stats.picks_hoje.dica,        target: 1   },
-                  { label: 'Múltiplas',   value: stats.picks_hoje.multiplas,   target: 1   },
-                ].map(({ label, value, target }) => {
-                  const ok = target === '' ? value > 0 : value >= (target as number)
-                  return (
-                    <div key={label} className="flex items-center gap-3 bg-zinc-900 rounded-md px-4 py-3">
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${ok ? 'bg-green-500' : 'bg-zinc-700'}`} />
-                      <div>
-                        <div className="font-mono text-white font-bold text-lg leading-none">{value}</div>
-                        <div className="text-zinc-500 text-xs mt-0.5">{label}</div>
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </div>
-
+            {/* O card antigo de "Picks de hoje" saiu daqui: virou o bloco
+                acima, alimentado por /admin/overview, que cobre os 6 tipos
+                (faltas e goleiros nao existiam quando este foi escrito). */}
             <AdminShareResults />
           </>
         )}
@@ -1050,6 +1194,101 @@ export default function Admin() {
             </div>
           ))}
         </div>
+        </>)}
+
+        {aba === 'ligas' && (<>
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-1">Cadastrar liga</h2>
+            <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+              O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
+              buscado automaticamente · só preencha se a validação estiver fora.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-4">
+              <input className="input" placeholder="ID da liga" inputMode="numeric"
+                value={novaLiga.league_id}
+                onChange={e => setNovaLiga(v => ({ ...v, league_id: e.target.value.replace(/\D/g, '') }))} />
+              <input className="input" placeholder="Temporada" inputMode="numeric"
+                value={novaLiga.season}
+                onChange={e => setNovaLiga(v => ({ ...v, season: e.target.value.replace(/\D/g, '') }))} />
+              <input className="input" placeholder="Nome (opcional)"
+                value={novaLiga.name}
+                onChange={e => setNovaLiga(v => ({ ...v, name: e.target.value }))} />
+              <button
+                className="btn-primary disabled:opacity-40"
+                disabled={salvandoLiga || !novaLiga.league_id || !novaLiga.season}
+                onClick={async () => {
+                  setSalvandoLiga(true)
+                  try {
+                    const r = await api.post('/admin/leagues', {
+                      league_id: Number(novaLiga.league_id),
+                      season: Number(novaLiga.season),
+                      name: novaLiga.name || undefined,
+                    })
+                    showToast(`${r.data.name} ${r.data.acao}. ${r.data.aviso}`)
+                    setNovaLiga({ league_id: '', season: String(new Date().getFullYear()), name: '' })
+                    carregarLigas()
+                  } catch (err: any) {
+                    showToast(err.response?.data?.detail || 'Erro ao cadastrar liga', false)
+                  } finally {
+                    setSalvandoLiga(false)
+                  }
+                }}>
+                {salvandoLiga ? 'Salvando...' : 'Cadastrar'}
+              </button>
+            </div>
+          </div>
+
+          <div className="card p-4">
+            <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">
+              Ligas na coleta {ligas ? `(${ligas.length})` : ''}
+            </h2>
+            {!ligas ? (
+              <p className="text-sm text-zinc-600">Carregando...</p>
+            ) : ligas.length === 0 ? (
+              <p className="text-sm text-zinc-600">Nenhuma liga cadastrada · o motor não tem o que coletar.</p>
+            ) : (
+              <div className="space-y-2">
+                {ligas.map(l => (
+                  <div key={l.league_id}
+                    className="flex items-center gap-3 bg-zinc-900 border border-zinc-800 rounded-md px-3 py-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm text-white font-bold truncate">{l.name}</span>
+                        <span className="font-mono text-[10px] text-zinc-600">#{l.league_id} · {l.season}</span>
+                      </div>
+                      <div className="text-[11px] text-zinc-500 mt-0.5 font-mono">
+                        {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
+                      </div>
+                    </div>
+                    <button
+                      className="text-xs text-red-400 hover:text-red-300 border border-zinc-800 hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
+                      onClick={async () => {
+                        // Confirmacao explicita porque o efeito nao e' obvio
+                        // pelo botao: para de COLETAR, mas o historico fica.
+                        if (!window.confirm(
+                          `Tirar "${l.name}" da coleta?\n\n` +
+                          `Os ${l.jogos_coletados} jogos já coletados, os times e os picks são PRESERVADOS ` +
+                          `· eles alimentam a calibração do motor. A liga apenas para de receber dados novos.`
+                        )) return
+                        try {
+                          const r = await api.delete(`/admin/leagues/${l.league_id}`)
+                          showToast(`${r.data.removida} saiu da coleta. ${r.data.aviso}`)
+                          carregarLigas()
+                        } catch (err: any) {
+                          showToast(err.response?.data?.detail || 'Erro ao remover liga', false)
+                        }
+                      }}>
+                      Remover
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <p className="text-[11px] text-zinc-600 mt-3 leading-relaxed">
+              Depois de cadastrar, rode <span className="text-zinc-400">Atualizar Jogos</span> na aba
+              Pipeline pra coletar times e jogos da liga nova.
+            </p>
+          </div>
         </>)}
 
       </main>
