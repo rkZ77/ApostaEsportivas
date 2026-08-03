@@ -1,5 +1,6 @@
 import time
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR
 from collectors.odds_collector_service import OddsCollectorService
 
 
@@ -26,11 +27,11 @@ class OddsMain:
         # sido lida -- e recoletada. Cada jogo tinha as odds baixadas em 3 dias
         # seguidos, 2 requisicoes por vez (Bet365 + Betano): 6 requisicoes onde
         # 2 bastam.
-        cur.execute("""
+        cur.execute(f"""
             SELECT fixture_id
             FROM fixtures
             WHERE status IN ('NS', 'TBD')
-              AND match_datetime::date = CURRENT_DATE
+              AND match_datetime::date = {HOJE_BR}
         """)
 
         fixtures = [row[0] for row in cur.fetchall()]

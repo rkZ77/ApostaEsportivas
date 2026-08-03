@@ -170,22 +170,34 @@ class FixtureCollectorService:
     # começam às 00:00-02:59 BRT do PRÓXIMO dia, evitando que
     # a pipeline de meia-noite perca esses jogos.
     # --------------------------------------------------------
+    # Quantos dias de Brasilia manter, contando hoje. 3 = hoje, amanha e
+    # depois. Antes so' hoje era mantido (mais os jogos de 00:xx de amanha),
+    # e a tabela `fixtures` ficava sem nada pra frente -- entao qualquer tela
+    # de "proximos jogos" dependia de chamar a API na hora.
+    DIAS_BR = 3
+
     def collect_fixtures_today_br(self) -> list:
         now_br   = datetime.now(TZ_LOCAL)
         today_br = now_br.date()
-        next_br  = today_br + timedelta(days=1)
+        dias_br  = [today_br + timedelta(days=i) for i in range(self.DIAS_BR)]
 
-        utc_today    = now_br.astimezone(timezone.utc).date()
-        utc_tomorrow = utc_today + timedelta(days=1)
-        utc_day3     = utc_today + timedelta(days=2)
+        # Brasilia e' UTC-3, entao a janela BR [hoje 00:00, hoje+N 23:59] cai
+        # em UTC entre hoje 03:00 e (hoje+N)+1 02:59 -- por isso um dia UTC a
+        # mais que o numero de dias BR.
+        #
+        # O inicio e' a DATA BR, nao "agora convertido pra UTC". Era esse o
+        # calculo antigo, e ele furava depois das 21:00 de Brasilia: as 22:00
+        # BR o "agora em UTC" ja e' o dia seguinte, entao a consulta comecava
+        # em D+1 e perdia todos os jogos de hoje anteriores as 21:00.
+        datas_utc = [today_br + timedelta(days=i) for i in range(self.DIAS_BR + 1)]
 
         print("\n" + "=" * 50)
         print(f"🕒 Execução  : {now_br.strftime('%Y-%m-%d %H:%M:%S')} (horário Brasília)")
-        print(f"📅 Dia alvo  : {today_br} (Brasília)")
-        print(f"🌐 Datas UTC consultadas: {utc_today}, {utc_tomorrow} e {utc_day3}")
+        print(f"📅 Dias alvo : {dias_br[0]} a {dias_br[-1]} (Brasília)")
+        print(f"🌐 Datas UTC consultadas: {', '.join(str(d) for d in datas_utc)}")
 
         all_raw = []
-        for utc_date in [utc_today, utc_tomorrow, utc_day3]:
+        for utc_date in datas_utc:
             all_raw.extend(self.get_fixtures_by_date(utc_date))
 
         # Remove duplicatas por fixture_id (pode aparecer em mais de uma consulta)
@@ -196,28 +208,21 @@ class FixtureCollectorService:
                 seen.add(f["fixture_id"])
                 deduped.append(f)
 
-        # Inclui:
-        # 1. Jogos de hoje (BRT)
-        # 2. Jogos de 00:00–02:59 BRT do próximo dia · captura virada da meia-noite
-        def is_target(f: dict) -> bool:
-            d = f["match_datetime"].date()
-            h = f["match_datetime"].hour
-            return d == today_br or (d == next_br and h < 3)
+        # match_datetime ja vem convertido pra Brasilia (convert_utc_to_br_naive),
+        # entao a comparacao com as datas BR e' direta.
+        janela_br = set(dias_br)
 
-        fixtures  = [f for f in deduped if is_target(f)]
+        fixtures  = [f for f in deduped if f["match_datetime"].date() in janela_br]
         discarded = len(deduped) - len(fixtures)
 
-        today_fixtures    = [f for f in fixtures if f["match_datetime"].date() == today_br]
-        midnight_fixtures = [f for f in fixtures if f["match_datetime"].date() == next_br]
-
         if discarded:
-            print(f"[INFO] {discarded} jogo(s) de outro dia descartados após conversão de timezone.")
-        if midnight_fixtures:
-            print(f"[INFO] {len(midnight_fixtures)} jogo(s) de 00:xx de {next_br} incluídos (virada da meia-noite).")
+            print(f"[INFO] {discarded} jogo(s) fora da janela descartados após conversão de timezone.")
 
-        print(f"\n✅ Jogos de hoje ({today_br}): {len(today_fixtures)}")
-        if midnight_fixtures:
-            print(f"✅ Jogos de 00:xx amanhã ({next_br}): {len(midnight_fixtures)}")
+        print()
+        for dia in dias_br:
+            n = sum(1 for f in fixtures if f["match_datetime"].date() == dia)
+            rotulo = "hoje" if dia == today_br else dia.strftime("%d/%m")
+            print(f"✅ Jogos de {rotulo} ({dia}): {n}")
         print("=" * 50)
         return fixtures
 

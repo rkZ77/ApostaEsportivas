@@ -96,51 +96,84 @@ def expected_fouls(media_casa: float | None,
     return round((media_casa + media_fora) * PESO_TIMES + media_arbitro * PESO_ARBITRO, 2)
 
 
-# Faixas medidas no backtest: previsao -> taxa real de Over 22.5.
-# Empirico de proposito (ver docstring). Cada tupla e' (limite_superior,
-# taxa, n) -- o n fica pra quem for reavaliar saber o peso de cada faixa.
-_FAIXAS_OVER_225 = [
-    (20.0, 0.434,  99),
-    (22.0, 0.353,  51),
-    (24.0, 0.567,  60),
-    (999.0, 0.734, 301),
-]
+# Faixas medidas: previsao -> taxa real de Over, por LINHA. Empirico de
+# proposito (ver docstring). Cada tupla e' (limite_superior, taxa, n).
+#
+# Remedido em 2026-08-02 contra 451 amostras validas (853 jogos com faltas em
+# match_statistics, exigindo >=5 jogos previos de cada lado), sem lookahead: a
+# media de cada time usa so' os jogos ANTERIORES aquele.
+#
+# POR QUE MAIS DE UMA LINHA AGORA: a tabela antiga so' tinha 22.5, e a coleta
+# real de odds (Bet365 e Betano, 2026-08-02) mostrou que ESSA LINHA NAO EXISTE
+# no mercado. Fouls. Total e' oferecido em 24.5, 25.5, 26.5, 28.5 e 29.5. Um
+# modelo que so' sabe 22.5 nunca geraria pick nenhum -- foi exatamente o que
+# aconteceu na primeira validacao com dado real.
+#
+# 22.5 fica na tabela por continuidade, mesmo sem mercado hoje: se alguma casa
+# voltar a oferecer, ja esta medida no mesmo criterio das outras.
+#
+# As faixas sao as mesmas pra todas as linhas de proposito -- comparar linhas
+# entre si exige o mesmo recorte de amostra. Cada linha tem n identico por
+# faixa (50/51/75/116/159) justamente por isso.
+_FAIXAS_POR_LINHA: dict[float, list[tuple[float, float, int]]] = {
+    22.5: [(22.0, 0.480, 50), (24.0, 0.549, 51), (26.0, 0.560, 75), (28.0, 0.716, 116), (999.0, 0.792, 159)],
+    24.5: [(22.0, 0.380, 50), (24.0, 0.373, 51), (26.0, 0.467, 75), (28.0, 0.647, 116), (999.0, 0.667, 159)],
+    25.5: [(22.0, 0.340, 50), (24.0, 0.373, 51), (26.0, 0.427, 75), (28.0, 0.534, 116), (999.0, 0.629, 159)],
+    26.5: [(22.0, 0.260, 50), (24.0, 0.333, 51), (26.0, 0.387, 75), (28.0, 0.491, 116), (999.0, 0.597, 159)],
+}
+
+# Linhas que o modelo sabe avaliar. 28.5 e 29.5 aparecem no mercado mas ficam
+# de fora: com previsao alta a taxa cai pra faixa de 30-40%, onde o erro da
+# propria estimativa pesa mais que a margem -- medir nao basta, precisaria de
+# amostra maior por faixa pra confiar.
+LINHAS_SUPORTADAS = tuple(sorted(_FAIXAS_POR_LINHA))
 
 
-def prob_over_225(previsto: float | None) -> tuple[float, int] | None:
-    """P(faltas totais > 22.5) e o n da faixa, pela tabela empirica.
+def prob_over(previsto: float | None, linha: float = 22.5) -> tuple[float, int] | None:
+    """P(faltas totais > linha) e o n da faixa, pela tabela empirica.
 
-    Devolve tambem o n porque uma faixa de 51 jogos nao merece a mesma
-    confianca que uma de 301 -- quem consome decide o que fazer com isso.
+    Devolve tambem o n porque uma faixa de 50 jogos nao merece a mesma
+    confianca que uma de 159 -- quem consome decide o que fazer com isso.
+    Linha fora de LINHAS_SUPORTADAS devolve None: nao da' pra interpolar,
+    porque a relacao nao e' parametrica (ver docstring do modulo).
     """
     if previsto is None:
         return None
-    for limite, taxa, n in _FAIXAS_OVER_225:
+    faixas = _FAIXAS_POR_LINHA.get(round(linha, 1))
+    if faixas is None:
+        return None
+    for limite, taxa, n in faixas:
         if previsto < limite:
             return taxa, n
     return None
+
+
+def prob_over_225(previsto: float | None) -> tuple[float, int] | None:
+    """Compatibilidade com quem ja chamava so' a linha 22.5."""
+    return prob_over(previsto, 22.5)
 
 
 def analyze_fouls_market(media_casa: float | None, media_fora: float | None,
                          media_arbitro: float | None = None,
                          n_casa: int | None = None, n_fora: int | None = None,
                          n_arbitro: int | None = None,
-                         odd: float | None = None) -> dict | None:
-    """Candidato de pick de faltas totais na linha 22.5, ou None.
+                         odd: float | None = None,
+                         linha: float = 22.5) -> dict | None:
+    """Candidato de pick de faltas totais numa linha, ou None.
 
-    So' cobre Over 22.5 por enquanto: e' a unica linha com faixa medida no
-    backtest. Outras linhas exigem refazer a tabela empirica pra cada uma --
-    nao da' pra interpolar, porque a relacao nao e' parametrica.
+    So' avalia linhas de LINHAS_SUPORTADAS (as que tem faixa medida). Outras
+    exigem refazer a tabela empirica -- nao da' pra interpolar, porque a
+    relacao nao e' parametrica.
     """
     previsto = expected_fouls(media_casa, media_fora, media_arbitro,
                               n_casa, n_fora, n_arbitro)
-    faixa = prob_over_225(previsto)
+    faixa = prob_over(previsto, linha)
     if faixa is None:
         return None
     prob, n_faixa = faixa
 
     resultado = {
-        "line": 22.5,
+        "line": linha,
         "expected_fouls": previsto,
         "probability": prob,
         "fair_odd": round(1 / prob, 3),

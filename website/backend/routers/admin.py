@@ -8,6 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
+from data_br import HOJE_BR, data_br
 from auth_utils import require_admin, hash_password, get_current_user
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
@@ -767,14 +768,14 @@ def admin_stats(current_user: dict = Depends(require_admin)):
         """)
         users_row = dict(cur.fetchone())
 
-        cur.execute("""
+        cur.execute(f"""
             SELECT
                 (SELECT COUNT(*) FROM picks_vip
-                 WHERE match_date = CURRENT_DATE)                            AS vip_picks,
+                 WHERE match_date = {HOJE_BR})                               AS vip_picks,
                 (SELECT COUNT(*) FROM picks_alavancagem
-                 WHERE match_date = CURRENT_DATE)                            AS alavancagem,
+                 WHERE match_date = {HOJE_BR})                               AS alavancagem,
                 (SELECT COUNT(*) FROM picks_free
-                 WHERE match_date = CURRENT_DATE)                            AS dica,
+                 WHERE match_date = {HOJE_BR})                               AS dica,
                 (SELECT COUNT(*) FROM picks_multiplas
                  WHERE DATE(created_at AT TIME ZONE 'UTC') = CURRENT_DATE)  AS multiplas
         """)
@@ -804,3 +805,272 @@ def admin_reverify_stats_results(current_user: dict = Depends(require_admin)):
     from routers.live import reverify_recent_stats_results
     result = reverify_recent_stats_results()
     return {"ok": True, **result}
+
+
+# ─── Console de operação ────────────────────────────────────────────────────
+# O /admin e' o painel de quem opera o site, nao so' do desenvolvedor. Os
+# endpoints abaixo existem pra que dar uma olhada no estado do sistema nao
+# dependa de abrir o banco ou ler log.
+
+_API_FOOTBALL_STATUS_CACHE: dict = {"ts": 0.0, "data": None}
+
+
+def _api_football_status() -> dict | None:
+    """Cota da API-Football (plano, usado hoje, limite diario).
+
+    O endpoint /status NAO consome cota -- e' o unico que responde com a cota
+    ja zerada, e e' justamente ai' que a informacao mais importa. Ainda assim
+    vai com cache de 60s: o dashboard recarrega sozinho e nao ha' motivo pra
+    bater na API a cada render.
+
+    Devolve None em qualquer falha. O painel inteiro nao pode cair porque um
+    provedor externo esta fora do ar.
+    """
+    import time
+
+    import requests
+
+    agora = time.time()
+    if _API_FOOTBALL_STATUS_CACHE["data"] and agora - _API_FOOTBALL_STATUS_CACHE["ts"] < 60:
+        return _API_FOOTBALL_STATUS_CACHE["data"]
+
+    key = os.getenv("API_FOOTBALL_KEY", "")
+    if not key:
+        return None
+    try:
+        r = requests.get("https://v3.football.api-sports.io/status",
+                         headers={"x-apisports-key": key}, timeout=8)
+        corpo = r.json().get("response") or {}
+        assinatura = corpo.get("subscription") or {}
+        requisicoes = corpo.get("requests") or {}
+        usado = requisicoes.get("current")
+        limite = requisicoes.get("limit_day")
+        dados = {
+            "plano": assinatura.get("plan"),
+            "ativo": assinatura.get("active"),
+            "expira_em": assinatura.get("end"),
+            "usado": usado,
+            "limite": limite,
+            "pct": round(usado / limite * 100, 1) if usado is not None and limite else None,
+        }
+    except Exception:
+        return None
+
+    _API_FOOTBALL_STATUS_CACHE.update({"ts": agora, "data": dados})
+    return dados
+
+
+@router.get("/overview")
+def admin_overview(current_user: dict = Depends(require_admin)):
+    """Retrato do sistema numa chamada so'.
+
+    Cada bloco tem fallback proprio: instancia sem alguma tabela nova (ou
+    provedor externo fora) mostra aquele bloco vazio em vez de derrubar o
+    painel -- que e' exatamente quando alguem mais precisa dele.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    def uma(sql, default=None):
+        try:
+            cur.execute(sql)
+            row = cur.fetchone()
+            return dict(row) if row else default
+        except Exception:
+            conn.rollback()
+            return default
+
+    try:
+        usuarios = uma("""
+            SELECT COUNT(*)                                                    AS total,
+                   COUNT(*) FILTER (WHERE plan = 'vip')                        AS vip,
+                   COUNT(*) FILTER (WHERE plan = 'trial')                      AS trial,
+                   COUNT(*) FILTER (WHERE plan = 'free')                       AS free,
+                   COUNT(*) FILTER (WHERE active)                              AS ativos,
+                   COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '1 day')  AS ativos_hoje,
+                   COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '7 days') AS ativos_semana,
+                   COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days')    AS novos_semana,
+                   COUNT(*) FILTER (WHERE plan = 'vip' AND expires_at IS NOT NULL
+                                      AND expires_at BETWEEN NOW() AND NOW() + INTERVAL '7 days')
+                                                                               AS vip_expirando
+            FROM users
+        """, {})
+
+        # Picks de hoje por tipo, ja com faltas e goleiros. Uma subquery por
+        # tabela pra que uma tabela faltando nao zere o bloco inteiro.
+        picks = {}
+        for rotulo, tabela in (("vip", "picks_vip"), ("free", "picks_free"),
+                               ("multiplas", "picks_multiplas"),
+                               ("alavancagem", "picks_alavancagem"),
+                               ("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
+            picks[rotulo] = uma(
+                f"SELECT COUNT(*) AS n, COUNT(*) FILTER (WHERE result IS NULL) AS pendentes "
+                f"FROM {tabela} WHERE match_date = {HOJE_BR}",
+                {"n": 0, "pendentes": 0},
+            )
+
+        # Saude da coleta. Sem isso, "nao saiu pick hoje" fica indistinguivel
+        # de "a coleta nem rodou" -- que sao problemas completamente
+        # diferentes pra quem esta operando.
+        coleta = uma(f"""
+            SELECT (SELECT COUNT(*) FROM fixtures
+                     WHERE {data_br('match_datetime')} = {HOJE_BR})            AS jogos_hoje,
+                   (SELECT COUNT(*) FROM fixtures
+                     WHERE {data_br('match_datetime')} = {HOJE_BR}
+                       AND status IN ('NS','TBD'))                          AS jogos_por_comecar,
+                   (SELECT COUNT(DISTINCT fixture_id) FROM odds_values)        AS jogos_com_odds,
+                   (SELECT MAX(match_date) FROM match_statistics)              AS ultimo_jogo_coletado,
+                   (SELECT COUNT(*) FROM leagues)                              AS ligas,
+                   (SELECT COUNT(*) FROM teams)                                AS times,
+                   (SELECT COUNT(*) FROM player_match_stats)                   AS estatisticas_jogador
+        """, {})
+
+        financeiro = uma("""
+            SELECT COALESCE(SUM(amount), 0)                                    AS receita_mes,
+                   COUNT(*)                                                    AS pagamentos_mes
+            FROM payments
+            WHERE status = 'approved'
+              AND created_at >= date_trunc('month', NOW())
+        """, {})
+
+        return {
+            "usuarios": usuarios,
+            "picks_hoje": picks,
+            "coleta": coleta,
+            "financeiro": financeiro,
+            "api_football": _api_football_status(),
+            "pipeline": _pipeline_status.get("tudo", {}),
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─── Ligas ──────────────────────────────────────────────────────────────────
+
+class LigaBody(BaseModel):
+    league_id: int
+    season: int
+    name: Optional[str] = None
+
+
+@router.get("/leagues")
+def listar_ligas(current_user: dict = Depends(require_admin)):
+    """Ligas cadastradas, com o volume de dado que cada uma ja acumulou.
+
+    A contagem existe pra deixar visivel o custo de remover: liga com muito
+    jogo coletado e' base de calibracao do motor (ai_performance_service faz
+    JOIN em match_statistics).
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT l.league_id, l.name, l.season,
+                   (SELECT COUNT(*) FROM teams t
+                     WHERE t.league_id = l.league_id)                AS times,
+                   (SELECT COUNT(*) FROM match_statistics ms
+                     WHERE ms.league_id = l.league_id)               AS jogos_coletados,
+                   (SELECT COUNT(*) FROM fixtures f
+                     WHERE f.league_id = l.league_id)                AS jogos_agendados
+            FROM leagues l
+            ORDER BY l.league_id
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/leagues")
+def adicionar_liga(body: LigaBody, current_user: dict = Depends(require_admin)):
+    """Cadastra uma liga, validando o id contra a API-Football.
+
+    A validacao custa 1 requisicao e evita o modo de falha silencioso que essa
+    tabela permite hoje: id digitado errado entra no banco sem reclamar e so'
+    aparece dias depois, como uma liga que nunca coleta jogo nenhum. De
+    quebra, o nome vem da propria API em vez de digitado na mao.
+    """
+    import requests
+
+    key = os.getenv("API_FOOTBALL_KEY", "")
+    nome = (body.name or "").strip()
+
+    if key:
+        try:
+            r = requests.get("https://v3.football.api-sports.io/leagues",
+                             headers={"x-apisports-key": key},
+                             params={"id": body.league_id}, timeout=10)
+            itens = r.json().get("response") or []
+            if not itens:
+                raise HTTPException(400, f"Liga {body.league_id} nao existe na API-Football.")
+            info = itens[0]
+            nome = nome or (info.get("league") or {}).get("name") or ""
+            temporadas = {s.get("year") for s in (info.get("seasons") or []) if s.get("year")}
+            if temporadas and body.season not in temporadas:
+                disponiveis = ", ".join(str(a) for a in sorted(temporadas)[-6:])
+                raise HTTPException(
+                    400,
+                    f"A liga {nome} nao tem a temporada {body.season}. "
+                    f"Temporadas disponiveis: {disponiveis}.",
+                )
+        except HTTPException:
+            raise
+        except Exception as e:
+            # Cota estourada ou provedor fora do ar nao pode impedir o
+            # cadastro -- so' custa a validacao.
+            logging.getLogger(__name__).warning("[LIGAS] Validacao indisponivel: %s", e)
+
+    if not nome:
+        raise HTTPException(
+            400, "Informe o nome da liga (a validacao automatica nao esta disponivel agora).")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT league_id FROM leagues WHERE league_id = %s", (body.league_id,))
+        if cur.fetchone():
+            cur.execute("UPDATE leagues SET name = %s, season = %s WHERE league_id = %s",
+                        (nome, body.season, body.league_id))
+            acao = "atualizada"
+        else:
+            cur.execute("INSERT INTO leagues (league_id, name, season) VALUES (%s, %s, %s)",
+                        (body.league_id, nome, body.season))
+            acao = "cadastrada"
+        conn.commit()
+        return {
+            "ok": True, "acao": acao,
+            "league_id": body.league_id, "name": nome, "season": body.season,
+            "aviso": "Rode 'Atualizar Jogos' pra coletar times e jogos desta liga.",
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.delete("/leagues/{league_id}")
+def remover_liga(league_id: int, current_user: dict = Depends(require_admin)):
+    """Tira a liga da coleta. NAO apaga jogo, time nem pick.
+
+    Regra do usuario (2026-08-01): historico nao se apaga. Quem a coleta le'
+    e' a tabela leagues, entao remover a linha ja basta pra parar de coletar;
+    jogo antigo continua em match_statistics alimentando a calibracao do
+    motor. Foi assim que a Copa do Mundo saiu do pipeline sem perder os 104
+    jogos que 77% do ledger de picks usa.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT name FROM leagues WHERE league_id = %s", (league_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Liga nao encontrada.")
+        cur.execute("DELETE FROM leagues WHERE league_id = %s", (league_id,))
+        conn.commit()
+        return {
+            "ok": True, "removida": row["name"],
+            "aviso": "Parou de coletar. Jogos, times e picks ja existentes foram preservados.",
+        }
+    finally:
+        cur.close()
+        conn.close()

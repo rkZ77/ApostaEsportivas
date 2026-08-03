@@ -16,6 +16,7 @@ import InfoTip from '../components/InfoTip'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
+  faltas: 'Faltas', goleiros: 'Defesas',
 }
 
 const pnlColor = (v: number | null) =>

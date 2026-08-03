@@ -29,6 +29,8 @@ export const PICK_TYPE_LABEL: Record<string, string> = {
   multipla: 'Múltipla',
   multiplas: 'Múltipla',
   alavancagem: 'Alavancagem',
+  faltas: 'Faltas',
+  goleiros: 'Defesas',
 }
 
 export const PICK_TYPE_HEX: Record<string, string> = {
@@ -37,6 +39,8 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   multipla: '#60a5fa',
   multiplas: '#60a5fa',
   alavancagem: '#fb923c',
+  faltas: '#c084fc',
+  goleiros: '#38bdf8',
 }
 
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */
@@ -46,4 +50,8 @@ export const PICK_TYPE_CLS: Record<string, string> = {
   multipla:    'text-blue-400 bg-blue-400/10 border-blue-400/20',
   multiplas:   'text-blue-400 bg-blue-400/10 border-blue-400/20',
   alavancagem: 'text-orange-400 bg-orange-400/10 border-orange-400/20',
+  // Mesmas cores da aba Mercados na pagina de picks (roxo/azul-claro), pra
+  // um pick de faltas ser reconhecido pela cor em qualquer tela.
+  faltas:      'text-purple-400 bg-purple-400/10 border-purple-400/20',
+  goleiros:    'text-sky-400 bg-sky-400/10 border-sky-400/20',
 }

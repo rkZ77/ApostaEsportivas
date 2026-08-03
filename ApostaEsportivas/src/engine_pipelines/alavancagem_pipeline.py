@@ -23,6 +23,7 @@ import itertools
 import textwrap
 import traceback
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
@@ -85,7 +86,7 @@ def _create_table_if_needed(cur):
 
 
 def _has_today_pick(cur) -> bool:
-    cur.execute("SELECT COUNT(*) FROM picks_alavancagem WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT COUNT(*) FROM picks_alavancagem WHERE match_date = {HOJE_BR}")
     return cur.fetchone()[0] >= 1
 
 
@@ -99,7 +100,7 @@ def _fixtures_with_odds_today(cur) -> list:
                f.referee
         FROM fixtures f
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE f.match_datetime::date = CURRENT_DATE
+        WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status = 'NS'
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
@@ -235,7 +236,7 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
 
 def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
     tipo = _TIPO_POR_TAMANHO[len(legs)]
-    cols, vals = ["match_date", "tipo"], ["CURRENT_DATE", "%s"]
+    cols, vals = ["match_date", "tipo"], [HOJE_BR, "%s"]
     params = [tipo]
 
     for i, p in enumerate(legs, start=1):

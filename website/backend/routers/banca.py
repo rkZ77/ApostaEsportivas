@@ -53,6 +53,35 @@ class CashoutBody(BaseModel):
     cashout_amount: float  # valor recebido de volta em R$
 
 
+# Picks de mercado proprio (faltas, defesas de goleiro). Estrutura identica a
+# de picks_free -- um jogo, um mercado, uma odd -- entao entram no calculo da
+# banca pelo mesmo caminho, sem tratamento especial.
+#
+# O helper existe porque o type_map e' montado em 4 lugares diferentes deste
+# modulo. Um tipo esquecido em qualquer um deles nao da erro: o pick
+# simplesmente some do somatorio (type_map.get devolve {} e o loop faz
+# `continue`), e a banca do usuario fica errada em silencio.
+_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros"}
+
+
+def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict:
+    maps: dict = {}
+    for tipo, tabela in _TABELAS_MERCADO.items():
+        ids = [f["pick_id"] for f in followed if f["pick_type"] == tipo]
+        m: dict = {}
+        if ids:
+            try:
+                cur.execute(f"SELECT {colunas} FROM {tabela} WHERE id = ANY(%s)", (ids,))
+                for r in cur.fetchall():
+                    m[r["id"]] = dict(r)
+            except Exception:
+                # Instancia sem a migracao das tabelas novas: segue sem elas
+                # em vez de derrubar a banca inteira.
+                cur.connection.rollback()
+        maps[tipo] = m
+    return maps
+
+
 def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
     if pick_type == "vip":
         cur.execute("""
@@ -100,6 +129,33 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             FROM picks_alavancagem pa
             LEFT JOIN fixtures f1 ON f1.fixture_id = pa.fixture_id_1
             WHERE pa.id = %s
+        """, (pick_id,))
+    elif pick_type == "faltas":
+        cur.execute("""
+            SELECT pf.result, pf.profit, 1 AS stake,
+                   pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+                   COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
+                   pf.market, pf.line, pf.odd,
+                   f.match_datetime
+            FROM picks_faltas pf
+            LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+            WHERE pf.id = %s
+        """, (pick_id,))
+    elif pick_type == "goleiros":
+        # A "linha" ja vem pronta do pipeline no formato "<goleiro> · N ou
+        # mais defesas" -- e' prop de jogador, entao o nome do goleiro faz
+        # parte da aposta e nao pode ficar so' no campo player_name.
+        cur.execute("""
+            SELECT pg.result, pg.profit, 1 AS stake,
+                   pg.home_team AS home_team_name, pg.away_team AS away_team_name,
+                   COALESCE(pg.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(pg.away_team_id, f.away_team_id) AS away_team_id,
+                   pg.market, pg.line, pg.odd,
+                   f.match_datetime
+            FROM picks_goleiros pg
+            LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
+            WHERE pg.id = %s
         """, (pick_id,))
     else:
         return None
@@ -280,7 +336,8 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     if multipla_ids:
         cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
         for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+                **_mercado_maps(cur, followed)}
 
     total = bankroll_start
     for f in followed:
@@ -334,7 +391,8 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
         cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
         for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
 
-    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+    type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+                **_mercado_maps(cur, followed)}
 
     for f in followed:
         pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
@@ -460,7 +518,16 @@ def get_banca(
                     del d["legs_json"]
                     multipla_map[d["id"]] = d
 
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+            # Aqui a lista e' exibida, nao so' somada: precisa das mesmas
+            # colunas de display que vip_map/free_map trazem acima, senao o
+            # pick de mercado apareceria sem time e sem mercado na tela.
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+                        **_mercado_maps(cur, followed,
+                                        "id, result, profit, "
+                                        "home_team AS home_team_name, "
+                                        "away_team AS away_team_name, "
+                                        "home_team_id, away_team_id, "
+                                        "market, line, odd")}
 
             entries = []
             for f in followed:
@@ -942,7 +1009,8 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
                 cur.execute("SELECT id, result, total_odd AS odd FROM picks_multiplas WHERE id = ANY(%s)", (multipla_ids,))
                 for r in cur.fetchall(): multipla_map[r["id"]] = dict(r)
 
-            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map}
+            type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
+                **_mercado_maps(cur, followed)}
             for f in followed:
                 pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
                 if not pick:

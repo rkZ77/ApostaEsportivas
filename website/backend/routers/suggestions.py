@@ -391,6 +391,41 @@ def get_today_suggestions(
                 alav["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 alav["pick_type"] = "alavancagem"
 
+        # Mercados com modelo proprio (faltas, defesas de goleiro). Vem por
+        # ultimo pra nao mexer na ordem das chaves ja consumidas pelo front.
+        # Sao VIP: aparecem na aba Hoje pra quem tem acesso, junto do resto.
+        for chave, tabela in (("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
+            if not is_vip:
+                result[chave] = []
+                continue
+            linhas = _safe_query(cur, f"""
+                SELECT p.id, p.fixture_id, p.match_date,
+                       p.home_team, p.away_team, p.home_team_id, p.away_team_id,
+                       p.league_id, p.market, p.market_type, p.line, p.odd,
+                       p.bet_house, p.confidence, p.prob_real, p.edge,
+                       p.reasoning, p.stake_units, p.result,
+                       f.match_datetime
+                FROM {tabela} p
+                LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                WHERE {("p.match_date = %s" if date else
+                        "p.match_date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
+                        " OR (p.result IS NULL AND p.match_date >="
+                        " (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - INTERVAL '3 days')")}
+                ORDER BY p.edge DESC NULLS LAST
+            """, _d)
+            picks = [dict(r) for r in linhas]
+            if user_id and picks:
+                fm = _ufp_map(chave, [p["id"] for p in picks if p.get("id")])
+                for p in picks:
+                    fr = fm.get(p.get("id"))
+                    p["is_followed"]      = fr is not None
+                    p["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                    p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                    p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
+            for p in picks:
+                p["pick_type"] = chave
+            result[chave] = picks
+
         # ── Calcula suggested_stake_units com banca real do usuário ─────────
         # Centraliza a lógica no backend; frontend apenas exibe o valor.
         if user_id:
