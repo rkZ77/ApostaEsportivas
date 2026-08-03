@@ -74,9 +74,13 @@ function ensureFonts(): Promise<void> {
  * justamente o que lê como estático.
  */
 function drawBackground(ctx: CanvasRenderingContext2D, accentHex: string): void {
+  // A cor de destaque entra JÁ no degradê de base, não só nos glows. Veio de
+  // uma alteração paralela feita direto no card de pick, com a intenção certa
+  // (chamar atenção no feed, em vez do brilho sutil de antes) -- aqui ela vale
+  // pros quatro cards em vez de um só.
   const bg = ctx.createLinearGradient(0, 0, W * 0.35, H)
-  bg.addColorStop(0, '#0a0a0c')
-  bg.addColorStop(0.55, '#000000')
+  bg.addColorStop(0, `${accentHex}3a`)
+  bg.addColorStop(0.4, '#000000')
   bg.addColorStop(1, '#08080a')
   ctx.fillStyle = bg
   ctx.fillRect(0, 0, W, H)
@@ -94,14 +98,14 @@ function drawBackground(ctx: CanvasRenderingContext2D, accentHex: string): void 
   ctx.restore()
 
   const glowTopo = ctx.createRadialGradient(W * 0.18, H * 0.16, 40, W * 0.18, H * 0.16, W * 0.95)
-  glowTopo.addColorStop(0, `${accentHex}3d`)
-  glowTopo.addColorStop(0.5, `${accentHex}12`)
+  glowTopo.addColorStop(0, `${accentHex}7a`)
+  glowTopo.addColorStop(0.45, `${accentHex}1f`)
   glowTopo.addColorStop(1, 'transparent')
   ctx.fillStyle = glowTopo
   ctx.fillRect(0, 0, W, H)
 
   const glowBase = ctx.createRadialGradient(W * 0.86, H * 0.82, 40, W * 0.86, H * 0.82, W * 0.85)
-  glowBase.addColorStop(0, `${accentHex}26`)
+  glowBase.addColorStop(0, `${accentHex}3a`)
   glowBase.addColorStop(1, 'transparent')
   ctx.fillStyle = glowBase
   ctx.fillRect(0, 0, W, H)
