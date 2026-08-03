@@ -96,6 +96,83 @@
     @apply border-t border-line;
   }
 
+  /* --- ritmo de pagina ---------------------------------------------------
+     Vocabulario tirado da pagina de Resultados, que e' a referencia aprovada.
+     A Landing tinha 5 paddings verticais e 6 larguras de container; aqui vira
+     um par so'. */
+  .shell {
+    @apply max-w-5xl mx-auto px-4;
+  }
+  /* Conteudo de leitura/placar, onde linha longa atrapalha em vez de ajudar */
+  .shell-narrow {
+    @apply max-w-2xl mx-auto px-4;
+  }
+  .section {
+    @apply py-16 md:py-24;
+  }
+  .section-tight {
+    @apply py-12 md:py-16;
+  }
+  /* Faixa alternada. Precisa existir porque pagina e secao agora compartilham
+     surface-0: sem isso o ritmo entre secoes some.
+     O tom fica ENTRE surface-0 e surface-1 de proposito: em surface-1 cheio,
+     todo .card dentro da faixa (que tambem e' surface-1) sumiria no fundo. */
+  .section-alt {
+    @apply bg-surface-1/60 border-y border-line;
+  }
+
+  .section-head {
+    @apply text-center mb-10;
+  }
+  /* font-bold, nao font-black: Space Grotesk carrega so' 500/600/700 e a fonte
+     nao existe acima de 700, entao font-black ja renderizava como 700. Pedir
+     700 direto e' o mesmo pixel com o CSS dizendo a verdade. */
+  .section-title {
+    @apply font-display text-2xl md:text-3xl font-bold text-ink-1 mb-3 leading-tight;
+  }
+  .section-sub {
+    @apply text-ink-2 text-sm max-w-lg mx-auto leading-relaxed;
+  }
+
+  /* --- painel delineado ---------------------------------------------------
+     A regua define bloco pela BORDA, nao pelo preenchimento: fundo do painel
+     e' o mesmo da pagina. E o que da o ar de terminal em vez de cartao. */
+  .panel {
+    @apply bg-surface-0 border border-line rounded-lg overflow-hidden;
+  }
+  .panel-head {
+    @apply px-5 py-3 border-b border-line flex items-center justify-between gap-3;
+  }
+  .panel-label {
+    @apply text-xs font-bold text-ink-2 uppercase tracking-wide;
+  }
+  .panel-meta {
+    @apply text-[10px] text-ink-4 shrink-0;
+  }
+  .panel-row {
+    @apply flex items-center gap-2 px-4 py-3;
+  }
+
+  /* Ladrilho de numero: valor em mono grande, rotulo minusculo em versalete. */
+  .stat-tile {
+    @apply bg-surface-0 border border-line rounded-lg p-4 text-center;
+  }
+  .stat-value {
+    @apply font-mono text-2xl font-black text-ink-1;
+  }
+  .stat-label {
+    @apply text-[10px] text-ink-3 uppercase mt-1;
+  }
+
+  /* Pilula de filtro */
+  .pill {
+    @apply text-[11px] px-2.5 py-1 rounded-lg border font-semibold border-line text-ink-3
+           hover:border-line-strong transition-colors duration-1 ease-smooth;
+  }
+  .pill-active {
+    @apply bg-accent/15 border-accent/40 text-green-400;
+  }
+
   /* --- acao --- */
   .btn-primary {
     @apply bg-accent hover:bg-accent-hover active:bg-accent-press text-black font-bold

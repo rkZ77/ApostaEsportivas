@@ -168,21 +168,21 @@ function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] 
     <>
       <TodayBadge />
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-surface-1 border border-line rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-green-500">{winRate != null && <NumberTicker value={Number(winRate)} suffix="%" />}</p>
-          <p className="text-[10px] text-ink-3 mt-0.5 uppercase">Win Rate</p>
+        <div className="stat-tile p-3">
+          <p className="stat-value text-xl text-green-500">{winRate != null && <NumberTicker value={Number(winRate)} suffix="%" />}</p>
+          <p className="stat-label">Win Rate</p>
         </div>
-        <div className="bg-surface-1 border border-line rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-ink-1"><NumberTicker value={summary.total} /></p>
-          <p className="text-[10px] text-ink-3 mt-0.5 uppercase">Picks</p>
+        <div className="stat-tile p-3">
+          <p className="stat-value text-xl text-ink-1"><NumberTicker value={summary.total} /></p>
+          <p className="stat-label">Picks</p>
         </div>
         <div className="bg-surface-1 border border-green-500/20 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-green-400"><NumberTicker value={summary.greens} /></p>
-          <p className="text-[10px] text-ink-3 mt-0.5 uppercase">GREEN</p>
+          <p className="stat-value text-xl text-green-400"><NumberTicker value={summary.greens} /></p>
+          <p className="stat-label">GREEN</p>
         </div>
         <div className="bg-surface-1 border border-red-500/20 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-red-400"><NumberTicker value={reds} /></p>
-          <p className="text-[10px] text-ink-3 mt-0.5 uppercase">RED</p>
+          <p className="stat-value text-xl text-red-400"><NumberTicker value={reds} /></p>
+          <p className="stat-label">RED</p>
         </div>
       </div>
     </>
@@ -192,18 +192,18 @@ function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] 
 // 3 passos · jornada do usuário, com ênfase na análise real da IA
 function ThreeSteps() {
   return (
-    <section id="como-funciona" className="py-20 bg-surface-0 border-b border-line/60">
-      <div className="max-w-5xl mx-auto px-4">
+    <section id="como-funciona" className="section section-alt">
+      <div className="shell">
         <div className="text-center mb-5">
           <span className="inline-flex items-center gap-1.5 font-mono text-green-400 text-xs font-bold border border-green-500/20 px-2.5 py-1 rounded-sm">
             <BrainCircuit className="w-3.5 h-3.5" />
             Como a IA decide cada pick
           </span>
         </div>
-        <h2 className="font-display text-3xl md:text-4xl font-semibold text-center mb-4 leading-tight">
+        <h2 className="section-title text-center">
           Nada de achismo. <span className="text-green-500">Só dados reais e matemática.</span>
         </h2>
-        <p className="text-center text-ink-2 text-sm max-w-2xl mx-auto mb-8 leading-relaxed">
+        <p className="section-sub max-w-2xl text-center mb-8">
           Antes de qualquer pick, a IA cruza dados de forma recente, confronto direto, força do
           adversário e odds de mercado · milhares de dados por rodada. Só entra quando encontra
           valor esperado (EV) positivo, sem achismo e auditável do início ao fim.
@@ -286,11 +286,11 @@ function ActiveLeagues() {
   if (!leagues.length) return null
 
   return (
-    <section className="border-y border-line/60 bg-surface-0 py-14">
-      <div className="max-w-5xl mx-auto px-4">
+    <section className="section-tight">
+      <div className="shell">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-black mb-2">Ligas e torneios cobertos</h2>
-          <p className="text-ink-2 text-sm max-w-lg mx-auto">
+          <h2 className="section-title">Ligas e torneios cobertos</h2>
+          <p className="section-sub">
             A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando ·
             hoje a IA já analisa:
           </p>
@@ -347,11 +347,11 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
   const todayReds   = todayItems.filter(t => t.result === 'RED').length
 
   return (
-    <section id="resultados" className="py-24 bg-surface-0 border-y border-line/60">
-      <div className="max-w-5xl mx-auto px-4">
+    <section id="resultados" className="section section-alt">
+      <div className="shell">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
-          <p className="text-ink-2 text-sm max-w-lg mx-auto">
+          <h2 className="section-title">Resultados reais, verificáveis</h2>
+          <p className="section-sub">
             Todos os picks ficam registrados. Win rate auditável, qualquer pessoa pode conferir.
           </p>
         </div>
@@ -508,8 +508,8 @@ function FreePickTeaserCard() {
 // em secao cheia garante que o pick gratis apareca pra eles tambem.
 function FreePickTeaser() {
   return (
-    <section className="py-14 md:hidden">
-      <div className="max-w-2xl mx-auto px-4 space-y-6">
+    <section className="section-tight md:hidden">
+      <div className="shell-narrow space-y-6">
         <NextGamesPreview />
         <FreePickTeaserCard />
       </div>
@@ -536,14 +536,14 @@ function LeaderboardTeaser() {
   const rankCls = ['bg-yellow-400 text-black', 'bg-ink-2 text-black', 'bg-orange-400 text-black']
 
   return (
-    <section className="py-16 bg-surface-0 border-y border-line/60">
-      <div className="max-w-2xl mx-auto px-4">
+    <section className="section-tight section-alt">
+      <div className="shell-narrow">
         <div className="text-center mb-8">
           <p className="text-sm font-bold text-yellow-400 mb-2 flex items-center justify-center gap-1.5">
             <Trophy className="w-4 h-4" /> Ranking de usuários
           </p>
-          <h2 className="text-2xl font-black text-ink-1">Quem está ganhando mais</h2>
-          <p className="text-ink-3 text-sm mt-2">Top apostadores da plataforma este mês</p>
+          <h2 className="section-title">Quem está ganhando mais</h2>
+          <p className="section-sub">Top apostadores da plataforma este mês</p>
         </div>
         {loading ? (
           <div className="flex justify-center py-8">
@@ -689,12 +689,12 @@ export default function Landing() {
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
         <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
 
-        <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
+        <div className="shell pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
 
             {/* Texto */}
             <div>
-              <h1 className="font-display text-4xl md:text-5xl font-semibold leading-[1.1] mb-5 tracking-tight">
+              <h1 className="font-display text-4xl md:text-5xl font-bold leading-[1.1] mb-5 tracking-tight">
                 {['Picks de futebol', 'gerados por IA,', 'entregues todo dia.'].map((line, i) => (
                   <motion.span
                     key={line}
@@ -752,8 +752,8 @@ export default function Landing() {
 
       <ActiveLeagues />
 
-      <section className="py-24">
-        <div className="max-w-5xl mx-auto px-4">
+      <section className="section">
+        <div className="shell">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             {/* Texto */}
             <div>
@@ -825,11 +825,11 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="planos" className="py-24">
-        <div className="max-w-4xl mx-auto px-4">
+      <section id="planos" className="section section-alt">
+        <div className="shell">
           <div className="text-center mb-12">
-            <h2 className="font-display text-3xl font-semibold mb-3">Comece de graça, evolua quando quiser</h2>
-            <p className="text-ink-2 text-sm max-w-md mx-auto">
+            <h2 className="section-title">Comece de graça, evolua quando quiser</h2>
+            <p className="section-sub">
               Teste 2 dias com acesso VIP completo. Depois escolha seu plano.
             </p>
           </div>
