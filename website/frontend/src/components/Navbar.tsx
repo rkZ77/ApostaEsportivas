@@ -47,7 +47,7 @@ export default function Navbar() {
     daysUntilExpiry <= 7
 
   const isActive = (path: string) =>
-    pathname === path ? 'text-green-500 font-semibold' : 'text-zinc-400 hover:text-white'
+    pathname === path ? 'text-green-500 font-semibold' : 'text-ink-2 hover:text-ink-1'
 
   const navLinks = [
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
@@ -69,14 +69,14 @@ export default function Navbar() {
 
   return (
     <>
-      <nav className="bg-zinc-950 border-b border-zinc-800 sticky top-0 z-50">
+      <nav className="bg-surface-0 border-b border-line sticky top-0 z-50">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
 
           {/* Logo */}
           <Link to="/picks" className="flex items-center gap-3">
             <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
             <div className="hidden sm:block">
-              <span className="font-display text-white font-semibold text-lg tracking-tight">Pick</span>
+              <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">Pick</span>
               <span className="font-display text-green-500 font-semibold text-lg">IA</span>
             </div>
           </Link>
@@ -97,7 +97,7 @@ export default function Navbar() {
                 <Icon className="w-3.5 h-3.5" />
                 {label}
                 {badge && (
-                  <span className="absolute top-1 right-0.5 w-2 h-2 bg-green-500 rounded-full border border-zinc-950 animate-pulse" />
+                  <span className="absolute top-1 right-0.5 w-2 h-2 bg-green-500 rounded-full border border-surface-0 animate-pulse" />
                 )}
               </Link>
             ))}
@@ -117,7 +117,7 @@ export default function Navbar() {
               >
                 {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
                 <div className="flex items-center gap-1.5">
-                  <span className="text-white text-xs font-semibold leading-none">
+                  <span className="text-ink-1 text-xs font-semibold leading-none">
                     {user?.name?.split(' ')[0]
                       ? user.name.split(' ')[0].charAt(0).toUpperCase() + user.name.split(' ')[0].slice(1).toLowerCase()
                       : ''}
@@ -131,29 +131,29 @@ export default function Navbar() {
               {profileOpen && (
                 <>
                   <div className="fixed inset-0 z-40" onClick={() => setProfileOpen(false)} />
-                  <div className="absolute right-0 top-full mt-2 w-52 bg-zinc-900 border border-zinc-800 rounded-lg shadow-xl z-50 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-zinc-800">
-                      <p className="text-white text-sm font-bold truncate">{user?.name}</p>
-                      <p className="text-zinc-500 text-xs truncate">{user?.email}</p>
+                  <div className="absolute right-0 top-full mt-2 w-52 bg-surface-1 border border-line rounded-lg shadow-xl z-50 overflow-hidden">
+                    <div className="px-4 py-3 border-b border-line">
+                      <p className="text-ink-1 text-sm font-bold truncate">{user?.name}</p>
+                      <p className="text-ink-3 text-xs truncate">{user?.email}</p>
                     </div>
                     <div className="py-1">
-                      <Link to="/como-funciona" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                      <Link to="/como-funciona" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <BookOpen className="w-4 h-4 text-green-400" />
                         Como funciona
                       </Link>
-                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <Avatar name={user?.name ?? ''} size="sm" />
                         Meu perfil
                       </Link>
-                      <a href={WA_SUPPORT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800 transition-colors">
+                      <a href={WA_SUPPORT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <MessageCircle className="w-4 h-4 text-green-400" />
                         Suporte
                       </a>
                     </div>
-                    <div className="border-t border-zinc-800 py-1">
+                    <div className="border-t border-line py-1">
                       <button
                         onClick={async () => { await logout(); navigate('/login') }}
-                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-800 transition-colors"
+                        className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-2 hover:text-red-400 hover:bg-surface-2 transition-colors"
                       >
                         <LogOut className="w-4 h-4" />
                         Sair
@@ -167,7 +167,7 @@ export default function Navbar() {
             {/* Hamburger · mobile */}
             <button
               onClick={() => setSidebarOpen(v => !v)}
-              className="lg:hidden text-zinc-400 hover:text-white transition-colors p-2"
+              className="lg:hidden text-ink-2 hover:text-ink-1 transition-colors p-2"
               aria-label="Menu"
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -214,26 +214,26 @@ export default function Navbar() {
 
       {/* Sidebar · mobile */}
       <aside
-        className={`fixed top-0 right-0 h-full w-72 bg-zinc-950 border-l border-zinc-800 z-50 flex flex-col transition-transform duration-300 ease-in-out lg:hidden ${
+        className={`fixed top-0 right-0 h-full w-72 bg-surface-0 border-l border-line z-50 flex flex-col transition-transform duration-300 ease-in-out lg:hidden ${
           sidebarOpen ? 'translate-x-0' : 'translate-x-full'
         }`}
       >
         {/* Sidebar header */}
-        <div className="flex items-center justify-between px-5 h-16 border-b border-zinc-800">
+        <div className="flex items-center justify-between px-5 h-16 border-b border-line">
           <div className="flex items-center gap-2">
-            <span className="font-display text-white font-semibold text-lg tracking-tight">Pick</span>
+            <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">Pick</span>
             <span className="font-display text-green-500 font-semibold text-lg">IA</span>
           </div>
-          <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-zinc-400 hover:text-white p-1">
+          <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-ink-2 hover:text-ink-1 p-1">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* User info */}
-        <Link to="/profile" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-5 py-4 border-b border-zinc-800 hover:bg-zinc-900 transition-colors">
+        <Link to="/profile" onClick={() => setSidebarOpen(false)} className="flex items-center gap-3 px-5 py-4 border-b border-line hover:bg-surface-1 transition-colors">
           {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
           <div>
-            <div className="text-white text-sm font-semibold">{user?.name}</div>
+            <div className="text-ink-1 text-sm font-semibold">{user?.name}</div>
             <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
               {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
             </span>
@@ -249,10 +249,10 @@ export default function Navbar() {
               onClick={() => { onClick?.(); setSidebarOpen(false) }}
               className={`relative flex items-center gap-3 px-5 py-3.5 text-sm font-medium transition-colors ${
                 highlight === 'yellow'
-                  ? pathname === to ? 'text-yellow-400 bg-yellow-400/5' : 'text-yellow-400 hover:bg-zinc-900'
+                  ? pathname === to ? 'text-yellow-400 bg-yellow-400/5' : 'text-yellow-400 hover:bg-surface-1'
                   : pathname === to
                     ? 'text-green-500 bg-green-500/5'
-                    : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+                    : 'text-ink-2 hover:text-ink-1 hover:bg-surface-1'
               }`}
             >
               <Icon className="w-4 h-4 flex-shrink-0" />
@@ -265,11 +265,11 @@ export default function Navbar() {
         </nav>
 
         {/* Como funciona + Logout */}
-        <div className="border-t border-zinc-800 p-4 space-y-1">
+        <div className="border-t border-line p-4 space-y-1">
           <Link
             to="/como-funciona"
             onClick={() => setSidebarOpen(false)}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
           >
             <BookOpen className="w-4 h-4 text-green-400" />
             Como funciona
@@ -278,14 +278,14 @@ export default function Navbar() {
             href={WA_SUPPORT_LINK}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-white hover:bg-zinc-900 transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
           >
             <MessageCircle className="w-4 h-4 text-green-400" />
             Suporte
           </a>
           <button
             onClick={async () => { await logout(); navigate('/login') }}
-            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-zinc-400 hover:text-red-400 hover:bg-zinc-900 transition-colors"
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-red-400 hover:bg-surface-1 transition-colors"
           >
             <LogOut className="w-4 h-4" />
             Sair

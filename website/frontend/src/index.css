@@ -4,6 +4,39 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Tokens neutros. Valores em canal RGB porque o Tailwind monta a cor como
+ * rgb(var(--token) / <alpha-value>) e assim bg-surface-2/60 continua valendo.
+ *
+ * Rampa de superficie medida em L* (CIELAB), degrau de 3.7 a 5.8 entre niveis:
+ * apertado o bastante pra parecer um sistema, aberto o bastante pra o olho ver
+ * a pilha. Rampa de tinta validada em WCAG sobre surface-1.
+ */
+:root {
+  color-scheme: dark;
+
+  --surface-0:  10  10  12;   /* #0a0a0c · fundo de pagina           */
+  --surface-1:  20  20  24;   /* #141418 · card                      */
+  --surface-2:  31  31  36;   /* #1f1f24 · card elevado, input       */
+  --surface-3:  43  43  49;   /* #2b2b31 · hover, estado ativo       */
+
+  --line:        35  35  41;  /* #232329 · borda padrao              */
+  --line-strong: 51  51  58;  /* #33333a · borda em foco/destaque    */
+
+  --ink-1: 250 250 250;       /* #fafafa · 17.8:1 · titulo, numero   */
+  --ink-2: 199 199 207;       /* #c7c7cf · 11.0:1 · corpo            */
+  --ink-3: 148 148 158;       /* #94949e ·  6.2:1 · apoio, rotulo    */
+  --ink-4: 117 117 127;       /* #75757f ·  4.1:1 · so' texto grande */
+
+  --accent:        0 204   0; /* #00CC00 · a marca, intocada         */
+  --accent-hover: 26 224  26;
+  --accent-press:  0 170   0;
+
+  --ease:  cubic-bezier(0.2, 0, 0, 1);
+  --dur-1: 150ms;
+  --dur-2: 240ms;
+}
+
 @layer utilities {
   .scrollbar-none {
     scrollbar-width: none;
@@ -16,13 +49,23 @@
 
 @layer base {
   * { box-sizing: border-box; }
+
   body {
-    @apply bg-black text-gray-100 antialiased;
+    @apply bg-surface-0 text-ink-2 antialiased;
     font-family: 'Inter', sans-serif;
   }
+
+  /* Voz 1 · titulo */
   h1, h2, h3, .font-display {
     font-family: 'Space Grotesk', 'Inter', sans-serif;
+    @apply text-ink-1;
   }
+
+  /* Foco visivel consistente no site inteiro, em vez de outline do navegador */
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent/50 ring-offset-2 ring-offset-surface-0 rounded-sm;
+  }
+
   /* Remove as setinhas nativas de incremento dos campos numéricos (todo o site) */
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
@@ -32,25 +75,68 @@
   input[type="number"] {
     -moz-appearance: textfield;
   }
+
+  ::selection {
+    @apply bg-accent/25 text-ink-1;
+  }
 }
 
 @layer components {
+  /* --- superficie --- */
   .card {
-    @apply bg-zinc-900 border border-zinc-800 rounded-lg;
+    @apply bg-surface-1 border border-line rounded-lg;
   }
-  .btn-primary {
-    @apply bg-green-500 hover:bg-green-400 active:bg-green-600 text-black font-bold px-6 py-3 rounded-md transition-all duration-150 disabled:opacity-40;
-  }
-  .btn-ghost {
-    @apply border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-medium px-4 py-2 rounded-md transition-all duration-150;
+  .card-elevated {
+    @apply bg-surface-2 border border-line rounded-lg;
   }
   .stat-card {
     @apply card p-5 flex flex-col gap-1;
   }
-  .input {
-    @apply w-full bg-zinc-800 border border-zinc-700 rounded-md px-4 py-3 text-base text-white placeholder-zinc-500
-           focus:outline-none focus:border-green-500 focus:ring-1 focus:ring-green-500/30 transition-all;
+  .divider {
+    @apply border-t border-line;
   }
+
+  /* --- acao --- */
+  .btn-primary {
+    @apply bg-accent hover:bg-accent-hover active:bg-accent-press text-black font-bold
+           px-6 py-3 rounded-md transition-colors duration-1 ease-smooth disabled:opacity-40;
+  }
+  .btn-ghost {
+    @apply border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 font-medium
+           px-4 py-2 rounded-md transition-colors duration-1 ease-smooth;
+  }
+  .btn-subtle {
+    @apply bg-surface-2 hover:bg-surface-3 text-ink-2 hover:text-ink-1 font-medium
+           px-4 py-2 rounded-md transition-colors duration-1 ease-smooth;
+  }
+
+  .input {
+    @apply w-full bg-surface-2 border border-line-strong rounded-md px-4 py-3 text-base text-ink-1
+           placeholder-ink-4 focus:outline-none focus:border-accent focus:ring-1 focus:ring-accent/30
+           transition-colors duration-1 ease-smooth;
+  }
+
+  /* --- navegacao por aba ---
+     Carrega so' a semantica de estado (cor + sublinhado). A geometria fica com
+     quem chama, porque aba de modal e aba de pagina tem densidade diferente e
+     nao adianta forcar as duas no mesmo padding. */
+  .tab {
+    @apply text-ink-3 hover:text-ink-1 border-b-2 border-transparent
+           transition-colors duration-1 ease-smooth whitespace-nowrap;
+  }
+  .tab-active {
+    @apply text-ink-1 border-accent;
+  }
+
+  /* Voz 2 · rotulo. Versalete de secao, o mesmo desenho do badge. */
+  .label-micro {
+    @apply font-mono text-[10px] font-bold uppercase tracking-widest text-ink-3;
+  }
+
+  /* Voz 3 · evidencia = font-mono puro. Nao existe helper aqui de proposito:
+     JetBrains Mono ja tem algarismo de largura fixa, entao tabular-nums em
+     cima seria no-op. Numero em fonte de UI (Inter) e' que precisa de
+     tabular-nums explicito, e ai o utilitario do Tailwind resolve no lugar. */
 
   /* Tags em texto com borda, estilo terminal, no lugar de pilulas coloridas */
   .badge-vip, .badge-free, .badge-admin, .badge-trial, .badge-green, .badge-red {
@@ -60,7 +146,7 @@
     @apply bg-yellow-400/5 text-yellow-400 border-yellow-400/30;
   }
   .badge-free {
-    @apply bg-transparent text-zinc-400 border-zinc-600;
+    @apply bg-transparent text-ink-3 border-line-strong;
   }
   .badge-admin {
     @apply bg-purple-500/5 text-purple-400 border-purple-500/30;

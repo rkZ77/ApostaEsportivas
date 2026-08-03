@@ -13,7 +13,7 @@ export interface ResultStyle {
 export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
   GREEN:      { bg: 'bg-green-500/15',  border: 'border-green-500/40',  text: 'text-green-400',  label: 'GREEN',  emoji: '✓', hex: '#4ade80' },
   RED:        { bg: 'bg-red-500/15',    border: 'border-red-500/40',    text: 'text-red-400',    label: 'RED',    emoji: '✗', hex: '#f87171' },
-  PUSH:       { bg: 'bg-zinc-700/40',   border: 'border-zinc-600',      text: 'text-zinc-300',   label: 'PUSH',   emoji: '↔', hex: '#d4d4d8' },
+  PUSH:       { bg: 'bg-surface-3/40',   border: 'border-line-strong',      text: 'text-ink-2',   label: 'PUSH',   emoji: '↔', hex: '#d4d4d8' },
   'HALF-WIN': { bg: 'bg-teal-500/15',   border: 'border-teal-500/40',   text: 'text-teal-400',   label: '½ WIN',  emoji: '½', hex: '#2dd4bf' },
   'HALF-LOSS':{ bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-400', label: '½ LOSS', emoji: '½', hex: '#fb923c' },
 }

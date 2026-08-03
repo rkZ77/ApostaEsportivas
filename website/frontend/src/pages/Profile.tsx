@@ -257,7 +257,7 @@ export default function Profile() {
   }, [user?.expires_at, user?.plan])
 
   const planMeta: Record<string, { label: string; color: string }> = {
-    free:  { label: 'FREE',  color: 'text-zinc-400' },
+    free:  { label: 'FREE',  color: 'text-ink-2' },
     trial: { label: 'TRIAL', color: 'text-amber-400' },
     vip:   { label: 'VIP',   color: 'text-yellow-400' },
     admin: { label: 'ADMIN', color: 'text-purple-400' },
@@ -267,14 +267,14 @@ export default function Profile() {
   const currentAvatar = avatarPreview ?? user?.avatar_url ?? null
 
   return (
-    <div className="min-h-screen bg-black relative">
+    <div className="min-h-screen bg-surface-0 relative">
       <Navbar />
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
           <div>
-            <h1 className="text-base font-black text-white">Meu Perfil</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Gerencie suas informações e preferências</p>
+            <h1 className="text-base font-black text-ink-1">Meu Perfil</h1>
+            <p className="text-ink-3 text-xs mt-0.5">Gerencie suas informações e preferências</p>
           </div>
         </div>
       </div>
@@ -289,7 +289,7 @@ export default function Profile() {
             <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               {avatarUploading
                 ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                : <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                : <svg className="w-5 h-5 text-ink-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
                   </svg>
@@ -305,10 +305,10 @@ export default function Profile() {
           </div>
 
           <div className="flex-1 min-w-0">
-            <p className="text-white font-bold truncate">{user?.name}</p>
+            <p className="text-ink-1 font-bold truncate">{user?.name}</p>
             {meData?.username && <p className="text-green-500 text-xs font-semibold">@{meData.username}</p>}
-            <p className="text-zinc-500 text-xs truncate mt-0.5">{user?.email}</p>
-            <p className="text-zinc-600 text-xs mt-1.5 flex items-center gap-1">
+            <p className="text-ink-3 text-xs truncate mt-0.5">{user?.email}</p>
+            <p className="text-ink-4 text-xs mt-1.5 flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
               </svg>
@@ -322,27 +322,27 @@ export default function Profile() {
 
         {/* Assinatura */}
         <div className="card p-5">
-          <p className="text-xs text-zinc-500 font-semibold uppercase mb-4">Assinatura</p>
+          <p className="text-xs text-ink-3 font-semibold uppercase mb-4">Assinatura</p>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
-                <span className="text-zinc-400 text-sm">Status atual:</span>
+                <span className="text-ink-2 text-sm">Status atual:</span>
                 <span className={`text-sm font-black ${pm.color}`}>{pm.label}</span>
               </div>
               {countdown && (
-                <p className="text-zinc-400 text-sm">
-                  Expira em <span className="font-bold text-white tabular-nums">{countdown}</span>
+                <p className="text-ink-2 text-sm">
+                  Expira em <span className="font-bold text-ink-1 tabular-nums">{countdown}</span>
                 </p>
               )}
               {user?.plan === 'free' && (
-                <p className="text-zinc-500 text-xs">Faça upgrade para acessar picks VIP</p>
+                <p className="text-ink-3 text-xs">Faça upgrade para acessar picks VIP</p>
               )}
             </div>
             {(user?.plan === 'free' || user?.plan === 'trial') && (
               <button
                 type="button"
                 onClick={() => navigate('/planos')}
-                className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
+                className="shrink-0 bg-green-600 hover:bg-green-500 text-ink-1 font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
               >
                 Assinar
               </button>
@@ -357,29 +357,29 @@ export default function Profile() {
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-5">
-          <p className="text-xs text-zinc-500 font-semibold uppercase">Informações pessoais</p>
+          <p className="text-xs text-ink-3 font-semibold uppercase">Informações pessoais</p>
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">Nome completo</label>
+            <label className="text-xs text-ink-3 block mb-1.5">Nome completo</label>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} required />
           </div>
 
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">Nome de usuário <span className="text-zinc-600 font-normal">(para login)</span></label>
+            <label className="text-xs text-ink-3 block mb-1.5">Nome de usuário <span className="text-ink-4 font-normal">(para login)</span></label>
             <input className="input w-full" value={username}
               onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               placeholder="seu_usuario" maxLength={20} />
-            <p className="text-xs text-zinc-600 mt-1">3–20 caracteres · letras minúsculas, números e _</p>
+            <p className="text-xs text-ink-4 mt-1">3–20 caracteres · letras minúsculas, números e _</p>
           </div>
 
           <div>
-            <label className="text-xs text-zinc-500 block mb-1.5">WhatsApp <span className="text-zinc-600 font-normal">(opcional)</span></label>
+            <label className="text-xs text-ink-3 block mb-1.5">WhatsApp <span className="text-ink-4 font-normal">(opcional)</span></label>
             <input className="input w-full" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999" type="tel" inputMode="numeric" />
           </div>
 
           {!meData?.has_cpf && (
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">
-                CPF <span className="text-zinc-600">(necessário para ativar o teste gratuito)</span>
+              <label className="text-xs text-ink-3 block mb-1.5">
+                CPF <span className="text-ink-4">(necessário para ativar o teste gratuito)</span>
               </label>
               <input className="input w-full" value={cpf} onChange={e => setCpf(e.target.value)}
                 placeholder="000.000.000-00" />
@@ -391,11 +391,11 @@ export default function Profile() {
             </div>
           )}
 
-          <hr className="border-zinc-800" />
+          <hr className="border-line" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-zinc-500 font-semibold uppercase">Senha</p>
-              <p className="text-xs text-zinc-600 mt-0.5">
+              <p className="text-xs text-ink-3 font-semibold uppercase">Senha</p>
+              <p className="text-xs text-ink-4 mt-0.5">
                 {passwordChanged ? <span className="text-green-400">Senha alterada!</span> : 'Troque sua senha atual'}
               </p>
             </div>
@@ -425,7 +425,7 @@ export default function Profile() {
                 />
                 <button type="button" onClick={() => setShowCurrentPw(v => !v)}
                   aria-label={showCurrentPw ? 'Ocultar senha' : 'Mostrar senha'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
                   {showCurrentPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -442,7 +442,7 @@ export default function Profile() {
                 />
                 <button type="button" onClick={() => setShowNewPw(v => !v)}
                   aria-label={showNewPw ? 'Ocultar senha' : 'Mostrar senha'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
                   {showNewPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -450,21 +450,21 @@ export default function Profile() {
                 const { score, checks } = getPasswordStrength(newPassword)
                 const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
                 const labels    = ['Fraca', 'Boa', 'Forte']
-                const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                const color     = barColors[score - 1] ?? 'bg-surface-3'
                 const label     = score > 0 ? labels[score - 1] : ''
                 return (
                   <div className="space-y-2">
                     <div className="flex items-center gap-1.5">
                       {[1, 2, 3].map(i => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-surface-2'}`} />
                       ))}
                       {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
                     </div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                       {checks.map(c => (
                         <div key={c.label} className="flex items-center gap-1.5">
-                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
-                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                         </div>
                       ))}
                     </div>
@@ -484,16 +484,16 @@ export default function Profile() {
               {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={handleRequestPasswordChange} disabled={passwordChanging}
-                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
                   {passwordChanging ? 'Enviando…' : 'Enviar código de confirmação'}
                 </button>
                 <button type="button" onClick={resetPasswordChangeState}
-                  className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
                   Cancelar
                 </button>
               </div>
               <button type="button" onClick={() => navigate('/forgot-password')}
-                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline">
+                className="text-xs text-ink-4 hover:text-ink-2 transition-colors underline">
                 Esqueceu a senha atual? Redefinir por e-mail
               </button>
             </div>
@@ -501,8 +501,8 @@ export default function Profile() {
 
           {showPasswordChange && pwStep === 'code' && (
             <div className="space-y-3">
-              <p className="text-xs text-zinc-500">
-                Enviamos um código de 6 dígitos pra <span className="text-zinc-300 font-semibold">{user?.email}</span>. Ele expira em 15 minutos.
+              <p className="text-xs text-ink-3">
+                Enviamos um código de 6 dígitos pra <span className="text-ink-2 font-semibold">{user?.email}</span>. Ele expira em 15 minutos.
               </p>
               <input
                 type="text"
@@ -518,16 +518,16 @@ export default function Profile() {
               {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
               <div className="flex gap-2">
                 <button type="button" onClick={handleConfirmPasswordChange} disabled={passwordChanging || pwCode.length !== 6}
-                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                  className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
                   {passwordChanging ? 'Confirmando…' : 'Confirmar troca de senha'}
                 </button>
                 <button type="button" onClick={resetPasswordChangeState}
-                  className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                  className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
                   Cancelar
                 </button>
               </div>
               <button type="button" onClick={() => setPwStep('form')}
-                className="text-xs text-zinc-600 hover:text-zinc-400 transition-colors underline">
+                className="text-xs text-ink-4 hover:text-ink-2 transition-colors underline">
                 Voltar
               </button>
             </div>
@@ -549,14 +549,14 @@ export default function Profile() {
         {/* Sessão */}
         <div className="card p-6 space-y-4">
           <div>
-            <h2 className="text-sm font-black text-white">Sessão</h2>
-            <p className="text-zinc-500 text-xs mt-0.5">Você só pode estar logado em 1 dispositivo por vez</p>
+            <h2 className="text-sm font-black text-ink-1">Sessão</h2>
+            <p className="text-ink-3 text-xs mt-0.5">Você só pode estar logado em 1 dispositivo por vez</p>
           </div>
           {meData?.last_login_device && (
-            <p className="text-sm text-zinc-300">
-              Último login: <span className="font-semibold text-white">{meData.last_login_device}</span>
+            <p className="text-sm text-ink-2">
+              Último login: <span className="font-semibold text-ink-1">{meData.last_login_device}</span>
               {meData.last_login_at && (
-                <span className="text-zinc-500">
+                <span className="text-ink-3">
                   {' · '}
                   {new Date(meData.last_login_at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
                 </span>
@@ -567,19 +567,19 @@ export default function Profile() {
             type="button"
             onClick={handleLogoutOtherSessions}
             disabled={loggingOutOthers}
-            className="w-full py-2.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+            className="w-full py-2.5 rounded-md border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 text-xs font-semibold transition-colors disabled:opacity-50"
           >
             {loggingOutOthers ? 'Encerrando…' : loggedOutOthers ? 'Sessão encerrada!' : 'Encerrar outras sessões'}
           </button>
-          <p className="text-zinc-600 text-xs">Use isso se suspeitar que esqueceu logado em outro aparelho.</p>
+          <p className="text-ink-4 text-xs">Use isso se suspeitar que esqueceu logado em outro aparelho.</p>
         </div>
 
         {/* E-mail e verificação */}
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-black text-white">E-mail</h2>
-              <p className="text-zinc-500 text-xs mt-0.5">Verificação e alteração</p>
+              <h2 className="text-sm font-black text-ink-1">E-mail</h2>
+              <p className="text-ink-3 text-xs mt-0.5">Verificação e alteração</p>
             </div>
             {user?.email_verified
               ? <span className="text-xs font-bold text-green-400 bg-green-400/10 border border-green-400/20 px-2.5 py-1 rounded-lg">Verificado ✓</span>
@@ -587,7 +587,7 @@ export default function Profile() {
             }
           </div>
 
-          <p className="text-sm text-zinc-300 font-medium">{emailChanged || user?.email}</p>
+          <p className="text-sm text-ink-2 font-medium">{emailChanged || user?.email}</p>
 
           {!user?.email_verified && (
             <div className="space-y-3">
@@ -598,7 +598,7 @@ export default function Profile() {
                 <button
                   onClick={handleResendEmail}
                   disabled={emailResending || emailCooldown > 0}
-                  className="flex-1 py-2.5 rounded-md border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white text-xs font-semibold transition-colors disabled:opacity-50"
+                  className="flex-1 py-2.5 rounded-md border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 text-xs font-semibold transition-colors disabled:opacity-50"
                 >
                   {emailResending ? 'Enviando…' : emailCooldown > 0 ? `Reenviar em ${emailCooldown}s` : 'Reenviar confirmação'}
                 </button>
@@ -633,11 +633,11 @@ export default function Profile() {
                   {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
                   <div className="flex gap-2">
                     <button type="submit" disabled={emailChanging}
-                      className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
+                      className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
                       {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
                     </button>
                     <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
-                      className="px-4 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors">
+                      className="px-4 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors">
                       Cancelar
                     </button>
                   </div>
@@ -650,19 +650,19 @@ export default function Profile() {
         {/* Notificacoes push */}
         {push.supported && push.vapidKey !== '' && (
           <div className="card p-5">
-            <p className="text-xs text-zinc-500 uppercase font-semibold mb-3">Notificações</p>
+            <p className="text-xs text-ink-3 uppercase font-semibold mb-3">Notificações</p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-zinc-800'}`}>
+                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-surface-2'}`}>
                   {push.subscribed
                     ? <Bell className="w-4 h-4 text-green-400" />
-                    : <BellOff className="w-4 h-4 text-zinc-500" />}
+                    : <BellOff className="w-4 h-4 text-ink-3" />}
                 </div>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold text-white">
+                  <p className="text-sm font-semibold text-ink-1">
                     {push.subscribed ? 'Notificações ativas' : 'Ativar notificações'}
                   </p>
-                  <p className="text-xs text-zinc-500 truncate">
+                  <p className="text-xs text-ink-3 truncate">
                     {push.subscribed
                       ? 'Aviso quando os picks do dia forem publicados'
                       : 'Receba aviso quando os picks do dia saírem'}
@@ -670,14 +670,14 @@ export default function Profile() {
                 </div>
               </div>
               {push.permission === 'denied' ? (
-                <span className="text-xs text-zinc-600 shrink-0">Bloqueado no navegador</span>
+                <span className="text-xs text-ink-4 shrink-0">Bloqueado no navegador</span>
               ) : (
                 <button
                   onClick={push.subscribed ? push.unsubscribe : push.subscribe}
                   disabled={push.loading}
                   className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40 ${
                     push.subscribed
-                      ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      ? 'bg-surface-2 text-ink-2 hover:bg-surface-3'
                       : 'bg-green-500 text-black hover:bg-green-400'
                   }`}
                 >
@@ -691,58 +691,58 @@ export default function Profile() {
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">
           <div>
-            <h2 className="text-sm font-black text-white">Programa de Indicações</h2>
-            <p className="text-zinc-500 text-xs mt-0.5">Indique amigos e ganhe 1 dia VIP por cada conversão</p>
+            <h2 className="text-sm font-black text-ink-1">Programa de Indicações</h2>
+            <p className="text-ink-3 text-xs mt-0.5">Indique amigos e ganhe 1 dia VIP por cada conversão</p>
           </div>
 
           {referral ? (
             <>
               <div>
-                <p className="text-xs text-zinc-500 mb-1.5">Seu link de indicação</p>
+                <p className="text-xs text-ink-3 mb-1.5">Seu link de indicação</p>
                 <div className="flex items-center gap-2">
-                  <div className="flex-1 bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono truncate select-all">
+                  <div className="flex-1 bg-surface-1 border border-line-strong rounded-lg px-3 py-2 text-xs text-ink-2 font-mono truncate select-all">
                     {referral.referral_link}
                   </div>
                   <button
                     onClick={copyReferralLink}
                     className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                      referralCopied ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                      referralCopied ? 'bg-green-500/20 text-green-400' : 'bg-surface-2 text-ink-2 hover:bg-surface-3'
                     }`}
                   >
                     {referralCopied ? 'Copiado!' : 'Copiar'}
                   </button>
                 </div>
-                <p className="text-zinc-600 text-xs mt-1">
-                  Código: <span className="text-zinc-400 font-mono font-bold">{referral.referral_code}</span>
+                <p className="text-ink-4 text-xs mt-1">
+                  Código: <span className="text-ink-2 font-mono font-bold">{referral.referral_code}</span>
                 </p>
               </div>
 
               <div className="font-mono grid grid-cols-3 gap-3">
-                <div className="bg-zinc-900 rounded-lg p-3 text-center">
-                  <p className="text-xl font-black text-white">{referral.total_indicated}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">Indicados</p>
+                <div className="bg-surface-1 rounded-lg p-3 text-center">
+                  <p className="text-xl font-black text-ink-1">{referral.total_indicated}</p>
+                  <p className="text-ink-3 text-xs mt-0.5">Indicados</p>
                 </div>
-                <div className="bg-zinc-900 rounded-lg p-3 text-center">
+                <div className="bg-surface-1 rounded-lg p-3 text-center">
                   <p className="text-xl font-black text-green-400">{referral.total_converted}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">Convertidos</p>
+                  <p className="text-ink-3 text-xs mt-0.5">Convertidos</p>
                 </div>
-                <div className="bg-zinc-900 rounded-lg p-3 text-center">
+                <div className="bg-surface-1 rounded-lg p-3 text-center">
                   <p className="text-xl font-black text-yellow-400">{referral.days_earned}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">Dias ganhos</p>
+                  <p className="text-ink-3 text-xs mt-0.5">Dias ganhos</p>
                 </div>
               </div>
 
               {referral.total_indicated === 0 && (
-                <p className="text-zinc-600 text-xs text-center">
+                <p className="text-ink-4 text-xs text-center">
                   Compartilhe seu link: cada amigo que assinar VIP te dá +1 dia grátis!
                 </p>
               )}
             </>
           ) : referralLoaded ? (
-            <p className="text-zinc-600 text-xs">Não foi possível carregar os dados de indicação. Tente recarregar a página.</p>
+            <p className="text-ink-4 text-xs">Não foi possível carregar os dados de indicação. Tente recarregar a página.</p>
           ) : (
-            <div className="flex items-center gap-2 text-zinc-600 text-xs">
-              <div className="w-4 h-4 border border-zinc-700 border-t-transparent rounded-full animate-spin" />
+            <div className="flex items-center gap-2 text-ink-4 text-xs">
+              <div className="w-4 h-4 border border-line-strong border-t-transparent rounded-full animate-spin" />
               Carregando dados de indicação...
             </div>
           )}

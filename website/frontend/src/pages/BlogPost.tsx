@@ -46,7 +46,7 @@ export default function BlogPost() {
         <script type="application/ld+json">{JSON.stringify(jsonLd)}</script>
       </Helmet>
       <Navbar />
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-surface-0 text-ink-1">
         <div className="max-w-2xl mx-auto px-4 pt-6">
           <BackButton to="/blog" />
         </div>
@@ -56,21 +56,21 @@ export default function BlogPost() {
             <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-green-500/10 text-green-400 border border-green-500/20">
               {meta.category}
             </span>
-            <span className="text-zinc-600 text-xs">{formatDate(meta.publishedAt)}</span>
-            <span className="text-zinc-600 text-xs">· {meta.readingTime} min de leitura</span>
+            <span className="text-ink-4 text-xs">{formatDate(meta.publishedAt)}</span>
+            <span className="text-ink-4 text-xs">· {meta.readingTime} min de leitura</span>
           </div>
 
           <h1 className="text-2xl sm:text-3xl font-black mb-3 leading-tight">{meta.title}</h1>
-          <p className="text-zinc-400 text-sm leading-relaxed mb-6">{meta.description}</p>
-          <p className="text-zinc-600 text-xs mb-8">
+          <p className="text-ink-2 text-sm leading-relaxed mb-6">{meta.description}</p>
+          <p className="text-ink-4 text-xs mb-8">
             {meta.author.name} · {meta.author.role}
           </p>
 
-          <Suspense fallback={<div className="text-zinc-600 text-sm">Carregando artigo...</div>}>
+          <Suspense fallback={<div className="text-ink-4 text-sm">Carregando artigo...</div>}>
             <ArticleComponent />
           </Suspense>
 
-          <div className="mt-10 pt-6 border-t border-zinc-800">
+          <div className="mt-10 pt-6 border-t border-line">
             <Link to="/blog" className="text-green-400 hover:underline text-sm font-semibold">
               ← Ver todos os artigos
             </Link>

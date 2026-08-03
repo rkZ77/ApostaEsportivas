@@ -69,7 +69,7 @@ const LIMIT_OPTIONS = [
 ]
 
 function trendCls(v: number, h: number, l: number) {
-  return v >= h ? 'text-green-400' : v <= l ? 'text-red-400' : 'text-zinc-400'
+  return v >= h ? 'text-green-400' : v <= l ? 'text-red-400' : 'text-ink-2'
 }
 function trendLbl(v: number, h: number, l: number) {
   return v >= h ? 'Alto' : v <= l ? 'Baixo' : 'Médio'
@@ -83,7 +83,7 @@ function TrendIcon({ value, high, low }: { value: number; high: number; low: num
 function Spinner() {
   return (
     <div className="flex items-center justify-center py-20">
-      <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
     </div>
   )
 }
@@ -164,11 +164,11 @@ export function EstatisticasContent() {
   if (!isVip) {
     return (
       <div className="flex flex-col items-center justify-center py-24 gap-4">
-        <div className="w-14 h-14 rounded-full bg-zinc-900 flex items-center justify-center">
-          <Lock className="w-6 h-6 text-zinc-500" />
+        <div className="w-14 h-14 rounded-full bg-surface-1 flex items-center justify-center">
+          <Lock className="w-6 h-6 text-ink-3" />
         </div>
-        <h2 className="text-white font-black text-lg">Recurso VIP</h2>
-        <p className="text-zinc-500 text-sm text-center max-w-xs">
+        <h2 className="text-ink-1 font-black text-lg">Recurso VIP</h2>
+        <p className="text-ink-3 text-sm text-center max-w-xs">
           As estatísticas detalhadas são exclusivas para membros VIP.
         </p>
         <a href="/planos" className="btn-primary px-6 py-2 text-sm">Ver planos</a>
@@ -181,7 +181,7 @@ export function EstatisticasContent() {
 
         {/* Filtros */}
         {leaguesLoading ? (
-          <div className="h-9 bg-zinc-800 rounded-lg animate-pulse w-48" />
+          <div className="h-9 bg-surface-2 rounded-lg animate-pulse w-48" />
         ) : (
           <FilterPanel
             accent="green"
@@ -208,7 +208,7 @@ export function EstatisticasContent() {
 
         {loading ? <Spinner /> : !summary ? (
           <div className="card p-12 text-center">
-            <p className="text-zinc-500 text-sm">Sem dados para esta liga ainda.</p>
+            <p className="text-ink-3 text-sm">Sem dados para esta liga ainda.</p>
           </div>
         ) : (
           <>
@@ -219,8 +219,8 @@ export function EstatisticasContent() {
                   width={32} height={32} className="w-8 h-8 object-contain"
                   onError={e => (e.currentTarget.style.display = 'none')} />
                 <div>
-                  <h2 className="text-white font-black text-base">{selectedLeague.name}</h2>
-                  <p className="text-zinc-500 text-xs">
+                  <h2 className="text-ink-1 font-black text-base">{selectedLeague.name}</h2>
+                  <p className="text-ink-3 text-xs">
                     Temporada {selectedLeague.season} · <span className="font-mono text-green-400 font-bold">{summary.total_games}</span> jogos analisados
                   </p>
                 </div>
@@ -243,20 +243,20 @@ export function EstatisticasContent() {
                     onClick={() => toggleCard(key)}
                     disabled={!hasRank}
                     className={`card p-3 text-center transition-all select-none ${
-                      hasRank ? 'cursor-pointer hover:bg-zinc-800/60 active:scale-95' : 'cursor-default'
+                      hasRank ? 'cursor-pointer hover:bg-surface-2/60 active:scale-95' : 'cursor-default'
                     } ${isActive ? 'ring-1 ring-green-500/40 bg-green-500/5' : ''}`}
                   >
                     <div className={`flex justify-center mb-1 ${def.iconCls}`}>
                       <Icon className="w-4 h-4" />
                     </div>
                     <div className={`font-mono text-xl font-black ${cls}`}>{display}</div>
-                    <div className="text-[9px] text-zinc-600 font-semibold mt-0.5 leading-tight">{def.label}</div>
+                    <div className="text-[9px] text-ink-4 font-semibold mt-0.5 leading-tight">{def.label}</div>
                     <div className={`flex items-center justify-center gap-0.5 mt-1 text-[9px] font-bold ${cls}`}>
                       <TrendIcon value={val} high={def.high} low={def.low} />
                       {trendLbl(val, def.high, def.low)}
                     </div>
                     {hasRank && (
-                      <div className="mt-1.5 text-[9px] text-zinc-600 font-semibold">Ranking</div>
+                      <div className="mt-1.5 text-[9px] text-ink-4 font-semibold">Ranking</div>
                     )}
                   </button>
                 )
@@ -268,28 +268,28 @@ export function EstatisticasContent() {
               <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={() => setActiveCard(null)}>
                 <div className="absolute inset-0 bg-black/70" />
                 <div
-                  className="relative z-10 w-full sm:max-w-md bg-zinc-900 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[80vh] flex flex-col"
+                  className="relative z-10 w-full sm:max-w-md bg-surface-1 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[80vh] flex flex-col"
                   onClick={e => e.stopPropagation()}
                 >
                   {/* Header */}
-                  <div className="px-4 py-4 border-b border-zinc-800 flex items-center justify-between gap-3 shrink-0 bg-zinc-800">
+                  <div className="px-4 py-4 border-b border-line flex items-center justify-between gap-3 shrink-0 bg-surface-2">
                     <div className="flex items-center gap-2">
                       {(() => {
                         const def = STAT_DEFS[activeCard!]
                         const Icon = def.Icon
                         return <>
                           <Icon className={`w-5 h-5 ${def.iconCls}`} />
-                          <h3 className="text-base font-black text-white">Ranking: {def.rankLabel}</h3>
+                          <h3 className="text-base font-black text-ink-1">Ranking: {def.rankLabel}</h3>
                         </>
                       })()}
                     </div>
-                    <button onClick={() => setActiveCard(null)} className="text-zinc-500 hover:text-white p-1 transition-colors">
+                    <button onClick={() => setActiveCard(null)} className="text-ink-3 hover:text-ink-1 p-1 transition-colors">
                       <X className="w-5 h-5" />
                     </button>
                   </div>
 
                   {/* Context filter */}
-                  <div className="flex gap-1.5 px-4 py-3 border-b border-zinc-800 shrink-0">
+                  <div className="flex gap-1.5 px-4 py-3 border-b border-line shrink-0">
                     {([
                       { key: 'all',  label: 'Todos', Icon: Globe  },
                       { key: 'home', label: 'Casa',  Icon: Home   },
@@ -300,8 +300,8 @@ export function EstatisticasContent() {
                         onClick={() => setContext(key)}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
                           context === key
-                            ? 'bg-zinc-700 text-white'
-                            : 'bg-zinc-800 text-zinc-500 hover:text-zinc-300'
+                            ? 'bg-surface-3 text-ink-1'
+                            : 'bg-surface-2 text-ink-3 hover:text-ink-2'
                         }`}
                       >
                         <Icon className="w-3.5 h-3.5" />
@@ -313,24 +313,24 @@ export function EstatisticasContent() {
                   {/* List */}
                   <div className="flex-1 overflow-y-auto">
                     {sortedRanking.length === 0 ? (
-                      <div className="p-8 text-center text-zinc-500 text-sm">Sem dados de ranking ainda.</div>
+                      <div className="p-8 text-center text-ink-3 text-sm">Sem dados de ranking ainda.</div>
                     ) : (
-                      <div className="divide-y divide-zinc-800/60">
+                      <div className="divide-y divide-line/60">
                         {sortedRanking.map((team, idx) => {
                           const field = STAT_DEFS[activeCard!].rankField!
                           const val = team[field] as number
                           const isFirst = idx === 0
-                          const rankCls = idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-zinc-400' : idx === 2 ? 'text-zinc-500' : 'text-zinc-700'
+                          const rankCls = idx === 0 ? 'text-yellow-400' : idx === 1 ? 'text-ink-2' : idx === 2 ? 'text-ink-3' : 'text-ink-4'
                           return (
                             <div key={team.team_id}
-                              className={`flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
+                              className={`flex items-center gap-3 px-4 py-3 hover:bg-surface-2/50 transition-colors ${isFirst ? 'bg-green-500/5' : ''}`}>
                               <span className={`font-mono text-sm font-black w-6 shrink-0 text-right ${rankCls}`}>{idx + 1}</span>
                               <img src={`/api/proxy/team/${team.team_id}.png`} alt=""
                                 width={24} height={24} className="w-6 h-6 object-contain shrink-0"
                                 onError={e => (e.currentTarget.style.display = 'none')} />
-                              <span className="text-sm text-zinc-200 font-semibold flex-1 truncate">{team.team_name}</span>
-                              <span className="font-mono text-[11px] text-zinc-600 shrink-0">{team.games}j</span>
-                              <span className={`font-mono text-base font-black shrink-0 tabular-nums w-14 text-right ${isFirst ? 'text-green-400' : 'text-zinc-200'}`}>
+                              <span className="text-sm text-ink-2 font-semibold flex-1 truncate">{team.team_name}</span>
+                              <span className="font-mono text-[11px] text-ink-4 shrink-0">{team.games}j</span>
+                              <span className={`font-mono text-base font-black shrink-0 tabular-nums w-14 text-right ${isFirst ? 'text-green-400' : 'text-ink-2'}`}>
                                 {val.toFixed(2)}
                               </span>
                             </div>
@@ -345,11 +345,11 @@ export function EstatisticasContent() {
 
             {/* Game table */}
             <div className="card overflow-hidden p-0">
-              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
-                <h3 className="text-sm font-black text-white">
+              <div className="px-4 py-3 border-b border-line flex items-center justify-between">
+                <h3 className="text-sm font-black text-ink-1">
                   {limit === 0 ? 'Todos os' : `Últimos ${games.length}`} Jogos
                 </h3>
-                <div className="hidden sm:flex items-center gap-3 text-[10px] text-zinc-600 font-semibold">
+                <div className="hidden sm:flex items-center gap-3 text-[10px] text-ink-4 font-semibold">
                   <span className="flex items-center gap-1"><Flag className="w-3 h-3" />Escan.</span>
                   <span className="flex items-center gap-1"><AlertTriangle className="w-3 h-3" />Amar.</span>
                   <span className="flex items-center gap-1"><AlertCircle className="w-3 h-3" />Verm.</span>
@@ -357,15 +357,15 @@ export function EstatisticasContent() {
                 </div>
               </div>
 
-              <div className="divide-y divide-zinc-800/60">
+              <div className="divide-y divide-line/60">
                 {games.map(g => {
                   const date = new Date(g.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
                   const goalsColor = (g.total_goals || 0) >= 3
-                    ? 'text-green-400' : (g.total_goals || 0) === 0 ? 'text-red-400' : 'text-zinc-300'
+                    ? 'text-green-400' : (g.total_goals || 0) === 0 ? 'text-red-400' : 'text-ink-2'
                   return (
                     <div key={g.fixture_id}
-                      className="flex items-center gap-2 px-4 py-2.5 hover:bg-zinc-900/50 transition-colors">
-                      <span className="font-mono text-xs text-zinc-600 w-10 shrink-0 font-semibold">{date}</span>
+                      className="flex items-center gap-2 px-4 py-2.5 hover:bg-surface-1/50 transition-colors">
+                      <span className="font-mono text-xs text-ink-4 w-10 shrink-0 font-semibold">{date}</span>
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-1.5">
@@ -374,11 +374,11 @@ export function EstatisticasContent() {
                               width={16} height={16} className="w-4 h-4 object-contain shrink-0"
                               onError={e => (e.currentTarget.style.display = 'none')} />
                           )}
-                          <span className="text-sm text-zinc-300 font-semibold truncate">{g.home_team}</span>
+                          <span className="text-sm text-ink-2 font-semibold truncate">{g.home_team}</span>
                           <span className={`font-mono text-sm font-black shrink-0 mx-0.5 ${goalsColor}`}>
                             {g.home_goals ?? '?'} – {g.away_goals ?? '?'}
                           </span>
-                          <span className="text-sm text-zinc-300 font-semibold truncate">{g.away_team}</span>
+                          <span className="text-sm text-ink-2 font-semibold truncate">{g.away_team}</span>
                           {g.away_team_id && (
                             <img src={`/api/proxy/team/${g.away_team_id}.png`} alt=""
                               width={16} height={16} className="w-4 h-4 object-contain shrink-0"
@@ -388,12 +388,12 @@ export function EstatisticasContent() {
                       </div>
 
                       <div className="font-mono flex items-center gap-1 shrink-0">
-                        <span className="text-xs bg-zinc-800 px-1.5 py-0.5 rounded text-zinc-400 font-semibold min-w-[1.75rem] text-center">
+                        <span className="text-xs bg-surface-2 px-1.5 py-0.5 rounded text-ink-2 font-semibold min-w-[1.75rem] text-center">
                           {g.total_corners ?? '–'}
                         </span>
                         <span className={`text-xs px-1.5 py-0.5 rounded font-semibold min-w-[1.75rem] text-center ${
                           (g.total_yellow_cards || 0) >= 4
-                            ? 'bg-yellow-500/10 text-yellow-400' : 'bg-zinc-800 text-zinc-400'
+                            ? 'bg-yellow-500/10 text-yellow-400' : 'bg-surface-2 text-ink-2'
                         }`}>
                           {g.total_yellow_cards ?? '–'}
                         </span>
@@ -402,9 +402,9 @@ export function EstatisticasContent() {
                             {g.total_red_cards}
                           </span>
                         ) : (
-                          <span className="text-xs text-zinc-800 px-1.5 py-0.5 min-w-[1.75rem] text-center">–</span>
+                          <span className="text-xs text-line-strong px-1.5 py-0.5 min-w-[1.75rem] text-center">–</span>
                         )}
-                        <span className="hidden sm:block text-xs text-zinc-600 px-1.5 py-0.5 min-w-[2rem] text-center">
+                        <span className="hidden sm:block text-xs text-ink-4 px-1.5 py-0.5 min-w-[2rem] text-center">
                           {g.total_fouls != null ? `${g.total_fouls}f` : '–'}
                         </span>
                       </div>
@@ -421,12 +421,12 @@ export function EstatisticasContent() {
 
 export default function Estatisticas() {
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-5xl mx-auto px-4 py-4">
-          <h1 className="text-base font-black text-white tracking-tight">Estatísticas</h1>
-          <p className="text-zinc-500 text-xs mt-0.5">Tendências por liga · clique em um card para ver o ranking por time</p>
+          <h1 className="text-base font-black text-ink-1 tracking-tight">Estatísticas</h1>
+          <p className="text-ink-3 text-xs mt-0.5">Tendências por liga · clique em um card para ver o ranking por time</p>
         </div>
       </div>
       <main className="max-w-5xl mx-auto px-4 py-6">

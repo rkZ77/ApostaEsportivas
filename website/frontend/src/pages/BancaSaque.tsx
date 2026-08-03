@@ -51,15 +51,15 @@ export default function BancaSaque() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
 
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton to="/banca" />
           <div>
-            <h1 className="text-base font-black text-white">Sacar da banca</h1>
-            <p className="text-zinc-500 text-xs">O valor sai da sua banca e fica registrado no histórico</p>
+            <h1 className="text-base font-black text-ink-1">Sacar da banca</h1>
+            <p className="text-ink-3 text-xs">O valor sai da sua banca e fica registrado no histórico</p>
           </div>
         </div>
       </div>
@@ -67,17 +67,17 @@ export default function BancaSaque() {
       <main className="max-w-2xl mx-auto px-4 py-6">
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : (
           <div className="space-y-6">
             <div className="card p-5">
-              <p className="text-xs text-zinc-500 uppercase font-semibold mb-1">Banca atual</p>
-              <NumberTicker value={current} formatter={fmtBRL} className="font-mono text-3xl font-black text-white" />
+              <p className="text-xs text-ink-3 uppercase font-semibold mb-1">Banca atual</p>
+              <NumberTicker value={current} formatter={fmtBRL} className="font-mono text-3xl font-black text-ink-1" />
             </div>
 
             <div className="card p-5">
-              <label className="text-xs text-zinc-500 block mb-1.5">Quanto você quer sacar? (R$)</label>
+              <label className="text-xs text-ink-3 block mb-1.5">Quanto você quer sacar? (R$)</label>
               <input
                 type="number" min="0.01" step="0.01" value={amount}
                 onChange={e => setAmount(e.target.value)}
@@ -93,9 +93,9 @@ export default function BancaSaque() {
                   transition={{ duration: 0.2 }}
                   className="overflow-hidden"
                 >
-                  <div className="mt-3 bg-zinc-800/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
-                    <span className="text-zinc-400">Banca depois do saque</span>
-                    <NumberTicker value={newBanca} formatter={fmtBRL} className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-white'}`} />
+                  <div className="mt-3 bg-surface-2/50 rounded-lg px-3 py-2.5 text-xs flex items-center justify-between">
+                    <span className="text-ink-2">Banca depois do saque</span>
+                    <NumberTicker value={newBanca} formatter={fmtBRL} className={`font-black ${newBanca < 0 ? 'text-red-400' : 'text-ink-1'}`} />
                   </div>
                 </motion.div>
               )}
@@ -113,23 +113,23 @@ export default function BancaSaque() {
             </div>
 
             <div className="card overflow-hidden">
-              <div className="px-5 py-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-zinc-500 uppercase">Histórico de saques</span>
+              <div className="px-5 py-3 border-b border-line">
+                <span className="text-xs font-bold text-ink-3 uppercase">Histórico de saques</span>
               </div>
               {withdrawals.length === 0 ? (
-                <p className="text-zinc-600 text-sm px-5 py-8 text-center">Nenhum saque ainda</p>
+                <p className="text-ink-4 text-sm px-5 py-8 text-center">Nenhum saque ainda</p>
               ) : (
-                <div className="divide-y divide-zinc-800/60">
+                <div className="divide-y divide-line/60">
                   {withdrawals.map(w => (
                     <div key={w.id} className="flex items-center gap-3 px-5 py-3">
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-bold text-white">− {fmtBRL(w.amount)}</p>
-                        <p className="text-[11px] text-zinc-500 mt-0.5">
+                        <p className="text-sm font-bold text-ink-1">− {fmtBRL(w.amount)}</p>
+                        <p className="text-[11px] text-ink-3 mt-0.5">
                           {new Date(w.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                         </p>
                       </div>
                       <div className="text-right shrink-0">
-                        <p className="text-[10px] text-zinc-600">de {fmtBRL(w.bankroll_before)} pra {fmtBRL(w.bankroll_after)}</p>
+                        <p className="text-[10px] text-ink-4">de {fmtBRL(w.bankroll_before)} pra {fmtBRL(w.bankroll_after)}</p>
                       </div>
                     </div>
                   ))}

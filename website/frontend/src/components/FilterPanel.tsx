@@ -49,7 +49,7 @@ export default function FilterPanel({
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setOpen(o => !o)}
-          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${open ? c.active : 'border-zinc-700 text-zinc-300 hover:border-zinc-500'}`}
+          className={`flex items-center gap-1.5 text-xs font-bold px-3 py-2 rounded-lg border transition-colors ${open ? c.active : 'border-line-strong text-ink-2 hover:border-ink-4'}`}
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filtros
@@ -85,10 +85,10 @@ export default function FilterPanel({
           transition={{ duration: 0.2, ease: [0.16, 1, 0.3, 1] }}
           className="overflow-hidden"
         >
-        <div className="mt-2 card p-4 space-y-4 border-zinc-800">
+        <div className="mt-2 card p-4 space-y-4 border-line">
           {groups.map(g => (
             <div key={g.key}>
-              <p className="text-xs text-zinc-500 uppercase mb-2">{g.label}</p>
+              <p className="text-xs text-ink-3 uppercase mb-2">{g.label}</p>
               {/* Muitas opcoes (ex: 30 meses de historico) viram select nativo em
                   vez de parede de botoes -- pill buttons soh escalam bem ate uns
                   8 itens, depois disso o painel fica maior que a tela. */}
@@ -108,7 +108,7 @@ export default function FilterPanel({
                     <button
                       key={opt.value || 'all'}
                       onClick={() => g.onChange(opt.value)}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${g.value === opt.value ? c.active : 'border-zinc-700 text-zinc-400 hover:border-zinc-500'}`}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${g.value === opt.value ? c.active : 'border-line-strong text-ink-2 hover:border-ink-4'}`}
                     >
                       {opt.icon}
                       {opt.label}
@@ -121,11 +121,11 @@ export default function FilterPanel({
 
           {extra && extraWhen !== false && extra}
 
-          <div className="flex items-center justify-between pt-1 border-t border-zinc-800">
+          <div className="flex items-center justify-between pt-1 border-t border-line">
             <button
               onClick={clearAll}
               disabled={activeChips.length === 0}
-              className="text-xs font-semibold text-zinc-500 hover:text-zinc-300 disabled:opacity-30 transition-colors"
+              className="text-xs font-semibold text-ink-3 hover:text-ink-2 disabled:opacity-30 transition-colors"
             >
               Limpar filtros
             </button>

@@ -49,10 +49,10 @@ function RealWinRate() {
   }, [])
   if (pct == null) return null
   return (
-    <p className="text-xs text-zinc-600 mt-5">
+    <p className="text-xs text-ink-4 mt-5">
       Win rate real auditável:{' '}
       <Link to="/resultados" className="text-green-500 font-bold hover:text-green-400 transition-colors">
-        {pct}% <span className="text-zinc-600 font-normal">· ver histórico</span>
+        {pct}% <span className="text-ink-4 font-normal">· ver histórico</span>
       </Link>
     </p>
   )
@@ -215,19 +215,19 @@ export default function Login() {
   ]
 
   return (
-    <div className="min-h-screen bg-black flex items-stretch">
+    <div className="min-h-screen bg-surface-0 flex items-stretch">
 
       {/* Left panel · branding */}
-      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-zinc-950 border-r border-zinc-800">
+      <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-surface-0 border-r border-line">
         <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
 
         <div className="relative z-10 text-center px-12">
           <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
-          <h1 className="text-4xl font-black text-white tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
-          <p className="text-zinc-400 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
+          <h1 className="text-4xl font-black text-ink-1 tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
+          <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
           <div className="mt-8 text-left max-w-xs mx-auto">
-            <p className="text-zinc-500 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
+            <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
             <div className="space-y-3">
               {[
                 { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
@@ -237,11 +237,11 @@ export default function Login() {
               ].map(({ dot, text }) => (
                 <div key={text} className="flex items-center gap-3">
                   <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                  <span className="text-sm text-zinc-300">{text}</span>
+                  <span className="text-sm text-ink-2">{text}</span>
                 </div>
               ))}
             </div>
-            <p className="text-xs text-zinc-600 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
+            <p className="text-xs text-ink-4 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
             <RealWinRate />
           </div>
         </div>
@@ -254,23 +254,23 @@ export default function Login() {
           {/* Mobile logo */}
           <div className="flex lg:hidden flex-col items-center mb-10">
             <img src="/logo.png" alt="Pick IA" width={96} height={96} className="w-24 h-24 mb-3" />
-            <h1 className="text-3xl font-black text-white">Pick<span className="text-green-500">IA</span></h1>
+            <h1 className="text-3xl font-black text-ink-1">Pick<span className="text-green-500">IA</span></h1>
           </div>
 
-          <h2 className="text-2xl font-bold text-white mb-1">
+          <h2 className="text-2xl font-bold text-ink-1 mb-1">
             {mode === 'login' ? 'Bem-vindo de volta' : '2 dias VIP grátis'}
           </h2>
-          <p className="text-zinc-500 mb-6 text-sm">
+          <p className="text-ink-3 mb-6 text-sm">
             {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma. Sem cartão de crédito.'}
           </p>
 
           {kickedDevice && (
             <div className="mb-4 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4 text-sm">
               <p className="text-yellow-300 font-semibold mb-1">Sessão encerrada</p>
-              <p className="text-zinc-300">
-                Um acesso foi feito de <strong className="text-white">{kickedDevice}</strong> e sua sessão foi encerrada.
+              <p className="text-ink-2">
+                Um acesso foi feito de <strong className="text-ink-1">{kickedDevice}</strong> e sua sessão foi encerrada.
               </p>
-              <p className="text-zinc-400 mt-2">
+              <p className="text-ink-2 mt-2">
                 Se não foi você,{' '}
                 <Link to="/forgot-password" className="text-yellow-400 underline hover:text-yellow-300">
                   redefina sua senha
@@ -284,9 +284,9 @@ export default function Login() {
             {mode === 'login' && (
               <>
                 <div>
-                  <label htmlFor="login-identifier" className="block text-sm text-zinc-400 mb-2 font-medium">Login ID</label>
+                  <label htmlFor="login-identifier" className="block text-sm text-ink-2 mb-2 font-medium">Login ID</label>
                   {/* Tabs estilo Betano */}
-                  <div className="flex rounded-md overflow-hidden border border-zinc-700 mb-3">
+                  <div className="flex rounded-md overflow-hidden border border-line-strong mb-3">
                     {loginTabs.map(tab => (
                       <button
                         key={tab.key}
@@ -295,7 +295,7 @@ export default function Login() {
                         className={`flex-1 py-2 text-xs font-bold transition-colors ${
                           loginMethod === tab.key
                             ? 'bg-green-500 text-black'
-                            : 'bg-zinc-900 text-zinc-400 hover:text-white'
+                            : 'bg-surface-1 text-ink-2 hover:text-ink-1'
                         }`}
                       >
                         {tab.label}
@@ -333,31 +333,31 @@ export default function Login() {
             {mode === 'register' && (
               <div className="flex items-center gap-2 -mt-1 mb-1">
                 {[1, 2].map(step => (
-                  <div key={step} className={`h-1 flex-1 rounded-full transition-colors ${step <= regStep ? 'bg-green-500' : 'bg-zinc-800'}`} />
+                  <div key={step} className={`h-1 flex-1 rounded-full transition-colors ${step <= regStep ? 'bg-green-500' : 'bg-surface-2'}`} />
                 ))}
-                <span className="text-[11px] text-zinc-500 font-semibold shrink-0 ml-1">Passo {regStep} de 2</span>
+                <span className="text-[11px] text-ink-3 font-semibold shrink-0 ml-1">Passo {regStep} de 2</span>
               </div>
             )}
 
             {mode === 'register' && regStep === 1 && (
               <>
                 <div>
-                  <label htmlFor="reg-name" className="block text-sm text-zinc-400 mb-1.5 font-medium">Nome completo</label>
+                  <label htmlFor="reg-name" className="block text-sm text-ink-2 mb-1.5 font-medium">Nome completo</label>
                   <input id="reg-name" type="text" value={name}
                     onChange={e => setName(e.target.value)}
                     required className="input" placeholder="Nome e sobrenome"
                     autoComplete="name" autoFocus />
                 </div>
                 <div>
-                  <label htmlFor="reg-username" className="block text-sm text-zinc-400 mb-1.5 font-medium">Usuário</label>
+                  <label htmlFor="reg-username" className="block text-sm text-ink-2 mb-1.5 font-medium">Usuário</label>
                   <input id="reg-username" type="text" value={username}
                     onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
                     required className="input" placeholder="seu_usuario"
                     autoComplete="username" maxLength={20} />
-                  <p className="text-xs text-zinc-600 mt-1">3–20 caracteres. Letras minúsculas, números e _.</p>
+                  <p className="text-xs text-ink-4 mt-1">3–20 caracteres. Letras minúsculas, números e _.</p>
                 </div>
                 <div>
-                  <label htmlFor="reg-email" className="block text-sm text-zinc-400 mb-1.5 font-medium">Email</label>
+                  <label htmlFor="reg-email" className="block text-sm text-ink-2 mb-1.5 font-medium">Email</label>
                   <input id="reg-email" type="email" value={email}
                     onChange={e => setEmail(e.target.value)}
                     required className="input" placeholder="seu@email.com"
@@ -368,7 +368,7 @@ export default function Login() {
 
             {mode === 'register' && regStep === 2 && (
               <button type="button" onClick={() => setRegStep(1)}
-                className="text-zinc-500 hover:text-zinc-300 text-xs font-semibold transition-colors -mt-1 mb-1">
+                className="text-ink-3 hover:text-ink-2 text-xs font-semibold transition-colors -mt-1 mb-1">
                 ← Voltar
               </button>
             )}
@@ -376,15 +376,15 @@ export default function Login() {
             {mode === 'register' && regStep === 2 && (
               <>
                 <div>
-                  <label htmlFor="reg-cpf" className="block text-sm text-zinc-400 mb-1.5 font-medium">CPF</label>
+                  <label htmlFor="reg-cpf" className="block text-sm text-ink-2 mb-1.5 font-medium">CPF</label>
                   <input id="reg-cpf" type="text" value={cpf}
                     onChange={e => handleRegCpf(e.target.value)}
                     required className="input" placeholder="000.000.000-00"
                     inputMode="numeric" autoComplete="off" autoFocus />
-                  <p className="text-xs text-zinc-600 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
+                  <p className="text-xs text-ink-4 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
                 </div>
                 <div>
-                  <label htmlFor="reg-phone" className="block text-sm text-zinc-400 mb-1.5 font-medium">WhatsApp</label>
+                  <label htmlFor="reg-phone" className="block text-sm text-ink-2 mb-1.5 font-medium">WhatsApp</label>
                   <input id="reg-phone" type="tel" value={phone}
                     onChange={e => setPhone(maskPhone(e.target.value))}
                     required className="input" placeholder="(11) 99999-9999"
@@ -396,7 +396,7 @@ export default function Login() {
             {/* Senha · login inteiro, ou passo 1 do cadastro */}
             {(mode === 'login' || (mode === 'register' && regStep === 1)) && (
               <div>
-                <label htmlFor="password" className="block text-sm text-zinc-400 mb-1.5 font-medium">Senha</label>
+                <label htmlFor="password" className="block text-sm text-ink-2 mb-1.5 font-medium">Senha</label>
                 <div className="relative">
                   <input id="password" type={showPassword ? 'text' : 'password'} value={password}
                     onChange={e => setPassword(e.target.value)}
@@ -405,7 +405,7 @@ export default function Login() {
                     autoComplete={mode === 'login' ? 'current-password' : 'new-password'} />
                   <button type="button" onClick={() => setShowPassword(v => !v)}
                     aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -413,14 +413,14 @@ export default function Login() {
                   const { score, checks } = getPasswordStrength(password)
                   const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
                   const labels    = ['Fraca', 'Boa', 'Forte']
-                  const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                  const color     = barColors[score - 1] ?? 'bg-surface-3'
                   const label     = score > 0 ? labels[score - 1] : ''
                   return (
                     <div className="mt-2 space-y-2">
                       {/* Barras */}
                       <div className="flex items-center gap-1.5">
                         {[1,2,3].map(i => (
-                          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                          <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-surface-2'}`} />
                         ))}
                         {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
                       </div>
@@ -428,8 +428,8 @@ export default function Login() {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                         {checks.map(c => (
                           <div key={c.label} className="flex items-center gap-1.5">
-                            <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
-                            <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                            <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                            <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                           </div>
                         ))}
                       </div>
@@ -441,7 +441,7 @@ export default function Login() {
 
             {mode === 'register' && regStep === 2 && (
               <div>
-                <label htmlFor="password-confirm" className="block text-sm text-zinc-400 mb-1.5 font-medium">Confirmar senha</label>
+                <label htmlFor="password-confirm" className="block text-sm text-ink-2 mb-1.5 font-medium">Confirmar senha</label>
                 <div className="relative">
                   <input id="password-confirm" type={showConfirm ? 'text' : 'password'} value={confirm}
                     onChange={e => setConfirm(e.target.value)}
@@ -449,7 +449,7 @@ export default function Login() {
                     autoComplete="new-password" />
                   <button type="button" onClick={() => setShowConfirm(v => !v)}
                     aria-label={showConfirm ? 'Ocultar senha' : 'Mostrar senha'}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
                     {showConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
@@ -471,7 +471,7 @@ export default function Login() {
                   onChange={e => setAcceptedTerms(e.target.checked)}
                   className="mt-0.5 h-4 w-4 shrink-0 accent-green-500 cursor-pointer"
                 />
-                <span className="text-xs text-zinc-400 leading-relaxed">
+                <span className="text-xs text-ink-2 leading-relaxed">
                   Li e concordo com os{' '}
                   <Link to="/termos" target="_blank" className="text-green-500 hover:underline font-semibold">Termos de Uso</Link>
                   {' '}e a{' '}
@@ -506,12 +506,12 @@ export default function Login() {
 
           <div className="mt-5 text-center space-y-3">
             {mode === 'login' && (
-              <Link to="/forgot-password" className="block text-zinc-500 text-sm hover:text-zinc-300 transition-colors">
+              <Link to="/forgot-password" className="block text-ink-3 text-sm hover:text-ink-2 transition-colors">
                 Esqueceu sua senha? <span className="text-green-500 font-semibold">Clique aqui</span>
               </Link>
             )}
             <div>
-              <span className="text-zinc-500 text-sm">
+              <span className="text-ink-3 text-sm">
                 {mode === 'login' ? 'Não tem conta? ' : 'Já tem conta? '}
               </span>
               <button

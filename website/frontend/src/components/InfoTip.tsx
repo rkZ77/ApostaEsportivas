@@ -51,7 +51,7 @@ export default function InfoTip({ text, className = '' }: { text: string; classN
         type="button"
         onClick={toggle}
         aria-label="O que significa"
-        className="text-zinc-600 hover:text-zinc-300 transition-colors shrink-0"
+        className="text-ink-4 hover:text-ink-2 transition-colors shrink-0"
       >
         <Info className="w-3.5 h-3.5" />
       </button>
@@ -65,7 +65,7 @@ export default function InfoTip({ text, className = '' }: { text: string; classN
               exit="exit"
               onClick={e => e.stopPropagation()}
               style={{ position: 'fixed', top: pos.top, left: pos.left, width: TIP_WIDTH, transform: 'translateY(-100%)', transformOrigin: 'bottom center' }}
-              className="z-50 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[11px] leading-relaxed text-zinc-300 shadow-xl"
+              className="z-50 bg-surface-2 border border-line-strong rounded-lg px-3 py-2 text-[11px] leading-relaxed text-ink-2 shadow-xl"
             >
               {text}
             </motion.div>

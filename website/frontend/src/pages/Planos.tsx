@@ -126,15 +126,15 @@ export default function Planos() {
       <meta name="description" content="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias." />
       <link rel="canonical" href="https://pickia.com.br/planos" />
     </Helmet>
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <Navbar />
 
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
           <div>
-            <h1 className="text-base font-black text-white">Meu Plano</h1>
-            <p className="text-zinc-500 text-xs mt-0.5">Status e detalhes do seu acesso</p>
+            <h1 className="text-base font-black text-ink-1">Meu Plano</h1>
+            <p className="text-ink-3 text-xs mt-0.5">Status e detalhes do seu acesso</p>
           </div>
         </div>
       </div>
@@ -148,8 +148,8 @@ export default function Planos() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-white font-black text-xl mb-1">Teste VIP ativado!</h2>
-            <p className="text-zinc-400 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
+            <h2 className="text-ink-1 font-black text-xl mb-1">Teste VIP ativado!</h2>
+            <p className="text-ink-2 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
             <button onClick={() => navigate('/picks')}
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-md text-sm transition-colors">
               Ver Picks
@@ -158,7 +158,7 @@ export default function Planos() {
         )}
 
         {user && !activated && (isVip || isTrial) && (
-          <div className={`relative bg-zinc-900 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-lg p-6 overflow-hidden`}>
+          <div className={`relative bg-surface-1 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-lg p-6 overflow-hidden`}>
             <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
 
             {/* Cabeçalho */}
@@ -166,7 +166,7 @@ export default function Planos() {
               <div>
                 {/* Status atual + badge urgente */}
                 <div className="flex items-center gap-2 flex-wrap mb-1">
-                  <span className="text-zinc-500 text-xs">Status atual:</span>
+                  <span className="text-ink-3 text-xs">Status atual:</span>
                   <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
                     {isTrial ? 'TRIAL' : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
                   </span>
@@ -179,14 +179,14 @@ export default function Planos() {
 
                 {/* Countdown */}
                 {countdown && (
-                  <p className="text-zinc-400 text-xs mb-2">
-                    Expira em <span className={`font-bold tabular-nums ${urgent ? 'text-red-400' : 'text-white'}`}>{countdown}</span>
+                  <p className="text-ink-2 text-xs mb-2">
+                    Expira em <span className={`font-bold tabular-nums ${urgent ? 'text-red-400' : 'text-ink-1'}`}>{countdown}</span>
                   </p>
                 )}
 
-                <p className={`font-mono font-black text-3xl ${urgent ? 'text-red-400' : 'text-white'}`}>
+                <p className={`font-mono font-black text-3xl ${urgent ? 'text-red-400' : 'text-ink-1'}`}>
                   {daysUntilExpiry === null ? 'Ativo' : remaining <= 0 ? 'Expirado' : `${remaining} dia${remaining === 1 ? '' : 's'}`}
-                  {remaining > 0 && daysUntilExpiry !== null && <span className="text-zinc-500 font-normal text-sm ml-1">restantes</span>}
+                  {remaining > 0 && daysUntilExpiry !== null && <span className="text-ink-3 font-normal text-sm ml-1">restantes</span>}
                 </p>
               </div>
               <button onClick={() => navigate('/checkout')}
@@ -198,11 +198,11 @@ export default function Planos() {
             {/* Barra de progresso */}
             {daysUntilExpiry !== null && (
               <div className="space-y-1.5 mb-5">
-                <div className="flex justify-between text-[10px] text-zinc-500">
+                <div className="flex justify-between text-[10px] text-ink-3">
                   <span>Progresso do plano</span>
                   <span>{remaining} / {totalDays} dias</span>
                 </div>
-                <div className="h-2 bg-zinc-800 rounded-full overflow-hidden">
+                <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
                   <motion.div
                     className={`h-full rounded-full ${urgent ? 'bg-red-500' : isTrial ? 'bg-green-500' : 'bg-yellow-400'}`}
                     initial={{ width: 0 }}
@@ -216,26 +216,26 @@ export default function Planos() {
             {/* Datas */}
             <div className="grid grid-cols-2 gap-3 mb-5">
               {startDate && (
-                <div className="bg-zinc-800/60 rounded-md p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Início</p>
-                  <p className="text-white text-xs font-semibold">{startDate}</p>
+                <div className="bg-surface-2/60 rounded-md p-3">
+                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Início</p>
+                  <p className="text-ink-1 text-xs font-semibold">{startDate}</p>
                 </div>
               )}
               {expiryDate && (
-                <div className="bg-zinc-800/60 rounded-md p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
-                  <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-white'}`}>{expiryDate}</p>
+                <div className="bg-surface-2/60 rounded-md p-3">
+                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
+                  <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-ink-1'}`}>{expiryDate}</p>
                 </div>
               )}
               {memberSince && (
-                <div className="bg-zinc-800/60 rounded-md p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Membro desde</p>
-                  <p className="text-white text-xs font-semibold">{memberSince}</p>
+                <div className="bg-surface-2/60 rounded-md p-3">
+                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Membro desde</p>
+                  <p className="text-ink-1 text-xs font-semibold">{memberSince}</p>
                 </div>
               )}
               {totalSpent > 0 && (
-                <div className="bg-zinc-800/60 rounded-md p-3">
-                  <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Total investido</p>
+                <div className="bg-surface-2/60 rounded-md p-3">
+                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Total investido</p>
                   <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
                 </div>
               )}
@@ -244,7 +244,7 @@ export default function Planos() {
             {/* Features incluídas */}
             <div className="grid grid-cols-2 gap-2">
               {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
-                <div key={f} className="flex items-center gap-1.5 text-xs text-zinc-400">
+                <div key={f} className="flex items-center gap-1.5 text-xs text-ink-2">
                   <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
@@ -256,12 +256,12 @@ export default function Planos() {
         )}
 
         {user && !activated && !isVip && !isAdmin && !isTrial && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
-            <div className="w-10 h-10 bg-zinc-800 rounded-full flex items-center justify-center shrink-0 text-zinc-500 font-black text-sm">F</div>
+          <div className="bg-surface-1 border border-line rounded-lg p-5 flex items-center gap-4">
+            <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center shrink-0 text-ink-3 font-black text-sm">F</div>
             <div className="flex-1">
-              <p className="text-white font-bold text-sm">Plano Free</p>
-              <p className="text-zinc-500 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
-              {memberSince && <p className="text-zinc-700 text-xs mt-0.5">Membro desde {memberSince}</p>}
+              <p className="text-ink-1 font-bold text-sm">Plano Free</p>
+              <p className="text-ink-3 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
+              {memberSince && <p className="text-ink-4 text-xs mt-0.5">Membro desde {memberSince}</p>}
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-md transition-colors">
@@ -278,7 +278,7 @@ export default function Planos() {
         )}
 
         {isEligibleForTrial && !activated && (
-          <div className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-6 overflow-hidden">
+          <div className="relative bg-surface-1 border border-green-500/50 rounded-lg p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
               <span className="font-mono bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-sm uppercase">Sem cartão</span>
@@ -291,11 +291,11 @@ export default function Planos() {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-green-500 font-bold mb-1">Disponível para você</p>
-                <h2 className="text-xl font-black text-white mb-1">2 dias de VIP grátis</h2>
-                <p className="text-zinc-400 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
+                <h2 className="text-xl font-black text-ink-1 mb-1">2 dias de VIP grátis</h2>
+                <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
-                    <li key={f} className="flex items-center gap-2 text-sm text-zinc-300">
+                    <li key={f} className="flex items-center gap-2 text-sm text-ink-2">
                       <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
@@ -316,18 +316,18 @@ export default function Planos() {
         )}
 
         {upgradeOptions.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5">
-            <p className="text-xs text-zinc-500 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
-            <p className="text-white text-sm mb-4">
+          <div className="bg-surface-1 border border-line rounded-lg p-5">
+            <p className="text-xs text-ink-3 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
+            <p className="text-ink-1 text-sm mb-4">
               No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
               Veja quanto economizaria mudando:
             </p>
             <div className="grid grid-cols-2 gap-3">
               {upgradeOptions.map(opt => (
                 <button key={opt.key} onClick={() => navigate('/checkout')}
-                  className="relative p-4 rounded-md border border-zinc-700 hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
-                  <p className="text-white font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
-                  <p className="text-zinc-500 text-xs mt-0.5">R$ {opt.perMonth.toFixed(2).replace('.', ',')}/mês</p>
+                  className="relative p-4 rounded-md border border-line-strong hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
+                  <p className="text-ink-1 font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
+                  <p className="text-ink-3 text-xs mt-0.5">R$ {opt.perMonth.toFixed(2).replace('.', ',')}/mês</p>
                   <p className="text-green-400 text-xs font-bold mt-2">Economize R$ {opt.saveAmt.replace('.', ',')} ↓{opt.savePct}%</p>
                 </button>
               ))}
@@ -336,28 +336,28 @@ export default function Planos() {
         )}
 
         {referral && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6 space-y-4">
+          <div className="bg-surface-1 border border-line rounded-lg p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-black text-white">Indicações</h3>
-              <p className="text-zinc-500 text-xs mt-0.5">
+              <h3 className="text-sm font-black text-ink-1">Indicações</h3>
+              <p className="text-ink-3 text-xs mt-0.5">
                 +1 dia VIP por cadastro · +2 dias VIP se assinar o plano
               </p>
             </div>
 
             {/* Recompensas */}
             <div className="grid grid-cols-2 gap-2 text-[11px]">
-              <div className="bg-zinc-800/60 border border-zinc-700/50 rounded-md p-3 flex items-center gap-2">
-                <User className="w-5 h-5 text-zinc-400 shrink-0" />
+              <div className="bg-surface-2/60 border border-line-strong/50 rounded-md p-3 flex items-center gap-2">
+                <User className="w-5 h-5 text-ink-2 shrink-0" />
                 <div>
-                  <p className="text-white font-black">+1 dia</p>
-                  <p className="text-zinc-500">por cadastro</p>
+                  <p className="text-ink-1 font-black">+1 dia</p>
+                  <p className="text-ink-3">por cadastro</p>
                 </div>
               </div>
               <div className="bg-yellow-500/10 border border-yellow-500/20 rounded-md p-3 flex items-center gap-2">
                 <Crown className="w-5 h-5 text-yellow-400 shrink-0" />
                 <div>
                   <p className="text-yellow-400 font-black">+2 dias</p>
-                  <p className="text-zinc-500">se assinar VIP</p>
+                  <p className="text-ink-3">se assinar VIP</p>
                 </div>
               </div>
             </div>
@@ -365,30 +365,30 @@ export default function Planos() {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-3">
               {[
-                { label: 'Cadastros',   value: referral.total_indicated, color: 'text-white' },
+                { label: 'Cadastros',   value: referral.total_indicated, color: 'text-ink-1' },
                 { label: 'Assinantes',  value: referral.total_converted,  color: 'text-green-400' },
                 { label: 'Dias ganhos', value: referral.days_earned,      color: 'text-yellow-400' },
               ].map(({ label, value, color }) => (
-                <div key={label} className="bg-zinc-800/60 rounded-md p-3 text-center">
+                <div key={label} className="bg-surface-2/60 rounded-md p-3 text-center">
                   <NumberTicker value={value} className={`font-mono text-2xl font-black ${color}`} />
-                  <p className="text-zinc-500 text-xs mt-0.5">{label}</p>
+                  <p className="text-ink-3 text-xs mt-0.5">{label}</p>
                 </div>
               ))}
             </div>
 
             {/* Breakdown */}
             {referral.total_indicated > 0 && (
-              <div className="bg-zinc-800/40 rounded-md px-4 py-3 space-y-1.5 text-xs">
+              <div className="bg-surface-2/40 rounded-md px-4 py-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">{referral.total_indicated} cadastro{referral.total_indicated !== 1 ? 's' : ''} × 1 dia</span>
-                  <span className="text-white font-bold">+{referral.total_indicated} dia{referral.total_indicated !== 1 ? 's' : ''}</span>
+                  <span className="text-ink-3">{referral.total_indicated} cadastro{referral.total_indicated !== 1 ? 's' : ''} × 1 dia</span>
+                  <span className="text-ink-1 font-bold">+{referral.total_indicated} dia{referral.total_indicated !== 1 ? 's' : ''}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span className="text-zinc-500">{referral.total_converted} assinante{referral.total_converted !== 1 ? 's' : ''} × 2 dias</span>
+                  <span className="text-ink-3">{referral.total_converted} assinante{referral.total_converted !== 1 ? 's' : ''} × 2 dias</span>
                   <span className="text-yellow-400 font-bold">+{referral.total_converted * 2} dia{referral.total_converted * 2 !== 1 ? 's' : ''}</span>
                 </div>
-                <div className="flex justify-between border-t border-zinc-700 pt-1.5 mt-1">
-                  <span className="text-zinc-400 font-semibold">Total</span>
+                <div className="flex justify-between border-t border-line-strong pt-1.5 mt-1">
+                  <span className="text-ink-2 font-semibold">Total</span>
                   <span className="text-yellow-400 font-black">{referral.days_earned} dias VIP</span>
                 </div>
               </div>
@@ -396,23 +396,23 @@ export default function Planos() {
 
             {/* Link */}
             <div>
-              <p className="text-xs text-zinc-500 mb-1.5">Seu link de indicação</p>
+              <p className="text-xs text-ink-3 mb-1.5">Seu link de indicação</p>
               <div className="flex items-center gap-2">
-                <div className="flex-1 bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-xs text-zinc-300 font-mono truncate select-all">
+                <div className="flex-1 bg-surface-2 border border-line-strong rounded-lg px-3 py-2 text-xs text-ink-2 font-mono truncate select-all">
                   {referral.referral_link}
                 </div>
                 <button onClick={copyReferral}
                   className={`shrink-0 px-3 py-2 rounded-lg text-xs font-semibold transition-colors ${
-                    referralCopied ? 'bg-green-500/20 text-green-400' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700'
+                    referralCopied ? 'bg-green-500/20 text-green-400' : 'bg-surface-2 text-ink-2 hover:bg-surface-3'
                   }`}>
                   {referralCopied ? 'Copiado!' : 'Copiar'}
                 </button>
               </div>
-              <p className="text-zinc-600 text-xs mt-1">Código: <span className="text-zinc-400 font-mono font-bold">{referral.referral_code}</span></p>
+              <p className="text-ink-4 text-xs mt-1">Código: <span className="text-ink-2 font-mono font-bold">{referral.referral_code}</span></p>
             </div>
 
             {referral.total_indicated === 0 && (
-              <p className="text-zinc-600 text-xs text-center">
+              <p className="text-ink-4 text-xs text-center">
                 Compartilhe seu link: cada amigo que se cadastrar te dá +1 dia, e +2 se assinar o VIP!
               </p>
             )}
@@ -420,20 +420,20 @@ export default function Planos() {
         )}
 
         {payments.length > 0 && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
-            <h3 className="text-sm font-black text-white uppercase mb-4">Histórico de pagamentos</h3>
+          <div className="bg-surface-1 border border-line rounded-lg p-6">
+            <h3 className="text-sm font-black text-ink-1 uppercase mb-4">Histórico de pagamentos</h3>
             <div className="space-y-0">
               {payments.map(p => {
                 const date = p.created_at
                   ? new Date(p.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })
                   : ''
                 return (
-                  <div key={p.id} className="flex items-center justify-between py-3 border-b border-zinc-800 last:border-0">
+                  <div key={p.id} className="flex items-center justify-between py-3 border-b border-line last:border-0">
                     <div>
-                      <p className="text-white text-sm font-semibold">
+                      <p className="text-ink-1 text-sm font-semibold">
                         Plano Picks: {PLAN_LABEL[p.plan] ?? p.plan}
                       </p>
-                      <p className="text-zinc-500 text-xs mt-0.5">
+                      <p className="text-ink-3 text-xs mt-0.5">
                         {date} · {METHOD_LABEL[p.payment_method] ?? p.payment_method}
                       </p>
                     </div>
@@ -450,8 +450,8 @@ export default function Planos() {
               })}
               {totalSpent > 0 && (
                 <div className="flex items-center justify-between pt-3">
-                  <span className="text-zinc-500 text-xs font-semibold">Total investido</span>
-                  <span className="text-white font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</span>
+                  <span className="text-ink-3 text-xs font-semibold">Total investido</span>
+                  <span className="text-ink-1 font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</span>
                 </div>
               )}
             </div>
@@ -459,10 +459,10 @@ export default function Planos() {
         )}
 
         {(isVip || isTrial) && !isAdmin && (
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
+          <div className="bg-surface-1 border border-line rounded-lg p-5 flex items-center gap-4">
             <div className="flex-1">
-              <p className="text-white font-bold text-sm">Solicitar cancelamento ou reembolso</p>
-              <p className="text-zinc-500 text-xs mt-0.5">
+              <p className="text-ink-1 font-bold text-sm">Solicitar cancelamento ou reembolso</p>
+              <p className="text-ink-3 text-xs mt-0.5">
                 Pelo CDC você tem 7 dias de arrependimento em compras digitais. Reembolso integral garantido.
               </p>
             </div>
@@ -470,14 +470,14 @@ export default function Planos() {
               href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20cancelamento%2Freembolso%20do%20meu%20plano%20Pick%20IA."
               target="_blank"
               rel="noopener noreferrer"
-              className="shrink-0 border border-zinc-700 hover:border-red-500/50 hover:text-red-400 text-zinc-400 font-bold text-xs px-4 py-2.5 rounded-md transition-colors"
+              className="shrink-0 border border-line-strong hover:border-red-500/50 hover:text-red-400 text-ink-2 font-bold text-xs px-4 py-2.5 rounded-md transition-colors"
             >
               Solicitar
             </a>
           </div>
         )}
 
-        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-5 flex items-center gap-4">
+        <div className="bg-surface-1 border border-line rounded-lg p-5 flex items-center gap-4">
           <div className="w-10 h-10 bg-[#25D366]/10 border border-[#25D366]/20 rounded-full flex items-center justify-center shrink-0">
             <svg viewBox="0 0 24 24" className="w-5 h-5 fill-[#25D366]">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
@@ -485,24 +485,24 @@ export default function Planos() {
             </svg>
           </div>
           <div className="flex-1">
-            <p className="text-white font-bold text-sm">Precisa de ajuda?</p>
-            <p className="text-zinc-500 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas? Fale direto conosco</p>
+            <p className="text-ink-1 font-bold text-sm">Precisa de ajuda?</p>
+            <p className="text-ink-3 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas? Fale direto conosco</p>
           </div>
           <a
             href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA."
             target="_blank"
             rel="noopener noreferrer"
-            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-white font-black text-xs px-4 py-2.5 rounded-md transition-colors"
+            className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-ink-1 font-black text-xs px-4 py-2.5 rounded-md transition-colors"
           >
             WhatsApp
           </a>
         </div>
 
         {user && !isAdmin && !isVip && !isEligibleForTrial && !activated && (
-          <div className="bg-zinc-900 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
+          <div className="bg-surface-1 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
             <div>
-              <p className="text-white font-black text-sm">Quer acesso VIP completo?</p>
-              <p className="text-zinc-500 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de R$ 39,90/mês</p>
+              <p className="text-ink-1 font-black text-sm">Quer acesso VIP completo?</p>
+              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de R$ 39,90/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-md transition-colors">

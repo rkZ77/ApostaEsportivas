@@ -146,12 +146,12 @@ export default function ResultadosPublicos() {
         <meta name="description" content="Histórico completo dos picks da IA com win rate auditável, lucro acumulado e picks recentes." />
       </Helmet>
 
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-surface-0 text-ink-1">
         {/* Nav: logado usa a navbar do app (já tem tudo), visitante anônimo (ex: veio de link compartilhado) vê nav enxuta */}
         {user ? <Navbar /> : (
-          <nav className="border-b border-zinc-800/60 bg-zinc-950/80 backdrop-blur-sm sticky top-0 z-40">
+          <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
             <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-              <Link to="/" className="text-white font-black text-lg tracking-tight">
+              <Link to="/" className="text-ink-1 font-black text-lg tracking-tight">
                 Pick<span className="text-green-400">IA</span>
               </Link>
               <Link to="/login" className="text-xs font-bold text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/10 transition-colors">
@@ -177,7 +177,7 @@ export default function ResultadosPublicos() {
           </div>
           <div className="mb-8 text-center">
             <h1 className="text-3xl font-black mb-2">Resultados da IA</h1>
-            <p className="text-zinc-400 text-sm">Histórico auditável de todos os picks. Atualizado automaticamente.</p>
+            <p className="text-ink-2 text-sm">Histórico auditável de todos os picks. Atualizado automaticamente.</p>
           </div>
 
           {/* Filtros */}
@@ -198,49 +198,47 @@ export default function ResultadosPublicos() {
           />
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
-          <div className="flex border-b border-zinc-800 mb-6 overflow-x-auto">
+          <div className="flex border-b border-line mb-6 overflow-x-auto">
             {([
               ['resumo', 'Resumo'], ['por_liga', 'Por Liga'],
               ...(user ? [['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês']] : []),
             ] as [typeof tab, string][]).map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)}
-                className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors whitespace-nowrap ${
-                  tab === k ? 'border-green-500 text-white' : 'border-transparent text-zinc-500 hover:text-zinc-300'
-                }`}>{l}</button>
+                className={`tab px-5 py-3 text-sm font-semibold ${tab === k ? 'tab-active' : ''}`}>{l}</button>
             ))}
           </div>
 
           {tab === 'resumo' && (loading ? (
             <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
             </div>
           ) : error ? (
-            <div className="text-center py-16 text-zinc-500">
+            <div className="text-center py-16 text-ink-3">
               Não foi possível carregar os resultados agora. Tente novamente em instantes.
             </div>
           ) : !s || s.total === 0 ? (
-            <div className="text-center py-16 text-zinc-500">Nenhum resultado encontrado para os filtros selecionados.</div>
+            <div className="text-center py-16 text-ink-3">Nenhum resultado encontrado para os filtros selecionados.</div>
           ) : (
             <>
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                 {[
-                  { label: 'Win Rate',  value: `${winRatePct}%`,            color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-300' },
-                  { label: 'Total',     value: String(s.total),          color: 'text-white' },
+                  { label: 'Win Rate',  value: `${winRatePct}%`,            color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                  { label: 'Total',     value: String(s.total),          color: 'text-ink-1' },
                   { label: 'Greens',    value: String(s.greens),         color: 'text-green-400' },
                   { label: 'Lucro (u)', value: `${profit != null && profit >= 0 ? '+' : ''}${profit?.toFixed(1) ?? '0'}u`, color: (profit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' },
                 ].map(({ label, value, color }) => (
-                  <div key={label} className="bg-zinc-950 border border-zinc-800 rounded-lg p-4 text-center">
+                  <div key={label} className="bg-surface-0 border border-line rounded-lg p-4 text-center">
                     <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-                    <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
+                    <div className="text-[10px] text-ink-3 uppercase mt-1">{label}</div>
                   </div>
                 ))}
               </div>
 
               {/* Gráfico por dia */}
               {byDay.length > 1 && (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5 mb-8">
-                  <p className="text-sm text-zinc-500 font-bold mb-4">Picks por dia</p>
+                <div className="bg-surface-0 border border-line rounded-lg p-5 mb-8">
+                  <p className="text-sm text-ink-3 font-bold mb-4">Picks por dia</p>
                   <DailyGreensChart data={byDay} />
                 </div>
               )}
@@ -250,16 +248,16 @@ export default function ResultadosPublicos() {
                 const recentLeagues = Array.from(new Set(recent.map(t => t.league_name).filter(Boolean))) as string[]
                 const filteredRecent = recentLeagueFilter ? recent.filter(t => t.league_name === recentLeagueFilter) : recent
                 return (
-                <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
-                  <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between">
-                    <span className="text-xs font-bold text-zinc-400 uppercase">Picks recentes</span>
-                    <span className="text-[10px] text-zinc-600">{recentTotal} resultados</span>
+                <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+                  <div className="px-5 py-3 border-b border-line flex items-center justify-between">
+                    <span className="text-xs font-bold text-ink-2 uppercase">Picks recentes</span>
+                    <span className="text-[10px] text-ink-4">{recentTotal} resultados</span>
                   </div>
                   {recentLeagues.length > 1 && (
                     <div className="flex gap-2 flex-wrap px-4 pt-3">
                       <button
                         onClick={() => setRecentLeagueFilter('')}
-                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${!recentLeagueFilter ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                        className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${!recentLeagueFilter ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-line text-ink-3 hover:border-line-strong'}`}
                       >
                         Todas
                       </button>
@@ -267,17 +265,17 @@ export default function ResultadosPublicos() {
                         <button
                           key={lg}
                           onClick={() => setRecentLeagueFilter(lg === recentLeagueFilter ? '' : lg)}
-                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${recentLeagueFilter === lg ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-zinc-800 text-zinc-500 hover:border-zinc-700'}`}
+                          className={`text-[11px] px-2.5 py-1 rounded-lg border font-semibold transition-colors ${recentLeagueFilter === lg ? 'bg-green-500/15 border-green-500/40 text-green-400' : 'border-line text-ink-3 hover:border-line-strong'}`}
                         >
                           {lg}
                         </button>
                       ))}
                     </div>
                   )}
-                  <div className="divide-y divide-zinc-800/50">
+                  <div className="divide-y divide-line/50">
                     {filteredRecent.map((tip, i) => (
                       <div key={i} className="flex items-center gap-2 px-4 py-3">
-                        <span className="text-[10px] text-zinc-600 shrink-0 w-12">
+                        <span className="text-[10px] text-ink-4 shrink-0 w-12">
                           {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                         </span>
                         <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[tip.source] ?? ''}`}>
@@ -286,26 +284,26 @@ export default function ResultadosPublicos() {
                         <div className="flex items-center gap-1.5 flex-1 min-w-0">
                           <div className="flex items-center gap-1 min-w-0 shrink">
                             <TeamLogo id={tip.home_team_id} name={tip.home_team_name} size={16} />
-                            <span className="text-xs text-zinc-300 truncate">{tip.home_team_name}</span>
+                            <span className="text-xs text-ink-2 truncate">{tip.home_team_name}</span>
                           </div>
                           {tip.away_team_name && (
                             <>
-                              <span className="text-[10px] text-zinc-600 shrink-0">x</span>
+                              <span className="text-[10px] text-ink-4 shrink-0">x</span>
                               <div className="flex items-center gap-1 min-w-0 shrink">
                                 <TeamLogo id={tip.away_team_id} name={tip.away_team_name} size={16} />
-                                <span className="text-xs text-zinc-300 truncate">{tip.away_team_name}</span>
+                                <span className="text-xs text-ink-2 truncate">{tip.away_team_name}</span>
                               </div>
                             </>
                           )}
                         </div>
-                        <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[100px]">
+                        <span className="text-[11px] text-ink-3 shrink-0 hidden sm:block truncate max-w-[100px]">
                           {tip.market?.split(' ').slice(0, 3).join(' ')} {tip.line ?? ''}
                         </span>
-                        <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">{Number(tip.odd).toFixed(2)}</span>
+                        <span className="font-mono text-xs font-bold text-ink-2 shrink-0">{Number(tip.odd).toFixed(2)}</span>
                         {(() => {
                           const rs = getResultStyle(tip.result)
                           return (
-                            <span className={`text-xs font-black px-2 py-0.5 rounded border shrink-0 ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                            <span className={`text-xs font-black px-2 py-0.5 rounded border shrink-0 ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-ink-3'}`}>
                               {rs ? rs.label : tip.result}
                             </span>
                           )
@@ -316,12 +314,12 @@ export default function ResultadosPublicos() {
                   {recentTotal > RECENT_PAGE_SIZE && (() => {
                     const totalPages = Math.ceil(recentTotal / RECENT_PAGE_SIZE)
                     return (
-                      <div className="flex items-center justify-center gap-1 py-4 border-t border-zinc-800/50">
+                      <div className="flex items-center justify-center gap-1 py-4 border-t border-line/50">
                         <button disabled={recentPage === 0} onClick={() => setRecentPage(p => p - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
-                        <span className="text-xs text-zinc-500 px-2">{recentPage + 1} / {totalPages}</span>
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Ant</button>
+                        <span className="text-xs text-ink-3 px-2">{recentPage + 1} / {totalPages}</span>
                         <button disabled={(recentPage + 1) * RECENT_PAGE_SIZE >= recentTotal} onClick={() => setRecentPage(p => p + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Próx</button>
                       </div>
                     )
                   })()}
@@ -333,20 +331,20 @@ export default function ResultadosPublicos() {
 
           {tab === 'por_liga' && (loading ? (
             <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
             </div>
           ) : error ? (
-            <div className="text-center py-16 text-zinc-500">
+            <div className="text-center py-16 text-ink-3">
               Não foi possível carregar os resultados agora. Tente novamente em instantes.
             </div>
           ) : byLeague.length === 0 ? (
-            <div className="text-center py-16 text-zinc-500">Nenhum resultado de liga encontrado para os filtros selecionados.</div>
+            <div className="text-center py-16 text-ink-3">Nenhum resultado de liga encontrado para os filtros selecionados.</div>
           ) : (
-            <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
-              <div className="px-5 py-3 border-b border-zinc-800">
-                <span className="text-xs font-bold text-zinc-400 uppercase">Resultados por liga</span>
+            <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+              <div className="px-5 py-3 border-b border-line">
+                <span className="text-xs font-bold text-ink-2 uppercase">Resultados por liga</span>
               </div>
-              <div className="divide-y divide-zinc-800/50">
+              <div className="divide-y divide-line/50">
                 {byLeague.map((lg) => {
                   const wr = calcWinRate(lg.greens, lg.total)
                   const p  = Number(lg.profit)
@@ -354,10 +352,10 @@ export default function ResultadosPublicos() {
                     <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
                       {lg.league_id != null
                         ? <LeagueLogo id={lg.league_id} name={lg.league_name} />
-                        : <div className="w-4.5 h-4.5 rounded-full bg-zinc-800 shrink-0" />}
-                      <span className="text-sm font-semibold text-white flex-1 min-w-0 truncate">{lg.league_name}</span>
-                      <span className="text-[11px] text-zinc-600 shrink-0 hidden sm:block">{lg.total} picks</span>
-                      <span className={`font-mono text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                        : <div className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />}
+                      <span className="text-sm font-semibold text-ink-1 flex-1 min-w-0 truncate">{lg.league_name}</span>
+                      <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{lg.total} picks</span>
+                      <span className={`font-mono text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-ink-2'}`}>
                         {wr}%
                       </span>
                       <span className={`font-mono text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -382,25 +380,25 @@ export default function ResultadosPublicos() {
                   }]}
                 />
               </div>
-              <p className="text-zinc-600 text-xs mb-4">{gamesTotal} picks</p>
+              <p className="text-ink-4 text-xs mb-4">{gamesTotal} picks</p>
               {gamesLoading ? (
                 <div className="flex justify-center py-16">
-                  <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+                  <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
                 </div>
               ) : games.length === 0 ? (
-                <div className="text-center py-16 text-zinc-500 text-sm">Nenhum pick encontrado.</div>
+                <div className="text-center py-16 text-ink-3 text-sm">Nenhum pick encontrado.</div>
               ) : (
                 <>
-                  <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
-                    <div className="divide-y divide-zinc-800/50">
+                  <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+                    <div className="divide-y divide-line/50">
                       {games.map(g => {
                         const rs = getResultStyle(g.result)
-                        const badge = rs ? `${rs.bg} ${rs.text} ${rs.border}` : 'bg-zinc-700/50 text-zinc-400 border-zinc-700'
+                        const badge = rs ? `${rs.bg} ${rs.text} ${rs.border}` : 'bg-surface-3/50 text-ink-2 border-line-strong'
                         return (
                           <div key={`${g.pick_type}-${g.id}`}
-                            className="flex items-center gap-2 px-4 py-3 hover:bg-zinc-900/50 transition-colors cursor-pointer"
+                            className="flex items-center gap-2 px-4 py-3 hover:bg-surface-1/50 transition-colors cursor-pointer"
                             onClick={() => setDetailPick({ id: g.id, pick_type: g.pick_type })}>
-                            <span className="text-[10px] text-zinc-600 shrink-0 w-12">
+                            <span className="text-[10px] text-ink-4 shrink-0 w-12">
                               {new Date(g.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                             </span>
                             {g.pick_type && source === 'all' && (
@@ -411,26 +409,26 @@ export default function ResultadosPublicos() {
                             <div className="flex items-center gap-1.5 flex-1 min-w-0">
                               <div className="flex items-center gap-1 min-w-0 shrink">
                                 <TeamLogo id={g.home_team_id} name={g.home_team_name} size={16} />
-                                <span className="text-xs text-zinc-300 truncate">{g.home_team_name}</span>
+                                <span className="text-xs text-ink-2 truncate">{g.home_team_name}</span>
                               </div>
                               {g.away_team_name && g.pick_type !== 'multipla' && (
                                 <>
-                                  <span className="text-[10px] text-zinc-600 shrink-0">x</span>
+                                  <span className="text-[10px] text-ink-4 shrink-0">x</span>
                                   <div className="flex items-center gap-1 min-w-0 shrink">
                                     <TeamLogo id={g.away_team_id} name={g.away_team_name} size={16} />
-                                    <span className="text-xs text-zinc-300 truncate">{g.away_team_name}</span>
+                                    <span className="text-xs text-ink-2 truncate">{g.away_team_name}</span>
                                   </div>
                                 </>
                               )}
                             </div>
-                            <span className="text-[11px] text-zinc-500 shrink-0 hidden sm:block truncate max-w-[120px]">
+                            <span className="text-[11px] text-ink-3 shrink-0 hidden sm:block truncate max-w-[120px]">
                               {g.market}{g.line ? ` · ${g.line}` : ''}
                             </span>
-                            <span className="font-mono text-xs font-bold text-zinc-400 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
+                            <span className="font-mono text-xs font-bold text-ink-2 shrink-0">{g.odd ? Number(g.odd).toFixed(2) : ''}</span>
                             {g.result ? (
                               <span className={`text-xs font-black px-2 py-0.5 rounded border shrink-0 ${badge}`}>{rs ? rs.label : g.result}</span>
                             ) : (
-                              <span className="text-zinc-600 text-xs shrink-0">Pendente</span>
+                              <span className="text-ink-4 text-xs shrink-0">Pendente</span>
                             )}
                           </div>
                         )
@@ -443,10 +441,10 @@ export default function ResultadosPublicos() {
                     return (
                       <div className="flex items-center justify-center gap-1 mt-4 flex-wrap">
                         <button disabled={gamesPage === 0} onClick={() => goTo(gamesPage - 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Ant</button>
-                        <span className="text-xs text-zinc-500 px-2">{gamesPage + 1} / {totalPages}</span>
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Ant</button>
+                        <span className="text-xs text-ink-3 px-2">{gamesPage + 1} / {totalPages}</span>
                         <button disabled={(gamesPage + 1) * GAMES_PAGE_SIZE >= gamesTotal} onClick={() => goTo(gamesPage + 1)}
-                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-zinc-700 text-zinc-400 hover:border-zinc-500 disabled:opacity-30 transition-colors">Próx</button>
+                          className="px-3 py-1.5 rounded-lg text-xs font-semibold border border-line-strong text-ink-2 hover:border-ink-4 disabled:opacity-30 transition-colors">Próx</button>
                       </div>
                     )
                   })()}
@@ -458,18 +456,18 @@ export default function ResultadosPublicos() {
           {tab === 'por_mes' && user && (
             monthLoad ? (
               <div className="flex justify-center py-16">
-                <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+                <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
               </div>
             ) : monthly.length === 0 ? (
-              <div className="text-center py-16 text-zinc-500 text-sm">Nenhum resultado mensal encontrado.</div>
+              <div className="text-center py-16 text-ink-3 text-sm">Nenhum resultado mensal encontrado.</div>
             ) : (
-              <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
+              <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[460px]">
                     <thead>
-                      <tr className="border-b border-zinc-800">
+                      <tr className="border-b border-line">
                         {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
-                          <th key={h} className="text-left text-zinc-500 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
+                          <th key={h} className="text-left text-ink-3 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -480,17 +478,17 @@ export default function ResultadosPublicos() {
                         const [year, mo] = (m.month ?? '').split('-')
                         const label = new Date(Number(year), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })
                         return (
-                          <tr key={m.month} className="border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-colors">
-                            <td className="px-3 sm:px-5 py-3 text-white font-semibold capitalize font-sans">{label}</td>
-                            <td className="px-3 sm:px-5 py-3 text-zinc-300">{m.total}</td>
+                          <tr key={m.month} className="border-b border-line/50 hover:bg-surface-1/50 transition-colors">
+                            <td className="px-3 sm:px-5 py-3 text-ink-1 font-semibold capitalize font-sans">{label}</td>
+                            <td className="px-3 sm:px-5 py-3 text-ink-2">{m.total}</td>
                             <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
                             <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
                             <td className="px-3 sm:px-5 py-3">
                               <div className="flex items-center gap-2">
-                                <div className="bg-zinc-800 rounded-full h-1.5 w-16">
+                                <div className="bg-surface-2 rounded-full h-1.5 w-16">
                                   <div className="bg-green-500 h-1.5 rounded-full" style={{ width: `${wr}%` }} />
                                 </div>
-                                <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>{wr}%</span>
+                                <span className={`text-xs font-bold ${wr >= 55 ? 'text-green-400' : 'text-ink-2'}`}>{wr}%</span>
                               </div>
                             </td>
                           </tr>
@@ -506,7 +504,7 @@ export default function ResultadosPublicos() {
           {/* CTA · só faz sentido pra quem ainda não tem conta */}
           {!user && (
           <div className="mt-12 text-center">
-            <p className="text-zinc-500 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
+            <p className="text-ink-3 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
             <Link to="/login" className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3.5 rounded-md text-sm transition-colors">
               Criar conta · 2 dias VIP grátis
             </Link>
