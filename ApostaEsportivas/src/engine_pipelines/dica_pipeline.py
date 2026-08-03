@@ -12,6 +12,7 @@ from utils.data_br import HOJE_BR
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.team_stats_service import TeamStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.config import DICA_CONFIG
@@ -66,9 +67,10 @@ def _fixtures_with_odds_in_range(cur) -> list:
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
-            f.match_datetime, f.status, f.round, f.referee
+            f.match_datetime, f.status, f.round, f.referee, l.name
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
+        LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD', 'LIVE')
           AND ov.odd_value BETWEEN %s AND %s
@@ -81,7 +83,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
             "home_team_id": r[3], "away_team_id": r[4],
             "home_team": r[5], "away_team": r[6],
             "match_datetime": r[7], "status": r[8], "round": r[9],
-            "referee": r[10],
+            "referee": r[10], "league_name": r[11],
         }
         for r in rows
     ]
@@ -110,6 +112,7 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
     (used_groups, bloqueio global -- ver _today_vip_used_market_groups)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
 
     best_fixture, best_pick, best_quality = None, None, None
@@ -139,6 +142,8 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
         team_strength_data = ts.compare_team_strength(profile_home, profile_away)
         referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
         league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
+        league_baseline = team_stats_service.get_league_baseline(
+            fixture["league_id"], fixture["season"])
 
         coverage_val = dv.validate_coverage(
             structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
@@ -150,12 +155,19 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
             integrity_validation=integrity_val, outlier_info=outlier_info,
         )
 
+        team_stats_home, team_stats_away = team_stats_service.get_for_fixture(
+            fixture["home_team_id"], fixture["away_team_id"],
+            fixture["league_id"], fixture["season"])
+
         candidates = analyze_fixture_markets(
             structured_odds, last10_home, last10_away,
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
             team_strength_data=team_strength_data, referee_stats=referee_stats,
             league_stats=league_stats,
             league_id=fixture["league_id"], data_quality_score=quality["score"],
+            home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+            team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+            league_baseline=league_baseline,
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -219,7 +231,13 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     """, (
         fixture["fixture_id"], fixture["home_team"], fixture["away_team"],
         fixture["home_team_id"], fixture["away_team_id"],
-        fixture["league_id"], None,
+        # league_name vinha fixo como None desde 2026-07-17 (o pipeline nasceu
+        # sem o JOIN em `leagues`). A consulta que monta o card da Dica do Dia
+        # -- routers/suggestions.py::_picks_free_sql -- le pf.league_name puro,
+        # sem COALESCE contra l.name, entao o front escondia liga e escudo
+        # (Picks.tsx e PickPublico.tsx so' renderizam o bloco se league_name
+        # existir). Picks VIP nunca sofreram: a query deles ja fazia o JOIN.
+        fixture["league_id"], fixture.get("league_name"),
         pick["market_name"], pick["market_type"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_id"], pick["confidence"], pick["taxa_real"], pick["edge"], reasoning,
         stake_pct, stake_units, engine_debug,

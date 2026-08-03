@@ -19,6 +19,7 @@ from utils.data_br import HOJE_BR, data_br
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
@@ -119,6 +120,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     fixture anexados e os pares ja usados excluidos."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
     legs = []
 
@@ -148,6 +150,8 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
             league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
+            league_baseline = team_stats_service.get_league_baseline(
+                fixture["league_id"], fixture["season"])
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
@@ -159,11 +163,18 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 integrity_validation=integrity_val, outlier_info=outlier_info,
             )
 
+            team_stats_home, team_stats_away = team_stats_service.get_for_fixture(
+                fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], fixture["season"])
+
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+            league_baseline=league_baseline,
             )
             picks = rank_market_candidates(candidates)
             log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -288,7 +299,8 @@ def run_multipla_engine():
 
     result = _find_combo(legs)
     if not result:
-        print("[MULTIPLA_ENGINE] Nenhuma combinação bateu a faixa de odd total [2.00, 3.00].")
+        print(f"[MULTIPLA_ENGINE] Nenhuma combinação bateu a faixa de odd total "
+              f"[{ODD_TOTAL_MIN:.2f}, {ODD_TOTAL_MAX:.2f}].")
         cur.close()
         conn.close()
         return

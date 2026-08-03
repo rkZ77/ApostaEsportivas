@@ -19,6 +19,8 @@ Uso:
 import sys
 import os
 import time
+import textwrap
+import traceback
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("PYTHONUNBUFFERED", "1")
@@ -384,47 +386,60 @@ def cmd_ligas():
 
 
 def cmd_tudo(mode: str = "fast"):
-    """Pipeline completo diário na ordem correta."""
+    """Pipeline completo diário na ordem correta.
+
+    Cada etapa roda isolada: uma que quebre é reportada no fim e as seguintes
+    continuam. Antes era chamada direta em sequência, então qualquer exceção
+    abortava o resto -- em 2026-08-02 a alavancagem passou a levantar erro de
+    SQL e, com ela, faltas, defesas de goleiro e a atualização de RESULTADOS
+    (que nem depende das anteriores) deixariam de rodar junto, sem nenhum
+    aviso além do traceback no meio do log. O admin já chamava cada pipeline
+    como subprocesso separado e por isso não sofria disso; aqui a proteção
+    equivalente faltava.
+    """
     t0 = time.perf_counter()
     print("\n" + "="*60)
     print("PIPELINE COMPLETO · ApostaEsportivas")
     print("="*60 + "\n")
 
-    print("─── [1/7] DADOS ────────────────────────────────────────")
-    cmd_dados(mode=mode)
-
-    print("\n─── [2/7] ODDS ─────────────────────────────────────────")
-    cmd_odds()
-
-    print("\n─── [3/7] PICKS VIP ────────────────────────────────────")
-    cmd_vip()
-
-    print("\n─── [4/7] DICA DO DIA ──────────────────────────────────")
-    cmd_dica()
-
-    print("\n─── [5/7] MÚLTIPLA ─────────────────────────────────────")
-    cmd_multiplas()
-
-    print("\n─── [6/9] ALAVANCAGEM ──────────────────────────────────")
-    cmd_alavancagem()
-
-    print("\n─── [7/9] FALTAS ───────────────────────────────────────")
-    cmd_faltas()
-
     # Goleiros entra no pipeline mesmo dependendo de player_match_stats: se a
     # tabela estiver vazia ele avisa e sai sem gravar (custo zero, nenhuma
     # chamada de API). Deixar de fora exigiria lembrar de rodar na mao no dia
     # em que o historico ficasse pronto.
-    print("\n─── [8/9] DEFESAS DE GOLEIRO ───────────────────────────")
-    cmd_goleiros()
+    etapas = [
+        ("DADOS",               lambda: cmd_dados(mode=mode)),
+        ("ODDS",                cmd_odds),
+        ("PICKS VIP",           cmd_vip),
+        ("DICA DO DIA",         cmd_dica),
+        ("MÚLTIPLA",            cmd_multiplas),
+        ("ALAVANCAGEM",         cmd_alavancagem),
+        ("FALTAS",              cmd_faltas),
+        ("DEFESAS DE GOLEIRO",  cmd_goleiros),
+        ("RESULTADOS",          cmd_resultados),
+    ]
 
-    print("\n─── [9/9] RESULTADOS ───────────────────────────────────")
-    cmd_resultados()
+    falhas = []
+    total_etapas = len(etapas)
+    for i, (label, funcao) in enumerate(etapas, start=1):
+        print(f"\n─── [{i}/{total_etapas}] {label} " + "─" * max(0, 38 - len(label)))
+        try:
+            funcao()
+        except Exception as e:
+            falhas.append(label)
+            print(f"\n[PIPELINE] Etapa {label} FALHOU: {e}")
+            print(textwrap.indent(traceback.format_exc(), "    "))
+            print(f"[PIPELINE] Seguindo para a próxima etapa.")
 
     total = time.perf_counter() - t0
     print(f"\n{'='*60}")
-    print(f"PIPELINE CONCLUÍDO em {total:.1f}s")
+    if falhas:
+        print(f"PIPELINE CONCLUÍDO em {total:.1f}s · {len(falhas)} etapa(s) FALHARAM: "
+              f"{', '.join(falhas)}")
+    else:
+        print(f"PIPELINE CONCLUÍDO em {total:.1f}s · todas as etapas OK")
     print("="*60 + "\n")
+
+    return falhas
 
 
 # ─────────────────────────────────────────────────────────────
@@ -499,7 +514,12 @@ if __name__ == "__main__":
         cmd_ligas()
 
     elif cmd == "tudo":
-        cmd_tudo(mode="full" if extra == "full" else "fast")
+        # Sai com codigo != 0 quando alguma etapa falhou: as etapas agora sao
+        # isoladas (o pipeline nao aborta mais no meio), entao sem isso um
+        # "tudo" com falha sairia 0 e quem chama por subprocesso -- admin,
+        # scripts -- leria como sucesso.
+        if cmd_tudo(mode="full" if extra == "full" else "fast"):
+            sys.exit(1)
 
     else:
         print(f"Comando desconhecido: '{cmd}'\n{HELP}")

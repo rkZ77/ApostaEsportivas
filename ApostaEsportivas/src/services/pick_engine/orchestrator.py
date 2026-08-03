@@ -86,6 +86,22 @@ def analyze_fixture_markets(
     league_stats: dict | None = None,
     league_id: int | None = None,
     data_quality_score: float | None = None,
+    # IDs dos times: sem eles scored_conceded_avg nao consegue resolver o mando
+    # POR PARTIDA e volta ao comportamento antigo (um mando so' pra lista
+    # inteira, que le metade dos jogos na coluna errada -- ver docstring de
+    # stats_model.scored_conceded_avg). Opcionais so' por compatibilidade com
+    # chamadores antigos; todos os pipelines de producao passam.
+    home_team_id: int | None = None,
+    away_team_id: int | None = None,
+    # Linhas de `team_statistics` (services/team_stats_service.TeamStatsService)
+    # do mandante em HOME e do visitante em AWAY -- fonte preferida do sinal
+    # feitos-vs-cedidos. Ausentes -> cai no historico cru.
+    team_stats_home: dict | None = None,
+    team_stats_away: dict | None = None,
+    # Media da liga por mando (TeamStatsService.get_league_baseline) -- alvo
+    # do encolhimento das medias de team_statistics. Sem ela as medias entram
+    # cruas, que e' medidamente PIOR que o historico de 15 jogos.
+    league_baseline: dict | None = None,
     debug: bool = False,
 ) -> list | dict:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
@@ -198,7 +214,12 @@ def analyze_fixture_markets(
                     })
                 continue
 
-        convergence = stats_model.expected_value_convergence(last10_home, last10_away, family, scope)
+        convergence = stats_model.expected_value_convergence(
+            last10_home, last10_away, family, scope,
+            home_team_id=home_team_id, away_team_id=away_team_id,
+            team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+            league_baseline=league_baseline,
+        )
         market_type = "goals" if family == "btts" else family
         # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
         # -- MESMA fonte que calibration_adjustment ja usa (hit-rate real
@@ -351,8 +372,18 @@ def analyze_fixture_markets(
             # Lambda por lado (nao o convergence combinado do loop, que e'
             # scope='total') -- feitos do time x cedido pelo adversario,
             # em cada lado separadamente.
-            home_conv = stats_model.expected_value_convergence(last10_home, last10_away, "goals", "home")
-            away_conv = stats_model.expected_value_convergence(last10_home, last10_away, "goals", "away")
+            home_conv = stats_model.expected_value_convergence(
+                last10_home, last10_away, "goals", "home",
+                home_team_id=home_team_id, away_team_id=away_team_id,
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            away_conv = stats_model.expected_value_convergence(
+                last10_home, last10_away, "goals", "away",
+                home_team_id=home_team_id, away_team_id=away_team_id,
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
             if home_conv and away_conv:
                 btts_prob = probability_model.btts_probability(
                     home_conv["expected_value"], away_conv["expected_value"]

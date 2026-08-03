@@ -39,15 +39,20 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import main as main_module  # noqa: E402  (import após setar DB_ENV)
 
 OPCOES = {
-    "1": ("Atualizar jogos (completo)",       "dados"),
-    "2": ("Capturar odds",                    "odds"),
-    "3": ("Gerar picks VIP (motor)",          "vip"),
-    "4": ("Gerar pick Free (motor)",          "dica"),
-    "5": ("Gerar múltipla (motor)",           "multiplas"),
-    "6": ("Gerar alavancagem (motor)",        "alavancagem"),
-    "7": ("Atualizar resultados (VIP+Free+Mult+Alav)", "resultados"),
-    "8": ("Tudo: jogos + odds + picks",       "tudo"),
-    "9": ("Estatistica de jogador (API)",    "player_stats"),
+    "1":  ("Atualizar jogos (completo)",       "dados"),
+    "2":  ("Capturar odds",                    "odds"),
+    "3":  ("Gerar picks VIP (motor)",          "vip"),
+    "4":  ("Gerar pick Free (motor)",          "dica"),
+    "5":  ("Gerar múltipla (motor)",           "multiplas"),
+    "6":  ("Gerar alavancagem (motor)",        "alavancagem"),
+    # Faltas e defesas de goleiro ja' rodavam dentro de "tudo" e ja' tinham
+    # botao no admin, mas nao tinham opcao avulsa aqui -- em prod nao dava pra
+    # rodar so' um dos dois sem passar o pipeline inteiro.
+    "7":  ("Gerar picks de faltas (motor)",    "faltas"),
+    "8":  ("Gerar defesas de goleiro (motor)", "goleiros"),
+    "9":  ("Atualizar resultados (VIP+Free+Mult+Alav)", "resultados"),
+    "10": ("Tudo: jogos + odds + picks",       "tudo"),
+    "11": ("Estatistica de jogador (API)",     "player_stats"),
 }
 
 
@@ -63,6 +68,14 @@ def menu():
 
 
 def run(cmd: str, mode: str = "fast"):
+    # main.py so' roda as migracoes dentro do proprio __main__, e este wrapper
+    # importa main como modulo -- ou seja, rodar por aqui nunca as aplicava.
+    # Ja' quebrou o motor em prod em silencio depois de um merge que adicionou
+    # coluna nova (engine_debug, 2026-07-23): a coluna nao existia e todo
+    # INSERT de pick falhava. Sao ALTER/CREATE ... IF NOT EXISTS, idempotentes
+    # e baratos, entao rodar sempre e' seguro.
+    main_module.run_migrations()
+
     if cmd == "dados":
         main_module.cmd_dados(mode=mode)
     elif cmd == "odds":
@@ -75,6 +88,10 @@ def run(cmd: str, mode: str = "fast"):
         main_module.cmd_multiplas()
     elif cmd == "alavancagem":
         main_module.cmd_alavancagem()
+    elif cmd == "faltas":
+        main_module.cmd_faltas()
+    elif cmd == "goleiros":
+        main_module.cmd_goleiros()
     elif cmd == "resultados":
         main_module.cmd_resultados()
     elif cmd == "tudo":

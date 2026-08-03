@@ -42,12 +42,22 @@ class AIResultCheckerAlavancagem:
         conn = get_connection()
         cur  = conn.cursor()
 
+        # Le as TRES pernas. Antes so' lia 1 e 2, e so' checava a 2 quando
+        # tipo == 'combinacao' -- valor que o pipeline nunca grava (ele usa
+        # 'simples'/'dupla'/'tripla', ver _TIPO_POR_TAMANHO em
+        # engine_pipelines/alavancagem_pipeline.py). Resultado: toda 'dupla'
+        # caia no ramo de perna unica e era graduada so' pela perna 1, mas
+        # paga com odd_combined -- GREEN indevido e profit inflado sempre que
+        # a perna 2 perdesse. Havia 3 duplas assim em producao (ids 21, 25 e
+        # 31). A perna 3 nunca foi lida por ninguem.
         cur.execute("""
             SELECT id, tipo,
                    fixture_id_1, market_1, line_1, odd_1,
                    home_team_1, away_team_1,
                    fixture_id_2, market_2, line_2, odd_2,
                    home_team_2, away_team_2,
+                   fixture_id_3, market_3, line_3, odd_3,
+                   home_team_3, away_team_3,
                    odd_combined
             FROM picks_alavancagem
             WHERE result IS NULL
@@ -66,26 +76,42 @@ class AIResultCheckerAlavancagem:
             (pk_id, tipo,
              fid1, mkt1, ln1, odd1, home1, away1,
              fid2, mkt2, ln2, odd2, home2, away2,
+             fid3, mkt3, ln3, odd3, home3, away3,
              odd_combined) = row
 
             odd_combined = Decimal(str(odd_combined))
 
-            r1 = self._check_pick(fid1, mkt1, ln1, float(odd1), cur, home1, away1)
-            if r1 is None:
-                print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_1={fid1} · aguardando.")
+            # Quem manda e' a presenca da perna no banco, nao o texto de
+            # `tipo`: qualquer perna gravada TEM que ser conferida, seja o
+            # rotulo 'dupla', 'tripla' ou 'combinacao'. Amarrar isso a um
+            # valor especifico de `tipo` foi exatamente o que deixou as
+            # duplas passarem sem checar a perna 2.
+            pernas = [
+                (i, fid, mkt, ln, odd, home, away)
+                for i, (fid, mkt, ln, odd, home, away) in enumerate(
+                    ((fid1, mkt1, ln1, odd1, home1, away1),
+                     (fid2, mkt2, ln2, odd2, home2, away2),
+                     (fid3, mkt3, ln3, odd3, home3, away3)), start=1)
+                if fid is not None
+            ]
+            if not pernas:
+                print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem nenhuma perna gravada · pulando.")
                 continue
 
-            r2 = None
-            if tipo == "combinacao" and fid2 is not None:
-                r2 = self._check_pick(fid2, mkt2, ln2, float(odd2), cur, home2, away2)
-                if r2 is None:
-                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_2={fid2} · aguardando.")
-                    continue
+            resultados = {}
+            aguardando = False
+            for i, fid, mkt, ln, odd, home, away in pernas:
+                r = self._check_pick(fid, mkt, ln, float(odd or 1), cur, home, away)
+                if r is None:
+                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_{i}={fid} · aguardando.")
+                    aguardando = True
+                    break
+                resultados[i] = r
+            if aguardando:
+                continue
 
-            if tipo == "combinacao":
-                final_result = "GREEN" if r1 == "GREEN" and r2 == "GREEN" else "RED"
-            else:
-                final_result = r1
+            # Bilhete combinado: uma perna RED derruba a aposta inteira.
+            final_result = "GREEN" if all(r == "GREEN" for r in resultados.values()) else "RED"
 
             # Profit por 1 unidade
             if final_result == "GREEN":
@@ -93,9 +119,10 @@ class AIResultCheckerAlavancagem:
             else:
                 profit = Decimal("-1")
 
+            detalhe = " ".join(f"P{i}={r}" for i, r in sorted(resultados.items()))
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
-                f"P1={r1} P2={r2} -> {final_result} | "
+                f"{detalhe} -> {final_result} | "
                 f"profit={float(profit):.2f}u"
             )
 
