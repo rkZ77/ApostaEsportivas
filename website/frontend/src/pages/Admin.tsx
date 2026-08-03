@@ -144,6 +144,7 @@ export default function Admin() {
   const [pickSearching, setPickSearching] = useState(false)
   const [settingResult, setSettingResult] = useState<number | null>(null)
   const [toast, setToast] = useState<{ msg: string; ok: boolean } | null>(null)
+  const [acaoResultado, setAcaoResultado] = useState<'resolve' | 'reverify' | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [ligas, setLigas] = useState<Liga[] | null>(null)
   const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
@@ -205,6 +206,27 @@ export default function Admin() {
       .then(s => setStats(s.data))
       .catch(() => {})
   }
+
+  // Abrir a aba Picks ja com os ultimos 3 dias na tela. Antes ela abria em
+  // branco e so' mostrava algo depois de preencher filtro e clicar buscar --
+  // o caso comum e' justamente conferir o que saiu nos ultimos dias.
+  const [picksCarregouInicial, setPicksCarregouInicial] = useState(false)
+  useEffect(() => {
+    if (aba !== 'picks' || picksCarregouInicial) return
+    setPicksCarregouInicial(true)
+    const iso = (diasAtras: number) => {
+      const d = new Date()
+      d.setDate(d.getDate() - diasAtras)
+      return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(d)
+    }
+    const de = iso(3), ate = iso(0)
+    setPickDateFrom(de); setPickDateTo(ate)
+    setPickSearching(true)
+    api.get('/admin/picks/search', { params: { date_from: de, date_to: ate } })
+      .then(r => setPickResults(r.data))
+      .catch(() => {})
+      .finally(() => setPickSearching(false))
+  }, [aba, picksCarregouInicial])
 
   const carregarOverview = () => {
     api.get('/admin/overview').then(r => setOverview(r.data)).catch(() => {})
@@ -846,8 +868,57 @@ export default function Admin() {
         </>)}
 
         {aba === 'picks' && (<>
-        {/* REMOVED: Corrigir resultado de pick */}
-        {false && <div className="card p-4 mb-6">
+        {/* Ações de resultado. Os dois endpoints já existiam no backend desde
+            que o scheduler foi removido, mas não tinham botão nenhum -- só
+            dava pra chamar por fora. Sem scheduler, esta é a única forma de
+            resolver pick em lote. */}
+        <div className="card p-4 mb-4">
+          <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-1">Resultados</h2>
+          <p className="text-xs text-zinc-500 mb-3 leading-relaxed">
+            Nada roda agendado. Resolver marca GREEN/RED nos picks cujo jogo já
+            terminou; reconferir corrige escanteios e cartões que a API revisou
+            depois do apito.
+          </p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              className="btn-primary text-sm py-3 disabled:opacity-40"
+              disabled={acaoResultado !== null}
+              onClick={async () => {
+                setAcaoResultado('resolve')
+                try {
+                  const r = await api.post('/admin/resolve-picks')
+                  const res = r.data?.resolved ?? {}
+                  const total = Object.values(res).reduce((a: number, b: any) => a + Number(b || 0), 0)
+                  showToast(total > 0
+                    ? `${total} pick(s) resolvido(s): ${Object.entries(res).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`).join(', ')}`
+                    : 'Nenhum pick pendente com jogo encerrado.')
+                  carregarOverview()
+                } catch (err: any) {
+                  showToast(err.response?.data?.detail || 'Erro ao resolver picks', false)
+                } finally { setAcaoResultado(null) }
+              }}>
+              {acaoResultado === 'resolve' ? 'Resolvendo...' : 'Resolver picks pendentes'}
+            </button>
+            <button
+              className="btn-ghost text-sm py-3 disabled:opacity-40"
+              disabled={acaoResultado !== null}
+              onClick={async () => {
+                setAcaoResultado('reverify')
+                try {
+                  const r = await api.post('/admin/reverify-stats-results')
+                  const n = (r.data?.corrected ?? []).length
+                  showToast(n > 0 ? `${n} resultado(s) corrigido(s) após revisão da API.` : 'Nenhuma correção necessária.')
+                  carregarOverview()
+                } catch (err: any) {
+                  showToast(err.response?.data?.detail || 'Erro ao reconferir', false)
+                } finally { setAcaoResultado(null) }
+              }}>
+              {acaoResultado === 'reverify' ? 'Reconferindo...' : 'Reconferir escanteios e cartões'}
+            </button>
+          </div>
+        </div>
+
+        <div className="card p-4 mb-6">
           <h2 className="text-xs font-semibold text-zinc-500 uppercase mb-3">Corrigir Resultado de Pick</h2>
           {(() => {
             const brt = (daysAgo = 0) => {
@@ -894,6 +965,8 @@ export default function Admin() {
                 <option value="free">Free</option>
                 <option value="multipla">Múltipla</option>
                 <option value="alavancagem">Alavancagem</option>
+                <option value="faltas">Faltas</option>
+                <option value="goleiros">Defesas</option>
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -920,9 +993,12 @@ export default function Admin() {
                   'HALF-WIN': 'text-teal-400 bg-teal-400/10 border-teal-500/30',
                   'HALF-LOSS': 'text-orange-400 bg-orange-400/10 border-orange-500/30',
                 }
+                // Mesmas cores da aba Mercados na página de picks, pra o tipo
+                // ser reconhecido pela cor em qualquer tela.
                 const typeCls: Record<string, string> = {
                   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
+                  faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-zinc-400 bg-zinc-700/40 border-zinc-600/30') : 'text-zinc-600 bg-zinc-900 border-zinc-800'
                 return (
@@ -937,7 +1013,15 @@ export default function Admin() {
                     <div className="flex items-center gap-2">
                       <span className={`text-[10px] font-black px-2 py-1 rounded border ${resCls}`}>{p.result ?? 'Pendente'}</span>
                       <span className="text-zinc-600 text-xs">·</span>
-                      <span className="text-xs text-zinc-500 truncate">{p.market} {p.line}</span>
+                      <span className="text-xs text-zinc-500 truncate flex-1">{p.market} {p.line ?? ''}</span>
+                      {p.odd != null && (
+                        <span className="font-mono text-xs text-zinc-400 shrink-0">@{Number(p.odd).toFixed(2)}</span>
+                      )}
+                      {p.profit != null && (
+                        <span className={`font-mono text-xs shrink-0 ${Number(p.profit) > 0 ? 'text-green-400' : Number(p.profit) < 0 ? 'text-red-400' : 'text-zinc-500'}`}>
+                          {Number(p.profit) > 0 ? '+' : ''}{Number(p.profit).toFixed(2)}u
+                        </span>
+                      )}
                     </div>
                     <select
                       disabled={settingResult === p.id}
@@ -961,7 +1045,7 @@ export default function Admin() {
           {pickResults.length === 0 && !pickSearching && (pickSearch || pickDateFrom) && (
             <p className="text-zinc-600 text-xs text-center py-4">Nenhum pick encontrado.</p>
           )}
-        </div>}
+        </div>
         </>)}
 
         {aba === 'usuarios' && (<>
