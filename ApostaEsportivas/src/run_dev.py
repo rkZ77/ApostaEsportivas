@@ -32,16 +32,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import main as main_module  # noqa: E402  (import após setar DB_ENV)
 
 OPCOES = {
-    "1": ("Atualizar jogos (completo)",       "dados"),
-    "2": ("Capturar odds",                    "odds"),
-    "3": ("Gerar picks VIP (motor)",          "vip"),
-    "4": ("Gerar pick Free (motor)",          "dica"),
-    "5": ("Gerar múltipla (motor)",           "multiplas"),
-    "6": ("Gerar alavancagem (motor)",        "alavancagem"),
-    "7": ("Atualizar resultados",             "resultados"),
-    "8": ("Tudo: jogos + odds + picks",       "tudo"),
-    "9": ("Modo sombra (log IA vs motor)",    "shadow"),
-    "10": ("Estatistica de jogador (API)",   "player_stats"),
+    "1":  ("Atualizar jogos (completo)",       "dados"),
+    "2":  ("Capturar odds",                    "odds"),
+    "3":  ("Gerar picks VIP (motor)",          "vip"),
+    "4":  ("Gerar pick Free (motor)",          "dica"),
+    "5":  ("Gerar múltipla (motor)",           "multiplas"),
+    "6":  ("Gerar alavancagem (motor)",        "alavancagem"),
+    # Paridade com run_prod.py: faltas/goleiros rodavam so' dentro de "tudo".
+    "7":  ("Gerar picks de faltas (motor)",    "faltas"),
+    "8":  ("Gerar defesas de goleiro (motor)", "goleiros"),
+    "9":  ("Atualizar resultados",             "resultados"),
+    "10": ("Tudo: jogos + odds + picks",       "tudo"),
+    "11": ("Modo sombra (log IA vs motor)",    "shadow"),
+    "12": ("Estatistica de jogador (API)",     "player_stats"),
 }
 
 
@@ -57,6 +60,10 @@ def menu():
 
 
 def run(cmd: str):
+    # Mesma correcao de run_prod.py: main.py so' migra dentro do __main__ dele,
+    # e aqui ele entra como modulo importado. Idempotente (IF NOT EXISTS).
+    main_module.run_migrations()
+
     if cmd == "dados":
         main_module.cmd_dados()
     elif cmd == "odds":
@@ -69,6 +76,10 @@ def run(cmd: str):
         main_module.cmd_multiplas()
     elif cmd == "alavancagem":
         main_module.cmd_alavancagem()
+    elif cmd == "faltas":
+        main_module.cmd_faltas()
+    elif cmd == "goleiros":
+        main_module.cmd_goleiros()
     elif cmd == "resultados":
         main_module.cmd_resultados()
     elif cmd == "shadow":

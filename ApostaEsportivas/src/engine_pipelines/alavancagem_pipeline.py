@@ -26,6 +26,7 @@ from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
+from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
@@ -94,7 +95,7 @@ def _fixtures_with_odds_today(cur) -> list:
     """Fixtures de hoje, de qualquer liga cadastrada, com pelo menos 1 odd
     na faixa individual -- antes restrito a WC_LEAGUE_ID, ver docstring do
     modulo."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT DISTINCT f.fixture_id, f.home_team_id, f.away_team_id,
                f.home_team, f.away_team, f.season, f.match_datetime, f.league_id, f.round,
                f.referee
@@ -136,6 +137,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
     individual na faixa exigida pra combos."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
+    team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
     legs = []
 
@@ -165,6 +167,8 @@ def _gather_leg_candidates(fixtures: list) -> list:
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
             league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
+            league_baseline = team_stats_service.get_league_baseline(
+                fixture["league_id"], fixture["season"])
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
@@ -176,11 +180,18 @@ def _gather_leg_candidates(fixtures: list) -> list:
                 integrity_validation=integrity_val, outlier_info=outlier_info,
             )
 
+            team_stats_home, team_stats_away = team_stats_service.get_for_fixture(
+                fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], fixture["season"])
+
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+            league_baseline=league_baseline,
             )
             picks = rank_market_candidates(candidates)
             log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
@@ -201,15 +212,24 @@ def _gather_leg_candidates(fixtures: list) -> list:
 
 
 def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
-    """Tenta simples -> dupla -> tripla (pernas podem ser do mesmo fixture
+    """Tenta dupla -> tripla -> simples (pernas podem ser do mesmo fixture
     ou de fixtures diferentes) ate o produto real das odds cair em
     [odd_min, odd_max]. Rejeita combo com todas as pernas do mesmo
     market_type. Faixa recebida por parametro pra permitir tentar o alvo
     estreito primeiro e cair pro fallback largo depois (ver
-    run_alavancagem_engine)."""
+    run_alavancagem_engine).
+
+    A ORDEM importa e ja' foi um bug: com (1, 2, 3), uma perna unica de odd
+    1.40 sempre cabia no alvo [1.39, 1.55] e vencia antes de qualquer combo
+    ser testado -- as 30 alavancagens geradas em producao ate 2026-08-02
+    sairam TODAS como 'simples', contra o que o modulo documenta como pedido
+    explicito do usuario ("2-3 pernas de odd individual bem baixa somando
+    ~1.50", 2026-07-22). Uma aposta unica de odd 1.40 nao e' alavancagem.
+    Simples continua no fim como ultimo recurso: em dia magro, e' melhor
+    entregar uma perna do que nao entregar nada."""
     pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
 
-    for combo_size in (1, 2, 3):
+    for combo_size in (2, 3, 1):
         best = None
         for combo in itertools.combinations(pool, combo_size):
             market_types = {p["market_type"] for p in combo}
@@ -224,9 +244,18 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
             if not (odd_min <= odd_combined <= odd_max):
                 continue
 
-            confidence_media = round(sum(p["confidence"] for p in combo) / len(combo), 4)
-            if best is None or confidence_media > best[1]:
-                best = (combo, confidence_media, odd_combined)
+            # Confianca do BILHETE (produto), nao a media das pernas: a aposta
+            # so' paga se todas baterem. A media premiava combo desequilibrado
+            # (uma perna otima + uma fraca ganhava de duas boas), que e'
+            # justamente o pior bilhete dos dois. Com 1 perna o produto e' o
+            # proprio confidence dela -- identico ao que ja' era gravado, entao
+            # nada muda pro historico de 'simples' que existe hoje.
+            confidence_combo = 1.0
+            for p in combo:
+                confidence_combo *= float(p["confidence"])
+            confidence_combo = round(confidence_combo, 4)
+            if best is None or confidence_combo > best[1]:
+                best = (combo, confidence_combo, odd_combined)
 
         if best:
             return best[0], best[1], best[2]
@@ -251,7 +280,22 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
             p["best_bookmaker"], p["confidence"], p["taxa_real"], explain(p),
         ]
 
-    ev_combined = round(sum(p["ev"] for p in legs) / len(legs), 4)
+    # EV da aposta COMBINADA, nao a media dos EVs das pernas -- essa media nao
+    # tem significado: a alavancagem so' paga se TODAS as pernas baterem, entao
+    # a probabilidade da aposta e' o produto das probabilidades, nao a media.
+    # Com 2 pernas de 75% e EV +12% cada, a media dizia "+12%" enquanto o EV
+    # real do bilhete e' negativo (0.75*0.75=56% de chance). Errava sempre pro
+    # lado otimista, e piorava quanto mais pernas. Para 'simples' o resultado
+    # e' identico ao de antes (produto de um termo so').
+    #
+    # Assume independencia entre as pernas. Nao e' exato quando duas pernas
+    # saem do MESMO jogo (permitido aqui por regra do produto), mas o erro cai
+    # pro lado conservador na pratica e _find_combo ja' recusa combo com todas
+    # as pernas do mesmo market_type, que e' o caso de correlacao forte.
+    prob_combinada = 1.0
+    for p in legs:
+        prob_combinada *= float(p["taxa_real"])
+    ev_combined = round(prob_combinada * float(odd_combined) - 1.0, 4)
 
     cols += ["odd_combined", "confidence_media", "ev_combined"]
     vals += ["%s", "%s", "%s"]

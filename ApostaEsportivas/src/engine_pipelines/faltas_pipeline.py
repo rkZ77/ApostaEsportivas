@@ -147,9 +147,10 @@ def _fixtures_de_hoje(cur) -> list:
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
-            f.match_datetime, f.referee
+            f.match_datetime, f.referee, l.name
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
+        LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
         ORDER BY f.match_datetime
@@ -159,7 +160,7 @@ def _fixtures_de_hoje(cur) -> list:
             "fixture_id": r[0], "league_id": r[1], "season": r[2],
             "home_team_id": r[3], "away_team_id": r[4],
             "home_team": r[5], "away_team": r[6],
-            "match_datetime": r[7], "referee": r[8],
+            "match_datetime": r[7], "referee": r[8], "league_name": r[9],
         }
         for r in cur.fetchall()
     ]
@@ -271,16 +272,16 @@ def _salvar(cur, c: dict) -> None:
     cur.execute(f"""
         INSERT INTO picks_faltas
             (fixture_id, match_date, home_team, away_team,
-             home_team_id, away_team_id, league_id,
+             home_team_id, away_team_id, league_id, league_name,
              market, market_type, line, odd, bet_house, market_id,
              confidence, prob_real, edge, reasoning,
              stake_pct, stake_units, engine_debug)
-        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
+        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date, fixture_id) DO NOTHING
     """, (
         f["fixture_id"], f["home_team"], f["away_team"],
-        f["home_team_id"], f["away_team_id"], f["league_id"],
+        f["home_team_id"], f["away_team_id"], f["league_id"], f.get("league_name"),
         c["market_name"], f"Over {c['line']}", c["odd"], c["bookmaker"], c["market_id"],
         c["probability"], c["probability"], c["edge"], _explicar(c),
         stake_pct, stake_units, engine_debug,
@@ -331,7 +332,9 @@ def run_faltas_engine():
     gate = review_gate("faltas")
     salvos = 0
     for c in candidatos:
-        log_decision("FALTAS_ENGINE", c["fixture"], [c], [c])
+        # candidato unico e ja' escolhido: marca explicitamente pro resumo do
+        # decision_log sinalizar "<== ESCOLHIDO" como nos outros pipelines.
+        log_decision("FALTAS_ENGINE", c["fixture"], [{**c, "is_best_pick": True}], [c])
         aprovado = gate.apply([c], "faltas", c["fixture"])
         if not aprovado:
             print(f"[FALTAS_ENGINE] Fixture {c['fixture']['fixture_id']} vetado pela revisao de IA.")
