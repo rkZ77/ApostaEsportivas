@@ -1,6 +1,6 @@
 import time
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR, data_br
+from utils.data_br import HOJE_BR
 from collectors.odds_collector_service import OddsCollectorService
 
 
@@ -31,7 +31,7 @@ class OddsMain:
             SELECT fixture_id
             FROM fixtures
             WHERE status IN ('NS', 'TBD')
-              AND {data_br('match_datetime')} = {HOJE_BR}
+              AND match_datetime::date = {HOJE_BR}
         """)
 
         fixtures = [row[0] for row in cur.fetchall()]

@@ -1,5 +1,6 @@
 ﻿import datetime
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR
 import psycopg2.extras
 
 try:
@@ -192,12 +193,24 @@ class FixturesService:
     # 7. NOVO · Buscar TODOS os fixtures NS que ainda NÃO têm sugestão
     ##########################################################################
     def get_ns_without_suggestions(self):
-        rows = self._query("""
+        """Jogos DE HOJE (Brasilia) ainda sem pick VIP.
+
+        O filtro de dia entrou em 2026-08-02: antes pegava qualquer fixture NS
+        sem pick, e com a tabela `fixtures` passando a guardar 3 dias (ver
+        FixtureCollectorService.DIAS_BR) isso geraria pick VIP pra jogo de
+        depois de amanha -- sem odds coletadas (o coletor de odds so' baixa o
+        dia corrente) e fora do que o resto do produto mostra como "hoje".
+
+        match_datetime ja esta em horario de Brasilia; HOJE_BR existe porque
+        CURRENT_DATE e' a data UTC do servidor.
+        """
+        rows = self._query(f"""
             SELECT f.*
             FROM fixtures f
             LEFT JOIN picks_vip s ON s.fixture_id = f.fixture_id
             WHERE f.status = 'NS'
               AND s.fixture_id IS NULL
+              AND f.match_datetime::date = {HOJE_BR}
             ORDER BY f.match_datetime ASC;
         """)
 

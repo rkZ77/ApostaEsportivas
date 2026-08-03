@@ -8,7 +8,7 @@ pipeline ao de IA)."""
 import json
 
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR, data_br
+from utils.data_br import HOJE_BR
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -69,7 +69,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
             f.match_datetime, f.status, f.round, f.referee
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
+        WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD', 'LIVE')
           AND ov.odd_value BETWEEN %s AND %s
     """, (ODD_MIN, ODD_MAX))

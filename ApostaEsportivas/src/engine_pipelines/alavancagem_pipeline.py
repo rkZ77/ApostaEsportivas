@@ -23,7 +23,7 @@ import itertools
 import textwrap
 import traceback
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR, data_br
+from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
@@ -100,7 +100,7 @@ def _fixtures_with_odds_today(cur) -> list:
                f.referee
         FROM fixtures f
         INNER JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
+        WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status = 'NS'
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime

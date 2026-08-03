@@ -35,7 +35,7 @@ import re
 import unicodedata
 
 from utils.db_utils import get_connection
-from utils.data_br import HOJE_BR, data_br
+from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.pick_engine import competition_profile as cp
 from services.odds_service import OddsService
@@ -168,7 +168,7 @@ def _fixtures_de_hoje(cur) -> list:
             f.match_datetime
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
+        WHERE f.match_datetime::date = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
         ORDER BY f.match_datetime
     """)
