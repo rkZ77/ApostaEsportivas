@@ -52,16 +52,16 @@ export default function ForgotPassword() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center px-4">
+    <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
         <button onClick={goBack}
-          className="text-zinc-500 hover:text-white transition-colors text-sm mb-6 flex items-center gap-1">
+          className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-6 flex items-center gap-1">
           ← Voltar
         </button>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-white">Recuperar senha</h1>
-          <p className="text-zinc-500 text-sm mt-2">
+          <h1 className="text-2xl font-black text-ink-1">Recuperar senha</h1>
+          <p className="text-ink-3 text-sm mt-2">
             {step === 'email'
               ? 'Enviaremos um código de 6 dígitos para o seu email'
               : `Código enviado para ${email}`}
@@ -75,14 +75,14 @@ export default function ForgotPassword() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <p className="text-white font-semibold">Senha atualizada!</p>
-            <p className="text-zinc-500 text-sm">Redirecionando para o login...</p>
+            <p className="text-ink-1 font-semibold">Senha atualizada!</p>
+            <p className="text-ink-3 text-sm">Redirecionando para o login...</p>
           </div>
 
         ) : step === 'email' ? (
           <form onSubmit={handleEmail} className="card p-6 space-y-4">
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Email</label>
+              <label className="text-xs text-ink-3 block mb-1.5">Email</label>
               <input
                 type="email"
                 className="input w-full"
@@ -99,7 +99,7 @@ export default function ForgotPassword() {
               {loading ? 'Enviando...' : 'Enviar código'}
             </button>
             <Link to="/login"
-              className="block text-center text-zinc-600 text-xs hover:text-zinc-400 transition-colors">
+              className="block text-center text-ink-4 text-xs hover:text-ink-2 transition-colors">
               Lembrou a senha? Entrar
             </Link>
           </form>
@@ -107,7 +107,7 @@ export default function ForgotPassword() {
         ) : (
           <form onSubmit={handleReset} className="card p-6 space-y-4">
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Código recebido no email</label>
+              <label className="text-xs text-ink-3 block mb-1.5">Código recebido no email</label>
               <input
                 type="text"
                 inputMode="numeric"
@@ -121,7 +121,7 @@ export default function ForgotPassword() {
               />
             </div>
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Nova senha</label>
+              <label className="text-xs text-ink-3 block mb-1.5">Nova senha</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -134,7 +134,7 @@ export default function ForgotPassword() {
                 />
                 <button type="button" onClick={() => setShowPassword(v => !v)}
                   aria-label={showPassword ? 'Ocultar senha' : 'Mostrar senha'}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-zinc-300 transition-colors">
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-3 hover:text-ink-2 transition-colors">
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
@@ -142,21 +142,21 @@ export default function ForgotPassword() {
                 const { score, checks } = getPasswordStrength(password)
                 const barColors = ['bg-red-500', 'bg-yellow-400', 'bg-green-500']
                 const labels    = ['Fraca', 'Boa', 'Forte']
-                const color     = barColors[score - 1] ?? 'bg-zinc-700'
+                const color     = barColors[score - 1] ?? 'bg-surface-3'
                 const label     = score > 0 ? labels[score - 1] : ''
                 return (
                   <div className="mt-2 space-y-2">
                     <div className="flex items-center gap-1.5">
                       {[1, 2, 3].map(i => (
-                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-zinc-800'}`} />
+                        <div key={i} className={`h-1.5 flex-1 rounded-full transition-all duration-300 ${i <= score ? color : 'bg-surface-2'}`} />
                       ))}
                       {label && <span className={`text-[11px] font-semibold ml-1 shrink-0 ${color.replace('bg-', 'text-')}`}>{label}</span>}
                     </div>
                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                       {checks.map(c => (
                         <div key={c.label} className="flex items-center gap-1.5">
-                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-zinc-600'}`}>{c.ok ? '✓' : '○'}</span>
-                          <span className={`text-[11px] ${c.ok ? 'text-zinc-300' : 'text-zinc-600'}`}>{c.label}</span>
+                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                         </div>
                       ))}
                     </div>
@@ -165,7 +165,7 @@ export default function ForgotPassword() {
               })()}
             </div>
             <div>
-              <label className="text-xs text-zinc-500 block mb-1.5">Confirmar senha</label>
+              <label className="text-xs text-ink-3 block mb-1.5">Confirmar senha</label>
               <input
                 type={showPassword ? 'text' : 'password'}
                 className="input w-full"
@@ -182,7 +182,7 @@ export default function ForgotPassword() {
             </button>
             <button type="button"
               onClick={() => { setStep('email'); setError('') }}
-              className="w-full text-center text-zinc-600 text-xs hover:text-zinc-400 transition-colors">
+              className="w-full text-center text-ink-4 text-xs hover:text-ink-2 transition-colors">
               Reenviar código
             </button>
           </form>

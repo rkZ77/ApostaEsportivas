@@ -52,7 +52,7 @@ export default function ApostaModal({
     >
       <motion.div
         variants={sheetUp}
-        className="w-full max-w-xs bg-zinc-900 border border-zinc-700 rounded-lg overflow-y-auto max-h-[92dvh]"
+        className="w-full max-w-xs bg-surface-1 border border-line-strong rounded-lg overflow-y-auto max-h-[92dvh]"
         onClick={e => e.stopPropagation()}
       >
         <AnimatePresence mode="wait">
@@ -70,14 +70,14 @@ export default function ApostaModal({
             <div className="flex gap-2">
               <button
                 onClick={() => setOverrideStep(false)}
-                className="flex-1 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
+                className="flex-1 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors"
               >
                 Voltar
               </button>
               <button
                 onClick={() => onConfirm(parsed, house, units)}
                 disabled={loading}
-                className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
+                className="flex-1 py-2.5 rounded-md bg-yellow-600 hover:bg-yellow-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
               >
                 {loading ? '...' : 'Estou ciente'}
               </button>
@@ -86,12 +86,12 @@ export default function ApostaModal({
         ) : (
           /* ── Tela principal ── */
           <motion.div key="main" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
-            <h3 className="text-white font-black text-sm mb-1">Registrar aposta</h3>
-            <p className="text-zinc-500 text-xs mb-4">Informe onde e como você apostou.</p>
+            <h3 className="text-ink-1 font-black text-sm mb-1">Registrar aposta</h3>
+            <p className="text-ink-3 text-xs mb-4">Informe onde e como você apostou.</p>
 
             {/* Casa de aposta */}
             <div className="mb-4">
-              <label className="text-zinc-400 text-xs font-semibold mb-1.5 block">Casa de aposta</label>
+              <label className="text-ink-2 text-xs font-semibold mb-1.5 block">Casa de aposta</label>
               <div className="grid grid-cols-2 gap-1.5">
                 {HOUSES.map(h => (
                   <button
@@ -101,7 +101,7 @@ export default function ApostaModal({
                     className={`py-2 rounded-md border text-xs font-bold transition-colors ${
                       house === h
                         ? 'border-green-500/60 bg-green-500/10 text-green-400'
-                        : 'border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                        : 'border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-2'
                     }`}
                   >
                     {h}
@@ -112,9 +112,9 @@ export default function ApostaModal({
 
             {/* Odd */}
             <div className="mb-4">
-              <label className="text-zinc-400 text-xs font-semibold mb-1.5 block">
+              <label className="text-ink-2 text-xs font-semibold mb-1.5 block">
                 Odd apostada
-                <span className="text-zinc-600 font-normal ml-1">(pick: {pickOdd})</span>
+                <span className="text-ink-4 font-normal ml-1">(pick: {pickOdd})</span>
               </label>
               <input
                 type="number" step="0.01" min="1.01" value={oddStr}
@@ -132,15 +132,15 @@ export default function ApostaModal({
             {!hideUnits && (
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="text-zinc-400 text-xs font-semibold">Unidades a apostar</label>
-                  <span className="text-[10px] text-zinc-600">IA sugere: <span className="text-green-400 font-bold">{suggestedUnits}u</span></span>
+                  <label className="text-ink-2 text-xs font-semibold">Unidades a apostar</label>
+                  <span className="text-[10px] text-ink-4">IA sugere: <span className="text-green-400 font-bold">{suggestedUnits}u</span></span>
                 </div>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setUnits(u => Math.max(1, u - 1))}
                     aria-label="Diminuir unidades"
-                    className="w-11 h-11 rounded-md border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
+                    className="w-11 h-11 rounded-md border border-line-strong text-ink-2 text-lg font-bold hover:border-ink-4 transition-colors flex items-center justify-center shrink-0"
                   >−</button>
                   <input
                     type="number" min="1" max={maxUnits} step="1" value={units}
@@ -151,7 +151,7 @@ export default function ApostaModal({
                     type="button"
                     onClick={() => setUnits(u => Math.min(maxUnits, u + 1))}
                     aria-label="Aumentar unidades"
-                    className="w-11 h-11 rounded-md border border-zinc-700 text-zinc-300 text-lg font-bold hover:border-zinc-500 transition-colors flex items-center justify-center shrink-0"
+                    className="w-11 h-11 rounded-md border border-line-strong text-ink-2 text-lg font-bold hover:border-ink-4 transition-colors flex items-center justify-center shrink-0"
                   >+</button>
                 </div>
                 {exceedsSuggested && !exceedsMax && (
@@ -172,7 +172,7 @@ export default function ApostaModal({
             <div className="flex gap-2">
               <button
                 onClick={onCancel}
-                className="flex-1 py-2.5 rounded-md border border-zinc-700 text-zinc-400 text-sm hover:border-zinc-500 transition-colors"
+                className="flex-1 py-2.5 rounded-md border border-line-strong text-ink-2 text-sm hover:border-ink-4 transition-colors"
               >
                 Cancelar
               </button>
@@ -181,8 +181,8 @@ export default function ApostaModal({
                 disabled={!valid || loading}
                 className={`flex-1 py-2.5 rounded-md font-bold text-sm transition-colors disabled:opacity-50 ${
                   exceedsSuggested
-                    ? 'bg-yellow-600 hover:bg-yellow-500 text-white'
-                    : 'bg-green-600 hover:bg-green-500 text-white'
+                    ? 'bg-yellow-600 hover:bg-yellow-500 text-ink-1'
+                    : 'bg-green-600 hover:bg-green-500 text-ink-1'
                 }`}
               >
                 {loading ? '...' : exceedsSuggested ? `Apostar ${units}u` : 'Registrar aposta'}

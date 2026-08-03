@@ -21,7 +21,7 @@ export default function ErrorToast() {
           initial="hidden"
           animate="visible"
           exit="exit"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-xl shadow-lg max-w-[90vw] text-center"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] bg-red-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-xl shadow-lg max-w-[90vw] text-center"
         >
           {msg}
         </motion.div>

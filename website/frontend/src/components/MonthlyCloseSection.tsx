@@ -56,7 +56,7 @@ export default function MonthlyCloseSection() {
 
   return (
     <div>
-      <p className="text-xs text-zinc-500 uppercase font-semibold mb-3">Fechamentos mensais</p>
+      <p className="text-xs text-ink-3 uppercase font-semibold mb-3">Fechamentos mensais</p>
 
       {pending && (
         <button
@@ -65,17 +65,17 @@ export default function MonthlyCloseSection() {
         >
           <CalendarCheck className="w-5 h-5 shrink-0 text-yellow-400" />
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-black text-white">Fechamento de {pending.month_label} disponível</p>
-            <p className="text-xs text-zinc-400 leading-snug">
+            <p className="text-sm font-black text-ink-1">Fechamento de {pending.month_label} disponível</p>
+            <p className="text-xs text-ink-2 leading-snug">
               {fmtSigned(pending.total_pnl)} no mês · confirme sua banca para começar o mês novo
             </p>
           </div>
-          <ChevronRight className="w-4 h-4 shrink-0 text-zinc-500" />
+          <ChevronRight className="w-4 h-4 shrink-0 text-ink-3" />
         </button>
       )}
 
       {history.length > 0 && (
-        <div className="card overflow-hidden divide-y divide-zinc-800/60">
+        <div className="card overflow-hidden divide-y divide-line/60">
           {history.map(h => {
             const profit = h.total_pnl >= 0
             return (
@@ -84,8 +84,8 @@ export default function MonthlyCloseSection() {
                   ? <TrendingUp className="w-4 h-4 shrink-0 text-green-500" />
                   : <TrendingDown className="w-4 h-4 shrink-0 text-red-400" />}
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-white capitalize truncate">{h.month_label}</p>
-                  <p className="text-[11px] text-zinc-500 truncate">
+                  <p className="text-sm font-bold text-ink-1 capitalize truncate">{h.month_label}</p>
+                  <p className="text-[11px] text-ink-3 truncate">
                     {h.greens}G · {h.reds}R
                     {h.total_resolved ? ` em ${h.total_resolved} picks` : ''}
                     {' · '}{fmtBRL(h.bankroll_start)} para {fmtBRL(h.bankroll_end)}
@@ -96,7 +96,7 @@ export default function MonthlyCloseSection() {
                     {fmtSigned(h.total_pnl)}
                   </p>
                   {h.profit_units != null && (
-                    <p className="text-[10px] text-zinc-600">
+                    <p className="text-[10px] text-ink-4">
                       {h.profit_units >= 0 ? '+' : ''}{h.profit_units.toFixed(1)}u
                     </p>
                   )}

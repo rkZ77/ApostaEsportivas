@@ -15,7 +15,7 @@ import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
@@ -98,7 +98,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
     <div className="relative mb-6 -mx-4">
       {/* fade direita indicando scroll */}
       <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
-      <div className="flex border-b border-zinc-800 px-4 overflow-x-auto scrollbar-none">
+      <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
         {tabs.map(t => {
           const count = counts?.[t.key]
           return (
@@ -107,7 +107,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
               whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
               className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
-                tab === t.key ? 'text-white' : 'text-zinc-500 hover:text-zinc-300'
+                tab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
               }`}
             >
               {t.label}
@@ -158,7 +158,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const planStatusColor = isAdmin ? 'text-purple-400'
     : isTrial ? 'text-amber-400'
     : isVip ? 'text-yellow-400'
-    : 'text-zinc-400'
+    : 'text-ink-2'
 
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')
@@ -183,20 +183,20 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
       <Avatar name={user.name} imageUrl={user.avatar_url} size="lg" />
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 flex-wrap">
-          <h2 className="text-white font-black text-lg leading-tight">Olá, {firstName}!</h2>
+          <h2 className="text-ink-1 font-black text-lg leading-tight">Olá, {firstName}!</h2>
           <span className={planBadgeCls}>{planLabel}</span>
         </div>
-        <p className="text-zinc-500 text-xs mt-0.5 truncate">{user.email}</p>
+        <p className="text-ink-3 text-xs mt-0.5 truncate">{user.email}</p>
 
         {/* Assinatura inline */}
         <div className="mt-2 flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1.5">
-            <span className="text-zinc-500 text-xs">Status atual:</span>
+            <span className="text-ink-3 text-xs">Status atual:</span>
             <span className={`text-xs font-black ${planStatusColor}`}>{planLabel}</span>
           </div>
           {countdown && (
-            <span className="text-zinc-400 text-xs">
-              Expira em <span className="font-mono font-bold text-white tabular-nums">{countdown}</span>
+            <span className="text-ink-2 text-xs">
+              Expira em <span className="font-mono font-bold text-ink-1 tabular-nums">{countdown}</span>
             </span>
           )}
           {!isVip && !isAdmin && (
@@ -269,7 +269,7 @@ function QuickStats({ stats }: { stats: any }) {
       ),
       label: 'Picks/mês',
       value: String(stats.total ?? 0),
-      color: 'text-zinc-300',
+      color: 'text-ink-2',
       iconColor: 'text-blue-400',
       sub: 'Finalizados',
     },
@@ -282,8 +282,8 @@ function QuickStats({ stats }: { stats: any }) {
       ),
       label: 'Sequência',
       value: streak > 0 ? (streakType === 'green' ? `+${streak}` : `-${streak}`) : '',
-      color: streakType === 'green' ? 'text-green-500' : streakType === 'red' ? 'text-red-400' : 'text-zinc-500',
-      iconColor: streakType === 'green' ? 'text-orange-400' : 'text-zinc-600',
+      color: streakType === 'green' ? 'text-green-500' : streakType === 'red' ? 'text-red-400' : 'text-ink-3',
+      iconColor: streakType === 'green' ? 'text-orange-400' : 'text-ink-4',
       sub: streakType === 'green' ? 'Greens seguidos' : streakType === 'red' ? 'Reds seguidos' : 'Sem sequência',
     },
   ]
@@ -293,11 +293,11 @@ function QuickStats({ stats }: { stats: any }) {
       {items.map(({ icon, label, value, color, iconColor, sub }) => (
         <div key={label} className="card p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-zinc-600 font-semibold uppercase">{label}</span>
+            <span className="text-xs text-ink-4 font-semibold uppercase">{label}</span>
             <span className={iconColor}>{icon}</span>
           </div>
           <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-          <div className="text-xs text-zinc-700 mt-0.5">{sub}</div>
+          <div className="text-xs text-ink-4 mt-0.5">{sub}</div>
         </div>
       ))}
     </div>
@@ -405,20 +405,20 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`relative overflow-hidden bg-zinc-950 border rounded-lg transition-colors duration-200 group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
+      className={`pick-card group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
       onClick={onClick}
     >
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap">
           <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
           <span className="badge-free">FREE</span>
           {dica.league_name && (
             <div className="flex items-center gap-1">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
-              <span className="text-[10px] text-zinc-600 truncate max-w-[90px]">{dica.league_name}</span>
+              <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{dica.league_name}</span>
             </div>
           )}
         </div>
@@ -431,27 +431,27 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
             <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
-          <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
+          <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
         )}
       </div>
 
       {/* Hero: Odd | Stake | Retorno */}
-      <div className="font-mono flex items-stretch divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+      <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
+          <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
           <div className="text-3xl font-black text-green-400">{Number(dica.odd).toFixed(2)}</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">{dica.bet_house}</div>
+          <div className="text-[10px] text-ink-4 mt-0.5">{dica.bet_house}</div>
         </div>
         {stakeSuggestion && !dica.result ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
               <div className="text-xl font-black text-green-400">{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
+              <div className="text-[11px] text-ink-4">R${stakeSuggestion.amountR.toFixed(0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
-              <div className="text-xl font-black text-white">+{((Number(dica.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-ink-1">+{((Number(dica.odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
               <div className="text-[11px] text-green-600 font-semibold">+R${((Number(dica.odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
@@ -464,20 +464,20 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">Lucro</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  {u > 1 && <div className="text-[10px] text-zinc-600">({u}u)</div>}
+                  {u > 1 && <div className="text-[10px] text-ink-4">({u}u)</div>}
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Em reais</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
                   {profitR != null ? (
                     <div className={`text-xl font-black ${color}`}>
                       {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
                     </div>
                   ) : (
-                    <div className="text-xl font-black text-zinc-600">-</div>
+                    <div className="text-xl font-black text-ink-4">-</div>
                   )}
                 </div>
               </>
@@ -487,15 +487,15 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
           <div className="flex-1 px-4 py-3 text-center">
             {dica.ev != null ? (
               <>
-                <div className="text-[10px] text-zinc-500 mb-0.5">EV</div>
+                <div className="text-[10px] text-ink-3 mb-0.5">EV</div>
                 <div className={`text-xl font-black ${Number(dica.ev) >= 0 ? 'text-green-400' : 'text-orange-400'}`}>
                   {Number(dica.ev) >= 0 ? '+' : ''}{(Number(dica.ev) * 100).toFixed(1)}%
                 </div>
               </>
             ) : (
               <>
-                <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
-                <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+                <div className="text-[10px] text-ink-3 mb-0.5">Confiança</div>
+                <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-ink-2'}`}>{pct}%</div>
               </>
             )}
           </div>
@@ -506,13 +506,13 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       <div className="px-5 py-3 space-y-2">
         <div className="flex items-center gap-2">
           <TeamLogo id={dica.home_team_id} name={dica.home_team ?? ''} size={22} />
-          <span className="text-sm font-bold text-white truncate">{dica.home_team}</span>
-          <span className="text-zinc-600 text-xs shrink-0">vs</span>
-          <span className="text-sm font-bold text-white truncate">{dica.away_team}</span>
+          <span className="text-sm font-bold text-ink-1 truncate">{dica.home_team}</span>
+          <span className="text-ink-4 text-xs shrink-0">vs</span>
+          <span className="text-sm font-bold text-ink-1 truncate">{dica.away_team}</span>
           <TeamLogo id={dica.away_team_id} name={dica.away_team ?? ''} size={22} />
         </div>
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
-          <span className="font-semibold text-zinc-300">{translateMarket(dica.market)}</span>
+        <div className="flex items-center gap-2 text-xs text-ink-3">
+          <span className="font-semibold text-ink-2">{translateMarket(dica.market)}</span>
           {dica.line && <><span>·</span><span>{translateLine(dica.line)}</span></>}
           <InfoTip text={explainMarket(dica.market, dica.line)} />
         </div>
@@ -521,12 +521,12 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       {/* Confiança bar */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-zinc-600">Confiança</span>
-          <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
+          <span className="text-ink-4">Confiança</span>
+          <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
         </div>
-        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
+        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
           <div
-            className={`h-1 rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-zinc-500'}`}
+            className={`h-1 rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'}`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -534,14 +534,14 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
 
       {/* Reasoning snippet */}
       {fato && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
-          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
-          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{fato}</span>
+        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
+          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{fato}</span>
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
         {!dica.result ? (
           <button
             onClick={banca ? handleFollow : () => navigate('/banca')}
@@ -561,7 +561,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-green-400 hover:bg-green-500/5 border border-zinc-700 hover:border-green-500/50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-green-400 hover:bg-green-500/5 border border-line-strong hover:border-green-500/50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -572,7 +572,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
             }
           </button>
           {onClick && (
-            <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">
+            <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">
               Ver detalhes
             </span>
           )}
@@ -597,7 +597,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -616,9 +616,9 @@ function PickSeguroEmpty() {
 
   return (
     <div className="card p-10 text-center border-dashed">
-      <p className="text-zinc-500 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
-      <p className="text-zinc-600 text-xs">{msg}</p>
-      {hour < 12 && <p className="text-zinc-700 text-xs mt-2">Publicado todos os dias até às 12h</p>}
+      <p className="text-ink-3 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
+      <p className="text-ink-4 text-xs">{msg}</p>
+      {hour < 12 && <p className="text-ink-4 text-xs mt-2">Publicado todos os dias até às 12h</p>}
     </div>
   )
 }
@@ -708,23 +708,23 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="relative overflow-hidden bg-zinc-950 border border-zinc-800 hover:border-blue-500/30 rounded-lg cursor-pointer transition-colors duration-200 group"
+      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-blue-500 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2">
           <span className="text-xs font-black text-blue-400">Múltipla</span>
           <span className="badge-vip">VIP</span>
-          <span className="text-[10px] text-zinc-600">
+          <span className="text-[10px] text-ink-4">
             {new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}
             {' · '}{legs.length} seleções
           </span>
           {legs.length >= 2 && legs[0]?.home && legs[1]?.home && (
-            <span className="text-[9px] text-zinc-500 truncate max-w-[140px]">
+            <span className="text-[9px] text-ink-3 truncate max-w-[140px]">
               {legs[0].home} · {legs[1].home}
             </span>
           )}
@@ -738,26 +738,26 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
             <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
           </span>
         ) : (
-          <span className="text-[10px] text-zinc-500 border border-zinc-800 px-2 py-1 rounded-lg">Pendente</span>
+          <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
         )}
       </div>
 
       {/* Odd hero + retorno */}
-      <div className="font-mono flex items-center gap-0 divide-x divide-zinc-800/60 border-b border-zinc-800/60">
+      <div className="font-mono flex items-center gap-0 divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
-          <div className="text-[10px] text-zinc-500 mb-0.5">Odd combinada</div>
+          <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
           <div className="text-3xl font-black text-green-400">{Number(m.total_odd).toFixed(2)}</div>
         </div>
         {stakeSuggestion && !m.result ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Apostar</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
               <div className="text-xl font-black text-blue-400">{stakeSuggestion.units}u</div>
-              <div className="text-[11px] text-zinc-600">R${stakeSuggestion.amountR.toFixed(0)}</div>
+              <div className="text-[11px] text-ink-4">R${stakeSuggestion.amountR.toFixed(0)}</div>
             </div>
             <div className="flex-1 px-4 py-3 text-center">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Lucro pot.</div>
-              <div className="text-xl font-black text-white">+{((Number(m.total_odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+              <div className="text-xl font-black text-ink-1">+{((Number(m.total_odd) - 1) * stakeSuggestion.units).toFixed(2)}u</div>
               <div className="text-[11px] text-green-600 font-semibold">+R${((Number(m.total_odd) - 1) * stakeSuggestion.amountR).toFixed(0)}</div>
             </div>
           </>
@@ -770,20 +770,20 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Lucro</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">Lucro</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  {u > 1 && <div className="text-[10px] text-zinc-600">({u}u)</div>}
+                  {u > 1 && <div className="text-[10px] text-ink-4">({u}u)</div>}
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-zinc-500 mb-0.5">Em reais</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
                   {profitR != null ? (
                     <div className={`text-xl font-black ${color}`}>
                       {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
                     </div>
                   ) : (
-                    <div className="text-xl font-black text-zinc-600">-</div>
+                    <div className="text-xl font-black text-ink-4">-</div>
                   )}
                 </div>
               </>
@@ -791,8 +791,8 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           })()
         ) : (
           <div className="flex-1 px-5 py-3 text-center">
-            <div className="text-[10px] text-zinc-500 mb-0.5">Confiança</div>
-            <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-zinc-300'}`}>{pct}%</div>
+            <div className="text-[10px] text-ink-3 mb-0.5">Confiança</div>
+            <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-ink-2'}`}>{pct}%</div>
           </div>
         )}
       </div>
@@ -810,7 +810,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
             ? 'border-green-500/20 bg-green-500/5'
             : lr === 'RED'
             ? 'border-red-500/20 bg-red-500/5'
-            : 'border-zinc-800 bg-zinc-900/60'
+            : 'border-line bg-surface-1/60'
           const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : lr === 'RED'
@@ -824,9 +824,9 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
               </span>
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <TeamLogo id={leg.home_team_id} name={leg.home ?? leg.home_team ?? ''} size={20} />
-                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home ?? leg.home_team}</span>
-                <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
-                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away ?? leg.away_team}</span>
+                <span className="text-xs text-ink-2 font-semibold truncate">{leg.home ?? leg.home_team}</span>
+                <span className="text-ink-4 text-[10px] shrink-0">vs</span>
+                <span className="text-xs text-ink-2 font-semibold truncate">{leg.away ?? leg.away_team}</span>
                 <TeamLogo id={leg.away_team_id} name={leg.away ?? leg.away_team ?? ''} size={20} />
               </div>
               <span className={`font-mono font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : lr === 'RED' ? 'text-red-400' : 'text-blue-300'}`}>
@@ -834,8 +834,8 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
               </span>
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
-              <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
+              <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
+              {leg.line && <><span className="text-ink-4">·</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
               <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
@@ -846,24 +846,24 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       {/* Confiança bar */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-zinc-600">Confiança combinada</span>
-          <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-zinc-500'}>{pct}%</span>
+          <span className="text-ink-4">Confiança combinada</span>
+          <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
         </div>
-        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
-          <div className={`h-1 rounded-full ${pct >= 70 ? 'bg-blue-500' : 'bg-zinc-600'}`} style={{ width: `${pct}%` }} />
+        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
+          <div className={`h-1 rounded-full ${pct >= 70 ? 'bg-blue-500' : 'bg-surface-3'}`} style={{ width: `${pct}%` }} />
         </div>
       </div>
 
       {/* Fato da IA */}
       {shortReasoning(m.reasoning) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
-          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
-          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
+        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
+          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
         {!m.result ? (
           <button
             onClick={banca ? handleFollow : () => navigate('/banca')}
@@ -883,7 +883,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-blue-400 hover:bg-blue-500/5 border border-zinc-700 hover:border-blue-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-blue-400 hover:bg-blue-500/5 border border-line-strong hover:border-blue-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -893,7 +893,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+          <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">Ver detalhes</span>
         </div>
       </div>
     </motion.div>
@@ -914,7 +914,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1001,13 +1001,13 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className="relative overflow-hidden bg-zinc-950 border border-orange-500/20 hover:border-orange-500/40 rounded-lg cursor-pointer transition-colors duration-200 group"
+      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-black text-orange-400">Alavancagem</span>
           <span className="badge-vip">VIP</span>
@@ -1027,18 +1027,18 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       </div>
 
       {/* Bankroll progression */}
-      <div className="px-5 py-3 border-b border-zinc-800/60">
+      <div className="px-5 py-3 border-b border-line/60">
         {userBankroll != null ? (
           <div className="font-mono flex items-center gap-3">
             <div className="flex-1">
-              <div className="text-[10px] text-zinc-500 mb-1">Sua banca alavancagem</div>
+              <div className="text-[10px] text-ink-3 mb-1">Sua banca alavancagem</div>
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-black text-orange-400">R${stake.toFixed(2)}</span>
                 {!pick.result && (
                   <>
-                    <span className="text-zinc-600 text-sm">·</span>
-                    <span className="text-lg font-black text-white">R${potReturn.toFixed(2)}</span>
-                    <span className="text-[10px] text-zinc-600">se green</span>
+                    <span className="text-ink-4 text-sm">·</span>
+                    <span className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</span>
+                    <span className="text-[10px] text-ink-4">se green</span>
                   </>
                 )}
                 {profit != null && (
@@ -1049,20 +1049,20 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
               </div>
             </div>
             <div className="text-center shrink-0">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Odd</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
               <div className="text-2xl font-black text-green-400">{oddCombined.toFixed(2)}</div>
             </div>
           </div>
         ) : (
           <div className="font-mono flex items-center justify-between">
             <div>
-              <div className="text-[10px] text-zinc-500 mb-0.5">Odd alvo</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Odd alvo</div>
               <div className="text-2xl font-black text-green-400">{oddCombined.toFixed(2)}</div>
             </div>
             <div className="text-right">
-              <div className="text-[10px] text-zinc-500 mb-0.5">Retorno pot.</div>
-              <div className="text-lg font-black text-white">R${potReturn.toFixed(2)}</div>
-              <div className="text-[10px] text-zinc-600">base R${stake.toFixed(0)}</div>
+              <div className="text-[10px] text-ink-3 mb-0.5">Retorno pot.</div>
+              <div className="text-lg font-black text-ink-1">R${potReturn.toFixed(2)}</div>
+              <div className="text-[10px] text-ink-4">base R${stake.toFixed(0)}</div>
             </div>
           </div>
         )}
@@ -1075,7 +1075,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
             ? 'border-green-500/20 bg-green-500/5'
             : pick.result === 'RED'
             ? 'border-red-500/20 bg-red-500/5'
-            : 'border-zinc-800 bg-zinc-900/60'
+            : 'border-line bg-surface-1/60'
           const circleClass = pick.result === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
             : pick.result === 'RED'
@@ -1089,9 +1089,9 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
               </span>
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
-                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.home}</span>
-                <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
-                <span className="text-xs text-zinc-300 font-semibold truncate">{leg.away}</span>
+                <span className="text-xs text-ink-2 font-semibold truncate">{leg.home}</span>
+                <span className="text-ink-4 text-[10px] shrink-0">vs</span>
+                <span className="text-xs text-ink-2 font-semibold truncate">{leg.away}</span>
                 <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
               </div>
               <span className={`font-mono font-black text-sm shrink-0 ${pick.result === 'GREEN' ? 'text-green-400' : pick.result === 'RED' ? 'text-red-400' : 'text-orange-300'}`}>
@@ -1099,9 +1099,9 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
               </span>
             </div>
             <div className="flex items-center gap-1.5 ml-7 text-xs mt-1">
-              <span className="font-semibold text-zinc-300">{translateMarket(leg.market)}</span>
-              {leg.line && <><span className="text-zinc-600">·</span><span className="text-zinc-400">{translateLine(leg.line)}</span></>}
-              {leg.house && <><span className="text-zinc-600">·</span><span className="text-zinc-500">{leg.house}</span></>}
+              <span className="font-semibold text-ink-2">{translateMarket(leg.market)}</span>
+              {leg.line && <><span className="text-ink-4">·</span><span className="text-ink-2">{translateLine(leg.line)}</span></>}
+              {leg.house && <><span className="text-ink-4">·</span><span className="text-ink-3">{leg.house}</span></>}
               <InfoTip text={explainMarket(leg.market, leg.line)} />
             </div>
           </div>
@@ -1112,24 +1112,24 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       {/* Confiança */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-zinc-600">Confiança</span>
-          <span className={confPct >= 70 ? 'text-orange-400 font-bold' : 'text-zinc-500'}>{confPct}%</span>
+          <span className="text-ink-4">Confiança</span>
+          <span className={confPct >= 70 ? 'text-orange-400 font-bold' : 'text-ink-3'}>{confPct}%</span>
         </div>
-        <div className="bg-zinc-800 rounded-full h-1 overflow-hidden">
-          <div className={`h-1 rounded-full ${confPct >= 70 ? 'bg-orange-500' : 'bg-zinc-600'}`} style={{ width: `${confPct}%` }} />
+        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
+          <div className={`h-1 rounded-full ${confPct >= 70 ? 'bg-orange-500' : 'bg-surface-3'}`} style={{ width: `${confPct}%` }} />
         </div>
       </div>
 
       {/* Fato da IA */}
       {shortReasoning(pick.reasoning_1) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-zinc-900 border border-zinc-800 rounded-md">
-          <span className="text-[10px] text-zinc-600 font-black uppercase">Fato · </span>
-          <span className="text-[11px] text-zinc-400 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
+        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
+          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
         </div>
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-zinc-800/60">
+      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
         {!pick.result ? (
           <button
             onClick={e => {
@@ -1153,7 +1153,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
           <button
             onClick={handleShare}
             disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-zinc-400 hover:text-orange-400 hover:bg-orange-500/5 border border-zinc-700 hover:border-orange-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
+            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-orange-400 hover:bg-orange-500/5 border border-line-strong hover:border-orange-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
             title="Compartilhar pick"
           >
             {sharing
@@ -1163,7 +1163,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          <span className="text-xs text-zinc-600 group-hover:text-zinc-400 transition-colors">Ver detalhes</span>
+          <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">Ver detalhes</span>
         </div>
       </div>
     </motion.div>
@@ -1184,7 +1184,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1218,17 +1218,17 @@ function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' 
   const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
   const edge = p.edge != null ? Number(p.edge) * 100 : null
   return (
-    <div className="card p-4 sm:p-5 space-y-3">
+    <div className={`pick-card p-4 sm:p-5 space-y-3 ${PICK_TYPE_BORDER[tipo]}`}>
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm text-zinc-200 font-medium min-w-0">
+          <div className="flex items-center gap-1.5 text-sm text-ink-2 font-medium min-w-0">
             <TeamLogo id={p.home_team_id} name={p.home_team} size={18} />
             <span className="truncate">{p.home_team}</span>
-            <span className="text-zinc-600 shrink-0">x</span>
+            <span className="text-ink-4 shrink-0">x</span>
             <TeamLogo id={p.away_team_id} name={p.away_team} size={18} />
             <span className="truncate">{p.away_team}</span>
           </div>
-          <p className="text-[11px] text-zinc-600 mt-1 font-mono">
+          <p className="text-[11px] text-ink-4 mt-1 font-mono">
             {new Date(`${p.match_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
             {p.bet_house ? ` · ${p.bet_house}` : ''}
           </p>
@@ -1240,32 +1240,32 @@ function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' 
         )}
       </div>
 
-      <div className="bg-zinc-950 border border-zinc-800 rounded-md px-3 py-2.5">
-        <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-1">
+      <div className="bg-surface-1 border border-line rounded-md px-3 py-2.5">
+        <p className="text-[10px] text-ink-4 uppercase font-semibold mb-1">
           {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
         </p>
-        <p className="text-sm text-white font-bold">{p.line}</p>
+        <p className="text-sm text-ink-1 font-bold">{p.line}</p>
         {tipo === 'goleiros' && p.team_name && (
-          <p className="text-[11px] text-zinc-500 mt-0.5">{p.team_name}</p>
+          <p className="text-[11px] text-ink-3 mt-0.5">{p.team_name}</p>
         )}
       </div>
 
       <div className="grid grid-cols-3 gap-2 font-mono">
-        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
+        <div className="bg-surface-1 rounded-md p-2.5 text-center">
           <div className="text-base font-black text-green-400">{Number(p.odd).toFixed(2)}</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">Odd</div>
+          <div className="text-[10px] text-ink-4 mt-0.5">Odd</div>
         </div>
-        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
-          <div className="text-base font-black text-white">{prob != null ? `${prob.toFixed(0)}%` : '·'}</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">Probabilidade</div>
+        <div className="bg-surface-1 rounded-md p-2.5 text-center">
+          <div className="text-base font-black text-ink-1">{prob != null ? `${prob.toFixed(0)}%` : '·'}</div>
+          <div className="text-[10px] text-ink-4 mt-0.5">Probabilidade</div>
         </div>
-        <div className="bg-zinc-900 rounded-md p-2.5 text-center">
+        <div className="bg-surface-1 rounded-md p-2.5 text-center">
           <div className="text-base font-black text-green-400">{edge != null ? `${edge > 0 ? '+' : ''}${edge.toFixed(1)}%` : '·'}</div>
-          <div className="text-[10px] text-zinc-600 mt-0.5">Margem</div>
+          <div className="text-[10px] text-ink-4 mt-0.5">Margem</div>
         </div>
       </div>
 
-      {p.reasoning && <p className="text-xs text-zinc-500 leading-relaxed">{p.reasoning}</p>}
+      {p.reasoning && <p className="text-xs text-ink-3 leading-relaxed">{p.reasoning}</p>}
     </div>
   )
 }
@@ -1278,13 +1278,13 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando }: {
   return (
     <div>
       <SectionHeader color={cor} label={titulo} badge="VIP" />
-      <p className="text-xs text-zinc-500 leading-relaxed mb-4">{explicacao}</p>
+      <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>
       {carregando ? (
         <Spinner />
       ) : !picks || picks.length === 0 ? (
         <div className="card p-6 text-center">
-          <p className="text-sm text-zinc-400 font-bold mb-1">Nenhum pick de {titulo.toLowerCase()} ainda</p>
-          <p className="text-xs text-zinc-600">
+          <p className="text-sm text-ink-2 font-bold mb-1">Nenhum pick de {titulo.toLowerCase()} ainda</p>
+          <p className="text-xs text-ink-4">
             {tipo === 'goleiros'
               ? 'Defesas é um mercado raro: aparece em menos de 1% dos jogos. Dia sem pick é o normal aqui.'
               : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
@@ -1303,7 +1303,7 @@ function SectionHeader({ color, label, badge }: { color: string; label: string; 
   return (
     <div className="flex items-center gap-3 mb-4">
       <span className={`w-0.5 h-5 ${color} rounded-full block`} />
-      <h2 className="text-sm font-black text-zinc-300">{label}</h2>
+      <h2 className="text-sm font-black text-ink-2">{label}</h2>
       {badge && <span className="badge-vip">{badge}</span>}
     </div>
   )
@@ -1313,7 +1313,7 @@ function SectionHeader({ color, label, badge }: { color: string; label: string; 
 function Spinner() {
   return (
     <div className="card p-16 flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+      <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
     </div>
   )
 }
@@ -1341,7 +1341,7 @@ function PipelineStatusCard() {
   }
 
   return (
-    <div className="card p-8 border-zinc-800">
+    <div className="card p-8 border-line">
       <div className="flex flex-col items-center mb-6">
         <div className="relative mb-4">
           <span className="absolute inset-0 rounded-full bg-green-500/20 animate-ping" />
@@ -1349,8 +1349,8 @@ function PipelineStatusCard() {
             <BrainCircuit className="w-7 h-7 text-green-400" />
           </span>
         </div>
-        <p className="text-white font-bold text-base text-center">A IA está montando os picks de hoje</p>
-        <p className="text-zinc-500 text-sm mt-1 text-center">Analisando estatísticas, odds e forma recente dos times</p>
+        <p className="text-ink-1 font-bold text-base text-center">A IA está montando os picks de hoje</p>
+        <p className="text-ink-3 text-sm mt-1 text-center">Analisando estatísticas, odds e forma recente dos times</p>
       </div>
       <div className="space-y-3 max-w-xs mx-auto">
         {status.steps.map(s => (
@@ -1358,17 +1358,17 @@ function PipelineStatusCard() {
             <span className={`w-5 h-5 rounded-full flex items-center justify-center shrink-0 text-[11px] font-black ${
               s.status === 'done'    ? 'bg-green-500/15 text-green-400' :
               s.status === 'running' ? 'bg-yellow-500/15 text-yellow-400' :
-              s.status === 'error'   ? 'bg-zinc-700 text-zinc-500' :
-                                        'bg-zinc-800 text-zinc-600'
+              s.status === 'error'   ? 'bg-surface-3 text-ink-3' :
+                                        'bg-surface-2 text-ink-4'
             }`}>
               {s.status === 'done' ? '✓' : s.status === 'running' ? (
                 <span className="w-2 h-2 rounded-full bg-yellow-400 animate-pulse" />
               ) : '·'}
             </span>
             <span className={`text-sm ${
-              s.status === 'done'    ? 'text-zinc-400' :
-              s.status === 'running' ? 'text-white font-semibold' :
-                                        'text-zinc-600'
+              s.status === 'done'    ? 'text-ink-2' :
+              s.status === 'running' ? 'text-ink-1 font-semibold' :
+                                        'text-ink-4'
             }`}>
               {s.label}
             </span>
@@ -1470,7 +1470,7 @@ function PicksTable({
   if (!rows.length) return null
   return (
     <div className="card overflow-hidden p-0">
-      <div className="divide-y divide-zinc-800/60">
+      <div className="divide-y divide-line/60">
         {rows.map(row => {
           const pt = showSource ? (row.pick_type ?? pickType) : pickType
           const p  = normalizePickRow(row, pt)
@@ -1478,10 +1478,10 @@ function PicksTable({
             <button
               key={`${pt}-${p.id}`}
               onClick={() => onOpen(p.id, pt)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-zinc-800/40 transition-colors text-left"
+              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors text-left"
             >
               <div className="w-12 shrink-0 text-center">
-                <span className="text-xs text-zinc-500">
+                <span className="text-xs text-ink-3">
                   {new Date(p.matchDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                 </span>
               </div>
@@ -1494,17 +1494,17 @@ function PicksTable({
                     </span>
                   )}
                   <TeamLogo id={p.homeId} name={p.homeName} size={16} />
-                  <span className="text-sm font-semibold text-white truncate">{p.homeName}</span>
+                  <span className="text-sm font-semibold text-ink-1 truncate">{p.homeName}</span>
                   {p.awayName && (
                     <>
-                      <span className="text-zinc-600 text-xs shrink-0">vs</span>
-                      <span className="text-sm font-semibold text-white truncate">{p.awayName}</span>
+                      <span className="text-ink-4 text-xs shrink-0">vs</span>
+                      <span className="text-sm font-semibold text-ink-1 truncate">{p.awayName}</span>
                       <TeamLogo id={p.awayId} name={p.awayName} size={16} />
                     </>
                   )}
                 </div>
-                <p className="text-xs text-zinc-500 truncate">
-                  {p.market}{p.line ? <> · <span className="text-zinc-400">{p.line}</span></> : ''}
+                <p className="text-xs text-ink-3 truncate">
+                  {p.market}{p.line ? <> · <span className="text-ink-2">{p.line}</span></> : ''}
                   {p.odd ? ` · Odd ${p.odd.toFixed(2)}` : ''}
                   {p.betHouse ? ` · ${p.betHouse}` : ''}
                 </p>
@@ -1514,7 +1514,7 @@ function PicksTable({
                 {p.result ? (() => {
                   const rs = getResultStyle(p.result)
                   return (
-                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-ink-3'}`}>
                       {rs ? rs.label : p.result}
                     </span>
                   )
@@ -1528,7 +1528,7 @@ function PicksTable({
                     {p.profit >= 0 ? '+' : ''}{p.isMonetary ? 'R$' : ''}{Math.abs(p.profit).toFixed(2)}{!p.isMonetary ? 'u' : ''}
                   </span>
                 ) : (
-                  <span className="text-sm font-black w-14 text-right text-zinc-700"></span>
+                  <span className="text-sm font-black w-14 text-right text-ink-4"></span>
                 )}
               </div>
             </button>
@@ -1536,7 +1536,7 @@ function PicksTable({
         })}
       </div>
       {footerAction && (
-        <div className="px-4 py-3 border-t border-zinc-800">
+        <div className="px-4 py-3 border-t border-line">
           <button onClick={footerAction.onClick}
             className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
             {footerAction.label}
@@ -1550,11 +1550,11 @@ function PicksTable({
 // VIP Lock Overlay
 function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'orange' | 'purple' }) {
   const cls = color === 'blue'
-    ? { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-white'    }
+    ? { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1'    }
     : color === 'orange'
-    ? { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-white' }
+    ? { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1' }
     : color === 'purple'
-    ? { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-white' }
+    ? { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1' }
     : { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black' }
   return (
     <div className="relative rounded-lg overflow-hidden">
@@ -1562,16 +1562,16 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="card p-5 space-y-3">
             <div className="flex items-center justify-between">
-              <div className="h-3 bg-zinc-700 rounded w-24" />
-              <div className="h-5 bg-zinc-700 rounded w-16" />
+              <div className="h-3 bg-surface-3 rounded w-24" />
+              <div className="h-5 bg-surface-3 rounded w-16" />
             </div>
-            <div className="h-4 bg-zinc-700 rounded w-3/4" />
+            <div className="h-4 bg-surface-3 rounded w-3/4" />
             <div className="grid grid-cols-3 gap-2">
-              <div className="h-10 bg-zinc-800 rounded-lg" />
-              <div className="h-10 bg-zinc-800 rounded-lg" />
-              <div className="h-10 bg-zinc-800 rounded-lg" />
+              <div className="h-10 bg-surface-2 rounded-lg" />
+              <div className="h-10 bg-surface-2 rounded-lg" />
+              <div className="h-10 bg-surface-2 rounded-lg" />
             </div>
-            <div className="h-2 bg-zinc-800 rounded-full" />
+            <div className="h-2 bg-surface-2 rounded-full" />
           </div>
         ))}
       </div>
@@ -1582,8 +1582,8 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
             </svg>
           </div>
-          <p className="font-display text-white font-black text-base mb-1">Exclusivo para assinantes VIP</p>
-          <p className="text-zinc-400 text-xs mb-4 max-w-xs">10 a 20 picks por dia com análise completa da IA e resultados em tempo real.</p>
+          <p className="font-display text-ink-1 font-black text-base mb-1">Exclusivo para assinantes VIP</p>
+          <p className="text-ink-2 text-xs mb-4 max-w-xs">10 a 20 picks por dia com análise completa da IA e resultados em tempo real.</p>
           <Link to="/checkout" className={`inline-block font-black px-6 py-2.5 rounded-md transition-colors text-sm ${cls.btn}`}>
             Assinar VIP
           </Link>
@@ -1797,7 +1797,7 @@ export default function Picks() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-surface-0">
       <AnimatePresence>
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
       </AnimatePresence>
@@ -1805,18 +1805,18 @@ export default function Picks() {
       {/* Modal de boas-vindas · configura banca */}
       {showBancaModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm px-4">
-          <div className="bg-zinc-900 border border-zinc-800 rounded-lg max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
+          <div className="bg-surface-1 border border-line rounded-lg max-w-md w-full p-6 shadow-2xl overflow-y-auto max-h-[92dvh]">
             <div className="flex items-center gap-3 mb-4">
               <div className="w-10 h-10 rounded-md bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center shrink-0">
                 <Wallet className="w-5 h-5 text-yellow-400" />
               </div>
               <div>
-                <h2 className="text-white font-black text-base">Configure sua banca</h2>
-                <p className="text-zinc-500 text-xs">Último passo para começar a usar</p>
+                <h2 className="text-ink-1 font-black text-base">Configure sua banca</h2>
+                <p className="text-ink-3 text-xs">Último passo para começar a usar</p>
               </div>
             </div>
-            <p className="text-zinc-400 text-sm leading-relaxed mb-5">
-              Com a banca configurada você consegue <span className="text-white font-semibold">acompanhar seus picks</span>,
+            <p className="text-ink-2 text-sm leading-relaxed mb-5">
+              Com a banca configurada você consegue <span className="text-ink-1 font-semibold">acompanhar seus picks</span>,
               ver seu <span className="text-green-400 font-semibold">lucro acumulado</span>,
               e receber <span className="text-yellow-400 font-semibold">sugestão de stake</span> em cada aposta.
               Leva menos de 30 segundos!
@@ -1837,7 +1837,7 @@ export default function Picks() {
                   sessionStorage.setItem('pickia_banca_modal_shown', '1')
                   setShowBancaModal(false)
                 }}
-                className="w-full text-zinc-500 hover:text-zinc-400 text-xs py-2 transition-colors"
+                className="w-full text-ink-3 hover:text-ink-2 text-xs py-2 transition-colors"
               >
                 Fazer depois
               </button>
@@ -1849,25 +1849,25 @@ export default function Picks() {
       <Navbar />
 
       {/* Cabeçalho */}
-      <div className="bg-zinc-950 border-b border-zinc-800">
+      <div className="bg-surface-0 border-b border-line">
         <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-base font-black text-white tracking-tight">Picks</h1>
+            <h1 className="text-base font-black text-ink-1 tracking-tight">Picks</h1>
             {tab === 'hoje' ? (
               <div className="flex items-center gap-0.5 mt-0.5">
                 <button
                   onClick={() => setSelectedOffset(o => o - 1)}
-                  className="text-zinc-500 hover:text-zinc-300 transition-colors p-0.5 -ml-0.5"
+                  className="text-ink-3 hover:text-ink-2 transition-colors p-0.5 -ml-0.5"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                 </button>
-                <span className="text-zinc-400 text-xs capitalize font-medium">
+                <span className="text-ink-2 text-xs capitalize font-medium">
                   {selectedOffset === 0 ? 'Hoje' : todayLabel}
                 </span>
                 <button
                   onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
                   disabled={selectedOffset >= 0}
-                  className="text-zinc-500 hover:text-zinc-300 disabled:opacity-20 transition-colors p-0.5"
+                  className="text-ink-3 hover:text-ink-2 disabled:opacity-20 transition-colors p-0.5"
                 >
                   <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -1881,14 +1881,14 @@ export default function Picks() {
                 )}
               </div>
             ) : (
-              <p className="text-zinc-500 text-xs capitalize mt-0.5">{todayLabel}</p>
+              <p className="text-ink-3 text-xs capitalize mt-0.5">{todayLabel}</p>
             )}
           </div>
           <div className="flex items-center gap-4">
             {quickStats && (
               <div className="hidden sm:flex items-center gap-3 text-xs">
-                <span className="text-zinc-600">Win rate geral</span>
-                <span className={`font-mono font-black text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400'}`}>
+                <span className="text-ink-4">Win rate geral</span>
+                <span className={`font-mono font-black text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>
               </div>
@@ -1908,7 +1908,7 @@ export default function Picks() {
               <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
               <span className="text-green-400 text-sm font-semibold">Novos picks disponíveis hoje!</span>
             </div>
-            <button onClick={markSeen} className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">
+            <button onClick={markSeen} className="text-ink-4 hover:text-ink-2 text-xs transition-colors">
               Fechar
             </button>
           </div>
@@ -1929,7 +1929,7 @@ export default function Picks() {
               >
                 Acompanhar
               </button>
-              <button onClick={clearLive} className="text-zinc-600 hover:text-zinc-400 text-xs transition-colors">✕</button>
+              <button onClick={clearLive} className="text-ink-4 hover:text-ink-2 text-xs transition-colors">✕</button>
             </div>
           </div>
         )}
@@ -1957,8 +1957,8 @@ export default function Picks() {
           <motion.div key="hoje" variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {todayLoading ? <Spinner /> : todayError ? (
             <div className="card p-10 text-center">
-              <p className="text-zinc-400 font-semibold mb-1">Erro ao carregar picks</p>
-              <p className="text-zinc-600 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
+              <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>
+              <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
               <button
                 onClick={() => { setTodayError(false); setTodayLoading(true); const p = selectedOffset < 0 ? { date: getBrasiliaDateIso(selectedOffset) } : {}; api.get('/suggestions/today', { params: p }).then(r => setToday(r.data)).catch(() => setTodayError(true)).finally(() => setTodayLoading(false)) }}
                 className="text-sm text-green-400 hover:text-green-300 font-semibold transition-colors"
@@ -1972,17 +1972,17 @@ export default function Picks() {
               {/* Stats da IA este mês */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-zinc-600 uppercase font-semibold mb-2">Performance da IA · Geral</p>
+                  <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
-                      { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-white' },
+                      { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
-                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-zinc-400' },
+                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
                     ].map(({ label, value, color }) => (
-                      <div key={label} className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
+                      <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
                         <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
-                        <div className="text-[10px] text-zinc-500 uppercase mt-1">{label}</div>
+                        <div className="text-[10px] text-ink-3 uppercase mt-1">{label}</div>
                       </div>
                     ))}
                   </div>
@@ -1999,7 +1999,7 @@ export default function Picks() {
                 const ts = today?.vip?.[0]?.created_at ?? today?.dica_do_dia?.created_at
                 const hora = new Date(ts).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })
                 return (
-                  <p className="text-[11px] text-zinc-600 text-right -mt-4 mb-2">
+                  <p className="text-[11px] text-ink-4 text-right -mt-4 mb-2">
                     Picks gerados hoje às {hora}
                   </p>
                 )
@@ -2035,7 +2035,7 @@ export default function Picks() {
                         {vips.length > 4 && (
                           <button
                             onClick={() => setTab('vip')}
-                            className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700"
+                            className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong"
                           >
                             Ver todos os {vips.length} picks
                           </button>
@@ -2069,7 +2069,7 @@ export default function Picks() {
                   {!canSeeVip ? <VipLockOverlay color="orange" /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
-                        <p className="text-xs text-zinc-400 leading-relaxed">
+                        <p className="text-xs text-ink-2 leading-relaxed">
                           Banca composta: começa em{' '}
                           <span className="text-orange-400 font-bold">
                             {userAlavSerie?.configured ? `R$${userAlavSerie.initial_bankroll.toFixed(2)}` : 'sua banca cadastrada'}
@@ -2085,7 +2085,7 @@ export default function Picks() {
                         isLive={isAlavLive(today.alavancagem)}
                       />
                       <button onClick={() => setTab('alavancagem')}
-                        className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700">
+                        className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
                         Ver histórico da série
                       </button>
                     </>
@@ -2108,7 +2108,7 @@ export default function Picks() {
                     ))}
                   </div>
                   <button onClick={() => setTab('mercados')}
-                    className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700">
+                    className="mt-3 w-full text-center text-xs text-purple-400 hover:text-purple-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
                     Ver todos os mercados
                   </button>
                 </section>
@@ -2125,9 +2125,9 @@ export default function Picks() {
             {/* O que é */}
             <div className="card p-5 border-green-500/20 bg-green-500/5">
               <p className="font-display text-sm font-black text-green-400 mb-3">O que é o Pick do Dia Free?</p>
-              <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
+              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
                 <p>
-                  Um pick gratuito publicado diariamente pela <span className="text-white font-bold">IA</span>. Analisamos centenas de
+                  Um pick gratuito publicado diariamente pela <span className="text-ink-1 font-bold">IA</span>. Analisamos centenas de
                   jogos e selecionamos o <span className="text-green-400 font-bold">1 pick com maior confiança</span> para disponibilizar para todos os usuários.
                 </p>
                 <p>
@@ -2137,12 +2137,12 @@ export default function Picks() {
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
                     { label: 'Frequência',  value: 'Diário',  color: 'text-green-400' },
-                    { label: 'Picks/dia',   value: '1',       color: 'text-white'     },
+                    { label: 'Picks/dia',   value: '1',       color: 'text-ink-1'     },
                     { label: 'Custo',       value: 'Grátis',  color: 'text-green-400' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
+                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
+                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
                     </div>
                   ))}
                 </div>
@@ -2159,7 +2159,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>
@@ -2170,9 +2170,9 @@ export default function Picks() {
             {/* O que é */}
             <div className="card p-5 border-yellow-400/20 bg-yellow-400/5">
               <p className="font-display text-sm font-black text-yellow-400 mb-3">O que são os Picks VIP?</p>
-              <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
+              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
                 <p>
-                  Picks exclusivos gerados pela <span className="text-white font-bold">IA</span> com análise estatística avançada.
+                  Picks exclusivos gerados pela <span className="text-ink-1 font-bold">IA</span> com análise estatística avançada.
                   A cada dia a IA processa forma recente, confrontos diretos, odds de mercado e gera
                   {' '}<span className="text-yellow-400 font-bold">10 a 20 picks de alta confiança</span>.
                 </p>
@@ -2183,12 +2183,12 @@ export default function Picks() {
                 <div className="grid grid-cols-3 gap-3 mt-3">
                   {[
                     { label: 'Picks/dia',    value: '10–20',  color: 'text-yellow-400' },
-                    { label: 'Mercados',     value: '5+',     color: 'text-white'      },
+                    { label: 'Mercados',     value: '5+',     color: 'text-ink-1'      },
                     { label: 'Análise IA',   value: 'Completa', color: 'text-green-400' },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
+                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
+                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
                     </div>
                   ))}
                 </div>
@@ -2231,8 +2231,8 @@ export default function Picks() {
                       </motion.div>
                     ) : (
                       <div className="card p-8 text-center border-dashed">
-                        <p className="text-zinc-500 text-sm font-semibold">{leagueFilter || vipResultFilter ? 'Nenhum pick encontrado com esse filtro.' : 'Picks VIP do dia ainda não gerados.'}</p>
-                        <p className="text-zinc-600 text-xs mt-1">{leagueFilter || vipResultFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
+                        <p className="text-ink-3 text-sm font-semibold">{leagueFilter || vipResultFilter ? 'Nenhum pick encontrado com esse filtro.' : 'Picks VIP do dia ainda não gerados.'}</p>
+                        <p className="text-ink-4 text-xs mt-1">{leagueFilter || vipResultFilter ? '' : 'Os picks saem pela manhã. Volte mais tarde.'}</p>
                       </div>
                     )}
                   </>
@@ -2242,7 +2242,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-yellow-400 hover:text-yellow-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>
@@ -2253,9 +2253,9 @@ export default function Picks() {
             {/* O que é */}
             <div className="card p-5 border-blue-400/20 bg-blue-400/5">
               <p className="font-display text-sm font-black text-blue-400 mb-3">O que são as Múltiplas VIP?</p>
-              <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
+              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
                 <p>
-                  A IA combina <span className="text-white font-bold">2 a 3 seleções</span> de alta confiança em uma única aposta múltipla,
+                  A IA combina <span className="text-ink-1 font-bold">2 a 3 seleções</span> de alta confiança em uma única aposta múltipla,
                   gerando odds combinadas entre <span className="text-blue-400 font-bold">2.00 e 4.00</span> com risco controlado.
                 </p>
                 <p>
@@ -2266,11 +2266,11 @@ export default function Picks() {
                   {[
                     { label: 'Seleções',   value: '2–3',   color: 'text-blue-400'   },
                     { label: 'Odd alvo',   value: '2.00–4.00', color: 'text-green-400'  },
-                    { label: 'Frequência', value: 'Diário', color: 'text-white'     },
+                    { label: 'Frequência', value: 'Diário', color: 'text-ink-1'     },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
+                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
+                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
                     </div>
                   ))}
                 </div>
@@ -2287,8 +2287,8 @@ export default function Picks() {
                   </motion.div>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
-                    <p className="text-zinc-500 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
-                    <p className="text-zinc-600 text-xs mt-1">Publicada diariamente pela manhã.</p>
+                    <p className="text-ink-3 text-sm font-semibold">Múltipla do dia ainda não gerada.</p>
+                    <p className="text-ink-4 text-xs mt-1">Publicada diariamente pela manhã.</p>
                   </div>
                 )
               )}
@@ -2296,7 +2296,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-blue-400 hover:text-blue-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>
@@ -2307,15 +2307,15 @@ export default function Picks() {
             {/* Como funciona */}
             <div className="card p-5 border-orange-500/20 bg-orange-500/5">
               <p className="font-display text-sm font-black text-orange-400 mb-3">Como funciona a Alavancagem?</p>
-              <div className="space-y-2 text-sm text-zinc-400 leading-relaxed">
+              <div className="space-y-2 text-sm text-ink-2 leading-relaxed">
                 <p>
-                  A banca começa em <span className="text-white font-bold">R$50</span> e o lucro de cada GREEN é
+                  A banca começa em <span className="text-ink-1 font-bold">R$50</span> e o lucro de cada GREEN é
                   reinvestido integralmente na próxima aposta, sem retirar nada.
                 </p>
                 <p>
                   A cada <span className="text-red-400 font-bold">RED</span>, a banca reseta para R$50 e uma nova
                   série começa do zero. A IA seleciona 1 pick (ou combinada de 2 com alta correlação)
-                  com <span className="text-white font-bold">odd combinada entre 1.45 e 1.90</span> para maximizar a consistência.
+                  com <span className="text-ink-1 font-bold">odd combinada entre 1.45 e 1.90</span> para maximizar a consistência.
                 </p>
                 <p>
                   O objetivo é <span className="text-green-400 font-bold">encadear greens consecutivos</span> e multiplicar
@@ -2326,11 +2326,11 @@ export default function Picks() {
                     { label: 'Banca inicial', value: 'R$50',   color: 'text-orange-400' },
                     { label: 'Odd alvo',      value: '1.45–1.90', color: 'text-green-400'  },
                     { label: 'Reset no RED',  value: 'R$50',   color: 'text-red-400'    },
-                    { label: '5 greens',      value: 'R$300+', color: 'text-white'      },
+                    { label: '5 greens',      value: 'R$300+', color: 'text-ink-1'      },
                   ].map(({ label, value, color }) => (
-                    <div key={label} className="bg-zinc-900 rounded-md p-3 text-center">
+                    <div key={label} className="bg-surface-1 rounded-md p-3 text-center">
                       <div className={`text-lg font-black ${color}`}>{value}</div>
-                      <div className="text-xs text-zinc-600 mt-0.5">{label}</div>
+                      <div className="text-xs text-ink-4 mt-0.5">{label}</div>
                     </div>
                   ))}
                 </div>
@@ -2350,12 +2350,12 @@ export default function Picks() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="font-display text-sm font-black text-orange-400">Banca Alavancagem</p>
-                      <p className="text-xs text-zinc-500 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
+                      <p className="text-xs text-ink-3 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
                     </div>
                     {userAlavSerie?.configured && (
                       <div className="font-mono text-right">
                         <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
-                        <div className="text-xs text-zinc-600">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
+                        <div className="text-xs text-ink-4">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
                       </div>
                     )}
                   </div>
@@ -2373,18 +2373,18 @@ export default function Picks() {
                       <button
                         onClick={saveAlavInit}
                         disabled={alavInitSaving || !alavInitInput}
-                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-white font-black px-4 py-2 rounded-md text-sm transition-colors"
+                        className="bg-orange-500 hover:bg-orange-400 disabled:opacity-50 text-ink-1 font-black px-4 py-2 rounded-md text-sm transition-colors"
                       >
                         {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
                       </button>
                       {userAlavSerie?.configured && (
-                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-md border border-zinc-700 text-zinc-500 text-sm hover:text-white transition-colors">✕</button>
+                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-md border border-line-strong text-ink-3 text-sm hover:text-ink-1 transition-colors">✕</button>
                       )}
                     </div>
                   ) : (
                     <button
                       onClick={() => setAlavInitInput(String(userAlavSerie.initial_bankroll))}
-                      className="text-xs text-zinc-600 hover:text-orange-400 transition-colors underline"
+                      className="text-xs text-ink-4 hover:text-orange-400 transition-colors underline"
                     >
                       Alterar valor inicial
                     </button>
@@ -2408,8 +2408,8 @@ export default function Picks() {
                       />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
-                        <p className="text-zinc-500 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-zinc-600 text-xs mt-1">Publicado diariamente até às 12h.</p>
+                        <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
+                        <p className="text-ink-4 text-xs mt-1">Publicado diariamente até às 12h.</p>
                       </div>
                     )}
                   </div>
@@ -2436,19 +2436,19 @@ export default function Picks() {
                     <div>
                       <SectionHeader color="bg-orange-400" label="Progresso da Série" />
                       {alavLoading ? (
-                        <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-zinc-700 border-t-orange-400 rounded-full animate-spin" /></div>
+                        <div className="flex justify-center py-6"><div className="w-6 h-6 border-2 border-line-strong border-t-orange-400 rounded-full animate-spin" /></div>
                       ) : alavError ? (
                         <div className="card p-8 text-center border-dashed">
-                          <p className="text-zinc-400 text-sm font-semibold mb-1">Erro ao carregar a série</p>
-                          <p className="text-zinc-600 text-xs mb-3">Não foi possível conectar ao servidor.</p>
+                          <p className="text-ink-2 text-sm font-semibold mb-1">Erro ao carregar a série</p>
+                          <p className="text-ink-4 text-xs mb-3">Não foi possível conectar ao servidor.</p>
                           <button onClick={() => doFetchAlavancagem(alavFilters)} className="text-xs text-orange-400 hover:text-orange-300 font-semibold transition-colors">
                             Tentar novamente
                           </button>
                         </div>
                       ) : !alavancagem.length ? (
                         <div className="card p-8 text-center border-dashed border-orange-500/20">
-                          <p className="text-zinc-500 text-sm font-semibold">Série ainda não iniciada.</p>
-                          <p className="text-zinc-600 text-xs mt-1">Os stats aparecem assim que os primeiros picks forem gerados.</p>
+                          <p className="text-ink-3 text-sm font-semibold">Série ainda não iniciada.</p>
+                          <p className="text-ink-4 text-xs mt-1">Os stats aparecem assim que os primeiros picks forem gerados.</p>
                         </div>
                       ) : (
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -2459,14 +2459,14 @@ export default function Picks() {
                               color: userBankroll != null && userBankroll > initialBankroll ? 'text-green-400' : 'text-orange-400',
                               sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
                             },
-                            { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-zinc-500', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
-                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-zinc-500', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
+                            { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-ink-3', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
+                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-ink-3', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
                             { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
                           ].map(({ label, value, color, sub }) => (
                             <div key={label} className="card p-4 text-center">
                               <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
-                              <div className="text-xs text-zinc-500 font-semibold mt-0.5">{label}</div>
-                              <div className="text-[10px] text-zinc-700 mt-0.5">{sub}</div>
+                              <div className="text-xs text-ink-3 font-semibold mt-0.5">{label}</div>
+                              <div className="text-[10px] text-ink-4 mt-0.5">{sub}</div>
                             </div>
                           ))}
                         </div>
@@ -2483,7 +2483,7 @@ export default function Picks() {
                       <button
                         onClick={loadMoreAlavancagem}
                         disabled={alavLoadingMore}
-                        className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 mb-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold"
+                        className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 mb-3 border border-line rounded-md hover:border-line-strong font-semibold"
                       >
                         {alavLoadingMore ? 'Carregando...' : 'Carregar picks mais antigos'}
                       </button>
@@ -2509,29 +2509,29 @@ export default function Picks() {
                                 {res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : <Clock className="w-3 h-3" />}
                               </div>
                               {idx < arr.length - 1 && (
-                                <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-zinc-800'}`} />
+                                <div className={`w-0.5 flex-1 my-1 min-h-[16px] ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-surface-2'}`} />
                               )}
                             </div>
                             <div
                               onClick={() => openDetail(pick.id, 'alavancagem')}
                               className={`flex-1 mb-2 rounded-md border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
-                                !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-zinc-800 bg-zinc-900'
+                                !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-line bg-surface-1'
                               }`}
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex items-center gap-1 flex-wrap mb-0.5">
                                     <TeamLogo id={pick.home_team_id_1} name={pick.home_team_1 ?? ''} size={14} />
-                                    <span className="text-xs font-bold text-white truncate">{pick.home_team_1}</span>
-                                    <span className="text-zinc-600 text-[10px]">vs</span>
+                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.home_team_1}</span>
+                                    <span className="text-ink-4 text-[10px]">vs</span>
                                     <TeamLogo id={pick.away_team_id_1} name={pick.away_team_1 ?? ''} size={14} />
-                                    <span className="text-xs font-bold text-white truncate">{pick.away_team_1}</span>
+                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.away_team_1}</span>
                                   </div>
-                                  <div className="text-[10px] text-zinc-500">{date}</div>
+                                  <div className="text-[10px] text-ink-3">{date}</div>
                                 </div>
                                 <div className="font-mono text-right shrink-0 space-y-0.5">
                                   {bankBefore != null && (
-                                    <div className="text-[10px] text-zinc-600">R${bankBefore.toFixed(2)}</div>
+                                    <div className="text-[10px] text-ink-4">R${bankBefore.toFixed(2)}</div>
                                   )}
                                   {profit != null && (
                                     <div className={`text-xs font-black ${profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
@@ -2539,7 +2539,7 @@ export default function Picks() {
                                     </div>
                                   )}
                                   {bankAfter != null && (
-                                    <div className="text-[10px] text-zinc-500">Banca: R${bankAfter.toFixed(2)}</div>
+                                    <div className="text-[10px] text-ink-3">Banca: R${bankAfter.toFixed(2)}</div>
                                   )}
                                   {!res && bankBefore != null && (
                                     <div className="text-[10px] text-orange-400 font-semibold">Em aberto</div>
@@ -2558,7 +2558,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-zinc-800 rounded-md hover:border-zinc-700 font-semibold">
+              className="w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>

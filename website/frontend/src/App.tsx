@@ -66,17 +66,17 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
   render() {
     if (this.state.error) {
       return (
-        <div className="min-h-screen bg-black flex flex-col items-center justify-center p-8 text-center">
+        <div className="min-h-screen bg-surface-0 flex flex-col items-center justify-center p-8 text-center">
           <p className="text-red-400 font-bold text-lg mb-2">Algo deu errado</p>
-          <p className="text-zinc-500 text-sm mb-5">Tente recarregar a página</p>
+          <p className="text-ink-3 text-sm mb-5">Tente recarregar a página</p>
           <button
             onClick={() => window.location.reload()}
-            className="px-4 py-2 bg-zinc-800 text-zinc-300 rounded-lg text-sm hover:bg-zinc-700 transition-colors"
+            className="px-4 py-2 bg-surface-2 text-ink-2 rounded-lg text-sm hover:bg-surface-3 transition-colors"
           >
             Recarregar
           </button>
           {import.meta.env.DEV && (
-            <pre className="text-zinc-600 text-xs bg-zinc-900 rounded-xl p-4 max-w-xl w-full text-left overflow-auto whitespace-pre-wrap mt-6">
+            <pre className="text-ink-4 text-xs bg-surface-1 rounded-xl p-4 max-w-xl w-full text-left overflow-auto whitespace-pre-wrap mt-6">
               {(this.state.error as Error).message}
               {'\n\n'}
               {(this.state.error as Error).stack}
@@ -90,8 +90,8 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
 }
 
 const PageLoader = () => (
-  <div className="min-h-screen bg-black flex items-center justify-center">
-    <div className="w-8 h-8 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+  <div className="min-h-screen bg-surface-0 flex items-center justify-center">
+    <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
   </div>
 )
 

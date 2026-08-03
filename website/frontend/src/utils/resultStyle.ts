@@ -13,7 +13,7 @@ export interface ResultStyle {
 export const RESULT_STYLE: Record<PickResult, ResultStyle> = {
   GREEN:      { bg: 'bg-green-500/15',  border: 'border-green-500/40',  text: 'text-green-400',  label: 'GREEN',  emoji: '✓', hex: '#4ade80' },
   RED:        { bg: 'bg-red-500/15',    border: 'border-red-500/40',    text: 'text-red-400',    label: 'RED',    emoji: '✗', hex: '#f87171' },
-  PUSH:       { bg: 'bg-zinc-700/40',   border: 'border-zinc-600',      text: 'text-zinc-300',   label: 'PUSH',   emoji: '↔', hex: '#d4d4d8' },
+  PUSH:       { bg: 'bg-surface-3/40',   border: 'border-line-strong',      text: 'text-ink-2',   label: 'PUSH',   emoji: '↔', hex: '#d4d4d8' },
   'HALF-WIN': { bg: 'bg-teal-500/15',   border: 'border-teal-500/40',   text: 'text-teal-400',   label: '½ WIN',  emoji: '½', hex: '#2dd4bf' },
   'HALF-LOSS':{ bg: 'bg-orange-500/15', border: 'border-orange-500/40', text: 'text-orange-400', label: '½ LOSS', emoji: '½', hex: '#fb923c' },
 }
@@ -41,6 +41,22 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   alavancagem: '#fb923c',
   faltas: '#c084fc',
   goleiros: '#38bdf8',
+}
+
+/**
+ * Borda do card de pick por tipo, na mesma convenção de cor do badge acima.
+ * Existe pra que os 6 tipos de card (VIP, free, múltipla, alavancagem, faltas,
+ * defesas) usem a casca `.pick-card` e se diferenciem só pela cor da borda,
+ * em vez de cada um trazer a sua própria casca.
+ */
+export const PICK_TYPE_BORDER: Record<string, string> = {
+  vip:         'border-green-500/20 hover:border-green-500/40',
+  free:        'border-green-500/20 hover:border-green-500/40',
+  multipla:    'border-blue-400/20 hover:border-blue-400/40',
+  multiplas:   'border-blue-400/20 hover:border-blue-400/40',
+  alavancagem: 'border-orange-400/20 hover:border-orange-400/40',
+  faltas:      'border-purple-400/20 hover:border-purple-400/40',
+  goleiros:    'border-sky-400/20 hover:border-sky-400/40',
 }
 
 /** Classes Tailwind pro badge de tipo de pick (VIP/Free/Múltipla/Alavancagem). */

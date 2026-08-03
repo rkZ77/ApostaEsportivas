@@ -42,7 +42,7 @@ const REACTIONS = [
 const PLAN_BADGE: Record<string, string> = {
   vip:   'text-yellow-400 bg-yellow-400/10 border-yellow-400/20',
   admin: 'text-purple-400 bg-purple-400/10 border-purple-400/20',
-  free:  'text-zinc-400 bg-zinc-800 border-zinc-700',
+  free:  'text-ink-2 bg-surface-2 border-line-strong',
 }
 
 interface Comment {
@@ -139,14 +139,14 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
 
   if (loading) return (
     <div className="flex justify-center py-8">
-      <div className="w-6 h-6 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+      <div className="w-6 h-6 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
     </div>
   )
 
   if (fetchError) return (
     <div className="text-center py-8">
-      <p className="text-zinc-500 text-sm font-semibold mb-1">Erro ao carregar reações e comentários</p>
-      <p className="text-zinc-600 text-xs mb-3">Não foi possível conectar ao servidor.</p>
+      <p className="text-ink-3 text-sm font-semibold mb-1">Erro ao carregar reações e comentários</p>
+      <p className="text-ink-4 text-xs mb-3">Não foi possível conectar ao servidor.</p>
       <button onClick={load} className="text-xs text-green-400 hover:text-green-300 font-semibold transition-colors">
         Tentar novamente
       </button>
@@ -157,7 +157,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
     <div className="space-y-6">
 
       <div>
-        <p className="text-xs text-zinc-500 uppercase mb-3">Reações</p>
+        <p className="text-xs text-ink-3 uppercase mb-3">Reações</p>
         <div className="flex flex-wrap gap-2">
           {REACTIONS.map(({ key, icon, label }) => {
             const active = data?.user_reactions.includes(key) ?? false
@@ -169,13 +169,13 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
                 className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold transition-all ${
                   active
                     ? 'bg-green-500/15 border-green-500/40 text-green-400'
-                    : 'bg-zinc-800/60 border-zinc-700 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200'
+                    : 'bg-surface-2/60 border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-2'
                 }`}
               >
                 {icon}
                 <span>{label}</span>
                 {count > 0 && (
-                  <span className={`text-xs font-black ${active ? 'text-green-400' : 'text-zinc-500'}`}>
+                  <span className={`text-xs font-black ${active ? 'text-green-400' : 'text-ink-3'}`}>
                     {count}
                   </span>
                 )}
@@ -186,7 +186,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
       </div>
 
       <div>
-        <p className="text-xs text-zinc-500 uppercase mb-3">
+        <p className="text-xs text-ink-3 uppercase mb-3">
           Comentários{data?.comments.length ? ` (${data.comments.length})` : ''}
         </p>
 
@@ -201,13 +201,13 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               onChange={e => setNewComment(e.target.value.slice(0, 300))}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
               placeholder="Comente sobre este pick... (Enter para enviar)"
-              className="flex-1 bg-zinc-800 border border-zinc-700 rounded-xl px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-green-500/50"
+              className="flex-1 bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50"
               disabled={submitting}
             />
             <button
               onClick={submitComment}
               disabled={!newComment.trim() || submitting}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-white text-sm font-bold transition-colors shrink-0"
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-ink-1 text-sm font-bold transition-colors shrink-0"
             >
               {submitting ? '...' : 'Enviar'}
             </button>
@@ -217,7 +217,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
 
         {/* Lista */}
         {!data?.comments.length ? (
-          <div className="text-center py-8 text-zinc-600 text-xs">
+          <div className="text-center py-8 text-ink-4 text-xs">
             Seja o primeiro a comentar neste pick.
           </div>
         ) : (
@@ -226,7 +226,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               <button
                 onClick={loadOlderComments}
                 disabled={loadingMore}
-                className="w-full text-center text-xs text-zinc-500 hover:text-zinc-300 disabled:opacity-50 transition-colors py-2 border border-zinc-800 rounded-xl hover:border-zinc-700 font-semibold"
+                className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 border border-line rounded-xl hover:border-line-strong font-semibold"
               >
                 {loadingMore ? 'Carregando...' : 'Carregar comentários anteriores'}
               </button>
@@ -234,13 +234,13 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
             {data.comments.map(c => (
               <div key={c.id} className="flex gap-2.5">
                 <Avatar name={c.user_name} imageUrl={c.user_avatar_url} size="sm" className="shrink-0 mt-0.5" />
-                <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-xl px-3 py-2.5">
+                <div className="flex-1 bg-surface-1 border border-line rounded-xl px-3 py-2.5">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-xs font-bold text-white">{c.user_name}</span>
+                    <span className="text-xs font-bold text-ink-1">{c.user_name}</span>
                     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${PLAN_BADGE[c.user_plan] ?? PLAN_BADGE.free}`}>
                       {c.user_plan.toUpperCase()}
                     </span>
-                    <span className="text-xs text-zinc-600 ml-auto">
+                    <span className="text-xs text-ink-4 ml-auto">
                       {new Date(c.created_at).toLocaleString('pt-BR', {
                         day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit',
                       })}
@@ -248,7 +248,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
                     {(user?.id === c.user_id || user?.plan === 'admin') && (
                       <button
                         onClick={() => deleteComment(c.id)}
-                        className="text-zinc-700 hover:text-red-400 transition-colors text-sm ml-1 leading-none"
+                        className="text-ink-4 hover:text-red-400 transition-colors text-sm ml-1 leading-none"
                         title="Deletar comentário"
                         aria-label="Deletar comentário"
                       >
@@ -256,7 +256,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
                       </button>
                     )}
                   </div>
-                  <p className="text-sm text-zinc-300 leading-relaxed">{c.content}</p>
+                  <p className="text-sm text-ink-2 leading-relaxed">{c.content}</p>
                 </div>
               </div>
             ))}

@@ -24,7 +24,7 @@ export default function Blog() {
         <link rel="canonical" href="https://pickia.com.br/blog" />
       </Helmet>
       <Navbar />
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-surface-0 text-ink-1">
         <div className="max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
           <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-sm px-4 py-1.5 mb-6">
             <BookOpen className="w-3.5 h-3.5 text-green-400" />
@@ -34,7 +34,7 @@ export default function Blog() {
             Gestão de banca e estratégia<br />
             <span className="text-green-500">para apostas esportivas</span>
           </h1>
-          <p className="text-zinc-400 text-sm max-w-lg mx-auto leading-relaxed">
+          <p className="text-ink-2 text-sm max-w-lg mx-auto leading-relaxed">
             Conteúdo prático sobre Kelly Criterion, valor esperado, odds e como interpretar
             resultados, sem promessa de ganho garantido.
           </p>
@@ -42,24 +42,24 @@ export default function Blog() {
 
         <div className="max-w-3xl mx-auto px-4 pb-16">
           {POSTS.length === 0 ? (
-            <p className="text-zinc-500 text-sm text-center py-12">Nenhum artigo publicado ainda.</p>
+            <p className="text-ink-3 text-sm text-center py-12">Nenhum artigo publicado ainda.</p>
           ) : (
             <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
               {POSTS.map((post) => (
                 <motion.div key={post.slug} variants={fadeInUp} whileHover={{ y: -2 }}>
                   <Link
                     to={`/blog/${post.slug}`}
-                    className="block border border-zinc-800 bg-zinc-900/40 hover:border-green-500/40 hover:bg-zinc-900 rounded-lg p-5 transition-colors"
+                    className="block border border-line bg-surface-1/40 hover:border-green-500/40 hover:bg-surface-1 rounded-lg p-5 transition-colors"
                   >
                     <div className="flex items-center gap-2 mb-2">
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-sm bg-green-500/10 text-green-400 border border-green-500/20">
                         {post.category}
                       </span>
-                      <span className="text-zinc-600 text-xs">{formatDate(post.publishedAt)}</span>
-                      <span className="text-zinc-600 text-xs">· {post.readingTime} min de leitura</span>
+                      <span className="text-ink-4 text-xs">{formatDate(post.publishedAt)}</span>
+                      <span className="text-ink-4 text-xs">· {post.readingTime} min de leitura</span>
                     </div>
-                    <h2 className="text-white font-black text-lg mb-1.5 leading-snug">{post.title}</h2>
-                    <p className="text-zinc-400 text-sm leading-relaxed">{post.description}</p>
+                    <h2 className="text-ink-1 font-black text-lg mb-1.5 leading-snug">{post.title}</h2>
+                    <p className="text-ink-2 text-sm leading-relaxed">{post.description}</p>
                   </Link>
                 </motion.div>
               ))}

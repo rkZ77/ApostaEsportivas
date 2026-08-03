@@ -193,21 +193,21 @@ export default function MonthlyCloseModal({ onClose }: Props) {
         variants={backdropFade} initial="hidden" animate="visible" exit="exit"
         className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center"
       >
-        <motion.div variants={sheetUp} className="bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
+        <motion.div variants={sheetUp} className="bg-surface-0 border border-line rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl">
           <div className="px-5 pt-5 pb-2 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black text-zinc-500 uppercase mb-0.5">Fechamento mensal</p>
-              <h2 className="text-white font-black text-xl">{data?.month_label ?? 'Mês passado'}</h2>
+              <p className="text-[10px] font-black text-ink-3 uppercase mb-0.5">Fechamento mensal</p>
+              <h2 className="text-ink-1 font-black text-xl">{data?.month_label ?? 'Mês passado'}</h2>
             </div>
             <button
               onClick={failed ? onClose : handleClose}
               aria-label="Fechar"
-              className="w-8 h-8 flex items-center justify-center rounded-full border border-zinc-800 text-zinc-500 hover:text-white transition-colors shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-line text-ink-3 hover:text-ink-1 transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
           </div>
-          <p className="px-5 pb-5 text-sm text-zinc-400 leading-relaxed">
+          <p className="px-5 pb-5 text-sm text-ink-2 leading-relaxed">
             {failed
               ? 'Não foi possível carregar seu fechamento agora. Ele continua no sino, tente de novo em instantes.'
               : 'Você não seguiu nenhum pick nesse mês, então não há fechamento pra confirmar.'}
@@ -238,7 +238,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     { label: 'RED',    value: data.reds,      color: 'bg-red-500'  },
     { label: '½ WIN',  value: data.half_wins, color: 'bg-teal-500' },
     { label: '½ LOSS', value: data.half_loss, color: 'bg-orange-500' },
-    { label: 'PUSH',   value: data.push,      color: 'bg-zinc-500' },
+    { label: 'PUSH',   value: data.push,      color: 'bg-ink-4' },
   ].filter(d => d.value > 0)
 
   return (
@@ -246,7 +246,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
       variants={backdropFade} initial="hidden" animate="visible" exit="exit"
       className="fixed inset-0 bg-black/90 backdrop-blur-sm z-[9998] flex items-end sm:items-center justify-center"
     >
-      <motion.div variants={sheetUp} className="bg-zinc-950 border border-zinc-800 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl overflow-y-auto max-h-[92dvh]">
+      <motion.div variants={sheetUp} className="bg-surface-0 border border-line rounded-t-2xl sm:rounded-2xl w-full sm:max-w-sm shadow-2xl overflow-y-auto max-h-[92dvh]">
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -254,16 +254,16 @@ export default function MonthlyCloseModal({ onClose }: Props) {
             {step === 'edit' && (
               <button
                 onClick={() => setStep('summary')}
-                className="w-7 h-7 flex items-center justify-center rounded-full text-zinc-500 hover:text-white transition-colors"
+                className="w-7 h-7 flex items-center justify-center rounded-full text-ink-3 hover:text-ink-1 transition-colors"
               >
                 <ArrowLeft className="w-4 h-4" />
               </button>
             )}
             <div>
-              <p className="text-[10px] font-black text-zinc-500 uppercase mb-0.5">
+              <p className="text-[10px] font-black text-ink-3 uppercase mb-0.5">
                 {step === 'edit' ? 'Atualizar banca' : step === 'success' ? 'Banca atualizada' : 'Fechamento mensal'}
               </p>
-              <h2 className="text-white font-black text-xl">
+              <h2 className="text-ink-1 font-black text-xl">
                 {step === 'success' ? fmtBRL(savedValue) : data.month_label}
               </h2>
             </div>
@@ -271,7 +271,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
           {step !== 'edit' && (
             <button
               onClick={handleClose}
-              className="w-8 h-8 flex items-center justify-center rounded-full border border-zinc-800 text-zinc-500 hover:text-white hover:border-zinc-600 transition-colors shrink-0"
+              className="w-8 h-8 flex items-center justify-center rounded-full border border-line text-ink-3 hover:text-ink-1 hover:border-line-strong transition-colors shrink-0"
             >
               <X className="w-4 h-4" />
             </button>
@@ -292,31 +292,31 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               </div>
               <p className={`text-sm font-black ml-7 mb-3 ${accent} opacity-75`}>
                 {ganhoU >= 0 ? '+' : ''}{ganhoU.toFixed(1)} unidades
-                <span className="text-zinc-600 font-normal ml-1">(1u = {fmtBRL(data.unit_value)})</span>
+                <span className="text-ink-4 font-normal ml-1">(1u = {fmtBRL(data.unit_value)})</span>
               </p>
               <div className="flex items-center justify-between pt-2 border-t border-white/5">
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] text-ink-3">
                   {data.greens}G · {data.reds}R
                   {data.half_wins > 0 ? ` · ${data.half_wins}½W` : ''}
                   {data.half_loss > 0 ? ` · ${data.half_loss}½L` : ''}
                   {data.push > 0 ? ` · ${data.push}P` : ''}
                   {' '}· {data.total_resolved} picks
                 </span>
-                <span className={`text-[11px] font-bold ${winRate >= 55 ? 'text-green-400' : 'text-zinc-400'}`}>
+                <span className={`text-[11px] font-bold ${winRate >= 55 ? 'text-green-400' : 'text-ink-2'}`}>
                   {winRate}% win rate
                 </span>
               </div>
             </div>
 
             {/* Banca início e fim */}
-            <div className="mx-5 mb-3 flex items-center gap-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
+            <div className="mx-5 mb-3 flex items-center gap-3 bg-surface-1 rounded-xl border border-line px-4 py-3">
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Início do mês</p>
-                <p className="text-sm font-black text-zinc-300 truncate">{fmtBRL(bancaInicio)}</p>
+                <p className="text-[10px] text-ink-3 uppercase mb-0.5">Início do mês</p>
+                <p className="text-sm font-black text-ink-2 truncate">{fmtBRL(bancaInicio)}</p>
               </div>
               <div className={`w-6 h-px shrink-0 ${isProfit ? 'bg-green-500/50' : 'bg-red-500/50'}`} />
               <div className="flex-1 min-w-0 text-right">
-                <p className="text-[10px] text-zinc-500 uppercase mb-0.5">Fim do mês</p>
+                <p className="text-[10px] text-ink-3 uppercase mb-0.5">Fim do mês</p>
                 <p className={`text-sm font-black truncate ${accent}`}>{fmtBRL(data.bankroll_current)}</p>
               </div>
             </div>
@@ -333,11 +333,11 @@ export default function MonthlyCloseModal({ onClose }: Props) {
 
             {/* Alavancagem · série é composta, não entra na banca de unidades acima */}
             {data.alavancagem?.configured && (
-              <div className="mx-5 mb-3 bg-zinc-900 rounded-xl border border-zinc-800 px-4 py-3">
-                <p className="text-[10px] text-zinc-500 uppercase mb-1.5">Série de alavancagem</p>
+              <div className="mx-5 mb-3 bg-surface-1 rounded-xl border border-line px-4 py-3">
+                <p className="text-[10px] text-ink-3 uppercase mb-1.5">Série de alavancagem</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-white">{fmtBRL(data.alavancagem.current_bankroll)}</span>
-                  <span className="text-[11px] text-zinc-500">
+                  <span className="text-sm font-black text-ink-1">{fmtBRL(data.alavancagem.current_bankroll)}</span>
+                  <span className="text-[11px] text-ink-3">
                     {data.alavancagem.greens_this_month}G · {data.alavancagem.reds_this_month}R no mês
                   </span>
                 </div>
@@ -359,7 +359,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 </div>
                 <div className="flex gap-3 mt-1.5 flex-wrap">
                   {distItems.map(d => (
-                    <span key={d.label} className="text-[10px] text-zinc-500 font-semibold">{d.label} {d.value}</span>
+                    <span key={d.label} className="text-[10px] text-ink-3 font-semibold">{d.label} {d.value}</span>
                   ))}
                 </div>
               </div>
@@ -379,7 +379,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                   edição sobrescreveria o registro histórico do mês. */}
               {readOnly ? (
                 <>
-                  <div className="flex items-center gap-2 justify-center text-zinc-500 text-xs font-semibold py-1">
+                  <div className="flex items-center gap-2 justify-center text-ink-3 text-xs font-semibold py-1">
                     <Check className="w-4 h-4 shrink-0 text-green-500" />
                     Banca já atualizada para esse fechamento
                   </div>
@@ -412,7 +412,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
 
                   <button
                     onClick={handleClose}
-                    className="w-full py-2.5 text-zinc-600 hover:text-zinc-400 text-sm font-semibold transition-colors"
+                    className="w-full py-2.5 text-ink-4 hover:text-ink-2 text-sm font-semibold transition-colors"
                   >
                     Fechar sem alterar
                   </button>
@@ -425,13 +425,13 @@ export default function MonthlyCloseModal({ onClose }: Props) {
         {/* ── STEP: EDIT ── */}
         {step === 'edit' && (
           <motion.div key="edit" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="px-5 pb-6 pt-1 space-y-3">
-            <p className="text-sm text-zinc-400 leading-snug">
+            <p className="text-sm text-ink-2 leading-snug">
               Confirme o valor que será a sua nova banca de entrada para o próximo mês.
             </p>
 
             {/* Input de valor */}
-            <div className="flex items-center bg-zinc-900 border border-zinc-700 rounded-xl px-4 py-3.5 gap-2 focus-within:border-zinc-500 transition-colors">
-              <span className="text-zinc-400 font-black text-lg shrink-0">R$</span>
+            <div className="flex items-center bg-surface-1 border border-line-strong rounded-xl px-4 py-3.5 gap-2 focus-within:border-ink-4 transition-colors">
+              <span className="text-ink-2 font-black text-lg shrink-0">R$</span>
               <input
                 ref={inputRef}
                 type="text"
@@ -440,7 +440,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 value={newBanca}
                 onChange={e => setNewBanca(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSave()}
-                className="flex-1 bg-transparent text-white font-black text-2xl outline-none placeholder:text-zinc-700"
+                className="flex-1 bg-transparent text-ink-1 font-black text-2xl outline-none placeholder:text-ink-4"
               />
             </div>
 
@@ -473,8 +473,8 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               <Check className="w-9 h-9 text-green-400" />
             </motion.div>
             <div>
-              <p className="text-white font-black text-2xl mb-1">{fmtBRL(savedValue)}</p>
-              <p className="text-zinc-400 text-sm">Nova banca definida com sucesso</p>
+              <p className="text-ink-1 font-black text-2xl mb-1">{fmtBRL(savedValue)}</p>
+              <p className="text-ink-2 text-sm">Nova banca definida com sucesso</p>
             </div>
           </motion.div>
         )}

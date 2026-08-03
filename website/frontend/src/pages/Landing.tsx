@@ -25,7 +25,7 @@ function Check() {
 }
 function X() {
   return (
-    <svg className="w-4 h-4 text-zinc-700 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+    <svg className="w-4 h-4 text-ink-4 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
       <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
     </svg>
   )
@@ -95,21 +95,21 @@ function NextGamesPreview() {
   if (!games || games.length === 0) return null
 
   return (
-    <div className="bg-zinc-950 border border-zinc-800 rounded-lg p-5">
+    <div className="bg-surface-0 border border-line rounded-lg p-5">
       <div className="flex items-center gap-2 mb-3">
         <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
         <span className="text-green-400 font-bold font-mono text-xs">Jogos que a IA analisa · {dateLabel}</span>
       </div>
       <div className="space-y-1.5">
         {games.map(g => (
-          <div key={g.fixture_id} className="flex items-center gap-2.5 bg-zinc-900/70 border border-zinc-800 rounded-md px-3 py-2 font-mono">
-            <span className="text-[11px] text-zinc-500 tabular-nums shrink-0 w-9">
+          <div key={g.fixture_id} className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2 font-mono">
+            <span className="text-[11px] text-ink-3 tabular-nums shrink-0 w-9">
               {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
             </span>
-            <div className="flex items-center gap-1.5 flex-1 min-w-0 text-xs text-zinc-200">
+            <div className="flex items-center gap-1.5 flex-1 min-w-0 text-xs text-ink-2">
               <TeamLogo id={g.home_team_id} name={g.home_team} />
               <span className="truncate">{g.home_team}</span>
-              <span className="text-zinc-600 shrink-0">x</span>
+              <span className="text-ink-4 shrink-0">x</span>
               <TeamLogo id={g.away_team_id} name={g.away_team} />
               <span className="truncate">{g.away_team}</span>
             </div>
@@ -135,7 +135,7 @@ function TodayBadge() {
   if (!today || today.total === 0) return null
 
   return (
-    <div className="flex items-center gap-1.5 text-xs text-zinc-400 mt-4">
+    <div className="flex items-center gap-1.5 text-xs text-ink-2 mt-4">
       <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
       <span className="text-green-400 font-bold">{today.total}</span> pick{today.total > 1 ? 's' : ''} publicado{today.total > 1 ? 's' : ''} hoje pela IA
     </div>
@@ -145,7 +145,7 @@ function TodayBadge() {
 // Social proof stats · bloco de 4 métricas em tempo real
 // Recebe summary via prop (mesmo fetch de /public/results reaproveitado de Landing)
 function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] | null; loaded: boolean }) {
-  if (!loaded) return <div className="h-20 mt-6 bg-zinc-900/40 rounded-md animate-pulse" />
+  if (!loaded) return <div className="h-20 mt-6 bg-surface-1/40 rounded-md animate-pulse" />
 
   const winRate = summary && summary.total > 0 ? ((summary.greens / summary.total) * 100).toFixed(0) : null
   // summary.reds ja vem certo do backend (COUNT WHERE result='RED') -- NAO
@@ -156,7 +156,7 @@ function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] 
   if (!summary || summary.total === 0) {
     return (
       <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 mt-5">
-        <div className="flex items-center gap-1.5 text-xs text-zinc-500">
+        <div className="flex items-center gap-1.5 text-xs text-ink-3">
           <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
           Picks diários gerados por IA · Auditável publicamente
         </div>
@@ -168,21 +168,21 @@ function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] 
     <>
       <TodayBadge />
       <div className="mt-2 grid grid-cols-2 sm:grid-cols-4 gap-2">
-        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-green-500">{winRate != null && <NumberTicker value={Number(winRate)} suffix="%" />}</p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Win Rate</p>
+        <div className="stat-tile p-3">
+          <p className="stat-value text-xl text-green-500">{winRate != null && <NumberTicker value={Number(winRate)} suffix="%" />}</p>
+          <p className="stat-label">Win Rate</p>
         </div>
-        <div className="bg-zinc-900 border border-zinc-800 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-white"><NumberTicker value={summary.total} /></p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">Picks</p>
+        <div className="stat-tile p-3">
+          <p className="stat-value text-xl text-ink-1"><NumberTicker value={summary.total} /></p>
+          <p className="stat-label">Picks</p>
         </div>
-        <div className="bg-zinc-900 border border-green-500/20 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-green-400"><NumberTicker value={summary.greens} /></p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">GREEN</p>
+        <div className="bg-surface-1 border border-green-500/20 rounded-md p-3 text-center">
+          <p className="stat-value text-xl text-green-400"><NumberTicker value={summary.greens} /></p>
+          <p className="stat-label">GREEN</p>
         </div>
-        <div className="bg-zinc-900 border border-red-500/20 rounded-md p-3 text-center">
-          <p className="font-mono text-xl font-bold text-red-400"><NumberTicker value={reds} /></p>
-          <p className="text-[10px] text-zinc-500 mt-0.5 uppercase">RED</p>
+        <div className="bg-surface-1 border border-red-500/20 rounded-md p-3 text-center">
+          <p className="stat-value text-xl text-red-400"><NumberTicker value={reds} /></p>
+          <p className="stat-label">RED</p>
         </div>
       </div>
     </>
@@ -192,18 +192,18 @@ function SocialProofStats({ summary, loaded }: { summary: PublicData['summary'] 
 // 3 passos · jornada do usuário, com ênfase na análise real da IA
 function ThreeSteps() {
   return (
-    <section id="como-funciona" className="py-20 bg-black border-b border-zinc-800/60">
-      <div className="max-w-5xl mx-auto px-4">
+    <section id="como-funciona" className="section section-alt">
+      <div className="shell">
         <div className="text-center mb-5">
           <span className="inline-flex items-center gap-1.5 font-mono text-green-400 text-xs font-bold border border-green-500/20 px-2.5 py-1 rounded-sm">
             <BrainCircuit className="w-3.5 h-3.5" />
             Como a IA decide cada pick
           </span>
         </div>
-        <h2 className="font-display text-3xl md:text-4xl font-semibold text-center mb-4 leading-tight">
+        <h2 className="section-title text-center">
           Nada de achismo. <span className="text-green-500">Só dados reais e matemática.</span>
         </h2>
-        <p className="text-center text-zinc-400 text-sm max-w-2xl mx-auto mb-8 leading-relaxed">
+        <p className="section-sub max-w-2xl text-center mb-8">
           Antes de qualquer pick, a IA cruza dados de forma recente, confronto direto, força do
           adversário e odds de mercado · milhares de dados por rodada. Só entra quando encontra
           valor esperado (EV) positivo, sem achismo e auditável do início ao fim.
@@ -211,7 +211,7 @@ function ThreeSteps() {
 
         <div className="flex flex-wrap items-center justify-center gap-2 mb-12">
           {['Forma recente', 'Confronto direto', 'Odds de mercado', 'Valor esperado (EV)', 'Confiança mínima ≥ 60%'].map(t => (
-            <span key={t} className="font-mono text-[11px] text-zinc-400 border border-zinc-800 px-2.5 py-1 rounded-sm">
+            <span key={t} className="font-mono text-[11px] text-ink-2 border border-line px-2.5 py-1 rounded-sm">
               {t}
             </span>
           ))}
@@ -234,8 +234,8 @@ function ThreeSteps() {
                 <Icon className={`w-6 h-6 ${color}`} />
               </div>
               <div className={`font-mono text-sm font-bold ${color} mb-2 opacity-60`}>0{n}</div>
-              <h3 className="font-display text-base font-semibold text-white mb-2">{title}</h3>
-              <p className="text-zinc-400 text-sm leading-relaxed">{desc}</p>
+              <h3 className="font-display text-base font-semibold text-ink-1 mb-2">{title}</h3>
+              <p className="text-ink-2 text-sm leading-relaxed">{desc}</p>
             </motion.div>
           ))}
         </motion.div>
@@ -254,9 +254,9 @@ function StickyMobileCTA() {
   const [dismissed, setDismissed] = useState(false)
   if (dismissed) return null
   return (
-    <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-zinc-950/98 backdrop-blur-md border-t border-zinc-800 px-4 py-3 flex items-center gap-3 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
+    <div className="fixed bottom-0 inset-x-0 z-50 sm:hidden bg-surface-0/98 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 shadow-[0_-4px_24px_rgba(0,0,0,0.6)]">
       <div className="flex-1 min-w-0">
-        <p className="text-white text-xs font-black leading-none">Começar teste VIP</p>
+        <p className="text-ink-1 text-xs font-black leading-none">Começar teste VIP</p>
         <p className="text-green-500 text-[10px] font-semibold mt-0.5">
           2 dias grátis · Brasileirão + Premier League
         </p>
@@ -264,7 +264,7 @@ function StickyMobileCTA() {
       <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-xs px-5 py-3 rounded-md transition-colors whitespace-nowrap">
         Criar conta
       </Link>
-      <button onClick={() => setDismissed(true)} className="text-zinc-600 hover:text-zinc-400 p-1 shrink-0" aria-label="Fechar">
+      <button onClick={() => setDismissed(true)} className="text-ink-4 hover:text-ink-2 p-1 shrink-0" aria-label="Fechar">
         <XIcon className="w-4 h-4" />
       </button>
     </div>
@@ -286,11 +286,11 @@ function ActiveLeagues() {
   if (!leagues.length) return null
 
   return (
-    <section className="border-y border-zinc-800/60 bg-zinc-950 py-14">
-      <div className="max-w-5xl mx-auto px-4">
+    <section className="section-tight">
+      <div className="shell">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-black mb-2">Ligas e torneios cobertos</h2>
-          <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+          <h2 className="section-title">Ligas e torneios cobertos</h2>
+          <p className="section-sub">
             A cobertura entra automaticamente assim que a temporada de cada liga estiver rolando ·
             hoje a IA já analisa:
           </p>
@@ -313,7 +313,7 @@ function ActiveLeagues() {
                 onError={e => (e.currentTarget.style.display = 'none')}
               />
               <div className="text-center">
-                <p className="text-xs font-semibold text-zinc-300 leading-tight">{name}</p>
+                <p className="text-xs font-semibold text-ink-2 leading-tight">{name}</p>
                 <p className="text-[10px] text-green-500 font-bold">Ativo</p>
               </div>
             </motion.div>
@@ -347,11 +347,11 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
   const todayReds   = todayItems.filter(t => t.result === 'RED').length
 
   return (
-    <section id="resultados" className="py-24 bg-zinc-950 border-y border-zinc-800/60">
-      <div className="max-w-5xl mx-auto px-4">
+    <section id="resultados" className="section section-alt">
+      <div className="shell">
         <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-black mb-3">Resultados reais, verificáveis</h2>
-          <p className="text-zinc-400 text-sm max-w-lg mx-auto">
+          <h2 className="section-title">Resultados reais, verificáveis</h2>
+          <p className="section-sub">
             Todos os picks ficam registrados. Win rate auditável, qualquer pessoa pode conferir.
           </p>
         </div>
@@ -359,7 +359,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
         {/* Lista */}
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="w-7 h-7 border-2 border-zinc-700 border-t-green-500 rounded-full animate-spin" />
+            <div className="w-7 h-7 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
           </div>
         ) : recent10.length > 0 ? (
           <motion.div
@@ -367,25 +367,25 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true, margin: '0px 0px -80px 0px' }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-            className="bg-zinc-900 border border-zinc-800 rounded-lg overflow-hidden"
+            className="bg-surface-1 border border-line rounded-lg overflow-hidden"
           >
-            <div className="px-5 py-3 border-b border-zinc-800 flex items-center justify-between flex-wrap gap-y-1">
-              <span className="text-xs font-bold text-zinc-400 uppercase">Últimas 10 dicas finalizadas</span>
+            <div className="px-5 py-3 border-b border-line flex items-center justify-between flex-wrap gap-y-1">
+              <span className="text-xs font-bold text-ink-2 uppercase">Últimas 10 dicas finalizadas</span>
               {(todayGreens > 0 || todayReds > 0) && (
-                <span className="text-[11px] text-zinc-500">
+                <span className="text-[11px] text-ink-3">
                   Dia {new Date(latestDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}:{' '}
                   <span className="text-green-400 font-bold">{todayGreens} GREEN</span>
                   {' · '}
                   <span className="text-red-400 font-bold">{todayReds} RED</span>
                 </span>
               )}
-              <span className="text-xs text-zinc-600">Atualizado automaticamente</span>
+              <span className="text-xs text-ink-4">Atualizado automaticamente</span>
             </div>
-            <div className="divide-y divide-zinc-800/50">
+            <div className="divide-y divide-line/50">
               {recent10.map((tip, i) => (
                 <div key={i} className="flex items-center gap-2 px-3 sm:px-5 py-3">
                   <div className="w-10 sm:w-14 shrink-0 text-center">
-                    <span className="text-[10px] sm:text-xs text-zinc-500">
+                    <span className="text-[10px] sm:text-xs text-ink-3">
                       {new Date(tip.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                     </span>
                   </div>
@@ -395,16 +395,16 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                         {SRC_LBL[tip.source] ?? tip.source}
                       </span>
                       <TeamLogo id={tip.home_team_id} name={tip.home_team_name} />
-                      <span className="text-xs sm:text-sm font-semibold text-white truncate">{tip.home_team_name}</span>
+                      <span className="text-xs sm:text-sm font-semibold text-ink-1 truncate">{tip.home_team_name}</span>
                       {tip.away_team_name && tip.away_team_name !== '--' && (
                         <>
-                          <span className="text-zinc-600 text-[10px] shrink-0">vs</span>
+                          <span className="text-ink-4 text-[10px] shrink-0">vs</span>
                           <TeamLogo id={tip.away_team_id} name={tip.away_team_name} />
-                          <span className="text-xs sm:text-sm font-semibold text-white truncate">{tip.away_team_name}</span>
+                          <span className="text-xs sm:text-sm font-semibold text-ink-1 truncate">{tip.away_team_name}</span>
                         </>
                       )}
                     </div>
-                    <p className="text-[10px] sm:text-xs text-zinc-500 truncate">
+                    <p className="text-[10px] sm:text-xs text-ink-3 truncate">
                       {tip.market && tip.market !== '--' ? tip.market : ''}
                       {tip.line && tip.line !== '--' ? ` ${tip.line}` : ''}
                       {' · '}{Number(tip.odd).toFixed(2)}
@@ -414,7 +414,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                     {(() => {
                       const rs = getResultStyle(tip.result)
                       return (
-                        <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-zinc-500'}`}>
+                        <span className={`text-[10px] sm:text-xs font-black px-1.5 sm:px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-ink-3'}`}>
                           {rs ? rs.label : tip.result}
                         </span>
                       )
@@ -423,18 +423,18 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                 </div>
               ))}
             </div>
-            <div className="px-5 py-4 border-t border-zinc-800 text-center bg-zinc-950/50 flex items-center justify-center gap-5">
-              <Link to="/resultados" className="text-sm text-zinc-400 hover:text-white font-semibold transition-colors">
+            <div className="px-5 py-4 border-t border-line text-center bg-surface-0/50 flex items-center justify-center gap-5">
+              <Link to="/resultados" className="text-sm text-ink-2 hover:text-ink-1 font-semibold transition-colors">
                 Ver histórico completo
               </Link>
-              <span className="text-zinc-700">·</span>
+              <span className="text-ink-4">·</span>
               <Link to="/login?mode=register" className="text-sm text-green-500 hover:text-green-400 font-bold transition-colors">
                 Criar conta grátis
               </Link>
             </div>
           </motion.div>
         ) : (
-          <p className="text-center text-zinc-600 text-sm py-8">Nenhum resultado ainda.</p>
+          <p className="text-center text-ink-4 text-sm py-8">Nenhum resultado ainda.</p>
         )}
       </div>
     </section>
@@ -469,7 +469,7 @@ function FreePickTeaserCard() {
 
   return (
     <div className="relative">
-      <div className="relative bg-zinc-950 border border-green-500/30 rounded-lg p-6 sm:p-8 text-center">
+      <div className="relative bg-surface-0 border border-green-500/30 rounded-lg p-6 sm:p-8 text-center">
         <div className="inline-flex items-center gap-2 font-mono border border-green-500/20 rounded-sm px-3 py-1.5 mb-5 flex-wrap justify-center">
           <Gift className="w-3.5 h-3.5 text-green-400" />
           <span className="text-green-400 text-[11px] font-bold">Dica do Dia · grátis, sem precisar de conta</span>
@@ -479,12 +479,12 @@ function FreePickTeaserCard() {
             </span>
           )}
         </div>
-        <p className="font-display text-lg sm:text-xl font-semibold text-white mb-1 flex items-center justify-center gap-2 flex-wrap">
+        <p className="font-display text-lg sm:text-xl font-semibold text-ink-1 mb-1 flex items-center justify-center gap-2 flex-wrap">
           <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
-          {pick.home_team_name} <span className="text-zinc-600">x</span> {pick.away_team_name}
+          {pick.home_team_name} <span className="text-ink-4">x</span> {pick.away_team_name}
           <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
         </p>
-        <p className="text-zinc-500 text-xs mb-6 font-mono">
+        <p className="text-ink-3 text-xs mb-6 font-mono">
           Pick gerado por IA hoje · odd {Number(pick.odd).toFixed(2)}
         </p>
         <Link
@@ -494,7 +494,7 @@ function FreePickTeaserCard() {
           Ver a análise completa
           <ArrowRight className="w-4 h-4" />
         </Link>
-        <p className="text-[11px] text-zinc-600 mt-3">
+        <p className="text-[11px] text-ink-4 mt-3">
           Crie sua conta grátis em segundos pra ver o mercado e a análise completa da IA
         </p>
       </div>
@@ -508,8 +508,8 @@ function FreePickTeaserCard() {
 // em secao cheia garante que o pick gratis apareca pra eles tambem.
 function FreePickTeaser() {
   return (
-    <section className="py-14 md:hidden">
-      <div className="max-w-2xl mx-auto px-4 space-y-6">
+    <section className="section-tight md:hidden">
+      <div className="shell-narrow space-y-6">
         <NextGamesPreview />
         <FreePickTeaserCard />
       </div>
@@ -533,21 +533,21 @@ function LeaderboardTeaser() {
 
   if (!loading && leaders.length === 0) return null
 
-  const rankCls = ['bg-yellow-400 text-black', 'bg-zinc-300 text-black', 'bg-orange-400 text-black']
+  const rankCls = ['bg-yellow-400 text-black', 'bg-ink-2 text-black', 'bg-orange-400 text-black']
 
   return (
-    <section className="py-16 bg-black border-y border-zinc-800/60">
-      <div className="max-w-2xl mx-auto px-4">
+    <section className="section-tight section-alt">
+      <div className="shell-narrow">
         <div className="text-center mb-8">
           <p className="text-sm font-bold text-yellow-400 mb-2 flex items-center justify-center gap-1.5">
             <Trophy className="w-4 h-4" /> Ranking de usuários
           </p>
-          <h2 className="text-2xl font-black text-white">Quem está ganhando mais</h2>
-          <p className="text-zinc-500 text-sm mt-2">Top apostadores da plataforma este mês</p>
+          <h2 className="section-title">Quem está ganhando mais</h2>
+          <p className="section-sub">Top apostadores da plataforma este mês</p>
         </div>
         {loading ? (
           <div className="flex justify-center py-8">
-            <div className="w-6 h-6 border-2 border-zinc-700 border-t-yellow-400 rounded-full animate-spin" />
+            <div className="w-6 h-6 border-2 border-line-strong border-t-yellow-400 rounded-full animate-spin" />
           </div>
         ) : (
           <motion.div
@@ -558,35 +558,35 @@ function LeaderboardTeaser() {
             className="space-y-3"
           >
             {leaders.slice(0, 3).map((l, i) => (
-              <motion.div key={i} variants={fadeInUp} whileHover={{ y: -2 }} className="flex items-center gap-4 bg-zinc-950 border border-zinc-800 rounded-lg px-5 py-4">
-                <span className={`text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-zinc-800 text-zinc-400'}`}>
+              <motion.div key={i} variants={fadeInUp} whileHover={{ y: -2 }} className="flex items-center gap-4 bg-surface-0 border border-line rounded-lg px-5 py-4">
+                <span className={`text-xs font-black w-7 h-7 rounded-full flex items-center justify-center shrink-0 ${rankCls[i] ?? 'bg-surface-2 text-ink-2'}`}>
                   {i + 1}
                 </span>
-                <div className="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-sm font-black text-zinc-400 shrink-0 overflow-hidden">
+                <div className="w-9 h-9 rounded-full bg-surface-2 flex items-center justify-center text-sm font-black text-ink-2 shrink-0 overflow-hidden">
                   {l.avatar_url
                     ? <img src={l.avatar_url} alt={l.name} width={36} height={36} className="w-full h-full object-cover" onError={e => (e.currentTarget.style.display = 'none')} />
                     : l.name[0]?.toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-white truncate">{l.name}</p>
-                  <p className="text-[11px] text-zinc-500">{l.total} picks · {l.greens} greens</p>
+                  <p className="text-sm font-bold text-ink-1 truncate">{l.name}</p>
+                  <p className="text-[11px] text-ink-3">{l.total} picks · {l.greens} greens</p>
                 </div>
                 <div className="text-right shrink-0">
                   <p className={`text-lg font-black ${l.yield_roi >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                     {l.yield_roi >= 0 ? '+' : ''}{l.yield_roi.toFixed(1)}%
                   </p>
-                  <p className="text-[10px] text-zinc-600">Yield ROI</p>
+                  <p className="text-[10px] text-ink-4">Yield ROI</p>
                 </div>
                 <div className="text-right shrink-0 hidden sm:block">
-                  <p className="text-base font-black text-white">{l.win_rate}%</p>
-                  <p className="text-[10px] text-zinc-600">Win rate</p>
+                  <p className="text-base font-black text-ink-1">{l.win_rate}%</p>
+                  <p className="text-[10px] text-ink-4">Win rate</p>
                 </div>
               </motion.div>
             ))}
           </motion.div>
         )}
         <div className="text-center mt-6">
-          <Link to="/login" className="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">
+          <Link to="/login" className="text-xs text-ink-3 hover:text-ink-2 transition-colors">
             Entre para ver seu ranking
           </Link>
         </div>
@@ -630,19 +630,19 @@ export default function Landing() {
       <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura de Brasileirão e Premier League. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
       <link rel="canonical" href="https://pickia.com.br/" />
     </Helmet>
-    <div className="min-h-screen bg-black text-white overflow-x-hidden">
+    <div className="min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden">
 
-      <nav className="border-b border-zinc-800/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md" ref={menuRef}>
+      <nav className="border-b border-line/60 sticky top-0 z-50 bg-black/95 backdrop-blur-md" ref={menuRef}>
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <img src="/logo.png" alt="PickIA" width={36} height={36} className="w-9 h-9 rounded-full object-cover" />
             <span className="font-display font-semibold text-lg tracking-tight">Pick<span className="text-green-500">IA</span></span>
           </div>
           <div className="flex items-center gap-5">
-            <a href="#resultados" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Resultados</a>
-            <a href="#como-funciona" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
-            <a href="#planos" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors hidden sm:block">Planos</a>
-            <Link to="/login" className="text-zinc-400 hover:text-white text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
+            <a href="#resultados" className="text-ink-2 hover:text-ink-1 text-sm font-medium transition-colors hidden sm:block">Resultados</a>
+            <a href="#como-funciona" className="text-ink-2 hover:text-ink-1 text-sm font-medium transition-colors hidden sm:block">Como funciona</a>
+            <a href="#planos" className="text-ink-2 hover:text-ink-1 text-sm font-medium transition-colors hidden sm:block">Planos</a>
+            <Link to="/login" className="text-ink-2 hover:text-ink-1 text-sm font-medium transition-colors px-2 hidden sm:block">Entrar</Link>
             <Link to="/login?mode=register" className="bg-green-500 hover:bg-green-400 text-black font-black text-sm px-5 py-2 rounded-md transition-colors hidden sm:block">
               Criar conta grátis
             </Link>
@@ -652,7 +652,7 @@ export default function Landing() {
             </Link>
             <button
               onClick={() => setMenuOpen(o => !o)}
-              className="sm:hidden p-2 text-zinc-400 hover:text-white transition-colors"
+              className="sm:hidden p-2 text-ink-2 hover:text-ink-1 transition-colors"
               aria-label="Menu"
             >
               {menuOpen ? <XIcon className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -662,20 +662,20 @@ export default function Landing() {
 
         {/* Mobile dropdown */}
         {menuOpen && (
-          <div className="sm:hidden border-t border-zinc-800 bg-black/98 px-4 py-3 space-y-1">
+          <div className="sm:hidden border-t border-line bg-black/98 px-4 py-3 space-y-1">
             <a href="#resultados" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-sm font-medium">
               Resultados
             </a>
             <a href="#como-funciona" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-sm font-medium">
               Como funciona
             </a>
             <a href="#planos" onClick={() => setMenuOpen(false)}
-              className="flex items-center gap-3 px-3 py-3 rounded-md text-zinc-300 hover:text-white hover:bg-zinc-900 transition-colors text-sm font-medium">
+              className="flex items-center gap-3 px-3 py-3 rounded-md text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-sm font-medium">
               Planos
             </a>
-            <div className="border-t border-zinc-800 pt-2 mt-1">
+            <div className="border-t border-line pt-2 mt-1">
               <Link to="/login" onClick={() => setMenuOpen(false)}
                 className="flex items-center justify-center gap-2 w-full px-3 py-3 rounded-md bg-green-500 hover:bg-green-400 text-black transition-colors text-sm font-black">
                 Entrar na conta
@@ -689,12 +689,12 @@ export default function Landing() {
         {/* Fundo: grid fino de dados, no lugar do blur-blob de gradiente */}
         <div className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,black,transparent)]" />
 
-        <div className="max-w-5xl mx-auto px-4 pt-20 pb-24 relative">
+        <div className="shell pt-20 pb-24 relative">
           <div className="grid md:grid-cols-2 gap-12 items-start">
 
             {/* Texto */}
             <div>
-              <h1 className="font-display text-4xl md:text-5xl font-semibold leading-[1.1] mb-5 tracking-tight">
+              <h1 className="font-display text-4xl md:text-5xl font-bold leading-[1.1] mb-5 tracking-tight">
                 {['Picks de futebol', 'gerados por IA,', 'entregues todo dia.'].map((line, i) => (
                   <motion.span
                     key={line}
@@ -708,7 +708,7 @@ export default function Landing() {
                 ))}
               </h1>
 
-              <p className="text-zinc-400 text-base leading-relaxed mb-5">
+              <p className="text-ink-2 text-base leading-relaxed mb-5">
                 A IA analisa cada jogo do Brasileirão e da Premier League com estatística real,
                 forma recente e odds de mercado. Você recebe os melhores picks com edge positivo
                 toda manhã. De graça pra começar.
@@ -719,12 +719,12 @@ export default function Landing() {
                   Criar conta · 2 dias VIP grátis
                 </ShimmerButton>
                 <a href="#resultados"
-                  className="border border-zinc-700 hover:border-zinc-500 text-zinc-300 hover:text-white font-semibold px-7 py-3.5 rounded-md text-sm transition-colors text-center">
+                  className="border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 font-semibold px-7 py-3.5 rounded-md text-sm transition-colors text-center">
                   Ver resultados reais
                 </a>
               </div>
 
-              <p className="flex items-center gap-1.5 text-xs text-zinc-500 mb-8">
+              <p className="flex items-center gap-1.5 text-xs text-ink-3 mb-8">
                 <Check />
                 Sem cartão de crédito · cancele quando quiser
               </p>
@@ -752,8 +752,8 @@ export default function Landing() {
 
       <ActiveLeagues />
 
-      <section className="py-24">
-        <div className="max-w-5xl mx-auto px-4">
+      <section className="section">
+        <div className="shell">
           <div className="grid md:grid-cols-2 gap-16 items-center">
             {/* Texto */}
             <div>
@@ -761,7 +761,7 @@ export default function Landing() {
                 Converse com uma IA<br />
                 <span className="text-green-500">especialista em futebol</span>
               </h2>
-              <p className="text-zinc-400 text-sm leading-relaxed mb-6">
+              <p className="text-ink-2 text-sm leading-relaxed mb-6">
                 Diferente de outras IAs genéricas, o nosso agente é treinado 100% no contexto de apostas esportivas.
                 Pergunte sobre qualquer jogo, seleção, mercado ou estratégia e receba análises com base nos dados reais do sistema.
               </p>
@@ -773,7 +773,7 @@ export default function Landing() {
                   'Sugere estratégias de gestão de banca',
                   'Disponível 24/7, resposta em segundos',
                 ].map(t => (
-                  <li key={t} className="flex items-center gap-3 text-sm text-zinc-300">
+                  <li key={t} className="flex items-center gap-3 text-sm text-ink-2">
                     <Check />
                     {t}
                   </li>
@@ -785,36 +785,36 @@ export default function Landing() {
             </div>
 
             {/* Demo chat */}
-            <div className="bg-zinc-950 border border-zinc-800 rounded-lg overflow-hidden">
-              <div className="px-4 py-3 border-b border-zinc-800 flex items-center justify-between">
+            <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
+              <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-                  <span className="font-display text-sm font-semibold text-white">Agente PickIA</span>
+                  <span className="font-display text-sm font-semibold text-ink-1">Agente PickIA</span>
                 </div>
-                <span className="font-mono text-[10px] text-zinc-500 border border-zinc-800 px-2 py-0.5 rounded-sm">Futebol · IA</span>
+                <span className="font-mono text-[10px] text-ink-3 border border-line px-2 py-0.5 rounded-sm">Futebol · IA</span>
               </div>
               <div className="p-4 space-y-3 min-h-[260px]">
                 <div className="flex justify-end">
-                  <div className="bg-green-600 text-white text-sm px-4 py-2.5 rounded-md rounded-tr-sm max-w-[80%]">
+                  <div className="bg-green-600 text-ink-1 text-sm px-4 py-2.5 rounded-md rounded-tr-sm max-w-[80%]">
                     {chatMessages[chatDemo].q}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-7 h-7 bg-zinc-800 border border-zinc-700 rounded-full flex items-center justify-center shrink-0 mt-0.5">
+                  <div className="w-7 h-7 bg-surface-2 border border-line-strong rounded-full flex items-center justify-center shrink-0 mt-0.5">
                     <svg className="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                       <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17H3a2 2 0 01-2-2V5a2 2 0 012-2h14a2 2 0 012 2v10a2 2 0 01-2 2h-2" />
                     </svg>
                   </div>
-                  <div className="bg-zinc-900 border border-zinc-800 text-zinc-300 text-sm px-4 py-2.5 rounded-md rounded-tl-sm max-w-[85%] leading-relaxed">
+                  <div className="bg-surface-1 border border-line text-ink-2 text-sm px-4 py-2.5 rounded-md rounded-tl-sm max-w-[85%] leading-relaxed">
                     {chatMessages[chatDemo].a}
                   </div>
                 </div>
               </div>
               <div className="px-4 pb-4">
-                <div className="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2.5 flex items-center gap-2">
-                  <span className="text-zinc-600 text-sm flex-1">Pergunte sobre qualquer jogo...</span>
+                <div className="bg-surface-1 border border-line-strong rounded-md px-3 py-2.5 flex items-center gap-2">
+                  <span className="text-ink-4 text-sm flex-1">Pergunte sobre qualquer jogo...</span>
                   <div className="w-7 h-7 bg-green-600 rounded-lg flex items-center justify-center">
-                    <svg className="w-3.5 h-3.5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-ink-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
                     </svg>
                   </div>
@@ -825,11 +825,11 @@ export default function Landing() {
         </div>
       </section>
 
-      <section id="planos" className="py-24">
-        <div className="max-w-4xl mx-auto px-4">
+      <section id="planos" className="section section-alt">
+        <div className="shell">
           <div className="text-center mb-12">
-            <h2 className="font-display text-3xl font-semibold mb-3">Comece de graça, evolua quando quiser</h2>
-            <p className="text-zinc-400 text-sm max-w-md mx-auto">
+            <h2 className="section-title">Comece de graça, evolua quando quiser</h2>
+            <p className="section-sub">
               Teste 2 dias com acesso VIP completo. Depois escolha seu plano.
             </p>
           </div>
@@ -842,10 +842,10 @@ export default function Landing() {
             className="grid md:grid-cols-3 gap-5"
           >
             {/* Free */}
-            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-zinc-900 border border-zinc-800 rounded-lg p-7">
+            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-surface-1 border border-line rounded-lg p-7">
               <span className="badge-free mb-3">Free</span>
-              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 0</p>
-              <p className="text-zinc-500 text-xs mb-6">Para sempre</p>
+              <p className="font-mono text-3xl font-bold text-ink-1 mb-0.5">R$ 0</p>
+              <p className="text-ink-3 text-xs mb-6">Para sempre</p>
               <div className="space-y-2.5 mb-8">
                 {[
                   [true,  '1 pick gratuito por dia'],
@@ -859,24 +859,24 @@ export default function Landing() {
                 ].map(([ok, t]) => (
                   <div key={t as string} className="flex items-center gap-2.5">
                     {ok ? <Check /> : <X />}
-                    <span className={`text-sm ${ok ? 'text-zinc-200' : 'text-zinc-600'}`}>{t as string}</span>
+                    <span className={`text-sm ${ok ? 'text-ink-2' : 'text-ink-4'}`}>{t as string}</span>
                   </div>
                 ))}
               </div>
-              <Link to="/login?mode=register" className="block text-center border border-zinc-700 hover:border-zinc-500 text-zinc-400 hover:text-white font-bold py-2.5 rounded-md text-sm transition-colors">
+              <Link to="/login?mode=register" className="block text-center border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 font-bold py-2.5 rounded-md text-sm transition-colors">
                 Criar conta grátis
               </Link>
             </motion.div>
 
             {/* Trial · destaque */}
-            <motion.div variants={fadeInUp} whileHover={{ y: -5 }} className="relative bg-zinc-900 border border-green-500/50 rounded-lg p-7 overflow-hidden">
+            <motion.div variants={fadeInUp} whileHover={{ y: -5 }} className="relative bg-surface-1 border border-green-500/50 rounded-lg p-7 overflow-hidden">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
               <div className="absolute top-3.5 right-4 font-mono text-[10px] font-bold text-green-400 border border-green-500/30 px-2 py-1 rounded-sm uppercase">
                 Começar agora
               </div>
               <span className="badge-green mb-3">Teste grátis</span>
-              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 0</p>
-              <p className="text-zinc-400 text-xs mb-6">2 dias completos · Sem compromisso</p>
+              <p className="font-mono text-3xl font-bold text-ink-1 mb-0.5">R$ 0</p>
+              <p className="text-ink-2 text-xs mb-6">2 dias completos · Sem compromisso</p>
               <div className="space-y-2.5 mb-8">
                 {[
                   'Pick Free + todos os Picks VIP',
@@ -890,7 +890,7 @@ export default function Landing() {
                 ].map(t => (
                   <div key={t} className="flex items-center gap-2.5">
                     <Check />
-                    <span className="text-sm text-zinc-200">{t}</span>
+                    <span className="text-sm text-ink-2">{t}</span>
                   </div>
                 ))}
               </div>
@@ -900,12 +900,12 @@ export default function Landing() {
             </motion.div>
 
             {/* VIP */}
-            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-zinc-900 border border-yellow-400/30 rounded-lg p-7 overflow-hidden relative">
+            <motion.div variants={fadeInUp} whileHover={{ y: -4 }} className="bg-surface-1 border border-yellow-400/30 rounded-lg p-7 overflow-hidden relative">
               <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-yellow-400/60 to-transparent" />
               <span className="badge-trial mb-3">VIP</span>
-              <p className="font-mono text-3xl font-bold text-white mb-0.5">R$ 39,90<span className="text-base font-semibold text-zinc-500">/mês</span></p>
-              <p className="text-zinc-500 text-xs mb-1">Menos de R$1,33 por dia</p>
-              <p className="text-zinc-600 text-[10px] mb-6">Menos que uma aposta perdida</p>
+              <p className="font-mono text-3xl font-bold text-ink-1 mb-0.5">R$ 39,90<span className="text-base font-semibold text-ink-3">/mês</span></p>
+              <p className="text-ink-3 text-xs mb-1">Menos de R$1,33 por dia</p>
+              <p className="text-ink-4 text-[10px] mb-6">Menos que uma aposta perdida</p>
               <div className="space-y-2.5 mb-8">
                 {[
                   'Tudo do Teste VIP',
@@ -917,7 +917,7 @@ export default function Landing() {
                 ].map(t => (
                   <div key={t} className="flex items-center gap-2.5">
                     <Check />
-                    <span className="text-sm text-zinc-200">{t}</span>
+                    <span className="text-sm text-ink-2">{t}</span>
                   </div>
                 ))}
               </div>
