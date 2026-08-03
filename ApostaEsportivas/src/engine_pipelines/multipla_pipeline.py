@@ -15,6 +15,7 @@ import itertools
 from datetime import datetime
 
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR, data_br
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -83,7 +84,7 @@ def _has_today_multipla(cur) -> bool:
     encontrado durante o teste desta pipeline: rodava 2x no mesmo dia sem
     detectar duplicata). Aqui usa match_date = CURRENT_DATE, mesmo padrao
     ja usado (e correto) em has_today_dica()/has_today_pick()."""
-    cur.execute("SELECT COUNT(*) FROM picks_multiplas WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT COUNT(*) FROM picks_multiplas WHERE match_date = {HOJE_BR}")
     return cur.fetchone()[0] >= 1
 
 
@@ -92,9 +93,9 @@ def _today_used_pairs(cur) -> set:
     a multipla nunca repete o mesmo mercado do mesmo jogo que ja saiu em
     VIP/Free, mesma regra do pipeline de IA."""
     pairs = set()
-    cur.execute("SELECT fixture_id, market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT fixture_id, market_type FROM picks_vip WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
-    cur.execute("SELECT fixture_id, market_type FROM picks_free WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT fixture_id, market_type FROM picks_free WHERE match_date = {HOJE_BR}")
     pairs |= {(r[0], r[1]) for r in cur.fetchall() if r[0] and r[1]}
     return pairs
 

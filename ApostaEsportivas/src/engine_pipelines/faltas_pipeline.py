@@ -11,19 +11,28 @@ Passar isso pelo ranking generico jogaria fora justamente o que foi medido.
 Ver a docstring de fouls_model.py -- especialmente o aviso de nao trocar a
 tabela de faixas por um numero de correlacao.
 
-LIMITE CONHECIDO: so' a linha Over 22.5 do TOTAL do jogo. E' a unica com faixa
-medida no backtest, e a relacao nao e' parametrica, entao nao da' pra
-interpolar pra 24.5 ou 20.5 -- cada linha nova exige refazer a tabela. As
-odds coletadas de verdade (Bet365 e Betano, 2026-08-01) vem em "Fouls. Total"
-com over/under legitimo e caem na faixa 1.35-2.00.
+LINHAS: as que tem faixa medida em fouls_model.LINHAS_SUPORTADAS (hoje 22.5,
+24.5, 25.5 e 26.5). A primeira coleta real de odds (Bet365 e Betano,
+2026-08-02) mostrou que o mercado NAO oferece 22.5 -- "Fouls. Total" sai em
+24.5, 25.5, 26.5, 28.5 e 29.5. O modelo so' conhecia 22.5, entao a primeira
+validacao com dado real gerou zero pick. As linhas do mercado foram medidas e
+entraram na tabela; 28.5 e 29.5 ficaram de fora (taxa baixa demais, o erro da
+estimativa pesa mais que a margem).
+
+Quando o mesmo jogo tem varias linhas, o pipeline avalia todas e fica com a de
+maior margem -- escolher a linha faz parte da decisao.
 """
 import json
+import re
 
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR, data_br
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
+from services.pick_engine import competition_profile as cp
 from services.pick_engine.fouls_model import (
+    LINHAS_SUPORTADAS,
     MIN_JOGOS_ARBITRO,
     MIN_JOGOS_TIME,
     analyze_fouls_market,
@@ -37,13 +46,26 @@ from engine_pipelines.decision_log import log_decision
 ODD_MIN = 1.35
 ODD_MAX = 2.00
 
-# Linha unica suportada pelo modelo (ver docstring).
-LINHA = 22.5
-
 # Edge minimo pra gravar. Abaixo disso a margem nao cobre o erro do proprio
-# modelo -- a faixa mais forte da tabela empirica (73.4%) foi medida em 301
-# jogos, o que ja carrega incerteza de alguns pontos percentuais.
+# modelo -- a faixa mais forte da tabela empirica foi medida em 159 jogos, o
+# que ja carrega incerteza de alguns pontos percentuais.
 EDGE_MIN = 0.04
+
+
+def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> list:
+    """Historico do time, respeitando o perfil da competicao.
+
+    Copa (de clube ou selecao) nao acumula jogo suficiente pra sustentar
+    analise so' com os jogos DELA -- validacao com dado real mostrou media de
+    faltas saindo de 1 unico jogo em fixtures da Copa do Brasil, muito abaixo
+    do minimo de 5 do modelo. Mesma decisao que dica/vip ja tomam via
+    competition_profile.
+    """
+    since = match_stats.get_structural_change_date(team_id)
+    if cp.uses_all_competitions_history(fixture["league_id"]):
+        return match_stats.get_last_n_all_competitions(team_id, since_date=since)
+    return match_stats.get_all_matches_full(
+        team_id, fixture["season"], fixture["league_id"], since_date=since)
 
 # Nomes do mercado de faltas TOTAL do jogo, como a API-Football entrega.
 # So' o total: "Fouls. Home Total"/"Away Total" sao por time e o modelo mede
@@ -74,38 +96,44 @@ def _media_faltas(historico: list, team_id: int) -> tuple[float | None, int]:
     return round(sum(valores) / len(valores), 3), len(valores)
 
 
-def _odd_over_faltas(structured_odds: list) -> dict | None:
-    """Melhor odd de Over 22.5 no mercado de faltas totais, ou None.
+_OVER_RE = re.compile(r"^over\s+([\d.,]+)$", re.IGNORECASE)
 
-    Casa a linha por valor numerico (nao por texto) porque o mesmo mercado
-    aparece como "Over 22.5" na Bet365 e pode vir com formatacao diferente em
-    outra casa.
+
+def _odds_over_faltas(structured_odds: list) -> dict[float, dict]:
+    """Melhor odd de Over por LINHA no mercado de faltas totais.
+
+    A linha sai do texto do value_name ("Over 24.5"), NAO da coluna
+    line_value: na coleta real (2026-08-02) line_value vem NULL em todas as
+    linhas de faltas, entao ler dali nunca casava nada -- o pipeline rodava
+    sem erro e sem gerar pick, o pior tipo de falha.
     """
-    melhor = None
+    melhores: dict[float, dict] = {}
     for o in structured_odds:
         nome = (o.get("market_name") or "").strip().lower()
         if nome not in NOMES_MERCADO_TOTAL:
             continue
-        valor = (o.get("value_name") or "").strip().lower()
-        if not valor.startswith("over"):
+        m = _OVER_RE.match((o.get("value_name") or "").strip())
+        if not m:
             continue
         try:
-            linha = float(str(o.get("line_value") or "").replace(",", "."))
+            linha = float(m.group(1).replace(",", "."))
+            odd = float(o.get("odd") or 0)
         except (TypeError, ValueError):
             continue
-        if abs(linha - LINHA) > 0.01:
+        if linha not in LINHAS_SUPORTADAS:
             continue
-        odd = float(o.get("odd") or 0)
         if odd < ODD_MIN or odd > ODD_MAX:
             continue
-        if melhor is None or odd > melhor["odd"]:
-            melhor = {
+        atual = melhores.get(linha)
+        if atual is None or odd > atual["odd"]:
+            melhores[linha] = {
                 "odd": odd,
+                "linha": linha,
                 "bookmaker": o.get("bookmaker_name") or o.get("bookmaker"),
                 "market_id": o.get("market_id"),
                 "market_name": o.get("market_name"),
             }
-    return melhor
+    return melhores
 
 
 def _fixtures_de_hoje(cur) -> list:
@@ -115,14 +143,14 @@ def _fixtures_de_hoje(cur) -> list:
     CURRENT_DATE`) -- se divergir daqui, o coletor de odds (que usa o mesmo
     predicado) nao tera' baixado odd pro jogo.
     """
-    cur.execute("""
+    cur.execute(f"""
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
             f.match_datetime, f.referee
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE f.match_datetime::date = CURRENT_DATE
+        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
           AND f.status IN ('NS', 'TBD')
         ORDER BY f.match_datetime
     """)
@@ -141,18 +169,23 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
                      odds_service: OddsService,
                      referee_service: RefereeStatsService) -> dict | None:
     """Candidato de faltas pra um jogo, ou None se nao der pra avaliar."""
-    structured = odds_service.load_odds_structured(fixture["fixture_id"])
+    # load_odds_by_fixture (RAW), nao load_odds_structured: aquele agrupa por
+    # line_value e valida pares Over/Under por probabilidade implicita. Em
+    # faltas o line_value vem NULL (a linha esta no texto do value_name),
+    # entao o pareamento falha e ele descarta o mercado inteiro -- medido no
+    # fixture 1546846: 12 entradas no raw viram 0 depois dele. A escolha da
+    # melhor odd por linha, que era o servico dele, ja e' feita em
+    # _odds_over_faltas.
+    structured = odds_service.load_odds_by_fixture(fixture["fixture_id"])
     if not structured:
         return None
 
-    melhor_odd = _odd_over_faltas(structured)
-    if not melhor_odd:
+    ofertas = _odds_over_faltas(structured)
+    if not ofertas:
         return None
 
-    hist_casa = match_stats.get_all_matches_full(
-        fixture["home_team_id"], fixture["season"], fixture["league_id"])
-    hist_fora = match_stats.get_all_matches_full(
-        fixture["away_team_id"], fixture["season"], fixture["league_id"])
+    hist_casa = _historico(match_stats, fixture, fixture["home_team_id"])
+    hist_fora = _historico(match_stats, fixture, fixture["away_team_id"])
 
     media_casa, n_casa = _media_faltas(hist_casa, fixture["home_team_id"])
     media_fora, n_fora = _media_faltas(hist_fora, fixture["away_team_id"])
@@ -161,23 +194,32 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
     n_arbitro = int(arbitro["games"]) if arbitro and arbitro.get("games") else None
 
-    analise = analyze_fouls_market(
-        media_casa=media_casa, media_fora=media_fora,
-        media_arbitro=media_arbitro,
-        n_casa=n_casa, n_fora=n_fora, n_arbitro=n_arbitro,
-        odd=melhor_odd["odd"],
-    )
-    if not analise:
+    # Avalia TODAS as linhas oferecidas e fica com a de maior margem. As casas
+    # publicam 24.5 a 29.5 no mesmo jogo, e a margem varia bastante entre elas
+    # -- escolher a linha faz parte da decisao, nao e' detalhe de formatacao.
+    melhor = None
+    for linha, oferta in sorted(ofertas.items()):
+        analise = analyze_fouls_market(
+            media_casa=media_casa, media_fora=media_fora,
+            media_arbitro=media_arbitro,
+            n_casa=n_casa, n_fora=n_fora, n_arbitro=n_arbitro,
+            odd=oferta["odd"], linha=linha,
+        )
+        if not analise or analise.get("edge", 0) < EDGE_MIN:
+            continue
+        if melhor is None or analise["edge"] > melhor[0]["edge"]:
+            melhor = (analise, oferta)
+
+    if melhor is None:
         return None
-    if analise.get("edge", 0) < EDGE_MIN:
-        return None
+    analise, oferta = melhor
 
     return {
         **analise,
         "fixture": fixture,
-        "bookmaker": melhor_odd["bookmaker"],
-        "market_id": melhor_odd["market_id"],
-        "market_name": melhor_odd["market_name"] or "Fouls. Total",
+        "bookmaker": oferta["bookmaker"],
+        "market_id": oferta["market_id"],
+        "market_name": oferta["market_name"] or "Fouls. Total",
         "n_casa": n_casa, "n_fora": n_fora,
         "media_casa": media_casa, "media_fora": media_fora,
         "media_arbitro": media_arbitro, "n_arbitro": n_arbitro,
@@ -196,7 +238,7 @@ def _explicar(c: dict) -> str:
             f"{c['n_arbitro']} jogos apitados."
         )
     partes.append(
-        f"Nessa faixa de previsao, Over {LINHA} bateu em "
+        f"Nessa faixa de previsao, Over {c['line']} bateu em "
         f"{c['probability'] * 100:.1f}% dos {c['faixa_amostra']} jogos medidos."
     )
     partes.append(
@@ -226,20 +268,20 @@ def _salvar(cur, c: dict) -> None:
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 
-    cur.execute("""
+    cur.execute(f"""
         INSERT INTO picks_faltas
             (fixture_id, match_date, home_team, away_team,
              home_team_id, away_team_id, league_id,
              market, market_type, line, odd, bet_house, market_id,
              confidence, prob_real, edge, reasoning,
              stake_pct, stake_units, engine_debug)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
+        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, 'fouls', %s, %s, %s, %s,
                 %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date, fixture_id) DO NOTHING
     """, (
         f["fixture_id"], f["home_team"], f["away_team"],
         f["home_team_id"], f["away_team_id"], f["league_id"],
-        c["market_name"], f"Over {LINHA}", c["odd"], c["bookmaker"], c["market_id"],
+        c["market_name"], f"Over {c['line']}", c["odd"], c["bookmaker"], c["market_id"],
         c["probability"], c["probability"], c["edge"], _explicar(c),
         stake_pct, stake_units, engine_debug,
     ))
@@ -257,7 +299,8 @@ def run_faltas_engine():
         return
 
     print(f"[FALTAS_ENGINE] Avaliando {len(fixtures)} jogo(s) "
-          f"(linha unica Over {LINHA}, minimo {MIN_JOGOS_TIME} jogos por time "
+          f"(linhas {', '.join(str(l) for l in LINHAS_SUPORTADAS)}, "
+          f"minimo {MIN_JOGOS_TIME} jogos por time "
           f"ou {MIN_JOGOS_ARBITRO} do arbitro)...")
 
     match_stats = MatchStatsService()
@@ -296,7 +339,7 @@ def run_faltas_engine():
         _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review")})
         salvos += 1
         print(f"[FALTAS_ENGINE] Salvo: {c['fixture']['home_team']} x {c['fixture']['away_team']} "
-              f"· Over {LINHA} faltas @ {c['odd']} "
+              f"· Over {c['line']} faltas @ {c['odd']} "
               f"(prob={c['probability'] * 100:.1f}%, margem={c['edge'] * 100:+.1f}%)")
 
     conn.commit()

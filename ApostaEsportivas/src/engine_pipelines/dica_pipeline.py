@@ -8,6 +8,7 @@ pipeline ao de IA)."""
 import json
 
 from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR, data_br
 from services.fixtures_service import FixturesService
 from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
@@ -37,7 +38,7 @@ _LEAGUE_PRIORITY = {
 
 
 def _has_today_dica(cur) -> bool:
-    cur.execute("SELECT COUNT(*) FROM picks_free WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT COUNT(*) FROM picks_free WHERE match_date = {HOJE_BR}")
     return cur.fetchone()[0] >= 1
 
 
@@ -53,7 +54,7 @@ def _today_vip_used_market_groups(cur) -> set:
     driblar o bloqueio so trocando a estrutura da aposta sobre o mesmo dado
     bruto. Multipla/Alavancagem rodam DEPOIS da Free e mantem a regra
     propria (fixture+mercado, contra VIP e Free) -- fora de escopo aqui."""
-    cur.execute("SELECT market_type FROM picks_vip WHERE match_date = CURRENT_DATE")
+    cur.execute(f"SELECT market_type FROM picks_vip WHERE match_date = {HOJE_BR}")
     return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
 
 
@@ -61,14 +62,14 @@ def _fixtures_with_odds_in_range(cur) -> list:
     """Mesma query de ai/dica_do_dia_pipeline.py::get_fixtures_with_odds_in_range,
     reimplementada aqui para nao acoplar a esse modulo (que instancia
     Anthropic() no import)."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
             f.home_team_id, f.away_team_id, f.home_team, f.away_team,
             f.match_datetime, f.status, f.round, f.referee
         FROM fixtures f
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
-        WHERE DATE(f.match_datetime) = CURRENT_DATE
+        WHERE {data_br('f.match_datetime')} = {HOJE_BR}
           AND f.status IN ('NS', 'TBD', 'LIVE')
           AND ov.odd_value BETWEEN %s AND %s
     """, (ODD_MIN, ODD_MAX))
@@ -186,14 +187,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         default=str, ensure_ascii=False,
     )
 
-    cur.execute("""
+    cur.execute(f"""
         INSERT INTO picks_free
             (fixture_id, match_date, home_team, away_team,
              home_team_id, away_team_id,
              league_id, league_name, market, market_type, line, odd, bet_house,
              market_id, confidence, prob_real, edge, reasoning,
              stake_pct, stake_units, engine_debug)
-        VALUES (%s, CURRENT_DATE, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) DO UPDATE SET
             fixture_id   = EXCLUDED.fixture_id,
             home_team    = EXCLUDED.home_team,
