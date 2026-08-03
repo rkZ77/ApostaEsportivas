@@ -1,12 +1,28 @@
 import { Link } from 'react-router-dom'
+import { Helmet } from 'react-helmet-async'
+import { ChevronLeft } from 'lucide-react'
+import Footer from '../components/Footer'
 
 export default function Privacidade() {
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-300">
-      <div className="max-w-3xl mx-auto px-4 py-12">
+    // bg-black e nao bg-zinc-950: as outras 20 paginas usam preto, e a
+    // diferenca de tom aparecia ao navegar entre elas.
+    <div className="min-h-screen bg-black text-zinc-300 flex flex-col">
+      <Helmet>
+        <title>Política de Privacidade · Pick IA</title>
+        <meta name="description" content="Política de Privacidade do Pick IA: quais dados coletamos, como usamos e seus direitos." />
+      </Helmet>
+      <div className="max-w-3xl mx-auto px-4 py-12 flex-1 w-full">
 
-        <Link to="/" className="text-sm text-zinc-500 hover:text-green-400 transition-colors mb-8 inline-block">
-          ← Voltar
+        {/* Alvo de toque de 44px, como o BackButton do resto do site. A seta
+            de texto que estava aqui era pequena demais pra dedo, e o site e'
+            mobile-first. */}
+        <Link to="/"
+          className="inline-flex items-center gap-2 h-11 pr-4 text-sm text-zinc-500 hover:text-green-400 transition-colors mb-8">
+          <span className="flex items-center justify-center w-11 h-11 rounded-full border border-zinc-800">
+            <ChevronLeft className="w-4 h-4" />
+          </span>
+          Voltar
         </Link>
 
         <h1 className="text-3xl font-black text-white mb-2">Política de Privacidade</h1>
@@ -124,6 +140,9 @@ export default function Privacidade() {
           <Link to="/" className="hover:text-zinc-400 transition-colors">Início</Link>
         </div>
       </div>
+      {/* Sem Footer estas paginas eram beco sem saida: linkadas do rodape do
+          site, sem navbar e com uma unica seta de texto pra sair. */}
+      <Footer />
     </div>
   )
 }
