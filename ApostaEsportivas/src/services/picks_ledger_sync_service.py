@@ -25,6 +25,8 @@ _PICK_TYPE_BY_TABLE = {
     "picks_free": "free",
     "picks_multiplas": "multipla",
     "picks_alavancagem": "alavancagem",
+    "picks_faltas": "faltas",
+    "picks_goleiros": "goleiros",
 }
 
 
