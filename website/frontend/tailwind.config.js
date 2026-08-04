@@ -47,17 +47,23 @@ export default {
         },
       },
       /*
-       * Duas famílias, não três. `display` continua existindo como nome porque
-       * 28 lugares usam font-display, mas aponta pra mesma Inter do corpo: o
-       * que separa título de texto é peso e tamanho.
+       * Nunito em todo o site. `display` continua existindo como nome porque
+       * ~28 lugares usam font-display, mas aponta pra mesma familia do corpo:
+       * o que separa titulo de texto e peso e tamanho, nao familia.
        *
-       * JetBrains Mono fica por função, não por estilo: algarismo de largura
-       * fixa é o que faz coluna de odd e de percentual alinhar.
+       * A pilha de fallback e a pedida: system fonts antes de cair no
+       * sans-serif generico, pra que a troca de fonte nao mude o layout
+       * enquanto a webfont carrega.
+       *
+       * JetBrains Mono fica por funcao, nao por estilo: algarismo de largura
+       * fixa e o que faz coluna de odd e de percentual alinhar. Nunito nao tem
+       * numeral de largura constante confiavel, e sem isso a tabela de
+       * resultados "dança" a cada digito que muda.
        */
       fontFamily: {
-        display: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
-        sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        display: ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        sans:    ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        mono:    ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },
       // escala de raio enxuta: 3 degraus + pilula. xl/2xl foram dobrados em lg.
       borderRadius: {
