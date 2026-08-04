@@ -96,8 +96,11 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
 
   return (
     <div className="relative mb-6 -mx-4">
-      {/* fade direita indicando scroll */}
-      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
+      {/* Fade da direita indicando que a barra rola. Desbota de surface-0 pra
+          surface-0/0, e nao pra `transparent`: transparent e' rgba(0,0,0,0),
+          entao o degrade passaria pelo preto no meio e deixaria uma mancha
+          escura na ponta da barra em vez de sumir. */}
+      <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
       <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
         {tabs.map(t => {
           const count = counts?.[t.key]
@@ -1605,6 +1608,17 @@ export default function Picks() {
 
   const [tab, setTab]               = useState<Tab>('hoje')
 
+  // Estar nesta pagina ja significa ter visto os picks novos, entao o aviso
+  // saiu do corpo da pagina e o assunto vive so' no sino. Marcar aqui (e nao
+  // apenas no clique do link da Navbar, que era o unico outro gatilho) cobre
+  // quem chega por URL direta, atalho do PWA ou toque numa notificacao push.
+  // Depende de hasNew e nao do mount porque markSeen so' tem o id certo
+  // depois que as notificacoes carregam.
+  useEffect(() => {
+    if (hasNew) markSeen()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasNew])
+
   useEffect(() => {
     const hash = location.hash.replace('#', '') as Tab
     const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','aovivo','chat']
@@ -1902,18 +1916,6 @@ export default function Picks() {
       </div>
 
       <main className="max-w-6xl mx-auto px-4 py-6">
-        {hasNew && (
-          <div className="mb-4 flex items-center justify-between bg-green-500/10 border border-green-500/25 rounded-lg px-4 py-3">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse shrink-0" />
-              <span className="text-green-400 text-sm font-semibold">Novos picks disponíveis hoje!</span>
-            </div>
-            <button onClick={markSeen} className="text-ink-4 hover:text-ink-2 text-xs transition-colors">
-              Fechar
-            </button>
-          </div>
-        )}
-
         {hasLive && tab !== 'aovivo' && (
           <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2">
