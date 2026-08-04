@@ -112,40 +112,47 @@ export function PickExplainButton({
   )
 }
 
-/* ── Confiança ──────────────────────────────────────────────────────────── */
+/* ── Probabilidade ──────────────────────────────────────────────────────── */
 
 /**
- * Barra de confiança com a probabilidade estimada ao lado.
+ * Probabilidade estimada do pick sair.
  *
- * Os cortes (75 e 60) são os mesmos usados no resto do site pra decidir cor,
- * então um pick de 76% parece igualmente forte em qualquer tela.
+ * Chamava-se "confiança" e mostrava o campo `confidence`, que e' OUTRO numero:
+ * medido no banco, confidence vem sistematicamente ACIMA de probability (0,816
+ * contra 0,755 no mesmo pick). Exibir confidence sob o rotulo "probabilidade"
+ * seria dizer 82% onde a chance calculada e' 75%.
+ *
+ * Entao le `probability` de verdade, e so' cai em `confidence` quando nao ha
+ * probabilidade nenhuma: picks VIP antigos (42 de 149 sem o campo) e multiplas,
+ * que nao tem coluna de probabilidade.
+ *
+ * Os cortes (75 e 60) sao os mesmos do resto do site pra decidir cor.
  */
-export function PickConfidence({
+export function PickProbability({
   confidence,
   probability,
   className,
 }: {
-  /** Fração 0..1, como vem do banco. */
-  confidence: number
+  /** Fração 0..1. Só é usada quando não há probabilidade. */
+  confidence?: number | null
+  /** Fração 0..1. É esta que o rótulo promete. */
   probability?: number | null
   className?: string
 }) {
-  const pct = Math.round((confidence ?? 0) * 100)
-  const prob = probability != null ? Number(probability) * 100 : null
+  const bruto = probability ?? confidence
+  if (bruto == null) return null
+  const pct = Math.round(Number(bruto) * 100)
+  // Sem probabilidade real, o numero e' uma aproximacao: o rotulo avisa.
+  const aproximado = probability == null
 
   return (
     <div className={cn('px-5 pb-3', className)}>
       <div className="flex justify-between items-baseline text-[10px] mb-1">
-        <span className="text-ink-4">Confiança</span>
-        <span className="flex items-center gap-2">
-          {prob != null && (
-            <span className="text-ink-4">
-              prob. <span className="font-mono text-ink-3">{prob.toFixed(0)}%</span>
-            </span>
-          )}
-          <span className={cn('font-mono', pct >= 75 ? 'text-accent font-bold' : 'text-ink-3')}>
-            {pct}%
-          </span>
+        <span className="text-ink-4">
+          Probabilidade{aproximado && <span className="text-ink-4"> estimada</span>}
+        </span>
+        <span className={cn('font-mono', pct >= 75 ? 'text-accent font-bold' : 'text-ink-3')}>
+          {pct}%
         </span>
       </div>
       <div className="bg-surface-2 rounded-full h-1 overflow-hidden">

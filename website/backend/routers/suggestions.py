@@ -252,7 +252,7 @@ def get_today_suggestions(
         _picks_free_sql = f"""
             SELECT pf.id, pf.fixture_id, pf.match_date, pf.home_team, pf.away_team,
                    pf.league_id, pf.league_name, pf.market, pf.market_type, pf.line, pf.odd, pf.bet_house,
-                   pf.confidence, pf.prob_real, pf.edge,
+                   pf.confidence, pf.prob_real, pf.prob_real AS probability, pf.edge,
                    CASE WHEN pf.prob_real IS NOT NULL AND pf.odd IS NOT NULL
                         THEN ROUND((pf.prob_real * pf.odd - 1)::numeric, 4)
                         ELSE NULL END AS ev,
@@ -402,7 +402,7 @@ def get_today_suggestions(
                 SELECT p.id, p.fixture_id, p.match_date,
                        p.home_team, p.away_team, p.home_team_id, p.away_team_id,
                        p.league_id, p.market, p.market_type, p.line, p.odd,
-                       p.bet_house, p.confidence, p.prob_real, p.edge,
+                       p.bet_house, p.confidence, p.prob_real, p.prob_real AS probability, p.edge,
                        p.reasoning, p.stake_units, p.result,
                        f.match_datetime
                 FROM {tabela} p
@@ -1285,7 +1285,7 @@ def get_picks_free_history(
                    pf.home_team, pf.away_team,
                    pf.league_id, pf.league_name,
                    pf.market, pf.market_type, pf.line, pf.odd, pf.bet_house,
-                   pf.confidence, pf.prob_real, pf.edge,
+                   pf.confidence, pf.prob_real, pf.prob_real AS probability, pf.edge,
                    CASE WHEN pf.prob_real IS NOT NULL AND pf.odd IS NOT NULL
                         THEN ROUND((pf.prob_real * pf.odd - 1)::numeric, 4)
                         ELSE NULL END AS ev,
@@ -2093,7 +2093,7 @@ def get_faltas(
             SELECT pf.id, pf.fixture_id, pf.match_date,
                    pf.home_team, pf.away_team, pf.home_team_id, pf.away_team_id,
                    pf.league_id, pf.market, pf.market_type, pf.line, pf.odd,
-                   pf.bet_house, pf.confidence, pf.prob_real, pf.edge,
+                   pf.bet_house, pf.confidence, pf.prob_real, pf.prob_real AS probability, pf.edge,
                    pf.reasoning, pf.stake_pct, pf.stake_units,
                    pf.result, pf.profit, pf.created_at
             FROM picks_faltas pf

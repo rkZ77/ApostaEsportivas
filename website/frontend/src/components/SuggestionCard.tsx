@@ -11,7 +11,7 @@ import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import FavoriteButton from './FavoriteButton'
-import { PickCardFooter, PickExplainButton } from './PickCardParts'
+import { PickCardFooter, PickExplainButton, PickProbability } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Clock } from 'lucide-react'
@@ -334,27 +334,7 @@ export default function SuggestionCard({
         </div>
       </div>
 
-      {/* Confiança e probabilidade estimada, lado a lado: a barra sozinha não
-          dizia contra o quê aquela confiança estava sendo medida. */}
-      <div className="px-5 pb-3">
-        <div className="flex justify-between items-baseline text-[10px] mb-1">
-          <span className="text-ink-4">Confiança</span>
-          <span className="flex items-center gap-2">
-            {probPct != null && (
-              <span className="text-ink-4">
-                prob. <span className="font-mono text-ink-3">{probPct.toFixed(0)}%</span>
-              </span>
-            )}
-            <span className={`font-mono ${pct >= 75 ? 'text-accent font-bold' : 'text-ink-3'}`}>{pct}%</span>
-          </span>
-        </div>
-        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
-          <div
-            className={`h-1 rounded-full ${pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+      <PickProbability confidence={s.confidence} probability={s.probability} />
 
       {/* Reasoning snippet */}
       {fato && (
