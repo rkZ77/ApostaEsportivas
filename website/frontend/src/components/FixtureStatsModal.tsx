@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import api from '../services/api'
@@ -452,7 +453,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="w-7 h-7 border-2 border-line-strong border-t-blue-500 rounded-full animate-spin" />
+              <Spinner size="lg" tone="blue" />
             </div>
           ) : !data ? (
             <div className="text-center text-ink-4 text-sm py-16">Estatísticas não disponíveis.</div>

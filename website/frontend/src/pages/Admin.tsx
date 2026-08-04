@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
-import BackButton from '../components/BackButton'
+import { Plus, Play, AlertTriangle } from 'lucide-react'
+import PageShell from '../components/PageShell'
+import { Button, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
 import { fmtBRL } from '../utils/format'
 
@@ -348,37 +348,32 @@ export default function Admin() {
   const paymentsPage_ = payments.slice(paymentsPageSafe * PAYMENTS_PER_PAGE, (paymentsPageSafe + 1) * PAYMENTS_PER_PAGE)
 
   if (loading) return (
-    <><Navbar /><div className="min-h-screen flex items-center justify-center">
-      <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
-    </div></>
+    <PageShell title="Painel Admin" noindex width="admin" footer={false}>
+      <SpinnerBlock />
+    </PageShell>
   )
 
   return (
-    <div className="min-h-screen bg-surface-0 flex flex-col">
+    <PageShell
+      title="Painel Admin"
+      noindex
+      width="admin"
+      bar={{
+        back: '/picks',
+        title: 'Painel Admin',
+        sub: 'Gerenciar usuários e planos',
+        actions: (
+          <Button size="sm" Icon={Plus} onClick={() => setCreating(v => !v)}>
+            Novo usuário
+          </Button>
+        ),
+      }}
+    >
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-lg text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-ink-1' : 'bg-red-600 text-ink-1'}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-elev text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-ink-1' : 'bg-red-600 text-ink-1'}`}>
           {toast.msg}
         </div>
       )}
-      <Navbar />
-
-      {/* Header */}
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BackButton to="/picks" />
-            <div>
-              <h1 className="text-xl font-black text-ink-1">Painel Admin</h1>
-              <p className="text-ink-3 text-sm">Gerenciar usuários e planos</p>
-            </div>
-          </div>
-          <button onClick={() => setCreating(v => !v)} className="btn-primary text-sm px-4 py-2">
-            + Novo usuário
-          </button>
-        </div>
-      </div>
-
-      <main className="max-w-7xl mx-auto px-4 py-6 flex-1 w-full">
 
         {/* Sub-paginas. A pagina inteira era uma coluna so' com 7 blocos
             empilhados -- no celular dava varias telas de rolagem ate chegar
@@ -414,15 +409,15 @@ export default function Admin() {
               const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
               return (
                 <div className="flex flex-col items-end gap-1">
-                  <button
+                  <Button
+                    size="sm"
+                    Icon={Play}
+                    loading={isTudoRunning}
+                    disabled={runningCmd !== null}
                     onClick={() => runPipeline('tudo')}
-                    disabled={runningCmd !== null || isTudoRunning}
-                    className="flex items-center gap-2 text-sm px-4 py-2 rounded-lg bg-green-500 text-black font-bold hover:bg-green-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
-                    {isTudoRunning
-                      ? <><span className="w-3.5 h-3.5 border-2 border-black/30 border-t-black rounded-full animate-spin" /> Rodando tudo...</>
-                      : '▶ Rodar Tudo'}
-                  </button>
+                    {isTudoRunning ? 'Rodando tudo...' : 'Rodar tudo'}
+                  </Button>
                   {s && (
                     <span
                       className={`text-[10px] cursor-pointer underline ${s.status === 'error' ? 'text-red-500' : 'text-ink-4'}`}
@@ -468,17 +463,19 @@ export default function Admin() {
                       className={`text-[10px] cursor-pointer truncate ${s.status === 'error' ? 'text-red-400 underline' : 'text-ink-4'}`}
                       onClick={() => setExpandedLog(expandedLog === command ? null : command)}
                     >
-                      {s.status === 'error' ? '⚠ ver log' : s.finished_at ?? ''}
+                      {s.status === 'error'
+                        ? <span className="inline-flex items-center gap-1"><AlertTriangle className="w-2.5 h-2.5" /> ver log</span>
+                        : s.finished_at ?? ''}
                     </p>
                   )}
                   <button
                     onClick={() => runPipeline(command)}
                     disabled={runningCmd !== null || isRunning}
-                    className="mt-auto text-[10px] px-2 py-1 rounded-lg border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
+                    className="mt-auto text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors duration-1 ease-smooth disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-1"
                   >
                     {isRunning
-                      ? <><span className="w-2.5 h-2.5 border border-ink-4 border-t-white rounded-full animate-spin" /> rodando</>
-                      : '▶ rodar'}
+                      ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
+                      : <><Play className="w-2.5 h-2.5" /> rodar</>}
                   </button>
                   {expandedLog === command && (s?.error || s?.log) && (
                     <pre className={`text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-40 ${s.status === 'error' ? 'text-red-400' : 'text-ink-2'}`}>
@@ -817,7 +814,7 @@ export default function Admin() {
             </div>
           </div>
           {paymentsLoading ? (
-            <div className="p-6 flex justify-center"><div className="w-5 h-5 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" /></div>
+            <div className="p-6 flex justify-center"><Spinner size="sm" /></div>
           ) : payments.length === 0 ? (
             <p className="text-center text-ink-4 text-sm py-6">Nenhum pagamento registrado.</p>
           ) : (
@@ -1002,7 +999,7 @@ export default function Admin() {
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-ink-2 bg-surface-3/40 border-line-strong/30') : 'text-ink-4 bg-surface-1 border-line'
                 return (
-                  <div key={`${p.pick_type}-${p.id}`} className="bg-surface-1 border border-line rounded-xl p-3 flex flex-col gap-2">
+                  <div key={`${p.pick_type}-${p.id}`} className="bg-surface-1 border border-line rounded-lg p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
                         <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-ink-2 bg-surface-3/40'}`}>{p.pick_type}</span>
@@ -1375,8 +1372,6 @@ export default function Admin() {
           </div>
         </>)}
 
-      </main>
-      <Footer />
-    </div>
+    </PageShell>
   )
 }

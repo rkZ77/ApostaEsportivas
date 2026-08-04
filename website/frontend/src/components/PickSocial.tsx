@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { Spinner } from './ui'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import Avatar from './Avatar'
@@ -139,7 +140,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
 
   if (loading) return (
     <div className="flex justify-center py-8">
-      <div className="w-6 h-6 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+      <Spinner />
     </div>
   )
 
@@ -166,7 +167,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               <button
                 key={key}
                 onClick={() => toggleReaction(key)}
-                className={`flex items-center gap-2 px-3 py-2 rounded-xl border text-sm font-semibold transition-all ${
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
                   active
                     ? 'bg-green-500/15 border-green-500/40 text-green-400'
                     : 'bg-surface-2/60 border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-2'
@@ -201,13 +202,13 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               onChange={e => setNewComment(e.target.value.slice(0, 300))}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
               placeholder="Comente sobre este pick... (Enter para enviar)"
-              className="flex-1 bg-surface-2 border border-line-strong rounded-xl px-3 py-2 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50"
+              className="flex-1 bg-surface-2 border border-line-strong rounded-lg px-3 py-2 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50"
               disabled={submitting}
             />
             <button
               onClick={submitComment}
               disabled={!newComment.trim() || submitting}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-xl text-ink-1 text-sm font-bold transition-colors shrink-0"
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-ink-1 text-sm font-bold transition-colors shrink-0"
             >
               {submitting ? '...' : 'Enviar'}
             </button>
@@ -226,7 +227,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               <button
                 onClick={loadOlderComments}
                 disabled={loadingMore}
-                className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 border border-line rounded-xl hover:border-line-strong font-semibold"
+                className="w-full text-center text-xs text-ink-3 hover:text-ink-2 disabled:opacity-50 transition-colors py-2 border border-line rounded-lg hover:border-line-strong font-semibold"
               >
                 {loadingMore ? 'Carregando...' : 'Carregar comentários anteriores'}
               </button>
@@ -234,7 +235,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
             {data.comments.map(c => (
               <div key={c.id} className="flex gap-2.5">
                 <Avatar name={c.user_name} imageUrl={c.user_avatar_url} size="sm" className="shrink-0 mt-0.5" />
-                <div className="flex-1 bg-surface-1 border border-line rounded-xl px-3 py-2.5">
+                <div className="flex-1 bg-surface-1 border border-line rounded-lg px-3 py-2.5">
                   <div className="flex items-center gap-2 mb-1 flex-wrap">
                     <span className="text-xs font-bold text-ink-1">{c.user_name}</span>
                     <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${PLAN_BADGE[c.user_plan] ?? PLAN_BADGE.free}`}>

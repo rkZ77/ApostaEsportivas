@@ -1,4 +1,6 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
+/* As fontes são carregadas por <link> no index.html, com preconnect.
+   Um @import aqui obrigaria o navegador a baixar e parsear este CSS inteiro
+   antes de sequer descobrir que existe uma fonte pra buscar. */
 
 @tailwind base;
 @tailwind components;

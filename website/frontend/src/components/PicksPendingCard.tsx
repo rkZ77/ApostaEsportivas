@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { CalendarClock, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -112,7 +113,7 @@ export default function PicksPendingCard() {
         {leagueNames && <p className="text-ink-4 text-xs mb-5">{leagueNames}</p>}
         {nextGames === null ? (
           <div className="flex justify-center py-3">
-            <div className="w-5 h-5 border-2 border-line-strong border-t-ink-3 rounded-full animate-spin" />
+            <Spinner size="sm" tone="ink" />
           </div>
         ) : groups.length === 0 ? (
           <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>

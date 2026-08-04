@@ -225,6 +225,64 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_user ON notifications(user_id, created_at DESC);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_notifications_unread ON notifications(user_id) WHERE read_at IS NULL;")
+
+        # ── Favoritos ────────────────────────────────────────────────────────
+        # Uma tabela pra todos os tipos (liga, time, mercado, pick) em vez de
+        # quatro: o que muda entre eles é só o significado de ref_id, e a tela
+        # sempre lê "os favoritos do usuário" de uma vez. `kind` é texto livre
+        # com CHECK pra não virar tabela de dominio pra 4 valores.
+        #
+        # ref_id é TEXT e não INTEGER de propósito: liga e time são id numérico
+        # da API-Football, mas mercado é chave textual ('faltas', 'goleiros').
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_favorites (
+                id         SERIAL PRIMARY KEY,
+                user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                kind       VARCHAR(20) NOT NULL CHECK (kind IN ('league','team','market','pick')),
+                ref_id     VARCHAR(60) NOT NULL,
+                label      VARCHAR(120),
+                created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, kind, ref_id)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_favorites_user ON user_favorites(user_id, kind);")
+
+        # ── Alertas ──────────────────────────────────────────────────────────
+        # Preferência do usuário, não fila de disparo: quem dispara é o gerador
+        # de notificação já existente, que consulta isto antes de criar a linha
+        # em `notifications`.
+        #
+        # min_confidence e min_ev ficam como NUMERIC nullable: NULL = "não me
+        # importo com esse critério", que é diferente de 0.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_alerts (
+                id             SERIAL PRIMARY KEY,
+                user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                kind           VARCHAR(30) NOT NULL CHECK (kind IN ('new_value_bet','confidence','favorite_team')),
+                enabled        BOOLEAN NOT NULL DEFAULT TRUE,
+                min_confidence NUMERIC,
+                min_ev         NUMERIC,
+                created_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+                updated_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, kind)
+            )
+        """)
+
+        # ── Conquistas ───────────────────────────────────────────────────────
+        # Só o registro de "quando desbloqueou". O catálogo (nome, descrição,
+        # meta) vive no código, em routers/personal.py: é conteúdo de produto,
+        # muda junto com a copy e não precisa de deploy de banco pra ajustar.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_achievements (
+                id           SERIAL PRIMARY KEY,
+                user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                code         VARCHAR(40) NOT NULL,
+                unlocked_at  TIMESTAMP NOT NULL DEFAULT NOW(),
+                UNIQUE (user_id, code)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);")
+
         conn.commit()
         return True
     except Exception as e:

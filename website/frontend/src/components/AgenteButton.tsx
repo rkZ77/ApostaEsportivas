@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, lazy, Suspense } from 'react'
+import { Spinner } from './ui'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bot } from 'lucide-react'
@@ -17,9 +18,9 @@ function PanelFallback() {
   return (
     <div
       style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-xl shadow-2xl shadow-black/60 flex items-center justify-center"
+      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-lg shadow-2xl shadow-black/60 flex items-center justify-center"
     >
-      <div className="w-6 h-6 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+      <Spinner />
     </div>
   )
 }
