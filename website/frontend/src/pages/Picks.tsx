@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo } from 'react'
+﻿import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
@@ -19,7 +19,7 @@ import { PickCardFooter, PickExplainButton, PickConfidence, PickStats, PickReaso
 import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -1133,7 +1133,21 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       <PickCardFooter
         onBet={!pick.result ? (e => {
           e.stopPropagation()
-          if (userBankroll == null) { onConfigureBanca?.() ?? navigate('/banca') }
+          /*
+           * A banca de alavancagem e SEPARADA da banca do site: ela vive em
+           * user_banca.alav_bankroll_init e se configura no painel laranja no
+           * topo desta aba, nao em /banca.
+           *
+           * Isto aqui era `onConfigureBanca?.() ?? navigate('/banca')`, e o ??
+           * testa o RESULTADO da chamada, nao se a funcao existe. Como
+           * onConfigureBanca devolve undefined, o lado direito rodava SEMPRE:
+           * trocava a aba e logo em seguida jogava o usuario em /banca, que e
+           * a banca errada.
+           */
+          if (userBankroll == null) {
+            if (onConfigureBanca) onConfigureBanca()
+            else navigate('/banca')
+          }
           else handleFollow(e as any)
         }) : undefined}
         betState={following ? 'loading' : followed ? 'done' : 'idle'}
@@ -1893,6 +1907,23 @@ export default function Picks() {
   }, [tab, canSeeVip])
 
 
+  /*
+   * Leva o usuario ate o painel de banca da alavancagem.
+   *
+   * Trocar de aba sozinho nao resolvia: quem clica em "Configurar banca" num
+   * card de alavancagem JA esta na aba de alavancagem, entao setTab nao movia
+   * nada e a tela parecia nao responder.
+   */
+  const alavConfigRef = useRef<HTMLDivElement>(null)
+  const irParaConfigAlavancagem = useCallback(() => {
+    setTab('alavancagem')
+    // espera a aba pintar antes de rolar
+    setTimeout(() => {
+      alavConfigRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      alavConfigRef.current?.querySelector('input')?.focus({ preventScroll: true })
+    }, 120)
+  }, [])
+
   const saveAlavInit = async () => {
     const val = parseFloat(alavInitInput)
     if (!val || val <= 0) return
@@ -2228,7 +2259,7 @@ export default function Picks() {
                         pick={today.alavancagem}
                         onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
-                        onConfigureBanca={() => setTab('alavancagem')}
+                        onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
                       />
                       <button onClick={() => setTab('alavancagem')}
@@ -2493,7 +2524,7 @@ export default function Picks() {
             ) : (
               <>
                 {/* Config banca alavancagem */}
-                <div className="card p-5 border-orange-500/20">
+                <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="font-display text-sm font-bold text-orange-400">Banca Alavancagem</p>
@@ -2525,7 +2556,7 @@ export default function Picks() {
                         {alavInitSaving ? '...' : userAlavSerie?.configured ? 'Alterar' : 'Definir'}
                       </button>
                       {userAlavSerie?.configured && (
-                        <button onClick={() => setAlavInitInput('')} className="px-3 py-2 rounded-md border border-line-strong text-ink-3 text-sm hover:text-ink-1 transition-colors">✕</button>
+                        <button onClick={() => setAlavInitInput('')} aria-label="Cancelar" className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 transition-colors"><XIcon className="w-4 h-4" /></button>
                       )}
                     </div>
                   ) : (
@@ -2550,7 +2581,7 @@ export default function Picks() {
                         pick={today.alavancagem}
                         onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
-                        onConfigureBanca={() => setTab('alavancagem')}
+                        onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
                       />
                     ) : (
