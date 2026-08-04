@@ -2,11 +2,12 @@ import { cn } from '../../lib/cn'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_LABEL } from '../../utils/resultStyle'
 
 /*
- * Tag em texto com borda, no estilo terminal do sistema. Substitui as pílulas
- * coloridas soltas que cada tela desenhava por conta.
+ * Tag em texto com borda. Substitui as pílulas coloridas soltas que cada tela
+ * desenhava por conta.
  *
- * O desenho (mono, versalete, tracking largo) é fixo. A cor é o único eixo,
- * porque é ela que carrega o significado que o usuário já aprendeu.
+ * Na fonte do site: o badge diz palavra, e monoespaçada aqui é pra número.
+ * A cor é o único eixo que varia, porque é ela que carrega o significado que
+ * o usuário já aprendeu.
  */
 
 const TONE = {
@@ -38,7 +39,7 @@ export default function Badge({
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 font-mono text-[10px] font-bold uppercase tracking-widest',
+        'inline-flex items-center gap-1 text-[10px] font-bold tracking-wide',
         'px-1.5 py-0.5 rounded-sm border',
         TONE[tone],
         className,
@@ -86,7 +87,7 @@ export function PickTypeBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center font-mono text-[10px] font-bold uppercase tracking-widest',
+        'inline-flex items-center text-[10px] font-bold tracking-wide',
         'px-1.5 py-0.5 rounded-sm border shrink-0',
         PICK_TYPE_CLS[type] ?? 'text-ink-3 border-line-strong',
         className,
@@ -112,7 +113,7 @@ export function ResultBadge({
   const rs = getResultStyle(result)
   if (!rs) {
     return (
-      <span className={cn('font-mono text-[10px] font-bold uppercase tracking-widest text-ink-4 shrink-0', className)}>
+      <span className={cn('text-[10px] font-bold tracking-wide text-ink-4 shrink-0', className)}>
         {result || 'Pendente'}
       </span>
     )
@@ -120,7 +121,7 @@ export function ResultBadge({
   return (
     <span
       className={cn(
-        'inline-flex items-center font-mono text-[10px] font-bold uppercase tracking-widest',
+        'inline-flex items-center text-[10px] font-bold tracking-wide',
         'px-1.5 py-0.5 rounded-sm border shrink-0',
         rs.bg, rs.border, rs.text,
         className,

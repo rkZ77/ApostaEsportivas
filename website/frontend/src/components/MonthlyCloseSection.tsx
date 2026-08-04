@@ -56,7 +56,7 @@ export default function MonthlyCloseSection() {
 
   return (
     <div>
-      <p className="text-xs text-ink-3 uppercase font-semibold mb-3">Fechamentos mensais</p>
+      <p className="text-xs text-ink-3 font-semibold mb-3">Fechamentos mensais</p>
 
       {pending && (
         <button

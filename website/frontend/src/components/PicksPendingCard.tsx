@@ -119,7 +119,7 @@ export default function PicksPendingCard() {
           <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
           <div className="text-left space-y-4">
-            <p className="text-[10px] text-ink-4 uppercase font-semibold">Próximos jogos</p>
+            <p className="text-[10px] text-ink-4 font-semibold">Próximos jogos</p>
             {groups.map(group => (
               <div key={group.dateLabel}>
                 <p className="text-[11px] text-ink-3 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
@@ -158,7 +158,7 @@ export default function PicksPendingCard() {
       <p className="text-ink-3 text-sm">Assim que forem publicados você recebe um aviso.</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">
-          <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2">
+          <p className="text-[10px] text-ink-4 font-semibold mb-2">
             {todayGames.length} jogo{todayGames.length > 1 ? 's' : ''} sendo analisado{todayGames.length > 1 ? 's' : ''} hoje
           </p>
           <div className="space-y-1.5">

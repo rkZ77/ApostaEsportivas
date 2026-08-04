@@ -403,7 +403,7 @@ export default function Admin() {
         {/* Pipeline */}
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase">Pipeline</h2>
+            <h2 className="text-xs font-semibold text-ink-3">Pipeline</h2>
             {(() => {
               const s = pipelineStatus['tudo']
               const isTudoRunning = runningCmd === 'tudo' || s?.status === 'running'
@@ -492,7 +492,7 @@ export default function Admin() {
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-3">
             <div>
-              <h2 className="text-xs font-semibold text-ink-3 uppercase">Revisão por IA</h2>
+              <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
               <p className="text-[11px] text-ink-4 mt-1">
                 {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
                   `${aiReviewStatus?.config.mode ?? 'off'} · ${aiReviewStatus?.config.environment ?? 'prod'} · limite ${aiReviewStatus?.config.daily_limit ?? 0}/dia`}
@@ -509,7 +509,7 @@ export default function Admin() {
               ['Vetos 24h', aiReviewStatus?.summary.rejected_24h ?? 0],
               ['Cache 24h', aiReviewStatus?.summary.cache_hits_24h ?? 0],
             ].map(([label, value]) => <div key={String(label)} className="rounded bg-surface-1 px-3 py-2">
-              <p className="text-[10px] text-ink-4 uppercase">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
+              <p className="text-[10px] text-ink-4">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
             </div>)}
           </div>
           <div className="space-y-1 max-h-40 overflow-y-auto">
@@ -533,8 +533,8 @@ export default function Admin() {
         {overview?.api_football && (
           <div className="card p-4 mb-4">
             <div className="flex items-center justify-between mb-2 gap-3">
-              <h2 className="text-xs font-semibold text-ink-3 uppercase">Cota da API-Football</h2>
-              <span className={`text-[10px] font-black uppercase border px-1.5 py-0.5 rounded ${
+              <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
+              <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
                 overview.api_football.ativo
                   ? 'text-green-400 bg-green-500/10 border-green-500/30'
                   : 'text-red-400 bg-red-500/10 border-red-500/30'
@@ -567,7 +567,7 @@ export default function Admin() {
             indistinguível de "a coleta nem rodou". */}
         {overview?.coleta && (
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Coleta</h2>
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">Coleta</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {[
                 { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
@@ -579,7 +579,7 @@ export default function Admin() {
               ].map(({ label, value }) => (
                 <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
                   <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
-                  <div className="text-[10px] text-ink-3 uppercase mt-0.5">{label}</div>
+                  <div className="text-[10px] text-ink-3 mt-0.5">{label}</div>
                 </div>
               ))}
             </div>
@@ -600,7 +600,7 @@ export default function Admin() {
         {/* Picks de hoje, os 6 tipos */}
         {overview?.picks_hoje && (
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Picks de hoje</h2>
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               {Object.entries(overview.picks_hoje).map(([chave, c]) => (
                 <div key={chave} className="flex items-center gap-3 bg-surface-1 rounded-md px-3 py-2.5">
@@ -622,13 +622,13 @@ export default function Admin() {
         <div className="grid gap-4 sm:grid-cols-2 mb-4">
           {overview?.financeiro && (
             <div className="card p-4">
-              <h2 className="text-xs font-semibold text-ink-3 uppercase mb-2">Receita do mês</h2>
+              <h2 className="text-xs font-semibold text-ink-3 mb-2">Receita do mês</h2>
               <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
               <p className="text-[11px] text-ink-4 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
             </div>
           )}
           <div className="card p-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-2">Último pipeline</h2>
+            <h2 className="text-xs font-semibold text-ink-3 mb-2">Último pipeline</h2>
             {overview?.pipeline?.status ? (
               <>
                 <div className={`font-mono text-lg font-black ${
@@ -666,7 +666,7 @@ export default function Admin() {
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-3">
                   <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
-                  <div className="text-xs text-ink-3 uppercase mt-1">{label}</div>
+                  <div className="text-xs text-ink-3 mt-1">{label}</div>
                 </div>
               ))}
             </div>
@@ -683,7 +683,7 @@ export default function Admin() {
         {/* Financeiro */}
         {revenue && (
           <div className="mb-6">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Financeiro</h2>
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">Financeiro</h2>
 
             {/* KPIs */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -695,7 +695,7 @@ export default function Admin() {
               ].map(({ label, value, color }) => (
                 <div key={label} className="stat-card text-center py-4">
                   <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-                  <div className="text-xs text-ink-3 uppercase mt-1">{label}</div>
+                  <div className="text-xs text-ink-3 mt-1">{label}</div>
                 </div>
               ))}
             </div>
@@ -704,7 +704,7 @@ export default function Admin() {
               {/* Receita por mês */}
               <div className="card overflow-hidden lg:col-span-2">
                 <div className="px-4 py-3 border-b border-line">
-                  <span className="text-xs font-semibold text-ink-3 uppercase">Receita por mês (últimos 12)</span>
+                  <span className="text-xs font-semibold text-ink-3">Receita por mês (últimos 12)</span>
                 </div>
                 {revenue.monthly.length === 0 ? (
                   <p className="text-center text-ink-4 text-sm py-6">Sem dados.</p>
@@ -715,9 +715,9 @@ export default function Admin() {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-line">
-                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Mês</th>
-                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Receita</th>
-                            <th className="text-left text-ink-3 font-medium px-4 py-2 uppercase">Vendas</th>
+                            <th className="text-left text-ink-3 font-medium px-4 py-2">Mês</th>
+                            <th className="text-left text-ink-3 font-medium px-4 py-2">Receita</th>
+                            <th className="text-left text-ink-3 font-medium px-4 py-2">Vendas</th>
                             <th className="w-32 px-4 py-2"></th>
                           </tr>
                         </thead>
@@ -751,7 +751,7 @@ export default function Admin() {
               {/* Por plano */}
               <div className="card overflow-hidden">
                 <div className="px-4 py-3 border-b border-line">
-                  <span className="text-xs font-semibold text-ink-3 uppercase">Por plano</span>
+                  <span className="text-xs font-semibold text-ink-3">Por plano</span>
                 </div>
                 {revenue.by_plan.length === 0 ? (
                   <p className="text-center text-ink-4 text-sm py-6">Sem dados.</p>
@@ -792,7 +792,7 @@ export default function Admin() {
         {/* Pagamentos */}
         <div className="card overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3 flex-wrap">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase">Pagamentos</h2>
+            <h2 className="text-xs font-semibold text-ink-3">Pagamentos</h2>
             <div className="flex items-center gap-2">
               <span className="text-xs text-ink-4">{payments.length} registro(s)</span>
               <button
@@ -824,7 +824,7 @@ export default function Admin() {
                   <thead>
                     <tr className="border-b border-line">
                       {['Data', 'Usuário', 'Plano', 'Valor', 'Método', 'Status', 'Expira'].map(h => (
-                        <th key={h} className="text-left text-ink-3 font-medium px-4 py-2 uppercase whitespace-nowrap">{h}</th>
+                        <th key={h} className="text-left text-ink-3 font-medium px-4 py-2 whitespace-nowrap">{h}</th>
                       ))}
                     </tr>
                   </thead>
@@ -870,7 +870,7 @@ export default function Admin() {
             dava pra chamar por fora. Sem scheduler, esta é a única forma de
             resolver pick em lote. */}
         <div className="card p-4 mb-4">
-          <h2 className="text-xs font-semibold text-ink-3 uppercase mb-1">Resultados</h2>
+          <h2 className="text-xs font-semibold text-ink-3 mb-1">Resultados</h2>
           <p className="text-xs text-ink-3 mb-3 leading-relaxed">
             Nada roda agendado. Resolver marca GREEN/RED nos picks cujo jogo já
             terminou; reconferir corrige escanteios e cartões que a API revisou
@@ -916,7 +916,7 @@ export default function Admin() {
         </div>
 
         <div className="card p-4 mb-6">
-          <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Corrigir Resultado de Pick</h2>
+          <h2 className="text-xs font-semibold text-ink-3 mb-3">Corrigir Resultado de Pick</h2>
           {(() => {
             const brt = (daysAgo = 0) => {
               const d = new Date()
@@ -945,7 +945,7 @@ export default function Admin() {
           })()}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-ink-3 uppercase font-semibold">Time</label>
+              <label className="text-[10px] text-ink-3 font-semibold">Time</label>
               <input
                 className="input text-sm"
                 placeholder="Ex: Brasil, Flamengo..."
@@ -955,7 +955,7 @@ export default function Admin() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-ink-3 uppercase font-semibold">Tipo</label>
+              <label className="text-[10px] text-ink-3 font-semibold">Tipo</label>
               <select className="input text-sm" value={pickTypeFilter} onChange={e => setPickTypeFilter(e.target.value)}>
                 <option value="">Todos</option>
                 <option value="vip">VIP</option>
@@ -967,11 +967,11 @@ export default function Admin() {
               </select>
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-ink-3 uppercase font-semibold">Data de</label>
+              <label className="text-[10px] text-ink-3 font-semibold">Data de</label>
               <input type="date" className="input text-sm" value={pickDateFrom} onChange={e => setPickDateFrom(e.target.value)} />
             </div>
             <div className="flex flex-col gap-1">
-              <label className="text-[10px] text-ink-3 uppercase font-semibold">Data até</label>
+              <label className="text-[10px] text-ink-3 font-semibold">Data até</label>
               <input type="date" className="input text-sm" value={pickDateTo} onChange={e => setPickDateTo(e.target.value)} />
             </div>
           </div>
@@ -1002,7 +1002,7 @@ export default function Admin() {
                   <div key={`${p.pick_type}-${p.id}`} className="bg-surface-1 border border-line rounded-lg p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-2">
                       <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-ink-2 bg-surface-3/40'}`}>{p.pick_type}</span>
+                        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${typeCls[p.pick_type] ?? 'text-ink-2 bg-surface-3/40'}`}>{p.pick_type}</span>
                         <span className="text-xs font-semibold text-ink-1 truncate">{p.home_team}{p.away_team ? ` vs ${p.away_team}` : ''}</span>
                       </div>
                       <span className="text-[10px] text-ink-3 shrink-0">{p.match_date ? new Date(p.match_date + 'T12:00:00').toLocaleDateString('pt-BR') : ''}</span>
@@ -1098,7 +1098,7 @@ export default function Admin() {
               <thead>
                 <tr className="border-b border-line">
                   {['Usuário', 'WhatsApp', 'Plano', 'Tipo / Validade', 'Banca', 'Status', 'Cadastro', 'Último acesso', 'Ações'].map(h => (
-                    <th key={h} className="text-left text-ink-3 font-medium px-4 py-3 uppercase text-xs whitespace-nowrap">{h}</th>
+                    <th key={h} className="text-left text-ink-3 font-medium px-4 py-3 text-xs whitespace-nowrap">{h}</th>
                   ))}
                 </tr>
               </thead>
@@ -1279,7 +1279,7 @@ export default function Admin() {
 
         {aba === 'ligas' && (<>
           <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-1">Cadastrar liga</h2>
+            <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar liga</h2>
             <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
               buscado automaticamente · só preencha se a validação estiver fora.
@@ -1320,7 +1320,7 @@ export default function Admin() {
           </div>
 
           <div className="card p-4">
-            <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">
               Ligas na coleta {ligas ? `(${ligas.length})` : ''}
             </h2>
             {!ligas ? (

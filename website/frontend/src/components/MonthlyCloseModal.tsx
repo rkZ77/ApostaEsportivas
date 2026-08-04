@@ -196,7 +196,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
         <motion.div variants={sheetUp} className="bg-surface-0 border border-line rounded-t-2xl sm:rounded-lg w-full sm:max-w-sm shadow-2xl">
           <div className="px-5 pt-5 pb-2 flex items-start justify-between gap-3">
             <div>
-              <p className="text-[10px] font-black text-ink-3 uppercase mb-0.5">Fechamento mensal</p>
+              <p className="text-[10px] font-black text-ink-3 mb-0.5">Fechamento mensal</p>
               <h2 className="text-ink-1 font-bold text-xl">{data?.month_label ?? 'Mês passado'}</h2>
             </div>
             <button
@@ -260,7 +260,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               </button>
             )}
             <div>
-              <p className="text-[10px] font-black text-ink-3 uppercase mb-0.5">
+              <p className="text-[10px] font-black text-ink-3 mb-0.5">
                 {step === 'edit' ? 'Atualizar banca' : step === 'success' ? 'Banca atualizada' : 'Fechamento mensal'}
               </p>
               <h2 className="text-ink-1 font-bold text-xl">
@@ -311,12 +311,12 @@ export default function MonthlyCloseModal({ onClose }: Props) {
             {/* Banca início e fim */}
             <div className="mx-5 mb-3 flex items-center gap-3 bg-surface-1 rounded-lg border border-line px-4 py-3">
               <div className="flex-1 min-w-0">
-                <p className="text-[10px] text-ink-3 uppercase mb-0.5">Início do mês</p>
+                <p className="text-[10px] text-ink-3 mb-0.5">Início do mês</p>
                 <p className="text-sm font-black text-ink-2 truncate">{fmtBRL(bancaInicio)}</p>
               </div>
               <div className={`w-6 h-px shrink-0 ${isProfit ? 'bg-green-500/50' : 'bg-red-500/50'}`} />
               <div className="flex-1 min-w-0 text-right">
-                <p className="text-[10px] text-ink-3 uppercase mb-0.5">Fim do mês</p>
+                <p className="text-[10px] text-ink-3 mb-0.5">Fim do mês</p>
                 <p className={`text-sm font-black truncate ${accent}`}>{fmtBRL(data.bankroll_current)}</p>
               </div>
             </div>
@@ -334,7 +334,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
             {/* Alavancagem · série é composta, não entra na banca de unidades acima */}
             {data.alavancagem?.configured && (
               <div className="mx-5 mb-3 bg-surface-1 rounded-lg border border-line px-4 py-3">
-                <p className="text-[10px] text-ink-3 uppercase mb-1.5">Série de alavancagem</p>
+                <p className="text-[10px] text-ink-3 mb-1.5">Série de alavancagem</p>
                 <div className="flex items-center justify-between">
                   <span className="text-sm font-black text-ink-1">{fmtBRL(data.alavancagem.current_bankroll)}</span>
                   <span className="text-[11px] text-ink-3">

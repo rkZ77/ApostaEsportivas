@@ -168,7 +168,7 @@ export default function Planos() {
                     {isTrial ? 'TRIAL' : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
                   </span>
                   {urgent && (
-                    <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold uppercase animate-pulse">
+                    <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold animate-pulse">
                       Expirando
                     </span>
                   )}
@@ -214,25 +214,25 @@ export default function Planos() {
             <div className="grid grid-cols-2 gap-3 mb-5">
               {startDate && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Início</p>
+                  <p className="text-[10px] text-ink-3 mb-0.5">Início</p>
                   <p className="text-ink-1 text-xs font-semibold">{startDate}</p>
                 </div>
               )}
               {expiryDate && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
+                  <p className="text-[10px] text-ink-3 mb-0.5">{remaining <= 0 ? 'Expirou' : 'Expira'}</p>
                   <p className={`text-xs font-semibold ${urgent ? 'text-red-400' : 'text-ink-1'}`}>{expiryDate}</p>
                 </div>
               )}
               {memberSince && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Membro desde</p>
+                  <p className="text-[10px] text-ink-3 mb-0.5">Membro desde</p>
                   <p className="text-ink-1 text-xs font-semibold">{memberSince}</p>
                 </div>
               )}
               {totalSpent > 0 && (
                 <div className="bg-surface-2/60 rounded-md p-3">
-                  <p className="text-[10px] text-ink-3 uppercase mb-0.5">Total investido</p>
+                  <p className="text-[10px] text-ink-3 mb-0.5">Total investido</p>
                   <p className="text-green-400 text-xs font-black">R$ {totalSpent.toFixed(2).replace('.', ',')}</p>
                 </div>
               )}
@@ -278,7 +278,7 @@ export default function Planos() {
           <div className="relative bg-surface-1 border border-green-500/50 rounded-lg p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="font-mono bg-green-500 text-black text-[10px] font-black px-2.5 py-1 rounded-sm uppercase">Sem cartão</span>
+              <span className="bg-accent text-black text-[10px] font-bold px-2.5 py-1 rounded-sm">Sem cartão</span>
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-md flex items-center justify-center shrink-0 mt-0.5">
@@ -314,7 +314,7 @@ export default function Planos() {
 
         {upgradeOptions.length > 0 && (
           <div className="bg-surface-1 border border-line rounded-lg p-5">
-            <p className="text-xs text-ink-3 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
+            <p className="text-xs text-ink-3 font-black mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
             <p className="text-ink-1 text-sm mb-4">
               No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga {fmtPlanPrice(monthly.price)}/mês.
               Veja quanto economizaria mudando:
@@ -418,7 +418,7 @@ export default function Planos() {
 
         {payments.length > 0 && (
           <div className="bg-surface-1 border border-line rounded-lg p-6">
-            <h3 className="text-sm font-bold text-ink-1 uppercase mb-4">Histórico de pagamentos</h3>
+            <h3 className="text-sm font-bold text-ink-1 mb-4">Histórico de pagamentos</h3>
             <div className="space-y-0">
               {payments.map(p => {
                 const date = p.created_at
@@ -438,7 +438,7 @@ export default function Planos() {
                       <p className="text-green-400 font-black text-sm">
                         R$ {Number(p.amount).toFixed(2).replace('.', ',')}
                       </p>
-                      <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold uppercase">
+                      <span className="text-[10px] bg-green-500/10 text-green-400 border border-green-500/20 px-1.5 py-0.5 rounded font-bold">
                         Aprovado
                       </span>
                     </div>

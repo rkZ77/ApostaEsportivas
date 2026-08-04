@@ -60,7 +60,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
           return (
             <g key={pct}>
               <line x1={PL} y1={y} x2={W - PR} y2={y} stroke="#1f1f23" strokeWidth="0.8" />
-              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="'JetBrains Mono', monospace">{v}</text>
+              <text x={PL - 4} y={y + 3} fill="#52525b" fontSize="8" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fontVariantNumeric: 'tabular-nums' }}>{v}</text>
             </g>
           )
         })}
@@ -116,7 +116,8 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
             y={H - 6}
             fill="#52525b" fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
-            fontFamily="'JetBrains Mono', monospace"
+            fontFamily="Inter, -apple-system, sans-serif"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
           >
             {fmtDate(sorted[idx].match_date)}
           </text>

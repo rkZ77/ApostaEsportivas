@@ -121,12 +121,12 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
             >
               {t.label}
               {t.badge && (
-                <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold uppercase ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
+                <span className={`ml-1.5 text-[10px] border px-1.5 py-0.5 rounded font-bold ${t.badgeCls ?? 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20'}`}>
                   {t.badge}
                 </span>
               )}
               {t.premiumOnly && canSeeVip && (
-                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold uppercase">
+                <span className="ml-1.5 text-[10px] bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 px-1.5 py-0.5 rounded font-bold">
                   VIP
                 </span>
               )}
@@ -302,7 +302,7 @@ function QuickStats({ stats }: { stats: any }) {
       {items.map(({ icon, label, value, color, iconColor, sub }) => (
         <div key={label} className="card p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-ink-4 font-semibold uppercase">{label}</span>
+            <span className="text-xs text-ink-4 font-semibold">{label}</span>
             <span className={iconColor}>{icon}</span>
           </div>
           <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
@@ -545,7 +545,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       {/* Reasoning snippet */}
       {fato && (
         <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
           <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{fato}</span>
         </div>
       )}
@@ -859,7 +859,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       {/* Fato da IA */}
       {shortReasoning(m.reasoning) && (
         <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
           <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
         </div>
       )}
@@ -1120,7 +1120,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       {/* Fato da IA */}
       {shortReasoning(pick.reasoning_1) && (
         <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
           <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
         </div>
       )}
@@ -2119,7 +2119,7 @@ export default function Picks() {
               {/* Stats da IA este mês */}
               {quickStats && (
                 <div>
-                  <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2">Performance da IA · Geral</p>
+                  <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
@@ -2129,7 +2129,7 @@ export default function Picks() {
                     ].map(({ label, value, color }) => (
                       <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
                         <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
-                        <div className="text-[10px] text-ink-3 uppercase mt-1">{label}</div>
+                        <div className="text-[10px] text-ink-3 mt-1">{label}</div>
                       </div>
                     ))}
                   </div>

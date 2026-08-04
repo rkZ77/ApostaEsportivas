@@ -55,15 +55,18 @@ export default {
        * sans-serif generico, pra que a troca de fonte nao mude o layout
        * enquanto a webfont carrega.
        *
-       * JetBrains Mono fica por funcao, nao por estilo: algarismo de largura
-       * fixa e o que faz coluna de odd e de percentual alinhar. Nunito nao tem
-       * numeral de largura constante confiavel, e sem isso a tabela de
-       * resultados "dança" a cada digito que muda.
+       * A familia `mono` NAO e monoespaçada: e Inter. O nome ficou porque ~150
+       * lugares usam font-mono, e o papel continua o mesmo (numero, evidencia).
+       *
+       * Inter resolve o que a JetBrains Mono resolvia sem parecer terminal: ela
+       * tem algarismo TABULAR de verdade, e a regra em index.css liga tnum em
+       * tudo que usa font-mono. Coluna de odd e de percentual continua alinhada
+       * mesmo com os digitos mudando.
        */
       fontFamily: {
         display: ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
         sans:    ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
-        mono:    ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        mono:    ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       // escala de raio enxuta: 3 degraus + pilula. xl/2xl foram dobrados em lg.
       borderRadius: {

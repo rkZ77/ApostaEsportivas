@@ -73,7 +73,7 @@ export default function AdminShareResults() {
 
   return (
     <div className="card p-4 mb-6">
-      <h2 className="text-xs font-semibold text-ink-3 uppercase mb-3">Compartilhar resultados</h2>
+      <h2 className="text-xs font-semibold text-ink-3 mb-3">Compartilhar resultados</h2>
       <div className="flex flex-wrap gap-2">
         <button
           onClick={shareThisMonth}
