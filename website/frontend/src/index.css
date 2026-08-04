@@ -57,9 +57,23 @@
     font-family: 'Inter', sans-serif;
   }
 
-  /* Voz 1 · titulo */
+  /*
+   * Voz 1 · titulo.
+   *
+   * Inter, a mesma do corpo. O site rodava Space Grotesk aqui, e o par
+   * "Space Grotesk + Inter" e' a assinatura de template de startup e de
+   * landing gerada por IA desde 2023: o leitor reconhece antes de ler.
+   *
+   * Titulo agora se separa do corpo por PESO e TAMANHO, nao por familia.
+   * Da' menos ruido, e' o que produto de referencia faz (Stripe, Vercel), e
+   * ainda tira um arquivo de fonte do carregamento.
+   *
+   * O tracking negativo importa: Inter em corpo grande abre demais sem ele e
+   * o titulo perde densidade.
+   */
   h1, h2, h3, .font-display {
-    font-family: 'Space Grotesk', 'Inter', sans-serif;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+    letter-spacing: -0.02em;
     @apply text-ink-1;
   }
 
@@ -126,9 +140,10 @@
   .section-head {
     @apply text-center mb-10;
   }
-  /* font-bold, nao font-black: Space Grotesk carrega so' 500/600/700 e a fonte
-     nao existe acima de 700, entao font-black ja renderizava como 700. Pedir
-     700 direto e' o mesmo pixel com o CSS dizendo a verdade. */
+  /* font-bold (700), nao font-black (900). A Inter TEM 900 carregado, entao
+     agora e' escolha e nao limitacao: 900 em titulo de secao pesa demais
+     contra corpo em 400 e puxa a pagina pra estetica de banner promocional,
+     que e' justamente o que o produto nao e'. */
   .section-title {
     @apply font-display text-2xl md:text-3xl font-bold text-ink-1 mb-3 leading-tight;
   }

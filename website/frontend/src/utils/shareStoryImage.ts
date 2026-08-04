@@ -28,18 +28,22 @@ export interface StoryImageInput {
 // Canvas não espera webfont carregar: se desenhar antes, cai no fallback
 // silenciosamente e o resultado varia por dispositivo. ensureFonts() força o
 // carregamento uma vez e é aguardado por todos os builders.
-const DISPLAY = '"Space Grotesk", system-ui, -apple-system, sans-serif'
+const DISPLAY = 'Inter, system-ui, -apple-system, sans-serif'
 const MONO = '"JetBrains Mono", ui-monospace, monospace'
 const SANS = 'Inter, system-ui, -apple-system, sans-serif'
 
-// index.css carrega Space Grotesk e JetBrains Mono só até o peso 700; Inter
-// vai até 900. Pedir 900 numa família que não tem faz o navegador SIMULAR o
-// negrito (faux bold), e o traço sintetizado muda de aparelho pra aparelho --
-// a mesma pick sairia com espessura diferente em dois celulares. Por isso o
-// peso é limitado ao que existe de verdade em cada família.
+// JetBrains Mono é carregada só até o peso 700; Inter vai até 900. Pedir 900
+// numa família que não tem faz o navegador SIMULAR o negrito (faux bold), e o
+// traço sintetizado muda de aparelho pra aparelho -- a mesma pick sairia com
+// espessura diferente em dois celulares. Por isso o peso do mono é limitado
+// ao que existe de verdade.
+//
+// DISPLAY deixou de ser Space Grotesk junto com o resto do site (ver o bloco
+// de tipografia em index.css). Como agora é Inter, ele não precisa mais do
+// teto de 700 e ganhou fontSans de volta na prática.
 const clamp700 = (peso: number) => Math.min(peso, 700)
 
-const fontDisplay = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${DISPLAY}`
+const fontDisplay = (peso: number, tam: number) => `${peso} ${tam}px ${DISPLAY}`
 const fontMono = (peso: number, tam: number) => `${clamp700(peso)} ${tam}px ${MONO}`
 const fontSans = (peso: number, tam: number) => `${peso} ${tam}px ${SANS}`
 
@@ -49,8 +53,8 @@ function ensureFonts(): Promise<void> {
   const fonts = (document as any).fonts
   if (!fonts?.load) return (fontesPromise = Promise.resolve())
   fontesPromise = Promise.all([
-    fonts.load('700 58px "Space Grotesk"'),
-    fonts.load('600 28px "Space Grotesk"'),
+    fonts.load('800 58px Inter'),
+    fonts.load('600 28px Inter'),
     fonts.load('700 52px "JetBrains Mono"'),
     fonts.load('500 24px "JetBrains Mono"'),
     fonts.load('900 40px Inter'),
