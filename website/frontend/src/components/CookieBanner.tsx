@@ -36,7 +36,7 @@ export default function CookieBanner() {
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={accept}
-              className="shrink-0 bg-green-500 hover:bg-green-400 active:bg-green-600 text-black text-xs font-black px-5 py-2 rounded-xl transition-colors"
+              className="shrink-0 bg-green-500 hover:bg-green-400 active:bg-green-600 text-black text-xs font-black px-5 py-2 rounded-lg transition-colors"
             >
               Entendi
             </motion.button>

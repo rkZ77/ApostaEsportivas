@@ -1,7 +1,10 @@
 import { useRef, useEffect } from 'react'
-import { Zap } from 'lucide-react'
+import { Helmet } from 'react-helmet-async'
+import { Zap, Lock } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
+import { EmptyState, LiveDot } from '../components/ui'
 import Avatar from '../components/Avatar'
 import BackButton from '../components/BackButton'
 import { useAuth } from '../context/AuthContext'
@@ -76,45 +79,48 @@ export default function Agente() {
 
   if (!isVip && !isAdmin) {
     return (
-      <div className="min-h-screen bg-surface-0 flex flex-col">
-        <Navbar />
-        <div className="flex-1 flex items-center justify-center px-4 py-16">
-          <div className="text-center max-w-sm">
-            <div className="w-16 h-16 rounded-full bg-yellow-400/10 border border-yellow-400/20 flex items-center justify-center mx-auto mb-5">
-              <svg className="w-8 h-8 text-yellow-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-              </svg>
-            </div>
-            <h2 className="text-ink-1 font-black text-xl mb-2">Agente exclusivo VIP</h2>
-            <p className="text-ink-2 text-sm mb-6 leading-relaxed">
-              O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP.
-            </p>
-            <a href="/checkout" className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-8 py-3 rounded-md transition-colors text-sm">
-              Assinar VIP
-            </a>
-          </div>
-        </div>
-      </div>
+      <PageShell
+        title="Agente IA"
+        description="Converse com uma IA especialista em futebol sobre picks, banca e jogos ao vivo."
+        noindex
+        width="narrow"
+        mainClassName="flex items-center"
+      >
+        <EmptyState
+          Icon={Lock}
+          title="Agente exclusivo VIP"
+          description="O Agente IA analisa picks, banca, jogos ao vivo e responde qualquer dúvida em tempo real. Disponível apenas para assinantes VIP."
+          action={{ children: 'Assinar VIP', to: '/checkout', variant: 'vip' }}
+          className="w-full"
+        />
+      </PageShell>
     )
   }
 
   return (
+    /* h-screen + overflow-hidden de propósito: o chat rola por dentro, não a
+       página. Por isso esta tela não usa PageShell, que assume página que rola
+       e termina em rodapé. */
     <div className="h-screen bg-surface-0 flex flex-col overflow-hidden">
+      <Helmet>
+        <title>Agente IA · Pick IA</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       <Navbar />
 
       {/* Header */}
       <div className="bg-surface-0 border-b border-line">
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
-          <div className="w-9 h-9 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center shrink-0">
-            <span className="text-green-400 text-sm font-bold">AI</span>
+          <div className="w-9 h-9 rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center shrink-0">
+            <span className="text-accent text-sm font-bold">AI</span>
           </div>
           <div>
-            <h1 className="text-base font-black text-ink-1">Pick<span className="text-green-500">IA</span> Agent</h1>
+            <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent">IA</span> Agent</h1>
             <p className="text-ink-3 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
-            <span className={`w-2 h-2 rounded-full ${loading ? 'bg-yellow-500 animate-pulse' : 'bg-green-500'}`} />
+            <LiveDot tone={loading ? 'amber' : 'green'} />
             <span className="text-ink-3 text-xs">{loading ? 'Analisando...' : 'Online'}</span>
           </div>
         </div>

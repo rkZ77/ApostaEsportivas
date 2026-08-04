@@ -63,7 +63,7 @@ export default function PushPromptBanner() {
           exit="exit"
           className="fixed bottom-40 left-0 right-0 z-[9990] flex justify-center px-4 pointer-events-none"
         >
-          <div className="pointer-events-auto w-full max-w-sm bg-surface-1 border border-line-strong rounded-2xl shadow-2xl px-4 py-4 flex items-center gap-3">
+          <div className="pointer-events-auto w-full max-w-sm bg-surface-1 border border-line-strong rounded-lg shadow-2xl px-4 py-4 flex items-center gap-3">
             <div className="w-9 h-9 rounded-full bg-green-500/10 flex items-center justify-center shrink-0">
               <Bell className="w-4 h-4 text-green-400" />
             </div>

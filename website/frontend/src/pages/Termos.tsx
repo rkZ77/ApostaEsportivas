@@ -1,32 +1,16 @@
 import { Link } from 'react-router-dom'
-import { Helmet } from 'react-helmet-async'
-import { ChevronLeft } from 'lucide-react'
-import Footer from '../components/Footer'
+import PageShell from '../components/PageShell'
 
 export default function Termos() {
   return (
-    // bg-surface-0 e nao bg-surface-0: as outras 20 paginas usam preto, e a
-    // diferenca de tom aparecia ao navegar entre elas.
-    <div className="min-h-screen bg-surface-0 text-ink-2 flex flex-col">
-      <Helmet>
-        <title>Termos de Uso · Pick IA</title>
-        <meta name="description" content="Termos de Uso do Pick IA: regras de uso da plataforma, assinaturas e responsabilidades." />
-      </Helmet>
-      <div className="max-w-3xl mx-auto px-4 py-12 flex-1 w-full">
-
-        {/* Alvo de toque de 44px, como o BackButton do resto do site. A seta
-            de texto que estava aqui era pequena demais pra dedo, e o site e'
-            mobile-first. */}
-        <Link to="/"
-          className="inline-flex items-center gap-2 h-11 pr-4 text-sm text-ink-3 hover:text-green-400 transition-colors mb-8">
-          <span className="flex items-center justify-center w-11 h-11 rounded-full border border-line">
-            <ChevronLeft className="w-4 h-4" />
-          </span>
-          Voltar
-        </Link>
-
-        <h1 className="text-3xl font-black text-ink-1 mb-2">Termos de Uso</h1>
-        <p className="text-ink-3 text-sm mb-10">Última atualização: junho de 2026</p>
+    <PageShell
+      title="Termos de Uso · Pick IA"
+      description="Termos de Uso do Pick IA: regras de uso da plataforma, assinaturas e responsabilidades."
+      width="prose"
+      nav={false}
+      bar={{ back: '/', title: 'Termos de Uso', sub: 'Última atualização: junho de 2026' }}
+      mainClassName="text-ink-2"
+    >
 
         <div className="space-y-8 text-sm leading-relaxed">
 
@@ -154,10 +138,6 @@ export default function Termos() {
           <Link to="/privacidade" className="hover:text-ink-2 transition-colors">Política de Privacidade</Link>
           <Link to="/" className="hover:text-ink-2 transition-colors">Início</Link>
         </div>
-      </div>
-      {/* Sem Footer estas paginas eram beco sem saida: linkadas do rodape do
-          site, sem navbar e com uma unica seta de texto pra sair. */}
-      <Footer />
-    </div>
+    </PageShell>
   )
 }

@@ -5,15 +5,14 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
 import { fmtBRL, fmtSigned } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
-import BackButton from '../components/BackButton'
 import FilterPanel from '../components/FilterPanel'
-import NumberTicker from '../components/ui/NumberTicker'
+import { Button, NumberTicker, Spinner } from '../components/ui'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
@@ -79,7 +78,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
       >
         <motion.div variants={dialogScale} className="bg-surface-1 border border-line-strong rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           onClick={e => e.stopPropagation()}>
-          <h2 className="text-ink-1 font-black text-lg mb-2">Já configurada este mês</h2>
+          <h2 className="text-ink-1 font-bold text-lg mb-2">Já configurada este mês</h2>
           <p className="text-ink-2 text-sm leading-relaxed mb-4">
             Pra manter o histórico de risco confiável, a banca só pode ser configurada uma vez por
             mês. Se você quer tirar um valor agora, use o botão "Sacar" (fica registrado no
@@ -102,7 +101,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
       className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
     >
       <motion.div variants={dialogScale} className="bg-surface-1 border border-line rounded-lg p-6 w-full max-w-sm overflow-y-auto max-h-[92dvh]">
-        <h2 className="text-ink-1 font-black text-lg mb-1">Configurar banca</h2>
+        <h2 className="text-ink-1 font-bold text-lg mb-1">Configurar banca</h2>
         <p className="text-ink-3 text-xs mb-5">Define banca, unidade e meta como um tipster profissional.</p>
 
         <div className="space-y-4">
@@ -289,9 +288,44 @@ export default function Banca() {
   ]
 
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
+    <PageShell
+      title="Minha Banca"
+      description="Acompanhe o crescimento da sua banca a partir dos picks que você apostou."
+      noindex
+      bar={{
+        back: true,
+        title: 'Minha Banca',
+        sub: (
+          <span className="flex items-center gap-2">
+            Acompanhe o crescimento dos picks que você apostou
+            {data?.unit_value && (
+              <span className="text-ink-2 font-semibold">
+                1 unidade = <span className="font-mono text-ink-1">{fmtBRL(Number(data.unit_value))}</span>
+              </span>
+            )}
+          </span>
+        ),
+        actions: (
+          <>
+            <Button to="/meus-picks" variant="ghost" size="sm" className="hidden sm:inline-flex">
+              Meus Picks
+            </Button>
+            <Button variant="ghost" size="sm" onClick={() => navigate('/banca/saque')}>
+              Sacar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSetup(true)}
+              className={data?.can_configure === false ? 'opacity-50' : undefined}
+              title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
+            >
+              Configurar
+            </Button>
+          </>
+        ),
+      }}
+    >
       <AnimatePresence>
       {showSetup && (
         <SetupModal
@@ -314,44 +348,9 @@ export default function Banca() {
       )}
       </AnimatePresence>
 
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BackButton />
-            <div>
-              <h1 className="text-base font-black text-ink-1">Minha Banca</h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                <p className="text-ink-3 text-xs hidden sm:block">Acompanhe o crescimento dos picks que você apostou</p>
-                {data?.unit_value && (
-                  <span className="text-xs font-semibold text-ink-2">
-                    1 unidade = <span className="text-ink-1 font-black">{fmtBRL(Number(data.unit_value))}</span>
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap justify-end">
-            <Link to="/meus-picks" className="btn-ghost text-xs px-3 py-2 hidden sm:inline-flex">
-              Meus Picks
-            </Link>
-            <button onClick={() => navigate('/banca/saque')} className="btn-ghost text-xs px-3 py-2">
-              Sacar
-            </button>
-            <button
-              onClick={() => setShowSetup(true)}
-              className={`btn-ghost text-xs px-3 py-2 ${data?.can_configure === false ? 'opacity-50' : ''}`}
-              title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
-            >
-              Configurar
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : error ? (
           <div className="card p-10 text-center">
@@ -730,8 +729,6 @@ export default function Banca() {
 
           </div>
         )}
-
-      </main>
-    </div>
+    </PageShell>
   )
 }

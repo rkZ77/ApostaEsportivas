@@ -128,12 +128,82 @@ def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, data_
 
 router = APIRouter(prefix="/api/payments", tags=["payments"])
 
+#
+# FONTE DE VERDADE DO PREÇO.
+#
+# Isto aqui é o que o MercadoPago cobra de fato. Antes o valor também estava
+# escrito à mão no Checkout, no Planos, na Home e no JSON-LD do index.html, e o
+# JSON-LD ficou anunciando R$ 49,90 pro Google enquanto a cobrança era 39,90
+# sem ninguém perceber.
+#
+# Quem quiser mostrar preço na tela lê de GET /api/payments/plans (público).
+# Não copiar número daqui pro front.
+#
 PLANS = {
     "mensal":     {"price": 39.90,  "title": "Plano Picks Mensal",     "days": 30},
     "trimestral": {"price": 99.90,  "title": "Plano Picks Trimestral", "days": 90},
     "semestral":  {"price": 199.90, "title": "Plano Picks Semestral",  "days": 180},
     "anual":      {"price": 359.90, "title": "Plano Picks Anual",      "days": 365},
 }
+
+# Rótulo curto de cada ciclo, pra tela não precisar traduzir a chave.
+PLAN_LABELS = {
+    "mensal": "Mensal", "trimestral": "Trimestral",
+    "semestral": "Semestral", "anual": "Anual",
+}
+PLAN_PERIODS = {
+    "mensal": "1 mês", "trimestral": "3 meses",
+    "semestral": "6 meses", "anual": "12 meses",
+}
+# ISO 8601 de duração, exigido pelo billingIncrement do schema.org.
+PLAN_ISO_PERIOD = {
+    "mensal": "P1M", "trimestral": "P3M", "semestral": "P6M", "anual": "P1Y",
+}
+
+
+def _plan_payload(key: str) -> dict:
+    """Um plano já com tudo que a tela precisa mostrar.
+
+    O desconto é calculado aqui, e não no front, porque era mais um lugar onde
+    a conta podia divergir: o Planos.tsx derivava `savePct` com 39.90 escrito
+    de novo no meio da expressão.
+    """
+    info = PLANS[key]
+    months = round(info["days"] / 30) or 1
+    per_month = info["price"] / months
+    monthly_price = PLANS["mensal"]["price"]
+    full_price = monthly_price * months
+    savings = round(full_price - info["price"], 2)
+    save_pct = round((1 - info["price"] / full_price) * 100) if full_price > 0 else 0
+
+    return {
+        "id":            key,
+        "label":         PLAN_LABELS[key],
+        "title":         info["title"],
+        "price":         info["price"],
+        "days":          info["days"],
+        "period":        PLAN_PERIODS[key],
+        "months":        months,
+        "price_per_month": round(per_month, 2),
+        "iso_period":    PLAN_ISO_PERIOD[key],
+        # 0 no mensal, que é a própria régua de comparação
+        "savings":       savings if key != "mensal" else 0.0,
+        "save_pct":      save_pct if key != "mensal" else 0,
+    }
+
+
+@router.get("/plans")
+def list_plans():
+    """Catálogo de planos VIP · sem autenticação.
+
+    Público de propósito: a Home e a página de Planos mostram preço pra
+    visitante deslogado, e é justamente esse caminho que ficava desatualizado
+    quando o valor era escrito à mão no front.
+    """
+    return {
+        "currency": "BRL",
+        "plans": [_plan_payload(k) for k in PLANS],
+    }
 
 
 class CreatePreferenceBody(BaseModel):

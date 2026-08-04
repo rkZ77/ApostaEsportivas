@@ -1,9 +1,8 @@
 import { Link } from 'react-router-dom'
-import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { BookOpen } from 'lucide-react'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
+import PageShell from '../components/PageShell'
+import EmptyState from '../components/ui/EmptyState'
 import { POSTS } from '../blog/registry'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
@@ -14,23 +13,18 @@ function formatDate(iso: string): string {
 
 export default function Blog() {
   return (
-    <>
-      <Helmet>
-        <title>Blog Pick IA · Gestão de banca e estratégia em apostas esportivas</title>
-        <meta
-          name="description"
-          content="Artigos sobre gestão de banca, Kelly Criterion, EV positivo e estratégia para apostas esportivas de futebol, direto da equipe do Pick IA."
-        />
-        <link rel="canonical" href="https://pickia.com.br/blog" />
-      </Helmet>
-      <Navbar />
-      <div className="min-h-screen bg-surface-0 text-ink-1">
-        <div className="max-w-3xl mx-auto px-4 pt-10 pb-8 text-center">
+    <PageShell
+      title="Blog Pick IA · Gestão de banca e estratégia em apostas esportivas"
+      description="Artigos sobre gestão de banca, Kelly Criterion, EV positivo e estratégia para apostas esportivas de futebol, direto da equipe do Pick IA."
+      canonical="https://pickia.com.br/blog"
+      width="prose"
+    >
+        <div className="pb-8 text-center">
           <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-sm px-4 py-1.5 mb-6">
             <BookOpen className="w-3.5 h-3.5 text-green-400" />
             <span className="text-green-400 text-xs font-bold">Blog Pick IA</span>
           </div>
-          <h1 className="text-3xl sm:text-4xl font-black mb-4 leading-tight">
+          <h1 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
             Gestão de banca e estratégia<br />
             <span className="text-green-500">para apostas esportivas</span>
           </h1>
@@ -40,9 +34,14 @@ export default function Blog() {
           </p>
         </div>
 
-        <div className="max-w-3xl mx-auto px-4 pb-16">
+        <div className="pb-8">
           {POSTS.length === 0 ? (
-            <p className="text-ink-3 text-sm text-center py-12">Nenhum artigo publicado ainda.</p>
+            <EmptyState
+              Icon={BookOpen}
+              title="Nenhum artigo publicado ainda"
+              description="Estamos escrevendo. Enquanto isso, dá pra conferir o histórico auditável dos picks."
+              action={{ children: 'Ver resultados', to: '/resultados', variant: 'ghost' }}
+            />
           ) : (
             <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
               {POSTS.map((post) => (
@@ -58,7 +57,7 @@ export default function Blog() {
                       <span className="text-ink-4 text-xs">{formatDate(post.publishedAt)}</span>
                       <span className="text-ink-4 text-xs">· {post.readingTime} min de leitura</span>
                     </div>
-                    <h2 className="text-ink-1 font-black text-lg mb-1.5 leading-snug">{post.title}</h2>
+                    <h2 className="text-ink-1 font-bold text-lg mb-1.5 leading-snug">{post.title}</h2>
                     <p className="text-ink-2 text-sm leading-relaxed">{post.description}</p>
                   </Link>
                 </motion.div>
@@ -66,8 +65,6 @@ export default function Blog() {
             </motion.div>
           )}
         </div>
-      </div>
-      <Footer />
-    </>
+    </PageShell>
   )
 }

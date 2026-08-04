@@ -86,7 +86,7 @@ export default function ApostaModal({
         ) : (
           /* ── Tela principal ── */
           <motion.div key="main" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="p-5">
-            <h3 className="text-ink-1 font-black text-sm mb-1">Registrar aposta</h3>
+            <h3 className="text-ink-1 font-bold text-sm mb-1">Registrar aposta</h3>
             <p className="text-ink-3 text-xs mb-4">Informe onde e como você apostou.</p>
 
             {/* Casa de aposta */}

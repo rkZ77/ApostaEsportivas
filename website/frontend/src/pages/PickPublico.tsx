@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from '../components/ui'
 import { useParams, useSearchParams, Link } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { Lock, Crown, TrendingUp } from 'lucide-react'
@@ -41,7 +42,7 @@ export default function PickPublico() {
   if (loading) {
     return (
       <div className="min-h-screen bg-surface-0 flex items-center justify-center">
-        <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+        <Spinner size="lg" />
       </div>
     )
   }
@@ -102,7 +103,7 @@ export default function PickPublico() {
             </div>
             {rs ? (
               <span className={`text-xs font-black px-3 py-1 rounded-lg border ${rs.bg} ${rs.border} ${rs.text}`}>
-                {rs.label} {rs.emoji}
+                {rs.label}
               </span>
             ) : (
               <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>

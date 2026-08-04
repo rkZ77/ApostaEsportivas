@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { Link, useNavigate } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
@@ -53,6 +54,10 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
+      <Helmet>
+        <title>Recuperar senha · Pick IA</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
       <div className="w-full max-w-sm">
         <button onClick={goBack}
           className="text-ink-3 hover:text-ink-1 transition-colors text-sm mb-6 flex items-center gap-1">
@@ -60,7 +65,7 @@ export default function ForgotPassword() {
         </button>
 
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-black text-ink-1">Recuperar senha</h1>
+          <h1 className="text-2xl font-bold text-ink-1">Recuperar senha</h1>
           <p className="text-ink-3 text-sm mt-2">
             {step === 'email'
               ? 'Enviaremos um código de 6 dígitos para o seu email'

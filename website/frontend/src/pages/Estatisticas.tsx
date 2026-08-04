@@ -6,8 +6,8 @@ import {
 } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
+import PageShell from '../components/PageShell'
+import { SpinnerBlock } from '../components/ui'
 import FilterPanel from '../components/FilterPanel'
 
 const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
@@ -80,12 +80,9 @@ function TrendIcon({ value, high, low }: { value: number; high: number; low: num
   return <Minus className="w-3 h-3" />
 }
 
-function Spinner() {
-  return (
-    <div className="flex items-center justify-center py-20">
-      <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
-    </div>
-  )
+/* Carregamento desta tela. O spinner em si vem de ui/Spinner: aqui só a altura. */
+function StatsLoading() {
+  return <SpinnerBlock className="py-20" />
 }
 
 function statValue(key: StatKey, s: Summary): number {
@@ -167,7 +164,7 @@ export function EstatisticasContent() {
         <div className="w-14 h-14 rounded-full bg-surface-1 flex items-center justify-center">
           <Lock className="w-6 h-6 text-ink-3" />
         </div>
-        <h2 className="text-ink-1 font-black text-lg">Recurso VIP</h2>
+        <h2 className="text-ink-1 font-bold text-lg">Recurso VIP</h2>
         <p className="text-ink-3 text-sm text-center max-w-xs">
           As estatísticas detalhadas são exclusivas para membros VIP.
         </p>
@@ -206,7 +203,7 @@ export function EstatisticasContent() {
           />
         )}
 
-        {loading ? <Spinner /> : !summary ? (
+        {loading ? <StatsLoading /> : !summary ? (
           <div className="card p-12 text-center">
             <p className="text-ink-3 text-sm">Sem dados para esta liga ainda.</p>
           </div>
@@ -219,7 +216,7 @@ export function EstatisticasContent() {
                   width={32} height={32} className="w-8 h-8 object-contain"
                   onError={e => (e.currentTarget.style.display = 'none')} />
                 <div>
-                  <h2 className="text-ink-1 font-black text-base">{selectedLeague.name}</h2>
+                  <h2 className="text-ink-1 font-bold text-base">{selectedLeague.name}</h2>
                   <p className="text-ink-3 text-xs">
                     Temporada {selectedLeague.season} · <span className="font-mono text-green-400 font-bold">{summary.total_games}</span> jogos analisados
                   </p>
@@ -279,7 +276,7 @@ export function EstatisticasContent() {
                         const Icon = def.Icon
                         return <>
                           <Icon className={`w-5 h-5 ${def.iconCls}`} />
-                          <h3 className="text-base font-black text-ink-1">Ranking: {def.rankLabel}</h3>
+                          <h3 className="text-base font-bold text-ink-1">Ranking: {def.rankLabel}</h3>
                         </>
                       })()}
                     </div>
@@ -346,7 +343,7 @@ export function EstatisticasContent() {
             {/* Game table */}
             <div className="card overflow-hidden p-0">
               <div className="px-4 py-3 border-b border-line flex items-center justify-between">
-                <h3 className="text-sm font-black text-ink-1">
+                <h3 className="text-sm font-bold text-ink-1">
                   {limit === 0 ? 'Todos os' : `Últimos ${games.length}`} Jogos
                 </h3>
                 <div className="hidden sm:flex items-center gap-3 text-[10px] text-ink-4 font-semibold">
@@ -421,18 +418,16 @@ export function EstatisticasContent() {
 
 export default function Estatisticas() {
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 py-4">
-          <h1 className="text-base font-black text-ink-1 tracking-tight">Estatísticas</h1>
-          <p className="text-ink-3 text-xs mt-0.5">Tendências por liga · clique em um card para ver o ranking por time</p>
-        </div>
-      </div>
-      <main className="max-w-5xl mx-auto px-4 py-6">
-        <EstatisticasContent />
-      </main>
-      <Footer />
-    </div>
+    <PageShell
+      title="Estatísticas"
+      description="Tendências por liga e ranking por time nos mercados que a IA analisa."
+      noindex
+      bar={{
+        title: 'Estatísticas',
+        sub: 'Tendências por liga · clique em um card para ver o ranking por time',
+      }}
+    >
+      <EstatisticasContent />
+    </PageShell>
   )
 }

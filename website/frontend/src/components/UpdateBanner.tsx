@@ -70,12 +70,12 @@ export default function UpdateBanner() {
         >
           <motion.div
             variants={dialogScale}
-            className="bg-surface-1 border border-line-strong rounded-2xl p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
+            className="bg-surface-1 border border-line-strong rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
           >
             <div className="w-11 h-11 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mb-4">
               <Sparkles className="w-5 h-5 text-green-400" />
             </div>
-            <h3 className="text-ink-1 font-black text-lg mb-1">Novidades no Pick IA</h3>
+            <h3 className="text-ink-1 font-bold text-lg mb-1">Novidades no Pick IA</h3>
             <p className="text-ink-3 text-xs mb-4">Atualizado em {latestEntry.date}</p>
             <ul className="space-y-2.5 mb-5">
               {latestEntry.items.map((item, i) => (
@@ -100,7 +100,7 @@ export default function UpdateBanner() {
           animate="visible"
           exit="exit"
           style={{ bottom: 'calc(5rem + env(safe-area-inset-bottom))' }}
-          className="fixed right-2 sm:right-4 z-50 w-56 sm:w-64 bg-surface-1 border border-line-strong rounded-2xl shadow-xl shadow-black/50 p-4"
+          className="fixed right-2 sm:right-4 z-50 w-56 sm:w-64 bg-surface-1 border border-line-strong rounded-lg shadow-xl shadow-black/50 p-4"
         >
           <div className="flex items-start justify-between gap-2 mb-3">
             <div>
@@ -117,7 +117,7 @@ export default function UpdateBanner() {
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => window.location.reload()}
-            className="w-full py-2 rounded-xl bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-bold transition-colors"
+            className="w-full py-2 rounded-lg bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-bold transition-colors"
           >
             Atualizar
           </motion.button>

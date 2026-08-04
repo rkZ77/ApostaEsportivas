@@ -158,7 +158,7 @@ export default function NotificationBell() {
             <div className="fixed inset-0 z-40" onClick={() => setOpen(false)} />
             <motion.div
               variants={popIn} initial="hidden" animate="visible" exit="exit"
-              className="absolute right-0 top-full mt-2 w-[22rem] bg-surface-1 border border-line rounded-xl shadow-2xl z-50 overflow-hidden"
+              className="absolute right-0 top-full mt-2 w-[22rem] bg-surface-1 border border-line rounded-lg shadow-2xl z-50 overflow-hidden"
             >
               <div className="px-4 py-3 border-b border-line flex items-center justify-between">
                 <p className="text-ink-1 text-sm font-black">Notificações</p>

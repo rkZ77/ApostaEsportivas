@@ -1,12 +1,11 @@
 import { useNavigate } from 'react-router-dom'
-import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { Lightbulb, Crown, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
 import api from '../services/api'
-import BackButton from '../components/BackButton'
+import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import NumberTicker from '../components/ui/NumberTicker'
 
 const PLAN_DAYS: Record<string, number> = {
@@ -14,9 +13,6 @@ const PLAN_DAYS: Record<string, number> = {
 }
 const PLAN_LABEL: Record<string, string> = {
   mensal: 'Mensal', trimestral: 'Trimestral', semestral: 'Semestral', anual: 'Anual',
-}
-const PLAN_PRICE: Record<string, number> = {
-  mensal: 39.90, trimestral: 99.90, semestral: 199.90, anual: 359.90,
 }
 const METHOD_LABEL: Record<string, string> = {
   credit_card: 'Cartão de crédito', debit_card: 'Cartão de débito',
@@ -31,6 +27,7 @@ interface ReferralData {
 export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
+  const { plans, monthly } = usePlans()
 
   const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
@@ -111,35 +108,35 @@ export default function Planos() {
   // Total gasto em pagamentos aprovados
   const totalSpent = payments.reduce((acc, p) => acc + Number(p.amount), 0)
 
-  // Sugestão de upgrade (só para mensal)
-  const upgradeOptions = subType === 'mensal' ? [
-    { key: 'trimestral', label: 'Trimestral', price: 99.90, perMonth: 33.30, savePct: 17, saveAmt: (39.90 * 3 - 99.90).toFixed(2) },
-    { key: 'anual',      label: 'Anual',      price: 359.90, perMonth: 29.99, savePct: 25, saveAmt: (39.90 * 12 - 359.90).toFixed(2) },
-  ] : []
+  // Sugestão de upgrade (só para quem está no mensal). O desconto vem pronto
+  // do backend: repetir a conta aqui era o que fazia o Checkout anunciar 17%
+  // num plano que economiza 16%.
+  const upgradeOptions = subType === 'mensal'
+    ? plans.filter(p => p.id === 'trimestral' || p.id === 'anual')
+    : []
 
-  const color = isTrial ? 'green' : 'yellow'
+  /*
+   * Classes completas, não montadas por template.
+   *
+   * Antes isto era `const color = isTrial ? 'green' : 'yellow'` e o JSX pedia
+   * `border-${color}-500/20`. O Tailwind gera CSS varrendo o fonte atrás de
+   * classes literais, então nenhuma das quatro combinações chegou a existir no
+   * arquivo compilado: a borda de destaque e a linha do topo deste card nunca
+   * renderizaram, em nenhum plano.
+   */
+  const accentCls = isTrial
+    ? { border: 'border-green-500/20', line: 'via-green-500/60' }
+    : { border: 'border-yellow-500/20', line: 'via-yellow-500/60' }
 
   return (
-    <>
-    <Helmet>
-      <title>Planos · Pick IA | VIP e Free para Apostas Esportivas</title>
-      <meta name="description" content="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias." />
-      <link rel="canonical" href="https://pickia.com.br/planos" />
-    </Helmet>
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
-          <BackButton />
-          <div>
-            <h1 className="text-base font-black text-ink-1">Meu Plano</h1>
-            <p className="text-ink-3 text-xs mt-0.5">Status e detalhes do seu acesso</p>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
+    <PageShell
+      title="Planos · Pick IA | VIP e Free para Apostas Esportivas"
+      description="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias."
+      canonical="https://pickia.com.br/planos"
+      width="prose"
+      bar={{ back: true, title: 'Meu Plano', sub: 'Status e detalhes do seu acesso' }}
+      mainClassName="space-y-6"
+    >
 
         {activated && (
           <div className="bg-green-500/10 border border-green-500/40 rounded-lg p-6 text-center">
@@ -148,7 +145,7 @@ export default function Planos() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
-            <h2 className="text-ink-1 font-black text-xl mb-1">Teste VIP ativado!</h2>
+            <h2 className="text-ink-1 font-bold text-xl mb-1">Teste VIP ativado!</h2>
             <p className="text-ink-2 text-sm mb-4">Você tem 2 dias de acesso completo. Aproveite!</p>
             <button onClick={() => navigate('/picks')}
               className="bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3 rounded-md text-sm transition-colors">
@@ -158,8 +155,8 @@ export default function Planos() {
         )}
 
         {user && !activated && (isVip || isTrial) && (
-          <div className={`relative bg-surface-1 border ${urgent ? 'border-red-500/40' : `border-${color}-500/20`} rounded-lg p-6 overflow-hidden`}>
-            <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-${color}-500/60 to-transparent`} />
+          <div className={`relative bg-surface-1 border ${urgent ? 'border-red-500/40' : accentCls.border} rounded-lg p-6 overflow-hidden`}>
+            <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent ${accentCls.line} to-transparent`} />
 
             {/* Cabeçalho */}
             <div className="flex items-start justify-between gap-4 mb-5">
@@ -291,7 +288,7 @@ export default function Planos() {
               </div>
               <div className="flex-1">
                 <p className="text-sm text-green-500 font-bold mb-1">Disponível para você</p>
-                <h2 className="text-xl font-black text-ink-1 mb-1">2 dias de VIP grátis</h2>
+                <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias de VIP grátis</h2>
                 <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
@@ -319,16 +316,16 @@ export default function Planos() {
           <div className="bg-surface-1 border border-line rounded-lg p-5">
             <p className="text-xs text-ink-3 font-black uppercase mb-1 flex items-center gap-1"><Lightbulb className="w-3.5 h-3.5" /> Você pode economizar</p>
             <p className="text-ink-1 text-sm mb-4">
-              No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga R$ 39,90/mês.
+              No plano <span className="text-yellow-400 font-bold">Mensal</span> você paga {fmtPlanPrice(monthly.price)}/mês.
               Veja quanto economizaria mudando:
             </p>
             <div className="grid grid-cols-2 gap-3">
               {upgradeOptions.map(opt => (
-                <button key={opt.key} onClick={() => navigate('/checkout')}
+                <button key={opt.id} onClick={() => navigate('/checkout')}
                   className="relative p-4 rounded-md border border-line-strong hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
                   <p className="text-ink-1 font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
-                  <p className="text-ink-3 text-xs mt-0.5">R$ {opt.perMonth.toFixed(2).replace('.', ',')}/mês</p>
-                  <p className="text-green-400 text-xs font-bold mt-2">Economize R$ {opt.saveAmt.replace('.', ',')} ↓{opt.savePct}%</p>
+                  <p className="font-mono text-ink-3 text-xs mt-0.5">{fmtPlanPrice(opt.price_per_month)}/mês</p>
+                  <p className="text-accent text-xs font-bold mt-2">Economize {fmtPlanPrice(opt.savings)} · {opt.save_pct}%</p>
                 </button>
               ))}
             </div>
@@ -338,7 +335,7 @@ export default function Planos() {
         {referral && (
           <div className="bg-surface-1 border border-line rounded-lg p-6 space-y-4">
             <div>
-              <h3 className="text-sm font-black text-ink-1">Indicações</h3>
+              <h3 className="text-sm font-bold text-ink-1">Indicações</h3>
               <p className="text-ink-3 text-xs mt-0.5">
                 +1 dia VIP por cadastro · +2 dias VIP se assinar o plano
               </p>
@@ -421,7 +418,7 @@ export default function Planos() {
 
         {payments.length > 0 && (
           <div className="bg-surface-1 border border-line rounded-lg p-6">
-            <h3 className="text-sm font-black text-ink-1 uppercase mb-4">Histórico de pagamentos</h3>
+            <h3 className="text-sm font-bold text-ink-1 uppercase mb-4">Histórico de pagamentos</h3>
             <div className="space-y-0">
               {payments.map(p => {
                 const date = p.created_at
@@ -502,7 +499,7 @@ export default function Planos() {
           <div className="bg-surface-1 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-ink-1 font-black text-sm">Quer acesso VIP completo?</p>
-              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de R$ 39,90/mês</p>
+              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de {fmtPlanPrice(monthly.price)}/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-md transition-colors">
@@ -511,8 +508,6 @@ export default function Planos() {
           </div>
         )}
 
-      </main>
-    </div>
-    </>
+    </PageShell>
   )
 }

@@ -1,4 +1,5 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
+import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PartyPopper, Eye, EyeOff } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
@@ -216,6 +217,11 @@ export default function Login() {
 
   return (
     <div className="min-h-screen bg-surface-0 flex items-stretch">
+      <Helmet>
+        <title>Entrar · Pick IA</title>
+        <meta name="description" content="Acesse sua conta Pick IA para ver os picks da IA do dia, sua banca e seu histórico." />
+      </Helmet>
+
 
       {/* Left panel · branding */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-surface-0 border-r border-line">
@@ -224,7 +230,7 @@ export default function Login() {
 
         <div className="relative z-10 text-center px-12">
           <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
-          <h1 className="text-4xl font-black text-ink-1 tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
+          <h1 className="text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
           <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
           <div className="mt-8 text-left max-w-xs mx-auto">
             <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
@@ -254,7 +260,7 @@ export default function Login() {
           {/* Mobile logo */}
           <div className="flex lg:hidden flex-col items-center mb-10">
             <img src="/logo.png" alt="Pick IA" width={96} height={96} className="w-24 h-24 mb-3" />
-            <h1 className="text-3xl font-black text-ink-1">Pick<span className="text-green-500">IA</span></h1>
+            <h1 className="text-3xl font-bold text-ink-1">Pick<span className="text-green-500">IA</span></h1>
           </div>
 
           <h2 className="text-2xl font-bold text-ink-1 mb-1">

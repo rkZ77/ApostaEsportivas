@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
@@ -222,7 +223,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div className="text-center shrink-0">
                   {resultStyle ? (
                     <span className={`text-xs font-black px-2 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.text} ${resultStyle.border}`}>
-                      {resultStyle.label} {resultStyle.emoji}
+                      {resultStyle.label}
                     </span>
                   ) : (
                     <span className="text-ink-4 text-xs font-bold">VS</span>
@@ -245,7 +246,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               </div>
             ) : (
               <div className="h-10 flex items-center">
-                <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin mx-auto" />
+                <Spinner size="lg" className="mx-auto" />
               </div>
             )}
           </div>
@@ -293,7 +294,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+              <Spinner size="lg" />
             </div>
           ) : locked ? (
             <div className="flex flex-col items-center text-center py-10 gap-3">
@@ -365,7 +366,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     <div className={`rounded-lg p-4 border flex items-center justify-between ${resultStyle.bg} ${resultStyle.border}`}>
                       <div>
                         <div className="text-xs text-ink-3 mb-0.5">Resultado</div>
-                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label} {resultStyle.emoji}</div>
+                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label}</div>
                       </div>
                       <div className={`text-2xl font-black ${s.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {s.profit >= 0 ? '+' : ''}{Number(s.profit).toFixed(2)}u
@@ -519,7 +520,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div>
                   {standingsLoading ? (
                     <div className="flex items-center justify-center h-40">
-                      <div className="w-7 h-7 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+                      <Spinner size="lg" />
                     </div>
                   ) : !standings || standings.groups.length === 0 ? (
                     <p className="text-ink-3 text-center py-10 text-sm">Classificação não disponível.</p>
@@ -585,7 +586,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div>
                   {caminhoLoading ? (
                     <div className="flex items-center justify-center h-40">
-                      <div className="w-7 h-7 border-2 border-line-strong border-t-orange-500 rounded-full animate-spin" />
+                      <Spinner size="lg" tone="orange" />
                     </div>
                   ) : caminho.length === 0 ? (
                     <p className="text-ink-3 text-center py-10 text-sm">Nenhum histórico disponível.</p>

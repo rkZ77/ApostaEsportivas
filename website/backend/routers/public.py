@@ -656,3 +656,110 @@ def public_leaderboard():
     finally:
         cur.close()
         conn.close()
+
+
+# ─────────────────────── Movimento de mercado (CLV) ───────────────────────
+#
+# Isto é a versão viável de "mercado em movimento".
+#
+# Não existe série temporal de odds no banco: `odds_values` é upsert e só
+# guarda a odd corrente, e `closing_odds` grava UMA linha por (fixture,
+# market) perto do apito. Então não dá pra desenhar a odd variando ao longo
+# do dia sem antes criar um coletor que grave histórico.
+#
+# O que dá, e vale mais: Closing Line Value. Compara a odd em que o pick foi
+# publicado com a odd de fechamento do mesmo mercado. Se o mercado fechou
+# MAIS BAIXO que a nossa entrada, o preço andou a nosso favor: pegamos valor
+# antes do mercado corrigir. CLV positivo consistente é o indicador que
+# sobrevive à variância de resultado, porque não depende do jogo ter dado
+# certo, só de termos entrado num preço melhor que o de fechamento.
+
+# Tabelas de pick que têm odd + market_id e podem casar com closing_odds.
+#
+# Cada uma traz seu par de colunas de time porque o nome diverge entre elas:
+# picks_vip tem home_team_name/away_team_name e picks_free tem home_team/
+# away_team. Um UNION com nome fixo quebrava em uma das duas.
+_CLV_SOURCES = [
+    ("picks_vip",  "vip",  "home_team_name", "away_team_name"),
+    ("picks_free", "free", "home_team",      "away_team"),
+]
+
+
+@router.get("/market-movement")
+def public_market_movement(days: int = Query(30, ge=1, le=365)):
+    """CLV dos picks resolvidos na janela · sem autenticação."""
+    union_sql = " UNION ALL ".join(
+        f"""SELECT id, fixture_id, market_id, market_type, line, odd, result,
+                   match_date,
+                   {home_col} AS home_team_name,
+                   {away_col} AS away_team_name,
+                   '{label}' AS pick_type
+              FROM {table}
+             WHERE market_id IS NOT NULL AND odd IS NOT NULL"""
+        for table, label, home_col, away_col in _CLV_SOURCES
+    )
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            WITH picks AS ({union_sql}),
+            joined AS (
+                SELECT p.*, co.closing_odd,
+                       -- movimento em %: negativo = mercado fechou mais baixo
+                       -- que a nossa entrada, ou seja, valor a nosso favor
+                       ROUND(((co.closing_odd - p.odd) / p.odd * 100)::numeric, 2) AS move_pct
+                  FROM picks p
+                  JOIN closing_odds co
+                    ON co.fixture_id = p.fixture_id
+                   AND co.market_id  = p.market_id
+                 WHERE p.match_date >= CURRENT_DATE - %s::int
+                   AND co.closing_odd IS NOT NULL
+                   AND co.closing_odd > 0
+            )
+            SELECT * FROM joined ORDER BY match_date DESC, id DESC LIMIT 200
+        """, (days,))
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error("[MARKET_MOVEMENT] %s", e)
+        return {"available": False, "reason": "sem dados de fechamento", "summary": None, "recent": []}
+    finally:
+        cur.close()
+        conn.close()
+
+    if not rows:
+        # Sem linha nenhuma não é erro: o capture roda perto do jogo e um
+        # ambiente novo simplesmente ainda não tem fechamento gravado.
+        return {"available": False, "reason": "sem odds de fechamento na janela", "summary": None, "recent": []}
+
+    # CLV positivo = entramos numa odd MAIOR que a de fechamento (move_pct < 0)
+    beat = [r for r in rows if r["move_pct"] is not None and r["move_pct"] < 0]
+    moves = [float(r["move_pct"]) for r in rows if r["move_pct"] is not None]
+    avg_move = round(sum(moves) / len(moves), 2) if moves else 0.0
+
+    return {
+        "available": True,
+        "summary": {
+            "total": len(rows),
+            "beat_closing": len(beat),
+            "beat_pct": round(len(beat) / len(rows) * 100) if rows else 0,
+            # sinal invertido pra leitura: positivo = valor capturado
+            "avg_clv": round(-avg_move, 2),
+            "days": days,
+        },
+        "recent": [
+            {
+                "pick_type":  r["pick_type"],
+                "match_date": r["match_date"].isoformat() if hasattr(r["match_date"], "isoformat") else r["match_date"],
+                "home_team":  r["home_team_name"],
+                "away_team":  r["away_team_name"],
+                "market":     r["market_type"],
+                "line":       r["line"],
+                "odd":        float(r["odd"]),
+                "closing_odd": float(r["closing_odd"]),
+                "clv":        round(-float(r["move_pct"]), 2) if r["move_pct"] is not None else None,
+                "result":     r["result"],
+            }
+            for r in rows[:40]
+        ],
+    }

@@ -1,9 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
 import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react'
 import { AnimatePresence } from 'framer-motion'
+import { Spinner } from './components/ui'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider, useNotifications } from './context/NotificationContext'
+import { FavoritesProvider } from './context/FavoritesContext'
 import AgenteButton from './components/AgenteButton'
 import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
@@ -16,7 +18,7 @@ const Login          = lazy(() => import('./pages/Login'))
 const Picks          = lazy(() => import('./pages/Picks'))
 const Admin          = lazy(() => import('./pages/Admin'))
 const Fixtures       = lazy(() => import('./pages/Fixtures'))
-const Landing        = lazy(() => import('./pages/Landing'))
+const Home           = lazy(() => import('./pages/Home'))
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'))
 const Profile        = lazy(() => import('./pages/Profile'))
 const Planos         = lazy(() => import('./pages/Planos'))
@@ -33,6 +35,7 @@ const NotFound       = lazy(() => import('./pages/NotFound'))
 const ComoFunciona   = lazy(() => import('./pages/ComoFunciona'))
 const PickPublico         = lazy(() => import('./pages/PickPublico'))
 const ResultadosPublicos  = lazy(() => import('./pages/ResultadosPublicos'))
+const PerformanceIA       = lazy(() => import('./pages/PerformanceIA'))
 const Blog                = lazy(() => import('./pages/Blog'))
 const BlogPost            = lazy(() => import('./pages/BlogPost'))
 
@@ -76,7 +79,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
             Recarregar
           </button>
           {import.meta.env.DEV && (
-            <pre className="text-ink-4 text-xs bg-surface-1 rounded-xl p-4 max-w-xl w-full text-left overflow-auto whitespace-pre-wrap mt-6">
+            <pre className="text-ink-4 text-xs bg-surface-1 rounded-lg p-4 max-w-xl w-full text-left overflow-auto whitespace-pre-wrap mt-6">
               {(this.state.error as Error).message}
               {'\n\n'}
               {(this.state.error as Error).stack}
@@ -91,7 +94,7 @@ class RouteErrorBoundary extends Component<{ children: ReactNode }, { error: Err
 
 const PageLoader = () => (
   <div className="min-h-screen bg-surface-0 flex items-center justify-center">
-    <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+    <Spinner size="lg" />
   </div>
 )
 
@@ -168,6 +171,7 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
+          <FavoritesProvider>
           <AgenteButton />
           <CookieBanner />
           <UpdateBanner />
@@ -178,7 +182,7 @@ export default function App() {
           <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/" element={<Landing />} />
+                <Route path="/" element={<Home />} />
                 <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
                 <Route path="/picks" element={<PrivateRoute><Picks /></PrivateRoute>} />
                 <Route path="/results" element={<Navigate to="/resultados" replace />} />
@@ -200,12 +204,14 @@ export default function App() {
                 <Route path="/como-funciona" element={<ComoFunciona />} />
                 <Route path="/p/:pick_type/:pick_id" element={<PickPublico />} />
                 <Route path="/resultados" element={<ResultadosPublicos />} />
+                <Route path="/performance" element={<PerformanceIA />} />
                 <Route path="/blog" element={<Blog />} />
                 <Route path="/blog/:slug" element={<BlogPost />} />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </Suspense>
           </RouteErrorBoundary>
+          </FavoritesProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

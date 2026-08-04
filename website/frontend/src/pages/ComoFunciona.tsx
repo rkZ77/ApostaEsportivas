@@ -1,8 +1,8 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
-import Navbar from '../components/Navbar'
-import Footer from '../components/Footer'
+import PageShell from '../components/PageShell'
+import { Button } from '../components/ui'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
 const features = [
@@ -91,26 +91,26 @@ export default function ComoFunciona() {
   }
 
   return (
-    <>
-    <Navbar />
-    <div className="min-h-screen bg-surface-0 text-ink-1">
-      {/* Fechar */}
-      <div className="sticky top-16 z-10 flex justify-end px-4 pt-4">
-        <button
-          onClick={handleClose}
-          className="flex items-center gap-1.5 text-ink-2 hover:text-ink-1 bg-surface-1 border border-line rounded-md px-3 py-2 text-xs font-semibold transition-colors"
-        >
-          <X className="w-3.5 h-3.5" />
-          Fechar
-        </button>
-      </div>
-
+    <PageShell
+      title="Como funciona"
+      description="Entenda como a IA do Pick IA analisa cada jogo, gera os picks e como usar cada parte da plataforma."
+      width="prose"
+      bar={{
+        title: 'Como funciona',
+        sub: 'Um tour por tudo que a plataforma faz',
+        actions: (
+          <Button variant="ghost" size="sm" Icon={X} onClick={handleClose}>
+            Fechar
+          </Button>
+        ),
+      }}
+    >
       {/* Header */}
-      <div className="max-w-3xl mx-auto px-4 pt-6 pb-8 text-center">
+      <div className="pb-8 text-center">
         <div className="inline-flex items-center gap-2 bg-green-500/10 border border-green-500/20 rounded-sm px-4 py-1.5 mb-6">
           <span className="text-green-400 text-xs font-bold">Bem-vindo ao PickIA</span>
         </div>
-        <h1 className="text-3xl sm:text-4xl font-black mb-4 leading-tight">
+        <h1 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
           Como a plataforma<br />
           <span className="text-green-500">funciona</span>
         </h1>
@@ -121,7 +121,7 @@ export default function ComoFunciona() {
       </div>
 
       {/* Feature cards */}
-      <div className="max-w-3xl mx-auto px-4 pb-8">
+      <div className="pb-8">
         <motion.div
           variants={staggerContainer}
           initial="hidden"
@@ -137,7 +137,7 @@ export default function ComoFunciona() {
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1.5">
-                    <span className="font-display font-black text-ink-1 text-sm">{title}</span>
+                    <span className="font-display font-bold text-ink-1 text-sm">{title}</span>
                     {badge && (
                       <span className={badge === 'VIP' ? 'badge-vip' : 'badge-free'}>
                         {badge}
@@ -161,9 +161,9 @@ export default function ComoFunciona() {
       </div>
 
       {/* CTA */}
-      <div className="max-w-3xl mx-auto px-4 pb-16 text-center">
+      <div className="pb-8 text-center">
         <div className="bg-surface-1 border border-line rounded-lg p-8">
-          <h2 className="text-xl font-black mb-2">Pronto para começar?</h2>
+          <h2 className="text-xl font-bold mb-2">Pronto para começar?</h2>
           <p className="text-ink-2 text-sm mb-6">
             Os picks de hoje já estão disponíveis. Confira as análises da IA.
           </p>
@@ -176,8 +176,6 @@ export default function ComoFunciona() {
           </button>
         </div>
       </div>
-    </div>
-    <Footer />
-    </>
+    </PageShell>
   )
 }
