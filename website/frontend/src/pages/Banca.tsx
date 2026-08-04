@@ -413,7 +413,7 @@ export default function Banca() {
               ].map(({ label, value, formatter, color, sub }) => (
                 <div key={label} className="stat-card text-center">
                   <NumberTicker value={value} formatter={formatter} className={`font-mono text-3xl font-black ${color}`} />
-                  <div className="text-xs text-ink-3 uppercase mt-1">{label}</div>
+                  <div className="text-xs text-ink-3 mt-1">{label}</div>
                   <div className="text-[10px] text-ink-4 mt-0.5">{sub}</div>
                 </div>
               ))}
@@ -430,7 +430,7 @@ export default function Banca() {
               <div className="card p-5">
                 <div className="flex items-center justify-between mb-3">
                   <div>
-                    <p className="text-xs text-ink-3 uppercase font-semibold mb-0.5">Meta de banca</p>
+                    <p className="text-xs text-ink-3 font-semibold mb-0.5">Meta de banca</p>
                     <p className="font-mono text-ink-1 font-black">
                       {fmtBRL(current)}
                       <span className="text-ink-4 font-normal text-sm"> / {fmtBRL(goal)}</span>
@@ -465,7 +465,7 @@ export default function Banca() {
             {chartData.length >= 2 && (
               <div className="card p-5">
                 <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs text-ink-3 uppercase font-semibold">Evolução da banca</p>
+                  <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
                   <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                     {fmtSigned(data?.total_pnl ?? 0)}
                   </span>
@@ -479,7 +479,7 @@ export default function Banca() {
 
               {/* Streak pessoal */}
               <div className="card p-5">
-                <p className="text-xs text-ink-3 uppercase font-semibold mb-4">Sequência pessoal</p>
+                <p className="text-xs text-ink-3 font-semibold mb-4">Sequência pessoal</p>
                 <div className="flex items-center justify-around">
                   <div className="text-center">
                     <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-green-500' : data?.streak_type === 'red' ? 'text-red-400' : 'text-ink-4'}`}>
@@ -501,7 +501,7 @@ export default function Banca() {
 
               {/* Distribuição de resultados */}
               <div className="card p-5">
-                <p className="text-xs text-ink-3 uppercase font-semibold mb-4">Distribuição de resultados</p>
+                <p className="text-xs text-ink-3 font-semibold mb-4">Distribuição de resultados</p>
                 {distTotal === 0 ? (
                   <p className="text-ink-4 text-xs text-center py-4">Sem picks resolvidos ainda.</p>
                 ) : (
@@ -528,7 +528,7 @@ export default function Banca() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {data?.best_pick && (
                   <div className="card p-4 border-green-500/20 bg-green-500/5">
-                    <p className="text-xs text-green-500 font-black uppercase mb-2">Melhor pick apostado</p>
+                    <p className="text-xs text-green-500 font-black mb-2">Melhor pick apostado</p>
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -548,7 +548,7 @@ export default function Banca() {
                 )}
                 {data?.worst_pick && data.worst_pick.pnl < 0 && (
                   <div className="card p-4 border-red-500/20 bg-red-500/5">
-                    <p className="text-xs text-red-400 font-black uppercase mb-2">Pior pick apostado</p>
+                    <p className="text-xs text-red-400 font-black mb-2">Pior pick apostado</p>
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -572,7 +572,7 @@ export default function Banca() {
             {/* Comparação com IA */}
             {data?.ia_roi != null && (
               <div className="card p-5">
-                <p className="text-xs text-ink-3 uppercase font-semibold mb-4">Você vs IA</p>
+                <p className="text-xs text-ink-3 font-semibold mb-4">Você vs IA</p>
                 <div className="font-mono grid grid-cols-3 gap-2 sm:gap-4">
                   <div className="text-center">
                     <div className={`text-xl sm:text-2xl font-black ${(data?.yield_roi ?? 0) >= 0 ? 'text-blue-400' : 'text-red-400'}`}>
@@ -686,7 +686,7 @@ export default function Banca() {
               return (
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <p className="text-xs text-ink-3 uppercase font-semibold">
+                    <p className="text-xs text-ink-3 font-semibold">
                       Últimos picks apostados
                     </p>
                     <Link to="/meus-picks" className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
@@ -709,7 +709,7 @@ export default function Banca() {
                       {sortedKeys.map(dateKey => (
                         <div key={dateKey}>
                           <div className="flex items-center gap-2 px-4 py-2 bg-surface-1/60 border-b border-line/60">
-                            <span className="text-[10px] font-black text-ink-3 uppercase capitalize">
+                            <span className="text-[10px] font-black text-ink-3 capitalize">
                               {dayLabel(dateKey)}
                             </span>
                             <span className="text-[10px] text-ink-4">{grouped[dateKey].length} pick{grouped[dateKey].length !== 1 ? 's' : ''}</span>

@@ -40,6 +40,21 @@
 }
 
 @layer utilities {
+  /*
+   * Todo `font-mono` do site ganha algarismo tabular.
+   *
+   * A familia `mono` deixou de ser JetBrains Mono e passou a ser Inter (ver
+   * tailwind.config.js). Inter e proporcional, entao sem esta regra o "1" fica
+   * mais estreito que o "8" e a coluna de odd, de percentual e de placar
+   * dançaria a cada digito que muda -- que era exatamente o motivo de existir
+   * uma monoespaçada ali.
+   *
+   * Fica em `utilities` pra vir depois da familia e nao brigar com ela.
+   */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+  }
+
   .scrollbar-none {
     scrollbar-width: none;
     -ms-overflow-style: none;
@@ -74,14 +89,8 @@
    * Voz 1 · titulo.
    *
    * Nunito, a mesma do corpo. Uma familia so' no site inteiro: titulo se
-   * separa do texto por PESO e TAMANHO, nao por familia.
-   *
-   * Titulo agora se separa do corpo por PESO e TAMANHO, nao por familia.
-   * Da' menos ruido, e' o que produto de referencia faz (Stripe, Vercel), e
-   * ainda tira um arquivo de fonte do carregamento.
-   *
-   * O tracking negativo importa: Inter em corpo grande abre demais sem ele e
-   * o titulo perde densidade.
+   * separa do texto por PESO e TAMANHO, nao por familia. Da' menos ruido e
+   * tira um arquivo de fonte do carregamento.
    */
   h1, h2, h3, .font-display {
     font-family: Nunito, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -177,8 +186,11 @@
   .panel-head {
     @apply px-5 py-3 border-b border-line flex items-center justify-between gap-3;
   }
+  /* Sem caixa alta. Os rotulos aqui sao frases ("Aproveitamento por liga",
+     "Por que virou pick"), e frase em caixa alta o olho le letra por letra
+     em vez de reconhecer a palavra pelo contorno. */
   .panel-label {
-    @apply text-xs font-bold text-ink-2 uppercase tracking-wide;
+    @apply text-xs font-bold text-ink-2;
   }
   .panel-meta {
     @apply text-[10px] text-ink-4 shrink-0;
@@ -206,7 +218,7 @@
     @apply font-mono text-2xl font-black text-ink-1;
   }
   .stat-label {
-    @apply text-[10px] text-ink-3 uppercase mt-1;
+    @apply text-[11px] text-ink-3 mt-1;
   }
 
   /* Pilula de filtro */
@@ -257,21 +269,27 @@
    * "eyebrow" de template de landing: o leitor reconhece o carimbo antes de
    * conseguir ler a palavra, e ler custa esforco em 10px.
    *
-   * Agora e a fonte do site, um ponto maior e com o espacamento so o
-   * suficiente pra caixa alta respirar. Continua sendo rotulo, deixou de ser
-   * enfeite. */
+   * Agora e so a fonte do site em negrito, sem caixa alta e sem tracking:
+   * o que separa rotulo de conteudo passa a ser o peso e a cor, que e o
+   * suficiente e nao custa esforco de leitura. */
   .label-micro {
-    @apply text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3;
+    @apply text-[11px] font-bold text-ink-3;
   }
 
-  /* Voz 3 · evidencia = font-mono puro. Nao existe helper aqui de proposito:
-     JetBrains Mono ja tem algarismo de largura fixa, entao tabular-nums em
+  /* Voz 3 · evidencia = font-mono (hoje Inter + tnum). Nao existe helper aqui
+     de proposito:
+     A familia mono ja recebe tabular-nums pela regra em @layer utilities,
+     entao repetir tabular-nums em
      cima seria no-op. Numero em fonte de UI (Inter) e' que precisa de
      tabular-nums explicito, e ai o utilitario do Tailwind resolve no lugar. */
 
-  /* Tags em texto com borda, estilo terminal, no lugar de pilulas coloridas */
+  /* Tags em texto com borda, no lugar de pilulas coloridas.
+     Na fonte do site, nao em mono: o badge diz PALAVRA ('Multipla',
+     'Alavancagem'), e monoespaçada e' pra numero. Sem `uppercase` tambem --
+     quem decide a caixa e o texto, e PICK_TYPE_LABEL ja traz 'VIP' e 'Free'
+     e RESULT_STYLE ja traz 'GREEN'. */
   .badge-vip, .badge-free, .badge-admin, .badge-trial, .badge-green, .badge-red {
-    @apply inline-flex items-center font-mono text-[10px] font-bold uppercase tracking-widest px-1.5 py-0.5 rounded-sm border;
+    @apply inline-flex items-center text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded-sm border;
   }
   .badge-vip {
     @apply bg-yellow-400/5 text-yellow-400 border-yellow-400/30;

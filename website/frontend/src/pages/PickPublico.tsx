@@ -163,7 +163,7 @@ export default function PickPublico() {
           {isVip && fullPick ? (
             <div className="px-5 py-4 space-y-2 border-b border-line/60">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-ink-3 uppercase">Mercado</span>
+                <span className="text-[10px] text-ink-3">Mercado</span>
                 <span className="text-sm font-bold text-ink-1">{fullPick.market} {fullPick.line ? `· ${fullPick.line}` : ''}</span>
               </div>
               {fullPick.reasoning && (

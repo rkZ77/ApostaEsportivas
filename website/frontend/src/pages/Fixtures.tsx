@@ -61,7 +61,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400 font-semibold'
                   : 'text-ink-2 hover:bg-surface-2 hover:text-ink-1'
               }`}>
-              <span className="text-[9px] uppercase leading-none mb-0.5">
+              <span className="text-[9px] leading-none mb-0.5">
                 {DAY_SHORT[dt.getDay()]}
               </span>
               <span className="text-sm font-black leading-none">{dy}</span>
@@ -347,7 +347,7 @@ export default function Fixtures() {
                       onError={e => (e.currentTarget.style.display = 'none')}
                       />
                   )}
-                  {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase ml-1">Copa do Mundo</span>}
+                  {isCopa && <span className="text-[10px] font-black text-yellow-500 ml-1">Copa do Mundo</span>}
                   <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
                   <svg
                     className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${collapsed.has(league) ? '-rotate-90' : ''} ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}
@@ -454,19 +454,19 @@ export default function Fixtures() {
                       {live && ls && (
                         <div className="font-mono px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Esc</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Esc</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_corners} <span className="text-ink-4">-</span> {ls.away_corners}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Fin</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Fin</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_shots_on} <span className="text-ink-4">-</span> {ls.away_shots_on}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Cart</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Cart</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_yellow} <span className="text-ink-4">-</span> {ls.away_yellow}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Posse</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Posse</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_possession}% <span className="text-ink-4">-</span> {ls.away_possession}%</div>
                           </div>
                         </div>

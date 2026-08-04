@@ -493,10 +493,6 @@ export default function Home() {
                 </Button>
               </motion.div>
 
-              <p className="flex items-center gap-1.5 text-xs text-ink-3">
-                <Check className="w-3.5 h-3.5 text-accent shrink-0" />
-                Sem cartão de crédito · cancele quando quiser
-              </p>
             </div>
 
             <div className="lg:pl-4">

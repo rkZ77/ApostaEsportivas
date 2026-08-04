@@ -22,14 +22,14 @@ export interface StoryImageInput {
 
 // ── Tipografia ───────────────────────────────────────────────────────────
 // As mesmas duas famílias do site (index.css / tailwind.config): Space
-// Grotesk no display, JetBrains Mono nos números. Antes tudo era system-ui,
+// Nunito no display, Inter nos números. Antes tudo era system-ui,
 // então a imagem compartilhada não parecia do mesmo produto que a página.
 //
 // Canvas não espera webfont carregar: se desenhar antes, cai no fallback
 // silenciosamente e o resultado varia por dispositivo. ensureFonts() força o
 // carregamento uma vez e é aguardado por todos os builders.
 const DISPLAY = 'Nunito, -apple-system, BlinkMacSystemFont, sans-serif'
-const MONO = '"JetBrains Mono", ui-monospace, monospace'
+const MONO = 'Inter, -apple-system, BlinkMacSystemFont, sans-serif'
 const SANS = 'Nunito, -apple-system, BlinkMacSystemFont, sans-serif'
 
 // Pedir um peso que a família não carrega faz o navegador SIMULAR o negrito
@@ -37,7 +37,7 @@ const SANS = 'Nunito, -apple-system, BlinkMacSystemFont, sans-serif'
 // pick sairia com espessura diferente em dois celulares. Por isso cada teto
 // abaixo espelha o que index.html realmente baixa.
 //
-// Nunito: 400..800.  JetBrains Mono: 400..700.
+// Nunito: 400..800.  Inter (numeros): 400..700.
 const clamp800 = (peso: number) => Math.min(peso, 800)
 const clamp700 = (peso: number) => Math.min(peso, 700)
 
@@ -53,8 +53,8 @@ function ensureFonts(): Promise<void> {
   fontesPromise = Promise.all([
     fonts.load('800 58px Nunito'),
     fonts.load('600 28px Nunito'),
-    fonts.load('700 52px "JetBrains Mono"'),
-    fonts.load('500 24px "JetBrains Mono"'),
+    fonts.load('700 52px Inter'),
+    fonts.load('500 24px Inter'),
     fonts.load('800 40px Nunito'),
     fonts.load('700 26px Nunito'),
   ])

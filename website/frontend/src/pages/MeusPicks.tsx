@@ -234,25 +234,25 @@ export default function MeusPicks() {
                 <div className="font-mono grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
                     <div className="text-2xl font-black text-ink-1">{periodEntries.length}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">Apostas</div>
+                    <div className="text-[10px] text-ink-3 mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">
+                    <div className="text-[10px] text-ink-3 mt-1">
                       {daysBack === 0 ? 'Total' : daysBack === 'thismonth' ? 'Este mês' : daysBack === 'lastmonth' ? 'Mês passado' : `Últimos ${daysBack}d`}
                     </div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-ink-2'}`}>{wr}%</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">Win rate</div>
+                    <div className="text-[10px] text-ink-3 mt-1">Win rate</div>
                   </div>
                   <div className="card p-3 text-center border-green-500/20">
                     <div className="text-2xl font-black text-green-400">{greenCount}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">GREEN</div>
+                    <div className="text-[10px] text-ink-3 mt-1">GREEN</div>
                   </div>
                   <div className="card p-3 text-center border-red-500/20">
                     <div className="text-2xl font-black text-red-400">{redCount}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">RED</div>
+                    <div className="text-[10px] text-ink-3 mt-1">RED</div>
                   </div>
                 </div>
               )
@@ -278,7 +278,7 @@ export default function MeusPicks() {
               return (
                 <div className="card p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-semibold text-ink-3 uppercase">Evolução da Banca</h3>
+                    <h3 className="text-xs font-semibold text-ink-3">Evolução da Banca</h3>
                     <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                       {fmtSigned(pnl)}
                     </span>

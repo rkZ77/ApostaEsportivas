@@ -69,7 +69,7 @@ export default function BancaSaque() {
         ) : (
           <div className="space-y-6">
             <div className="card p-5">
-              <p className="text-xs text-ink-3 uppercase font-semibold mb-1">Banca atual</p>
+              <p className="text-xs text-ink-3 font-semibold mb-1">Banca atual</p>
               <NumberTicker value={current} formatter={fmtBRL} className="font-mono text-3xl font-black text-ink-1" />
             </div>
 
@@ -111,7 +111,7 @@ export default function BancaSaque() {
 
             <div className="card overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
-                <span className="text-xs font-bold text-ink-3 uppercase">Histórico de saques</span>
+                <span className="text-xs font-bold text-ink-3">Histórico de saques</span>
               </div>
               {withdrawals.length === 0 ? (
                 <p className="text-ink-4 text-sm px-5 py-8 text-center">Nenhum saque ainda</p>

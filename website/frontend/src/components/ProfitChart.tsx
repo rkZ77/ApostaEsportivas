@@ -107,7 +107,7 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
                 strokeWidth={isZero ? 1 : 0.8}
                 strokeDasharray={isZero ? '4,4' : 'none'}
               />
-              <text x={PL - 6} y={yPos + 3.5} fill="#52525b" fontSize="9" textAnchor="end" fontFamily="monospace">
+              <text x={PL - 6} y={yPos + 3.5} fill="#52525b" fontSize="9" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {fmtY(v)}
               </text>
             </g>
@@ -167,7 +167,8 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
             y={H - 6}
             fill="#52525b" fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
-            fontFamily="monospace"
+            fontFamily="Inter, -apple-system, sans-serif"
+            style={{ fontVariantNumeric: 'tabular-nums' }}
           >
             {fmtDate(dates[idx])}
           </text>

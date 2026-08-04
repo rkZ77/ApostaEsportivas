@@ -158,7 +158,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
     <div className="space-y-6">
 
       <div>
-        <p className="text-xs text-ink-3 uppercase mb-3">Reações</p>
+        <p className="text-xs text-ink-3 mb-3">Reações</p>
         <div className="flex flex-wrap gap-2">
           {REACTIONS.map(({ key, icon, label }) => {
             const active = data?.user_reactions.includes(key) ?? false
@@ -187,7 +187,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
       </div>
 
       <div>
-        <p className="text-xs text-ink-3 uppercase mb-3">
+        <p className="text-xs text-ink-3 mb-3">
           Comentários{data?.comments.length ? ` (${data.comments.length})` : ''}
         </p>
 

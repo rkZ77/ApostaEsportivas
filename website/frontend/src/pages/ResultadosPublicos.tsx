@@ -425,7 +425,7 @@ export default function ResultadosPublicos() {
           ) : (
             <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
-                <span className="text-xs font-bold text-ink-2 uppercase">Resultados por liga</span>
+                <span className="text-xs font-bold text-ink-2">Resultados por liga</span>
               </div>
               <div className="divide-y divide-line/50">
                 {byLeague.map((lg) => {
@@ -563,7 +563,7 @@ export default function ResultadosPublicos() {
                     <thead>
                       <tr className="border-b border-line">
                         {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
-                          <th key={h} className="text-left text-ink-3 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
+                          <th key={h} className="text-left text-ink-3 font-medium px-3 sm:px-5 py-3 text-xs">{h}</th>
                         ))}
                       </tr>
                     </thead>
