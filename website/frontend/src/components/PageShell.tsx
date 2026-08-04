@@ -102,7 +102,7 @@ export default function PageShell({
                   {bar.title}
                 </h1>
                 {bar.sub != null && (
-                  <p className="text-ink-3 text-xs mt-0.5 hidden sm:block">{bar.sub}</p>
+                  <p className="text-ink-3 text-[11px] mt-0.5 hidden sm:block">{bar.sub}</p>
                 )}
               </div>
             </div>

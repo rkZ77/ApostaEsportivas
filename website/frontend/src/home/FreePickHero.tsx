@@ -30,8 +30,9 @@ interface FreePick {
   result: string | null
   league_name?: string | null
   match_datetime?: string | null
-  /** true = visitante anônimo, resposta veio sem market/line */
-  locked: boolean
+  /** true = visitante anônimo, resposta veio sem market/line.
+   *  Opcional porque resposta antiga em cache pode nao trazer o campo. */
+  locked?: boolean
   market?: string
   line?: string
 }
@@ -63,6 +64,14 @@ export default function FreePickHero() {
 
   // Sem pick do dia o hero fica só com o texto, em vez de um painel vazio.
   if (!pick) return null
+
+  // Falha FECHADO: campo ausente conta como bloqueado.
+  //
+  // Se um cache antigo ou uma versao anterior da API devolver sem `locked`,
+  // o ramo destravado renderizaria uma caixa de mercado vazia -- e, pior,
+  // qualquer mudanca futura que passe a mandar o market sem a flag vazaria
+  // o dado. Exigir `locked === false` pra revelar inverte o risco.
+  const revelado = pick.locked === false && !!pick.market
 
   const hora = pick.match_datetime
     ? new Date(pick.match_datetime).toLocaleTimeString('pt-BR', {
@@ -121,7 +130,7 @@ export default function FreePickHero() {
 
           <div className="px-4 py-4 text-center min-w-0">
             <div className="stat-label !mt-0 mb-1">Mercado</div>
-            {pick.locked ? (
+            {!revelado ? (
               <div className="relative">
                 <span className="font-mono text-base font-bold text-ink-2 blur-[6px] select-none" aria-hidden="true">
                   {ISCA}
@@ -141,7 +150,7 @@ export default function FreePickHero() {
 
         {/* Ação */}
         <div className="px-5 py-4">
-          {pick.locked ? (
+          {!revelado ? (
             <>
               <Button to="/login?mode=register" block IconRight={ArrowRight}>
                 Ver o mercado desta dica
