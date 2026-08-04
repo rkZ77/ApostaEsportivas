@@ -386,7 +386,7 @@ export default function Admin() {
             pra poder abrir/recarregar direto numa aba, mesmo padrao da
             pagina de Picks. */}
         <div className="relative mb-6 -mx-4">
-          <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-black to-transparent z-10" />
+          <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
           <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
             {ABAS.map(a => (
               <button
