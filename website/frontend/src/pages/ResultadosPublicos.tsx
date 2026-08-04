@@ -132,18 +132,38 @@ export default function ResultadosPublicos() {
 
   const s = data?.summary
   const winRatePct = calcWinRate(s?.greens ?? 0, s?.total ?? 0)
-  const profit  = s ? Number(s.profit) : null
   const months   = data?.available_months ?? []
   const recent   = data?.recent ?? []
   const recentTotal = data?.recent_total ?? 0
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
 
+  // Metricas derivadas de acerto e cobertura. Esta pagina fala de acuracia da
+  // IA, entao nada aqui pode virar dinheiro ou unidade: quem quer ver retorno
+  // tem a Banca, que e' por usuario e depende da stake de cada um.
+  const leaguesCovered = byLeague.length
+  const daysWithPicks  = byDay.length
+  const avgPerDay = daysWithPicks > 0 && s ? s.total / daysWithPicks : null
+  // Liga com melhor aproveitamento. Piso de 5 picks pra uma liga com 1 green
+  // em 1 pick nao aparecer como "melhor" em 100%.
+  const bestLeague = byLeague
+    .filter(l => l.total >= 5)
+    .map(l => ({ name: l.league_name, id: l.league_id, wr: calcWinRate(l.greens, l.total) ?? 0 }))
+    .sort((a, b) => b.wr - a.wr)[0] ?? null
+  // Maior sequencia de dias seguidos com saldo positivo (mais greens que reds).
+  const bestStreak = (() => {
+    let cur = 0, best = 0
+    for (const d of [...byDay].sort((a, b) => a.match_date.localeCompare(b.match_date))) {
+      if (d.greens > d.reds) { cur += 1; best = Math.max(best, cur) } else { cur = 0 }
+    }
+    return best
+  })()
+
   return (
     <>
       <Helmet>
         <title>Resultados · Pick IA</title>
-        <meta name="description" content="Histórico completo dos picks da IA com win rate auditável, lucro acumulado e picks recentes." />
+        <meta name="description" content="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir." />
       </Helmet>
 
       <div className="min-h-screen bg-surface-0 text-ink-1">
@@ -199,9 +219,12 @@ export default function ResultadosPublicos() {
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
           <div className="flex border-b border-line mb-6 overflow-x-auto">
+            {/* Por Jogo/Por Mes exigem login, mas a aba aparece pra todo mundo:
+                sumir da barra sem explicacao fazia parecer que a pagina estava
+                quebrada. Deslogado, a aba abre um convite pra entrar. */}
             {([
               ['resumo', 'Resumo'], ['por_liga', 'Por Liga'],
-              ...(user ? [['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês']] : []),
+              ['por_jogo', 'Por Jogo'], ['por_mes', 'Por Mês'],
             ] as [typeof tab, string][]).map(([k, l]) => (
               <button key={k} onClick={() => setTab(k)}
                 className={`tab px-5 py-3 text-sm font-semibold ${tab === k ? 'tab-active' : ''}`}>{l}</button>
@@ -223,10 +246,26 @@ export default function ResultadosPublicos() {
               {/* Stats */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                 {[
-                  { label: 'Win Rate',  value: `${winRatePct}%`,            color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
-                  { label: 'Total',     value: String(s.total),          color: 'text-ink-1' },
-                  { label: 'Greens',    value: String(s.greens),         color: 'text-green-400' },
-                  { label: 'Lucro (u)', value: `${profit != null && profit >= 0 ? '+' : ''}${profit?.toFixed(1) ?? '0'}u`, color: (profit ?? 0) >= 0 ? 'text-green-400' : 'text-red-400' },
+                  { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                  { label: 'Picks',    value: String(s.total),    color: 'text-ink-1' },
+                  { label: 'Greens',   value: String(s.greens),   color: 'text-green-400' },
+                  { label: 'Reds',     value: String(s.reds),     color: 'text-red-400' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="stat-tile">
+                    <div className={`stat-value ${color}`}>{value}</div>
+                    <div className="stat-label">{label}</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Cobertura e consistencia · segunda leva de numeros, todos de
+                  volume/acerto. Nenhum deles vira dinheiro. */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+                {[
+                  { label: 'Ligas',        value: String(leaguesCovered), color: 'text-ink-1' },
+                  { label: 'Dias com pick', value: String(daysWithPicks),  color: 'text-ink-1' },
+                  { label: 'Picks por dia', value: avgPerDay != null ? avgPerDay.toFixed(1) : '·', color: 'text-ink-1' },
+                  { label: 'Seq. positiva', value: bestStreak > 0 ? `${bestStreak}d` : '·', color: bestStreak > 0 ? 'text-green-400' : 'text-ink-2' },
                 ].map(({ label, value, color }) => (
                   <div key={label} className="stat-tile">
                     <div className={`stat-value ${color}`}>{value}</div>
@@ -240,6 +279,51 @@ export default function ResultadosPublicos() {
                 <div className="panel p-5 mb-8">
                   <p className="panel-label mb-4">Picks por dia</p>
                   <DailyGreensChart data={byDay} />
+                </div>
+              )}
+
+              {/* Liga com melhor aproveitamento */}
+              {bestLeague && (
+                <div className="panel mb-8">
+                  <div className="panel-head">
+                    <span className="panel-label">Melhor aproveitamento</span>
+                    <span className="panel-meta">mín. 5 picks</span>
+                  </div>
+                  <div className="flex items-center gap-3 px-5 py-4">
+                    {bestLeague.id != null
+                      ? <LeagueLogo id={bestLeague.id} name={bestLeague.name} />
+                      : <div className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />}
+                    <span className="text-sm font-semibold text-ink-1 flex-1 min-w-0 truncate">{bestLeague.name}</span>
+                    <span className="font-mono text-xl font-black text-green-400 shrink-0">{bestLeague.wr}%</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Aproveitamento por liga · barra em vez de so' numero, pra dar
+                  leitura visual de quais ligas a IA acerta mais. */}
+              {byLeague.length > 1 && (
+                <div className="panel mb-8">
+                  <div className="panel-head">
+                    <span className="panel-label">Aproveitamento por liga</span>
+                    <span className="panel-meta">{byLeague.length} ligas</span>
+                  </div>
+                  <div className="px-5 py-4 space-y-3">
+                    {[...byLeague]
+                      .map(lg => ({ ...lg, wr: calcWinRate(lg.greens, lg.total) ?? 0 }))
+                      .sort((a, b) => b.wr - a.wr)
+                      .map(lg => (
+                        <div key={`bar-${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3">
+                          <span className="text-[11px] text-ink-3 w-28 shrink-0 truncate">{lg.league_name}</span>
+                          <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${lg.wr >= 55 ? 'bg-green-500' : 'bg-ink-4'}`}
+                              style={{ width: `${Math.max(2, Math.min(100, lg.wr))}%` }}
+                            />
+                          </div>
+                          <span className="font-mono text-[11px] font-bold text-ink-2 w-9 text-right shrink-0">{lg.wr}%</span>
+                        </div>
+                      ))}
+                  </div>
                 </div>
               )}
 
@@ -347,7 +431,6 @@ export default function ResultadosPublicos() {
               <div className="divide-y divide-line/50">
                 {byLeague.map((lg) => {
                   const wr = calcWinRate(lg.greens, lg.total)
-                  const p  = Number(lg.profit)
                   return (
                     <div key={`${lg.league_id ?? lg.league_name}`} className="flex items-center gap-3 px-5 py-3">
                       {lg.league_id != null
@@ -355,11 +438,11 @@ export default function ResultadosPublicos() {
                         : <div className="w-4.5 h-4.5 rounded-full bg-surface-2 shrink-0" />}
                       <span className="text-sm font-semibold text-ink-1 flex-1 min-w-0 truncate">{lg.league_name}</span>
                       <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{lg.total} picks</span>
+                      <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
+                        {lg.greens}G · {lg.reds}R
+                      </span>
                       <span className={`font-mono text-xs font-black w-12 text-right shrink-0 ${(wr ?? 0) >= 55 ? 'text-green-400' : 'text-ink-2'}`}>
                         {wr}%
-                      </span>
-                      <span className={`font-mono text-xs font-black w-16 text-right shrink-0 ${p >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {p >= 0 ? '+' : ''}{p.toFixed(1)}u
                       </span>
                     </div>
                   )
@@ -367,6 +450,20 @@ export default function ResultadosPublicos() {
               </div>
             </div>
           ))}
+
+          {(tab === 'por_jogo' || tab === 'por_mes') && !user && (
+            <div className="panel px-5 py-14 text-center">
+              <p className="text-sm text-ink-2 font-semibold mb-1">
+                {tab === 'por_jogo' ? 'Resultado pick a pick' : 'Fechamento mês a mês'}
+              </p>
+              <p className="text-xs text-ink-3 mb-5 max-w-sm mx-auto leading-relaxed">
+                Essa visão detalhada é para quem tem conta. Criar é de graça e leva menos de um minuto.
+              </p>
+              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
+                Criar conta grátis
+              </Link>
+            </div>
+          )}
 
           {tab === 'por_jogo' && user && (
             <div>
