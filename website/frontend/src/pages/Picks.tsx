@@ -15,7 +15,7 @@ import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } f
 import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
-import { PickCardFooter, PickExplainButton, PickConfidence, PickStats, PickReasoning } from '../components/PickCardParts'
+import { PickCardFooter, PickExplainButton, PickProbability, PickStats, PickReasoning } from '../components/PickCardParts'
 import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
@@ -324,7 +324,8 @@ function shortReasoning(text?: string): string {
 function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
-  const pct = Math.round((dica.confidence ?? 0) * 100)
+  // probability quando existir; confidence e' o fallback dos picks antigos
+  const pct = Math.round(Number(dica.probability ?? dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -504,7 +505,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
               </>
             ) : (
               <>
-                <div className="text-[10px] text-ink-3 mb-0.5">Confiança</div>
+                <div className="text-[10px] text-ink-3 mb-0.5">Probabilidade</div>
                 <div className={`text-xl font-black ${pct >= 75 ? 'text-green-400' : 'text-ink-2'}`}>{pct}%</div>
               </>
             )}
@@ -528,10 +529,10 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
         </div>
       </div>
 
-      {/* Confiança bar */}
+      {/* Barra de probabilidade */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Confiança</span>
+          <span className="text-ink-4">Probabilidade</span>
           <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
         </div>
         <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
@@ -631,7 +632,8 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
 
-  const pct = Math.round((m.confidence ?? 0) * 100)
+  // Multipla nao tem coluna de probabilidade: score_combo entra como aproximacao
+  const pct = Math.round(Number(m.probability ?? m.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
@@ -793,7 +795,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           })()
         ) : (
           <div className="flex-1 px-5 py-3 text-center">
-            <div className="text-[10px] text-ink-3 mb-0.5">Confiança</div>
+            <div className="text-[10px] text-ink-3 mb-0.5">Probabilidade</div>
             <div className={`text-2xl font-black ${pct >= 70 ? 'text-green-400' : 'text-ink-2'}`}>{pct}%</div>
           </div>
         )}
@@ -845,10 +847,10 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
         })}
       </div>
 
-      {/* Confiança bar */}
+      {/* Barra de probabilidade */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Confiança combinada</span>
+          <span className="text-ink-4">Probabilidade combinada</span>
           <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
         </div>
         <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
@@ -1109,7 +1111,7 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       {/* Confiança */}
       <div className="px-5 pb-3">
         <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Confiança</span>
+          <span className="text-ink-4">Probabilidade</span>
           <span className={confPct >= 70 ? 'text-orange-400 font-bold' : 'text-ink-3'}>{confPct}%</span>
         </div>
         <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
@@ -1323,9 +1325,8 @@ function MercadoCard({ p, tipo, banca, onBet, onClick }: {
         </div>
       </div>
 
-      {/* prob_real faz as vezes de confiança aqui: é o número que o modelo
-          desses dois mercados produz. */}
-      {p.prob_real != null && <PickConfidence confidence={Number(p.prob_real)} />}
+      {/* prob_real E a probabilidade destes dois mercados. */}
+      <PickProbability probability={p.prob_real != null ? Number(p.prob_real) : null} />
 
       <PickReasoning text={p.reasoning} />
 

@@ -1,4 +1,4 @@
-import { BrainCircuit, Percent, Target, TrendingUp, Scale } from 'lucide-react'
+import { Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
 
@@ -65,7 +65,12 @@ export default function AnalysisModal({
   const ourProb = data.probability != null ? Number(data.probability) * 100 : null
   const conf = data.confidence != null ? Math.round(Number(data.confidence) * 100) : null
   const ev = data.ev != null ? Number(data.ev) : null
-  const edge = ourProb != null ? ourProb - implied : null
+
+  // Sem probabilidade real (pick VIP antigo, multipla), confidence entra como
+  // aproximacao e o rotulo avisa. Ver PickProbability em PickCardParts.
+  const probAproximada = ourProb == null
+  const mostraProb = ourProb ?? (conf != null ? conf : null)
+  const edge = mostraProb != null ? mostraProb - implied : null
 
   return (
     <Modal
@@ -76,21 +81,21 @@ export default function AnalysisModal({
     >
       <div className="p-5 space-y-5">
 
+        {/*
+          * Uma probabilidade so'.
+          *
+          * Havia dois cartoes aqui, "Confianca da IA" e "Prob. estimada", com
+          * numeros diferentes (confidence vem sistematicamente acima de
+          * probability no banco). Dois valores concorrentes pra mesma pergunta
+          * so' confundem: fica o que o rotulo promete, a probabilidade.
+          */}
         <div className="grid grid-cols-2 gap-3">
-          {conf != null && (
-            <Metric
-              Icon={BrainCircuit}
-              label="Confiança da IA"
-              value={`${conf}%`}
-              tone={conf >= 70 ? 'good' : 'default'}
-              hint="quanto o modelo confia na leitura"
-            />
-          )}
-          {ourProb != null && (
+          {mostraProb != null && (
             <Metric
               Icon={Percent}
-              label="Prob. estimada"
-              value={`${ourProb.toFixed(1)}%`}
+              label={`Probabilidade${probAproximada ? ' estimada' : ''}`}
+              value={`${mostraProb.toFixed(1)}%`}
+              tone={mostraProb >= 70 ? 'good' : 'default'}
               hint="chance calculada pelo modelo"
             />
           )}
@@ -120,7 +125,7 @@ export default function AnalysisModal({
               <span className="panel-label">Por que virou pick</span>
             </div>
             <p className="text-xs text-ink-2 leading-relaxed">
-              O modelo estima <span className="font-mono text-ink-1">{ourProb!.toFixed(1)}%</span> de
+              O modelo estima <span className="font-mono text-ink-1">{mostraProb!.toFixed(1)}%</span> de
               chance, e a odd {odd.toFixed(2)} está pagando como se fosse{' '}
               <span className="font-mono text-ink-1">{implied.toFixed(1)}%</span>.
               {edge > 0 ? (

@@ -131,7 +131,20 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const homeLogo = TEAM_LOGO(s?.home_team_id)
   const awayLogo = TEAM_LOGO(s?.away_team_id)
   const resultStyle = getResultStyle(s?.result)
-  const confidence = Math.round((s?.confidence ?? 0) * 100)
+  /*
+   * Probabilidade estimada, nao confianca.
+   *
+   * Sao campos DIFERENTES no banco: medido em picks_vip, confidence vem
+   * sistematicamente acima de probability (0,816 contra 0,755 no mesmo pick).
+   * Mostrar confidence sob o rotulo "probabilidade" seria anunciar 82% onde a
+   * chance calculada e 75%.
+   *
+   * `confidence` so entra quando nao ha probabilidade: picks VIP antigos e
+   * multiplas, que nao tem a coluna.
+   */
+  const probBruta = s?.probability ?? s?.confidence ?? 0
+  const confidence = Math.round(Number(probBruta) * 100)
+  const probAproximada = s?.probability == null
   const ev = s?.ev != null ? (Number(s.ev) * 100).toFixed(1) : null
 
   const stakeUnits = (() => {
@@ -321,7 +334,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Métricas principais */}
                   <div className="font-mono grid grid-cols-3 gap-2">
                     <div className="bg-surface-1 border border-line rounded-lg p-3 text-center">
-                      <div className="text-[10px] text-ink-3 mb-1">Confiança</div>
+                      <div className="text-[10px] text-ink-3 mb-1">Probabilidade</div>
                       <div className={`text-2xl font-black ${confidence >= 75 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-ink-2'}`}>
                         {confidence}%
                       </div>
@@ -350,10 +363,10 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     </div>
                   </div>
 
-                  {/* Barra de confiança */}
+                  {/* Barra de probabilidade */}
                   <div>
                     <div className="flex justify-between text-xs text-ink-3 mb-1.5">
-                      <span>Nível de confiança</span>
+                      <span>Probabilidade{probAproximada ? ' estimada' : ''}</span>
                       <span className={confidence >= 75 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-ink-2'}>{confidence}%</span>
                     </div>
                     <div className="bg-surface-2 rounded-full h-2 overflow-hidden">
