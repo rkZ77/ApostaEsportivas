@@ -16,7 +16,6 @@ export default function Leagues() {
     <section className="section-tight overflow-hidden">
       <div className="shell">
         <SectionHead
-          eyebrow="Cobertura"
           title="As ligas que a IA analisa"
           sub="A cobertura entra e sai conforme a temporada de cada campeonato. A lista abaixo é o que está ativo agora."
         />

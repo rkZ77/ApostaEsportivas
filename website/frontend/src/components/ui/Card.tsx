@@ -83,21 +83,20 @@ export function StatTile({
 }
 
 /** Cabeçalho de seção: título + subtítulo, centralizado, no ritmo do sistema. */
+/* Sem `eyebrow`: o rotulo miudo acima do titulo saiu das seis secoes que o
+   usavam. Ele repetia o proprio titulo ("PLANOS" sobre "Comece de graca,
+   evolua quando quiser") e era o carimbo visual de template. */
 export function SectionHead({
   title,
   sub,
-  eyebrow,
   className,
 }: {
   title: React.ReactNode
   sub?: React.ReactNode
-  /** Rótulo miúdo acima do título. */
-  eyebrow?: React.ReactNode
   className?: string
 }) {
   return (
     <div className={cn('section-head', className)}>
-      {eyebrow != null && <div className="label-micro mb-3">{eyebrow}</div>}
       <h2 className="section-title">{title}</h2>
       {sub != null && <p className="section-sub">{sub}</p>}
     </div>

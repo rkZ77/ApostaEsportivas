@@ -45,7 +45,6 @@ export default function HowItWorks() {
     <section id="como-funciona" className="section section-alt">
       <div className="shell">
         <SectionHead
-          eyebrow="Do dado à pick"
           title="Nada de achismo. Só dados reais e matemática."
           sub="Todo jogo passa pelo mesmo caminho, e o que não tem valor esperado positivo não vira pick."
         />
