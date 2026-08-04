@@ -52,6 +52,19 @@
 @layer base {
   * { box-sizing: border-box; }
 
+  /* Rolagem por âncora (#produtos, #planos) parava com o título embaixo da
+     barra fixa de 64px do SiteHeader. O scroll-margin resolve no alvo, sem
+     JS e sem cada seção ter que lembrar de compensar. */
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 5rem;
+  }
+
+  /* Quem prefere menos movimento não deve levar rolagem animada. */
+  @media (prefers-reduced-motion: reduce) {
+    html { scroll-behavior: auto; }
+  }
+
   body {
     @apply bg-surface-0 text-ink-2 antialiased;
     font-family: 'Inter', sans-serif;

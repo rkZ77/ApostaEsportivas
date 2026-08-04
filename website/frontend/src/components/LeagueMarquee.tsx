@@ -22,11 +22,11 @@ export interface LeagueTeaser {
 
 export default function LeagueMarquee({
   className,
-  /** Fica sem cor até o hover. Usar quando a fita for pano de fundo. */
-  muted,
+  /** Roda no sentido contrário. Usado pra cruzar duas fitas. */
+  reverse,
 }: {
   className?: string
-  muted?: boolean
+  reverse?: boolean
 }) {
   const [leagues, setLeagues] = useState<LeagueTeaser[]>([])
 
@@ -45,6 +45,7 @@ export default function LeagueMarquee({
 
   return (
     <Marquee
+      reverse={reverse}
       className={cn('py-2', className)}
       items={items.map((lg, i) => (
         <div
@@ -60,10 +61,9 @@ export default function LeagueMarquee({
             width={22}
             height={22}
             loading="lazy"
-            className={cn(
-              'w-[22px] h-[22px] object-contain shrink-0 transition-all duration-2 ease-smooth',
-              muted && 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100',
-            )}
+            /* Sem grayscale: o escudo em cor é o que o olho reconhece, e era
+               justamente isso que a fita apagava. */
+            className="w-[26px] h-[26px] object-contain shrink-0" 
             onError={e => (e.currentTarget.style.display = 'none')}
           />
           <span className="text-xs font-medium text-ink-3 whitespace-nowrap">{lg.name}</span>

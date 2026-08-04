@@ -844,17 +844,31 @@ STAKE_LIMITS = {
     "free":       (1, 6),
     "multipla":   (1, 5),
     "alavancagem":(1, 9999),  # sem limite fixo · banca composta progressiva
+    # Mercados de modelo proprio. Teto igual ao do Free e nao ao do VIP: sao
+    # mercados com amostra historica menor (defesas aparece em menos de 1% dos
+    # jogos), entao a incerteza da estimativa e maior mesmo quando a margem
+    # calculada e boa.
+    "faltas":     (1, 6),
+    "goleiros":   (1, 6),
+}
+
+STAKE_LABELS = {
+    "vip": "VIP", "free": "Free", "multipla": "Múltipla",
+    "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
 }
 
 @router.post("/follow")
 def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)):
     _check_banca_rate(current_user["id"])
-    if body.pick_type not in ("vip", "free", "multipla", "alavancagem"):
+    # A fonte da verdade e STAKE_LIMITS: a lista estava escrita duas vezes e
+    # foi por isso que faltas/goleiros ficaram de fora do follow mesmo com o
+    # resto da banca (resolve, P&L, historico) ja sabendo lidar com eles.
+    if body.pick_type not in STAKE_LIMITS:
         raise HTTPException(400, "Tipo inválido.")
     min_u, max_u = STAKE_LIMITS[body.pick_type]
     if not (min_u <= body.stake_units <= max_u):
-        labels = {"vip": "VIP", "free": "Free", "multipla": "Múltipla", "alavancagem": "Alavancagem"}
-        raise HTTPException(400, f"Stake para picks {labels[body.pick_type]} deve ser entre {min_u} e {max_u} unidades.")
+        label = STAKE_LABELS.get(body.pick_type, body.pick_type)
+        raise HTTPException(400, f"Stake para picks {label} deve ser entre {min_u} e {max_u} unidades.")
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()
