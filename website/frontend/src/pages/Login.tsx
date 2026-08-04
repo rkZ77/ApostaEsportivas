@@ -230,7 +230,7 @@ export default function Login() {
 
         <div className="relative z-10 text-center px-12">
           <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
-          <h1 className="text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-green-500">IA</span></h1>
+          <p className="font-display text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-accent">IA</span></p>
           <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
           <div className="mt-8 text-left max-w-xs mx-auto">
             <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
@@ -260,12 +260,16 @@ export default function Login() {
           {/* Mobile logo */}
           <div className="flex lg:hidden flex-col items-center mb-10">
             <img src="/logo.png" alt="Pick IA" width={96} height={96} className="w-24 h-24 mb-3" />
-            <h1 className="text-3xl font-bold text-ink-1">Pick<span className="text-green-500">IA</span></h1>
+            <p className="font-display text-3xl font-bold text-ink-1">Pick<span className="text-accent">IA</span></p>
           </div>
 
-          <h2 className="text-2xl font-bold text-ink-1 mb-1">
+          {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
+              duas vezes como h1 (uma no painel de desktop, outra no bloco
+              mobile): so uma renderiza, mas as duas existiam no DOM, entao
+              leitor de tela e robo de busca viam duas. */}
+          <h1 className="text-2xl font-bold text-ink-1 mb-1">
             {mode === 'login' ? 'Bem-vindo de volta' : '2 dias VIP grátis'}
-          </h2>
+          </h1>
           <p className="text-ink-3 mb-6 text-sm">
             {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma. Sem cartão de crédito.'}
           </p>
