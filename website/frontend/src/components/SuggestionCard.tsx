@@ -11,9 +11,10 @@ import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import FavoriteButton from './FavoriteButton'
+import { PickCardFooter } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
-import { Share2, Check as CheckIcon, Loader2, Clock, BrainCircuit } from 'lucide-react'
+import { Clock } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -363,55 +364,16 @@ export default function SuggestionCard({
         </div>
       )}
 
-      {/* Entrada para a análise completa. Fica fora do onClick do card pra não
-          disputar com "ver detalhes": são duas leituras diferentes. */}
-      {(s.reasoning || s.ev != null || probPct != null) && (
-        <div className="px-5 pb-3">
-          <button
-            onClick={e => { e.stopPropagation(); setShowAnalysis(true) }}
-            className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2 transition-colors duration-1 ease-smooth"
-          >
-            <BrainCircuit className="w-3.5 h-3.5" />
-            Entenda esta análise
-          </button>
-        </div>
-      )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
-        {!s.result ? (
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={banca ? handleFollow : () => navigate('/banca')}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : banca
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </motion.button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-green-400 hover:bg-green-500/5 border border-line-strong hover:border-green-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-
-        </div>
-      </div>
+      <PickCardFooter
+        onBet={!s.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
+        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        hasBanca={!!banca}
+        onExplain={(s.reasoning || s.ev != null || probPct != null) ? (e => { e.stopPropagation(); setShowAnalysis(true) }) : undefined}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+      />
     </motion.div>
 
     <AnimatePresence>

@@ -10,10 +10,12 @@ import ApostaModal from '../components/ApostaModal'
 import SuggestionDetail from '../components/SuggestionDetail'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
-import { LiveDot, Spinner, EmptyState } from '../components/ui'
+import { LiveDot, Spinner, EmptyState, Badge, PickTypeBadge, ResultBadge } from '../components/ui'
 import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../components/MercadosControls'
 import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
+import AnalysisModal from '../components/AnalysisModal'
+import { PickCardFooter, PickConfidence, PickStats, PickReasoning } from '../components/PickCardParts'
 import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
@@ -320,6 +322,7 @@ function shortReasoning(text?: string): string {
 }
 
 function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
   const pct = Math.round((dica.confidence ?? 0) * 100)
   const [followed, setFollowed] = useState(dica.is_followed ?? false)
@@ -548,39 +551,32 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
-        {!dica.result ? (
-          <button
-            onClick={banca ? handleFollow : () => navigate('/banca')}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : banca
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-green-400 hover:bg-green-500/5 border border-line-strong hover:border-green-500/50 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-        </div>
-      </div>
+      <PickCardFooter
+        onBet={!dica.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
+        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        hasBanca={!!banca}
+        onExplain={dica.reasoning ? () => setShowAnalysis(true) : undefined}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+      />
     </motion.div>
+    <AnimatePresence>
+    {showAnalysis && (
+      <AnalysisModal
+        onClose={() => setShowAnalysis(false)}
+        data={{
+          market: translateMarket(dica.market),
+          line: translateLine(dica.line),
+          odd: Number(dica.odd),
+          confidence: dica.confidence,
+          probability: dica.probability ?? null,
+          ev: dica.ev ?? null,
+          reasoning: dica.reasoning,
+        }}
+      />
+    )}
+    </AnimatePresence>
+
     <AnimatePresence>
     {showModal && (
       <ApostaModal
@@ -627,6 +623,7 @@ function PickSeguroEmpty() {
 
 // Múltipla card
 function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
   let legs: any[] = []
   try { legs = typeof m.legs === 'string' ? JSON.parse(m.legs) : (m.legs ?? []) } catch { legs = [] }
@@ -865,39 +862,31 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
-        {!m.result ? (
-          <button
-            onClick={banca ? handleFollow : () => navigate('/banca')}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : banca
-                ? 'border-blue-500/30 text-blue-400 bg-blue-500/10 hover:bg-blue-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-blue-400 hover:bg-blue-500/5 border border-line-strong hover:border-blue-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-        </div>
-      </div>
+      <PickCardFooter
+        onBet={!m.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
+        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        hasBanca={!!banca}
+        onExplain={m.reasoning ? () => setShowAnalysis(true) : undefined}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+      />
     </motion.div>
+    <AnimatePresence>
+    {showAnalysis && (
+      <AnalysisModal
+        onClose={() => setShowAnalysis(false)}
+        data={{
+          market: 'Múltipla',
+          line: `${m.games?.length ?? 0} seleções`,
+          odd: Number(m.total_odd),
+          confidence: m.confidence ?? null,
+          probability: null,
+          ev: m.ev ?? null,
+          reasoning: m.reasoning,
+        }}
+      />
+    )}
+    </AnimatePresence>
     <AnimatePresence>
     {showModal && (
       <ApostaModal
@@ -927,6 +916,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
 
 // Alavancagem card
 function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive = false }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean }) {
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate    = useNavigate()
   const isCombo     = pick.tipo === 'dupla' || pick.tipo === 'tripla' || pick.tipo === 'combinacao'
   const comboLabel  = pick.tipo === 'tripla' ? 'Tripla' : pick.tipo === 'dupla' ? 'Dupla' : 'Combinada'
@@ -1130,43 +1120,36 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       )}
 
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
-        {!pick.result ? (
-          <button
-            onClick={e => {
-              e.stopPropagation()
-              if (userBankroll == null) { onConfigureBanca?.() ?? navigate('/banca') }
-              else handleFollow(e as any)
-            }}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : userBankroll != null
-                ? 'border-orange-500/30 text-orange-400 bg-orange-500/10 hover:bg-orange-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : userBankroll != null ? 'Apostar' : 'Configurar banca'}
-          </button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-orange-400 hover:bg-orange-500/5 border border-line-strong hover:border-orange-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-        </div>
-      </div>
+      <PickCardFooter
+        onBet={!pick.result ? (e => {
+          e.stopPropagation()
+          if (userBankroll == null) { onConfigureBanca?.() ?? navigate('/banca') }
+          else handleFollow(e as any)
+        }) : undefined}
+        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        hasBanca={userBankroll != null}
+        onExplain={pick.reasoning_1 ? () => setShowAnalysis(true) : undefined}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+      />
     </motion.div>
+    <AnimatePresence>
+    {showAnalysis && (
+      <AnalysisModal
+        onClose={() => setShowAnalysis(false)}
+        data={{
+          market: 'Alavancagem',
+          line: [pick.line_1, pick.line_2, pick.line_3].filter(Boolean).join(' + '),
+          odd: Number(pick.odd_combined),
+          confidence: pick.confidence_media ?? null,
+          probability: null,
+          ev: pick.ev_combined ?? null,
+          reasoning: [pick.reasoning_1, pick.reasoning_2, pick.reasoning_3].filter(Boolean).join('\n\n'),
+        }}
+      />
+    )}
+    </AnimatePresence>
+
     <AnimatePresence>
     {showModal && (
       <ApostaModal
@@ -1213,32 +1196,44 @@ interface MercadoPick {
   result?: string | null
 }
 
-function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' }) {
-  const rs = getResultStyle(p.result)
+/*
+ * Card de mercado (faltas e defesas).
+ *
+ * Reescrito pra ter a MESMA anatomia dos outros cinco cards: cabeçalho com
+ * badge e horário, tira de números, times, confiança, raciocínio e rodapé com
+ * Apostar / Entenda / Compartilhar. Antes era o mais divergente do conjunto
+ * (padding e raio próprios, números em caixinhas separadas) e o único sem
+ * nenhuma ação: dava pra ler o pick e não dava pra registrar.
+ */
+function MercadoCard({ p, tipo, banca, onBet }: {
+  p: MercadoPick
+  tipo: 'faltas' | 'goleiros'
+  banca?: { bankroll_current: number; unit_value: number } | null
+  onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
+}) {
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
   const edge = p.edge != null ? Number(p.edge) * 100 : null
+
+  const kickoff = new Date(`${p.match_date}T12:00:00`)
+    .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+
   return (
-    <div className={`pick-card p-4 sm:p-5 space-y-3 ${PICK_TYPE_BORDER[tipo]}`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-sm text-ink-2 font-medium min-w-0">
-            <TeamLogo id={p.home_team_id} name={p.home_team} size={18} />
-            <span className="truncate">{p.home_team}</span>
-            <span className="text-ink-4 shrink-0">x</span>
-            <TeamLogo id={p.away_team_id} name={p.away_team} size={18} />
-            <span className="truncate">{p.away_team}</span>
-          </div>
-          <p className="text-[11px] text-ink-4 mt-1 font-mono">
-            {new Date(`${p.match_date}T12:00:00`).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-            {p.bet_house ? ` · ${p.bet_house}` : ''}
-          </p>
+    <>
+    <div className={`pick-card ${PICK_TYPE_BORDER[tipo]}`}>
+
+      {/* Cabeçalho */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type={tipo} />
+          <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
+            <Clock className="w-3 h-3" />
+            {kickoff}
+          </span>
+          {p.bet_house && <span className="text-[10px] text-ink-4 truncate">{p.bet_house}</span>}
         </div>
         <div className="flex items-center gap-1 shrink-0">
-          {rs && (
-            <span className={`text-[10px] font-black uppercase border px-1.5 py-0.5 rounded ${rs.bg} ${rs.border} ${rs.text}`}>
-              {rs.label}
-            </span>
-          )}
+          {p.result ? <ResultBadge result={p.result} /> : <Badge tone="neutral">Pendente</Badge>}
           <FavoriteButton
             kind="market"
             refId={tipo}
@@ -1248,40 +1243,78 @@ function MercadoCard({ p, tipo }: { p: MercadoPick; tipo: 'faltas' | 'goleiros' 
         </div>
       </div>
 
-      <div className="bg-surface-1 border border-line rounded-md px-3 py-2.5">
-        <p className="text-[10px] text-ink-4 uppercase font-semibold mb-1">
-          {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
-        </p>
-        <p className="text-sm text-ink-1 font-bold">{p.line}</p>
-        {tipo === 'goleiros' && p.team_name && (
-          <p className="text-[11px] text-ink-3 mt-0.5">{p.team_name}</p>
-        )}
+      <PickStats
+        items={[
+          { label: 'Odd', value: Number(p.odd).toFixed(2), tone: 'accent' },
+          { label: 'Probabilidade', value: prob != null ? `${prob.toFixed(0)}%` : '·' },
+          {
+            label: 'Margem',
+            value: edge != null ? `${edge > 0 ? '+' : ''}${edge.toFixed(1)}%` : '·',
+            tone: edge != null && edge > 0 ? 'accent' : 'default',
+          },
+        ]}
+      />
+
+      {/* Times e linha */}
+      <div className="px-5 py-3 space-y-2">
+        <div className="flex items-center gap-2">
+          <TeamLogo id={p.home_team_id} name={p.home_team} size={20} />
+          <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team}</span>
+          <span className="text-ink-4 text-xs shrink-0">x</span>
+          <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team}</span>
+          <TeamLogo id={p.away_team_id} name={p.away_team} size={20} />
+        </div>
+        <div className="flex items-center gap-2 text-xs text-ink-3 flex-wrap">
+          <span className="font-semibold text-ink-2">
+            {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
+          </span>
+          <span>·</span>
+          <span className="text-ink-1 font-semibold">{p.line}</span>
+          {tipo === 'goleiros' && p.team_name && (
+            <><span>·</span><span>{p.team_name}</span></>
+          )}
+        </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-2 font-mono">
-        <div className="bg-surface-1 rounded-md p-2.5 text-center">
-          <div className="text-base font-black text-green-400">{Number(p.odd).toFixed(2)}</div>
-          <div className="text-[10px] text-ink-4 mt-0.5">Odd</div>
-        </div>
-        <div className="bg-surface-1 rounded-md p-2.5 text-center">
-          <div className="text-base font-black text-ink-1">{prob != null ? `${prob.toFixed(0)}%` : '·'}</div>
-          <div className="text-[10px] text-ink-4 mt-0.5">Probabilidade</div>
-        </div>
-        <div className="bg-surface-1 rounded-md p-2.5 text-center">
-          <div className="text-base font-black text-green-400">{edge != null ? `${edge > 0 ? '+' : ''}${edge.toFixed(1)}%` : '·'}</div>
-          <div className="text-[10px] text-ink-4 mt-0.5">Margem</div>
-        </div>
-      </div>
+      {/* prob_real faz as vezes de confiança aqui: é o número que o modelo
+          desses dois mercados produz. */}
+      {p.prob_real != null && <PickConfidence confidence={Number(p.prob_real)} />}
 
-      {p.reasoning && <p className="text-xs text-ink-3 leading-relaxed">{p.reasoning}</p>}
+      <PickReasoning text={p.reasoning} />
+
+      <PickCardFooter
+        onBet={!p.result && onBet ? () => onBet(p, tipo) : undefined}
+        hasBanca={!!banca}
+        onExplain={p.reasoning || p.prob_real != null ? () => setShowAnalysis(true) : undefined}
+      />
     </div>
+
+    <AnimatePresence>
+    {showAnalysis && (
+      <AnalysisModal
+        onClose={() => setShowAnalysis(false)}
+        data={{
+          market: tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo',
+          line: p.line,
+          odd: Number(p.odd),
+          confidence: p.prob_real ?? null,
+          probability: p.prob_real ?? null,
+          ev: edge,
+          reasoning: p.reasoning,
+        }}
+      />
+    )}
+    </AnimatePresence>
+    </>
   )
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onBet }: {
   tipo: 'faltas' | 'goleiros'
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
+  banca?: { bankroll_current: number; unit_value: number } | null
+  onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
 }) {
   return (
     <div>
@@ -1290,17 +1323,18 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando }: {
       {carregando ? (
         <PickLoading />
       ) : !picks || picks.length === 0 ? (
-        <div className="card p-6 text-center">
-          <p className="text-sm text-ink-2 font-bold mb-1">Nenhum pick de {titulo.toLowerCase()} ainda</p>
-          <p className="text-xs text-ink-4">
-            {tipo === 'goleiros'
+        <div className="card">
+          <EmptyState
+            title={`Nenhum pick de ${titulo.toLowerCase()} ainda`}
+            description={tipo === 'goleiros'
               ? 'Defesas é um mercado raro: aparece em menos de 1% dos jogos. Dia sem pick é o normal aqui.'
               : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
-          </p>
+            compact
+          />
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} />)}
+          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} banca={banca} onBet={onBet} />)}
         </div>
       )}
     </div>
@@ -1656,6 +1690,42 @@ export default function Picks() {
   // já baixa os dois conjuntos inteiros, são poucas dezenas de picks por dia.
   const [mercadoFiltro, setMercadoFiltro] = useState<MercadoFiltro>(FILTRO_INICIAL)
   const { isFavorite, favorites } = useFavorites()
+
+  /*
+   * Registrar aposta de mercado (faltas e defesas).
+   *
+   * Reusa o ApostaModal dos outros tipos em vez de um fluxo proprio: a
+   * confirmacao de odd real e casa de aposta e a mesma, e duas telas de
+   * confirmacao diferentes pro mesmo ato so confundiriam.
+   */
+  const [mercadoBet, setMercadoBet] = useState<{ p: MercadoPick; tipo: 'faltas' | 'goleiros' } | null>(null)
+  const [mercadoBetLoading, setMercadoBetLoading] = useState(false)
+  const [mercadoBetError, setMercadoBetError] = useState<string | null>(null)
+
+  const handleMercadoBet = useCallback((p: MercadoPick, tipo: 'faltas' | 'goleiros') => {
+    setMercadoBetError(null)
+    setMercadoBet({ p, tipo })
+  }, [])
+
+  const confirmMercadoBet = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
+    if (!mercadoBet) return
+    setMercadoBetLoading(true)
+    setMercadoBetError(null)
+    try {
+      await api.post('/banca/follow', {
+        pick_id: mercadoBet.p.id,
+        pick_type: mercadoBet.tipo,
+        stake_units: stakeUnits,
+        actual_odd: actualOdd,
+        bet_house: betHouse,
+      })
+      setMercadoBet(null)
+    } catch (err: any) {
+      setMercadoBetError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
+    } finally {
+      setMercadoBetLoading(false)
+    }
+  }
   // Um pick de mercado conta como favorito se o time da casa, o visitante ou
   // o próprio tipo de mercado estiver favoritado.
   const mercadoEhFavorito = useCallback((p: MercadoPick & { tipo?: string }) => (
@@ -1887,6 +1957,20 @@ export default function Picks() {
         ),
       }}
     >
+      <AnimatePresence>
+      {mercadoBet && (
+        <ApostaModal
+          pickOdd={Number(mercadoBet.p.odd)}
+          suggestedUnits={mercadoBet.p.stake_units ?? 1}
+          suggestedHouse={mercadoBet.p.bet_house}
+          onConfirm={confirmMercadoBet}
+          onCancel={() => setMercadoBet(null)}
+          loading={mercadoBetLoading}
+          error={mercadoBetError}
+        />
+      )}
+      </AnimatePresence>
+
       <AnimatePresence>
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
       </AnimatePresence>
@@ -2627,6 +2711,8 @@ export default function Picks() {
                         explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
                         picks={faltas === null ? null : faltasFiltradas}
                         carregando={mercadosLoading}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onBet={handleMercadoBet}
                       />
                     )}
                     {mercadoFiltro.categoria !== 'faltas' && (
@@ -2637,6 +2723,8 @@ export default function Picks() {
                         explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir."
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={mercadosLoading}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onBet={handleMercadoBet}
                       />
                     )}
                   </>
