@@ -73,7 +73,6 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
     <section id="resultados" className="section section-alt">
       <div className="shell">
         <SectionHead
-          eyebrow="Auditável"
           title="Resultados reais, verificáveis"
           sub="Todo pick publicado fica registrado. Qualquer pessoa pode conferir, sem conta."
         />
@@ -185,7 +184,6 @@ function Leaderboard() {
     <section className="section-tight">
       <div className="shell-narrow">
         <SectionHead
-          eyebrow={<span className="flex items-center justify-center gap-1.5"><Trophy className="w-3 h-3" /> Ranking</span>}
           title="Quem está indo melhor"
           sub="Usuários com o melhor aproveitamento na banca este mês."
         />
@@ -274,7 +272,6 @@ function Plans({ monthly }: { monthly: Plan }) {
     <section id="planos" className="section section-alt">
       <div className="shell">
         <SectionHead
-          eyebrow="Planos"
           title="Comece de graça, evolua quando quiser"
           sub="Dois dias com acesso VIP completo, sem cartão. Depois você escolhe."
         />

@@ -250,9 +250,18 @@
     @apply text-ink-1 border-accent;
   }
 
-  /* Voz 2 · rotulo. Versalete de secao, o mesmo desenho do badge. */
+  /* Voz 2 · rotulo.
+   *
+   * Era mono em 10px com tracking-widest. Essa combinacao (monoespaçada,
+   * caixa alta, letra muito afastada, corpo minusculo) e o desenho padrao de
+   * "eyebrow" de template de landing: o leitor reconhece o carimbo antes de
+   * conseguir ler a palavra, e ler custa esforco em 10px.
+   *
+   * Agora e a fonte do site, um ponto maior e com o espacamento so o
+   * suficiente pra caixa alta respirar. Continua sendo rotulo, deixou de ser
+   * enfeite. */
   .label-micro {
-    @apply font-mono text-[10px] font-bold uppercase tracking-widest text-ink-3;
+    @apply text-[11px] font-bold uppercase tracking-[0.04em] text-ink-3;
   }
 
   /* Voz 3 · evidencia = font-mono puro. Nao existe helper aqui de proposito:

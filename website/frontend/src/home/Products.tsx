@@ -111,7 +111,6 @@ export default function Products() {
       <div className="shell">
         <div className="flex items-end justify-between gap-4 mb-8">
           <SectionHead
-            eyebrow="O que você recebe"
             title="Uma plataforma, vários tipos de análise"
             sub="Cada módulo tem o seu próprio modelo. Nenhum deles publica sem passar no corte de valor."
             className="text-left mb-0 [&_p]:mx-0"
