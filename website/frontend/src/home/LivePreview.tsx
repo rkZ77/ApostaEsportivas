@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react'
-import { ArrowRight, Gift } from 'lucide-react'
 import api from '../services/api'
-import { Badge, Button, LiveDot, Panel, PanelHead, ResultBadge } from '../components/ui'
+import { LiveDot, Panel, PanelHead } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 
 /*
@@ -99,87 +98,25 @@ function NextGames({ games, dateLabel }: { games: UpcomingFixture[]; dateLabel: 
   )
 }
 
-interface FreePick {
-  id: number
-  home_team_name: string
-  away_team_name: string
-  home_team_id?: number | null
-  away_team_id?: number | null
-  odd: number
-  result: string | null
-}
-
-function useFreePick() {
-  const [pick, setPick] = useState<FreePick | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    api
-      .get('/public/free-pick-today')
-      .then(r => setPick(r.data ?? null))
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }, [])
-
-  return { pick, loading }
-}
-
-function FreePickCard({ pick }: { pick: FreePick }) {
-  return (
-    <div className="relative bg-surface-0 border border-accent/30 rounded-lg p-6 text-center">
-      <div className="flex items-center justify-center gap-2 flex-wrap mb-4">
-        <Badge tone="green" Icon={Gift}>Dica do dia</Badge>
-        <span className="text-[11px] text-ink-3">grátis, sem precisar de conta</span>
-        {pick.result && <ResultBadge result={pick.result} />}
-      </div>
-
-      <p className="font-display text-base sm:text-lg font-semibold text-ink-1 mb-1.5 flex items-center justify-center gap-2 flex-wrap">
-        <TeamLogo id={pick.home_team_id ?? undefined} name={pick.home_team_name} size={18} />
-        {pick.home_team_name}
-        <span className="text-ink-4">x</span>
-        {pick.away_team_name}
-        <TeamLogo id={pick.away_team_id ?? undefined} name={pick.away_team_name} size={18} />
-      </p>
-
-      <p className="font-mono text-xs text-ink-3 mb-5">
-        Gerado pela IA hoje · odd {Number(pick.odd).toFixed(2)}
-      </p>
-
-      <Button to={`/p/free/${pick.id}`} IconRight={ArrowRight}>
-        Ver a análise completa
-      </Button>
-    </div>
-  )
-}
-
 /**
  * A faixa inteira, decidindo se existe.
  *
- * Antes cada card sumia por conta própria devolvendo null, e a <section> em
- * volta continuava lá com o padding: em dia sem jogo e sem pick free, a Home
- * ganhava um vão vazio de umas cem alturas de linha entre o hero e os
- * resultados. Quem decide agora é a seção, que só renderiza se tiver o que pôr
- * dentro.
+ * Quem decide é a seção, e não o card: quando o card sumia sozinho devolvendo
+ * null, a <section> em volta ficava com o padding e a Home ganhava um vão
+ * vazio entre o hero e os resultados em dia sem jogo.
  */
 export default function LivePreviewSection() {
   const { games, dateLabel } = useNextGames()
-  const { pick, loading } = useFreePick()
 
-  const hasGames = !!games && games.length > 0
-  const hasPick = !loading && !!pick
-
-  // `games === null` é "ainda buscando": segurar a seção nesse estado evita
-  // que ela apareça e suma na cara do usuário.
-  if (games === null || loading) return null
-  if (!hasGames && !hasPick) return null
+  // Só a fila de jogos. A Dica do Dia subiu pro hero (home/FreePickHero) e
+  // mostrar o mesmo pick duas vezes na mesma tela só diluía os dois.
+  if (games === null) return null
+  if (games.length === 0) return null
 
   return (
     <section className="section-tight">
-      <div className="shell">
-        <div className={`grid gap-5 items-start ${hasGames && hasPick ? 'md:grid-cols-2' : 'max-w-xl mx-auto'}`}>
-          {hasGames && <NextGames games={games} dateLabel={dateLabel} />}
-          {hasPick && <FreePickCard pick={pick} />}
-        </div>
+      <div className="shell-narrow">
+        <NextGames games={games} dateLabel={dateLabel} />
       </div>
     </section>
   )

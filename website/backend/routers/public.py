@@ -1,7 +1,8 @@
 import logging
 import traceback
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
+from auth_utils import get_current_user_optional
 from database import get_connection
 from data_br import HOJE_BR, data_br
 
@@ -566,10 +567,18 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
 
 
 @router.get("/free-pick-today")
-def public_free_pick_today():
-    """Teaser da Dica do Dia (free) de hoje, sem autenticacao -- usado pra
-    dar um gostinho do produto pra quem ainda nao tem conta. Nao expoe
-    mercado/linha/reasoning, so o suficiente pra linkar pra /p/free/{id}."""
+def public_free_pick_today(request: Request):
+    """Dica do Dia (free) de hoje.
+
+    Publico, mas mostra MAIS pra quem tem conta: visitante anonimo ve o jogo e
+    a odd, e o mercado volta como `locked: true` sem o valor. Quem esta logado
+    recebe market e line de verdade.
+
+    O corte e aqui e nao no CSS de proposito. Mandar o mercado e desfocar na
+    tela nao esconde nada: o texto continua no JSON e aparece no DevTools. Se
+    o campo e a recompensa por criar conta, ele nao pode sair daqui antes.
+    """
+    user = get_current_user_optional(request)
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -578,9 +587,11 @@ def public_free_pick_today():
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                    COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
-                   pf.odd, pf.result
+                   pf.odd, pf.result, pf.market, pf.line,
+                   fx.match_datetime, l.name AS league_name
             FROM picks_free pf
             LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
+            LEFT JOIN leagues  l  ON l.league_id = fx.league_id
             WHERE pf.match_date = CURRENT_DATE
             ORDER BY pf.created_at DESC
             LIMIT 1
@@ -591,6 +602,16 @@ def public_free_pick_today():
         d = dict(row)
         if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
             d["match_date"] = d["match_date"].isoformat()
+        if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
+            d["match_datetime"] = d["match_datetime"].isoformat()
+
+        if user:
+            d["locked"] = False
+        else:
+            # Anonimo: o mercado nem entra na resposta.
+            d.pop("market", None)
+            d.pop("line", None)
+            d["locked"] = True
         return d
     finally:
         cur.close()

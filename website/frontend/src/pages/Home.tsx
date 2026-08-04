@@ -15,7 +15,7 @@ import { winRate as calcWinRate } from '../utils/format'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
-import DashboardMockup from '../home/DashboardMockup'
+import FreePickHero from '../home/FreePickHero'
 import StatsBand, { type PublicSummary } from '../home/StatsBand'
 import HowItWorks from '../home/HowItWorks'
 import Products from '../home/Products'
@@ -503,7 +503,7 @@ export default function Home() {
             </div>
 
             <div className="lg:pl-4">
-              <DashboardMockup />
+              <FreePickHero />
             </div>
           </div>
 
