@@ -15,7 +15,7 @@ import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } f
 import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
-import { PickCardFooter, PickConfidence, PickStats, PickReasoning } from '../components/PickCardParts'
+import { PickCardFooter, PickExplainButton, PickConfidence, PickStats, PickReasoning } from '../components/PickCardParts'
 import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
@@ -551,11 +551,14 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       )}
 
       {/* Footer */}
+      {dica.reasoning && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
       <PickCardFooter
         onBet={!dica.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
         betState={following ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
-        onExplain={dica.reasoning ? () => setShowAnalysis(true) : undefined}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
       />
@@ -862,11 +865,14 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
       )}
 
       {/* Footer */}
+      {m.reasoning && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
       <PickCardFooter
         onBet={!m.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
         betState={following ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
-        onExplain={m.reasoning ? () => setShowAnalysis(true) : undefined}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
       />
@@ -1120,6 +1126,10 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
       )}
 
       {/* Footer */}
+      {pick.reasoning_1 && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
       <PickCardFooter
         onBet={!pick.result ? (e => {
           e.stopPropagation()
@@ -1128,7 +1138,6 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
         }) : undefined}
         betState={following ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={userBankroll != null}
-        onExplain={pick.reasoning_1 ? () => setShowAnalysis(true) : undefined}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
       />
@@ -1282,10 +1291,13 @@ function MercadoCard({ p, tipo, banca, onBet }: {
 
       <PickReasoning text={p.reasoning} />
 
+      {(p.reasoning || p.prob_real != null) && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
       <PickCardFooter
         onBet={!p.result && onBet ? () => onBet(p, tipo) : undefined}
         hasBanca={!!banca}
-        onExplain={p.reasoning || p.prob_real != null ? () => setShowAnalysis(true) : undefined}
       />
     </div>
 
