@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Spinner } from '../components/ui'
 import { AnimatePresence, motion } from 'framer-motion'
-import Navbar from '../components/Navbar'
-import BackButton from '../components/BackButton'
+import PageShell from '../components/PageShell'
 import api from '../services/api'
 import { fmtBRL } from '../utils/format'
 import NumberTicker from '../components/ui/NumberTicker'
@@ -51,28 +51,25 @@ export default function BancaSaque() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <BackButton to="/banca" />
-          <div>
-            <h1 className="text-base font-black text-ink-1">Sacar da banca</h1>
-            <p className="text-ink-3 text-xs">O valor sai da sua banca e fica registrado no histórico</p>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-2xl mx-auto px-4 py-6">
+    <PageShell
+      title="Sacar da banca"
+      description="Registre um saque da sua banca. O valor sai do saldo e fica no histórico."
+      noindex
+      width="narrow"
+      bar={{
+        back: '/banca',
+        title: 'Sacar da banca',
+        sub: 'O valor sai da sua banca e fica registrado no histórico',
+      }}
+    >
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : (
           <div className="space-y-6">
             <div className="card p-5">
-              <p className="text-xs text-ink-3 uppercase font-semibold mb-1">Banca atual</p>
+              <p className="text-xs text-ink-3 font-semibold mb-1">Banca atual</p>
               <NumberTicker value={current} formatter={fmtBRL} className="font-mono text-3xl font-black text-ink-1" />
             </div>
 
@@ -114,7 +111,7 @@ export default function BancaSaque() {
 
             <div className="card overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
-                <span className="text-xs font-bold text-ink-3 uppercase">Histórico de saques</span>
+                <span className="text-xs font-bold text-ink-3">Histórico de saques</span>
               </div>
               {withdrawals.length === 0 ? (
                 <p className="text-ink-4 text-sm px-5 py-8 text-center">Nenhum saque ainda</p>
@@ -138,7 +135,6 @@ export default function BancaSaque() {
             </div>
           </div>
         )}
-      </main>
-    </div>
+    </PageShell>
   )
 }

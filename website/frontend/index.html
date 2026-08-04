@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+    <!--
+      Fontes. Estavam num @import dentro do index.css, o que serializa o
+      download: o navegador só descobria o Google Fonts depois de baixar e
+      parsear o CSS inteiro. Aqui elas entram já no HTML, com preconnect,
+      e o handshake acontece em paralelo com o resto.
+    -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800&family=Inter:wght@400;500;600;700&display=swap"
+    />
+
     <!-- Primary Meta -->
     <title>Pick IA · Picks de Futebol com Inteligência Artificial</title>
     <meta name="description" content="Picks de futebol gerados por IA com análise estatística real. Cobertura diária de Brasileirão, Champions League, Premier League e La Liga. VIP, múltiplas, alavancagem e picks gratuitos. Teste grátis por 2 dias." />
@@ -58,41 +71,16 @@
     }
     </script>
 
-    <!-- JSON-LD: SoftwareApplication -->
-    <script type="application/ld+json">
-    {
-      "@context": "https://schema.org",
-      "@type": "SoftwareApplication",
-      "name": "Pick IA",
-      "applicationCategory": "SportsApplication",
-      "operatingSystem": "Web, iOS, Android",
-      "url": "https://pickia.com.br",
-      "description": "Plataforma SaaS de picks esportivos gerados por inteligência artificial. Análise estatística de futebol, gestão de banca com Kelly Criterion e picks diários para Brasileirão, Champions League, Premier League e La Liga.",
-      "offers": [
-        {
-          "@type": "Offer",
-          "name": "Plano Free",
-          "price": "0",
-          "priceCurrency": "BRL"
-        },
-        {
-          "@type": "Offer",
-          "name": "Plano VIP",
-          "price": "49.90",
-          "priceCurrency": "BRL",
-          "billingIncrement": "P1M"
-        }
-      ],
-      "featureList": [
-        "Picks VIP diários gerados por IA",
-        "Análise estatística de futebol",
-        "Gestão de banca com Kelly Criterion",
-        "Picks múltiplos e alavancagem",
-        "Acompanhamento ao vivo",
-        "Agente IA especialista em futebol"
-      ]
-    }
-    </script>
+    <!--
+      O SoftwareApplication com as ofertas NÃO fica aqui.
+
+      Estava fixo neste arquivo e ficou anunciando R$ 49,90 pro Google enquanto
+      a cobrança real era R$ 39,90, porque ninguém lembra de editar HTML estático
+      ao reajustar preço. Agora ele é montado em pages/Home.tsx a partir de
+      GET /api/payments/plans, que é a mesma tabela que o MercadoPago cobra.
+
+      Não recolocar preço aqui.
+    -->
 
     <!-- Google Analytics -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS"></script>

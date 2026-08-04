@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import { Bell, BellOff, Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
+import { Spinner } from '../components/ui'
+import AlertsAndAchievements from '../components/AlertsAndAchievements'
 import Avatar from '../components/Avatar'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { maskPhone } from '../utils/format'
 import { getPasswordStrength } from '../utils/passwordStrength'
-import BackButton from '../components/BackButton'
 
 interface ReferralData {
   referral_code: string
@@ -267,19 +268,14 @@ export default function Profile() {
   const currentAvatar = avatarPreview ?? user?.avatar_url ?? null
 
   return (
-    <div className="min-h-screen bg-surface-0 relative">
-      <Navbar />
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <BackButton />
-          <div>
-            <h1 className="text-base font-black text-ink-1">Meu Perfil</h1>
-            <p className="text-ink-3 text-xs mt-0.5">Gerencie suas informações e preferências</p>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+    <PageShell
+      title="Meu Perfil"
+      description="Gerencie suas informações, senha, avatar e preferências de conta."
+      noindex
+      width="narrow"
+      bar={{ back: true, title: 'Meu Perfil', sub: 'Gerencie suas informações e preferências' }}
+      mainClassName="space-y-6"
+    >
         {/* Info atual + upload de avatar */}
         <div className="card p-5 flex items-center gap-4">
           <div className="relative group cursor-pointer shrink-0" onClick={handleAvatarClick}>
@@ -288,7 +284,7 @@ export default function Profile() {
             )}
             <div className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
               {avatarUploading
-                ? <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                ? <Spinner size="sm" className="border-white border-t-transparent" />
                 : <svg className="w-5 h-5 text-ink-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
                     <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -322,7 +318,7 @@ export default function Profile() {
 
         {/* Assinatura */}
         <div className="card p-5">
-          <p className="text-xs text-ink-3 font-semibold uppercase mb-4">Assinatura</p>
+          <p className="text-xs text-ink-3 font-semibold mb-4">Assinatura</p>
           <div className="flex items-center justify-between gap-4">
             <div className="space-y-1.5">
               <div className="flex items-center gap-2">
@@ -357,7 +353,7 @@ export default function Profile() {
 
         {/* Formulário */}
         <form onSubmit={handleSubmit} className="card p-6 space-y-5">
-          <p className="text-xs text-ink-3 font-semibold uppercase">Informações pessoais</p>
+          <p className="text-xs text-ink-3 font-semibold">Informações pessoais</p>
           <div>
             <label className="text-xs text-ink-3 block mb-1.5">Nome completo</label>
             <input className="input w-full" value={name} onChange={e => setName(e.target.value)} required />
@@ -394,7 +390,7 @@ export default function Profile() {
           <hr className="border-line" />
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs text-ink-3 font-semibold uppercase">Senha</p>
+              <p className="text-xs text-ink-3 font-semibold">Senha</p>
               <p className="text-xs text-ink-4 mt-0.5">
                 {passwordChanged ? <span className="text-green-400">Senha alterada!</span> : 'Troque sua senha atual'}
               </p>
@@ -549,7 +545,7 @@ export default function Profile() {
         {/* Sessão */}
         <div className="card p-6 space-y-4">
           <div>
-            <h2 className="text-sm font-black text-ink-1">Sessão</h2>
+            <h2 className="text-sm font-bold text-ink-1">Sessão</h2>
             <p className="text-ink-3 text-xs mt-0.5">Você só pode estar logado em 1 dispositivo por vez</p>
           </div>
           {meData?.last_login_device && (
@@ -578,7 +574,7 @@ export default function Profile() {
         <div className="card p-6 space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-sm font-black text-ink-1">E-mail</h2>
+              <h2 className="text-sm font-bold text-ink-1">E-mail</h2>
               <p className="text-ink-3 text-xs mt-0.5">Verificação e alteração</p>
             </div>
             {user?.email_verified
@@ -650,7 +646,7 @@ export default function Profile() {
         {/* Notificacoes push */}
         {push.supported && push.vapidKey !== '' && (
           <div className="card p-5">
-            <p className="text-xs text-ink-3 uppercase font-semibold mb-3">Notificações</p>
+            <p className="text-xs text-ink-3 font-semibold mb-3">Notificações</p>
             <div className="flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-surface-2'}`}>
@@ -691,7 +687,7 @@ export default function Profile() {
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">
           <div>
-            <h2 className="text-sm font-black text-ink-1">Programa de Indicações</h2>
+            <h2 className="text-sm font-bold text-ink-1">Programa de Indicações</h2>
             <p className="text-ink-3 text-xs mt-0.5">Indique amigos e ganhe 1 dia VIP por cada conversão</p>
           </div>
 
@@ -747,7 +743,10 @@ export default function Profile() {
             </div>
           )}
         </div>
-      </main>
-    </div>
+
+        {/* Alertas e conquistas. Vêm de /api/personal, tela própria dentro do
+            perfil pra não criar mais uma rota pra dois blocos curtos. */}
+        <AlertsAndAchievements />
+    </PageShell>
   )
 }

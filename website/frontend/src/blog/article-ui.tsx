@@ -16,7 +16,7 @@ export function P({ children }: { children: ReactNode }) {
 export function H2({ children }: { children: string }) {
   const id = slugify(children)
   return (
-    <h2 id={id} className="text-ink-1 text-xl sm:text-2xl font-black mt-10 mb-4 scroll-mt-24">
+    <h2 id={id} className="text-ink-1 text-xl sm:text-2xl font-bold mt-10 mb-4 scroll-mt-24">
       {children}
     </h2>
   )
@@ -61,7 +61,7 @@ export function Quote({ children }: { children: ReactNode }) {
 
 export function Callout({ children }: { children: ReactNode }) {
   return (
-    <div className="bg-green-500/10 border border-green-500/20 rounded-2xl p-5 my-6">
+    <div className="bg-green-500/10 border border-green-500/20 rounded-lg p-5 my-6">
       <p className="text-ink-2 text-sm leading-relaxed">{children}</p>
     </div>
   )

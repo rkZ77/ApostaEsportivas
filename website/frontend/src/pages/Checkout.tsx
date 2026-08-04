@@ -2,27 +2,14 @@ import { useState, useEffect } from 'react'
 import { motion } from 'framer-motion'
 import { CheckCircle, XCircle, Check, Clock } from 'lucide-react'
 import { useNavigate, useLocation, Link } from 'react-router-dom'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
 import { useAuth } from '../context/AuthContext'
+import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import api from '../services/api'
-import BackButton from '../components/BackButton'
 
-interface Plan {
-  id: string
-  label: string
-  price: number
-  period: string
-  pricePerMonth: number
-  savings?: string
-  popular?: boolean
-}
-
-const PLANS: Plan[] = [
-  { id: 'mensal',     label: 'Mensal',     price: 39.90,  period: '1 mês',    pricePerMonth: 39.90 },
-  { id: 'trimestral', label: 'Trimestral', price: 99.90,  period: '3 meses',  pricePerMonth: 33.30, savings: 'Economize 17%', popular: true },
-  { id: 'semestral',  label: 'Semestral',  price: 199.90, period: '6 meses',  pricePerMonth: 33.32, savings: 'Economize 17%' },
-  { id: 'anual',      label: 'Anual',      price: 359.90, period: '12 meses', pricePerMonth: 29.99, savings: 'Economize 25%' },
-]
+/* O plano em destaque é escolha de venda, não vem do backend: o resto (preço,
+   período, desconto) vem de usePlans. */
+const POPULAR_PLAN = 'trimestral'
 
 function SuccessPage() {
   const navigate = useNavigate()
@@ -66,7 +53,7 @@ function SuccessPage() {
         >
           <CheckCircle className="w-10 h-10 text-green-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-ink-1">Pagamento aprovado!</h1>
+        <h1 className="text-2xl font-bold text-ink-1">Pagamento aprovado!</h1>
         <p className="text-ink-2">Seu plano VIP foi ativado. Bem-vindo!</p>
         {!ready
           ? <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso VIP…</p>
@@ -90,7 +77,7 @@ function FailurePage() {
         >
           <XCircle className="w-10 h-10 text-red-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-ink-1">Pagamento recusado</h1>
+        <h1 className="text-2xl font-bold text-ink-1">Pagamento recusado</h1>
         <p className="text-ink-2">Houve um problema com o pagamento. Tente novamente.</p>
         <button onClick={() => navigate('/checkout')} className="btn-primary px-8 py-3">
           Tentar novamente
@@ -128,7 +115,7 @@ function PendingPage() {
         >
           <Clock className="w-9 h-9 text-yellow-400" />
         </motion.div>
-        <h1 className="text-2xl font-black text-ink-1">Pagamento em análise</h1>
+        <h1 className="text-2xl font-bold text-ink-1">Pagamento em análise</h1>
         <p className="text-ink-2">Seu pagamento está sendo processado.</p>
         <div className="bg-surface-1 border border-line rounded-md px-4 py-3 text-left space-y-1 max-w-xs mx-auto">
           <p className="text-ink-2 text-xs font-semibold">Previsão de ativação:</p>
@@ -158,7 +145,8 @@ export default function Checkout() {
   const { user } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const [selectedPlan, setSelectedPlan] = useState<string>('trimestral')
+  const { plans } = usePlans()
+  const [selectedPlan, setSelectedPlan] = useState<string>(POPULAR_PLAN)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
@@ -180,24 +168,17 @@ export default function Checkout() {
     }
   }
 
-  const selected = PLANS.find(p => p.id === selectedPlan)!
+  const selected = plans.find(p => p.id === selectedPlan) ?? plans[0]
 
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
-      {/* Header */}
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-2xl mx-auto px-4 py-4 flex items-center gap-3">
-          <BackButton />
-          <div>
-            <h1 className="text-base font-black text-ink-1">Assinar VIP</h1>
-            <p className="text-ink-3 text-xs mt-0.5">Acesso completo a todos os picks</p>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-2xl mx-auto px-4 py-8 space-y-6">
+    <PageShell
+      title="Assinar VIP"
+      description="Acesso completo a todos os picks da IA, múltiplas, alavancagem e gestão de banca."
+      noindex
+      width="narrow"
+      bar={{ back: true, title: 'Assinar VIP', sub: 'Acesso completo a todos os picks' }}
+      mainClassName="space-y-6"
+    >
         {/* Benefícios */}
         <div className="card p-5">
           <h2 className="text-ink-1 font-bold mb-4">O que você ganha no VIP</h2>
@@ -222,7 +203,7 @@ export default function Checkout() {
         <div>
           <h2 className="text-ink-1 font-bold mb-3">Escolha o período</h2>
           <div className="grid grid-cols-2 gap-3">
-            {PLANS.map(plan => (
+            {plans.map(plan => (
               <motion.button
                 key={plan.id}
                 whileTap={{ scale: 0.97 }}
@@ -234,25 +215,25 @@ export default function Checkout() {
                     ? 'border-green-500 bg-green-500/5'
                     : 'border-line bg-surface-1 hover:border-line-strong'}`}
               >
-                {plan.popular && (
+                {plan.id === POPULAR_PLAN && (
                   <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-ink-1 px-2 py-0.5 rounded-sm font-semibold">
                     Popular
                   </span>
                 )}
-                {plan.savings && (
+                {plan.save_pct > 0 && (
                   <span className="absolute -top-2.5 right-3 font-mono text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-sm font-semibold">
-                    {plan.savings}
+                    Economize {plan.save_pct}%
                   </span>
                 )}
                 <div className="text-ink-1 font-bold text-sm">{plan.label}</div>
                 <div className="text-ink-3 text-xs mt-0.5">{plan.period}</div>
                 <div className="mt-2">
-                  <span className="font-mono text-ink-1 font-black text-xl">
-                    R$ {plan.price.toFixed(2).replace('.', ',')}
+                  <span className="font-mono text-ink-1 font-bold text-xl">
+                    {fmtPlanPrice(plan.price)}
                   </span>
                 </div>
                 <div className="font-mono text-ink-3 text-xs mt-0.5">
-                  R$ {plan.pricePerMonth.toFixed(2).replace('.', ',')}/mês
+                  {fmtPlanPrice(plan.price_per_month)}/mês
                 </div>
               </motion.button>
             ))}
@@ -264,14 +245,14 @@ export default function Checkout() {
           <h2 className="text-ink-1 font-bold">Resumo do pedido</h2>
           <div className="flex justify-between text-sm">
             <span className="text-ink-2">Plano Picks: {selected.label}</span>
-            <span className="text-ink-1 font-semibold">
-              R$ {selected.price.toFixed(2).replace('.', ',')}
+            <span className="font-mono text-ink-1 font-semibold">
+              {fmtPlanPrice(selected.price)}
             </span>
           </div>
           <div className="flex justify-between text-sm pt-2 border-t border-line">
             <span className="text-ink-1 font-bold">Total</span>
-            <span className="text-green-400 font-black text-lg">
-              R$ {selected.price.toFixed(2).replace('.', ',')}
+            <span className="font-mono text-accent font-bold text-lg">
+              {fmtPlanPrice(selected.price)}
             </span>
           </div>
           <p className="text-ink-4 text-xs">
@@ -281,7 +262,7 @@ export default function Checkout() {
 
         {/* Aviso sobre tempo de ativação por método */}
         <div className="bg-surface-1 border border-line rounded-md p-4 space-y-2">
-          <p className="text-ink-2 text-xs font-bold uppercase mb-1">Tempo de ativação por método</p>
+          <p className="text-ink-2 text-xs font-bold mb-1">Tempo de ativação por método</p>
           <div className="flex items-center gap-2 text-xs">
             <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
             <span className="text-ink-2 font-semibold">Cartão de crédito:</span>
@@ -325,7 +306,6 @@ export default function Checkout() {
           {' '}e a{' '}
           <Link to="/privacidade" className="underline hover:text-ink-2 transition-colors">política de privacidade</Link>.
         </p>
-      </main>
-    </div>
+    </PageShell>
   )
 }

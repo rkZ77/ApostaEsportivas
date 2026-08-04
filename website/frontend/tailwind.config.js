@@ -46,10 +46,27 @@ export default {
           600: '#00AA00',
         },
       },
+      /*
+       * Nunito em todo o site. `display` continua existindo como nome porque
+       * ~28 lugares usam font-display, mas aponta pra mesma familia do corpo:
+       * o que separa titulo de texto e peso e tamanho, nao familia.
+       *
+       * A pilha de fallback e a pedida: system fonts antes de cair no
+       * sans-serif generico, pra que a troca de fonte nao mude o layout
+       * enquanto a webfont carrega.
+       *
+       * A familia `mono` NAO e monoespaçada: e Inter. O nome ficou porque ~150
+       * lugares usam font-mono, e o papel continua o mesmo (numero, evidencia).
+       *
+       * Inter resolve o que a JetBrains Mono resolvia sem parecer terminal: ela
+       * tem algarismo TABULAR de verdade, e a regra em index.css liga tnum em
+       * tudo que usa font-mono. Coluna de odd e de percentual continua alinhada
+       * mesmo com os digitos mudando.
+       */
       fontFamily: {
-        display: ['"Space Grotesk"', '"Inter"', 'sans-serif'],
-        sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
-        mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
+        display: ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        sans:    ['Nunito', '-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', '"Open Sans"', '"Helvetica Neue"', 'sans-serif'],
+        mono:    ['Inter', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
       },
       // escala de raio enxuta: 3 degraus + pilula. xl/2xl foram dobrados em lg.
       borderRadius: {

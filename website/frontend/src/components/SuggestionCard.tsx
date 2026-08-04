@@ -6,11 +6,15 @@ import api from '../services/api'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
-import { getResultStyle } from '../utils/resultStyle'
+import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import InfoTip from './InfoTip'
+import AnalysisModal from './AnalysisModal'
+import { Badge, PickTypeBadge, ResultBadge } from './ui'
+import FavoriteButton from './FavoriteButton'
+import { PickCardFooter, PickExplainButton } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
-import { Share2, Check as CheckIcon, Loader2 } from 'lucide-react'
+import { Clock } from 'lucide-react'
 
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -78,6 +82,7 @@ export default function SuggestionCard({
   const [followed, setFollowed]   = useState(s.is_followed ?? false)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [showAnalysis, setShowAnalysis] = useState(false)
   const [modalOdd, setModalOdd]   = useState(Number(s.odd))
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -170,11 +175,19 @@ export default function SuggestionCard({
     }
   }
 
-  const rs = getResultStyle(s.result)
-  const resultStyle = rs ? { bg: rs.bg, border: rs.border, text: rs.text, label: `${rs.label} ${rs.emoji}` } : null
-
   const fato   = shortReasoning(s.reasoning)
   const isCopa = s.league_id === 1
+  const pickType = s.pick_type ?? 'vip'
+
+  // Horário do jogo. O card mostrava só a data em outro lugar, e "hoje 16:00"
+  // é justamente o que decide se ainda dá tempo de entrar na aposta.
+  const kickoff = s.match_date
+    ? new Date(s.match_date).toLocaleTimeString('pt-BR', {
+        hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
+      })
+    : null
+
+  const probPct = s.probability != null ? Number(s.probability) * 100 : null
 
   return (
   <>
@@ -183,34 +196,37 @@ export default function SuggestionCard({
       whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
       whileTap={{ scale: 0.985 }}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`relative overflow-hidden bg-surface-0 border border-line rounded-lg cursor-pointer transition-colors duration-200 group ${isCopa ? 'hover:border-yellow-500/30' : 'hover:border-green-500/30'}`}
+      /* Casca comum dos 6 tipos de card (ver .pick-card em index.css). A cor da
+         borda vem de PICK_TYPE_BORDER, que é a mesma convenção do badge. */
+      className={`pick-card group cursor-pointer ${isCopa ? 'border-yellow-500/20 hover:border-yellow-500/40' : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
     >
-      {/* Accent top bar */}
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
-
       {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick VIP</span>
-          <span className="badge-vip">VIP</span>
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type={pickType} />
           {(s.league_id || s.league_name) && (
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={s.league_id} name={s.league_name} />
               {s.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{s.league_name}</span>}
             </div>
           )}
+          {kickoff && (
+            <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
+              <Clock className="w-3 h-3" />
+              {kickoff}
+            </span>
+          )}
         </div>
-        {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
-          </span>
+        {s.home_team_id != null && (
+          <FavoriteButton kind="team" refId={s.home_team_id} label={s.home_team_name} size="sm" />
+        )}
+        {s.result ? (
+          <ResultBadge result={s.result} />
         ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
-          </span>
+          <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
         ) : (
-          <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
+          <Badge tone="neutral">Pendente</Badge>
         )}
       </div>
 
@@ -318,15 +334,23 @@ export default function SuggestionCard({
         </div>
       </div>
 
-      {/* Confiança */}
+      {/* Confiança e probabilidade estimada, lado a lado: a barra sozinha não
+          dizia contra o quê aquela confiança estava sendo medida. */}
       <div className="px-5 pb-3">
-        <div className="flex justify-between text-[10px] mb-1">
+        <div className="flex justify-between items-baseline text-[10px] mb-1">
           <span className="text-ink-4">Confiança</span>
-          <span className={`font-mono ${pct >= 75 ? 'text-green-400 font-bold' : 'text-ink-3'}`}>{pct}%</span>
+          <span className="flex items-center gap-2">
+            {probPct != null && (
+              <span className="text-ink-4">
+                prob. <span className="font-mono text-ink-3">{probPct.toFixed(0)}%</span>
+              </span>
+            )}
+            <span className={`font-mono ${pct >= 75 ? 'text-accent font-bold' : 'text-ink-3'}`}>{pct}%</span>
+          </span>
         </div>
         <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
           <div
-            className={`h-1 rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'}`}
+            className={`h-1 rounded-full ${pct >= 75 ? 'bg-accent' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'}`}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -335,51 +359,42 @@ export default function SuggestionCard({
       {/* Reasoning snippet */}
       {fato && (
         <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black uppercase">Fato · </span>
+          <span className="label-micro">Fato · </span>
           <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{fato}</span>
         </div>
       )}
 
+
       {/* Footer */}
-      <div className="flex items-center justify-between px-5 py-3 border-t border-line/60">
-        {!s.result ? (
-          <motion.button
-            whileTap={{ scale: 0.95 }}
-            onClick={banca ? handleFollow : () => navigate('/banca')}
-            disabled={following || followed}
-            className={`text-xs font-bold px-3 py-1.5 rounded-lg border transition-colors ${
-              followed
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 cursor-default'
-                : banca
-                ? 'border-green-500/30 text-green-400 bg-green-500/10 hover:bg-green-500/20'
-                : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5'
-            }`}
-          >
-            {following ? '...' : followed ? 'Registrado' : banca ? 'Apostar' : 'Configurar banca'}
-          </motion.button>
-        ) : <span />}
-        <div className="flex items-center gap-3 ml-auto">
-          <button
-            onClick={handleShare}
-            disabled={sharing}
-            className="flex items-center gap-1.5 text-xs font-bold text-ink-2 hover:text-green-400 hover:bg-green-500/5 border border-line-strong hover:border-green-500/40 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
-            title="Compartilhar pick"
-          >
-            {sharing
-              ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /><span>Gerando...</span></>
-              : shared
-              ? <><CheckIcon className="w-3.5 h-3.5 text-green-400" /><span className="text-green-400">Compartilhado</span></>
-              : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
-            }
-          </button>
-          {onClick && (
-            <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">
-              Ver detalhes
-            </span>
-          )}
-        </div>
-      </div>
+      {(s.reasoning || s.ev != null || probPct != null) && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
+      <PickCardFooter
+        onBet={!s.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
+        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        hasBanca={!!banca}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+      />
     </motion.div>
+
+    <AnimatePresence>
+    {showAnalysis && (
+      <AnalysisModal
+        onClose={() => setShowAnalysis(false)}
+        data={{
+          market: translateMarket(s.market),
+          line: translateLine(s.line),
+          odd: Number(s.odd),
+          confidence: s.confidence,
+          probability: s.probability,
+          ev: s.ev,
+          reasoning: s.reasoning,
+        }}
+      />
+    )}
+    </AnimatePresence>
 
     <AnimatePresence>
     {showModal && (
@@ -399,7 +414,7 @@ export default function SuggestionCard({
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-xl shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-lg shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>

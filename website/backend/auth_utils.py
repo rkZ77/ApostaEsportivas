@@ -210,3 +210,44 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user.get("plan") != "admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Acesso admin necessário")
     return user
+
+
+def get_current_user_optional(request: Request) -> dict | None:
+    """Usuario logado, ou None se nao houver sessao valida.
+
+    Existe pra endpoint PUBLICO que mostra mais coisa pra quem tem conta, sem
+    exigir login pra funcionar. O caso que motivou: o teaser da Dica do Dia na
+    home, que esconde o mercado de visitante anonimo.
+
+    Ponto importante: o filtro tem que ser AQUI, no servidor. Mandar o dado e
+    borrar no CSS nao esconde nada -- basta abrir o DevTools. Se o campo nao
+    pode ser visto, ele nao pode sair daqui.
+    """
+    try:
+        token = request.cookies.get(COOKIE_NAME)
+        if not token:
+            auth = request.headers.get("authorization", "")
+            if auth.lower().startswith("bearer "):
+                token = auth[7:]
+        if not token:
+            return None
+
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            return None
+
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT id, active, plan FROM users WHERE id = %s", (payload.get("sub"),))
+            row = cur.fetchone()
+        finally:
+            cur.close(); conn.close()
+
+        if not row or not row["active"]:
+            return None
+        return dict(row)
+    except Exception:
+        # Token expirado, malformado ou banco fora: pro publico anonimo isso
+        # nao e erro, e so "sem sessao".
+        return None

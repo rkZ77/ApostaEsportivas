@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { CalendarClock, BrainCircuit } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -112,13 +113,13 @@ export default function PicksPendingCard() {
         {leagueNames && <p className="text-ink-4 text-xs mb-5">{leagueNames}</p>}
         {nextGames === null ? (
           <div className="flex justify-center py-3">
-            <div className="w-5 h-5 border-2 border-line-strong border-t-ink-3 rounded-full animate-spin" />
+            <Spinner size="sm" tone="ink" />
           </div>
         ) : groups.length === 0 ? (
           <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>
         ) : (
           <div className="text-left space-y-4">
-            <p className="text-[10px] text-ink-4 uppercase font-semibold">Próximos jogos</p>
+            <p className="text-[10px] text-ink-4 font-semibold">Próximos jogos</p>
             {groups.map(group => (
               <div key={group.dateLabel}>
                 <p className="text-[11px] text-ink-3 font-semibold capitalize mb-1.5">{group.dateLabel}</p>
@@ -157,7 +158,7 @@ export default function PicksPendingCard() {
       <p className="text-ink-3 text-sm">Assim que forem publicados você recebe um aviso.</p>
       {todayGames.length > 0 && (
         <div className="text-left mt-6">
-          <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2">
+          <p className="text-[10px] text-ink-4 font-semibold mb-2">
             {todayGames.length} jogo{todayGames.length > 1 ? 's' : ''} sendo analisado{todayGames.length > 1 ? 's' : ''} hoje
           </p>
           <div className="space-y-1.5">

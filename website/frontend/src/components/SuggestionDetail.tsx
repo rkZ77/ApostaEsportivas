@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
-import { getResultStyle } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
@@ -196,7 +197,10 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-ink-3 font-semibold">
-                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
+                {/* PICK_TYPE_LABEL cobre os seis pipelines. A cadeia de
+                    ternarios que estava aqui terminava em 'VIP', entao um
+                    pick de faltas abria rotulado como VIP. */}
+                {pickType === 'free' ? 'Dica do Dia' : PICK_TYPE_LABEL[pickType] ?? 'VIP'}
               </span>
               <button
                 onClick={onClose}
@@ -222,7 +226,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div className="text-center shrink-0">
                   {resultStyle ? (
                     <span className={`text-xs font-black px-2 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.text} ${resultStyle.border}`}>
-                      {resultStyle.label} {resultStyle.emoji}
+                      {resultStyle.label}
                     </span>
                   ) : (
                     <span className="text-ink-4 text-xs font-bold">VS</span>
@@ -245,7 +249,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               </div>
             ) : (
               <div className="h-10 flex items-center">
-                <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin mx-auto" />
+                <Spinner size="lg" className="mx-auto" />
               </div>
             )}
           </div>
@@ -280,7 +284,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             <button
               key={key}
               onClick={() => setTab(key)}
-              className={`tab flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold uppercase ${
+              className={`tab flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold ${
                 tab === key ? 'tab-active' : ''
               }`}
             >
@@ -293,7 +297,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
             <div className="flex items-center justify-center h-40">
-              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+              <Spinner size="lg" />
             </div>
           ) : locked ? (
             <div className="flex flex-col items-center text-center py-10 gap-3">
@@ -317,7 +321,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Métricas principais */}
                   <div className="font-mono grid grid-cols-3 gap-2">
                     <div className="bg-surface-1 border border-line rounded-lg p-3 text-center">
-                      <div className="text-[10px] text-ink-3 uppercase mb-1">Confiança</div>
+                      <div className="text-[10px] text-ink-3 mb-1">Confiança</div>
                       <div className={`text-2xl font-black ${confidence >= 75 ? 'text-green-400' : confidence >= 60 ? 'text-yellow-400' : 'text-ink-2'}`}>
                         {confidence}%
                       </div>
@@ -325,12 +329,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     <div className="bg-surface-1 border border-line rounded-lg p-3 text-center">
                       {isAlav ? (
                         <>
-                          <div className="text-[10px] text-ink-3 uppercase mb-1">Tipo</div>
+                          <div className="text-[10px] text-ink-3 mb-1">Tipo</div>
                           <div className="text-2xl font-black text-ink-1 capitalize">{s?.tipo ?? 'N/D'}</div>
                         </>
                       ) : (
                         <>
-                          <div className="text-[10px] text-ink-3 uppercase mb-1">Stake</div>
+                          <div className="text-[10px] text-ink-3 mb-1">Stake</div>
                           {stakeUnits != null
                             ? <div className="text-2xl font-black text-ink-1">{stakeUnits}u</div>
                             : <div className="text-xs text-ink-3 mt-1">s/d</div>
@@ -339,7 +343,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                       )}
                     </div>
                     <div className="bg-surface-1 border border-line rounded-lg p-3 text-center">
-                      <div className="text-[10px] text-ink-3 uppercase mb-1">EV</div>
+                      <div className="text-[10px] text-ink-3 mb-1">EV</div>
                       <div className={`text-2xl font-black ${ev && Number(ev) > 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {ev ? `${Number(ev) > 0 ? '+' : ''}${ev}%` : ''}
                       </div>
@@ -365,7 +369,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     <div className={`rounded-lg p-4 border flex items-center justify-between ${resultStyle.bg} ${resultStyle.border}`}>
                       <div>
                         <div className="text-xs text-ink-3 mb-0.5">Resultado</div>
-                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label} {resultStyle.emoji}</div>
+                        <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label}</div>
                       </div>
                       <div className={`text-2xl font-black ${s.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {s.profit >= 0 ? '+' : ''}{Number(s.profit).toFixed(2)}u
@@ -375,7 +379,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
 
                   {/* Raciocínio da IA */}
                   <div>
-                    <p className="text-[10px] text-ink-3 uppercase mb-2">Análise da IA</p>
+                    <p className="text-[10px] text-ink-3 mb-2">Análise da IA</p>
                     <div className="bg-surface-1 rounded-lg p-4 border border-line">
                       <p className="text-sm text-ink-2 leading-relaxed whitespace-pre-wrap">
                         {s.reasoning || 'Sem análise registrada.'}
@@ -386,7 +390,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                   {/* Múltipla / Alavancagem · legs */}
                   {(pickType === 'multipla' || pickType === 'alavancagem') && s.legs?.length > 0 && (
                     <div>
-                      <p className="text-[10px] text-ink-3 uppercase mb-2">Jogos</p>
+                      <p className="text-[10px] text-ink-3 mb-2">Jogos</p>
                       <div className="space-y-2">
                         {s.legs.map((g: any, i: number) => {
                           const homeTeam = g.home_team || g.home || ''
@@ -430,7 +434,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     return (
                       <div key={ctx}>
                         <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] text-ink-3 uppercase font-semibold">
+                          <p className="text-[10px] text-ink-3 font-semibold">
                             {ctx === 'HOME' ? 'Contexto Casa' : 'Contexto Fora'}
                           </p>
                           <span className="text-[10px] text-ink-4">{hStats?.games_count ?? 0}j / {aStats?.games_count ?? 0}j</span>
@@ -519,18 +523,18 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div>
                   {standingsLoading ? (
                     <div className="flex items-center justify-center h-40">
-                      <div className="w-7 h-7 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+                      <Spinner size="lg" />
                     </div>
                   ) : !standings || standings.groups.length === 0 ? (
                     <p className="text-ink-3 text-center py-10 text-sm">Classificação não disponível.</p>
                   ) : standings.groups.map((g: any, gi: number) => (
                     <div key={gi} className={gi > 0 ? 'mt-6' : ''}>
                       {standings.groups.length > 1 && (
-                        <p className="text-[10px] text-ink-3 uppercase mb-2 font-semibold">{g.group}</p>
+                        <p className="text-[10px] text-ink-3 mb-2 font-semibold">{g.group}</p>
                       )}
                       <div className="bg-surface-1 rounded-lg border border-line overflow-hidden">
                         {/* Header */}
-                        <div className="grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-line text-[10px] text-ink-4 font-semibold uppercase">
+                        <div className="grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-line text-[10px] text-ink-4 font-semibold">
                           <span>#</span>
                           <span>Time</span>
                           <span className="text-center">Pts</span>
@@ -585,7 +589,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 <div>
                   {caminhoLoading ? (
                     <div className="flex items-center justify-center h-40">
-                      <div className="w-7 h-7 border-2 border-line-strong border-t-orange-500 rounded-full animate-spin" />
+                      <Spinner size="lg" tone="orange" />
                     </div>
                   ) : caminho.length === 0 ? (
                     <p className="text-ink-3 text-center py-10 text-sm">Nenhum histórico disponível.</p>
@@ -603,7 +607,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                               <span className="text-orange-400 text-xs font-black">R$</span>
                             </div>
                             <div className="flex-1">
-                              <div className="text-[10px] text-ink-3 uppercase">Banca atual da série</div>
+                              <div className="text-[10px] text-ink-3">Banca atual da série</div>
                               <div className="text-lg font-black text-orange-400">
                                 R${Number(currentBankroll ?? 0).toFixed(0)}
                               </div>

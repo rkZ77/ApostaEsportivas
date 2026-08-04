@@ -1,7 +1,8 @@
 import logging
 import traceback
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
+from auth_utils import get_current_user_optional
 from database import get_connection
 from data_br import HOJE_BR, data_br
 
@@ -244,7 +245,7 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
 @router.get("/results")
 def public_results(
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
-    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem"),
+    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
 ):
@@ -411,7 +412,7 @@ def _mask_first(full_name: str) -> str:
 @router.get("/pick/{pick_type}/{pick_id}")
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
-    valid = {"vip", "free", "multipla", "alavancagem"}
+    valid = {"vip", "free", "multipla", "alavancagem", "faltas", "goleiros"}
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
 
@@ -449,6 +450,16 @@ def public_pick(pick_type: str, pick_id: int):
             cur.execute("""
                 SELECT id, match_date, games, total_odd AS odd, result, profit
                 FROM picks_multiplas WHERE id = %s
+            """, (pick_id,))
+        elif pick_type in ("faltas", "goleiros"):
+            # Mesmo contrato dos outros: teaser sem market nem reasoning, que
+            # e o que o link compartilhado pode mostrar sem entregar a analise.
+            tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"
+            cur.execute(f"""
+                SELECT id, match_date,
+                       home_team AS home_team_name, away_team AS away_team_name,
+                       odd, result, profit
+                FROM {tabela} WHERE id = %s
             """, (pick_id,))
         else:  # alavancagem
             cur.execute("""
@@ -556,10 +567,18 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
 
 
 @router.get("/free-pick-today")
-def public_free_pick_today():
-    """Teaser da Dica do Dia (free) de hoje, sem autenticacao -- usado pra
-    dar um gostinho do produto pra quem ainda nao tem conta. Nao expoe
-    mercado/linha/reasoning, so o suficiente pra linkar pra /p/free/{id}."""
+def public_free_pick_today(request: Request):
+    """Dica do Dia (free) de hoje.
+
+    Publico, mas mostra MAIS pra quem tem conta: visitante anonimo ve o jogo e
+    a odd, e o mercado volta como `locked: true` sem o valor. Quem esta logado
+    recebe market e line de verdade.
+
+    O corte e aqui e nao no CSS de proposito. Mandar o mercado e desfocar na
+    tela nao esconde nada: o texto continua no JSON e aparece no DevTools. Se
+    o campo e a recompensa por criar conta, ele nao pode sair daqui antes.
+    """
+    user = get_current_user_optional(request)
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -568,9 +587,11 @@ def public_free_pick_today():
                    pf.home_team AS home_team_name, pf.away_team AS away_team_name,
                    COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
                    COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
-                   pf.odd, pf.result
+                   pf.odd, pf.result, pf.market, pf.line,
+                   fx.match_datetime, l.name AS league_name
             FROM picks_free pf
             LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
+            LEFT JOIN leagues  l  ON l.league_id = fx.league_id
             WHERE pf.match_date = CURRENT_DATE
             ORDER BY pf.created_at DESC
             LIMIT 1
@@ -581,6 +602,16 @@ def public_free_pick_today():
         d = dict(row)
         if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
             d["match_date"] = d["match_date"].isoformat()
+        if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
+            d["match_datetime"] = d["match_datetime"].isoformat()
+
+        if user:
+            d["locked"] = False
+        else:
+            # Anonimo: o mercado nem entra na resposta.
+            d.pop("market", None)
+            d.pop("line", None)
+            d["locked"] = True
         return d
     finally:
         cur.close()
@@ -656,3 +687,118 @@ def public_leaderboard():
     finally:
         cur.close()
         conn.close()
+
+
+# ─────────────────────── Movimento de mercado (CLV) ───────────────────────
+#
+# Isto é a versão viável de "mercado em movimento".
+#
+# Não existe série temporal de odds no banco: `odds_values` é upsert e só
+# guarda a odd corrente, e `closing_odds` grava UMA linha por (fixture,
+# market) perto do apito. Então não dá pra desenhar a odd variando ao longo
+# do dia sem antes criar um coletor que grave histórico.
+#
+# O que dá, e vale mais: Closing Line Value. Compara a odd em que o pick foi
+# publicado com a odd de fechamento do mesmo mercado. Se o mercado fechou
+# MAIS BAIXO que a nossa entrada, o preço andou a nosso favor: pegamos valor
+# antes do mercado corrigir. CLV positivo consistente é o indicador que
+# sobrevive à variância de resultado, porque não depende do jogo ter dado
+# certo, só de termos entrado num preço melhor que o de fechamento.
+
+# Tabelas de pick que têm odd + market_id e podem casar com closing_odds.
+#
+# Cada uma traz seu par de colunas de time porque o nome diverge entre elas:
+# picks_vip tem home_team_name/away_team_name e picks_free tem home_team/
+# away_team. Um UNION com nome fixo quebrava em uma das duas.
+_CLV_SOURCES = [
+    ("picks_vip",  "vip",  "home_team_name", "away_team_name"),
+    ("picks_free", "free", "home_team",      "away_team"),
+]
+
+
+@router.get("/market-movement")
+def public_market_movement(days: int = Query(30, ge=1, le=365)):
+    """CLV dos picks resolvidos na janela · sem autenticação."""
+    union_sql = " UNION ALL ".join(
+        f"""SELECT id, fixture_id, market_id, market_type, line, odd, result,
+                   match_date,
+                   {home_col} AS home_team_name,
+                   {away_col} AS away_team_name,
+                   '{label}' AS pick_type
+              FROM {table}
+             WHERE market_id IS NOT NULL AND odd IS NOT NULL"""
+        for table, label, home_col, away_col in _CLV_SOURCES
+    )
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            WITH picks AS ({union_sql}),
+            joined AS (
+                SELECT p.*, co.closing_odd,
+                       -- Movimento em pontos percentuais. Negativo = mercado
+                       -- fechou MAIS BAIXO que a nossa entrada, ou seja, o
+                       -- preco andou a nosso favor.
+                       --
+                       -- Sem sinal de porcentagem neste comentario de
+                       -- proposito: o psycopg2 varre a query inteira atras de
+                       -- placeholder e nao distingue comentario, entao um
+                       -- por-cento solto aqui quebrava o execute com
+                       -- "tuple index out of range" e o endpoint devolvia
+                       -- available:false pra sempre.
+                       ROUND(((co.closing_odd - p.odd) / p.odd * 100)::numeric, 2) AS move_pct
+                  FROM picks p
+                  JOIN closing_odds co
+                    ON co.fixture_id = p.fixture_id
+                   AND co.market_id  = p.market_id
+                 WHERE p.match_date >= CURRENT_DATE - %s::int
+                   AND co.closing_odd IS NOT NULL
+                   AND co.closing_odd > 0
+            )
+            SELECT * FROM joined ORDER BY match_date DESC, id DESC LIMIT 200
+        """, (days,))
+        rows = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logger.error("[MARKET_MOVEMENT] %s", e)
+        return {"available": False, "reason": "sem dados de fechamento", "summary": None, "recent": []}
+    finally:
+        cur.close()
+        conn.close()
+
+    if not rows:
+        # Sem linha nenhuma não é erro: o capture roda perto do jogo e um
+        # ambiente novo simplesmente ainda não tem fechamento gravado.
+        return {"available": False, "reason": "sem odds de fechamento na janela", "summary": None, "recent": []}
+
+    # CLV positivo = entramos numa odd MAIOR que a de fechamento (move_pct < 0)
+    beat = [r for r in rows if r["move_pct"] is not None and r["move_pct"] < 0]
+    moves = [float(r["move_pct"]) for r in rows if r["move_pct"] is not None]
+    avg_move = round(sum(moves) / len(moves), 2) if moves else 0.0
+
+    return {
+        "available": True,
+        "summary": {
+            "total": len(rows),
+            "beat_closing": len(beat),
+            "beat_pct": round(len(beat) / len(rows) * 100) if rows else 0,
+            # sinal invertido pra leitura: positivo = valor capturado
+            "avg_clv": round(-avg_move, 2),
+            "days": days,
+        },
+        "recent": [
+            {
+                "pick_type":  r["pick_type"],
+                "match_date": r["match_date"].isoformat() if hasattr(r["match_date"], "isoformat") else r["match_date"],
+                "home_team":  r["home_team_name"],
+                "away_team":  r["away_team_name"],
+                "market":     r["market_type"],
+                "line":       r["line"],
+                "odd":        float(r["odd"]),
+                "closing_odd": float(r["closing_odd"]),
+                "clv":        round(-float(r["move_pct"]), 2) if r["move_pct"] is not None else None,
+                "result":     r["result"],
+            }
+            for r in rows[:40]
+        ],
+    }

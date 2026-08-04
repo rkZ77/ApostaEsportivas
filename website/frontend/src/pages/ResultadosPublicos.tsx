@@ -8,8 +8,8 @@ import { winRate as calcWinRate } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
-import Navbar from '../components/Navbar'
-import BackButton from '../components/BackButton'
+import PageShell from '../components/PageShell'
+import { Button, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
 import DailyGreensChart from '../components/DailyGreensChart'
 
@@ -46,9 +46,18 @@ interface PublicData {
   recent_total: number
 }
 
-const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
-const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem']
-const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem' }
+/* Os seis pipelines. Faltas e defesas ficavam de fora daqui mesmo o backend
+   ja incluindo os dois no agregado: o filtro nao os oferecia e o badge da
+   lista caia no valor cru ("faltas" em vez de "Faltas"). */
+const SRC_LBL: Record<string, string> = {
+  vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
+  faltas: 'Faltas', goleiros: 'Defesas',
+}
+const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas', 'goleiros']
+const SOURCE_LABELS: Record<string, string> = {
+  all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+}
 
 export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)
@@ -160,27 +169,26 @@ export default function ResultadosPublicos() {
   })()
 
   return (
-    <>
-      <Helmet>
-        <title>Resultados · Pick IA</title>
-        <meta name="description" content="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir." />
-      </Helmet>
-
-      <div className="min-h-screen bg-surface-0 text-ink-1">
-        {/* Nav: logado usa a navbar do app (já tem tudo), visitante anônimo (ex: veio de link compartilhado) vê nav enxuta */}
-        {user ? <Navbar /> : (
-          <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
-            <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
-              <Link to="/" className="text-ink-1 font-black text-lg tracking-tight">
-                Pick<span className="text-green-400">IA</span>
-              </Link>
-              <Link to="/login" className="text-xs font-bold text-green-400 border border-green-500/30 px-3 py-1.5 rounded-lg hover:bg-green-500/10 transition-colors">
-                Entrar
-              </Link>
-            </div>
-          </nav>
-        )}
-
+    <PageShell
+      title="Resultados · Pick IA"
+      description="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir."
+      canonical="https://pickia.com.br/resultados"
+      nav={user ? true : (
+        <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
+          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+            <Link to="/" className="font-display text-ink-1 font-semibold text-lg tracking-tight">
+              Pick<span className="text-accent">IA</span>
+            </Link>
+            <Button to="/login" variant="ghost" size="sm">Entrar</Button>
+          </div>
+        </nav>
+      )}
+      bar={{
+        back: true,
+        title: 'Resultados da IA',
+        sub: 'Histórico auditável de todos os picks. Atualizado automaticamente.',
+      }}
+    >
         <AnimatePresence>
         {detailPick && (
           <SuggestionDetail
@@ -190,15 +198,6 @@ export default function ResultadosPublicos() {
           />
         )}
         </AnimatePresence>
-
-        <main className="max-w-5xl mx-auto px-4 py-10">
-          <div className="mb-4">
-            <BackButton />
-          </div>
-          <div className="mb-8 text-center">
-            <h1 className="text-3xl font-black mb-2">Resultados da IA</h1>
-            <p className="text-ink-2 text-sm">Histórico auditável de todos os picks. Atualizado automaticamente.</p>
-          </div>
 
           {/* Filtros */}
           <FilterPanel
@@ -233,7 +232,7 @@ export default function ResultadosPublicos() {
 
           {tab === 'resumo' && (loading ? (
             <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+              <Spinner size="lg" />
             </div>
           ) : error ? (
             <div className="text-center py-16 text-ink-3">
@@ -415,7 +414,7 @@ export default function ResultadosPublicos() {
 
           {tab === 'por_liga' && (loading ? (
             <div className="flex justify-center py-20">
-              <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+              <Spinner size="lg" />
             </div>
           ) : error ? (
             <div className="text-center py-16 text-ink-3">
@@ -426,7 +425,7 @@ export default function ResultadosPublicos() {
           ) : (
             <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
-                <span className="text-xs font-bold text-ink-2 uppercase">Resultados por liga</span>
+                <span className="text-xs font-bold text-ink-2">Resultados por liga</span>
               </div>
               <div className="divide-y divide-line/50">
                 {byLeague.map((lg) => {
@@ -480,7 +479,7 @@ export default function ResultadosPublicos() {
               <p className="text-ink-4 text-xs mb-4">{gamesTotal} picks</p>
               {gamesLoading ? (
                 <div className="flex justify-center py-16">
-                  <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+                  <Spinner size="lg" />
                 </div>
               ) : games.length === 0 ? (
                 <div className="text-center py-16 text-ink-3 text-sm">Nenhum pick encontrado.</div>
@@ -553,7 +552,7 @@ export default function ResultadosPublicos() {
           {tab === 'por_mes' && user && (
             monthLoad ? (
               <div className="flex justify-center py-16">
-                <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+                <Spinner size="lg" />
               </div>
             ) : monthly.length === 0 ? (
               <div className="text-center py-16 text-ink-3 text-sm">Nenhum resultado mensal encontrado.</div>
@@ -564,7 +563,7 @@ export default function ResultadosPublicos() {
                     <thead>
                       <tr className="border-b border-line">
                         {['Mês', 'Picks', 'Greens', 'Reds', 'Win %'].map(h => (
-                          <th key={h} className="text-left text-ink-3 font-medium px-3 sm:px-5 py-3 text-xs uppercase">{h}</th>
+                          <th key={h} className="text-left text-ink-3 font-medium px-3 sm:px-5 py-3 text-xs">{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -602,13 +601,11 @@ export default function ResultadosPublicos() {
           {!user && (
           <div className="mt-12 text-center">
             <p className="text-ink-3 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
-            <Link to="/login" className="inline-block bg-green-500 hover:bg-green-400 text-black font-black px-8 py-3.5 rounded-md text-sm transition-colors">
+            <Button to="/login?mode=register" size="lg">
               Criar conta · 2 dias VIP grátis
-            </Link>
+            </Button>
           </div>
           )}
-        </main>
-      </div>
-    </>
+    </PageShell>
   )
 }

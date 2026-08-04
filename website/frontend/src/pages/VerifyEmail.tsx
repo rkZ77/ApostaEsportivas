@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react'
+import { Helmet } from 'react-helmet-async'
+import { Spinner } from '../components/ui'
 import { useSearchParams, useNavigate } from 'react-router-dom'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
@@ -76,12 +78,17 @@ export default function VerifyEmail() {
 
   return (
     <div className="min-h-screen bg-surface-0 flex items-center justify-center p-4">
+      <Helmet>
+        <title>Confirmar e-mail · Pick IA</title>
+        <meta name="robots" content="noindex, nofollow" />
+      </Helmet>
+
       <div className="w-full max-w-md bg-surface-1 border border-line rounded-lg p-8 text-center">
 
         {state === 'loading' && (
           <>
             <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mx-auto mb-5">
-              <div className="w-6 h-6 border-2 border-green-400 border-t-transparent rounded-full animate-spin" />
+              <Spinner className="border-accent/30 border-t-accent" />
             </div>
             <h1 className="text-xl font-bold text-ink-1 mb-2">Verificando…</h1>
             <p className="text-ink-3 text-sm">Aguarde um momento.</p>

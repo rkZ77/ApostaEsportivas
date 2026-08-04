@@ -21,7 +21,7 @@ load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
 load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 from migrations import run_startup_migrations
-from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, public, social, suggestions
+from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, personal, public, social, suggestions
 from runtime_env import side_effects_note
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
@@ -240,6 +240,7 @@ app.include_router(banca.router)
 app.include_router(leaderboard.router)
 app.include_router(live.router)
 app.include_router(notifications.router)
+app.include_router(personal.router)
 
 
 @app.on_event("startup")

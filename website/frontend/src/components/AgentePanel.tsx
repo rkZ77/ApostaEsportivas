@@ -52,7 +52,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
       exit={{ opacity: 0, scale: 0.95, y: 10, transition: { duration: 0.15 } }}
       transition={{ type: 'spring', stiffness: 380, damping: 30 }}
       style={{ bottom: 'calc(1.25rem + env(safe-area-inset-bottom))' }}
-      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-xl shadow-2xl shadow-black/60 flex flex-col overflow-hidden origin-bottom-right"
+      className="fixed right-4 z-50 w-[calc(100vw-2rem)] max-w-sm h-[min(72vh,560px)] bg-surface-0 border border-line rounded-lg shadow-2xl shadow-black/60 flex flex-col overflow-hidden origin-bottom-right"
     >
       {/* Header */}
       <div className="shrink-0 px-4 py-3 border-b border-line flex items-center gap-2.5 bg-surface-1/60">

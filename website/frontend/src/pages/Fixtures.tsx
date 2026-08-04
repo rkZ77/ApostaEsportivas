@@ -2,11 +2,12 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
-import BackButton from '../components/BackButton'
+import { Badge, LiveDot, Spinner } from '../components/ui'
+import AgendaInteligente from '../components/AgendaInteligente'
 import { backdropFade, dialogScale, tabFade } from '../lib/motion'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
@@ -60,7 +61,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
                   ? 'bg-green-500/10 border border-green-500/30 text-green-400 font-semibold'
                   : 'text-ink-2 hover:bg-surface-2 hover:text-ink-1'
               }`}>
-              <span className="text-[9px] uppercase leading-none mb-0.5">
+              <span className="text-[9px] leading-none mb-0.5">
                 {DAY_SHORT[dt.getDay()]}
               </span>
               <span className="text-sm font-black leading-none">{dy}</span>
@@ -148,7 +149,7 @@ interface LiveStats {
   away_possession: number
 }
 
-type PageTab = 'jogos' | 'estatistica'
+type PageTab = 'jogos' | 'agenda' | 'estatistica'
 
 export default function Fixtures() {
   const { isVip, isAdmin, user }   = useAuth()
@@ -226,73 +227,75 @@ export default function Fixtures() {
   const pickCount  = fixtures.filter(f => f.has_pick).length
 
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 pt-4 pb-0">
-          {/* Título + badges */}
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <BackButton />
-              <div>
-                <h1 className="text-base font-black text-ink-1">Jogos</h1>
-                <p className="text-ink-3 text-xs mt-0.5 capitalize">{dateLabel}</p>
+    <PageShell
+      title="Jogos"
+      description="Agenda dos jogos das ligas cobertas, com quais deles já têm pick da IA."
+      noindex
+      bar={{
+        back: true,
+        title: 'Jogos',
+        sub: <span className="capitalize">{dateLabel}</span>,
+        actions: (
+          <>
+            {pageTab === 'jogos' && pickCount > 0 && (
+              <Badge tone="green" className="hidden sm:inline-flex">{pickCount} picks IA</Badge>
+            )}
+            {pageTab === 'jogos' && liveCount > 0 && (
+              <span className="flex items-center gap-2">
+                <LiveDot />
+                <span className="text-accent text-xs font-bold">{liveCount} ao vivo</span>
+              </span>
+            )}
+          </>
+        ),
+      }}
+      beforeMain={
+        <div className="border-b border-line">
+          <div className="max-w-5xl mx-auto px-4">
+            {pageTab === 'jogos' && (
+              <div className="py-3">
+                <DateStrip date={date} onChange={handleDateChange} />
               </div>
+            )}
+            <div className="flex">
+              {([
+                { key: 'jogos',       label: 'Jogos' },
+                { key: 'agenda',      label: 'Agenda' },
+                { key: 'estatistica', label: 'Estatísticas' },
+              ] as { key: PageTab; label: string }[]).map(t => (
+                <motion.button
+                  key={t.key}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => setPageTab(t.key)}
+                  className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    pageTab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
+                  }`}
+                >
+                  {t.label}
+                  {pageTab === t.key && (
+                    <motion.div layoutId="fixtures-tab-underline" className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
+                  )}
+                </motion.button>
+              ))}
             </div>
-            <div className="flex items-center gap-3">
-              {pageTab === 'jogos' && pickCount > 0 && (
-                <div className="hidden sm:flex items-center gap-1.5 bg-green-500/10 border border-green-500/20 rounded-lg px-2.5 py-1.5">
-                  <span className="text-green-400 text-xs font-bold">{pickCount} picks IA</span>
-                </div>
-              )}
-              {pageTab === 'jogos' && liveCount > 0 && (
-                <div className="flex items-center gap-2">
-                  <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" />
-                  <span className="text-green-500 text-xs font-bold">{liveCount} ao vivo</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Strip de dias */}
-          {pageTab === 'jogos' && (
-            <div className="mb-3">
-              <DateStrip date={date} onChange={handleDateChange} />
-            </div>
-          )}
-          {/* Page tabs */}
-          <div className="flex border-b border-line">
-            {([
-              { key: 'jogos',       label: 'Jogos' },
-              { key: 'estatistica', label: 'Estatísticas' },
-            ] as { key: PageTab; label: string }[]).map(t => (
-              <motion.button
-                key={t.key}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setPageTab(t.key)}
-                className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
-                  pageTab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
-                }`}
-              >
-                {t.label}
-                {pageTab === t.key && (
-                  <motion.div layoutId="fixtures-tab-underline" className="absolute left-0 right-0 -bottom-px h-0.5 bg-green-500" transition={{ type: 'spring', stiffness: 500, damping: 40 }} />
-                )}
-              </motion.button>
-            ))}
           </div>
         </div>
-      </div>
-
+      }
+    >
       <AnimatePresence mode="wait">
-      {pageTab === 'estatistica' && (
-        <motion.main key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="max-w-5xl mx-auto px-4 py-6">
-          <EstatisticasContent />
-        </motion.main>
+      {pageTab === 'agenda' && (
+        <motion.div key="agenda" variants={tabFade} initial="hidden" animate="visible" exit="exit">
+          <AgendaInteligente />
+        </motion.div>
       )}
 
-      {pageTab === 'jogos' && <motion.main key="jogos" variants={tabFade} initial="hidden" animate="visible" exit="exit" className="max-w-5xl mx-auto px-4 py-6">
+      {pageTab === 'estatistica' && (
+        <motion.div key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit">
+          <EstatisticasContent />
+        </motion.div>
+      )}
+
+      {pageTab === 'jogos' && <motion.div key="jogos" variants={tabFade} initial="hidden" animate="visible" exit="exit">
 
         {/* Banner informativo */}
         <div className="flex items-start gap-3 bg-surface-1 border border-line rounded-lg px-4 py-3 mb-5">
@@ -309,7 +312,7 @@ export default function Fixtures() {
 
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : fixtures.length === 0 ? (
           <div className="card p-12 text-center border-dashed">
@@ -344,7 +347,7 @@ export default function Fixtures() {
                       onError={e => (e.currentTarget.style.display = 'none')}
                       />
                   )}
-                  {isCopa && <span className="text-[10px] font-black text-yellow-500 uppercase ml-1">Copa do Mundo</span>}
+                  {isCopa && <span className="text-[10px] font-black text-yellow-500 ml-1">Copa do Mundo</span>}
                   <span className={`text-xs ml-auto ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}>{games.length} {games.length === 1 ? 'jogo' : 'jogos'}</span>
                   <svg
                     className={`w-3.5 h-3.5 shrink-0 transition-transform duration-200 ${collapsed.has(league) ? '-rotate-90' : ''} ${isCopa ? 'text-yellow-700' : 'text-ink-4'}`}
@@ -451,19 +454,19 @@ export default function Fixtures() {
                       {live && ls && (
                         <div className="font-mono px-4 py-2 bg-green-950/20 border-t border-green-900/20 grid grid-cols-4 gap-1 text-center">
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Esc</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Esc</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_corners} <span className="text-ink-4">-</span> {ls.away_corners}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Fin</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Fin</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_shots_on} <span className="text-ink-4">-</span> {ls.away_shots_on}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Cart</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Cart</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_yellow} <span className="text-ink-4">-</span> {ls.away_yellow}</div>
                           </div>
                           <div>
-                            <div className="text-[10px] text-ink-3 uppercase mb-0.5">Posse</div>
+                            <div className="text-[10px] text-ink-3 mb-0.5">Posse</div>
                             <div className="text-xs font-bold text-ink-2">{ls.home_possession}% <span className="text-ink-4">-</span> {ls.away_possession}%</div>
                           </div>
                         </div>
@@ -477,7 +480,7 @@ export default function Fixtures() {
             })}
           </div>
         )}
-      </motion.main>}
+      </motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -503,7 +506,7 @@ export default function Fixtures() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
               </svg>
             </div>
-            <h3 className="text-ink-1 font-black text-lg mb-2">Análise exclusiva VIP</h3>
+            <h3 className="text-ink-1 font-bold text-lg mb-2">Análise exclusiva VIP</h3>
             <p className="text-ink-2 text-sm mb-6 leading-relaxed">
               Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
             </p>
@@ -519,6 +522,6 @@ export default function Fixtures() {
         </motion.div>
       )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   )
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Spinner } from './ui'
 import { motion } from 'framer-motion'
 import { X } from 'lucide-react'
 import api from '../services/api'
@@ -119,7 +120,7 @@ function StatRow({ label, home, away, higherIsBetter = true }: {
   const awayWins = higherIsBetter ? a > h : a < h
   return (
     <div className="py-2">
-      <div className="text-[10px] text-ink-4 text-center mb-1.5 uppercase font-semibold">{label}</div>
+      <div className="text-[10px] text-ink-4 text-center mb-1.5 font-semibold">{label}</div>
       <div className="font-mono flex items-center gap-2">
         <span className={`text-sm font-bold tabular-nums w-10 text-right ${homeWins ? 'text-blue-400' : 'text-ink-2'}`}>
           {home != null ? Number(home).toFixed(1) : ''}
@@ -223,7 +224,7 @@ function FormRow({ matches, teamId, name }: { matches: Match[]; teamId: number; 
   if (!matches.length) return null
   return (
     <div>
-      <p className="text-[10px] text-ink-4 uppercase font-semibold mb-2 truncate">{name}</p>
+      <p className="text-[10px] text-ink-4 font-semibold mb-2 truncate">{name}</p>
       <div className="flex gap-1.5 flex-wrap">
         {matches.slice(0, 8).map((m, i) => {
           const scored   = m.home_team_id === teamId ? (m.home_goals ?? 0) : (m.away_goals ?? 0)
@@ -452,7 +453,7 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
         <div className="flex-1 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="w-7 h-7 border-2 border-line-strong border-t-blue-500 rounded-full animate-spin" />
+              <Spinner size="lg" tone="blue" />
             </div>
           ) : !data ? (
             <div className="text-center text-ink-4 text-sm py-16">Estatísticas não disponíveis.</div>

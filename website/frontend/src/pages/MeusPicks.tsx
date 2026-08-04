@@ -1,17 +1,17 @@
 import { useEffect, useState, useCallback } from 'react'
+import { Spinner } from '../components/ui'
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
 import api from '../services/api'
-import Navbar from '../components/Navbar'
+import PageShell from '../components/PageShell'
 import { translateMarket, explainMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
 import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
-import BackButton from '../components/BackButton'
 import InfoTip from '../components/InfoTip'
 
 const SOURCE_LBL: Record<string, string> = {
@@ -163,9 +163,12 @@ export default function MeusPicks() {
     : pageItems
 
   return (
-    <div className="min-h-screen bg-surface-0">
-      <Navbar />
-
+    <PageShell
+      title="Meus Picks"
+      description="Suas apostas pendentes e resolvidas, com resultado e saldo de cada uma."
+      noindex
+      bar={{ back: true, title: 'Meus Picks', sub: 'Suas apostas pendentes e resolvidas' }}
+    >
       <AnimatePresence>
       {detailPick && (
         <SuggestionDetail
@@ -176,22 +179,9 @@ export default function MeusPicks() {
       )}
       </AnimatePresence>
 
-      <div className="bg-surface-0 border-b border-line">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <BackButton />
-            <div>
-              <h1 className="text-base font-black text-ink-1">Meus Picks</h1>
-              <p className="text-ink-3 text-xs mt-0.5">Suas apostas pendentes e resolvidas</p>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <main className="max-w-5xl mx-auto px-4 py-6">
         {loading ? (
           <div className="card p-16 flex items-center justify-center">
-            <div className="w-8 h-8 border-2 border-line-strong border-t-green-500 rounded-full animate-spin" />
+            <Spinner size="lg" />
           </div>
         ) : error ? (
           <div className="card p-10 text-center">
@@ -244,25 +234,25 @@ export default function MeusPicks() {
                 <div className="font-mono grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
                   <div className="card p-3 text-center">
                     <div className="text-2xl font-black text-ink-1">{periodEntries.length}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">Apostas</div>
+                    <div className="text-[10px] text-ink-3 mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">
+                    <div className="text-[10px] text-ink-3 mt-1">
                       {daysBack === 0 ? 'Total' : daysBack === 'thismonth' ? 'Este mês' : daysBack === 'lastmonth' ? 'Mês passado' : `Últimos ${daysBack}d`}
                     </div>
                   </div>
                   <div className="card p-3 text-center">
                     <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-ink-2'}`}>{wr}%</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">Win rate</div>
+                    <div className="text-[10px] text-ink-3 mt-1">Win rate</div>
                   </div>
                   <div className="card p-3 text-center border-green-500/20">
                     <div className="text-2xl font-black text-green-400">{greenCount}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">GREEN</div>
+                    <div className="text-[10px] text-ink-3 mt-1">GREEN</div>
                   </div>
                   <div className="card p-3 text-center border-red-500/20">
                     <div className="text-2xl font-black text-red-400">{redCount}</div>
-                    <div className="text-[10px] text-ink-3 uppercase mt-1">RED</div>
+                    <div className="text-[10px] text-ink-3 mt-1">RED</div>
                   </div>
                 </div>
               )
@@ -288,7 +278,7 @@ export default function MeusPicks() {
               return (
                 <div className="card p-4">
                   <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-semibold text-ink-3 uppercase">Evolução da Banca</h3>
+                    <h3 className="text-xs font-semibold text-ink-3">Evolução da Banca</h3>
                     <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
                       {fmtSigned(pnl)}
                     </span>
@@ -494,7 +484,6 @@ export default function MeusPicks() {
 
           </div>
         )}
-      </main>
 
       <AnimatePresence>
       {showRemoved && (
@@ -506,6 +495,6 @@ export default function MeusPicks() {
         </motion.div>
       )}
       </AnimatePresence>
-    </div>
+    </PageShell>
   )
 }
