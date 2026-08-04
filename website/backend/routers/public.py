@@ -737,8 +737,16 @@ def public_market_movement(days: int = Query(30, ge=1, le=365)):
             WITH picks AS ({union_sql}),
             joined AS (
                 SELECT p.*, co.closing_odd,
-                       -- movimento em %: negativo = mercado fechou mais baixo
-                       -- que a nossa entrada, ou seja, valor a nosso favor
+                       -- Movimento em pontos percentuais. Negativo = mercado
+                       -- fechou MAIS BAIXO que a nossa entrada, ou seja, o
+                       -- preco andou a nosso favor.
+                       --
+                       -- Sem sinal de porcentagem neste comentario de
+                       -- proposito: o psycopg2 varre a query inteira atras de
+                       -- placeholder e nao distingue comentario, entao um
+                       -- por-cento solto aqui quebrava o execute com
+                       -- "tuple index out of range" e o endpoint devolvia
+                       -- available:false pra sempre.
                        ROUND(((co.closing_odd - p.odd) / p.odd * 100)::numeric, 2) AS move_pct
                   FROM picks p
                   JOIN closing_odds co
