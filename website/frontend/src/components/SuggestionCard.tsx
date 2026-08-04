@@ -11,7 +11,7 @@ import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
 import FavoriteButton from './FavoriteButton'
-import { PickCardFooter } from './PickCardParts'
+import { PickCardFooter, PickExplainButton } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Clock } from 'lucide-react'
@@ -366,11 +366,14 @@ export default function SuggestionCard({
 
 
       {/* Footer */}
+      {(s.reasoning || s.ev != null || probPct != null) && (
+        <PickExplainButton onClick={() => setShowAnalysis(true)} />
+      )}
+
       <PickCardFooter
         onBet={!s.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
         betState={following ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
-        onExplain={(s.reasoning || s.ev != null || probPct != null) ? (e => { e.stopPropagation(); setShowAnalysis(true) }) : undefined}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
       />

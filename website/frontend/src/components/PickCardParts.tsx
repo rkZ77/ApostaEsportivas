@@ -23,7 +23,6 @@ export function PickCardFooter({
   betState = 'idle',
   /** Sem banca configurada o botão vira convite pra configurar. */
   hasBanca = true,
-  onExplain,
   onShare,
   shareState = 'idle',
   className,
@@ -31,8 +30,6 @@ export function PickCardFooter({
   onBet?: (e: React.MouseEvent) => void
   betState?: 'idle' | 'loading' | 'done'
   hasBanca?: boolean
-  /** Abre "Entenda esta análise". Omitir quando não há o que explicar. */
-  onExplain?: (e: React.MouseEvent) => void
   onShare?: (e: React.MouseEvent) => void
   shareState?: 'idle' | 'loading' | 'done'
   className?: string
@@ -63,19 +60,6 @@ export function PickCardFooter({
       )}
 
       <div className="flex items-center gap-2 ml-auto">
-        {onExplain && (
-          <button
-            onClick={onExplain}
-            title="Entenda esta análise"
-            className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-ink-4 px-3 py-2 rounded-md transition-colors duration-1 ease-smooth min-h-[36px]"
-          >
-            <BrainCircuit className="w-3.5 h-3.5 shrink-0" />
-            {/* Em tela estreita fica só o ícone: três botões escritos por
-                extenso quebravam a linha no celular. */}
-            <span className="hidden xs:inline sm:inline">Entenda</span>
-          </button>
-        )}
-
         {onShare && (
           <button
             onClick={onShare}
@@ -94,6 +78,36 @@ export function PickCardFooter({
           </button>
         )}
       </div>
+    </div>
+  )
+}
+
+/* ── Entenda esta análise ───────────────────────────────────────────────── */
+
+/**
+ * Botão largo, no corpo do card e não no rodapé.
+ *
+ * Fica no meio de propósito: é a ação de LEITURA, e o rodapé é a fila de ação
+ * (apostar, compartilhar). Largura cheia porque, espremido ao lado dos outros
+ * dois, o rótulo tinha que virar só "Entenda" pra caber no celular, e aí a
+ * frase perdia o convite.
+ */
+export function PickExplainButton({
+  onClick,
+  className,
+}: {
+  onClick: (e: React.MouseEvent) => void
+  className?: string
+}) {
+  return (
+    <div className={cn('px-5 pb-3', className)}>
+      <button
+        onClick={e => { e.stopPropagation(); onClick(e) }}
+        className="w-full flex items-center justify-center gap-1.5 text-[11px] font-semibold text-ink-2 hover:text-ink-1 border border-line hover:border-line-strong rounded-md py-2.5 min-h-[36px] transition-colors duration-1 ease-smooth"
+      >
+        <BrainCircuit className="w-3.5 h-3.5 shrink-0" />
+        Entenda esta análise
+      </button>
     </div>
   )
 }
