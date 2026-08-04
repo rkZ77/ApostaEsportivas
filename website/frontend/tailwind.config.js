@@ -46,8 +46,16 @@ export default {
           600: '#00AA00',
         },
       },
+      /*
+       * Duas famílias, não três. `display` continua existindo como nome porque
+       * 28 lugares usam font-display, mas aponta pra mesma Inter do corpo: o
+       * que separa título de texto é peso e tamanho.
+       *
+       * JetBrains Mono fica por função, não por estilo: algarismo de largura
+       * fixa é o que faz coluna de odd e de percentual alinhar.
+       */
       fontFamily: {
-        display: ['"Space Grotesk"', '"Inter"', 'sans-serif'],
+        display: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
         sans: ['"Inter"', 'system-ui', '-apple-system', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'ui-monospace', 'monospace'],
       },

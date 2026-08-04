@@ -19,7 +19,6 @@ import DashboardMockup from '../home/DashboardMockup'
 import StatsBand, { type PublicSummary } from '../home/StatsBand'
 import HowItWorks from '../home/HowItWorks'
 import Products from '../home/Products'
-import Testimonials from '../home/Testimonials'
 import FinalCTA from '../home/FinalCTA'
 import LivePreviewSection from '../home/LivePreview'
 
@@ -529,8 +528,6 @@ export default function Home() {
       <HowItWorks />
 
       <Products />
-
-      <Testimonials />
 
       <Plans monthly={monthly} />
 
