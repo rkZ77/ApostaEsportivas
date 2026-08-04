@@ -20,6 +20,7 @@ import StatsBand, { type PublicSummary } from '../home/StatsBand'
 import HowItWorks from '../home/HowItWorks'
 import Products from '../home/Products'
 import FinalCTA from '../home/FinalCTA'
+import Leagues from '../home/Leagues'
 import LivePreviewSection from '../home/LivePreview'
 
 /*
@@ -351,19 +352,17 @@ function Plans({ monthly }: { monthly: Plan }) {
 
 /* ── CTA fixo no rodapé, só mobile ──────────────────────────────────────── */
 
-function StickyMobileCTA() {
-  const [dismissed, setDismissed] = useState(false)
-  if (dismissed) return null
+function StickyMobileCTA({ onDismiss }: { onDismiss: () => void }) {
   return (
-    <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3">
+    <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex-1 min-w-0">
         <p className="text-ink-1 text-xs font-bold leading-none">Testar o VIP por 2 dias</p>
         <p className="text-accent text-[10px] font-semibold mt-1">Grátis, sem cartão</p>
       </div>
       <Button to="/login?mode=register" size="sm">Criar conta</Button>
       <button
-        onClick={() => setDismissed(true)}
-        className="text-ink-4 hover:text-ink-2 p-1 shrink-0"
+        onClick={onDismiss}
+        className="text-ink-4 hover:text-ink-2 p-2 shrink-0"
         aria-label="Fechar chamada"
       >
         <XIcon className="w-4 h-4" />
@@ -379,6 +378,7 @@ const HEADLINE = ['Inteligência artificial', 'que encontra valor', 'antes do me
 export default function Home() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [ctaDismissed, setCtaDismissed] = useState(false)
   const { plans, monthly } = usePlans()
 
   // Uma chamada só: alimenta a faixa de indicadores e a lista de resultados.
@@ -417,7 +417,7 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col">
+    <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed ? '' : 'pb-20 sm:pb-0'}`}>
       <Helmet>
         <title>Pick IA · Inteligência artificial para apostas de valor no futebol</title>
         <meta
@@ -529,6 +529,8 @@ export default function Home() {
 
       <Products />
 
+      <Leagues />
+
       <Plans monthly={monthly} />
 
       <Leaderboard />
@@ -537,7 +539,7 @@ export default function Home() {
 
       <Footer />
 
-      <StickyMobileCTA />
+      {!ctaDismissed && <StickyMobileCTA onDismiss={() => setCtaDismissed(true)} />}
     </div>
   )
 }

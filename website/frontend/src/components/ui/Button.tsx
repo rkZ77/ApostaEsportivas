@@ -28,10 +28,17 @@ const VARIANT = {
   link: 'text-ink-2 hover:text-ink-1 font-medium underline-offset-4 hover:underline',
 } as const
 
+/*
+ * min-h existe por causa de dedo, não de estética.
+ *
+ * `sm` dava 28px de altura, e o público do site é majoritariamente mobile:
+ * botão de ação abaixo de ~36px erra o toque com frequência. `md` e `lg`
+ * ficam em 44px, que é o alvo recomendado pra ação principal.
+ */
 const SIZE = {
-  sm: 'text-xs px-3 py-1.5 gap-1.5 rounded-md',
-  md: 'text-sm px-4 py-2.5 gap-2 rounded-md',
-  lg: 'text-sm px-7 py-3.5 gap-2 rounded-md',
+  sm: 'text-xs px-3 py-2 gap-1.5 rounded-md min-h-[36px]',
+  md: 'text-sm px-4 py-2.5 gap-2 rounded-md min-h-[44px]',
+  lg: 'text-sm px-7 py-3.5 gap-2 rounded-md min-h-[48px]',
 } as const
 
 const ICON_SIZE = { sm: 'w-3.5 h-3.5', md: 'w-4 h-4', lg: 'w-4 h-4' } as const

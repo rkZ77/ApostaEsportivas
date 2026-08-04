@@ -409,11 +409,7 @@ export default function SuggestionCard({
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          {onClick && (
-            <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">
-              Ver detalhes
-            </span>
-          )}
+
         </div>
       </div>
     </motion.div>

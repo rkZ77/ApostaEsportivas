@@ -2,14 +2,13 @@ import { Link } from 'react-router-dom'
 /* O Lucide tirou os ícones de marca (Instagram, X, etc.) por questão de
    trademark, então o do Instagram continua vindo do asset em /public. */
 import { MessageCircle } from 'lucide-react'
-import LeagueMarquee from './LeagueMarquee'
 
 /*
  * Rodapé do site.
  *
- * Acima dos links entra a fita de ligas cobertas: é a prova mais direta do que
- * a IA analisa, e o rodapé é onde ela cabe em toda página sem roubar espaço do
- * conteúdo.
+ * Sem a fita de ligas: ela é argumento de venda e o rodapé aparece nas 23
+ * telas, inclusive nas de quem já assinou. Virou seção da Home, que é onde
+ * ela tem função.
  *
  * O disclaimer de +18 e jogo responsável fica no rodapé de propósito: aparece
  * em todas as telas, que é o que a regra pede.
@@ -58,18 +57,12 @@ export default function Footer() {
   return (
     <footer className="border-t border-line bg-surface-0 mt-auto">
 
-      {/* Ligas cobertas */}
-      <div className="border-b border-line py-4">
-        <p className="label-micro text-center mb-3">Ligas e torneios cobertos</p>
-        <LeagueMarquee muted />
-      </div>
-
       <div className="max-w-6xl mx-auto px-4 py-10">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
 
           {/* Marca */}
           <div className="col-span-2">
-            <Link to="/" className="flex items-center gap-2.5 mb-3" aria-label="Pick IA, início">
+            <Link to="/" className="inline-flex items-center gap-2.5 mb-3 py-1" aria-label="Pick IA, início">
               <img src="/logo.png" alt="" width={30} height={30} className="w-[30px] h-[30px] rounded-full object-cover" />
               <span className="font-display text-base font-semibold text-ink-1">
                 Pick<span className="text-accent">IA</span>
@@ -105,11 +98,11 @@ export default function Footer() {
           {GROUPS.map(({ title, links }) => (
             <div key={title}>
               <p className="label-micro mb-3">{title}</p>
-              <ul className="space-y-2">
+              <ul className="space-y-0.5 -ml-1">
                 {links.map(l => (
                   <li key={l.label}>
                     {l.to ? (
-                      <Link to={l.to} className="text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth">
+                      <Link to={l.to} className="block px-1 py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth">
                         {l.label}
                       </Link>
                     ) : (
@@ -117,7 +110,7 @@ export default function Footer() {
                         href={l.href}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
+                        className="block px-1 py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
                       >
                         {l.label}
                       </a>

@@ -578,11 +578,6 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          {onClick && (
-            <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">
-              Ver detalhes
-            </span>
-          )}
         </div>
       </div>
     </motion.div>
@@ -900,7 +895,6 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">Ver detalhes</span>
         </div>
       </div>
     </motion.div>
@@ -1170,7 +1164,6 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
               : <><Share2 className="w-3.5 h-3.5" /><span>Compartilhar</span></>
             }
           </button>
-          <span className="text-xs text-ink-4 group-hover:text-ink-2 transition-colors">Ver detalhes</span>
         </div>
       </div>
     </motion.div>
