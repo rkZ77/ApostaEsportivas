@@ -46,9 +46,18 @@ interface PublicData {
   recent_total: number
 }
 
-const SRC_LBL: Record<string, string> = { vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.' }
-const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem']
-const SOURCE_LABELS: Record<string, string> = { all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas', alavancagem: 'Alavancagem' }
+/* Os seis pipelines. Faltas e defesas ficavam de fora daqui mesmo o backend
+   ja incluindo os dois no agregado: o filtro nao os oferecia e o badge da
+   lista caia no valor cru ("faltas" em vez de "Faltas"). */
+const SRC_LBL: Record<string, string> = {
+  vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
+  faltas: 'Faltas', goleiros: 'Defesas',
+}
+const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas', 'goleiros']
+const SOURCE_LABELS: Record<string, string> = {
+  all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
+  alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+}
 
 export default function ResultadosPublicos() {
   const [data, setData] = useState<PublicData | null>(null)

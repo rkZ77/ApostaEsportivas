@@ -820,6 +820,56 @@ def get_suggestion_detail(
             }
 
         # ── FREE (picks_free) ────────────────────────────────────────────────
+        # Mercados de modelo proprio (faltas e defesas de goleiro).
+        #
+        # Sem este ramo o pick caia no `else` la embaixo, que consulta
+        # picks_vip: abrir a analise de um pick de faltas devolvia o pick VIP
+        # de mesmo id, ou 404. Os dois mercados sao pipeline proprio e
+        # precisam ler da sua tabela, igual multipla e alavancagem.
+        if pick_type in ("faltas", "goleiros"):
+            tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"
+            cur.execute(f"""
+                SELECT p.id, p.match_date, p.home_team, p.away_team,
+                       p.home_team_id, p.away_team_id,
+                       p.market, p.line, p.odd, p.bet_house,
+                       p.prob_real, p.edge, p.reasoning, p.result, p.profit,
+                       p.fixture_id,
+                       f.match_datetime, f.league_id, l.name AS league_name
+                  FROM {tabela} p
+             LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+             LEFT JOIN leagues  l ON l.league_id = f.league_id
+                 WHERE p.id = %s
+            """, (suggestion_id,))
+            row = cur.fetchone()
+            if not row:
+                raise HTTPException(404, "Pick nao encontrado")
+            if not is_vip:
+                raise HTTPException(403, "Acesso VIP necessario para ver a analise completa")
+
+            cur.execute(
+                "SELECT stake_units, actual_odd, bet_house FROM user_followed_picks "
+                "WHERE user_id = %s AND pick_id = %s AND pick_type = %s",
+                (current_user["id"], suggestion_id, pick_type),
+            )
+            follow = cur.fetchone()
+
+            d = dict(row)
+            return {
+                **d,
+                "home_team_name": d.get("home_team"),
+                "away_team_name": d.get("away_team"),
+                "pick_type": pick_type,
+                # prob_real faz as vezes de confianca: e o numero que o modelo
+                # desses dois mercados produz.
+                "confidence": float(d["prob_real"]) if d.get("prob_real") is not None else None,
+                "probability": float(d["prob_real"]) if d.get("prob_real") is not None else None,
+                "ev": float(d["edge"]) * 100 if d.get("edge") is not None else None,
+                "is_followed": follow is not None,
+                "user_stake_units": follow["stake_units"] if follow else None,
+                "user_actual_odd": follow["actual_odd"] if follow else None,
+                "user_bet_house": follow["bet_house"] if follow else None,
+            }
+
         if pick_type == "free":
             cur.execute("""
                 SELECT pf.id, pf.fixture_id, pf.match_date,

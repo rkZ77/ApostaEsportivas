@@ -1214,13 +1214,34 @@ interface MercadoPick {
  * (padding e raio próprios, números em caixinhas separadas) e o único sem
  * nenhuma ação: dava pra ler o pick e não dava pra registrar.
  */
-function MercadoCard({ p, tipo, banca, onBet }: {
+function MercadoCard({ p, tipo, banca, onBet, onClick }: {
   p: MercadoPick
   tipo: 'faltas' | 'goleiros'
   banca?: { bankroll_current: number; unit_value: number } | null
   onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
+  /** Abre a analise completa no drawer, igual aos outros tipos. */
+  onClick?: () => void
 }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
+
+  const handleShare = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    shareStory({
+      pickId: p.id,
+      pickTypeRoute: tipo,
+      homeTeamName: translateTeamName(p.home_team),
+      awayTeamName: translateTeamName(p.away_team),
+      homeTeamId: p.home_team_id,
+      awayTeamId: p.away_team_id,
+      pickType: tipo,
+      market: tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo',
+      line: p.line,
+      odd: Number(p.odd),
+      result: p.result,
+      profit: p.result ? calcProfitUnits(p.result, Number(p.odd), p.stake_units ?? 1) : null,
+    })
+  }
   const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
   const edge = p.edge != null ? Number(p.edge) * 100 : null
 
@@ -1229,7 +1250,10 @@ function MercadoCard({ p, tipo, banca, onBet }: {
 
   return (
     <>
-    <div className={`pick-card ${PICK_TYPE_BORDER[tipo]}`}>
+    <div
+      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER[tipo]}`}
+      onClick={onClick}
+    >
 
       {/* Cabeçalho */}
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
@@ -1296,8 +1320,10 @@ function MercadoCard({ p, tipo, banca, onBet }: {
       )}
 
       <PickCardFooter
-        onBet={!p.result && onBet ? () => onBet(p, tipo) : undefined}
+        onBet={!p.result && onBet ? (e => { e.stopPropagation(); onBet(p, tipo) }) : undefined}
         hasBanca={!!banca}
+        onShare={handleShare}
+        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
       />
     </div>
 
@@ -1321,12 +1347,13 @@ function MercadoCard({ p, tipo, banca, onBet }: {
   )
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onBet }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onBet, onOpen }: {
   tipo: 'faltas' | 'goleiros'
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
   onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
+  onOpen?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
 }) {
   return (
     <div>
@@ -1346,7 +1373,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} banca={banca} onBet={onBet} />)}
+          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} banca={banca} onBet={onBet} onClick={onOpen ? () => onOpen(p, tipo) : undefined} />)}
         </div>
       )}
     </div>
@@ -2725,6 +2752,7 @@ export default function Picks() {
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                         onBet={handleMercadoBet}
+                        onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
                     {mercadoFiltro.categoria !== 'faltas' && (
@@ -2737,6 +2765,7 @@ export default function Picks() {
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                         onBet={handleMercadoBet}
+                        onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
                   </>

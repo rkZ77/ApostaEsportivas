@@ -244,7 +244,7 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
 @router.get("/results")
 def public_results(
     month:  Optional[str] = Query(None, description="YYYY-MM · filtra por mês"),
-    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem"),
+    source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
 ):
@@ -411,7 +411,7 @@ def _mask_first(full_name: str) -> str:
 @router.get("/pick/{pick_type}/{pick_id}")
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
-    valid = {"vip", "free", "multipla", "alavancagem"}
+    valid = {"vip", "free", "multipla", "alavancagem", "faltas", "goleiros"}
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
 
@@ -449,6 +449,16 @@ def public_pick(pick_type: str, pick_id: int):
             cur.execute("""
                 SELECT id, match_date, games, total_odd AS odd, result, profit
                 FROM picks_multiplas WHERE id = %s
+            """, (pick_id,))
+        elif pick_type in ("faltas", "goleiros"):
+            # Mesmo contrato dos outros: teaser sem market nem reasoning, que
+            # e o que o link compartilhado pode mostrar sem entregar a analise.
+            tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"
+            cur.execute(f"""
+                SELECT id, match_date,
+                       home_team AS home_team_name, away_team AS away_team_name,
+                       odd, result, profit
+                FROM {tabela} WHERE id = %s
             """, (pick_id,))
         else:  # alavancagem
             cur.execute("""

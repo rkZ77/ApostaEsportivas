@@ -3,7 +3,7 @@ import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
-import { getResultStyle } from '../utils/resultStyle'
+import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
@@ -197,7 +197,10 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           <div className="px-5 pt-4 pb-3">
             <div className="flex items-center justify-between mb-3">
               <span className="text-xs text-ink-3 font-semibold">
-                {pickType === 'multipla' ? 'Múltipla' : pickType === 'alavancagem' ? 'Alavancagem' : pickType === 'free' ? 'Dica do Dia' : 'VIP'}
+                {/* PICK_TYPE_LABEL cobre os seis pipelines. A cadeia de
+                    ternarios que estava aqui terminava em 'VIP', entao um
+                    pick de faltas abria rotulado como VIP. */}
+                {pickType === 'free' ? 'Dica do Dia' : PICK_TYPE_LABEL[pickType] ?? 'VIP'}
               </span>
               <button
                 onClick={onClose}
