@@ -12,6 +12,7 @@ import UpdateBanner from './components/UpdateBanner'
 import ErrorToast from './components/ErrorToast'
 import PushPromptBanner from './components/PushPromptBanner'
 import MonthlyCloseModal from './components/MonthlyCloseModal'
+import TopProgressBar from './components/TopProgressBar'
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -172,6 +173,10 @@ export default function App() {
       <AuthProvider>
         <NotificationProvider>
           <FavoritesProvider>
+          {/* Fora do <Routes> de propósito: precisa sobreviver à troca de rota
+              pra conseguir medi-la. Dentro, ela seria desmontada junto com a
+              página que está saindo. */}
+          <TopProgressBar />
           <AgenteButton />
           <CookieBanner />
           <UpdateBanner />

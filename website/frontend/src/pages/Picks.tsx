@@ -3,6 +3,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
 import api from '../services/api'
+import { sinalizarNavegacao } from '../services/progressBus'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import SuggestionCard from '../components/SuggestionCard'
@@ -10,7 +11,7 @@ import ApostaModal from '../components/ApostaModal'
 import SuggestionDetail from '../components/SuggestionDetail'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
-import { LiveDot, Spinner, EmptyState } from '../components/ui'
+import { LiveDot, Spinner, EmptyState, SkeletonPickGrid } from '../components/ui'
 import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../components/MercadosControls'
 import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
@@ -79,10 +80,12 @@ interface AlavFilters { date_from: string; date_to: string; resultado: string }
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
-function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
+function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
   counts?: Partial<Record<Tab, number>>
   liveCount?: number
+  /** Aquece os dados da aba antes do clique · ver `prefetchAba` no Picks. */
+  onPrefetch?: (t: Tab) => void
 }) {
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
@@ -115,6 +118,14 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount }: {
               key={t.key}
               whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
+              /* Prefetch por intenção: no celular o `touchstart` chega antes do
+                 `click`, e no desktop o ponteiro passa por cima antes de clicar.
+                 São dezenas a centenas de milissegundos de vantagem, e nesse
+                 tempo a requisição já saiu · o clique passa a encontrar o dado
+                 pronto ou quase. `onFocus` cobre quem navega por teclado. */
+              onPointerEnter={() => onPrefetch?.(t.key)}
+              onTouchStart={() => onPrefetch?.(t.key)}
+              onFocus={() => onPrefetch?.(t.key)}
               className={`relative px-3 sm:px-4 py-3 text-xs sm:text-sm font-semibold mr-1 whitespace-nowrap flex-shrink-0 transition-colors ${
                 tab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
               }`}
@@ -1350,14 +1361,15 @@ function SectionHeader({ color, label, badge, action }: {
   )
 }
 
-/* Carregamento de bloco desta tela: spinner do sistema dentro de um .card,
-   pra lista em carregamento ocupar a mesma caixa da lista carregada. */
-function PickLoading() {
-  return (
-    <div className="card p-16 flex items-center justify-center">
-      <Spinner size="lg" />
-    </div>
-  )
+/* Carregamento de bloco desta tela.
+ *
+ * Era um spinner centralizado numa caixa `p-16`. O problema não era o spinner
+ * em si, era o salto: aquela caixa tem altura arbitrária e, quando o dado
+ * chegava, virava uma grade de cards de outra altura, empurrando tudo abaixo.
+ * O esqueleto já nasce com a forma da lista, então o conteúdo preenche o
+ * espaço que já estava reservado em vez de reorganizar a tela. */
+function PickLoading({ cards = 2 }: { cards?: number }) {
+  return <SkeletonPickGrid cards={cards} />
 }
 
 
@@ -1801,19 +1813,38 @@ export default function Picks() {
     }).catch(() => {})
   }, [])
 
+  /*
+   * Carga das abas que buscam sob demanda.
+   *
+   * Virou função (era o corpo do useEffect) pra poder ser chamada ANTES do
+   * clique · ver `prefetchAba`. As guardas de "já tenho" e "já estou buscando"
+   * ficam aqui dentro justamente porque agora há dois chamadores: o prefetch
+   * dispara primeiro e a troca de aba chega depois, e sem isso a mesma
+   * requisição sairia duas vezes.
+   */
+  const carregarMercados = useCallback(() => {
+    if (!canSeeVip || faltas !== null || mercadosLoading) return
+    setMercadosLoading(true)
+    // Os dois em paralelo: sao independentes, e serializar somaria a latencia
+    // de duas chamadas antes de pintar qualquer coisa na tela.
+    Promise.all([
+      api.get('/suggestions/faltas',   { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
+      api.get('/suggestions/goleiros', { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
+    ])
+      .then(([f, g]) => { setFaltas(f); setGoleiros(g) })
+      .finally(() => setMercadosLoading(false))
+  }, [canSeeVip, faltas, mercadosLoading])
+
+  const prefetchAba = useCallback((t: Tab) => {
+    if (t === 'mercados') carregarMercados()
+    if (t === 'alavancagem' && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
+  }, [carregarMercados, canSeeVip, alavLoaded])
+
+  /* A aba pode ser aberta sem passar pelo prefetch: deep link com hash
+     (#mercados) ou botão de outra parte da tela. */
   useEffect(() => {
-    if (tab === 'alavancagem'  && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
-    // Busca os dois em paralelo: sao independentes, e serializar somaria a
-    // latencia de duas chamadas antes de pintar qualquer coisa na tela.
-    if (tab === 'mercados' && canSeeVip && faltas === null && !mercadosLoading) {
-      setMercadosLoading(true)
-      Promise.all([
-        api.get('/suggestions/faltas',   { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
-        api.get('/suggestions/goleiros', { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
-      ])
-        .then(([f, g]) => { setFaltas(f); setGoleiros(g) })
-        .finally(() => setMercadosLoading(false))
-    }
+    if (tab === 'alavancagem' && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
+    if (tab === 'mercados') carregarMercados()
   }, [tab, canSeeVip])
 
 
@@ -2013,7 +2044,16 @@ export default function Picks() {
 
         <TabBar
           tab={tab}
-          setTab={(t) => { if (t === 'aovivo') clearLive(); setTab(t) }}
+          setTab={(t) => {
+            if (t === 'aovivo') clearLive()
+            /* Trocar de aba é uma espera igual à de trocar de página pra quem
+               está usando, mas aqui não há mudança de rota pra barra do topo
+               perceber sozinha (as abas são estado, o hash só entra no deep
+               link) · por isso o aviso explícito. */
+            if (t !== tab) sinalizarNavegacao()
+            setTab(t)
+          }}
+          onPrefetch={prefetchAba}
           canSeeVip={canSeeVip}
           liveCount={liveCount}
           counts={{
