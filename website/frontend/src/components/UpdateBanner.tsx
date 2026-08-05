@@ -1,35 +1,37 @@
 import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Sparkles } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import api from '../services/api'
-import { CHANGELOG } from '../data/changelog'
-import { backdropFade, dialogScale, toastUp } from '../lib/motion'
+import { toastUp } from '../lib/motion'
 
-const SEEN_KEY = 'pickia_changelog_seen'
-const latestEntry = CHANGELOG[CHANGELOG.length - 1]
-
+/*
+ * Aviso de pacote desatualizado · aba aberta durante um redeploy.
+ *
+ * O QUE SAIU DAQUI (2026-08-05, pedido do usuário)
+ * ------------------------------------------------
+ * Este arquivo também mostrava o modal "Novidades no Pick IA", montado a
+ * partir de data/changelog.ts. Saiu por dois motivos, e o segundo é o que
+ * decidiu:
+ *
+ * 1. Ele quase nunca aparecia. A condição exigia que `user` mudasse DEPOIS da
+ *    montagem inicial (`if (wasInitialMount) return`), ou seja: só no instante
+ *    do login. Quem já entrava com sessão restaurada nunca via, e o changelog
+ *    precisava ser mantido à mão pra um popup que raramente abria.
+ * 2. Aviso não deve interromper. O sino (NotificationBell) é o lugar de
+ *    qualquer coisa que o site queira contar, e um modal em cima da tela é o
+ *    oposto disso · o usuário abriu o site pra ver picks.
+ *
+ * Este aviso aqui FICA porque não é notificação: é uma condição de erro. O JS
+ * em memória aponta pra chunks que não existem mais no servidor, e sem
+ * recarregar a navegação quebra (ver RouteErrorBoundary em App.tsx). Ele
+ * também não empilha no topo · é um chip no canto inferior.
+ */
 export default function UpdateBanner() {
   const { user } = useAuth()
-  const [showNotes, setShowNotes]   = useState(false)
   const [staleBundle, setStaleBundle] = useState(false)
-  const [dismissed, setDismissed]   = useState(false)
+  const [dismissed, setDismissed] = useState(false)
   const versionRef = useRef<string | null>(null)
-  const isInitialMount = useRef(true)
 
-  // Novidade curada que esse usuário ainda não viu · mostra no momento do login,
-  // não numa sessão só restaurada ao abrir o app (senão só reaparecia limpando localStorage).
-  useEffect(() => {
-    const wasInitialMount = isInitialMount.current
-    isInitialMount.current = false
-    if (!user || !latestEntry) return
-    if (wasInitialMount) return
-    if (localStorage.getItem('pickia_just_registered')) return
-    if (localStorage.getItem(SEEN_KEY) !== latestEntry.id) setShowNotes(true)
-  }, [user])
-
-  // Aba já aberta durante um redeploy · pacote JS ficou desatualizado, pede reload.
-  // Só entra em jogo se não tiver novidade curada esperando (essa já força reload).
   useEffect(() => {
     if (!user) return
 
@@ -52,47 +54,9 @@ export default function UpdateBanner() {
     return () => clearInterval(id)
   }, [user])
 
-  const markSeen = () => {
-    if (latestEntry) localStorage.setItem(SEEN_KEY, latestEntry.id)
-    setShowNotes(false)
-  }
-
   return (
     <AnimatePresence>
-      {showNotes && latestEntry && (
-        <motion.div
-          key="changelog-backdrop"
-          variants={backdropFade}
-          initial="hidden"
-          animate="visible"
-          exit="exit"
-          className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
-        >
-          <motion.div
-            variants={dialogScale}
-            className="bg-surface-1 border border-line-strong rounded-lg p-6 max-w-sm w-full overflow-y-auto max-h-[92dvh]"
-          >
-            <div className="w-11 h-11 rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center mb-4">
-              <Sparkles className="w-5 h-5 text-green-400" />
-            </div>
-            <h3 className="text-ink-1 font-bold text-lg mb-1">Novidades no Pick IA</h3>
-            <p className="text-ink-3 text-xs mb-4">Atualizado em {latestEntry.date}</p>
-            <ul className="space-y-2.5 mb-5">
-              {latestEntry.items.map((item, i) => (
-                <li key={i} className="flex items-start gap-2.5 text-sm text-ink-2">
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-500 mt-1.5 shrink-0" />
-                  <span>{item}</span>
-                </li>
-              ))}
-            </ul>
-            <motion.button whileTap={{ scale: 0.98 }} onClick={markSeen} className="btn-primary w-full py-2.5 text-sm">
-              Entendi
-            </motion.button>
-          </motion.div>
-        </motion.div>
-      )}
-
-      {!showNotes && staleBundle && !dismissed && (
+      {staleBundle && !dismissed && (
         <motion.div
           key="stale-bundle-chip"
           variants={toastUp}

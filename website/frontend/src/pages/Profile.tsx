@@ -570,8 +570,12 @@ export default function Profile() {
           <p className="text-ink-4 text-xs">Use isso se suspeitar que esqueceu logado em outro aparelho.</p>
         </div>
 
-        {/* E-mail e verificação */}
-        <div className="card p-6 space-y-4">
+        {/* E-mail e verificação.
+            Com o e-mail pendente o cartão ganha contorno âmbar: é aqui que o
+            ponto de atenção do avatar (ver Navbar) desemboca, e sem destaque o
+            usuário chegaria numa tela cheia de cartões iguais sem saber qual
+            deles pediu a visita. */}
+        <div className={`card p-6 space-y-4 ${user?.email_verified === false ? 'border-yellow-400/30' : ''}`}>
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-sm font-bold text-ink-1">E-mail</h2>

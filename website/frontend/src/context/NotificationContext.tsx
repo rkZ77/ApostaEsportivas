@@ -9,7 +9,11 @@ const LS_KEY = 'lastSeenPickId'
 // poll mais rápido quando a aba está de fato aberta.
 const POLL_INTERVAL = 60_000
 
-export type NotificationType = 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result'
+/* Espelha as constantes TYPE_* de backend/routers/notifications.py · manter em
+   sincronia, senão o sino cai no ícone padrão (resultado de pick) para um tipo
+   que não é resultado nenhum. */
+export type NotificationType =
+  | 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result' | 'plan_expiring'
 
 export interface AppNotification {
   id: number
