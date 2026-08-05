@@ -88,7 +88,7 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "O **Pick Seguro** é gratuito e liberado pra todo mundo, inclusive plano free. É publicado "
-            "diariamente e geralmente cobre um mercado mais defensivo (handicap, over/under baixo).\n\n"
+            "diariamente e geralmente cobre um mercado mais defensivo (over/under baixo).\n\n"
             "Pick VIP, Múltipla e Alavancagem, além do chat com análise ao vivo, são exclusivos de "
             "assinantes VIP ou trial."
         ),
