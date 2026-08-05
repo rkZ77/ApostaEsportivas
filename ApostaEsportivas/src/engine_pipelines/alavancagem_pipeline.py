@@ -215,6 +215,21 @@ def _gather_leg_candidates(fixtures: list) -> list:
     return legs
 
 
+def _legs_sem_jogo_do_vip(cur, legs: list) -> list:
+    """Pernas em jogos que o VIP NAO publicou hoje.
+
+    O pareamento e' so' por fixture: diferente da Free, aqui nao interessa qual
+    mercado o VIP usou. Uma alavancagem no mesmo jogo do pick VIP entrega ao
+    assinante duas apostas que torcem pelo mesmo jogo, e o valor do produto e'
+    justamente espalhar o risco entre partidas.
+    """
+    cur.execute(f"SELECT DISTINCT fixture_id FROM picks_vip WHERE match_date = {HOJE_BR}")
+    do_vip = {r[0] for r in cur.fetchall()}
+    if not do_vip:
+        return legs
+    return [p for p in legs if p["_fixture"]["fixture_id"] not in do_vip]
+
+
 def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
     """Tenta dupla -> tripla -> simples (pernas podem ser do mesmo fixture
     ou de fixtures diferentes) ate o produto real das odds cair em
@@ -335,10 +350,27 @@ def run_alavancagem_engine():
         conn.close()
         return
 
-    result = _find_combo(legs, ODD_COMBINED_TARGET_MIN, ODD_COMBINED_TARGET_MAX)
-    if not result:
-        print(f"[ALAVANCAGEM_ENGINE] Nenhum combo no alvo [{ODD_COMBINED_TARGET_MIN}, {ODD_COMBINED_TARGET_MAX}] · tentando fallback largo...")
-        result = _find_combo(legs, ODD_COMBINED_FALLBACK_MIN, ODD_COMBINED_FALLBACK_MAX)
+    # Exclusividade de jogo do VIP (decisao do usuario, 2026-08-05): o jogo que
+    # o VIP publicou hoje fica reservado. Aqui e' preferencia e nao veto por um
+    # motivo estrutural -- a alavancagem precisa de 2 a 3 jogos DIFERENTES por
+    # bilhete, entao num dia curto (05/08: 4 jogos, os 4 usados pelo VIP) a
+    # regra dura simplesmente nao entregaria nada. A busca roda duas vezes: so'
+    # com jogo livre primeiro, com todos depois.
+    livres = _legs_sem_jogo_do_vip(cur, legs)
+    tentativas = [("jogos livres do VIP", livres)] if livres else []
+    tentativas.append(("todos os jogos", legs))
+
+    result = None
+    for rotulo, pool in tentativas:
+        result = _find_combo(pool, ODD_COMBINED_TARGET_MIN, ODD_COMBINED_TARGET_MAX)
+        if not result:
+            result = _find_combo(pool, ODD_COMBINED_FALLBACK_MIN, ODD_COMBINED_FALLBACK_MAX)
+        if result:
+            if rotulo != "jogos livres do VIP":
+                print("[ALAVANCAGEM_ENGINE] Sem combo possivel so' com jogo livre · "
+                      "reaproveitando jogo que o VIP ja usou hoje.")
+            break
+
     if not result:
         print(f"[ALAVANCAGEM_ENGINE] Nenhuma combinação bateu nem o alvo [{ODD_COMBINED_TARGET_MIN}, {ODD_COMBINED_TARGET_MAX}] nem o fallback [{ODD_COMBINED_FALLBACK_MIN}, {ODD_COMBINED_FALLBACK_MAX}].")
         cur.close()

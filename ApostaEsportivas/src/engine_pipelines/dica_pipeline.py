@@ -58,6 +58,62 @@ def _today_vip_used_market_groups(cur) -> set:
     return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
 
 
+def _today_vip_por_fixture(cur) -> dict:
+    """{fixture_id: {"grupos": {...}, "picks": {(market_type, line), ...}}} do
+    VIP de hoje.
+
+    O VIP tem prioridade sobre o jogo (decisao do usuario, 2026-08-05): ele
+    roda primeiro em cmd_tudo() e o jogo que usar fica reservado. Este mapa e
+    o que permite a Free saber DE QUE forma cada jogo ja foi usado, e nao so
+    que foi -- os dois graus de repeticao pesam diferente (ver _nivel_repeticao).
+    """
+    cur.execute(
+        f"SELECT fixture_id, market_type, line FROM picks_vip WHERE match_date = {HOJE_BR}"
+    )
+    por_fixture: dict = {}
+    for fixture_id, market_type, line in cur.fetchall():
+        alvo = por_fixture.setdefault(fixture_id, {"grupos": set(), "picks": set()})
+        if market_type:
+            alvo["grupos"].add(ranking.correlation_group(market_type))
+        alvo["picks"].add((market_type, (line or "").strip().lower()))
+    return por_fixture
+
+
+# Escada de preferencia da Free sobre o jogo/mercado, do melhor pro pior.
+# Numero menor vence; empate desempata por final_score.
+NIVEL_JOGO_LIVRE_MERCADO_NOVO = 0
+NIVEL_JOGO_LIVRE_MERCADO_USADO = 1
+NIVEL_JOGO_DO_VIP_MERCADO_NOVO = 2
+# Nao existe nivel 3: repetir o pick IDENTICO do VIP e proibido, nao e ultimo
+# recurso (ver _nivel_repeticao).
+
+
+def _nivel_repeticao(pick: dict, fixture_id: int, vip_por_fixture: dict,
+                     grupos_do_vip_no_dia: set) -> int | None:
+    """Quao repetido esse candidato seria, ou None se for proibido.
+
+    Regra do usuario (2026-08-05), em ordem:
+      1. jogo que o VIP nao usou vence sempre;
+      2. sem jogo livre, pode reaproveitar um jogo do VIP com OUTRO mercado;
+      3. o mesmo pick do VIP (mesmo mercado E mesma linha, no mesmo jogo)
+         nunca sai -- "so nao repete o mesmo pick". Sem jogo livre e sem outro
+         mercado, a Free do dia nao publica.
+    """
+    grupo = ranking.correlation_group(pick["market_type"])
+    usado = vip_por_fixture.get(fixture_id)
+
+    if not usado:
+        return (NIVEL_JOGO_LIVRE_MERCADO_NOVO if grupo not in grupos_do_vip_no_dia
+                else NIVEL_JOGO_LIVRE_MERCADO_USADO)
+
+    linha = (pick.get("value_label") or "").strip().lower()
+    if (pick["market_type"], linha) in usado["picks"]:
+        return None  # pick identico ao do VIP
+    if grupo in usado["grupos"]:
+        return None  # mesmo jogo E mesma familia de mercado: e o mesmo pick com outra roupa
+    return NIVEL_JOGO_DO_VIP_MERCADO_NOVO
+
+
 def _fixtures_with_odds_in_range(cur) -> list:
     """Mesma query de ai/dica_do_dia_pipeline.py::get_fixtures_with_odds_in_range,
     reimplementada aqui para nao acoplar a esse modulo (que instancia
@@ -112,30 +168,38 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
-def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple | None:
+def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
+                                    vip_por_fixture: dict | None = None) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
     data_quality_score) do maior Score Final entre os que passam DICA_CONFIG
     (confidence>=0.72), ou None se nenhum passar.
 
-    Nao repetir grupo de mercado ja usado no VIP do dia (used_groups, ver
-    _today_vip_used_market_groups) e' PREFERENCIA, nao veto -- mudanca de
-    2026-08-05, decisao do usuario. Antes era filtro duro e podia zerar a Dica
-    do dia inteiro: em 05/08 os 4 unicos jogos tinham pick aprovada no
-    DICA_CONFIG (uma delas com EV +32%) e todas caiam em goals/corners/cards,
-    os tres grupos que o VIP ja tinha consumido -- assinante gratuito ficava
-    sem pick nenhuma pra preservar uma regra de variedade.
+    Nao repetir o que o VIP ja usou hoje e' PREFERENCIA em escada, nao veto --
+    mudanca de 2026-08-05, decisao do usuario. Antes era filtro duro sobre o
+    grupo de mercado e podia zerar a Dica do dia inteiro: em 05/08 os 4 unicos
+    jogos tinham pick aprovada no DICA_CONFIG (uma delas com EV +32%) e todas
+    caiam em goals/corners/cards, os tres grupos que o VIP ja tinha consumido.
 
-    Agora roda os dois em paralelo: `best_*` so' aceita candidato fora de
-    used_groups, `fallback_*` aceita qualquer um. O fallback so' e' devolvido
-    quando o preferido nao existe, e vem marcado com _usou_fallback_vip=True
-    pra quem chama poder registrar isso (nao e' o caminho normal)."""
+    A escada (ver _nivel_repeticao), do melhor pro pior:
+      0. jogo que o VIP nao usou, mercado que nao saiu no VIP hoje;
+      1. jogo que o VIP nao usou, mercado repetido de outro jogo;
+      2. jogo do VIP, mercado de outra familia.
+    O pick identico ao do VIP nunca sai, em nenhum nivel: sem jogo livre e sem
+    outro mercado, a Free do dia simplesmente nao publica.
+
+    O VIP tem prioridade sobre o jogo porque roda primeiro em cmd_tudo() e e o
+    produto pago -- a Free e que se acomoda no que sobrou, nao o contrario.
+
+    O candidato escolhido carrega `_nivel_repeticao` pra _save_pick registrar
+    no engine_debug quando a Dica precisou descer a escada."""
+    vip_por_fixture = vip_por_fixture or {}
     match_stats = MatchStatsService()
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
 
-    best_fixture, best_pick, best_quality = None, None, None
-    fb_fixture, fb_pick, fb_quality = None, None, None
+    # (nivel, -final_score) do melhor ate agora: menor tupla vence.
+    melhor = None
 
     for fixture in fixtures:
         structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
@@ -194,37 +258,37 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
         if not picks:
             continue
 
-        # Fallback: guarda o melhor de TODOS antes de aplicar a preferencia,
-        # pra que um dia em que o VIP consumiu todos os grupos ainda entregue
-        # pick gratuita (ver docstring). Nao substitui a preferencia, so'
-        # existe como rede.
-        pick_geral = next((p for p in picks if p.get("is_best_pick")), picks[0])
-        if fb_pick is None or pick_geral["final_score"] > fb_pick["final_score"]:
-            fb_fixture, fb_pick, fb_quality = (
-                fixture, {**pick_geral, "data_quality_score": quality["score"]}, quality["score"],
-            )
+        # Escada: cada candidato aprovado recebe seu nivel de repeticao e
+        # disputa por (nivel, -score). Avaliar TODOS em vez de so' o
+        # is_best_pick do fixture importa: o melhor do jogo pode ser
+        # justamente o que repete o VIP, e o segundo colocado do mesmo jogo
+        # resolver num nivel melhor.
+        aceitos = 0
+        for p in picks:
+            nivel = _nivel_repeticao(p, fixture["fixture_id"], vip_por_fixture, used_groups)
+            if nivel is None:
+                continue
+            aceitos += 1
+            chave = (nivel, -p["final_score"])
+            if melhor is None or chave < melhor[0]:
+                melhor = (chave, fixture, {**p, "data_quality_score": quality["score"],
+                                           "_nivel_repeticao": nivel}, quality["score"])
 
-        preferidos = [p for p in picks if ranking.correlation_group(p["market_type"]) not in used_groups]
-        if not preferidos:
-            grupos = sorted({ranking.correlation_group(p["market_type"]) for p in picks})
-            print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: {len(picks)} candidato(s) "
-                  f"aprovado(s) no DICA_CONFIG repetem grupo ja usado no VIP de hoje "
-                  f"({', '.join(grupos)}) · so' entram se ninguem melhor aparecer.")
-            continue
+        if aceitos == 0:
+            print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: os {len(picks)} candidato(s) "
+                  f"aprovados no DICA_CONFIG repetiriam o pick que o VIP ja publicou neste jogo.")
 
-        pick = next((p for p in preferidos if p.get("is_best_pick")), preferidos[0])
-        if best_pick is None or pick["final_score"] > best_pick["final_score"]:
-            best_fixture, best_pick, best_quality = fixture, {**pick, "data_quality_score": quality["score"]}, quality["score"]
-
-    if best_pick is None and fb_pick is not None:
-        grupo = ranking.correlation_group(fb_pick["market_type"])
-        print(f"[DICA_ENGINE] Nenhum candidato fora dos grupos ja usados no VIP hoje · "
-              f"caindo no fallback com o melhor do dia (grupo '{grupo}', repetido do VIP).")
-        return fb_fixture, {**fb_pick, "_usou_fallback_vip": True}, fb_quality
-
-    if best_pick is None:
+    if melhor is None:
         return None
-    return best_fixture, best_pick, best_quality
+
+    _, fixture, pick, quality_score = melhor
+    if pick["_nivel_repeticao"] == NIVEL_JOGO_DO_VIP_MERCADO_NOVO:
+        print(f"[DICA_ENGINE] Nenhum jogo livre do VIP hoje · reaproveitando o jogo "
+              f"{fixture['fixture_id']} com outro mercado ({pick['market_type']}).")
+    elif pick["_nivel_repeticao"] == NIVEL_JOGO_LIVRE_MERCADO_USADO:
+        print(f"[DICA_ENGINE] Jogo livre, mas o mercado ({pick['market_type']}) ja saiu "
+              f"no VIP de hoje em outro jogo.")
+    return fixture, pick, quality_score
 
 
 def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None):
@@ -237,11 +301,13 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # services/pick_engine/red_analysis.py + calibration.py.
     engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
     engine_debug_data["ai_review"] = pick.get("ai_review")
-    # Rastro de quando a pick so' existiu porque a preferencia "nao repetir
-    # grupo do VIP" cedeu -- sem isso nao da' pra medir depois se o fallback
-    # esta virando regra em vez de excecao.
-    if pick.get("_usou_fallback_vip"):
-        engine_debug_data["fallback_grupo_repetido_do_vip"] = True
+    # Em que degrau da escada esta pick nasceu (ver _nivel_repeticao). Sem
+    # isso nao da' pra medir depois se o reaproveitamento de jogo do VIP virou
+    # regra em vez de excecao -- que e' o sinal de que o dia esta curto demais
+    # de jogos, nao de que a Free ficou pior.
+    nivel = pick.get("_nivel_repeticao")
+    if nivel is not None:
+        engine_debug_data["nivel_repeticao_vip"] = nivel
     engine_debug = json.dumps(
         engine_debug_data,
         default=str, ensure_ascii=False,
@@ -312,12 +378,17 @@ def run_dica_engine():
     print(f"[DICA_ENGINE] Avaliando {len(fixtures)} fixtures (motor deterministico)...")
 
     used_groups = _today_vip_used_market_groups(cur)
-    if used_groups:
-        print(f"[DICA_ENGINE] {len(used_groups)} grupo(s) de mercado ja usados no VIP hoje (bloqueio global) · bloqueados")
+    vip_por_fixture = _today_vip_por_fixture(cur)
+    if vip_por_fixture:
+        livres = [f for f in fixtures if f["fixture_id"] not in vip_por_fixture]
+        print(f"[DICA_ENGINE] VIP ja usou {len(vip_por_fixture)} jogo(s) hoje · "
+              f"{len(livres)} de {len(fixtures)} continuam livres "
+              f"({len(used_groups)} grupo(s) de mercado ja usados)")
 
-    result = _best_candidate_across_fixtures(fixtures, used_groups)
+    result = _best_candidate_across_fixtures(fixtures, used_groups, vip_por_fixture)
     if not result:
-        print("[DICA_ENGINE] Nenhum candidato passou nos critérios mínimos (DICA_CONFIG).")
+        print("[DICA_ENGINE] Nenhum candidato passou nos critérios mínimos (DICA_CONFIG) "
+              "ou o que sobrou repetiria um pick que o VIP ja publicou.")
         cur.close()
         conn.close()
         return
