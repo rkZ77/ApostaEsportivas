@@ -18,7 +18,7 @@ export { default as Panel, PanelHead, PanelRow, PanelList } from './Panel'
 export { default as Modal, Drawer, ModalFooter } from './Modal'
 
 export { default as EmptyState, ErrorState } from './EmptyState'
-export { default as Skeleton, SkeletonText, SkeletonCard, SkeletonRows } from './Skeleton'
+export { default as Skeleton, SkeletonText, SkeletonCard, SkeletonRows, SkeletonPickCard, SkeletonPickGrid } from './Skeleton'
 export { default as Spinner, SpinnerBlock } from './Spinner'
 
 export { default as Pagination } from './Pagination'
