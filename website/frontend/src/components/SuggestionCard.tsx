@@ -74,6 +74,19 @@ function shortReasoning(text?: string): string {
 
 interface BancaSummary { bankroll_current: number; unit_value: number }
 
+/*
+ * Teto de unidades por tipo, espelhando STAKE_LIMITS em
+ * backend/routers/banca.py. Sem isto o modal deixava escolher mais unidades
+ * do que o backend aceita e a aposta so' falhava no POST /banca/follow, com
+ * erro genérico depois de o usuário ter confirmado -- faltas e goleiros
+ * param em 6 lá, não em 10.
+ *
+ * VIP fica de fora de propósito: mantém o teto dinâmico que já tinha.
+ */
+const MAX_UNITS_POR_TIPO: Record<string, number> = {
+  free: 6, multipla: 3, faltas: 6, goleiros: 6,
+}
+
 export default function SuggestionCard({
   s, onClick, banca, isLive = false,
 }: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null; isLive?: boolean }) {
@@ -188,6 +201,11 @@ export default function SuggestionCard({
     : null
 
   const probPct = s.probability != null ? Number(s.probability) * 100 : null
+
+  // Sugestão nunca pode nascer acima do teto: em mercado com teto baixo
+  // (faltas/goleiros) o Kelly do calcVipStake chegava a pedir mais unidades
+  // do que o backend aceita.
+  const maxUnits = MAX_UNITS_POR_TIPO[pickType] ?? Math.max(10, stakeSuggestion?.units ?? 10)
 
   return (
   <>
@@ -312,7 +330,8 @@ export default function SuggestionCard({
           <div className="flex-1 px-4 py-3 text-center">
             <div className="text-[10px] text-ink-3 mb-0.5">EV</div>
             <div className={`text-xl font-black ${s.ev != null && s.ev > 0 ? 'text-green-400' : 'text-ink-3'}`}>
-              {s.ev != null ? `${Number(s.ev).toFixed(1)}%` : 's/d'}
+              {/* ev vem como fração do endpoint de lista · ver AnalysisModal */}
+              {s.ev != null ? `${(Number(s.ev) * 100).toFixed(1)}%` : 's/d'}
             </div>
           </div>
         )}
@@ -380,9 +399,9 @@ export default function SuggestionCard({
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
-        suggestedUnits={stakeSuggestion?.units ?? 1}
+        suggestedUnits={Math.min(stakeSuggestion?.units ?? 1, maxUnits)}
         suggestedHouse={s.bet_house}
-        maxUnits={s.pick_type === 'multipla' ? 3 : Math.max(10, stakeSuggestion?.units ?? 10)}
+        maxUnits={maxUnits}
         onConfirm={handleConfirm}
         onCancel={() => setShowModal(false)}
         loading={following}

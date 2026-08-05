@@ -61,6 +61,11 @@ const MARKET_PT: Record<string, string> = {
   'fouls. away total': 'Faltas Visitante Mais/Menos',
   'fouls. total': 'Faltas Mais/Menos',
   'fouls': 'Faltas Mais/Menos',
+  // Defesas de goleiro (bet_id 267) -- prop de JOGADOR, nao over/under de
+  // time: a linha ja vem com o nome do goleiro ("Fabio · 3 ou mais defesas").
+  'goalkeeper saves': 'Defesas do goleiro',
+  'player saves': 'Defesas do goleiro',
+  'saves': 'Defesas do goleiro',
   'to qualify': 'Classificação',
   'to qualify - extra time': 'Classificação (Prorrogação)',
 }
@@ -131,6 +136,11 @@ const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'fouls. away total':     _ouOr('o total de faltas cometidas só pela equipe visitante'),
   'fouls. total':          _ouOr('o total de faltas da partida (somando os dois times)'),
   'fouls':                 _ouOr('o total de faltas da partida (somando os dois times)'),
+  // "N ou mais" -- nao e' over/under, entao nao usa _ouOr: da GREEN a partir
+  // de N defesas, inclusive N (P(X >= N), ver goalkeeper_model.py).
+  'goalkeeper saves':      () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais. Vale só as defesas dele, não as do time inteiro.',
+  'player saves':          () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais.',
+  'saves':                 () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais.',
 }
 
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */

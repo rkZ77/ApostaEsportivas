@@ -10,12 +10,12 @@ import ApostaModal from '../components/ApostaModal'
 import SuggestionDetail from '../components/SuggestionDetail'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
-import { LiveDot, Spinner, EmptyState, Badge, PickTypeBadge, ResultBadge } from '../components/ui'
+import { LiveDot, Spinner, EmptyState } from '../components/ui'
 import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../components/MercadosControls'
 import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
-import { PickCardFooter, PickExplainButton, PickProbability, PickStats, PickReasoning } from '../components/PickCardParts'
+import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
 import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
@@ -1209,170 +1209,103 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
 // primeira tela em qualquer aparelho.
 interface MercadoPick {
   id: number
+  fixture_id?: number
   match_date: string
+  match_datetime?: string
   home_team: string; away_team: string
   home_team_id?: number; away_team_id?: number
+  league_id?: number; league_name?: string
   player_name?: string; team_name?: string
-  market: string; line: string
+  market: string; market_type?: string; line: string
   odd: number; bet_house?: string
   prob_real?: number; edge?: number
   reasoning?: string
   stake_units?: number
   result?: string | null
+  is_followed?: boolean
+  user_stake_units?: number | null
+  user_actual_odd?: number | null
+  user_bet_house?: string | null
 }
 
 /*
- * Card de mercado (faltas e defesas).
+ * Picks de mercado próprio renderizam pelo MESMO componente do VIP
+ * (SuggestionCard), não por um card paralelo.
  *
- * Reescrito pra ter a MESMA anatomia dos outros cinco cards: cabeçalho com
- * badge e horário, tira de números, times, confiança, raciocínio e rodapé com
- * Apostar / Entenda / Compartilhar. Antes era o mais divergente do conjunto
- * (padding e raio próprios, números em caixinhas separadas) e o único sem
- * nenhuma ação: dava pra ler o pick e não dava pra registrar.
+ * Antes existia um MercadoCard só pra faltas/goleiros. Ele nasceu com a mesma
+ * anatomia e foi divergindo: ficou sem stake sugerida em unidades e reais, sem
+ * lucro potencial, sem o estado "Apostado Xu" de quem já registrou, sem a odd
+ * real do usuário, sem o "Registrando…/Registrado" no botão, sem buscar odd ao
+ * vivo antes de abrir o modal e sem o aviso de sucesso. Duplicar a anatomia do
+ * card é justamente o que produz esse tipo de deriva, então o que sobra aqui é
+ * só a tradução do formato do pipeline pro formato que o SuggestionCard já
+ * consome.
+ *
+ * `ev` vai como FRAÇÃO porque é assim que o endpoint de lista entrega pros
+ * outros tipos (picks_vip.ev = 0.3203 para 32%) · manter a mesma escala é o
+ * que garante que os dois cards mostrem o mesmo número.
  */
-function MercadoCard({ p, tipo, banca, onBet, onClick }: {
-  p: MercadoPick
-  tipo: 'faltas' | 'goleiros'
-  banca?: { bankroll_current: number; unit_value: number } | null
-  onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
-  /** Abre a analise completa no drawer, igual aos outros tipos. */
-  onClick?: () => void
-}) {
-  const [showAnalysis, setShowAnalysis] = useState(false)
-  const { share: shareStory, sharing, shared } = useShareStoryImage()
-
-  const handleShare = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    shareStory({
-      pickId: p.id,
-      pickTypeRoute: tipo,
-      homeTeamName: translateTeamName(p.home_team),
-      awayTeamName: translateTeamName(p.away_team),
-      homeTeamId: p.home_team_id,
-      awayTeamId: p.away_team_id,
-      pickType: tipo,
-      market: tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo',
-      line: p.line,
-      odd: Number(p.odd),
-      result: p.result,
-      profit: p.result ? calcProfitUnits(p.result, Number(p.odd), p.stake_units ?? 1) : null,
-    })
+function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
+  return {
+    id: p.id,
+    fixture_id: p.fixture_id,
+    home_team_name: p.home_team,
+    away_team_name: p.away_team,
+    home_team_id: p.home_team_id,
+    away_team_id: p.away_team_id,
+    league_id: p.league_id,
+    league_name: p.league_name,
+    market: p.market,
+    line: p.line,
+    odd: Number(p.odd),
+    bet_house: p.bet_house ?? '',
+    /* prob_real É a probabilidade destes dois mercados: a tabela empírica
+       (faltas) e a Binomial Negativa (goleiros) já devolvem probabilidade, não
+       existe score composto separado pra virar "confiança". */
+    confidence: p.prob_real != null ? Number(p.prob_real) : 0,
+    probability: p.prob_real != null ? Number(p.prob_real) : null,
+    market_type: p.market_type ?? tipo,
+    ev: p.edge != null ? Number(p.edge) : undefined,
+    match_date: p.match_datetime ?? p.match_date,
+    reasoning: p.reasoning,
+    result: p.result ?? undefined,
+    pick_type: tipo,
+    is_followed: p.is_followed,
+    user_stake_units: p.user_stake_units,
+    user_actual_odd: p.user_actual_odd,
+    user_bet_house: p.user_bet_house,
+    /* stake_units do pipeline é a sugestão do próprio motor (calculate_stake),
+       mesmo papel de suggested_stake_units nos outros tipos. */
+    suggested_stake_units: p.stake_units,
   }
-  const prob = p.prob_real != null ? Number(p.prob_real) * 100 : null
-  const edge = p.edge != null ? Number(p.edge) * 100 : null
+}
 
-  const kickoff = new Date(`${p.match_date}T12:00:00`)
-    .toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onOpen }: {
+  tipo: 'faltas' | 'goleiros'
+  titulo: string; cor: string; explicacao: string
+  picks: MercadoPick[] | null; carregando: boolean
+  banca?: { bankroll_current: number; unit_value: number } | null
+  onOpen?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
+}) {
   return (
-    <>
-    <div
-      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER[tipo]}`}
-      onClick={onClick}
-    >
-
-      {/* Cabeçalho */}
-      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
-        <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <PickTypeBadge type={tipo} />
-          <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
-            <Clock className="w-3 h-3" />
-            {kickoff}
-          </span>
-          {p.bet_house && <span className="text-[10px] text-ink-4 truncate">{p.bet_house}</span>}
-        </div>
-        <div className="flex items-center gap-1 shrink-0">
-          {p.result ? <ResultBadge result={p.result} /> : <Badge tone="neutral">Pendente</Badge>}
+    <div>
+      {/* Favoritar o MERCADO (não o time) vive no cabeçalho da seção desde que
+          o card virou SuggestionCard: é uma preferência por categoria, então
+          repeti-la em cada card sempre foi redundante · o card agora favorita
+          o time, igual aos outros tipos. */}
+      <SectionHeader
+        color={cor}
+        label={titulo}
+        badge="VIP"
+        action={
           <FavoriteButton
             kind="market"
             refId={tipo}
             label={tipo === 'goleiros' ? 'Defesas de goleiro' : 'Faltas'}
             size="sm"
           />
-        </div>
-      </div>
-
-      <PickStats
-        items={[
-          { label: 'Odd', value: Number(p.odd).toFixed(2), tone: 'accent' },
-          { label: 'Probabilidade', value: prob != null ? `${prob.toFixed(0)}%` : '·' },
-          {
-            label: 'Margem',
-            value: edge != null ? `${edge > 0 ? '+' : ''}${edge.toFixed(1)}%` : '·',
-            tone: edge != null && edge > 0 ? 'accent' : 'default',
-          },
-        ]}
+        }
       />
-
-      {/* Times e linha */}
-      <div className="px-5 py-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <TeamLogo id={p.home_team_id} name={p.home_team} size={20} />
-          <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team}</span>
-          <span className="text-ink-4 text-xs shrink-0">x</span>
-          <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team}</span>
-          <TeamLogo id={p.away_team_id} name={p.away_team} size={20} />
-        </div>
-        <div className="flex items-center gap-2 text-xs text-ink-3 flex-wrap">
-          <span className="font-semibold text-ink-2">
-            {tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo'}
-          </span>
-          <span>·</span>
-          <span className="text-ink-1 font-semibold">{p.line}</span>
-          {tipo === 'goleiros' && p.team_name && (
-            <><span>·</span><span>{p.team_name}</span></>
-          )}
-        </div>
-      </div>
-
-      {/* prob_real E a probabilidade destes dois mercados. */}
-      <PickProbability probability={p.prob_real != null ? Number(p.prob_real) : null} />
-
-      <PickReasoning text={p.reasoning} />
-
-      {(p.reasoning || p.prob_real != null) && (
-        <PickExplainButton onClick={() => setShowAnalysis(true)} />
-      )}
-
-      <PickCardFooter
-        onBet={!p.result && onBet ? (e => { e.stopPropagation(); onBet(p, tipo) }) : undefined}
-        hasBanca={!!banca}
-        onShare={handleShare}
-        shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
-      />
-    </div>
-
-    <AnimatePresence>
-    {showAnalysis && (
-      <AnalysisModal
-        onClose={() => setShowAnalysis(false)}
-        data={{
-          market: tipo === 'goleiros' ? 'Defesas do goleiro' : 'Faltas no jogo',
-          line: p.line,
-          odd: Number(p.odd),
-          confidence: p.prob_real ?? null,
-          probability: p.prob_real ?? null,
-          ev: edge,
-          reasoning: p.reasoning,
-        }}
-      />
-    )}
-    </AnimatePresence>
-    </>
-  )
-}
-
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onBet, onOpen }: {
-  tipo: 'faltas' | 'goleiros'
-  titulo: string; cor: string; explicacao: string
-  picks: MercadoPick[] | null; carregando: boolean
-  banca?: { bankroll_current: number; unit_value: number } | null
-  onBet?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
-  onOpen?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
-}) {
-  return (
-    <div>
-      <SectionHeader color={cor} label={titulo} badge="VIP" />
       <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>
       {carregando ? (
         <PickLoading />
@@ -1388,19 +1321,31 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
-          {picks.map(p => <MercadoCard key={p.id} p={p} tipo={tipo} banca={banca} onBet={onBet} onClick={onOpen ? () => onOpen(p, tipo) : undefined} />)}
+          {picks.map(p => (
+            <SuggestionCard
+              key={p.id}
+              s={mercadoParaSuggestion(p, tipo)}
+              banca={banca}
+              onClick={onOpen ? () => onOpen(p, tipo) : undefined}
+            />
+          ))}
         </div>
       )}
     </div>
   )
 }
 
-function SectionHeader({ color, label, badge }: { color: string; label: string; badge?: string }) {
+function SectionHeader({ color, label, badge, action }: {
+  color: string; label: string; badge?: string
+  /** Ação opcional alinhada à direita (ex.: favoritar o mercado da seção). */
+  action?: React.ReactNode
+}) {
   return (
     <div className="flex items-center gap-3 mb-4">
       <span className={`w-0.5 h-5 ${color} rounded-full block`} />
       <h2 className="text-sm font-bold text-ink-2">{label}</h2>
       {badge && <span className="badge-vip">{badge}</span>}
+      {action && <div className="ml-auto shrink-0">{action}</div>}
     </div>
   )
 }
@@ -1745,42 +1690,6 @@ export default function Picks() {
   const [mercadoFiltro, setMercadoFiltro] = useState<MercadoFiltro>(FILTRO_INICIAL)
   const { isFavorite, favorites } = useFavorites()
 
-  /*
-   * Registrar aposta de mercado (faltas e defesas).
-   *
-   * Reusa o ApostaModal dos outros tipos em vez de um fluxo proprio: a
-   * confirmacao de odd real e casa de aposta e a mesma, e duas telas de
-   * confirmacao diferentes pro mesmo ato so confundiriam.
-   */
-  const [mercadoBet, setMercadoBet] = useState<{ p: MercadoPick; tipo: 'faltas' | 'goleiros' } | null>(null)
-  const [mercadoBetLoading, setMercadoBetLoading] = useState(false)
-  const [mercadoBetError, setMercadoBetError] = useState<string | null>(null)
-
-  const handleMercadoBet = useCallback((p: MercadoPick, tipo: 'faltas' | 'goleiros') => {
-    setMercadoBetError(null)
-    setMercadoBet({ p, tipo })
-  }, [])
-
-  const confirmMercadoBet = async (actualOdd: number, betHouse: string, stakeUnits: number) => {
-    if (!mercadoBet) return
-    setMercadoBetLoading(true)
-    setMercadoBetError(null)
-    try {
-      await api.post('/banca/follow', {
-        pick_id: mercadoBet.p.id,
-        pick_type: mercadoBet.tipo,
-        stake_units: stakeUnits,
-        actual_odd: actualOdd,
-        bet_house: betHouse,
-      })
-      setMercadoBet(null)
-    } catch (err: any) {
-      setMercadoBetError(err?.response?.data?.detail ?? 'Erro ao registrar aposta. Tente novamente.')
-    } finally {
-      setMercadoBetLoading(false)
-    }
-  }
-  // Um pick de mercado conta como favorito se o time da casa, o visitante ou
   // o próprio tipo de mercado estiver favoritado.
   const mercadoEhFavorito = useCallback((p: MercadoPick & { tipo?: string }) => (
     (p.home_team_id != null && isFavorite('team', p.home_team_id)) ||
@@ -2029,20 +1938,6 @@ export default function Picks() {
       }}
     >
       <AnimatePresence>
-      {mercadoBet && (
-        <ApostaModal
-          pickOdd={Number(mercadoBet.p.odd)}
-          suggestedUnits={mercadoBet.p.stake_units ?? 1}
-          suggestedHouse={mercadoBet.p.bet_house}
-          onConfirm={confirmMercadoBet}
-          onCancel={() => setMercadoBet(null)}
-          loading={mercadoBetLoading}
-          error={mercadoBetError}
-        />
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
       {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
       </AnimatePresence>
 
@@ -2279,11 +2174,27 @@ export default function Picks() {
                 <section>
                   <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
                   <div className="grid gap-4 md:grid-cols-2">
+                    {/* Era aqui que o card de mercado aparecia SEM ação nenhuma:
+                        o MercadoCard antigo só mostrava o botão Apostar quando
+                        recebia `onBet`, e nesta aba (a que o usuário abre
+                        primeiro) ele era montado sem nenhuma prop além do pick.
+                        Com SuggestionCard o card é o mesmo do VIP em qualquer
+                        lugar que apareça. */}
                     {(today?.faltas ?? []).map((p: MercadoPick) => (
-                      <MercadoCard key={`f-${p.id}`} p={p} tipo="faltas" />
+                      <SuggestionCard
+                        key={`f-${p.id}`}
+                        s={mercadoParaSuggestion(p, 'faltas')}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onClick={() => openDetail(p.id, 'faltas')}
+                      />
                     ))}
                     {(today?.goleiros ?? []).map((p: MercadoPick) => (
-                      <MercadoCard key={`g-${p.id}`} p={p} tipo="goleiros" />
+                      <SuggestionCard
+                        key={`g-${p.id}`}
+                        s={mercadoParaSuggestion(p, 'goleiros')}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onClick={() => openDetail(p.id, 'goleiros')}
+                      />
                     ))}
                   </div>
                   <button onClick={() => setTab('mercados')}
@@ -2783,7 +2694,6 @@ export default function Picks() {
                         picks={faltas === null ? null : faltasFiltradas}
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onBet={handleMercadoBet}
                         onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
@@ -2796,7 +2706,6 @@ export default function Picks() {
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onBet={handleMercadoBet}
                         onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
