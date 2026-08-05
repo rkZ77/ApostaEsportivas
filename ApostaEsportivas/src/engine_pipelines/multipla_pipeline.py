@@ -38,7 +38,13 @@ ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
                       # jogos diferentes ja passa de 3.00 (ex: 1.82x1.85=3.37),
                       # bloqueando a multipla o dia inteiro sem motivo real de
                       # qualidade. Decisao do usuario: alargar o teto pra 4.00.
-MAX_FIXTURES = 4
+# Sem teto de fixtures desde 2026-08-05 (pedido do usuario): todas as pernas
+# do dia entram no pool. O teto de 4 era heranca da era em que a IA MONTAVA a
+# multipla e cada fixture ia dentro do prompt ("controla tokens", ver
+# ai/alavancagem_pipeline.py) -- hoje a IA so' revisa a combo JA montada, uma
+# chamada unica no fim. Quem segura o custo de combinacao continua sendo
+# MAX_CANDIDATES_FOR_COMBO abaixo (itertools.combinations sobre o pool
+# ordenado), nao o numero de jogos lidos.
 MAX_CANDIDATES_FOR_COMBO = 12  # limita o espaco de busca das combinacoes
 
 
@@ -124,7 +130,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     referee_service = RefereeStatsService()
     legs = []
 
-    for fixture in fixtures[:MAX_FIXTURES]:
+    for fixture in fixtures:
         try:
             structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
             if not structured_odds:

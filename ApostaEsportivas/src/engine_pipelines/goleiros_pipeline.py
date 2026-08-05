@@ -57,15 +57,23 @@ EDGE_MIN = 0.06
 
 NOMES_MERCADO = ("goalkeeper saves", "saves", "player saves")
 
-# "Everson - 1" / "Jandrei Chitolina - 2". O numero e' sempre o ultimo campo.
-_VALOR_RE = re.compile(r"^(?P<nome>.+?)\s*-\s*(?P<n>\d+)$")
+# "Everson - 1" / "Jandrei Chitolina - 2" / "Joao Ricardo - 3+".
+# O "+" opcional no fim e' a notacao da Bet365 pro MESMO produto que a Betano
+# escreve sem sinal -- achado real 2026-08-05 comparando as duas casas no
+# mesmo jogo: "Weverton Pereira - 2" a 1.31 (Betano) e "Weverton - 2+" a 1.40
+# (Bet365). Sem aceitar o "+", a regex antiga (que exigia digito no fim da
+# string) descartava em silencio TODA a oferta da Bet365: 5 das 13 linhas
+# dentro da faixa de odd util naquele dia.
+_VALOR_RE = re.compile(r"^(?P<nome>.+?)\s*-\s*(?P<n>\d+)\s*\+?$")
 
 
 def _parse_valor(value_name: str) -> tuple[str, int] | None:
-    """('Everson', 1) a partir de 'Everson - 1', ou None se nao bater.
+    """('Everson', 1) a partir de 'Everson - 1' ou 'Everson - 1+'.
 
-    Nunca adivinha: formato diferente do esperado devolve None e o candidato
-    e' descartado, em vez de virar um pick com linha errada.
+    As duas grafias significam a mesma coisa ("N ou mais defesas"), entao o
+    "+" e' so' notacao e nao muda a linha. Nunca adivinha: formato diferente
+    do esperado devolve None e o candidato e' descartado, em vez de virar um
+    pick com linha errada.
     """
     m = _VALOR_RE.match((value_name or "").strip())
     if not m:
@@ -88,8 +96,49 @@ def _normalizar_nome(nome: str) -> str:
     return " ".join(sem_acento.lower().split())
 
 
-def _goleiros_conhecidos(cur) -> dict:
-    """{nome_normalizado: {player_id, team_id, saves_avg, jogos}} dos goleiros.
+def _resolver_goleiro(nome_ofertado: str, goleiros: list,
+                      home_team_id: int, away_team_id: int) -> dict | None:
+    """Goleiro da oferta, procurado APENAS entre os dois times da partida.
+
+    A casa de aposta e a API-Football nem sempre escrevem o nome igual: em
+    2026-08-05 a Betano publicou "Weverton Pereira" (Palmeiras) enquanto a base
+    tinha "Weverton" -- e existe OUTRO "Weverton" (Gremio) na mesma base, que
+    inclusive jogava no mesmo dia. Casar so' por nome pegaria o do Gremio,
+    leria o adversario errado e INVERTERIA a previsao, que e' pior que nao
+    gerar pick nenhuma.
+
+    Por isso o time entra como parte da chave, nao como conferencia posterior:
+      1. nome normalizado identico vence;
+      2. senao, aceita quando os tokens de um nome estao contidos nos do outro
+         ("weverton" dentro de "weverton pereira");
+      3. empate entre dois goleiros do jogo devolve None -- ambiguidade nunca
+         vira chute.
+    """
+    alvo = set(_normalizar_nome(nome_ofertado).split())
+    if not alvo:
+        return None
+
+    do_jogo = [g for g in goleiros if g["team_id"] in (home_team_id, away_team_id)]
+
+    exatos = [g for g in do_jogo if set(g["nome_norm"].split()) == alvo]
+    if exatos:
+        return exatos[0] if len(exatos) == 1 else None
+
+    parciais = []
+    for g in do_jogo:
+        tokens = set(g["nome_norm"].split())
+        if tokens and (tokens <= alvo or alvo <= tokens):
+            parciais.append(g)
+    return parciais[0] if len(parciais) == 1 else None
+
+
+def _goleiros_conhecidos(cur) -> list:
+    """Goleiros com vinculo jogador->time, um item por goleiro.
+
+    Lista e nao dicionario por nome: dois goleiros podem normalizar pro MESMO
+    nome (o "Weverton" do Gremio e o "Weverton Pereira" do Palmeiras), e um
+    dict por nome faria o segundo sobrescrever o primeiro em silencio. Quem
+    resolve a ambiguidade e' _resolver_goleiro, usando os times do jogo.
 
     NAO exige saves IS NOT NULL: o que este mapa resolve, e que e'
     obrigatorio, e' o vinculo goleiro->time (sem ele nao da' pra saber de qual
@@ -114,17 +163,18 @@ def _goleiros_conhecidos(cur) -> dict:
         WHERE position = 'G'
         GROUP BY player_id
     """)
-    out = {}
+    out = []
     for r in cur.fetchall():
         nome = _normalizar_nome(r[1])
         if not nome:
             continue
-        out[nome] = {
+        out.append({
             "player_id": r[0], "player_name": r[1],
             "team_id": r[2], "team_name": r[3],
             "saves_avg": float(r[4]) if r[4] is not None else None,
             "jogos": int(r[5] or 0),
-        }
+            "nome_norm": nome,
+        })
     return out
 
 
@@ -215,11 +265,13 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             continue
         nome_goleiro, n_defesas = parsed
 
-        info = goleiros.get(_normalizar_nome(nome_goleiro))
+        info = _resolver_goleiro(
+            nome_goleiro, goleiros, fixture["home_team_id"], fixture["away_team_id"])
         if not info:
-            # Goleiro que ainda nao aparece em player_match_stats: sem o
-            # vinculo com o time nao da' pra saber de qual adversario pegar
-            # o volume ofensivo. Descarta em vez de chutar o lado.
+            # Goleiro que ainda nao aparece em player_match_stats por nenhum
+            # dos dois times, ou nome ambiguo entre eles: sem o vinculo certo
+            # nao da' pra saber de qual adversario pegar o volume ofensivo.
+            # Descarta em vez de chutar o lado.
             continue
 
         # De qual lado ele esta -> quem chuta contra ele.
