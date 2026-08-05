@@ -53,7 +53,12 @@ ODD_COMBINED_FALLBACK_MIN = 1.45
 ODD_COMBINED_FALLBACK_MAX = 1.90
 ODD_INDIVIDUAL_MIN = 1.05
 ODD_INDIVIDUAL_MAX = 2.00  # = ODD_COMBINED_FALLBACK_MAX(1.90) + 0.10, mesma folga de sempre
-MAX_FIXTURES = 15
+# Sem teto de fixtures desde 2026-08-05 (pedido do usuario): todos os jogos do
+# dia entram. O LIMIT 15 era heranca da era em que a IA montava a alavancagem e
+# cada fixture ia dentro do prompt ("teto de fixtures por chamada · controla
+# tokens", ver ai/alavancagem_pipeline.py) -- hoje a IA so' revisa a combo JA
+# montada, uma chamada unica no fim. O custo de combinacao continua limitado
+# por MAX_CANDIDATES_FOR_COMBO abaixo.
 MAX_CANDIDATES_FOR_COMBO = 12
 
 _TIPO_POR_TAMANHO = {1: "simples", 2: "dupla", 3: "tripla"}
@@ -105,8 +110,7 @@ def _fixtures_with_odds_today(cur) -> list:
           AND f.status = 'NS'
           AND ov.odd_value BETWEEN %s AND %s
         ORDER BY f.match_datetime
-        LIMIT %s
-    """, (ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX, MAX_FIXTURES))
+    """, (ODD_INDIVIDUAL_MIN, ODD_INDIVIDUAL_MAX))
 
     return [
         {

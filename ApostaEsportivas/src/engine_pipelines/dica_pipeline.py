@@ -30,7 +30,6 @@ from engine_pipelines.decision_log import log_decision
 WC_LEAGUE_ID = 1
 ODD_MIN = 1.39
 ODD_MAX = 1.90
-MAX_FIXTURES = 3
 
 _LEAGUE_PRIORITY = {
     1: 1, 2: 2, 3: 3, 848: 4, 39: 5, 140: 6, 135: 7, 78: 8,
@@ -87,8 +86,17 @@ def _fixtures_with_odds_in_range(cur) -> list:
         }
         for r in rows
     ]
+    # Sem teto de fixtures desde 2026-08-05 (pedido do usuario): avalia TODOS
+    # os jogos do dia. O teto de 3 era heranca da era em que a IA GERAVA o pick
+    # e cada fixture entrava dentro do prompt -- o comentario do codigo legado
+    # (ai/alavancagem_pipeline.py) diz literalmente "controla tokens". Hoje a
+    # IA so' REVISA o pick ja escolhido, numa unica chamada no fim de
+    # run_dica_engine, entao ampliar o pool nao custa token nenhum: o custo
+    # extra e' so' leitura de historico/odds por fixture.
+    # A ordenacao por prioridade de liga fica: deixou de cortar jogo e virou
+    # criterio de desempate/leitura do log.
     fixtures.sort(key=lambda f: (_LEAGUE_PRIORITY.get(f["league_id"], 99), f["match_datetime"]))
-    return fixtures[:MAX_FIXTURES]
+    return fixtures
 
 
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
@@ -107,15 +115,27 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
 def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple | None:
     """Roda o motor pra cada fixture candidato e devolve (fixture, pick,
     data_quality_score) do maior Score Final entre os que passam DICA_CONFIG
-    (confidence>=0.72), ou None se nenhum passar. Pula candidatos cujo grupo
-    de correlacao de market_type ja saiu em QUALQUER picks_vip hoje
-    (used_groups, bloqueio global -- ver _today_vip_used_market_groups)."""
+    (confidence>=0.72), ou None se nenhum passar.
+
+    Nao repetir grupo de mercado ja usado no VIP do dia (used_groups, ver
+    _today_vip_used_market_groups) e' PREFERENCIA, nao veto -- mudanca de
+    2026-08-05, decisao do usuario. Antes era filtro duro e podia zerar a Dica
+    do dia inteiro: em 05/08 os 4 unicos jogos tinham pick aprovada no
+    DICA_CONFIG (uma delas com EV +32%) e todas caiam em goals/corners/cards,
+    os tres grupos que o VIP ja tinha consumido -- assinante gratuito ficava
+    sem pick nenhuma pra preservar uma regra de variedade.
+
+    Agora roda os dois em paralelo: `best_*` so' aceita candidato fora de
+    used_groups, `fallback_*` aceita qualquer um. O fallback so' e' devolvido
+    quando o preferido nao existe, e vem marcado com _usou_fallback_vip=True
+    pra quem chama poder registrar isso (nao e' o caminho normal)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
 
     best_fixture, best_pick, best_quality = None, None, None
+    fb_fixture, fb_pick, fb_quality = None, None, None
 
     for fixture in fixtures:
         structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
@@ -171,13 +191,36 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set) -> tuple |
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
         log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
-        picks = [p for p in picks if ranking.correlation_group(p["market_type"]) not in used_groups]
         if not picks:
             continue
 
-        pick = next((p for p in picks if p.get("is_best_pick")), picks[0])
+        # Fallback: guarda o melhor de TODOS antes de aplicar a preferencia,
+        # pra que um dia em que o VIP consumiu todos os grupos ainda entregue
+        # pick gratuita (ver docstring). Nao substitui a preferencia, so'
+        # existe como rede.
+        pick_geral = next((p for p in picks if p.get("is_best_pick")), picks[0])
+        if fb_pick is None or pick_geral["final_score"] > fb_pick["final_score"]:
+            fb_fixture, fb_pick, fb_quality = (
+                fixture, {**pick_geral, "data_quality_score": quality["score"]}, quality["score"],
+            )
+
+        preferidos = [p for p in picks if ranking.correlation_group(p["market_type"]) not in used_groups]
+        if not preferidos:
+            grupos = sorted({ranking.correlation_group(p["market_type"]) for p in picks})
+            print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: {len(picks)} candidato(s) "
+                  f"aprovado(s) no DICA_CONFIG repetem grupo ja usado no VIP de hoje "
+                  f"({', '.join(grupos)}) · so' entram se ninguem melhor aparecer.")
+            continue
+
+        pick = next((p for p in preferidos if p.get("is_best_pick")), preferidos[0])
         if best_pick is None or pick["final_score"] > best_pick["final_score"]:
             best_fixture, best_pick, best_quality = fixture, {**pick, "data_quality_score": quality["score"]}, quality["score"]
+
+    if best_pick is None and fb_pick is not None:
+        grupo = ranking.correlation_group(fb_pick["market_type"])
+        print(f"[DICA_ENGINE] Nenhum candidato fora dos grupos ja usados no VIP hoje · "
+              f"caindo no fallback com o melhor do dia (grupo '{grupo}', repetido do VIP).")
+        return fb_fixture, {**fb_pick, "_usou_fallback_vip": True}, fb_quality
 
     if best_pick is None:
         return None
@@ -194,6 +237,11 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # services/pick_engine/red_analysis.py + calibration.py.
     engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
     engine_debug_data["ai_review"] = pick.get("ai_review")
+    # Rastro de quando a pick so' existiu porque a preferencia "nao repetir
+    # grupo do VIP" cedeu -- sem isso nao da' pra medir depois se o fallback
+    # esta virando regra em vez de excecao.
+    if pick.get("_usou_fallback_vip"):
+        engine_debug_data["fallback_grupo_repetido_do_vip"] = True
     engine_debug = json.dumps(
         engine_debug_data,
         default=str, ensure_ascii=False,
