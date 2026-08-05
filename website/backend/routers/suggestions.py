@@ -404,9 +404,14 @@ def get_today_suggestions(
                        p.league_id, p.market, p.market_type, p.line, p.odd,
                        p.bet_house, p.confidence, p.prob_real, p.prob_real AS probability, p.edge,
                        p.reasoning, p.stake_units, p.result,
-                       f.match_datetime
+                       f.match_datetime, l.name AS league_name
                 FROM {tabela} p
                 LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                -- league_name existe na tabela do pick, mas vem NULL nas linhas
+                -- antigas; o JOIN com `leagues` e o mesmo fallback que as
+                -- outras consultas ja fazem. Sem ele o card mostra o escudo da
+                -- liga sem o nome ao lado, divergindo do card VIP.
+                LEFT JOIN leagues l ON l.league_id = p.league_id
                 WHERE {("p.match_date = %s" if date else
                         "p.match_date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
                         " OR (p.result IS NULL AND p.match_date >="
@@ -863,7 +868,10 @@ def get_suggestion_detail(
                 # desses dois mercados produz.
                 "confidence": float(d["prob_real"]) if d.get("prob_real") is not None else None,
                 "probability": float(d["prob_real"]) if d.get("prob_real") is not None else None,
-                "ev": float(d["edge"]) * 100 if d.get("edge") is not None else None,
+                # Fracao, nao porcentagem: e a escala que picks_vip.ev usa e que
+                # o front espera (SuggestionDetail e AnalysisModal fazem o x100).
+                # Com o *100 daqui, um edge de 0.0914 virava "914,0%" na tela.
+                "ev": float(d["edge"]) if d.get("edge") is not None else None,
                 "is_followed": follow is not None,
                 "user_stake_units": follow["stake_units"] if follow else None,
                 "user_actual_odd": follow["actual_odd"] if follow else None,

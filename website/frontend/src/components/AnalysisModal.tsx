@@ -64,7 +64,11 @@ export default function AnalysisModal({
   // probability é fração (0..1) no banco; confidence idem. Vira % aqui.
   const ourProb = data.probability != null ? Number(data.probability) * 100 : null
   const conf = data.confidence != null ? Math.round(Number(data.confidence) * 100) : null
-  const ev = data.ev != null ? Number(data.ev) : null
+  // ev também é fração no banco (picks_vip.ev = 0.3203 para 32%), mesma
+  // convenção de probability/confidence acima. Faltava o x100 aqui: os quatro
+  // chamadores passam a fração crua, então um EV de +32% aparecia como
+  // "+0.3%" · erro silencioso, porque 0.3% ainda é um número plausível.
+  const ev = data.ev != null ? Number(data.ev) * 100 : null
 
   // Sem probabilidade real (pick VIP antigo, multipla), confidence entra como
   // aproximacao e o rotulo avisa. Ver PickProbability em PickCardParts.
