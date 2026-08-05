@@ -12,11 +12,21 @@ _CARDS_FAMILIES = ("cards", "handicap_cards")
 
 # Familias de mercado de RESULTADO -- excluidas do pool de candidatos por
 # decisao explicita do usuario (2026-07-24): 1X2 puro, dupla chance e empate
-# anula (mesmo grupo de correlacao "result" em ranking.py). Handicap Asiatico
-# de gols (handicap_goals) fica DE FORA desta lista por pedido explicito do
-# usuario -- ele quer manter handicap_goals disponivel, so' o 1X2/dupla
-# chance/empate anula que devem sumir do pool.
+# anula (mesmo grupo de correlacao "result" em ranking.py).
 _RESULT_FAMILIES = ("outcome", "double_chance", "draw_no_bet")
+
+# Handicap Asiatico (gols/escanteios/cartoes) -- excluido do pool de
+# candidatos por decisao explicita do usuario (2026-08-05): o motor nao gera
+# mais pick de handicap em nenhum pipeline. Substitui a regra anterior
+# (2026-07-24 + 2026-07-26), que mantinha handicap_goals disponivel a partir
+# de |linha| >= 1.0 -- o corte de +-0.5 dentro de stats_model.handicap_taxa()
+# continua no lugar, mas hoje nao chega a ser exercido pela producao.
+# classify_market() segue reconhecendo o mercado (o rotulo em PT e a
+# resolucao de picks JA publicados dependem disso, ver
+# services/ai_result_checker_service.evaluate_handicap e
+# website/backend/routers/live.py) -- o descarte e' aqui, na entrada do
+# pool, igual _RESULT_FAMILIES acima.
+_HANDICAP_FAMILIES = ("handicap_goals", "handicap_corners", "handicap_cards")
 
 # Par/Impar (gols e escanteios) -- excluido do pool por propriedade
 # matematica do mercado, nao por decisao de gosto: pra uma contagem
@@ -108,18 +118,17 @@ def analyze_fixture_markets(
     (classify_market()) disponivel nas odds ja estruturadas
     (services.odds_service.OddsService.load_odds_structured), a partir do
     historico ja carregado. Cobre gols/escanteios/cartoes/faltas/ambas marcam/
-    chutes/impedimentos (over-under), handicap (gols/escanteios/cartoes),
-    clean sheet e vitoria sem sofrer gol -- ver stats_model.classify_market()
-    pra lista completa e o que fica de fora (jogador individual, placar
-    exato, 1o/2o tempo). 1X2, dupla chance e empate anula aposta
-    (_RESULT_FAMILIES acima) sao classificados mas descartados de proposito
-    antes de virar candidato -- mercado de resultado excluido por decisao de
-    produto (2026-07-24). Handicap Asiatico de gols continua disponivel
-    (pedido explicito) mas so' a partir de |linha|>=1.0 -- +-0.5 e' excluido
-    dentro de stats_model.handicap_taxa() por ser matematicamente identico
-    a Dupla Chance/1X2 (achado real 2026-07-26). Par/impar (_NEAR_COINFLIP_FAMILIES acima)
-    tambem e' classificado mas descartado -- mercado matematicamente proximo
-    de 50/50 independente dos times, ver comentario da constante (2026-07-26).
+    chutes/impedimentos (over-under), clean sheet e vitoria sem sofrer gol --
+    ver stats_model.classify_market() pra lista completa e o que fica de fora
+    (jogador individual, placar exato, 1o/2o tempo). 1X2, dupla chance e
+    empate anula aposta (_RESULT_FAMILIES acima) sao classificados mas
+    descartados de proposito antes de virar candidato -- mercado de resultado
+    excluido por decisao de produto (2026-07-24). Handicap de gols/escanteios/
+    cartoes (_HANDICAP_FAMILIES acima) idem, excluido por decisao de produto
+    (2026-08-05) -- o motor nao gera mais nenhum pick de handicap.
+    Par/impar (_NEAR_COINFLIP_FAMILIES acima) tambem e' classificado mas
+    descartado -- mercado matematicamente proximo de 50/50 independente dos
+    times, ver comentario da constante (2026-07-26).
 
     `context_data` (saida de context_model.build_context), `matchup_data`
     (saida de team_profile_model.compare_matchup), `news_data` (saida de
@@ -193,6 +202,13 @@ def analyze_fixture_markets(
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": family,
                     "reason": "mercado de resultado excluido por decisao de produto",
+                })
+            continue
+        if family in _HANDICAP_FAMILIES:
+            if debug:
+                eliminated_markets.append({
+                    "family": family, "scope": scope, "market_type": family,
+                    "reason": "handicap excluido por decisao de produto",
                 })
             continue
         if family in _NEAR_COINFLIP_FAMILIES:
