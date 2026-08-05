@@ -20,7 +20,7 @@ O PickIA é um site de picks esportivos com IA. Gera picks diários analisando e
 - Objetivo: encadear greens e multiplicar a banca. Exemplo: 5 greens seguidos transformam R$50 em ~R$300
 - Gerenciada exclusivamente pela série, separada da banca principal
 
-**Pick Seguro (gratuito):** Pick diário disponível para todos os usuários, inclusive free. Geralmente um mercado defensivo (handicap, over/under baixo).
+**Pick Seguro (gratuito):** Pick diário disponível para todos os usuários, inclusive free. Geralmente um mercado defensivo (over/under baixo).
 
 ---
 
