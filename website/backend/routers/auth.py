@@ -626,6 +626,30 @@ def login(body: LoginBody, response: Response, request: Request):
         )
         conn.commit()
 
+        # Aviso de plano perto de vencer · sino + e-mail, uma vez por faixa
+        # (ver plan_expiry.py). Fica no login porque este backend nao tem mais
+        # scheduler, e porque e' aqui que a pessoa esta olhando.
+        #
+        # Envolto em try/except de proposito: nem notificacao nem e-mail podem
+        # derrubar um login. Se isto falhar, o usuario entra do mesmo jeito e
+        # o proximo login tenta de novo (a faixa so' e' marcada quando o
+        # INSERT da notificacao passa).
+        try:
+            from plan_expiry import avisar_plano_expirando
+            from runtime_env import side_effects_enabled
+            avisar_plano_expirando(
+                cur, user,
+                site_url=(os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/"),
+                # Staging aponta pro banco de PRODUCAO: sem esse freio, um
+                # login de teste no noprod mandaria e-mail de renovacao de
+                # verdade. A notificacao no sino continua (idempotente).
+                enviar_email=_send_email if side_effects_enabled() else None,
+            )
+            conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("[LOGIN] Falha ao avisar plano expirando (user %s): %s", user["id"], e)
+
         plan_expires_at = user["expires_at"].isoformat() if user.get("expires_at") else None
         token_data = {
             "sub": str(user["id"]), "id": user["id"],
