@@ -20,12 +20,15 @@ const planBadge: Record<string, string> = {
 }
 
 export default function Navbar() {
-  const { user, logout, isAdmin, daysUntilExpiry } = useAuth()
+  const { user, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { hasNew, markSeen } = useNotifications()
-  const [expiryDismissed, setExpiryDismissed]       = useState(false)
-  const [emailBannerDismissed, setEmailBannerDismissed] = useState(false)
+  /* E-mail pendente de confirmação vira um ponto de atenção no avatar (que
+     leva ao Perfil), não um aviso no topo. `=== false` e não `!`: enquanto o
+     usuário não carregou, o campo é undefined e um `!` acenderia o ponto pra
+     todo mundo no primeiro quadro. */
+  const emailPendente = user?.email_verified === false
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [profileOpen, setProfileOpen] = useState(false)
 
@@ -39,12 +42,6 @@ export default function Navbar() {
     document.body.style.overflow = sidebarOpen ? 'hidden' : ''
     return () => { document.body.style.overflow = '' }
   }, [sidebarOpen])
-
-  const showExpiryWarning =
-    !expiryDismissed &&
-    daysUntilExpiry !== null &&
-    daysUntilExpiry >= 0 &&
-    daysUntilExpiry <= 7
 
   const isActive = (path: string) =>
     pathname === path ? 'text-green-500 font-semibold' : 'text-ink-2 hover:text-ink-1'
@@ -114,8 +111,20 @@ export default function Navbar() {
               <button
                 onClick={() => setProfileOpen(v => !v)}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+                title={emailPendente ? 'E-mail ainda não confirmado · veja no Perfil' : undefined}
               >
-                {user?.name && <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />}
+                {user?.name && (
+                  <span className="relative inline-flex">
+                    <Avatar name={user.name} imageUrl={user.avatar_url} size="sm" />
+                    {emailPendente && (
+                      <span
+                        className="absolute -top-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-yellow-400 ring-2 ring-surface-0"
+                        aria-label="E-mail não confirmado"
+                        role="status"
+                      />
+                    )}
+                  </span>
+                )}
                 <div className="flex items-center gap-1.5">
                   <span className="text-ink-1 text-xs font-semibold leading-none">
                     {user?.name?.split(' ')[0]
@@ -144,6 +153,11 @@ export default function Navbar() {
                       <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <Avatar name={user?.name ?? ''} size="sm" />
                         Meu perfil
+                        {emailPendente && (
+                          <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
+                            E-mail
+                          </span>
+                        )}
                       </Link>
                       <a href={WA_SUPPORT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <MessageCircle className="w-4 h-4 text-green-400" />
@@ -164,41 +178,33 @@ export default function Navbar() {
               )}
             </div>
 
-            {/* Hamburger · mobile */}
+            {/* Hamburger · mobile. O avatar com o ponto fica escondido abaixo
+                de `sm`, então no celular o sinal precisa viver aqui: é por este
+                botão que se chega ao Perfil. */}
             <button
               onClick={() => setSidebarOpen(v => !v)}
-              className="lg:hidden text-ink-2 hover:text-ink-1 transition-colors p-2"
-              aria-label="Menu"
+              className="lg:hidden relative text-ink-2 hover:text-ink-1 transition-colors p-2"
+              aria-label={emailPendente ? 'Menu · e-mail não confirmado' : 'Menu'}
             >
               {sidebarOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+              {emailPendente && !sidebarOpen && (
+                <span className="absolute top-1 right-1 w-2 h-2 rounded-full bg-yellow-400 ring-2 ring-surface-0" />
+              )}
             </button>
           </div>
         </div>
 
-        {/* E-mail não verificado */}
-        {!emailBannerDismissed && user?.email_verified === false && (
-          <div className="bg-blue-500/10 border-b border-blue-500/20 px-4 py-2 flex items-start sm:items-center justify-between gap-2">
-            <span className="text-blue-300 text-xs font-semibold leading-relaxed">
-              Confirme seu e-mail para garantir que os avisos da conta cheguem até você.{' '}
-              <Link to="/profile" className="underline hover:text-blue-200">Confirmar no Perfil</Link>
-            </span>
-            <button onClick={() => setEmailBannerDismissed(true)} aria-label="Dispensar aviso" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 text-sm font-black transition-colors">×</button>
-          </div>
-        )}
+        {/* E-mail não verificado não é mais uma faixa aqui (2026-08-05, pedido
+            do usuário): virou o ponto de atenção no avatar, logo acima. Uma
+            faixa custava uma linha inteira do topo, empilhava com a de plano
+            expirando e podia ser dispensada · o ponto acompanha o usuário até
+            ele resolver, sem tomar espaço nenhum. Ver `emailPendente`. */}
 
-        {/* VIP expiry warning */}
-        {showExpiryWarning && (
-          <div className="bg-yellow-400/10 border-b border-yellow-400/20 px-4 py-2 flex items-start sm:items-center justify-between gap-2">
-            <span className="text-yellow-400 text-xs font-semibold leading-relaxed">
-              {daysUntilExpiry === 0
-                ? 'Seu plano VIP expira hoje!'
-                : `Seu plano VIP expira em ${daysUntilExpiry} dia${daysUntilExpiry === 1 ? '' : 's'}.`}
-              {' '}
-              <Link to="/checkout" className="underline hover:text-yellow-300">Renovar</Link>
-            </span>
-            <button onClick={() => setExpiryDismissed(true)} aria-label="Dispensar aviso" className="w-7 h-7 shrink-0 flex items-center justify-center rounded-full bg-yellow-400/10 hover:bg-yellow-400/20 text-yellow-400 text-sm font-black transition-colors">×</button>
-          </div>
-        )}
+        {/* A faixa de plano expirando também saiu daqui (2026-08-05): agora o
+            aviso nasce no backend, no login, como notificação do sino e e-mail
+            de renovação (ver plan_expiry.py). A faixa tinha dois furos que a
+            notificação não tem · o × dispensava e ela nunca mais voltava
+            naquela sessão, e quem não abria o site não era avisado de nada. */}
 
         {/* Green accent line */}
         <div className="h-px bg-gradient-to-r from-transparent via-green-500/40 to-transparent" />
@@ -238,6 +244,11 @@ export default function Navbar() {
               {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
             </span>
           </div>
+          {emailPendente && (
+            <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
+              E-mail
+            </span>
+          )}
         </Link>
 
         {/* Links */}

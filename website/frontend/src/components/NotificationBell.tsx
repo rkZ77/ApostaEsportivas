@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bell, BellOff, CalendarCheck, CheckCheck, Radio, TrendingDown, TrendingUp, X, Zap,
+  Bell, BellOff, CalendarCheck, CheckCheck, Radio, TimerReset, TrendingDown, TrendingUp, X, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
@@ -27,6 +27,9 @@ function NotificationIcon({ n }: { n: AppNotification }) {
   if (n.type === 'monthly_close') return <CalendarCheck className={`${base} text-yellow-400`} />
   if (n.type === 'new_picks')     return <Zap className={`${base} text-green-400`} />
   if (n.type === 'pick_live')     return <Radio className={`${base} text-red-400`} />
+  /* Âmbar e não vermelho: vencimento é prazo, não perda. O vermelho aqui já
+     significa RED de pick e confundiria as duas leituras. */
+  if (n.type === 'plan_expiring') return <TimerReset className={`${base} text-yellow-400`} />
   const result = String(n.payload?.result ?? '')
   const isLoss = result === 'RED' || result === 'HALF-LOSS'
   return isLoss

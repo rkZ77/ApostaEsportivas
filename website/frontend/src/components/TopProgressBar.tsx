@@ -121,13 +121,13 @@ export default function TopProgressBar() {
          página, e um progressbar sem valor real só faria barulho no leitor. */
       aria-hidden="true"
     >
+      {/* Verde chapado, sem brilho. A primeira versão tinha um box-shadow de
+          10px que dava efeito neon · o movimento da barra já diz que algo está
+          carregando, e o brilho só competia com o conteúdo da página. */}
       <div
         className="h-full bg-accent transition-[width,opacity] duration-200 ease-out motion-reduce:transition-none"
         style={{
           width: `${progresso}%`,
-          /* O rastro luminoso é o que faz a barra ser lida como "carregando"
-             e não como uma borda verde do layout. */
-          boxShadow: '0 0 10px rgb(var(--accent) / 0.7), 0 0 4px rgb(var(--accent) / 0.9)',
           opacity: progresso >= 100 ? 0 : 1,
         }}
       />
