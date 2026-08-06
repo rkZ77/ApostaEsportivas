@@ -155,6 +155,78 @@ _MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
 ]
 
 
+# Posicao de cada campo dentro da tupla montada pra odds_values -- indexar por
+# constante evita que uma coluna nova no INSERT desalinhe o snapshot em
+# silencio (o INSERT e' posicional e a tupla tem 21 campos).
+_IDX_VALUE_NAME, _IDX_ODD_VALUE, _IDX_FIXTURE = 1, 2, 3
+_IDX_KICKOFF, _IDX_BOOKMAKER, _IDX_MARKET, _IDX_LINE = 6, 11, 13, 19
+
+
+def _create_odds_snapshots_table(cur) -> None:
+    """Tabela APPEND-ONLY de cotacoes.
+
+    `odds_values` e' upsert (ON CONFLICT DO UPDATE): cada coleta sobrescreve a
+    anterior, entao o historico de preco de um mercado e' destruido todo dia.
+    Isso inviabiliza a familia inteira de sinal de movimento de linha --
+    abertura x atual x fechamento, deteccao de dinheiro informado, velocidade
+    do movimento -- que e' o preditor mais forte que existe depois do proprio
+    preco.
+
+    Aqui nada e' sobrescrito. Uma linha por (fixture, casa, mercado, selecao,
+    instante). `minutes_to_kickoff` e' gravado junto porque classificar
+    abertura/live/fechamento depois exige saber a distancia pro jogo NAQUELE
+    momento -- reconstruir isso a posteriori a partir de created_at e' possivel
+    mas frágil, e o custo de guardar e' uma coluna inteira.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS odds_snapshots (
+            id                 BIGSERIAL PRIMARY KEY,
+            fixture_id         BIGINT NOT NULL,
+            bookmaker_id       INTEGER,
+            market_id          INTEGER,
+            value_name         TEXT,
+            line_value         TEXT,
+            odd_value          NUMERIC,
+            match_datetime     TIMESTAMP,
+            minutes_to_kickoff INTEGER,
+            captured_at        TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_odds_snapshots_fixture "
+                "ON odds_snapshots (fixture_id, market_id, value_name);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_odds_snapshots_captured "
+                "ON odds_snapshots (captured_at DESC);")
+
+
+def _save_odds_snapshots(cur, values_batch: list) -> None:
+    """Grava o retrato desta coleta. Best-effort: falha aqui nunca pode
+    derrubar a coleta de odds em si, que e' o caminho critico -- snapshot e'
+    dado de analise, odds_values e' o que o motor le pra gerar pick."""
+    if not values_batch:
+        return
+    try:
+        _create_odds_snapshots_table(cur)
+        linhas = [
+            (
+                v[_IDX_FIXTURE], v[_IDX_BOOKMAKER], v[_IDX_MARKET],
+                v[_IDX_VALUE_NAME], v[_IDX_LINE], v[_IDX_ODD_VALUE], v[_IDX_KICKOFF],
+            )
+            for v in values_batch
+        ]
+        execute_batch(cur, """
+            INSERT INTO odds_snapshots
+                (fixture_id, bookmaker_id, market_id, value_name, line_value,
+                 odd_value, match_datetime, minutes_to_kickoff, captured_at)
+            VALUES (%s,%s,%s,%s,%s,%s,%s,
+                    CASE WHEN %s IS NULL THEN NULL
+                         ELSE EXTRACT(EPOCH FROM (%s - NOW())) / 60 END,
+                    NOW())
+        """, [(f, b, m, vn, lv, od, kt, kt, kt) for f, b, m, vn, lv, od, kt in linhas],
+            page_size=500)
+    except Exception as e:
+        print(f"[ODDS_SNAPSHOTS] Aviso: snapshot nao gravado (coleta segue normal): {e}")
+
+
 def _market_pt_fallback(bet_name: str) -> str | None:
     """Traduz pelo nome cru quando o bet_id ainda nao esta em BET_ID_PT_MAP."""
     name = (bet_name or "").strip().lower()
@@ -458,6 +530,8 @@ class OddsCollectorService:
                         line_value = EXCLUDED.line_value,
                         updated_at = NOW();
                 """, values_batch, page_size=500)
+
+                _save_odds_snapshots(cur, values_batch)
 
                 print(f"[ODDS] Fixture {fixture_id} salvo com sucesso · {len(values_batch)} valores.")
             else:

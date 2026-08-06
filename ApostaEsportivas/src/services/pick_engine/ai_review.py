@@ -122,6 +122,15 @@ def build_review_payload(picks: list[dict], pipeline: str, fixture: dict | None 
             "game_intensity": pick.get("game_intensity"),
             "context": pick.get("context_raw"), "news": pick.get("news_raw"),
             "matchup": pick.get("matchup_raw"),
+            # Contexto de eliminatoria e rivalidade (2026-08-06). O motor ja'
+            # decide sozinho com isto -- context_gate barra o que contradiz a
+            # partida antes de chegar aqui. Vai no payload pra a IA poder
+            # VETAR com a mesma informacao, nunca pra ela ser a unica a
+            # aplicar a regra: este gate falha aberto e tem teto diario, entao
+            # uma regra que so' morasse aqui sumiria em silencio justamente
+            # nos jogos decisivos.
+            "match_context": pick.get("match_context"),
+            "context_gate": pick.get("context_gate"),
         } for pick in picks],
     }
 

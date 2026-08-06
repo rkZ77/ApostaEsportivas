@@ -384,7 +384,46 @@ def classify_market(market_name: str):
     return None
 
 
-def _cards_points(m: dict, scope: str) -> float:
+def resolve_side(m: dict, scope: str, team_id: int | None) -> str:
+    """Coluna ('home'/'away') que guarda a estatistica DO TIME analisado
+    naquela partida especifica.
+
+    `scope` diz QUAL time interessa (o mandante ou o visitante DESTE jogo,
+    que define de qual historico o pool veio); `team_id` diz onde ele estava
+    NAQUELA partida do historico. Sem team_id devolve o proprio scope --
+    comportamento antigo, correto so' quando todos os jogos do pool tem o
+    mesmo mando.
+
+    Bug real corrigido 2026-08-05: MatchStatsService.get_all_matches_full()
+    filtra por `(home_team_id = X OR away_team_id = X)`, ou seja devolve os
+    15 jogos do time MISTURANDO casa e fora. _extract_stat() lia o campo
+    fixo do scope (`home_corners` pra scope='home') em TODOS eles, entao nos
+    jogos em que o time foi visitante a taxa contava os escanteios/cartoes/
+    gols DO ADVERSARIO como se fossem dele. Metade da amostra vinha do time
+    errado em todo mercado de escopo home/away ("Home Corners Over/Under",
+    "Home Team Total Goals", "Away Team Total Cards", ...).
+
+    E' exatamente o mesmo bug que scored_conceded_avg() e
+    offensive_efficiency() ja tinham corrigido cada uma por conta propria
+    (ver docstrings de la') e que nunca tinha sido propagado ate' a taxa em
+    si -- que e' o numero que vira edge, EV e pick."""
+    if scope not in ("home", "away") or team_id is None:
+        return scope
+    return "home" if m.get("home_team_id") == team_id else "away"
+
+
+def scope_team_id(scope: str, home_team_id: int | None, away_team_id: int | None):
+    """team_id do lado que o escopo do mercado aponta -- scope='home' e o
+    MANDANTE do jogo analisado, scope='away' o visitante. None pra
+    scope='total' (a leitura e' do jogo inteiro, nao de um time)."""
+    if scope == "home":
+        return home_team_id
+    if scope == "away":
+        return away_team_id
+    return None
+
+
+def _cards_points(m: dict, scope: str, team_id: int | None = None) -> float:
     """Pontuacao de cartoes de uma partida: amarelo vale 1, vermelho vale 2
     -- mesma convencao que ai_result_checker_service.py ja usa pra gradear
     o resultado real (e convencao padrao de mercado "Total de Cartoes" nas
@@ -393,10 +432,13 @@ def _cards_points(m: dict, scope: str) -> float:
     NUNCA via cartao vermelho -- picks de "Cartoes Under" saiam com taxa
     inflada (rodando o motor contra dados reais: taxa "real" de 69% pra
     Under 5.5 que, contando vermelho como o jogo de verdade conta, era na
-    prática ~40-50%)."""
-    if scope == "home":
+    prática ~40-50%).
+
+    `team_id` resolve o mando POR PARTIDA -- ver resolve_side()."""
+    side = resolve_side(m, scope, team_id)
+    if side == "home":
         return (m.get("home_yellow_cards") or 0) + 2 * (m.get("home_red_cards") or 0)
-    if scope == "away":
+    if side == "away":
         return (m.get("away_yellow_cards") or 0) + 2 * (m.get("away_red_cards") or 0)
     return (
         (m.get("home_yellow_cards") or 0) + (m.get("away_yellow_cards") or 0)
@@ -404,15 +446,20 @@ def _cards_points(m: dict, scope: str) -> float:
     )
 
 
-def _extract_stat(m: dict, family: str, scope: str):
+def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
     """Le o valor real de uma familia/escopo num jogo historico, somando
     home+away quando a familia nao tem coluna 'total_X' pronta
-    (shots/offsides)."""
+    (shots/offsides).
+
+    `team_id` resolve o mando POR PARTIDA quando o escopo e' de um time so'
+    (home/away) -- sem ele, metade do historico e' lida na coluna do
+    adversario. Ver resolve_side()."""
     if family == "cards":
-        return _cards_points(m, scope)
+        return _cards_points(m, scope, team_id)
     fields = _FAMILY_STAT_FIELDS[family]
-    if scope in ("home", "away"):
-        return m.get(fields[scope]) or 0
+    side = resolve_side(m, scope, team_id)
+    if side in ("home", "away"):
+        return m.get(fields[side]) or 0
     total_field = fields.get("total")
     if total_field:
         return m.get(total_field) or 0
@@ -429,7 +476,8 @@ def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list
     return last10_home + last10_away, None
 
 
-def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
+def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
+                          team_id: int | None = None):
     """Constroi o hit_fn (jogo -> 0/1) pra um mercado 'classico' (over/under
     ou btts) -- extraido de market_taxa() pra ser reaproveitado por
     line_stability() sem duplicar a logica de parsing/validacao de
@@ -469,7 +517,7 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
     is_round_line = line_val % 1 == 0
 
     def hit_fn(m):
-        stat = _extract_stat(m, family, scope)
+        stat = _extract_stat(m, family, scope, team_id)
         # linha redonda (sem .5) e stat bate exato -- PUSH na graduacao
         # real (evaluate_asian), nao conta nem a favor nem contra aqui.
         if is_round_line and stat == line_val:
@@ -482,7 +530,8 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str):
 
 def market_taxa(family: str, scope: str, value: str, line_str: str,
                 last10_home: list, last10_away: list, reference_date=None,
-                config: PickEngineConfig = DEFAULT_CONFIG):
+                config: PickEngineConfig = DEFAULT_CONFIG,
+                team_id: int | None = None):
     """Over/under (gols/escanteios/cartoes/chutes/impedimentos) e ambas
     marcam (btts) -- os mercados 'classicos' ja existiam desde a Fase 1.
     Mercados novos (1X2/handicap/dupla-chance/etc) tem funcoes proprias
@@ -492,7 +541,7 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     if not pool:
         return None
 
-    hit_fn = _build_market_hit_fn(family, scope, value, line_str)
+    hit_fn = _build_market_hit_fn(family, scope, value, line_str, team_id)
     if hit_fn is None:
         return None
 
@@ -503,7 +552,8 @@ _MIN_MATCHES_PER_HALF_STABILITY = 2
 
 
 def line_stability(family: str, scope: str, value: str, line_str: str,
-                    last10_home: list, last10_away: list) -> dict | None:
+                    last10_home: list, last10_away: list,
+                    team_id: int | None = None) -> dict | None:
     """Compara a taxa BRUTA (nao ponderada) da linha na metade mais
     recente do historico vs a metade mais antiga -- diferente da media
     agregada (que pode esconder uma linha que so comecou a bater
@@ -518,7 +568,7 @@ def line_stability(family: str, scope: str, value: str, line_str: str,
     if not pool or len(pool) < _MIN_MATCHES_PER_HALF_STABILITY * 2:
         return None
 
-    hit_fn = _build_market_hit_fn(family, scope, value, line_str)
+    hit_fn = _build_market_hit_fn(family, scope, value, line_str, team_id)
     if hit_fn is None:
         return None
 
@@ -801,16 +851,23 @@ _DOUBLE_CHANCE_VALUE_MAP = {
 
 def compute_taxa(family: str, scope: str, value: str, line_str: str,
                   last10_home: list, last10_away: list, reference_date=None,
-                  config: PickEngineConfig = DEFAULT_CONFIG):
+                  config: PickEngineConfig = DEFAULT_CONFIG,
+                  team_id: int | None = None):
     """Ponto de entrada unico do Modelo 1 -- despacha pra funcao de taxa
     certa conforme a familia (classify_market() ja devolveu family/scope).
     Mercados 'classicos' (goals/corners/cards/btts/shots/shots_on_target/
     offsides) usam market_taxa() (over/under ou yes/no); os demais tem
-    parsing de value proprio (3-way, side+handicap, odd/even)."""
+    parsing de value proprio (3-way, side+handicap, odd/even).
+
+    `team_id` e' o time que o ESCOPO aponta (mandante pra scope='home',
+    visitante pra scope='away') -- resolve o mando por partida no historico
+    misto. Sem ele o calculo volta ao comportamento antigo, que le metade da
+    amostra na coluna do adversario (ver resolve_side())."""
     direction = (value or "").strip().lower()
 
     if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls", "saves"):
-        return market_taxa(family, scope, value, line_str, last10_home, last10_away, reference_date, config)
+        return market_taxa(family, scope, value, line_str, last10_home, last10_away,
+                            reference_date, config, team_id=team_id)
 
     if family == "outcome":
         if direction not in ("home", "draw", "away"):

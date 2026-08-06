@@ -48,15 +48,41 @@ def prob_over(line: float, lam: float) -> float:
 def poisson_prob_for_line(lam: float | None, line: float, direction: str) -> float | None:
     """P(hit) segundo o modelo Poisson pra uma linha Over/Under especifica.
     Retorna None se nao houver lambda valido (familia fora de escopo ou
-    feitos/cedidos indisponiveis -- ver stats_model.expected_value_convergence)."""
+    feitos/cedidos indisponiveis -- ver stats_model.expected_value_convergence).
+
+    LINHA REDONDA (sem .5, ex.: "Under 10"): o jogo que empata exato com a
+    linha e' PUSH na graduacao real (ai_result_checker_service.evaluate_asian
+    devolve a stake, nem GREEN nem RED), entao a probabilidade relevante e'
+    condicional a NAO dar push -- P(hit) / (1 - P(X = linha)).
+
+    Sem essa normalizacao, este modulo media uma coisa e stats_model outra:
+    weighted_rate() ja EXCLUI o jogo empatado da amostra (correcao de
+    2026-07-25), enquanto aqui "Under 10" contava P(X<=10), somando ao acerto
+    justamente a massa que na pratica vira devolucao. As duas estimativas
+    entao discordavam por construcao numa linha redonda, e o termo M
+    (confidence.model_fit_adjustment) cobrava -0.05 de confidence por uma
+    divergencia que era artefato de convencao, nao sinal de modelo errado.
+    Em linha .5 (o caso comum) P(X = linha) = 0 e nada muda."""
     if lam is None or lam < 0:
         return None
     direction = (direction or "").strip().lower()
     if direction == "over":
-        return round(prob_over(line, lam), 4)
-    if direction == "under":
-        return round(prob_under(line, lam), 4)
-    return None
+        raw = prob_over(line, lam)
+    elif direction == "under":
+        raw = prob_under(line, lam)
+    else:
+        return None
+
+    if line % 1 == 0:
+        push_mass = poisson_pmf(int(line), lam)
+        if direction == "under":
+            # prob_under() usa floor(line), que numa linha redonda INCLUI o
+            # empate exato -- tira ele antes de renormalizar.
+            raw -= push_mass
+        if push_mass < 1.0:
+            raw = raw / (1.0 - push_mass)
+
+    return round(max(0.0, min(1.0, raw)), 4)
 
 
 def is_poisson_family(family: str) -> bool:

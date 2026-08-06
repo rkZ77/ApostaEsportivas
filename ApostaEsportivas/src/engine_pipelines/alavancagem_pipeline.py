@@ -28,6 +28,7 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
+from services.standings_service import StandingsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine import team_profile_model as tpm
@@ -35,6 +36,8 @@ from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
+from services.pick_engine import context_gate
+from services.pick_engine import stats_model
 from engine_pipelines.decision_log import log_decision
 
 
@@ -143,6 +146,7 @@ def _gather_leg_candidates(fixtures: list) -> list:
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
+    standings_service = StandingsService()
     legs = []
 
     for fixture in fixtures:
@@ -164,9 +168,15 @@ def _gather_leg_candidates(fixtures: list) -> list:
             profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
             profile_away = tpm.build_profile(last10_away, fixture["away_team_id"])
             matchup = tpm.compare_matchup(profile_home, profile_away)
+            # Classificacao dos dois lados: ate' 2026-08-05 ia None/None aqui,
+            # o que travava table_pressure() em 'desconhecido' e desligava o
+            # termo de pressao no context_score e no gate de cartoes.
+            standing_home, standing_away = standings_service.get_for_fixture(
+                fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], fixture["season"])
             context_data = ctx.build_context(
                 last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
-                None, None, fixture["league_id"], round_str=fixture.get("round"),
+                standing_home, standing_away, fixture["league_id"], round_str=fixture.get("round"),
             )
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
@@ -176,9 +186,12 @@ def _gather_leg_candidates(fixtures: list) -> list:
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+                standings_home=standing_home, standings_away=standing_away,
                 referee_stats=referee_stats, context_data=context_data,
             )
-            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(last10_home, last10_away)
+            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(
+                last10_home, last10_away,
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"])
             quality = dv.data_quality_score(
                 {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
                 integrity_validation=integrity_val, outlier_info=outlier_info,
@@ -188,11 +201,23 @@ def _gather_leg_candidates(fixtures: list) -> list:
                 fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], fixture["season"])
 
+            # Contexto da partida: mata-mata, ida/volta, placar da ida,
+            # agregado e rivalidade medida no confronto direto. Alimenta o
+            # context_gate, que barra Under contradizendo o que o jogo vai ser.
+            conv_cartoes = stats_model.expected_value_convergence(
+                last10_home, last10_away, "cards", "total",
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
+
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
+                match_context=match_context,
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
