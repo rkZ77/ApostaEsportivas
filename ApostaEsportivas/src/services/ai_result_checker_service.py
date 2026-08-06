@@ -1,6 +1,7 @@
 from utils.db_utils import get_connection
-import re
 from decimal import Decimal
+
+from services import settlement
 
 
 _ALLOWED_CHECKER_TABLES = frozenset({"picks_vip", "picks_free", "picks_alavancagem"})
@@ -18,38 +19,59 @@ class AIResultCheckerService:
     ##########################################################################
     def get_fixture_result(self, fixture_id, cur):
 
-        cur.execute("""
-            SELECT
-                home_goals, away_goals, total_goals,
-                home_corners, away_corners, total_corners,
-                home_yellow_cards, away_yellow_cards,
-                home_red_cards, away_red_cards,
-                home_goals_ht, away_goals_ht,
-                status,
-                home_offsides, away_offsides
-            FROM match_statistics
-            WHERE fixture_id = %s
-            LIMIT 1;
-        """, (fixture_id,))
+        # SELECT * + mapa por NOME em vez de lista fixa lida por indice: a
+        # lista posicional obrigava a recontar 25 posicoes a cada coluna nova
+        # (uma inserida no meio desloca todas as seguintes em silencio, e o
+        # erro so' aparece como estatistica trocada), e quebrava com
+        # ProgrammingError quando uma coluna nova ainda nao existia no banco
+        # -- o que acontece sempre entre o merge e a migracao em PROD.
+        cur.execute("SELECT * FROM match_statistics WHERE fixture_id = %s LIMIT 1;",
+                    (fixture_id,))
 
         row = cur.fetchone()
 
         if not row:
             return None
 
-        hy, hr = (row[6] or 0), (row[8] or 0)
-        ay, ar = (row[7] or 0), (row[9] or 0)
-        hg_ht  = row[10]
-        ag_ht  = row[11]
-        h_off, a_off = row[13], row[14]
+        col = {d[0]: i for i, d in enumerate(cur.description)}
+
+        def g(nome):
+            i = col.get(nome)
+            return row[i] if i is not None else None
+
+        # NULL aqui significa "o provedor ainda nao publicou esse numero" e
+        # segue como None ate' o fim: `or 0` transformava ausencia em zero e
+        # era isso que gradeava um Over como RED com o jogo inteiro por
+        # contar (ver services/settlement.py, invariante 1). Gols sao a
+        # excecao legitima: vem do proprio /fixtures (placar), nao da folha
+        # de estatistica, e a linha so' existe pra jogo ja encerrado.
+        hy, hr = g("home_yellow_cards"), g("home_red_cards")
+        ay, ar = g("away_yellow_cards"), g("away_red_cards")
+        hg_ht  = g("home_goals_ht")
+        ag_ht  = g("away_goals_ht")
+        h_off, a_off = g("home_offsides"), g("away_offsides")
+        h_corn, a_corn = g("home_corners"), g("away_corners")
+
+        def _sum(*parts):
+            """Soma que respeita ausencia: se qualquer parcela e' desconhecida,
+            o total tambem e'."""
+            return None if any(p is None for p in parts) else sum(parts)
 
         return {
-            "home_goals":    row[0] or 0,
-            "away_goals":    row[1] or 0,
-            "total_goals":   row[2] or 0,
-            "home_corners":  row[3] or 0,
-            "away_corners":  row[4] or 0,
-            "total_corners": row[5] or 0,
+            "home_goals":    g("home_goals") or 0,
+            "away_goals":    g("away_goals") or 0,
+            "total_goals":   g("total_goals") or 0,
+            # Placar dos 90 minutos (score.fulltime da API). So' difere do
+            # placar acima em jogo decidido na prorrogacao -- e' o numero pelo
+            # qual a casa liquida. None em jogo antigo, coletado antes desta
+            # coluna existir: nesse caso o mercado nao e' liquidado.
+            "home_goals_90": g("home_goals_90"),
+            "away_goals_90": g("away_goals_90"),
+            "total_goals_90": _sum(g("home_goals_90"), g("away_goals_90")),
+            "home_corners":  h_corn,
+            "away_corners":  a_corn,
+            "total_corners": (g("total_corners") if g("total_corners") is not None
+                              else _sum(h_corn, a_corn)),
             "home_yellow":   hy,
             "away_yellow":   ay,
             "home_red":      hr,
@@ -60,47 +82,45 @@ class AIResultCheckerService:
             # confidence do pick sem relacao com o que de fato decide o
             # resultado real. "home_yellow"/"away_yellow"/"total_yellow"
             # acima continuam contagem pura, pros mercados so' de amarelo).
-            "home_cards":    hy + 2 * hr,
-            "away_cards":    ay + 2 * ar,
-            "status":        row[12],
-            "total_cards":   hy + 2 * hr + ay + 2 * ar,
-            "total_yellow":  hy + ay,
-            "total_red":     hr + ar,
+            "home_cards":    None if None in (hy, hr) else hy + 2 * hr,
+            "away_cards":    None if None in (ay, ar) else ay + 2 * ar,
+            "status":        g("status"),
+            "total_cards":   (None if None in (hy, hr, ay, ar)
+                              else hy + 2 * hr + ay + 2 * ar),
+            "total_yellow":  _sum(hy, ay),
+            "total_red":     _sum(hr, ar),
             "home_goals_ht": hg_ht,
             "away_goals_ht": ag_ht,
-            "total_goals_ht": (hg_ht or 0) + (ag_ht or 0) if hg_ht is not None else None,
-            "home_offsides": h_off or 0,
-            "away_offsides": a_off or 0,
-            "total_offsides": (h_off or 0) + (a_off or 0),
+            "total_goals_ht": _sum(hg_ht, ag_ht),
+            "home_offsides": h_off,
+            "away_offsides": a_off,
+            "total_offsides": _sum(h_off, a_off),
+            # Faltas/chutes/defesas ja' estavam em match_statistics e nao eram
+            # lidos aqui: o pick de faltas (picks_faltas) e qualquer perna
+            # desses mercados no picks_ledger ficavam com result NULL pra
+            # sempre, porque so' o caminho ao vivo sabia resolve-los.
+            "home_fouls":     g("home_fouls"),
+            "away_fouls":     g("away_fouls"),
+            "total_fouls":    _sum(g("home_fouls"), g("away_fouls")),
+            "home_shots_on":  g("home_shots_on"),
+            "away_shots_on":  g("away_shots_on"),
+            "total_shots_on": _sum(g("home_shots_on"), g("away_shots_on")),
+            "home_shots":     g("home_total_shots"),
+            "away_shots":     g("away_total_shots"),
+            "total_shots":    _sum(g("home_total_shots"), g("away_total_shots")),
+            "home_saves":     g("home_goalkeeper_saves"),
+            "away_saves":     g("away_goalkeeper_saves"),
+            "total_saves":    _sum(g("home_goalkeeper_saves"), g("away_goalkeeper_saves")),
         }
 
     ##########################################################################
     # PARSE DE LINHA
     ##########################################################################
     def parse_line(self, line):
-        if not line:
-            return None, None
-
-        ln = line.lower().strip()
-        ln = ln.replace("acima de", "over")
-        ln = ln.replace("mais de", "over")
-        ln = ln.replace("abaixo de", "under")
-        ln = ln.replace("menos de", "under")
-
-        if ln in ["yes", "sim"]:
-            return "yes", None
-        if ln in ["no", "nao", "não"]:
-            return "no", None
-
-        nums = re.findall(r"[+-]?\d+(?:\.\d+)?", ln.replace(",", "."))
-        num_val = Decimal(nums[0]) if nums else None
-
-        if "over" in ln:
-            return "over", num_val
-        if "under" in ln:
-            return "under", num_val
-
-        return None, num_val
+        """(op, valor). Delega em services/settlement.py::parse_line -- a
+        leitura da linha e' a mesma pro job em lote e pro caminho ao vivo."""
+        parsed = settlement.parse_line(line)
+        return parsed["op"], parsed["value"]
 
     ##########################################################################
     # DETECTA SE É MERCADO DE 1° TEMPO
@@ -118,8 +138,36 @@ class AIResultCheckerService:
     # DETECTA MERCADO
     # Retorna tipo base (sem sufixo _ht); use _is_first_half() separado.
     ##########################################################################
-    def detect_market_type(self, market_name):
-        name = market_name.lower()
+    # market_type gravado no banco -> familia base deste checker. So' e' usado
+    # quando o TEXTO do mercado nao decide nada: existe pick em producao com
+    # market_type='goals' e market='Escanteios Mais/Menos', e nesse conflito
+    # quem tem razao e' o texto. Mesma precedencia do caminho ao vivo
+    # (website/backend/routers/live.py::_stat_for_market), pra os dois motores
+    # nunca classificarem o mesmo pick de formas diferentes.
+    _MARKET_TYPE_HINTS = {
+        "corners": "corners", "handicap_corners": "corners",
+        "cards": "cards", "handicap_cards": "cards",
+        "goals": "goals", "handicap_goals": "goals", "handicap": "goals",
+        "offsides": "offsides",
+        "fouls": "fouls",
+        "saves": "saves",
+        "shots": "shots",
+        "shots_on_target": "shots_on_target",
+        "btts": "btts",
+        "result": "result_1x2", "outcome": "result_1x2", "result_1x2": "result_1x2",
+        "double_chance": "double_chance",
+        "to_qualify": "to_qualify",
+    }
+
+    _HANDICAP_KEYWORDS = ("handicap", "handi", "h.a.", " ha ")
+
+    def _is_handicap(self, market_name: str, market_type: str | None = None) -> bool:
+        if (market_type or "").lower().startswith("handicap"):
+            return True
+        return any(k in (market_name or "").lower() for k in self._HANDICAP_KEYWORDS)
+
+    def detect_market_type(self, market_name, market_type=None):
+        name = (market_name or "").lower()
 
         # Remove qualificadores de tempo para não confundir keywords
         for strip in ["1° tempo", "1º tempo", "primeiro tempo", "1st half",
@@ -137,6 +185,26 @@ class AIResultCheckerService:
         # BTTS
         if any(w in name for w in ["btts", "ambas marcam", "ambas as equipes", "ambas", "both teams"]):
             return "btts"
+
+        # Faltas / defesas / chutes vem ANTES de gols, porque varios nomes
+        # dessas familias contem a palavra "goal": "Total ShotOnGoal" (chutes
+        # no alvo), "Shots on Goal", "Goalkeeper Saves". Com gols na frente,
+        # "Total ShotOnGoal" era classificado como mercado de GOLS e liquidado
+        # contra o placar -- e' o mesmo par de familias que ja tinha causado um
+        # RED errado no caminho ao vivo (pick #114, fixture 1520774).
+        if any(w in name for w in ["falta", "foul"]):
+            return "fouls"
+        if any(w in name for w in ["defesa", "save", "goleiro", "goalkeeper"]):
+            return "saves"
+        no_space = name.replace(" ", "")
+        if any(w in no_space for w in ["shotontarget", "shotsontarget",
+                                        "shotongoal", "shotsongoal"]) \
+                or any(w in name for w in ["chute no alvo", "chutes no alvo",
+                                            "finalizacao no alvo", "finalização no alvo",
+                                            "chute a gol"]):
+            return "shots_on_target"
+        if any(w in name for w in ["chute", "shot", "finaliza"]):
+            return "shots"
 
         # Gols
         if any(w in name for w in ["gol", "goal", "total de gol"]):
@@ -170,6 +238,12 @@ class AIResultCheckerService:
         if any(w in name for w in ["handicap", "handi", "h.a.", " ha "]):
             return "handicap"
 
+        # market_type gravado no banco entra so' aqui, depois de o texto nao
+        # ter decidido nada -- ver _MARKET_TYPE_HINTS.
+        hint = self._MARKET_TYPE_HINTS.get((market_type or "").lower())
+        if hint:
+            return hint
+
         # Over/Under genérico → trata como gols se nada mais encaixou
         if any(w in name for w in ["over", "under", "acima", "abaixo", "mais de", "menos de"]):
             return "goals"
@@ -198,105 +272,38 @@ class AIResultCheckerService:
     # ENGINE ASIÁTICA
     ##########################################################################
     def evaluate_asian(self, value, line, op):
+        """Over/Under asiatico. Estatistica ausente, linha fora da grade ou op
+        que nao seja over/under devolvem (None, 0) -- "nao sei resolver" --
+        em vez do RED que a versao anterior devolvia no fim da funcao.
 
-        value = Decimal(value)
-        line = Decimal(line)
-
-        if line % 1 == 0:
-            if op == "over":
-                if value > line:
-                    return ("GREEN", Decimal("1"))
-                elif value == line:
-                    return ("PUSH", Decimal("0"))
-                else:
-                    return ("RED", Decimal("-1"))
-            else:
-                if value < line:
-                    return ("GREEN", Decimal("1"))
-                elif value == line:
-                    return ("PUSH", Decimal("0"))
-                else:
-                    return ("RED", Decimal("-1"))
-
-        if line % 1 == Decimal("0.5"):
-            if op == "over":
-                return ("GREEN", Decimal("1")) if value > line else ("RED", Decimal("-1"))
-            else:
-                return ("GREEN", Decimal("1")) if value < line else ("RED", Decimal("-1"))
-
-        if line % 1 in [Decimal("0.25"), Decimal("0.75")]:
-            low  = line - Decimal("0.25")
-            high = line + Decimal("0.25")
-
-            if op == "over":
-                if value > high:
-                    return ("GREEN", Decimal("1"))
-                elif value == high:
-                    return ("HALF-WIN", Decimal("0.5"))
-                elif value == low:
-                    return ("HALF-LOSS", Decimal("-0.5"))
-                else:
-                    return ("RED", Decimal("-1"))
-            else:
-                if value < low:
-                    return ("GREEN", Decimal("1"))
-                elif value == low:
-                    return ("HALF-WIN", Decimal("0.5"))
-                elif value == high:
-                    return ("HALF-LOSS", Decimal("-0.5"))
-                else:
-                    return ("RED", Decimal("-1"))
-
-        return ("RED", Decimal("-1"))
+        Aquele RED final era alcancavel de tres jeitos silenciosos: linha
+        negativa (`Decimal("-9.5") % 1` da' -0.5, nunca 0.5), linha fora da
+        grade asiatica, e op=None (mercado de cartoes chamava esta funcao sem
+        checar op, e o `else` de cada bloco tratava "sem operador" como
+        UNDER). Ver services/settlement.py."""
+        return settlement.settle_over_under(value, line, op)
 
     ##########################################################################
     # RESULTADO 1X2  (aceita também variantes de dupla chance na linha)
     ##########################################################################
-    def evaluate_result_1x2(self, hg, ag, raw_line, market=""):
-        """hg/ag: gols casa/fora. raw_line: '1', 'X', '2', '1X', 'Casa ou Empate', etc."""
-        ln  = (raw_line or "").lower().replace(" ", "").replace("ou", "").strip()
-        mkt = (market or "").lower()
+    def evaluate_result_1x2(self, hg, ag, raw_line, market="",
+                            home_team=None, away_team=None):
+        """hg/ag: gols casa/fora. raw_line: '1', 'X', '2', '1X', 'Casa ou Empate', etc.
 
-        if hg > ag:   actual = "1"
-        elif hg == ag: actual = "x"
-        else:          actual = "2"
-
-        # Dupla chance dentro do evaluate_result_1x2. As chaves "home/away" etc
-        # cobrem o value_name cru que a API-Football devolve pro mercado Double
-        # Chance ("Home/Away", "Home/Draw", "Draw/Away") -- achado rodando o
-        # motor deterministico contra jogos reais: esse pick nunca resolvia
-        # GREEN/RED porque so' as variantes PT-BR/compactas existiam aqui.
-        combos = {
-            "1x": {"1", "x"}, "x1": {"1", "x"},
-            "12": {"1", "2"}, "21": {"1", "2"},
-            "x2": {"x", "2"}, "2x": {"x", "2"},
-            "casaempate": {"1", "x"}, "empatevisitante": {"x", "2"},
-            "casavisitante": {"1", "2"},
-            "home/away": {"1", "2"}, "away/home": {"1", "2"},
-            "home/draw": {"1", "x"}, "draw/home": {"1", "x"},
-            "draw/away": {"x", "2"}, "away/draw": {"x", "2"},
-        }
-        for key, valid in combos.items():
-            if key in ln or key in mkt.replace(" ", ""):
-                return ("GREEN", Decimal("1")) if actual in valid else ("RED", Decimal("-1"))
-
-        # Resultado simples
-        if ln in ("1", "casa", "mandante", "home"):
-            pred = "1"
-        elif ln in ("x", "empate", "draw", "e"):
-            pred = "x"
-        elif ln in ("2", "visitante", "away", "fora"):
-            pred = "2"
-        else:
-            return (None, Decimal("0"))  # linha não reconhecida → não resolve
-
-        return ("GREEN", Decimal("1")) if pred == actual else ("RED", Decimal("-1"))
+        `market` continua na assinatura pra nao quebrar quem chama, mas nao
+        entra mais na decisao: procurar as chaves de dupla chance dentro do
+        nome do mercado fazia "Resultado Final (1X2)" casar com a chave "1x"
+        e virar um "1 ou X" -- todo pick de 1X2 dava GREEN em empate. A
+        selecao vem so' da linha (ver services/settlement.py::settle_outcome).
+        """
+        return settlement.settle_outcome(hg, ag, raw_line, home_team, away_team)
 
     ##########################################################################
     # DUPLA CHANCE
     ##########################################################################
-    def evaluate_double_chance(self, hg, ag, raw_line, market=""):
-        return self.evaluate_result_1x2(hg, ag, raw_line, market)
+    def evaluate_double_chance(self, hg, ag, raw_line, market="",
+                               home_team=None, away_team=None):
+        return self.evaluate_result_1x2(hg, ag, raw_line, market, home_team, away_team)
 
     ##########################################################################
     # HANDICAP ASIÁTICO (resultado)
@@ -320,193 +327,170 @@ class AIResultCheckerService:
         suportava: divide em duas metades de meia-bola e combina os dois
         resultados em HALF-WIN/HALF-LOSS quando aplicavel.
         """
-        if val is None:
+        if val is None or hg is None or ag is None:
             return (None, Decimal("0"))
-        handicap = val
 
-        raw_lower = str(raw_line or "").lower()
-        resolved_side = side
-        if any(k in raw_lower for k in ("home", "casa", "mandante")):
-            resolved_side = "home"
-        elif any(k in raw_lower for k in ("away", "visitante", "fora", "visita")):
-            resolved_side = "away"
-        elif home_team and home_team.lower() in raw_lower:
-            resolved_side = "home"
-        elif away_team and away_team.lower() in raw_lower:
-            resolved_side = "away"
-
-        home_g = Decimal(str(hg))
-        away_g = Decimal(str(ag))
-
-        def _straight(h):
-            if resolved_side == "away":
-                adj, opp = away_g + h, home_g
-            else:
-                adj, opp = home_g + h, away_g
-            if adj > opp:   return Decimal("1")
-            if adj == opp:  return Decimal("0")
-            return Decimal("-1")
-
-        quarters = handicap * 4
-        if quarters == quarters.to_integral_value() and int(quarters) % 2 != 0:
-            half_a = (quarters - 1) / 4
-            half_b = (quarters + 1) / 4
-            factor = (_straight(half_a) + _straight(half_b)) / 2
-        else:
-            factor = _straight(handicap)
-
-        result = {
-            Decimal("1"): "GREEN", Decimal("0.5"): "HALF-WIN", Decimal("0"): "PUSH",
-            Decimal("-0.5"): "HALF-LOSS", Decimal("-1"): "RED",
-        }[factor]
-        return (result, factor)
+        parsed = settlement.parse_line(raw_line, home_team, away_team)
+        resolved_side = parsed["side"] or side
+        return settlement.settle_asian_handicap(resolved_side, val, hg, ag)
 
     ##########################################################################
     # RESOLVE STAT_VAL para mercados over/under
     ##########################################################################
-    def _resolve_overunder(self, stats, mt, side, is_ht=False):
+    # familia -> (chave casa, chave visitante, chave total) em get_fixture_result().
+    # Uma tabela em vez de uma cadeia de ifs: mercado novo entra aqui e passa a
+    # ser resolvido nos tres recortes (casa/fora/total) de uma vez.
+    _STAT_KEYS = {
+        "goals":           ("home_goals", "away_goals", "total_goals"),
+        "goals_ht":        ("home_goals_ht", "away_goals_ht", "total_goals_ht"),
+        "goals_90":        ("home_goals_90", "away_goals_90", "total_goals_90"),
+        "corners":         ("home_corners", "away_corners", "total_corners"),
+        "cards":           ("home_cards", "away_cards", "total_cards"),
+        "yellow":          ("home_yellow", "away_yellow", "total_yellow"),
+        "offsides":        ("home_offsides", "away_offsides", "total_offsides"),
+        "fouls":           ("home_fouls", "away_fouls", "total_fouls"),
+        "saves":           ("home_saves", "away_saves", "total_saves"),
+        "shots":           ("home_shots", "away_shots", "total_shots"),
+        "shots_on_target": ("home_shots_on", "away_shots_on", "total_shots_on"),
+    }
+
+    def _stat_family(self, mt, market="", is_ht=False, prorrogacao=False):
+        """Familia de estatistica efetiva do mercado: resolve 1° tempo, o
+        recorte so'-amarelo dos mercados de cartao, e os 90 minutos quando o
+        jogo foi pra prorrogacao."""
         if mt == "goals":
             if is_ht:
-                hg = stats.get("home_goals_ht")
-                ag = stats.get("away_goals_ht")
-                if hg is None or ag is None:
-                    return None  # dados de 1° tempo ainda não disponíveis
-                return hg if side == "home" else ag if side == "away" else hg + ag
-            return (
-                stats["home_goals"]  if side == "home" else
-                stats["away_goals"]  if side == "away" else
-                stats["total_goals"]
-            )
-        if mt == "corners":
-            return (
-                stats["home_corners"]  if side == "home" else
-                stats["away_corners"]  if side == "away" else
-                stats["total_corners"]
-            )
-        if mt == "cards":
-            return (
-                stats["home_cards"] if side == "home" else
-                stats["away_cards"] if side == "away" else
-                stats["total_cards"]
-            )
-        if mt == "offsides":
-            return (
-                stats["home_offsides"] if side == "home" else
-                stats["away_offsides"] if side == "away" else
-                stats["total_offsides"]
-            )
-        return None
+                return "goals_ht"
+            if prorrogacao:
+                return "goals_90"
+            return "goals"
+        if mt == "cards" and any(k in (market or "").lower() for k in ("amarelo", "yellow")):
+            return "yellow"
+        return mt
+
+    def _resolve_overunder(self, stats, mt, side, is_ht=False, market="", prorrogacao=False):
+        """Valor observado do mercado, ou None se o provedor nao publicou.
+
+        None aqui NUNCA vira 0: quem chama e' obrigado a devolver
+        "nao liquidado" (ver services/settlement.py, invariante 1)."""
+        keys = self._STAT_KEYS.get(self._stat_family(mt, market, is_ht, prorrogacao))
+        if not keys:
+            return None
+        home_key, away_key, total_key = keys
+        key = home_key if side == "home" else away_key if side == "away" else total_key
+        return stats.get(key)
+
+    def _resolve_side_pair(self, stats, mt, is_ht=False, market="", prorrogacao=False):
+        """(valor casa, valor visitante) da familia -- o que o handicap precisa.
+        None se qualquer um dos lados for desconhecido."""
+        keys = self._STAT_KEYS.get(self._stat_family(mt, market, is_ht, prorrogacao))
+        if not keys:
+            return None
+        home_val, away_val = stats.get(keys[0]), stats.get(keys[1])
+        if home_val is None or away_val is None:
+            return None
+        return home_val, away_val
 
     ##########################################################################
     # AVALIA UM PICK COMPLETO
     # Retorna (None, Decimal("0")) quando não é possível determinar o resultado.
     ##########################################################################
-    def evaluate_pick(self, market, line, odd, stats, home_team=None, away_team=None):
-        mt     = self.detect_market_type(market)
+    _STAT_MARKETS = ("goals", "corners", "cards", "offsides",
+                     "fouls", "saves", "shots", "shots_on_target")
+
+    def evaluate_pick(self, market, line, odd, stats, home_team=None, away_team=None,
+                      market_type=None):
+        mt     = self.detect_market_type(market, market_type)
         is_ht  = self._is_first_half(market)
         side   = self.detect_side(market, home_team, away_team)
-        op, val = self.parse_line(line)
+        parsed = settlement.parse_line(line, home_team, away_team)
+        op, val = parsed["op"], parsed["value"]
 
-        # Mercados de over/under (gols totais/escanteios/cartões) são
-        # liquidados pelas casas com base no TEMPO NORMAL (90min) -- mas
-        # /fixtures/statistics da API-Football devolve o jogo inteiro
-        # (incluindo prorrogação/pênaltis) sem separar por período. Sem
-        # como recalcular o número certo, anula (PUSH) em vez de arriscar
-        # um RED/GREEN errado. Mercados de 1° tempo não são afetados (HT é
-        # sempre tempo normal, por definição).
-        if mt in ("goals", "corners", "cards", "offsides") and not is_ht and stats.get("status") in ("AET", "PEN"):
-            return ("PUSH", Decimal("0"))
+        # ── Prorrogacao ─────────────────────────────────────────────────────
+        # Casa de aposta liquida TUDO pelos 90 minutos; gol e escanteio do
+        # tempo extra nao contam. Mercado de 1° tempo nunca e' afetado (HT e'
+        # tempo normal por definicao).
+        #
+        # Gols: da' pra liquidar certo, porque score.fulltime da API traz o
+        # placar dos 90 minutos separado (Belgium x Senegal: 3x2 no total,
+        # 2x2 nos 90) -- e' o que home_goals_90/away_goals_90 guardam.
+        #
+        # Escanteio/cartao/falta/chute/impedimento: /fixtures/statistics NAO
+        # separa por periodo, entao o numero dos 90 minutos simplesmente nao
+        # existe pra nos. O pick NAO e' liquidado -- fica pendente pra
+        # conferencia. A versao anterior devolvia PUSH aqui, o que e' uma
+        # afirmacao financeira ("stake devolvida") que ninguem verificou:
+        # 6 picks VIP e 3 free em producao seriam anulados por isso, entre
+        # eles um RED que estava certo (pick #1452, Belgium x Senegal, 6
+        # escanteios contra uma linha Over 8.5 -- perdida com ou sem
+        # prorrogacao).
+        prorrogacao = stats.get("status") in ("AET", "PEN")
 
-        # Seleciona gols corretos (1° tempo ou jogo completo)
         if is_ht:
             hg = stats.get("home_goals_ht")
             ag = stats.get("away_goals_ht")
             if hg is None or ag is None:
                 return (None, Decimal("0"))  # aguardando dados de HT
+        elif prorrogacao:
+            hg = stats.get("home_goals_90")
+            ag = stats.get("away_goals_90")
+            if hg is None or ag is None:
+                return (None, Decimal("0"))  # placar dos 90min ainda nao coletado
+            if mt in self._STAT_MARKETS and mt != "goals":
+                return (None, Decimal("0"))  # contador dos 90min nao existe na API
         else:
-            hg = stats["home_goals"]
-            ag = stats["away_goals"]
+            hg = stats.get("home_goals")
+            ag = stats.get("away_goals")
 
-        if mt in ("goals", "corners"):
-            stat_val = self._resolve_overunder(stats, mt, side, is_ht)
-            if stat_val is None or val is None:
+        # ── Handicap asiatico de qualquer familia (gols/escanteios/cartoes) ──
+        # Uma so' porta pra todos: antes o handicap de gols e o de escanteios
+        # tinham caminhos separados e o de CARTOES nao tinha nenhum -- caia no
+        # ramo de over/under com op=None e era liquidado como se fosse Under.
+        if mt in self._STAT_MARKETS and self._is_handicap(market, market_type):
+            pair = self._resolve_side_pair(stats, mt, is_ht, market, prorrogacao)
+            if pair is None:
                 return (None, Decimal("0"))
-            if op in ("over", "under"):
-                result, factor = self.evaluate_asian(stat_val, val, op)
-            else:
-                # Asian handicap sem over/under (ex: "Corners Asian Handicap Away -5.5")
-                if mt == "corners":
-                    result, factor = self.evaluate_handicap(
-                        stats["home_corners"], stats["away_corners"], str(val), val, side,
-                        home_team, away_team
-                    )
-                else:
-                    result, factor = self.evaluate_handicap(hg, ag, str(val), val, side, home_team, away_team)
+            resolved_side = parsed["side"] or (side if side in ("home", "away") else None)
+            return settlement.settle_asian_handicap(resolved_side, val, pair[0], pair[1])
 
-        elif mt == "cards":
-            if val is None:
-                return (None, Decimal("0"))
-            is_yellow = any(k in market.lower() for k in ["amarelo", "yellow"])
-            if side == "home":
-                stat_val = stats["home_yellow"] if is_yellow else stats["home_cards"]
-            elif side == "away":
-                stat_val = stats["away_yellow"] if is_yellow else stats["away_cards"]
-            else:
-                stat_val = stats["total_yellow"] if is_yellow else stats["total_cards"]
-            result, factor = self.evaluate_asian(stat_val, val, op)
+        if mt in self._STAT_MARKETS:
+            stat_val = self._resolve_overunder(stats, mt, side, is_ht, market, prorrogacao)
+            return settlement.settle_over_under(stat_val, val, op)
 
-        elif mt == "offsides":
-            stat_val = self._resolve_overunder(stats, mt, side, is_ht)
-            if stat_val is None or val is None:
-                return (None, Decimal("0"))
-            result, factor = self.evaluate_asian(stat_val, val, op)
+        if mt == "btts":
+            return settlement.settle_btts(hg, ag, op)
 
-        elif mt == "btts":
-            both = hg > 0 and ag > 0
-            if op in ("yes", None) and line and "sim" in (line or "").lower():
-                result, factor = ("GREEN", Decimal("1")) if both else ("RED", Decimal("-1"))
-            elif op == "no" or (line and any(k in (line or "").lower() for k in ["no", "não", "nao"])):
-                result, factor = ("RED", Decimal("-1")) if both else ("GREEN", Decimal("1"))
-            else:
-                return (None, Decimal("0"))  # linha BTTS não reconhecida → não resolve
-
-        elif mt == "to_qualify":
+        if mt == "to_qualify":
             # Lado vem do campo line ("Casa"/"Visitante"/"Home"/"Away"), não do nome do mercado.
             # Se o placar (90min+prorrogação) está empatado, o jogo foi decidido nos pênaltis ·
             # essa informação não é capturada em match_statistics hoje, então não arriscamos
             # um GREEN/RED errado e deixamos pendente para conferência manual.
-            side_line = (str(line) or "").strip().lower()
-            if hg == ag:
+            if hg is None or ag is None or hg == ag:
                 return (None, Decimal("0"))
-            if side_line in ("casa", "home", "mandante"):
-                result, factor = ("GREEN", Decimal("1")) if hg > ag else ("RED", Decimal("-1"))
-            elif side_line in ("visitante", "away", "fora"):
-                result, factor = ("GREEN", Decimal("1")) if ag > hg else ("RED", Decimal("-1"))
-            else:
-                return (None, Decimal("0"))
+            side_line = settlement.parse_line(line, home_team, away_team)["side"]
+            if side_line == "home":
+                return ("GREEN", Decimal("1")) if hg > ag else ("RED", Decimal("-1"))
+            if side_line == "away":
+                return ("GREEN", Decimal("1")) if ag > hg else ("RED", Decimal("-1"))
+            return (None, Decimal("0"))
 
-        elif mt in ("result_1x2", "double_chance"):
-            result, factor = self.evaluate_result_1x2(hg, ag, line, market)
+        if mt in ("result_1x2", "double_chance"):
+            return settlement.settle_outcome(hg, ag, line, home_team, away_team)
 
-        elif mt == "handicap":
-            result, factor = self.evaluate_handicap(hg, ag, line, val, side, home_team, away_team)
+        if mt == "handicap":
+            return self.evaluate_handicap(hg, ag, line, val, side, home_team, away_team)
 
-        else:
-            return (None, Decimal("0"))  # mercado desconhecido → não resolve
-
-        return result, factor
+        return (None, Decimal("0"))  # mercado desconhecido → não resolve
 
     ##########################################################################
     # CALCULA PROFIT
     ##########################################################################
     def calculate_profit(self, factor, odd):
-        """Calcula lucro por 1 unidade apostada. Stake real é calculado por usuário via Kelly."""
-        odd = Decimal(str(odd))
-        if factor == Decimal("1"):    return odd - Decimal("1")
-        if factor == Decimal("0.5"):  return (odd - Decimal("1")) / Decimal("2")
-        if factor == Decimal("0"):    return Decimal("0")
-        if factor == Decimal("-0.5"): return Decimal("-0.5")
-        return Decimal("-1")
+        """Lucro por 1 unidade apostada, ou None se o fator/odd nao forem
+        numeros validos. Stake real e' calculado por usuario via Kelly.
+
+        None em vez de -1: um fator ilegivel nao e' uma aposta perdida."""
+        return settlement.profit_units(factor, odd)
 
     ##########################################################################
     # EXECUÇÃO PRINCIPAL (picks_vip)
@@ -549,10 +533,14 @@ class AIResultCheckerService:
                                                 home_team, away_team)
 
             if result is None:
-                print(f"[CHECKER] id={sid}: mercado nao reconhecido ou dados HT ausentes - pulando.")
+                print(f"[CHECKER] id={sid}: sem estatistica publicada, mercado nao "
+                      f"reconhecido ou linha ilegivel - segue pendente.")
                 continue
 
             profit = self.calculate_profit(factor, odd)
+            if profit is None:
+                print(f"[CHECKER] id={sid}: fator/odd invalidos ({factor!r}/{odd!r}) - segue pendente.")
+                continue
 
             mt   = self.detect_market_type(market)
             side = self.detect_side(market, home_team, away_team)

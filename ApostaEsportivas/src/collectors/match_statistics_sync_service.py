@@ -31,26 +31,40 @@ def load_leagues_from_db():
 
 
 def extract_stat(stats, stat_name):
+    """Valor do contador, ou None quando a API ainda nao publicou esse numero.
+
+    Devolvia 0 nos tres casos de ausencia (folha vazia, contador fora da
+    folha, valor null) -- e o banco guardava esse 0 como se fosse a contagem
+    real do jogo. Alem de gradear pick errado, contaminava a taxa historica
+    do motor: hoje ha' 99 jogos FT em match_statistics com escanteios, faltas
+    e chutes todos em 0, sendo que 94 deles tiveram gol (ou seja, aconteceram
+    de verdade). Ver services/settlement.py, invariante 1.
+    """
     if not stats:
-        return 0
+        return None
 
     for s in stats:
-        if s["type"] == stat_name:
-            val = s["value"]
+        if s.get("type") == stat_name:
+            val = s.get("value")
 
             if val is None:
-                return 0
+                return None
 
             if isinstance(val, str):
-                val = val.replace("%", "")
+                val = val.replace("%", "").strip()
                 try:
                     return float(val)
-                except:
-                    return 0
+                except ValueError:
+                    return None
 
             return val
 
-    return 0
+    return None
+
+
+def _sum_stats(*parts):
+    """Total que respeita ausencia: parcela desconhecida -> total desconhecido."""
+    return None if any(p is None for p in parts) else sum(parts)
 
 
 class MatchStatisticsSyncService:
@@ -62,6 +76,25 @@ class MatchStatisticsSyncService:
     def _open(self):
         self.conn = get_connection()
         self.cur = self.conn.cursor()
+        self._ensure_columns()
+
+    def _ensure_columns(self):
+        """Placar dos 90 MINUTOS, separado do placar final.
+
+        `goals` da API-Football e' o placar do jogo inteiro: num jogo decidido
+        na prorrogacao ele ja' inclui os gols do tempo extra (Belgium x
+        Senegal, fixture 1567308: goals 3x2, mas score.fulltime 2x2). Casa de
+        aposta liquida Over/Under e 1X2 pelos 90 minutos -- liquidar pelo 3x2
+        e' liquidar por um jogo que o apostador nao apostou.
+
+        Auto-provisionado aqui (mesmo padrao de
+        services/picks_ledger_sync_service.py::_create_table_if_needed) porque
+        migracao em PROD nao roda sozinha depois do merge.
+        """
+        for coluna in ("home_goals_90", "away_goals_90"):
+            self.cur.execute(
+                f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
+        self.conn.commit()
 
     def _close(self):
         if self.cur:
@@ -95,10 +128,20 @@ class MatchStatisticsSyncService:
         # reverify_recent_stats_results em routers/live.py). Com essa regra cada
         # jogo é coletado no máximo 2 vezes: logo após o FT e uma vez no dia
         # seguinte, que é quando o número já não muda mais.
+        #
+        # A folha tem que estar COMPLETA pra o jogo contar como estabilizado:
+        # linha com escanteios/faltas/chutes em NULL e' justamente aquela em
+        # que a API respondeu sem estatistica, e e' a que mais precisa de uma
+        # segunda passada. Sem essa condicao o jogo seria pulado pra sempre
+        # com a folha vazia.
         self.cur.execute("""
             SELECT fixture_id FROM match_statistics
             WHERE last_updated IS NOT NULL
               AND last_updated > match_date + INTERVAL '24 hours'
+              AND total_corners IS NOT NULL
+              AND total_yellow_cards IS NOT NULL
+              AND home_fouls IS NOT NULL
+              AND home_total_shots IS NOT NULL
         """)
         settled_fixture_ids = {row[0] for row in self.cur.fetchall()}
 
@@ -146,6 +189,10 @@ class MatchStatisticsSyncService:
                     skipped += 1
                     continue
 
+                score = fx.get("score", {}) or {}
+                ht = score.get("halftime") or {}
+                ft90 = score.get("fulltime") or {}
+
                 fixtures.append({
                     "fixture_id": fixture["id"],
                     "league_id": lg["league_id"],
@@ -156,6 +203,10 @@ class MatchStatisticsSyncService:
                     "status": status,
                     "home_goals": goals["home"] or 0,
                     "away_goals": goals["away"] or 0,
+                    "home_goals_ht": ht.get("home"),
+                    "away_goals_ht": ht.get("away"),
+                    "home_goals_90": ft90.get("home"),
+                    "away_goals_90": ft90.get("away"),
                     "referee": fixture.get("referee"),
                 })
 
@@ -223,6 +274,7 @@ class MatchStatisticsSyncService:
                 home_team_id, away_team_id,
                 home_goals, away_goals, total_goals,
                 home_goals_ht, away_goals_ht,
+                home_goals_90, away_goals_90,
                 home_corners, away_corners, total_corners,
                 home_yellow_cards, away_yellow_cards, total_yellow_cards,
                 home_red_cards, away_red_cards, total_red_cards,
@@ -247,6 +299,7 @@ class MatchStatisticsSyncService:
                 %s,%s,
                 %s,%s,%s,
                 %s,%s,
+                %s,%s,
                 %s,%s,%s,
                 %s,%s,%s,
                 %s,%s,%s,
@@ -265,53 +318,62 @@ class MatchStatisticsSyncService:
                 total_goals = EXCLUDED.total_goals,
                 home_goals_ht = COALESCE(EXCLUDED.home_goals_ht, match_statistics.home_goals_ht),
                 away_goals_ht = COALESCE(EXCLUDED.away_goals_ht, match_statistics.away_goals_ht),
+                home_goals_90 = COALESCE(EXCLUDED.home_goals_90, match_statistics.home_goals_90),
+                away_goals_90 = COALESCE(EXCLUDED.away_goals_90, match_statistics.away_goals_90),
 
-                home_corners = EXCLUDED.home_corners,
-                away_corners = EXCLUDED.away_corners,
-                total_corners = EXCLUDED.total_corners,
+                -- COALESCE em toda estatistica: agora que "nao publicado" chega
+                -- como NULL (ver extract_stat), uma coleta em que a API
+                -- respondeu incompleta nao pode apagar o numero certo ja
+                -- gravado numa coleta anterior. Placar e status seguem
+                -- sobrescrevendo direto: vem de /fixtures, nao da folha de
+                -- estatistica, e sao sempre confiaveis.
+                home_corners = COALESCE(EXCLUDED.home_corners, match_statistics.home_corners),
+                away_corners = COALESCE(EXCLUDED.away_corners, match_statistics.away_corners),
+                total_corners = COALESCE(EXCLUDED.total_corners, match_statistics.total_corners),
 
-                home_yellow_cards = EXCLUDED.home_yellow_cards,
-                away_yellow_cards = EXCLUDED.away_yellow_cards,
-                total_yellow_cards = EXCLUDED.total_yellow_cards,
+                home_yellow_cards = COALESCE(EXCLUDED.home_yellow_cards, match_statistics.home_yellow_cards),
+                away_yellow_cards = COALESCE(EXCLUDED.away_yellow_cards, match_statistics.away_yellow_cards),
+                total_yellow_cards = COALESCE(EXCLUDED.total_yellow_cards, match_statistics.total_yellow_cards),
 
-                home_red_cards = EXCLUDED.home_red_cards,
-                away_red_cards = EXCLUDED.away_red_cards,
-                total_red_cards = EXCLUDED.total_red_cards,
+                home_red_cards = COALESCE(EXCLUDED.home_red_cards, match_statistics.home_red_cards),
+                away_red_cards = COALESCE(EXCLUDED.away_red_cards, match_statistics.away_red_cards),
+                total_red_cards = COALESCE(EXCLUDED.total_red_cards, match_statistics.total_red_cards),
 
                 status = EXCLUDED.status,
                 match_date = EXCLUDED.match_date,
 
-                home_shots_on = EXCLUDED.home_shots_on,
-                away_shots_on = EXCLUDED.away_shots_on,
-                home_shots_off = EXCLUDED.home_shots_off,
-                away_shots_off = EXCLUDED.away_shots_off,
-                home_total_shots = EXCLUDED.home_total_shots,
-                away_total_shots = EXCLUDED.away_total_shots,
-                home_blocked_shots = EXCLUDED.home_blocked_shots,
-                away_blocked_shots = EXCLUDED.away_blocked_shots,
-                home_goalkeeper_saves = EXCLUDED.home_goalkeeper_saves,
-                away_goalkeeper_saves = EXCLUDED.away_goalkeeper_saves,
-                home_fouls = EXCLUDED.home_fouls,
-                away_fouls = EXCLUDED.away_fouls,
-                home_offsides = EXCLUDED.home_offsides,
-                away_offsides = EXCLUDED.away_offsides,
-                home_possession = EXCLUDED.home_possession,
-                away_possession = EXCLUDED.away_possession,
-                home_passes = EXCLUDED.home_passes,
-                away_passes = EXCLUDED.away_passes,
-                home_passes_accuracy = EXCLUDED.home_passes_accuracy,
-                away_passes_accuracy = EXCLUDED.away_passes_accuracy,
+                home_shots_on = COALESCE(EXCLUDED.home_shots_on, match_statistics.home_shots_on),
+                away_shots_on = COALESCE(EXCLUDED.away_shots_on, match_statistics.away_shots_on),
+                home_shots_off = COALESCE(EXCLUDED.home_shots_off, match_statistics.home_shots_off),
+                away_shots_off = COALESCE(EXCLUDED.away_shots_off, match_statistics.away_shots_off),
+                home_total_shots = COALESCE(EXCLUDED.home_total_shots, match_statistics.home_total_shots),
+                away_total_shots = COALESCE(EXCLUDED.away_total_shots, match_statistics.away_total_shots),
+                home_blocked_shots = COALESCE(EXCLUDED.home_blocked_shots, match_statistics.home_blocked_shots),
+                away_blocked_shots = COALESCE(EXCLUDED.away_blocked_shots, match_statistics.away_blocked_shots),
+                home_goalkeeper_saves = COALESCE(EXCLUDED.home_goalkeeper_saves, match_statistics.home_goalkeeper_saves),
+                away_goalkeeper_saves = COALESCE(EXCLUDED.away_goalkeeper_saves, match_statistics.away_goalkeeper_saves),
+                home_fouls = COALESCE(EXCLUDED.home_fouls, match_statistics.home_fouls),
+                away_fouls = COALESCE(EXCLUDED.away_fouls, match_statistics.away_fouls),
+                home_offsides = COALESCE(EXCLUDED.home_offsides, match_statistics.home_offsides),
+                away_offsides = COALESCE(EXCLUDED.away_offsides, match_statistics.away_offsides),
+                home_possession = COALESCE(EXCLUDED.home_possession, match_statistics.home_possession),
+                away_possession = COALESCE(EXCLUDED.away_possession, match_statistics.away_possession),
+                home_passes = COALESCE(EXCLUDED.home_passes, match_statistics.home_passes),
+                away_passes = COALESCE(EXCLUDED.away_passes, match_statistics.away_passes),
+                home_passes_accuracy = COALESCE(EXCLUDED.home_passes_accuracy, match_statistics.home_passes_accuracy),
+                away_passes_accuracy = COALESCE(EXCLUDED.away_passes_accuracy, match_statistics.away_passes_accuracy),
 
-                referee = EXCLUDED.referee,
+                referee = COALESCE(EXCLUDED.referee, match_statistics.referee),
                 last_updated = NOW();
         """, (
             fx["fixture_id"], fx["league_id"], fx["season"],
             fx["home_id"], fx["away_id"],
             home_goals, away_goals, total_goals,
             fx.get("home_goals_ht"), fx.get("away_goals_ht"),
-            home_corners, away_corners, home_corners + away_corners,
-            home_yellow, away_yellow, home_yellow + away_yellow,
-            home_red, away_red, home_red + away_red,
+            fx.get("home_goals_90"), fx.get("away_goals_90"),
+            home_corners, away_corners, _sum_stats(home_corners, away_corners),
+            home_yellow, away_yellow, _sum_stats(home_yellow, away_yellow),
+            home_red, away_red, _sum_stats(home_red, away_red),
             fx["status"], fx["match_date"],
 
             home_shots_on, away_shots_on,
@@ -402,7 +464,17 @@ class MatchStatisticsSyncService:
     # SYNC DIRETO POR FIXTURE_ID (para pendentes em picks_vip)
     # Não depende da tabela teams · busca tudo via API por ID.
     # ---------------------------------------------------------
-    def sync_pending_fixtures(self):
+    def sync_pending_fixtures(self, include_resolved: bool = False):
+        """Busca a folha de estatistica dos jogos que sustentam picks.
+
+        include_resolved=True inclui tambem picks JA' resolvidos cuja folha
+        esta ausente ou incompleta. E' o que quebra o circulo vicioso que
+        deixou o caso Fortaleza x Palmeiras (fixture 1546854) sem folha
+        nenhuma no banco: o caminho ao vivo gravou um resultado a partir de
+        estatistica vazia, e a partir dai o pick nao era mais "pendente",
+        entao a coleta nunca ia buscar o numero certo. Usado pela
+        re-resolucao (scripts/reauditar_resultados.py).
+        """
         print("[MATCH_STATS] Sincronizando fixtures pendentes das sugestões...")
 
         self._open()
@@ -411,21 +483,32 @@ class MatchStatisticsSyncService:
         pending_ids = set()
         import json as _json
 
-        for table in ("picks_vip", "picks_free"):
-            self.cur.execute(f"SELECT DISTINCT fixture_id FROM {table} WHERE result IS NULL AND fixture_id IS NOT NULL;")
+        filtro = "" if include_resolved else "AND result IS NULL"
+
+        for table in ("picks_vip", "picks_free", "picks_faltas", "picks_goleiros"):
+            try:
+                self.cur.execute(
+                    f"SELECT DISTINCT fixture_id FROM {table} "
+                    f"WHERE fixture_id IS NOT NULL {filtro};")
+            except Exception as e:
+                print(f"[MATCH_STATS] Aviso: {table} indisponivel ({e})")
+                self.conn.rollback()
+                continue
             for row in self.cur.fetchall():
                 if row[0] is not None:
                     pending_ids.add(row[0])
 
-        # Alavancagem: dois fixtures por pick
-        self.cur.execute("SELECT fixture_id_1, fixture_id_2 FROM picks_alavancagem WHERE result IS NULL;")
+        # Alavancagem: ate' tres fixtures por pick (a perna 3 nao era lida aqui)
+        self.cur.execute(
+            f"SELECT fixture_id_1, fixture_id_2, fixture_id_3 FROM picks_alavancagem "
+            f"WHERE TRUE {filtro};")
         for row in self.cur.fetchall():
-            for fid in (row[0], row[1]):
+            for fid in row:
                 if fid is not None:
                     pending_ids.add(fid)
 
         # Múltiplas: extrai fixture_ids do JSON das legs
-        self.cur.execute("SELECT games FROM picks_multiplas WHERE result IS NULL;")
+        self.cur.execute(f"SELECT games FROM picks_multiplas WHERE TRUE {filtro};")
         for (games_raw,) in self.cur.fetchall():
             try:
                 games = _json.loads(games_raw) if isinstance(games_raw, str) else games_raw
@@ -436,12 +519,17 @@ class MatchStatisticsSyncService:
             except Exception:
                 pass
 
-        # Remove os que já têm stats
+        # Remove os que já têm a folha COMPLETA. Antes bastava existir a linha:
+        # um jogo gravado com a folha vazia nunca era rebuscado.
         if pending_ids:
-            self.cur.execute(
-                "SELECT fixture_id FROM match_statistics WHERE fixture_id = ANY(%s);",
-                (list(pending_ids),)
-            )
+            self.cur.execute("""
+                SELECT fixture_id FROM match_statistics
+                WHERE fixture_id = ANY(%s)
+                  AND total_corners IS NOT NULL
+                  AND total_yellow_cards IS NOT NULL
+                  AND home_fouls IS NOT NULL
+                  AND home_total_shots IS NOT NULL;
+            """, (list(pending_ids),))
             already = {row[0] for row in self.cur.fetchall()}
             pending_ids -= already
 
@@ -480,8 +568,9 @@ class MatchStatisticsSyncService:
                 goals = item["goals"]
                 match_date = datetime.fromisoformat(fixture_info["date"].replace("Z", "+00:00"))
 
-                score = item.get("score", {})
-                ht = score.get("halftime", {})
+                score = item.get("score", {}) or {}
+                ht = score.get("halftime") or {}
+                ft90 = score.get("fulltime") or {}
                 fx = {
                     "fixture_id": fixture_id,
                     "league_id": league_id,
@@ -494,6 +583,8 @@ class MatchStatisticsSyncService:
                     "away_goals": goals["away"] or 0,
                     "home_goals_ht": ht.get("home"),
                     "away_goals_ht": ht.get("away"),
+                    "home_goals_90": ft90.get("home"),
+                    "away_goals_90": ft90.get("away"),
                     "referee": fixture_info.get("referee"),
                 }
 
