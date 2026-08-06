@@ -128,9 +128,21 @@ def injury_signal(injuries_home: list, starters_home: dict,
 def news_score(signal: dict | None) -> float | None:
     """Reduz o sinal de desfalques a um score 0-1 (0.5=neutro) para uso no
     Score Final -- titular desfalcado pesa mais que reserva/nao-confirmado.
-    Time desfalcado tende a jogar pior -> favorece o adversario, entao o
-    score aqui e simetrico (nao aponta lado, so intensidade combinada;
-    quem usa o score no ranking ja sabe pra qual candidato/mercado aplicar)."""
+
+    SENTIDO DO SCORE (corrigido 2026-08-05): desfalque DERRUBA o score, nao
+    levanta. A versao anterior devolvia `0.5 + total`, ou seja quanto MAIS
+    titular fora, MAIOR o Score Final do candidato -- ranking.final_score()
+    soma news_score com peso fixo (~0.111 depois da renormalizacao) e nao tem
+    como saber que aquele numero deveria ser lido ao contrario. Um jogo com 6
+    titulares desfalcados dos dois lados saia pontuando +0.5 (o teto) e
+    passava na frente de um jogo com elenco completo.
+
+    O sinal e' simetrico de proposito: nao aponta a favor de qual lado o
+    desfalque pesa (isso dependeria do mercado e do jogador). O que ele
+    afirma e' mais modesto e sempre verdadeiro na direcao certa -- time
+    desfalcado joga diferente do time que gerou o historico, entao a taxa
+    historica descreve pior a partida de amanha. Isso e' incerteza, e
+    incerteza tem que reduzir a nota, nunca aumentar."""
     if not signal:
         return None
 
@@ -140,4 +152,4 @@ def news_score(signal: dict | None) -> float | None:
                    + len(signal["away"]["outros_desfalcados"]) * 0.02)
 
     total = min(home_weight + away_weight, 0.5)
-    return round(0.5 + total, 4)
+    return round(0.5 - total, 4)

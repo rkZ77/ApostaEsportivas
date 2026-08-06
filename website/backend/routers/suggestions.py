@@ -292,7 +292,7 @@ def get_today_suggestions(
             rows_m = _safe_query(cur, f"""
                 SELECT id, match_date,
                        games AS legs,
-                       total_odd, score_combo AS confidence,
+                       total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
                        reasoning, result, profit, created_at
                 FROM picks_multiplas
                 WHERE {_m_where}
@@ -620,7 +620,7 @@ def get_suggestion_detail(
         if pick_type == "multipla":
             cur.execute("""
                 SELECT id, match_date, games AS legs,
-                       total_odd, score_combo AS confidence,
+                       total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
                        reasoning, result, profit, created_at
                 FROM picks_multiplas WHERE id = %s
             """, (suggestion_id,))
@@ -1187,7 +1187,7 @@ def get_recent_results(
         rows = _safe_query(cur, """
             SELECT pm.id, pm.match_date,
                    pm.total_odd AS odd,
-                   pm.score_combo AS confidence,
+                   COALESCE(pm.prob_combinada, pm.score_combo) AS confidence,
                    pm.result, pm.profit,
                    pm.games AS legs,
                    COALESCE(ufp.stake_units, 1) AS stake
@@ -1347,12 +1347,14 @@ def get_multiplas(
         elif resultado and resultado != "all":
             conditions.append("result = %s"); params.append(resultado)
         where = "WHERE " + " AND ".join(conditions)
-        order_col = "total_odd" if order_by == "odd" else "score_combo" if order_by == "confidence" else "match_date"
+        order_col = ("total_odd" if order_by == "odd"
+                     else "COALESCE(prob_combinada, score_combo)" if order_by == "confidence"
+                     else "match_date")
         params.append(limit)
         rows = _safe_query(cur, f"""
             SELECT id, match_date,
                    games AS legs,
-                   total_odd, score_combo AS confidence,
+                   total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
                    reasoning, result, profit, created_at
             FROM picks_multiplas
             {where}

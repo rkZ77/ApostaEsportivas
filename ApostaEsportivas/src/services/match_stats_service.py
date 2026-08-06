@@ -238,6 +238,49 @@ class MatchStatsService:
             LIMIT %s;
         """, params)
 
+    def get_h2h_matches(self, team_a, team_b, limit=10, before_date=None):
+        """Confrontos diretos entre dois times, de TODAS as competicoes.
+
+        A auditoria registrou "H2H nao tem coletor" (data_validation.
+        validate_coverage marca a fonte como sempre ausente). Isso estava
+        errado no diagnostico: o dado sempre esteve em `match_statistics`, que
+        guarda os dois times de cada partida -- faltava a CONSULTA, nao a
+        coleta. Nenhuma chamada de API nova, nenhuma tabela nova.
+
+        Cruza todas as competicoes de proposito: a carga emocional de um
+        classico nao respeita fronteira de campeonato, e restringir a liga
+        atual derrubaria a amostra pra 2 jogos por temporada, que nao sustenta
+        estimativa nenhuma.
+
+        `before_date` evita vazamento em backtest, mesmo contrato dos demais
+        metodos deste servico.
+        """
+        date_filter = "AND ms.match_date < %s" if before_date else ""
+        params = (
+            (team_a, team_b, team_b, team_a)
+            + ((before_date,) if before_date else ())
+            + (limit,)
+        )
+        return self._query(f"""
+            SELECT
+                ms.match_date, ms.league_id,
+                ms.home_team_id, ms.away_team_id,
+                ms.home_goals, ms.away_goals, ms.total_goals,
+                ms.home_corners, ms.away_corners, ms.total_corners,
+                ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
+                ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
+                ms.home_fouls, ms.away_fouls,
+                NULL::text    AS opponent_name,
+                NULL::integer AS opponent_rank
+            FROM match_statistics ms
+            WHERE ((ms.home_team_id = %s AND ms.away_team_id = %s)
+                OR (ms.home_team_id = %s AND ms.away_team_id = %s))
+              AND ms.status = 'FT'
+              {date_filter}
+            ORDER BY ms.match_date DESC
+            LIMIT %s;
+        """, params)
+
     ##########################################################################
     # Mudanca estrutural (Fase 1.6 do plano de implementacao, 2026-07-25):
     # flag manual pra "zerar" jogos anteriores a troca de tecnico/elenco
