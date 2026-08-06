@@ -183,6 +183,35 @@ def _closing_odd_for(cur, fixture_id: int | None, market_type: str | None, line:
             LIMIT 1
         """, (fixture_id, market_type, line, line))
         row = cur.fetchone()
+        if row and row[0] is not None:
+            return float(row[0])
+    except Exception:
+        pass
+
+    # Fallback: ultimo retrato de `odds_snapshots` ANTES do apito inicial.
+    #
+    # `closing_odds` so' e' preenchida por scripts/capture_closing_odds.py, que
+    # precisa rodar perto do horario dos jogos -- e a pasta scripts/ inteira
+    # esta no .gitignore, entao esse script nunca chegou a producao. Sem este
+    # fallback, `clv` ficaria NULL pra sempre e o painel de desempenho nao teria
+    # a unica metrica que converge com o volume de picks que existe hoje.
+    #
+    # O snapshot resolve isso sem passo operacional novo: capturar_odds.py ja'
+    # roda no pipeline diario e agora grava um retrato append-only a cada
+    # execucao. "Fechamento" vira "a ultima cotacao registrada antes do jogo",
+    # que e' a definicao pratica de closing line. Quanto mais perto do apito a
+    # coleta rodar, melhor a aproximacao -- rodar `main.py odds` uma segunda vez
+    # perto dos jogos deixa o CLV bem mais preciso, mas ja' funciona com uma.
+    try:
+        cur.execute("""
+            SELECT odd_value FROM odds_snapshots
+            WHERE fixture_id = %s
+              AND value_name = %s
+              AND minutes_to_kickoff >= 0
+            ORDER BY minutes_to_kickoff ASC, captured_at DESC
+            LIMIT 1
+        """, (fixture_id, line))
+        row = cur.fetchone()
         return float(row[0]) if row and row[0] is not None else None
     except Exception:
         return None

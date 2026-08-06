@@ -198,6 +198,32 @@ def _create_odds_snapshots_table(cur) -> None:
                 "ON odds_snapshots (captured_at DESC);")
 
 
+# Retencao dos retratos de cotacao. O snapshot serve a dois consumidores:
+# movimento de linha (util so' ate o jogo comecar) e derivacao do fechamento
+# pra CLV (consumido por picks_ledger_sync_service, que roda todo dia junto da
+# checagem de resultado). Depois que o CLV foi gravado no ledger, o retrato
+# vira redundante.
+#
+# 45 dias da folga larga sobre o ciclo diario de sincronizacao -- se o ledger
+# ficar duas semanas sem rodar, o dado ainda esta la'. Sem teto nenhum a tabela
+# cresce indefinidamente: cada coleta grava uma linha por valor de cada mercado
+# de cada casa, o que passa facil de 10 mil linhas por execucao.
+_SNAPSHOT_RETENTION_DAYS = 45
+
+
+def prune_odds_snapshots(cur, dias: int = _SNAPSHOT_RETENTION_DAYS) -> int:
+    """Apaga retratos antigos. Best-effort: falhar aqui nao pode atrapalhar a
+    coleta, e uma tabela grande demais e' problema menor que odd faltando."""
+    try:
+        cur.execute(
+            "DELETE FROM odds_snapshots WHERE captured_at < NOW() - (%s * INTERVAL '1 day')",
+            (dias,))
+        return cur.rowcount or 0
+    except Exception as e:
+        print(f"[ODDS_SNAPSHOTS] Aviso: limpeza nao executada: {e}")
+        return 0
+
+
 def _save_odds_snapshots(cur, values_batch: list) -> None:
     """Grava o retrato desta coleta. Best-effort: falha aqui nunca pode
     derrubar a coleta de odds em si, que e' o caminho critico -- snapshot e'

@@ -814,12 +814,22 @@ def admin_resolve_picks(current_user: dict = Depends(require_admin)):
 
 
 @router.post("/reverify-stats-results")
-def admin_reverify_stats_results(current_user: dict = Depends(require_admin)):
-    """Dispara manualmente a reconferência de escanteios/cartões já resolvidos
+def admin_reverify_stats_results(
+    days: int | None = None,
+    all_markets: bool = False,
+    current_user: dict = Depends(require_admin),
+):
+    """Dispara manualmente a reconferência de picks já resolvidos
     (ver routers.live.reverify_recent_stats_results). Rodava de 3 em 3h no
-    scheduler, removido em 2026-08-01 -- agora so' por aqui."""
+    scheduler, removido em 2026-08-01 -- agora so' por aqui.
+
+    Sem parametro: janela curta, so' escanteios/cartoes (uso do dia a dia).
+    `?days=365&all_markets=true`: auditoria completa -- reconfere TODOS os
+    mercados de TODO o historico contra a estatistica oficial de agora, e
+    corrige o que nao bater. Custa cota da API (uma consulta por fixture),
+    entao nao e' o padrao."""
     from routers.live import reverify_recent_stats_results
-    result = reverify_recent_stats_results()
+    result = reverify_recent_stats_results(days=days, all_markets=all_markets)
     return {"ok": True, **result}
 
 

@@ -43,10 +43,14 @@ class AIResultCheckerFree:
             )
 
             if result is None:
-                print(f"[CHECKER-FREE] id={pk_id}: mercado nao reconhecido ou dados HT ausentes - pulando.")
+                print(f"[CHECKER-FREE] id={pk_id}: sem estatistica publicada, mercado nao "
+                      f"reconhecido ou linha ilegivel - segue pendente.")
                 continue
 
             profit = self._engine.calculate_profit(factor, odd)
+            if profit is None:
+                print(f"[CHECKER-FREE] id={pk_id}: fator/odd invalidos - segue pendente.")
+                continue
 
             mt   = self._engine.detect_market_type(market)
             side = self._engine.detect_side(market, home_team, away_team)

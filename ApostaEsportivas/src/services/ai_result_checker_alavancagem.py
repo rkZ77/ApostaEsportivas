@@ -6,7 +6,7 @@ Verifica resultados da tabela picks_alavancagem.
 """
 
 from utils.db_utils import get_connection
-from decimal import Decimal
+from services import settlement
 from services.ai_result_checker_service import AIResultCheckerService
 
 
@@ -16,24 +16,20 @@ class AIResultCheckerAlavancagem:
         self._checker = AIResultCheckerService()
 
     def _check_pick(self, fixture_id, market, line, odd, cur,
-                    home_team=None, away_team=None) -> str | None:
-        """
-        Avalia um pick individual. Retorna 'GREEN', 'RED' ou None (sem dados ainda).
-        Para alavancagem, tratamos HALF-WIN/HALF-LOSS/PUSH como RED.
-        """
+                    home_team=None, away_team=None, market_type=None) -> str | None:
+        """Resultado real da perna (GREEN/RED/PUSH/HALF-*), ou None sem dados.
+
+        Nao achata mais PUSH/HALF em RED: uma perna anulada nao pode derrubar
+        um bilhete que ainda paga. A combinacao e' feita em
+        settlement.combine_legs(), que recalcula a odd do bilhete."""
         stats = self._checker.get_fixture_result(fixture_id, cur)
         if not stats:
             return None
 
         result, _ = self._checker.evaluate_pick(
-            market, line, float(odd), stats, home_team, away_team
+            market, line, float(odd), stats, home_team, away_team,
+            market_type=market_type,
         )
-
-        if result is None:
-            return None  # dados ausentes → aguardando
-        if result not in ("GREEN", "RED"):
-            result = "RED"  # HALF / PUSH → RED para alavancagem
-
         return result
 
     def check_all_results(self):
@@ -79,8 +75,6 @@ class AIResultCheckerAlavancagem:
              fid3, mkt3, ln3, odd3, home3, away3,
              odd_combined) = row
 
-            odd_combined = Decimal(str(odd_combined))
-
             # Quem manda e' a presenca da perna no banco, nao o texto de
             # `tipo`: qualquer perna gravada TEM que ser conferida, seja o
             # rotulo 'dupla', 'tripla' ou 'combinacao'. Amarrar isso a um
@@ -99,6 +93,7 @@ class AIResultCheckerAlavancagem:
                 continue
 
             resultados = {}
+            odds_pernas = {}
             aguardando = False
             for i, fid, mkt, ln, odd, home, away in pernas:
                 r = self._check_pick(fid, mkt, ln, float(odd or 1), cur, home, away)
@@ -107,22 +102,25 @@ class AIResultCheckerAlavancagem:
                     aguardando = True
                     break
                 resultados[i] = r
+                odds_pernas[i] = odd
             if aguardando:
                 continue
 
-            # Bilhete combinado: uma perna RED derruba a aposta inteira.
-            final_result = "GREEN" if all(r == "GREEN" for r in resultados.values()) else "RED"
+            ordem = sorted(resultados)
+            final_result, profit, odd_efetiva = settlement.combine_legs(
+                [resultados[i] for i in ordem],
+                [odds_pernas[i] for i in ordem],
+                odd_combined,
+            )
+            if final_result is None:
+                print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: nao foi possivel combinar "
+                      f"as pernas ({resultados}) · segue pendente.")
+                continue
 
-            # Profit por 1 unidade
-            if final_result == "GREEN":
-                profit = odd_combined - Decimal("1")
-            else:
-                profit = Decimal("-1")
-
-            detalhe = " ".join(f"P{i}={r}" for i, r in sorted(resultados.items()))
+            detalhe = " ".join(f"P{i}={resultados[i]}" for i in ordem)
             print(
                 f"[CHECKER-ALAVANCAGEM] id={pk_id} ({tipo}) | "
-                f"{detalhe} -> {final_result} | "
+                f"{detalhe} -> {final_result} | odd efetiva={odd_efetiva} | "
                 f"profit={float(profit):.2f}u"
             )
 
