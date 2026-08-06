@@ -1,7 +1,7 @@
 import time
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
-from collectors.odds_collector_service import OddsCollectorService
+from collectors.odds_collector_service import OddsCollectorService, prune_odds_snapshots
 
 
 class OddsMain:
@@ -48,7 +48,14 @@ class OddsMain:
     # LIMPAR TODAS AS ODDS (ULTRA RÁPIDO)
     # ----------------------------------------------------------------------
     def cleanup_all_odds(self):
+        """TRUNCATE nas tres tabelas de cotacao ANTES de recoletar.
 
+        `odds_snapshots` NAO entra aqui de proposito: ela e' append-only e
+        existe justamente pra sobreviver a esta limpeza. O TRUNCATE com CASCADE
+        e' seguro pra ela porque nao ha chave estrangeira ligando as duas -- se
+        alguem adicionar uma no futuro, o historico de preco desaparece toda
+        madrugada e o CLV volta a ficar vazio sem nenhum aviso.
+        """
         start = time.perf_counter()
 
         conn = get_connection()
@@ -62,6 +69,11 @@ class OddsMain:
                      odds_bookmakers
             RESTART IDENTITY CASCADE;
         """)
+
+        # Retencao dos retratos: uma vez por execucao, nao por fixture.
+        removidos = prune_odds_snapshots(cur)
+        if removidos:
+            print(f"[ODDS] {removidos} retrato(s) antigo(s) de cotacao removido(s).")
 
         conn.commit()
         cur.close()

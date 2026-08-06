@@ -301,15 +301,23 @@ def run_migrations():
 # COMANDOS
 # ─────────────────────────────────────────────────────────────
 def cmd_dados(mode: str = "fast"):
+    """Coleta completa. `full` percorre a temporada inteira (liga nova/backfill).
+
+    BUG CORRIGIDO 2026-08-06: o ramo `full` passava wc_mode="full" pra
+    run_stage_4, parametro que deixou de existir quando a coleta de amistosos
+    das selecoes da Copa saiu (2026-08-01) -- a assinatura virou
+    run_stage_4(mode, days) e o chamador nunca foi atualizado. Resultado:
+    `python main.py dados full` levantava TypeError antes de coletar
+    qualquer estatistica, e as etapas 0-3 rodavam a toa. O ramo `fast`
+    (run_all) nao passa por aqui, entao a rodada diaria escondia o defeito.
+    """
     from atualizar_jogos import DataCollectorMain
     c = DataCollectorMain()
     if mode == "full":
-        c.run_stage_0()
-        c.run_stage_1()
-        c.run_stage_2()
-        c.run_stage_3()
-        c.run_stage_4(mode="full", wc_mode="full")
-        c.run_stage_5(mode="full")
+        # Mesma sequencia de run_all(), so' que em modo temporada inteira --
+        # delega pra run_all(mode="full") em vez de repetir a lista de etapas,
+        # que foi como as duas versoes saíram de sincronia.
+        c.run_all(mode="full")
     else:
         c.run_all()
 
