@@ -114,6 +114,47 @@ class PickEngineConfig:
     # picks de cartoes; ajustar aqui se sair cartao demais em jogo sem tensao.
     cards_intensity_cold_threshold: float = 0.40
 
+    # ------------------------------------------------------------------
+    # Camada probabilistica (2026-08-06) -- TODAS DESLIGADAS POR PADRAO.
+    #
+    # calibration_model / market_anchor / selection_bias estao implementados e
+    # testados, mas nenhum foi promovido: promover exige backtest comparativo,
+    # e ate' a medicao existir a decisao seria por argumento, nao por dado.
+    # Com as tres em False o motor produz EXATAMENTE o mesmo resultado de
+    # antes -- ha teste travando essa equivalencia
+    # (test_camada_probabilistica.py::test_flags_desligadas_nao_mudam_nada).
+    #
+    # O caminho de promocao e' uma flag por vez, cada uma com sua rodada de
+    # backtest, na ordem abaixo (da menor pra maior mudanca de comportamento):
+    #
+    #   1. use_isotonic_calibration -- transformacao MONOTONA, nunca reordena
+    #      candidatos; muda quanto se aposta, nunca em que se aposta.
+    #   2. use_selection_bias -- desconta o vies do vencedor de uma disputa
+    #      entre muitos candidatos; reduz volume de pick, nao reordena.
+    #   3. use_market_anchor -- a maior mudanca: reescreve a probabilidade
+    #      combinando com o mercado, entao reordena e muda gate.
+    # ------------------------------------------------------------------
+    use_isotonic_calibration: bool = False
+    use_selection_bias: bool = False
+    use_market_anchor: bool = False
+
+    # Gate de contexto (mata-mata, agregado, rivalidade medida) -- LIGADO por
+    # padrao, diferente das tres flags acima. A distincao nao e' de gosto:
+    #
+    #   as tres acima sao OTIMIZACAO -- tentam estimar melhor a mesma
+    #   quantidade, entao precisam provar que estimam melhor antes de entrar.
+    #
+    #   o gate abaixo e' CORRECAO -- ele barra pick cuja amostra veio de uma
+    #   distribuicao diferente da partida analisada (taxa de 15 jogos de
+    #   pontos corridos aplicada a uma volta de mata-mata decisiva). Nao e'
+    #   uma aposta sobre estimar melhor; e' recusar responder uma pergunta com
+    #   dado de outra pergunta.
+    #
+    # Mesmo assim existe o interruptor: se em producao o gate bloquear demais,
+    # desligar e' uma linha, sem reverter codigo. Vale acompanhar a taxa de
+    # bloqueio pelo decision_log antes de confiar cegamente.
+    use_context_gate: bool = True
+
 
 DEFAULT_CONFIG = PickEngineConfig()
 

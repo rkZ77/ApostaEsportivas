@@ -114,7 +114,7 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
                    NULL AS market, NULL AS line,
                    total_odd AS odd,
                    games AS legs_json,
-                   score_combo AS confidence,
+                   COALESCE(prob_combinada, score_combo) AS confidence,
                    NULL AS match_datetime
             FROM picks_multiplas WHERE id = %s
         """, (pick_id,))

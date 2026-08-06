@@ -20,9 +20,19 @@ pick_type:
   'vip'      -> tiers por confidence+EV: >=80%+EV>10% ate 5%/10u,
                 >=72%+EV>5% ate 4%/7u, demais ate 3%/5u. Kelly 1/2.
   'free'     -> teto fixo 2%/6u. Kelly 1/2.
-  'multipla' -> teto fixo 2.5%/3u. Kelly 1/4. Unico tipo que NAO usa EV
-                (o pipeline passa confidence=score_combo, que ja resume a
-                forca do combo).
+  'multipla' -> teto fixo 2.5%/3u. Kelly 1/4.
+
+Sobre 'multipla' e EV: o guard de EV<=0 no topo nao se aplica a este tipo,
+por historico -- ate 2026-08-05 o pipeline passava confidence=score_combo (a
+MEDIA dos final_score das pernas), que nao e' probabilidade nenhuma, entao um
+guard de EV em cima dela nao teria significado. Desde entao
+multipla_pipeline._save_multipla passa a probabilidade REAL do bilhete (o
+produto das taxas das pernas) e o ev_combined correspondente, e o Kelly aqui
+volta a discriminar: bilhete fraco cai pro piso em vez de saturar o teto como
+saturava com score_combo. O guard segue desligado pra este tipo porque, com
+todas as pernas exigindo EV>0 no ranking, o produto tambem e' positivo -- ele
+nunca dispararia. Se algum dia o pipeline aceitar perna de EV negativo, ligar
+o guard aqui passa a ser obrigatorio.
 """
 
 

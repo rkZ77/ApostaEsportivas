@@ -14,13 +14,20 @@ from services.pick_engine.stats_model import _extract_stat, pool_and_field
 _VALUE_FAMILIES = {"goals", "corners", "cards", "shots", "shots_on_target", "offsides", "fouls"}
 
 
-def variance_stats(family: str, scope: str, last10_home: list, last10_away: list) -> dict | None:
+def variance_stats(family: str, scope: str, last10_home: list, last10_away: list,
+                    team_id: int | None = None) -> dict | None:
     """Desvio-padrao populacional e coeficiente de variacao (CV = desvio/
     media) do valor bruto da familia/escopo, no pool de jogos correto. CV
     normaliza o desvio pela media -- compara dispersao entre mercados de
     escala diferente (cartoes ~3/jogo vs gols ~2.5/jogo) de forma justa.
     None se a familia nao suportar leitura de valor ou a amostra for
-    pequena demais (<2 jogos, desvio nao faz sentido)."""
+    pequena demais (<2 jogos, desvio nao faz sentido).
+
+    `team_id` resolve o mando por partida (ver stats_model.resolve_side) --
+    sem ele, num escopo home/away metade dos valores vem do adversario e a
+    dispersao medida e' a do vai-e-vem entre os dois times, nao a do time
+    analisado: inflava o CV e cobrava uma penalidade de confidence que o
+    historico real nao justificava."""
     if family not in _VALUE_FAMILIES:
         return None
 
@@ -28,7 +35,7 @@ def variance_stats(family: str, scope: str, last10_home: list, last10_away: list
     if not pool or len(pool) < 2:
         return None
 
-    values = [_extract_stat(m, family, scope) for m in pool]
+    values = [_extract_stat(m, family, scope, team_id) for m in pool]
     n = len(values)
     mean = sum(values) / n
     variance = sum((v - mean) ** 2 for v in values) / n

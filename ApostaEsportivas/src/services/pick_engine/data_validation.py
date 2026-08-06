@@ -35,7 +35,7 @@ def validate_history(matches: list, min_games: int = 5) -> dict:
 
 
 def validate_market_sample(family: str, scope: str, last10_home: list, last10_away: list,
-                            min_games: int = 5) -> dict:
+                            min_games: int = 5, team_id: int | None = None) -> dict:
     """Amostra minima ESPECIFICA da familia de mercado, nao do time em
     geral -- um time pode ter historico geral rico (validate_history
     passa) mas o campo bruto desta familia (ex.: home_corners) ausente em
@@ -57,8 +57,9 @@ def validate_market_sample(family: str, scope: str, last10_home: list, last10_aw
         return {"passed": len(pool) >= min_games, "amostra_total": len(pool), "amostra_com_dado": len(pool), "reasons": []}
 
     def _has_data(m):
-        if scope in ("home", "away"):
-            return m.get(fields[scope]) is not None
+        side = stats_model.resolve_side(m, scope, team_id)
+        if side in ("home", "away"):
+            return m.get(fields[side]) is not None
         total_field = fields.get("total")
         if total_field:
             return m.get(total_field) is not None
@@ -189,11 +190,16 @@ def _median(values: list) -> float:
 
 
 def detect_outliers(family: str, scope: str, last10_home: list, last10_away: list,
-                     z_threshold: float = _MODIFIED_Z_THRESHOLD_DEFAULT) -> dict:
+                     z_threshold: float = _MODIFIED_Z_THRESHOLD_DEFAULT,
+                     team_id: int | None = None) -> dict:
     """Marca jogos cujo valor bruto foge muito da mediana do proprio pool
     (modified z-score via MAD > z_threshold). Amostra pequena (<2) ou
     familia sem leitura de valor bruto -> sem deteccao possivel, retorna
-    vazio (nao e erro)."""
+    vazio (nao e erro).
+
+    `team_id` resolve o mando por partida (ver stats_model.resolve_side) --
+    sem ele o pool alterna entre o valor do time e o do adversario, o que
+    embaralha mediana e MAD e faz a deteccao apontar o alvo errado."""
     if family not in variance_model._VALUE_FAMILIES:
         return {"outliers": [], "outlier_count": 0, "checked": 0}
 
@@ -201,7 +207,7 @@ def detect_outliers(family: str, scope: str, last10_home: list, last10_away: lis
     if not pool or len(pool) < 2:
         return {"outliers": [], "outlier_count": 0, "checked": len(pool)}
 
-    values = [stats_model._extract_stat(m, family, scope) for m in pool]
+    values = [stats_model._extract_stat(m, family, scope, team_id) for m in pool]
     median = _median(values)
     mad = _median([abs(v - median) for v in values])
 
@@ -234,7 +240,9 @@ def detect_outliers(family: str, scope: str, last10_home: list, last10_away: lis
 _OUTLIER_CHECK_FAMILIES = ("goals", "corners", "cards")
 
 
-def aggregate_fixture_quality_checks(last10_home: list, last10_away: list) -> tuple[dict, dict]:
+def aggregate_fixture_quality_checks(last10_home: list, last10_away: list,
+                                      home_team_id: int | None = None,
+                                      away_team_id: int | None = None) -> tuple[dict, dict]:
     """Roda validate_statistics_integrity() (nivel fixture, cobre todas as
     familias de uma vez) e detect_outliers() (por familia, agregado aqui)
     pros dois times, devolve (integrity_validation, outlier_info) prontos
@@ -247,7 +255,10 @@ def aggregate_fixture_quality_checks(last10_home: list, last10_away: list) -> tu
     outliers, checked = [], 0
     for family in _OUTLIER_CHECK_FAMILIES:
         for scope in ("home", "away"):
-            info = detect_outliers(family, scope, last10_home, last10_away)
+            info = detect_outliers(
+                family, scope, last10_home, last10_away,
+                team_id=stats_model.scope_team_id(scope, home_team_id, away_team_id),
+            )
             outliers.extend(info["outliers"])
             checked += info["checked"]
     outlier_info = {"outliers": outliers, "outlier_count": len(outliers), "checked": checked}

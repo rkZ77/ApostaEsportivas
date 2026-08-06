@@ -22,6 +22,8 @@ from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
+from services.pick_engine import context_gate
+from services.pick_engine import stats_model
 from engine_pipelines.decision_log import log_decision
 
 
@@ -39,18 +41,33 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
-def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id, round_str=None):
+def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id,
+                    round_str=None, standing_home=None, standing_away=None):
     """Contexto + perfil/matchup/team_strength (sem noticias -- exigiria
-    chamada HTTP por fixture, fora de escopo nesta primeira versao)."""
+    chamada HTTP por fixture, fora de escopo nesta primeira versao).
+
+    standing_home/standing_away (StandingsService.get_team_standing) passaram
+    a ser preenchidos em 2026-08-05. Antes TODOS os pipelines chamavam
+    build_context com None nos dois lugares, o que fazia context_model.
+    table_pressure() devolver sempre label='desconhecido' e derrubava, em
+    silencio, tres coisas que ja estavam implementadas: o termo de pressao de
+    tabela no context_score, o componente de pressao no referee_model.
+    game_intensity (que decide se cartoes e' mercado elegivel) e a checagem de
+    fase (context_score so' suprime o bonus em mata-mata -- sem o bonus, a
+    classificacao de round_phase nao mudava nada). A tabela league_standings
+    ja' era coletada e o StandingsService ja' existia; so' ninguem ligava os
+    dois."""
     profile_home = tpm.build_profile(last10_home, home_team_id)
     profile_away = tpm.build_profile(last10_away, away_team_id)
     matchup = tpm.compare_matchup(profile_home, profile_away)
     context_data = ctx.build_context(
         last10_home, last10_away, home_team_id, away_team_id,
-        None, None, league_id, round_str=round_str,
+        standing_home, standing_away, league_id, round_str=round_str,
     )
     team_strength_data = ts.compare_team_strength(profile_home, profile_away)
     return context_data, matchup, team_strength_data
+
+
 
 
 def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None) -> bool:
@@ -99,6 +116,7 @@ def run_vip_engine():
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
+    standings_service = StandingsService()
 
     fixtures = fixtures_service.get_ns_without_suggestions()
     if not fixtures:
@@ -130,9 +148,13 @@ def run_vip_engine():
             if not hist_home_val["passed"] or not hist_away_val["passed"]:
                 continue
 
+            standing_home, standing_away = standings_service.get_for_fixture(
+                fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], fixture["season"])
             context_data, matchup, team_strength_data = _build_signals(
                 last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], round_str=fixture.get("round"),
+                standing_home=standing_home, standing_away=standing_away,
             )
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
             league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
@@ -141,9 +163,12 @@ def run_vip_engine():
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+                standings_home=standing_home, standings_away=standing_away,
                 referee_stats=referee_stats, context_data=context_data,
             )
-            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(last10_home, last10_away)
+            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(
+                last10_home, last10_away,
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"])
             quality = dv.data_quality_score(
                 {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
                 integrity_validation=integrity_val, outlier_info=outlier_info,
@@ -153,11 +178,23 @@ def run_vip_engine():
                 fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], fixture["season"])
 
+            # Contexto da partida: mata-mata, ida/volta, placar da ida,
+            # agregado e rivalidade medida no confronto direto. Alimenta o
+            # context_gate, que barra Under contradizendo o que o jogo vai ser.
+            conv_cartoes = stats_model.expected_value_convergence(
+                last10_home, last10_away, "cards", "total",
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
+
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
+                match_context=match_context,
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,

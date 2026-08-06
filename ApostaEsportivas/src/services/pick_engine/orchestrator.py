@@ -6,6 +6,7 @@ from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
+    market_anchor, selection_bias, context_gate,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
@@ -108,6 +109,20 @@ def analyze_fixture_markets(
     # feitos-vs-cedidos. Ausentes -> cai no historico cru.
     team_stats_home: dict | None = None,
     team_stats_away: dict | None = None,
+    # Camada probabilistica (2026-08-06). Ambos opcionais e ignorados quando
+    # as flags de config estao desligadas, que e' o padrao.
+    # `calibrators`: {market_type: IsotonicCalibrator}, de
+    # calibration_model.fit_por_grupo() sobre o picks_ledger.
+    # `clv_by_market`: {market_type: {clv_medio, clv_n, clv_significativo}},
+    # de attribution.group_by(pernas, "market_type").
+    calibrators: dict | None = None,
+    clv_by_market: dict | None = None,
+    # Contexto de partida (2026-08-06): saida de context_gate.build_context().
+    # Mata-mata, ida/volta, placar da ida, agregado, quem precisa do resultado
+    # e rivalidade medida no H2H. Ausente -> gate inerte, motor identico ao de
+    # antes. Presente -> barra Under que contradiz o que a partida vai ser,
+    # em TODAS as familias de volume (nao so' cartoes).
+    match_context: dict | None = None,
     # Media da liga por mando (TeamStatsService.get_league_baseline) -- alvo
     # do encolhimento das medias de team_statistics. Sem ela as medias entram
     # cruas, que e' medidamente PIOR que o historico de 15 jogos.
@@ -237,6 +252,13 @@ def analyze_fixture_markets(
             league_baseline=league_baseline,
         )
         market_type = "goals" if family == "btts" else family
+        # Time que o escopo do mercado aponta -- resolve o mando POR PARTIDA
+        # na taxa/variancia/estabilidade/outlier. Sem isso, um mercado
+        # "Home Corners"/"Away Team Total Goals" lia a coluna fixa do escopo
+        # em TODO o historico do time, e nos jogos em que ele estava do outro
+        # lado a estatistica contada era a do ADVERSARIO (ver
+        # stats_model.resolve_side -- metade da amostra vinha do time errado).
+        side_team_id = stats_model.scope_team_id(scope, home_team_id, away_team_id)
         # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
         # -- MESMA fonte que calibration_adjustment ja usa (hit-rate real
         # historico do market_type), nao um numero novo/inventado.
@@ -263,6 +285,7 @@ def analyze_fixture_markets(
             taxa = stats_model.compute_taxa(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
+                team_id=side_team_id,
             )
             if not taxa or taxa["taxa_ponderada"] is None:
                 if debug:
@@ -299,6 +322,7 @@ def analyze_fixture_markets(
             # demais (handicap/outcome/etc), tratado como neutro no score.
             stability = stats_model.line_stability(
                 family, scope, m.get("value", ""), m.get("line", ""), last10_home, last10_away,
+                team_id=side_team_id,
             )
             line_candidates.append({
                 "market_id":        m.get("market_id"),
@@ -316,6 +340,11 @@ def analyze_fixture_markets(
                 "Q":                taxa["Q"],
                 "wilson":           taxa.get("wilson"),
                 "prob_baseline_source": prob_baseline["source"],
+                # O VALOR da probabilidade de mercado, nao so' a origem. Antes
+                # so' `source` era guardado, entao o edge era calculado e o
+                # numero que o produziu se perdia -- o que impedia tanto
+                # recalcular edge depois quanto ancorar contra o mercado.
+                "prob_baseline_value": prob_baseline["prob"],
                 "stability":        stability,
                 "_direction":       (m.get("value") or "").strip().lower(),
                 "_line_val":        line_val,
@@ -360,7 +389,8 @@ def analyze_fixture_markets(
         # perde confidence mesmo com taxa boa (nao aplica a familias sem
         # leitura de valor bruto, ex. btts/outcome -- variance_stats retorna
         # None e a penalidade fica 0).
-        var_stats = variance_model.variance_stats(family, scope, last10_home, last10_away)
+        var_stats = variance_model.variance_stats(
+            family, scope, last10_home, last10_away, team_id=side_team_id)
         v_penalty = variance_model.variance_penalty(
             var_stats["coefficient_of_variation"] if var_stats else None
         )
@@ -371,7 +401,8 @@ def analyze_fixture_markets(
         # jogos sem o campo em vez de tratar como 0, o que mudaria
         # taxa_real/confidence pra qualquer familia com gap de cobertura --
         # decisao separada, fora do escopo desta revisao.
-        market_sample = data_validation.validate_market_sample(family, scope, last10_home, last10_away)
+        market_sample = data_validation.validate_market_sample(
+            family, scope, last10_home, last10_away, team_id=side_team_id)
 
         # M (model-fit): concordancia entre a taxa empirica (contagem direta)
         # e a probabilidade do modelo Poisson pra MESMA linha -- substitui
@@ -442,9 +473,117 @@ def analyze_fixture_markets(
             candidate["_all_lines"] = ranking.evaluate_all_lines(line_candidates, config, data_quality_score)
         candidates.append(candidate)
 
+    # Gate de contexto ANTES da camada probabilistica: nao adianta calibrar e
+    # ancorar uma estimativa que veio da distribuicao errada. Um "Under
+    # cartoes" em volta de mata-mata decisivo nao esta' mal calibrado -- esta'
+    # descrevendo outro tipo de jogo.
+    if match_context and config.use_context_gate:
+        sobreviventes = []
+        for c in candidates:
+            veredito = context_gate.evaluate(c, match_context)
+            c["context_gate"] = veredito
+            if veredito["bloqueado"]:
+                if debug:
+                    eliminated_markets.append({
+                        "family": c.get("market_type"), "scope": None,
+                        "market_type": c.get("market_type"),
+                        "reason": context_gate.explicar_rejeicao(c, veredito),
+                    })
+                continue
+            if veredito["penalidade"]:
+                p = max(0.0, round(c["taxa_real"] - veredito["penalidade"], 4))
+                c["taxa_real"] = p
+                baseline = c.get("prob_baseline_value")
+                if baseline is not None:
+                    c["edge"] = round(p - baseline, 4)
+                c["ev"] = round(p * c["odd"] - 1, 4)
+            sobreviventes.append(c)
+        candidates = sobreviventes
+
+    candidates = apply_probability_layer(
+        candidates, config, calibrators=calibrators, clv_by_market=clv_by_market,
+    )
+
     if debug:
         return {"candidates": candidates, "eliminated_markets": eliminated_markets, "entries_dropped": entries_dropped}
     return candidates
+
+
+def apply_probability_layer(
+    candidates: list, config: PickEngineConfig = DEFAULT_CONFIG,
+    calibrators: dict | None = None, clv_by_market: dict | None = None,
+) -> list:
+    """Calibracao isotonica -> ancoragem de mercado -> desconto de vies de
+    selecao, nesta ordem, sobre os candidatos ja montados.
+
+    A ORDEM NAO E' ARBITRARIA. Calibrar primeiro porque a curva foi ajustada
+    sobre a probabilidade CRUA do motor -- aplicar depois da ancoragem seria
+    calibrar um numero que a curva nunca viu. Ancorar em seguida porque a
+    combinacao com o mercado deve usar a melhor estimativa propria disponivel,
+    que e' a ja calibrada. Descontar o vies por ultimo porque ele corrige o
+    ato de SELECIONAR, que acontece depois de toda a estimativa estar pronta.
+
+    Cada etapa reescreve taxa_real e recalcula edge/EV a partir dela, pra os
+    tres numeros nunca sairem de sincronia -- foi assim que a multipla passou
+    meses mostrando uma probabilidade que nao correspondia ao proprio EV.
+
+    Com as tres flags em False (padrao) devolve `candidates` sem tocar em
+    nada: mesmo objeto, mesmos valores.
+    """
+    if not candidates:
+        return candidates
+    if not (config.use_isotonic_calibration or config.use_market_anchor
+            or config.use_selection_bias):
+        return candidates
+
+    # O desconto de vies depende da dispersao do POOL INTEIRO, entao e'
+    # calculado uma vez antes de mexer em qualquer candidato -- calcular
+    # depois de alterar os edges mediria a dispersao ja' corrigida.
+    bias_info = selection_bias.corrigir(candidates, campo="edge") if config.use_selection_bias else None
+
+    ajustados = []
+    for c in candidates:
+        novo = dict(c)
+        p = novo["taxa_real"]
+        rastro: dict = {}
+
+        if config.use_isotonic_calibration and calibrators:
+            cal = calibrators.get(novo.get("market_type"))
+            if cal is not None:
+                p_cal = cal.predict(p)
+                if p_cal is not None:
+                    rastro["p_pre_calibracao"] = p
+                    p = p_cal
+
+        if config.use_market_anchor:
+            clv = (clv_by_market or {}).get(novo.get("market_type")) or {}
+            ancora = market_anchor.anchor(
+                p_modelo=p, p_mercado=novo.get("prob_baseline_value"),
+                clv_medio=clv.get("clv_medio"), amostra_clv=clv.get("clv_n", 0),
+                clv_significativo=clv.get("clv_significativo", False),
+            )
+            if ancora["p_final"] is not None:
+                rastro["p_pre_ancoragem"] = p
+                rastro["ancoragem"] = ancora
+                p = ancora["p_final"]
+
+        if bias_info and bias_info["desconto"]:
+            rastro["p_pre_vies_selecao"] = p
+            rastro["vies_selecao"] = bias_info
+            p = max(0.0, round(p - bias_info["desconto"], 4))
+
+        if rastro:
+            novo["taxa_real"] = p
+            novo["probability_trace"] = rastro
+            # edge e EV SEMPRE derivados da probabilidade final -- nunca
+            # carregados do calculo anterior.
+            baseline = novo.get("prob_baseline_value")
+            if baseline is not None:
+                novo["edge"] = round(p - baseline, 4)
+            novo["ev"] = round(p * novo["odd"] - 1, 4)
+        ajustados.append(novo)
+
+    return ajustados
 
 
 def explain(candidate: dict) -> str:

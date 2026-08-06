@@ -21,6 +21,7 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
+from services.standings_service import StandingsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
@@ -29,6 +30,8 @@ from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
 from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
+from services.pick_engine import context_gate
+from services.pick_engine import stats_model
 from engine_pipelines.decision_log import log_decision
 
 
@@ -58,6 +61,8 @@ def _create_table_if_needed(cur):
             stake         NUMERIC,
             stake_pct     NUMERIC,
             score_combo   NUMERIC,
+            prob_combinada NUMERIC,
+            ev_combined   NUMERIC,
             match_date    DATE,
             result        TEXT,
             profit        NUMERIC,
@@ -81,6 +86,13 @@ def _create_table_if_needed(cur):
         CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_multiplas_match_date_unique
         ON picks_multiplas (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE';
     """)
+    # Colunas novas (2026-08-05) em tabela que ja' existe em producao --
+    # CREATE TABLE IF NOT EXISTS acima nao adiciona coluna em tabela criada
+    # antes, entao o ALTER e' obrigatorio aqui. Ver run_migrations()/o gap de
+    # migracao ja' conhecido: sem isto o INSERT quebraria em PROD no primeiro
+    # jogo, e o pipeline inteiro cairia no except.
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS prob_combinada NUMERIC;")
+    cur.execute("ALTER TABLE picks_multiplas ADD COLUMN IF NOT EXISTS ev_combined NUMERIC;")
 
 
 def _has_today_multipla(cur) -> bool:
@@ -128,6 +140,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
     referee_service = RefereeStatsService()
+    standings_service = StandingsService()
     legs = []
 
     for fixture in fixtures:
@@ -149,9 +162,15 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
             profile_away = tpm.build_profile(last10_away, fixture["away_team_id"])
             matchup = tpm.compare_matchup(profile_home, profile_away)
+            # Classificacao dos dois lados: ate' 2026-08-05 ia None/None aqui,
+            # o que travava table_pressure() em 'desconhecido' e desligava o
+            # termo de pressao no context_score e no gate de cartoes.
+            standing_home, standing_away = standings_service.get_for_fixture(
+                fixture["home_team_id"], fixture["away_team_id"],
+                fixture["league_id"], fixture["season"])
             context_data = ctx.build_context(
                 last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
-                None, None, fixture["league_id"], round_str=fixture.get("round"),
+                standing_home, standing_away, fixture["league_id"], round_str=fixture.get("round"),
             )
             team_strength_data = ts.compare_team_strength(profile_home, profile_away)
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
@@ -161,9 +180,12 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
 
             coverage_val = dv.validate_coverage(
                 structured_odds=structured_odds, last10_home=last10_home, last10_away=last10_away,
+                standings_home=standing_home, standings_away=standing_away,
                 referee_stats=referee_stats, context_data=context_data,
             )
-            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(last10_home, last10_away)
+            integrity_val, outlier_info = dv.aggregate_fixture_quality_checks(
+                last10_home, last10_away,
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"])
             quality = dv.data_quality_score(
                 {"Q": min(hist_home_val["Q"], hist_away_val["Q"])}, coverage_val,
                 integrity_validation=integrity_val, outlier_info=outlier_info,
@@ -173,11 +195,23 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], fixture["season"])
 
+            # Contexto da partida: mata-mata, ida/volta, placar da ida,
+            # agregado e rivalidade medida no confronto direto. Alimenta o
+            # context_gate, que barra Under contradizendo o que o jogo vai ser.
+            conv_cartoes = stats_model.expected_value_convergence(
+                last10_home, last10_away, "cards", "total",
+                home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
+
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
+                match_context=match_context,
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
@@ -254,14 +288,43 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
 
     match_date = min(p["_fixture"]["match_datetime"] for p in legs).date()
     reasoning = " | ".join(explain(p) for p in legs)
+
+    # Probabilidade e EV do BILHETE, nao das pernas. A multipla so' paga se
+    # TODAS as pernas baterem, entao a chance do bilhete e' o PRODUTO das
+    # probabilidades -- exatamente o que alavancagem_pipeline.py ja' fazia
+    # desde que o mesmo erro foi encontrado la'; nunca tinha sido propagado
+    # pra ca (2026-08-05).
+    #
+    # Quanto isso pesava: 3 pernas de 72%/70%/68% dao 34,3% de chance real, e
+    # o score_combo (media dos final_score das pernas) mostrava 86,0% -- 51,7
+    # pontos percentuais de diferenca. E score_combo nem e' probabilidade: e'
+    # a media de um score de ranqueamento que ja' mistura confidence, Q,
+    # contexto e perfil.
+    #
+    # Assume independencia entre as pernas. _find_combo exige fixtures
+    # DIFERENTES, entao nao ha correlacao dentro do mesmo jogo; sobra a
+    # correlacao fraca de rodada (mesma liga, mesmo dia), que empurra a
+    # probabilidade real um pouco pra cima da estimada -- erro pro lado
+    # conservador.
+    prob_combinada = 1.0
+    for p in legs:
+        prob_combinada *= float(p["taxa_real"])
+    prob_combinada = round(prob_combinada, 4)
+    ev_combined = round(prob_combinada * float(odd_total) - 1.0, 4)
+
+    # Kelly precisa da probabilidade do evento, nao de um score de
+    # ranqueamento. Com score_combo o calculo saturava o teto de 2,5% em
+    # qualquer bilhete, o que fazia o dimensionamento ser constante na
+    # pratica -- Kelly decorativo.
     stake_pct, stake_units = calculate_stake(
-        confidence=score_combo, odd=odd_total, pick_type="multipla",
+        confidence=prob_combinada, odd=odd_total, ev=ev_combined, pick_type="multipla",
     )
 
     cur.execute("""
         INSERT INTO picks_multiplas
-        (multipla_name, games, total_odd, stake_pct, stake, score_combo, match_date, reasoning)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (multipla_name, games, total_odd, stake_pct, stake, score_combo,
+         prob_combinada, ev_combined, match_date, reasoning)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         ON CONFLICT (match_date) WHERE multipla_name = 'MULTIPLA_ENGINE' DO NOTHING
     """, (
         "MULTIPLA_ENGINE",
@@ -270,6 +333,8 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
         stake_pct,
         stake_units,
         score_combo,
+        prob_combinada,
+        ev_combined,
         match_date,
         reasoning,
     ))
