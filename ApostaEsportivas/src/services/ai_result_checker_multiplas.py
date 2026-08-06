@@ -1,6 +1,6 @@
 from utils.db_utils import get_connection
 from services.ai_result_checker_service import AIResultCheckerService
-from decimal import Decimal
+from services import settlement
 import json
 
 
@@ -20,27 +20,28 @@ class AIMultiplasCheckerService:
     # Retorna 'GREEN', 'RED' ou None (stats ainda não disponíveis)
     ##########################################################################
     def evaluate_leg(self, leg, cur):
+        """Resultado real da perna -- GREEN/RED/PUSH/HALF-*, sem achatar.
+
+        Antes qualquer coisa que nao fosse GREEN/RED virava RED aqui, o que
+        matava o bilhete inteiro por causa de uma perna ANULADA (PUSH). Quem
+        sabe combinar as pernas e' settlement.combine_legs(), e ele precisa do
+        resultado verdadeiro de cada uma pra fazer a conta certa."""
         fixture_id = leg.get("fixture_id")
         market     = leg.get("market", "")
         line       = leg.get("line", "")
         odd        = leg.get("odd", 1.0)
-        home_team  = leg.get("home_team")
-        away_team  = leg.get("away_team")
+        home_team  = leg.get("home_team") or leg.get("home")
+        away_team  = leg.get("away_team") or leg.get("away")
 
         stats = self._engine.get_fixture_result(fixture_id, cur)
         if not stats:
             return None  # jogo ainda sem resultado · não validar
 
-        result, factor = self._engine.evaluate_pick(
-            market, line, float(odd), stats, home_team, away_team
+        result, _factor = self._engine.evaluate_pick(
+            market, line, float(odd), stats, home_team, away_team,
+            market_type=leg.get("market_type"),
         )
-
-        if result is None:
-            return None  # dados ausentes → leg ainda pendente
-        # Múltipla exige acerto pleno · HALF e PUSH viram RED
-        if result not in ("GREEN", "RED"):
-            return "RED"
-        return result
+        return result  # None = perna ainda pendente
 
     ##########################################################################
     # MAIN · só valida quando TODOS os jogos tiverem stats
@@ -76,12 +77,14 @@ class AIMultiplasCheckerService:
                 games = games_json
 
             leg_results = []
+            leg_odds = []
             games_updated = False
 
             for leg in games:
+                leg_odds.append(leg.get("odd"))
                 # Reutiliza resultado já anotado de uma passagem anterior
                 existing = leg.get("result")
-                if existing in ("GREEN", "RED"):
+                if existing in settlement.RESULT_LABELS:
                     leg_results.append(existing)
                     continue
 
@@ -113,22 +116,15 @@ class AIMultiplasCheckerService:
                         except Exception: pass
                 continue
 
-            final_result = "GREEN" if all(r == "GREEN" for r in leg_results) else "RED"
+            final_result, profit, odd_efetiva = settlement.combine_legs(
+                leg_results, leg_odds, total_odd)
+            if final_result is None:
+                print(f"[CHECKER MULTIPLAS] id={mid}: nao foi possivel combinar as "
+                      f"pernas ({leg_results}) - segue pendente.")
+                continue
 
-            # Garante consistência: se overall GREEN, todas as pernas ficam GREEN
-            if final_result == "GREEN":
-                for leg in games:
-                    leg["result"] = "GREEN"
-
-            total_odd = Decimal(str(total_odd))
-
-            # Profit por 1 unidade
-            if final_result == "RED":
-                profit = Decimal("-1")
-            else:
-                profit = total_odd - Decimal("1")
-
-            print(f"[CHECKER MULTIPLAS] id={mid} | {final_result} | legs={leg_results}")
+            print(f"[CHECKER MULTIPLAS] id={mid} | {final_result} | legs={leg_results} | "
+                  f"odd efetiva={odd_efetiva} | profit={profit}")
 
             try:
                 cur.execute(f"""
