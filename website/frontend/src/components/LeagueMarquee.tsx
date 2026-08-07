@@ -20,6 +20,28 @@ export interface LeagueTeaser {
   logo_url: string
 }
 
+/*
+ * A resposta é buscada uma vez por carregamento de página, não uma vez por
+ * fita. A Home monta duas fitas cruzadas, e como cada uma tinha seu próprio
+ * useEffect, as duas montavam juntas e disparavam a mesma requisição em
+ * paralelo · duas conexões novas ao banco para a mesma lista de ligas.
+ *
+ * Guardar a Promise (e não o resultado) é o que resolve o caso das duas
+ * montarem no mesmo tique: a segunda encontra a chamada já em voo e aguarda
+ * essa, em vez de começar outra. Falha limpa a variável para a próxima
+ * montagem poder tentar de novo.
+ */
+let _leaguesPromise: Promise<LeagueTeaser[]> | null = null
+
+function fetchLeagues(): Promise<LeagueTeaser[]> {
+  if (!_leaguesPromise) {
+    _leaguesPromise = api.get('/public/leagues')
+      .then(r => (r.data ?? []) as LeagueTeaser[])
+      .catch(err => { _leaguesPromise = null; throw err })
+  }
+  return _leaguesPromise
+}
+
 export default function LeagueMarquee({
   className,
   /** Roda no sentido contrário. Usado pra cruzar duas fitas. */
@@ -31,9 +53,11 @@ export default function LeagueMarquee({
   const [leagues, setLeagues] = useState<LeagueTeaser[]>([])
 
   useEffect(() => {
-    api.get('/public/leagues')
-      .then(r => setLeagues(r.data ?? []))
+    let vivo = true
+    fetchLeagues()
+      .then(l => { if (vivo) setLeagues(l) })
       .catch(() => {})
+    return () => { vivo = false }
   }, [])
 
   // Com poucas ligas o trilho não preenche a largura e a emenda entre as duas

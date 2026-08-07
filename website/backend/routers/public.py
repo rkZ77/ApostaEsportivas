@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from typing import Optional
 from auth_utils import get_current_user_optional
 from database import get_connection
-from data_br import HOJE_BR, data_br
+from data_br import HOJE_BR, TZ_BR, data_br
 
 logger = logging.getLogger(__name__)
 
@@ -566,9 +566,82 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
         conn.close()
 
 
+@router.get("/next-fixtures")
+def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
+    """Proximos jogos que a IA ainda vai analisar · sem login.
+
+    Substitui, na Home, a chamada a GET /api/fixtures/today, que era o caminho
+    errado por tres motivos ao mesmo tempo:
+
+      1. exige sessao (Depends(get_current_user)), entao pro visitante anonimo
+         -- que e' o publico da Home -- ela sempre devolvia 401 e a faixa
+         "Na fila da IA" simplesmente nao existia;
+      2. cada 401 acionava o interceptor do axios, que tentava /auth/refresh e
+         reenviava a requisicao: tres viagens por dia consultado, e a Home
+         consultava ate' quatro dias em serie;
+      3. quem estava logado pagava pior ainda -- aquela rota bate na
+         API-Football liga por liga, dois dias UTC cada, com timeout de 10s.
+
+    Aqui e' uma consulta so' na tabela `fixtures`, que o coletor ja mantem com
+    hoje + 2 dias a frente (fixture_collector_service.DIAS_BR = 3).
+
+    A janela nao e' "hoje": e' "daqui pra frente". Quando os jogos do dia ja
+    comecaram, a lista anda sozinha pros de amanha em vez de mostrar partida
+    que ja rolou -- que era a queixa real ("na fila da IA mostrar os proximos
+    jogos do outro dia").
+
+    `match_datetime` esta gravado em horario de Brasilia SEM fuso (o coletor
+    converte antes de salvar, ver convert_utc_to_br_naive), entao o corte tem
+    que ser contra o relogio de Brasilia, nao contra NOW() -- o banco roda em
+    UTC e o filtro adiantaria 3 horas, escondendo os jogos da tarde.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        rows = _q(cur, f"""
+            SELECT f.fixture_id, f.home_team, f.away_team,
+                   f.home_team_id, f.away_team_id,
+                   f.league_id, COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
+                   f.match_datetime
+            FROM fixtures f
+            LEFT JOIN leagues l ON l.league_id = f.league_id
+            WHERE f.status IN ('NS', 'TBD')
+              AND f.match_datetime >= (NOW() AT TIME ZONE '{TZ_BR}') - INTERVAL '10 minutes'
+            ORDER BY f.match_datetime
+            LIMIT %s
+        """, (limit,))
+        result = []
+        for r in rows:
+            d = dict(r)
+            if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
+                d["match_datetime"] = d["match_datetime"].isoformat()
+            result.append(d)
+        return result
+    finally:
+        cur.close()
+        conn.close()
+
+
+# Colunas da Dica do Dia, uma vez so'. As duas consultas de
+# public_free_pick_today (a de hoje e a de reserva) precisam devolver
+# exatamente o mesmo formato -- escrever o SELECT duas vezes e' como as duas
+# passam a divergir sem ninguem notar.
+_FREE_PICK_SELECT = """
+    SELECT pf.id, pf.match_date,
+           pf.home_team AS home_team_name, pf.away_team AS away_team_name,
+           COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
+           COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
+           pf.odd, pf.result, pf.market, pf.line,
+           fx.match_datetime, l.name AS league_name
+    FROM picks_free pf
+    LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
+    LEFT JOIN leagues  l  ON l.league_id = fx.league_id
+"""
+
+
 @router.get("/free-pick-today")
 def public_free_pick_today(request: Request):
-    """Dica do Dia (free) de hoje.
+    """Dica do Dia (free): a de hoje, ou a ultima publicada.
 
     Publico, mas mostra MAIS pra quem tem conta: visitante anonimo ve o jogo e
     a odd, e o mercado volta como `locked: true` sem o valor. Quem esta logado
@@ -577,29 +650,41 @@ def public_free_pick_today(request: Request):
     O corte e aqui e nao no CSS de proposito. Mandar o mercado e desfocar na
     tela nao esconde nada: o texto continua no JSON e aparece no DevTools. Se
     o campo e a recompensa por criar conta, ele nao pode sair daqui antes.
+
+    Duas correcoes de data, ambas visiveis na Home:
+
+    - o filtro era `CURRENT_DATE`, que e' a data UTC. Entre 21:00 e 00:00 de
+      Brasilia o banco ja virou o dia e o Brasil nao, entao a dica do dia
+      sumia da Home justamente no horario de pico. Agora usa HOJE_BR.
+    - sem pick publicado ainda, devolvia None e a Home ficava com um buraco no
+      lugar do card. Desde 01/08 nao existe horario fixo de publicacao, entao
+      esse buraco podia durar o dia inteiro. Agora cai na ultima dica
+      publicada, marcada com `is_previous: true` -- a tela mostra a data e o
+      resultado dela, que e' prova, nao enfeite.
     """
     user = get_current_user_optional(request)
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        cur.execute("""
-            SELECT pf.id, pf.match_date,
-                   pf.home_team AS home_team_name, pf.away_team AS away_team_name,
-                   COALESCE(pf.home_team_id, fx.home_team_id) AS home_team_id,
-                   COALESCE(pf.away_team_id, fx.away_team_id) AS away_team_id,
-                   pf.odd, pf.result, pf.market, pf.line,
-                   fx.match_datetime, l.name AS league_name
-            FROM picks_free pf
-            LEFT JOIN fixtures fx ON fx.fixture_id = pf.fixture_id
-            LEFT JOIN leagues  l  ON l.league_id = fx.league_id
-            WHERE pf.match_date = CURRENT_DATE
+        row = _q1(cur, f"""
+            {_FREE_PICK_SELECT}
+            WHERE pf.match_date = {HOJE_BR}
             ORDER BY pf.created_at DESC
             LIMIT 1
         """)
-        row = cur.fetchone()
+        is_previous = False
+        if not row:
+            row = _q1(cur, f"""
+                {_FREE_PICK_SELECT}
+                WHERE pf.match_date < {HOJE_BR}
+                ORDER BY pf.match_date DESC, pf.created_at DESC
+                LIMIT 1
+            """)
+            is_previous = True
         if not row:
             return None
         d = dict(row)
+        d["is_previous"] = is_previous
         if d.get("match_date") and hasattr(d["match_date"], "isoformat"):
             d["match_date"] = d["match_date"].isoformat()
         if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
