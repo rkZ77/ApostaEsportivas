@@ -332,12 +332,23 @@ def test_zerar_mes_tem_rate_limit_e_exige_sessao():
 
 def test_aviso_mostra_o_que_some_antes_de_confirmar():
     """Acao sem desfazer nao pergunta "tem certeza", mostra o que vai embora."""
-    src = _front("pages/Banca.tsx")
-    assert "ResetMonthModal" in src
+    src = _front("components/ResetMonthModal.tsx")
     assert "Some da sua banca" in src
     assert "Continua como está" in src
+
+
+def test_zerar_mes_mora_na_tela_que_lista_as_apostas():
+    """O comando apaga user_followed_picks, que e' o que Meus Picks mostra.
+
+    Na Banca o botao ficava sobre uma pagina que, depois de zerar, nao tem mais
+    nada pra exibir -- grafico sem serie, sequencia vazia, distribuicao zerada.
+    """
+    picks = _front("pages/MeusPicks.tsx")
+    assert "ResetMonthModal" in picks
+    assert "/banca/reset-month" in picks
     # o numero do aviso vem do mesmo calculo do servidor, nao da lista filtrada
-    assert "/banca/monthly-close" in src
+    assert "/banca/monthly-close" in picks
+    assert "reset-month" not in _front("pages/Banca.tsx")
 
 # ─────────────── Forma recente do mercado (Entenda esta analise) ───────
 
@@ -423,7 +434,7 @@ def test_barra_da_pagina_quebra_antes_de_espremer_o_titulo():
 def test_zerar_mes_mantem_o_texto_no_celular():
     """Seta circular sozinha le como "recarregar" -- ambiguidade dessas num
     botao sem volta e' armadilha, e o publico e' mobile."""
-    src = _front_codigo("pages/Banca.tsx")
+    src = _front_codigo("pages/MeusPicks.tsx")
     i = src.index("setShowReset(true)")
     trecho = src[i:i + 700]
     assert "Zerar mês" in trecho

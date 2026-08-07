@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Spinner } from '../components/ui'
-import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
@@ -13,6 +13,7 @@ import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import InfoTip from '../components/InfoTip'
+import ResetMonthModal from '../components/ResetMonthModal'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
@@ -42,6 +43,42 @@ export default function MeusPicks() {
       .catch(() => setError(true))
       .finally(() => setLoading(false))
   }, [])
+
+  /*
+   * Zerar o mês mora AQUI, e não na Banca.
+   *
+   * O que o comando apaga é `user_followed_picks` · exatamente a lista que
+   * esta tela mostra. Se deleta onde se vê. Na Banca o botão ficava sobre uma
+   * página que, depois de zerar, não tem mais nada para exibir: gráfico sem
+   * série, sequência vazia, distribuição zerada.
+   *
+   * O resumo vem de /banca/monthly-close com o mês atual, não de contar as
+   * linhas da tela: a lista respeita o filtro de período escolhido e o comando
+   * do servidor não. Contando aqui, o aviso prometeria um número e o backend
+   * apagaria outro.
+   */
+  const [showReset, setShowReset] = useState(false)
+  const [mesAtual, setMesAtual] = useState<{ label: string; apostas: number; pnl: number } | null>(null)
+
+  const carregarMesAtual = useCallback(() => {
+    const agora = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7)
+    api.get('/banca/monthly-close', { params: { month: agora } })
+      .then(r => setMesAtual({
+        label: r.data?.month_label ?? 'este mês',
+        apostas: Number(r.data?.total_followed ?? 0),
+        pnl: Number(r.data?.total_pnl ?? 0),
+      }))
+      .catch(() => setMesAtual(null))
+  }, [])
+
+  useEffect(() => { carregarMesAtual() }, [carregarMesAtual])
+
+  const zerarMes = async () => {
+    await api.post('/banca/reset-month')
+    setShowReset(false)
+    carregarMesAtual()
+    load()
+  }
 
   const loadMoreResolved = () => {
     if (loadingMore || !data?.has_more_resolved) return
@@ -168,8 +205,36 @@ export default function MeusPicks() {
       description="Suas apostas pendentes e resolvidas, com resultado e saldo de cada uma."
       noindex
       width="full"
-      bar={{ back: true, title: 'Meus Picks', sub: 'Suas apostas pendentes e resolvidas' }}
+      bar={{
+        back: true,
+        title: 'Meus Picks',
+        sub: 'Suas apostas pendentes e resolvidas',
+        actions: (mesAtual?.apostas ?? 0) > 0 ? (
+          /* No celular some o ÍCONE, nunca o texto: seta circular sozinha lê
+             como "recarregar", e ambiguidade dessas num botão sem volta é
+             armadilha. O clique aqui só ABRE o aviso · nada é apagado nele. */
+          <button
+            onClick={() => setShowReset(true)}
+            title={`Tirar as ${mesAtual!.apostas} apostas de ${mesAtual!.label} da banca`}
+            className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-red-400 border border-line-strong hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
+          >
+            <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
+            Zerar mês
+          </button>
+        ) : undefined,
+      }}
     >
+      <AnimatePresence>
+      {showReset && mesAtual && (
+        <ResetMonthModal
+          mes={mesAtual.label}
+          apostas={mesAtual.apostas}
+          pnl={mesAtual.pnl}
+          onConfirm={zerarMes}
+          onClose={() => setShowReset(false)}
+        />
+      )}
+      </AnimatePresence>
       <AnimatePresence>
       {detailPick && (
         <SuggestionDetail

@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback } from 'react'
-import { TrendingUp, Info, AlertTriangle, RotateCcw } from 'lucide-react'
+import { TrendingUp, Info } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
@@ -210,113 +210,6 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
   { key: 'lastmonth', label: 'Mês passado' },
 ]
 
-/*
- * Aviso de "zerar o mês".
- *
- * A ação é irreversível e não tem desfazer, então o card não pergunta "tem
- * certeza?" e sim MOSTRA o que vai embora e o que fica. "Tem certeza" é uma
- * pergunta que ninguém lê; uma lista com o número real de apostas e o saldo
- * que some, sim.
- *
- * O botão de confirmar é vermelho e é o único vermelho da tela · quem chegou
- * aqui sem querer não confunde com o de fechar.
- */
-function ResetMonthModal({
-  mes, apostas, pnl, onConfirm, onClose,
-}: {
-  mes: string
-  /** Quantas apostas do mês somem. Vem do mesmo cálculo do fechamento mensal. */
-  apostas: number
-  pnl: number
-  onConfirm: () => Promise<void>
-  onClose: () => void
-}) {
-  const [salvando, setSalvando] = useState(false)
-  const [erro, setErro] = useState('')
-
-  const confirmar = async () => {
-    setErro('')
-    setSalvando(true)
-    try {
-      await onConfirm()
-    } catch (e: any) {
-      setErro(e?.response?.data?.detail ?? 'Não foi possível zerar agora. Tente de novo.')
-      setSalvando(false)
-    }
-  }
-
-  return (
-    <motion.div
-      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
-      className="fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center px-4"
-      onClick={onClose}
-    >
-      <motion.div
-        variants={dialogScale}
-        onClick={e => e.stopPropagation()}
-        className="bg-surface-1 border border-red-500/30 rounded-lg p-6 w-full max-w-md overflow-y-auto max-h-[92dvh]"
-      >
-        <div className="flex items-start gap-3 mb-4">
-          <AlertTriangle className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
-          <div>
-            <h2 className="text-ink-1 font-bold text-lg leading-tight">Zerar {mes}</h2>
-            <p className="text-ink-3 text-xs mt-1">Não dá pra desfazer depois.</p>
-          </div>
-        </div>
-
-        <div className="bg-surface-0 border border-line rounded-lg divide-y divide-line/60 mb-4">
-          <div className="px-4 py-3">
-            <p className="text-[11px] text-ink-3 mb-2 font-semibold">Some da sua banca</p>
-            <ul className="space-y-1.5 text-xs text-ink-2">
-              <li className="flex items-center justify-between gap-3">
-                <span>Apostas registradas em {mes}</span>
-                <span className="font-mono font-bold text-ink-1 tabular-nums">{apostas}</span>
-              </li>
-              <li className="flex items-center justify-between gap-3">
-                <span>Saldo do mês</span>
-                <span className={`font-mono font-bold tabular-nums ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>
-                  {pnl === 0 ? 'R$ 0' : fmtSigned(pnl)}
-                </span>
-              </li>
-            </ul>
-          </div>
-
-          <div className="px-4 py-3">
-            <p className="text-[11px] text-ink-3 mb-2 font-semibold">Continua como está</p>
-            <ul className="space-y-1 text-xs text-ink-3">
-              <li>Meses anteriores e os fechamentos já confirmados</li>
-              <li>Sua banca inicial, o valor da unidade e a meta</li>
-              <li>Seus saques registrados</li>
-              <li>Os picks de alavancagem, que têm banca própria</li>
-            </ul>
-          </div>
-        </div>
-
-        <p className="text-[11px] text-ink-4 leading-relaxed mb-5">
-          As apostas somem só da sua banca · os picks em si continuam publicados e você
-          pode registrar de novo os que quiser. Sua banca volta a ser o que era no
-          começo de {mes}.
-        </p>
-
-        {erro && <p className="text-red-400 text-xs mb-3">{erro}</p>}
-
-        <div className="flex flex-col-reverse sm:flex-row gap-2">
-          <button onClick={onClose} disabled={salvando} className="btn-ghost flex-1 py-2.5 text-sm">
-            Cancelar
-          </button>
-          <button
-            onClick={confirmar}
-            disabled={salvando || apostas === 0}
-            className="flex-1 py-2.5 text-sm font-bold rounded-md bg-red-500/15 border border-red-500/40 text-red-400 hover:bg-red-500/25 transition-colors disabled:opacity-40"
-          >
-            {salvando ? 'Zerando...' : apostas === 0 ? 'Nada pra zerar' : `Zerar as ${apostas} apostas`}
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
-  )
-}
-
 export default function Banca() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -326,29 +219,8 @@ export default function Banca() {
   const [error,   setError]   = useState(false)
   const [period,  setPeriod]  = useState<PeriodKey>(0)
   const [showSetup, setShowSetup]           = useState(false)
-  const [showReset, setShowReset]           = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
-  /*
-   * Resumo do mês corrente, só pra preencher o aviso de zerar.
-   *
-   * Lê de /banca/monthly-close com o mês atual em vez de contar as `entries`
-   * da tela: a lista respeita o filtro de período que o usuário escolheu, e o
-   * comando do servidor não. Contar aqui faria o aviso prometer um número e o
-   * backend apagar outro sempre que o filtro não fosse "Este mês".
-   */
-  const [mesAtual, setMesAtual] = useState<{ label: string; apostas: number; pnl: number } | null>(null)
-
-  const carregarMesAtual = useCallback(() => {
-    const agora = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' }).slice(0, 7)
-    api.get('/banca/monthly-close', { params: { month: agora } })
-      .then(r => setMesAtual({
-        label: r.data?.month_label ?? 'este mês',
-        apostas: Number(r.data?.total_followed ?? 0),
-        pnl: Number(r.data?.total_pnl ?? 0),
-      }))
-      .catch(() => setMesAtual(null))
-  }, [])
 
   const load = useCallback((p: PeriodKey) => {
     setLoading(true)
@@ -371,14 +243,6 @@ export default function Banca() {
     load(period)
   }, [period, load])
 
-  useEffect(() => { carregarMesAtual() }, [carregarMesAtual])
-
-  const zerarMes = async () => {
-    await api.post('/banca/reset-month')
-    setShowReset(false)
-    carregarMesAtual()
-    load(period)
-  }
 
   const handleSave = (start: number, unitValue: number) => {
     setShowSetup(false)
@@ -389,6 +253,7 @@ export default function Banca() {
   const pnlColor = (v: number | null) =>
     v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
 
+  const temGrafico = (data?.chart?.length ?? 0) >= 2
   const chartData = (data?.chart ?? []).map((p: any, i: number, arr: any[]) => ({
     match_date: p.date,
     profit: i === 0
@@ -440,39 +305,6 @@ export default function Banca() {
             <Button variant="ghost" size="sm" onClick={() => navigate('/banca/saque')}>
               Sacar
             </Button>
-            {/* Na fila dos botões do dia a dia por pedido do usuário. A
-                proteção contra o toque errado não é a distância, é o modal:
-                ele lista o que some antes de qualquer coisa acontecer, e o
-                botão daqui só abre esse modal · nada é apagado neste clique.
-
-                No celular quem some é o ÍCONE, nunca o texto. Uma seta
-                circular sozinha lê como "recarregar", e ambiguidade dessas num
-                botão sem volta é armadilha · o texto é o que carrega o
-                significado, o ícone só ajuda a achar. min-h-[36px] porque o
-                alvo tem que caber no polegar; o resto da barra usa Button
-                size="sm", que já tem essa altura.
-
-                O rótulo é "Zerar mês" e não "Zerar", que ao lado de "Sacar"
-                leria como zerar a banca inteira. */}
-            {(mesAtual?.apostas ?? 0) > 0 && (
-              <button
-                onClick={() => setShowReset(true)}
-                title={`Tirar as ${mesAtual!.apostas} apostas de ${mesAtual!.label} da banca`}
-                className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-red-400 border border-line-strong hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
-              >
-                <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
-                Zerar mês
-              </button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowSetup(true)}
-              className={data?.can_configure === false ? 'opacity-50' : undefined}
-              title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
-            >
-              Configurar
-            </Button>
           </>
         ),
       }}
@@ -485,18 +317,6 @@ export default function Banca() {
           onSave={handleSave}
           onClose={() => setShowSetup(false)}
           onWithdraw={() => navigate('/banca/saque')}
-        />
-      )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-      {showReset && mesAtual && (
-        <ResetMonthModal
-          mes={mesAtual.label}
-          apostas={mesAtual.apostas}
-          pnl={mesAtual.pnl}
-          onConfirm={zerarMes}
-          onClose={() => setShowReset(false)}
         />
       )}
       </AnimatePresence>
@@ -596,10 +416,12 @@ export default function Banca() {
               a curva, o momento e o saldo por tipo de resultado.
               Abaixo de xl volta a empilhar, que é o certo no celular.
             */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+            <div className={`grid grid-cols-1 gap-4 items-stretch ${
+              temGrafico ? 'xl:grid-cols-3' : 'sm:grid-cols-2'
+            }`}>
 
               {/* Gráfico de evolução */}
-              {chartData.length >= 2 && (
+              {temGrafico && (
                 <div className="card p-5 xl:col-span-2">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
@@ -611,11 +433,13 @@ export default function Banca() {
                 </div>
               )}
 
-              {/* Coluna da direita: os dois painéis empilhados, ocupando a mesma
-                  altura do gráfico ao lado. Separados, a sequência ficava com
-                  meio metro de vazio embaixo e a distribuição sobrava solta na
-                  linha seguinte, estreita. */}
-              <div className="flex flex-col gap-4">
+              {/* Com gráfico, os dois painéis empilham numa coluna ao lado
+                  dele. Sem gráfico (mês zerado, conta nova), eles se espalham
+                  lado a lado na largura toda · presos em 1/3 sobrava dois
+                  terços de preto, que foi o que apareceu logo depois do
+                  primeiro "zerar o mês". `contents` desfaz este invólucro e
+                  entrega os dois filhos direto pra grade de fora. */}
+              <div className={temGrafico ? 'flex flex-col gap-4' : 'contents'}>
 
               {/* Streak pessoal */}
               <div className="card p-5">
@@ -623,7 +447,7 @@ export default function Banca() {
                 <div className="flex items-center justify-around">
                   <div className="text-center">
                     <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-green-500' : data?.streak_type === 'red' ? 'text-red-400' : 'text-ink-4'}`}>
-                      {data?.streak > 0 ? data.streak : ''}
+                      {data?.streak > 0 ? data.streak : 0}
                     </div>
                     <div className="text-xs text-ink-3 mt-1">
                       {data?.streak_type === 'green' ? 'Greens seguidos' : data?.streak_type === 'red' ? 'Reds seguidos' : 'Sequência atual'}
@@ -632,7 +456,7 @@ export default function Banca() {
                   <div className="w-px h-12 bg-surface-2" />
                   <div className="text-center">
                     <div className="text-4xl font-black text-yellow-400">
-                      {data?.best_streak > 0 ? data.best_streak : ''}
+                      {data?.best_streak > 0 ? data.best_streak : 0}
                     </div>
                     <div className="text-xs text-ink-3 mt-1">Melhor sequência</div>
                   </div>
