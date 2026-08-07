@@ -50,8 +50,28 @@ from engine_pipelines.decision_log import (
     log_decision, log_run, log_skip,
 )
 
-ODD_MIN = 1.35
-ODD_MAX = 2.00
+# SEM FAIXA DE ODD desde 2026-08-07 (decisao do usuario, tomada depois de ver a
+# medicao abaixo). Era [1.35, 2.00], herdada dos pipelines de over/under de
+# TIME. Prop de jogador nao precifica igual, e a consequencia era estrutural,
+# nao azar: nos jogos de 07/08, TODA linha dentro de [1.35, 2.00] tinha edge
+# negativo, e as unicas que passavam o EDGE_MIN estavam fora e do lado alto
+# (Vagner 5+ @ 5.70 com edge +0.070 e 6+ @ 10.50 com +0.063). Com a faixa, este
+# pipeline nunca geraria pick -- e de fato nao gerou nenhum desde que existe.
+#
+# As constantes ficam como None em vez de sumir: documentam a decisao e voltar
+# atras e' trocar o valor, nao reescrever a checagem.
+#
+# O que continua filtrando: EDGE_MIN. Odd <= 1.00 nao precisa de guarda propria
+# porque edge = prob * odd - 1 fica negativo sozinho e o corte de edge pega.
+#
+# RISCO ASSUMIDO, escrito aqui de proposito: o modelo acha valor justamente na
+# cauda, que e' onde a estimativa dele e' mais fragil -- o EDGE_MIN daqui ja' e'
+# 0.06 contra 0.04 de faltas exatamente porque "a amostra por goleiro e' pequena
+# e a distribuicao e' superdispersa". Um edge de +0.06 calculado sobre uma
+# probabilidade de 15% erra de sinal com facilidade. Se odd alta comecar a
+# resolver RED com frequencia, esta faixa e' o primeiro lugar pra olhar.
+ODD_MIN = None
+ODD_MAX = None
 
 # Margem minima pra gravar. Mais exigente que faltas (0.04) porque aqui a
 # amostra por goleiro e' pequena e a distribuicao e' superdispersa: erro de
@@ -237,6 +257,36 @@ def _fixtures_de_hoje(cur) -> list:
     ]
 
 
+def melhor_por_goleiro(candidatos: list) -> list:
+    """UM candidato por goleiro, o de maior edge.
+
+    As linhas do mesmo goleiro sao a mesma aposta em graus diferentes (6+
+    implica 5+ implica 4+), e a MESMA linha ainda reaparece quando duas casas
+    cotam o jogo -- este pipeline le odd RAW, entao nao tem o "melhor preco por
+    linha" que _odds_over_faltas faz no de faltas.
+
+    Enquanto existiu teto de odd 2.00 isso nunca apareceu, porque nenhum
+    candidato passava. Assim que o teto saiu (2026-08-07), a medicao dos jogos
+    do dia devolveu QUATRO candidatos do mesmo goleiro: 4+ @ 3.75, 5+ @ 7.00,
+    5+ @ 5.70 (outra casa) e 6+ @ 10.50. Publicar os quatro e' publicar a mesma
+    aposta quatro vezes, gastar quatro revisoes de IA e multiplicar por quatro a
+    exposicao real do assinante num goleiro so'.
+
+    Maior edge e' o mesmo criterio que faltas usa pra escolher entre linhas do
+    mesmo jogo, e resolve os dois casos de uma vez: entre duas casas na mesma
+    linha, a de odd maior tem edge maior.
+
+    A reducao e' por GOLEIRO e nao por jogo: os dois goleiros da partida sao
+    apostas distintas e ambos podem sair.
+    """
+    melhor: dict = {}
+    for c in candidatos:
+        atual = melhor.get(c["goleiro"]["player_id"])
+        if atual is None or c["edge"] > atual["edge"]:
+            melhor[c["goleiro"]["player_id"]] = c
+    return list(melhor.values())
+
+
 def _avaliar_fixture(fixture: dict, goleiros: dict,
                      match_stats: MatchStatsService,
                      odds_service: OddsService) -> list:
@@ -260,7 +310,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
         if nome_mercado not in NOMES_MERCADO:
             continue
         odd = float(o.get("odd") or 0)
-        if odd < ODD_MIN or odd > ODD_MAX:
+        if (ODD_MIN is not None and odd < ODD_MIN) or (ODD_MAX is not None and odd > ODD_MAX):
             continue
 
         parsed = _parse_valor(o.get("value_name"))
@@ -310,7 +360,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             "market_name": o.get("market_name") or "Goalkeeper Saves",
         })
 
-    return candidatos
+    return melhor_por_goleiro(candidatos)
 
 
 def _explicar(c: dict) -> str:
