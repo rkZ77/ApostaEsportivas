@@ -288,3 +288,53 @@ def test_grade_e_tabela_vao_pra_largura_cheia():
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+# ─────────────────── Zerar o mes corrente na banca ─────────────────────
+
+
+def test_zerar_mes_so_alcanca_o_mes_corrente():
+    """A rota nao aceita parametro de mes, de proposito.
+
+    Com um `month` no corpo ou na query, um cliente qualquer apagaria mes
+    fechado -- e fechamento mensal e' historico assinado.
+    """
+    corpo = _codigo("routers/banca.py", "reset_current_month")
+    assert "_current_month_key()" in corpo
+    assert "month" not in corpo.split("def reset_current_month(")[1].split(")")[0], \
+        "a assinatura nao pode receber mes"
+    assert "DELETE FROM user_followed_picks" in corpo
+
+
+def test_zerar_mes_usa_o_mesmo_recorte_que_a_tela_soma():
+    """Se o filtro daqui divergisse de _compute_month_stats, o aviso mostraria
+    um numero de apostas e o comando apagaria outro conjunto."""
+    corpo = _codigo("routers/banca.py", "reset_current_month")
+    soma  = _codigo("routers/banca.py", "_compute_month_stats")
+    for regra in ("followed_at AT TIME ZONE 'America/Sao_Paulo'",
+                  "pick_type != 'alavancagem'"):
+        assert regra in corpo, f"reset sem: {regra}"
+        assert regra in soma,  f"soma sem: {regra}"
+
+
+def test_zerar_mes_nao_toca_fechamento_saque_nem_banca_inicial():
+    """As tres coisas que o usuario NAO pediu pra apagar."""
+    corpo = _codigo("routers/banca.py", "reset_current_month")
+    for tabela in ("banca_monthly_closes", "banca_withdrawals", "user_banca"):
+        assert tabela not in corpo, f"reset nao pode tocar {tabela}"
+
+
+def test_zerar_mes_tem_rate_limit_e_exige_sessao():
+    corpo = _codigo("routers/banca.py", "reset_current_month")
+    assert "_check_banca_rate" in corpo
+    assert "Depends(get_current_user)" in corpo
+
+
+def test_aviso_mostra_o_que_some_antes_de_confirmar():
+    """Acao sem desfazer nao pergunta "tem certeza", mostra o que vai embora."""
+    src = _front("pages/Banca.tsx")
+    assert "ResetMonthModal" in src
+    assert "Some da sua banca" in src
+    assert "Continua como está" in src
+    # o numero do aviso vem do mesmo calculo do servidor, nao da lista filtrada
+    assert "/banca/monthly-close" in src
