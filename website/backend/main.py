@@ -9,6 +9,7 @@ import httpx
 from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -58,6 +59,26 @@ _SERVER_VERSION = str(int(time.time()))
 
 _origins_env = os.getenv("ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:3000")
 _allow_origins = [o.strip() for o in _origins_env.split(",") if o.strip()]
+
+# Nada saia daqui sem compressao. O JSON da Home e' o caso extremo:
+# /api/public/results devolve resumo + serie diaria + quebra por liga + a
+# lista de recentes, texto repetitivo que o gzip corta em ~80%. Os bundles JS
+# e CSS servidos pelo catch-all do SPA passam pelo mesmo caminho (o
+# `dist/` e' servido pelo FastAPI, nao por um nginx na frente), entao ate'
+# entao eles iam inteiros pro celular.
+#
+# 500 bytes de piso: abaixo disso o cabecalho de compressao custa mais do que
+# economiza. Nivel 6, nao o 9 que vem por padrao: em JSON os dois chegam
+# praticamente no mesmo tamanho, e o 9 gasta varias vezes mais CPU pra isso --
+# num container pequeno esse tempo volta como latencia na propria resposta que
+# a compressao deveria acelerar.
+#
+# Registrado ANTES do CORS de proposito. O Starlette empilha ao contrario (o
+# ultimo add_middleware fica por fora), entao com esta ordem o CORS e' a
+# camada externa e o gzip a interna: a resposta e' comprimida primeiro e so'
+# depois recebe os cabecalhos de CORS, que assim nunca entram no corpo
+# comprimido. Invertido, o preflight OPTIONS passaria pelo compressor a toa.
+app.add_middleware(GZipMiddleware, minimum_size=500, compresslevel=6)
 
 app.add_middleware(
     CORSMiddleware,
@@ -336,6 +357,22 @@ def dynamic_sitemap():
 
 
 _dist = _base_dir / "dist"
+
+# O Vite assina cada arquivo de /assets com o hash do conteudo
+# (Home-C6srAYyR.js): mudou o conteudo, muda o nome. Entao o conteudo daquele
+# nome nunca muda, e revalidar e' viagem perdida.
+#
+# Sem este cabecalho o FileResponse mandava so' ETag/Last-Modified, e cada
+# carregamento repetido da Home gastava uma ida e volta por chunk -- uns dez
+# 304 em serie antes do primeiro pixel, o que no 4G custa mais que o download.
+#
+# O index.html e' o oposto: ele e' quem aponta pros hashes novos depois de um
+# deploy. Se ficar em cache, o navegador continua pedindo chunk que nao existe
+# mais (e cai no reload automatico do RouteErrorBoundary). Por isso revalida
+# sempre.
+_ASSET_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
+_HTML_CACHE  = {"Cache-Control": "no-cache"}
+
 if _dist.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
@@ -345,5 +382,6 @@ if _dist.exists():
         # do build e serve qualquer arquivo legivel pelo processo.
         candidate = (_dist / full_path).resolve()
         if candidate.is_relative_to(_dist) and candidate.is_file():
-            return FileResponse(str(candidate))
-        return FileResponse(str(_dist / "index.html"))
+            eterno = full_path.startswith("assets/") and candidate.suffix != ".html"
+            return FileResponse(str(candidate), headers=_ASSET_CACHE if eterno else None)
+        return FileResponse(str(_dist / "index.html"), headers=_HTML_CACHE)

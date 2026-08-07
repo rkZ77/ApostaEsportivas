@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { ArrowRight, Gift, Lock } from 'lucide-react'
+import { ArrowRight, Gift, History, Lock } from 'lucide-react'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Badge, Button, LiveDot, ResultBadge, Skeleton } from '../components/ui'
@@ -18,6 +18,12 @@ import { TeamLogo } from '../components/TeamLogo'
  * aqui cobre um texto de enfeite, não o mercado escondido: se o valor viesse
  * no JSON, bastava abrir o DevTools pra ler, e a recompensa por criar conta
  * virava teatro.
+ *
+ * Sem dica publicada hoje, o card não some: o endpoint devolve a última, com
+ * `is_previous`, e aqui ele muda de papel · deixa de ser a oferta do dia e
+ * passa a ser prova, com data e resultado à mostra. Um pick RED antigo exposto
+ * na Home é menos custoso do que um buraco onde deveria haver produto, e o
+ * histórico completo já é público em /resultados de qualquer forma.
  */
 
 interface FreePick {
@@ -29,7 +35,10 @@ interface FreePick {
   odd: number
   result: string | null
   league_name?: string | null
+  match_date?: string | null
   match_datetime?: string | null
+  /** true = não é a dica de hoje, é a última publicada antes dela. */
+  is_previous?: boolean
   /** true = visitante anônimo, resposta veio sem market/line.
    *  Opcional porque resposta antiga em cache pode nao trazer o campo. */
   locked?: boolean
@@ -73,11 +82,18 @@ export default function FreePickHero() {
   // o dado. Exigir `locked === false` pra revelar inverte o risco.
   const revelado = pick.locked === false && !!pick.market
 
-  const hora = pick.match_datetime
-    ? new Date(pick.match_datetime).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
-      })
-    : null
+  const anterior = pick.is_previous === true
+
+  /*
+   * Horário do jogo se a dica é de hoje; data se é a anterior.
+   *
+   * Os dois saem de fatia de string, não de `new Date`: `match_datetime` chega
+   * em horário de Brasília sem fuso, então deixar o navegador interpretar
+   * jogava o horário para o fuso de quem está lendo.
+   */
+  const quando = anterior
+    ? (pick.match_date ? `${pick.match_date.slice(8, 10)}/${pick.match_date.slice(5, 7)}` : null)
+    : (pick.match_datetime ? pick.match_datetime.slice(11, 16) : null)
 
   return (
     <motion.div
@@ -92,19 +108,21 @@ export default function FreePickHero() {
 
         <div className="panel-head">
           <span className="flex items-center gap-2">
-            <LiveDot />
-            <span className="panel-label">Dica do dia</span>
+            {anterior
+              ? <History className="w-3.5 h-3.5 text-ink-4 shrink-0" />
+              : <LiveDot />}
+            <span className="panel-label">{anterior ? 'Última dica publicada' : 'Dica do dia'}</span>
           </span>
           <Badge tone="green" Icon={Gift}>Grátis</Badge>
         </div>
 
         {/* Jogo */}
         <div className="px-5 py-5 text-center">
-          {(pick.league_name || hora) && (
+          {(pick.league_name || quando) && (
             <p className="text-[11px] text-ink-4 mb-3">
               {pick.league_name}
-              {pick.league_name && hora ? ' · ' : ''}
-              {hora}
+              {pick.league_name && quando ? ' · ' : ''}
+              {quando}
             </p>
           )}
 
@@ -163,6 +181,14 @@ export default function FreePickHero() {
             <Button to={`/p/free/${pick.id}`} block variant="ghost" IconRight={ArrowRight}>
               Ver a análise completa
             </Button>
+          )}
+
+          {/* Sem hora prometida: a publicação não tem horário fixo, e escrever
+              um aqui viraria promessa quebrada em todo dia que atrasasse. */}
+          {anterior && (
+            <p className="text-[11px] text-ink-4 text-center mt-2.5">
+              A dica de hoje aparece aqui assim que a análise fechar.
+            </p>
           )}
         </div>
       </div>

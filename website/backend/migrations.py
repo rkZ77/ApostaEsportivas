@@ -283,6 +283,18 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_user_achievements_user ON user_achievements(user_id);")
 
+        # Fila da Home (GET /api/public/next-fixtures): "proximos jogos ainda
+        # nao iniciados, em ordem de horario". Sem indice isso e' varredura da
+        # tabela inteira a cada visita anonima -- e `fixtures` so' cresce, o
+        # coletor nunca apaga o passado, entao a conta piora com o tempo.
+        # Parcial no status porque a consulta so' olha jogo por comecar: o
+        # indice fica do tamanho da janela util, nao do historico.
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_fixtures_proximos
+            ON fixtures (match_datetime)
+            WHERE status IN ('NS', 'TBD')
+        """)
+
         conn.commit()
         return True
     except Exception as e:
