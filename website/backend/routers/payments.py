@@ -451,13 +451,20 @@ def _search_user_payments(sdk, user_id: int) -> list[dict]:
     Consulta direta em vez de varrer a janela de datas: a conta tem milhares de
     pagamentos que não são do site, e a varredura poderia paginar sem nunca
     chegar no que interessa. São quatro consultas exatas, uma por plano.
+
+    Timeout curto porque este caminho roda dentro do login e do retorno do
+    checkout: MercadoPago lento não pode virar tela travada. Se estourar, quem
+    resolve é a camada seguinte (webhook, ou o botão do /admin).
     """
+    from mercadopago.config import RequestOptions
+
+    opcoes = RequestOptions(connection_timeout=6)
     encontrados: list[dict] = []
     for plano in PLANS:
-        resposta = (sdk.payment().search(filters={
-            "external_reference": f"{user_id}:{plano}",
-            "status":             "approved",
-        }) or {}).get("response") or {}
+        resposta = (sdk.payment().search(
+            filters={"external_reference": f"{user_id}:{plano}", "status": "approved"},
+            request_options=opcoes,
+        ) or {}).get("response") or {}
         encontrados.extend(p for p in (resposta.get("results") or []) if _e_assinatura(p))
     return encontrados
 
@@ -502,6 +509,26 @@ def _reconcile(begin: str, source: str, user_id: int | None = None) -> dict:
         "ja_registrados": ja_tinha,
         "falhas":       falhas,
     }
+
+
+def try_activate_pending(user_id: int) -> dict | None:
+    """Ativa o VIP de quem foi pro MercadoPago e ainda está sem acesso.
+
+    Chamada no login, que é o único momento recorrente que este backend tem
+    desde que o scheduler saiu · mesmo motivo do aviso de plano expirando em
+    routers/auth.py. Fecha o caso que nenhuma outra camada pega: pagou por
+    boleto ou Pix, fechou o navegador, o webhook falhou, e a pessoa só volta
+    dias depois. Quando ela volta, entra VIP.
+
+    Nunca levanta exceção: nada aqui pode derrubar um login.
+    """
+    try:
+        resultado = _reconcile("NOW-30DAYS", "login", user_id=user_id)
+        ativados = resultado["ativados"]
+        return ativados[0] if ativados else None
+    except Exception as e:
+        logger.warning("[LOGIN] Falha ao conferir pagamento pendente do user %s: %s", user_id, e)
+        return None
 
 
 class CreatePreferenceBody(BaseModel):
@@ -551,6 +578,21 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
 
     preference = result["response"]
     sandbox = os.getenv("MERCADOPAGO_SANDBOX", "true").lower() == "true"
+
+    # Marca que esta pessoa foi pro MercadoPago. É o que faz o login saber em
+    # quem vale a pena gastar consulta à API depois · ver try_activate_pending.
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("UPDATE users SET checkout_started_at = NOW() WHERE id = %s", (current_user["id"],))
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        # Não impede o pagamento: só reduz a chance de auto-reparo depois.
+        logger.warning("[PAYMENTS] Falha ao marcar checkout do user %s: %s", current_user["id"], e)
 
     return {
         "init_point": preference.get("sandbox_init_point") if sandbox else preference.get("init_point"),
