@@ -22,14 +22,13 @@ const SOURCE_LBL: Record<string, string> = {
 // lock overlay para free
 // modal de setup
 function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
-  current: { start: number; goal: number | null; unitValue: number }
+  current: { start: number; unitValue: number }
   locked?: boolean
-  onSave: (start: number, goal: number | null, unitValue: number) => void
+  onSave: (start: number, unitValue: number) => void
   onClose: () => void
   onWithdraw: () => void
 }) {
   const [start,     setStart]     = useState(String(current.start))
-  const [goal,      setGoal]      = useState(current.goal ? String(current.goal) : '')
   const [unitValue, setUnitValue] = useState(String(current.unitValue))
   const [err,       setErr]       = useState('')
   const [loading,   setLoading]   = useState(false)
@@ -53,16 +52,14 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
   const handleSave = async () => {
     setErr('')
     const s  = parseFloat(start.replace(',', '.'))
-    const g  = goal ? parseFloat(goal.replace(',', '.')) : null
     const uv = parseFloat(unitValue.replace(',', '.'))
     if (!s || s <= 0)          { setErr('Banca inicial deve ser maior que zero.'); return }
-    if (g !== null && g <= s)  { setErr('Meta deve ser maior que a banca inicial.'); return }
     if (!uv || uv <= 0)        { setErr('Valor da unidade deve ser maior que zero.'); return }
     if (isBlocked)             { setErr(`Unidade muito alta. Máximo permitido: ${fmtBRL(parseFloat(maxUnitSafe ?? '0'))} para ter 20 unidades mínimas.`); return }
     setLoading(true)
     try {
-      await api.post('/banca/setup', { bankroll_start: s, bankroll_goal: g, unit_value: uv })
-      onSave(s, g, uv)
+      await api.post('/banca/setup', { bankroll_start: s, unit_value: uv })
+      onSave(s, uv)
     } catch (e: any) {
       setErr(e.response?.data?.detail ?? 'Erro ao salvar.')
     } finally {
@@ -168,13 +165,6 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
             )}
           </div>
 
-          <div>
-            <label className="text-xs text-ink-3 block mb-1.5">
-              Meta de banca (R$) <span className="text-ink-4">(opcional)</span>
-            </label>
-            <input type="number" min="1" step="0.01" value={goal}
-              onChange={e => setGoal(e.target.value)} className="input w-full" placeholder="Ex: 1000" />
-          </div>
         </div>
 
         <div className="mt-4 bg-surface-2/50 rounded-lg px-3 py-2 text-xs text-ink-2">
@@ -390,9 +380,9 @@ export default function Banca() {
     load(period)
   }
 
-  const handleSave = (start: number, goal: number | null, unitValue: number) => {
+  const handleSave = (start: number, unitValue: number) => {
     setShowSetup(false)
-    setData((d: any) => d ? { ...d, bankroll_start: start, bankroll_goal: goal, unit_value: unitValue } : d)
+    setData((d: any) => d ? { ...d, bankroll_start: start, unit_value: unitValue } : d)
     load(period)
   }
 
@@ -407,10 +397,8 @@ export default function Banca() {
   }))
 
   // meta progress
-  const goal    = data?.bankroll_goal ?? null
   const current = data?.bankroll_current ?? data?.bankroll_start ?? 0
   const start   = data?.bankroll_start ?? 100
-  const goalPct = goal ? Math.min(100, Math.round(((current - start) / (goal - start)) * 100)) : 0
 
   // ganho em unidades (exclui alavancagem, igual ao total_pnl)
   const ganhoUnidades = (data?.unit_value ?? 0) > 0 ? (data?.total_pnl ?? 0) / data.unit_value : 0
@@ -452,6 +440,30 @@ export default function Banca() {
             <Button variant="ghost" size="sm" onClick={() => navigate('/banca/saque')}>
               Sacar
             </Button>
+            {/* Na fila dos botões do dia a dia por pedido do usuário. A
+                proteção contra o toque errado não é a distância, é o modal:
+                ele lista o que some antes de qualquer coisa acontecer, e o
+                botão daqui só abre esse modal · nada é apagado neste clique.
+
+                No celular quem some é o ÍCONE, nunca o texto. Uma seta
+                circular sozinha lê como "recarregar", e ambiguidade dessas num
+                botão sem volta é armadilha · o texto é o que carrega o
+                significado, o ícone só ajuda a achar. min-h-[36px] porque o
+                alvo tem que caber no polegar; o resto da barra usa Button
+                size="sm", que já tem essa altura.
+
+                O rótulo é "Zerar mês" e não "Zerar", que ao lado de "Sacar"
+                leria como zerar a banca inteira. */}
+            {(mesAtual?.apostas ?? 0) > 0 && (
+              <button
+                onClick={() => setShowReset(true)}
+                title={`Tirar as ${mesAtual!.apostas} apostas de ${mesAtual!.label} da banca`}
+                className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-red-400 border border-line-strong hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
+              >
+                <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
+                Zerar mês
+              </button>
+            )}
             <Button
               variant="ghost"
               size="sm"
@@ -468,7 +480,7 @@ export default function Banca() {
       <AnimatePresence>
       {showSetup && (
         <SetupModal
-          current={{ start: data?.bankroll_start ?? 100, goal: data?.bankroll_goal ?? null, unitValue: data?.unit_value ?? 1 }}
+          current={{ start: data?.bankroll_start ?? 100, unitValue: data?.unit_value ?? 1 }}
           locked={data?.can_configure === false}
           onSave={handleSave}
           onClose={() => setShowSetup(false)}
@@ -575,42 +587,6 @@ export default function Banca() {
               <Info className="w-3 h-3 shrink-0" />
               <span>Picks de Alavancagem não são contabilizados nesta banca</span>
             </div>
-
-            {/* Meta de banca */}
-            {goal ? (
-              <div className="card p-5">
-                <div className="flex items-center justify-between mb-3">
-                  <div>
-                    <p className="text-xs text-ink-3 font-semibold mb-0.5">Meta de banca</p>
-                    <p className="font-mono text-ink-1 font-black">
-                      {fmtBRL(current)}
-                      <span className="text-ink-4 font-normal text-sm"> / {fmtBRL(goal)}</span>
-                    </p>
-                  </div>
-                  <span className={`font-mono text-2xl font-black ${goalPct >= 100 ? 'text-green-400' : 'text-ink-2'}`}>
-                    {goalPct >= 100 ? 'Meta atingida!' : `${goalPct}%`}
-                  </span>
-                </div>
-                <div className="bg-surface-2 rounded-full h-3 overflow-hidden">
-                  <motion.div
-                    className={`h-3 rounded-full ${goalPct >= 100 ? 'bg-green-400' : 'bg-green-500'}`}
-                    initial={{ width: 0 }}
-                    animate={{ width: `${Math.max(2, goalPct)}%` }}
-                    transition={{ duration: 0.7, ease: [0.16, 1, 0.3, 1] }}
-                  />
-                </div>
-                <p className="text-xs text-ink-4 mt-2">
-                  Faltam {fmtBRL(Math.max(0, goal - current))} para atingir a meta
-                </p>
-              </div>
-            ) : (
-              <button
-                onClick={() => setShowSetup(true)}
-                className="w-full card p-4 border-dashed text-center text-xs text-ink-3 hover:text-ink-2 hover:border-line-strong transition-colors"
-              >
-                + Definir meta de banca
-              </button>
-            )}
 
             {/*
               Painel: gráfico à esquerda, sequência e distribuição à direita.
@@ -891,31 +867,6 @@ export default function Banca() {
             })()}
 
             <MonthlyCloseSection />
-
-            {/*
-              Recomeçar o mês. Fica no fim da página, discreto e sozinho, e não
-              na barra do topo junto de "Sacar" e "Configurar": é ação de
-              manutenção, rara e sem volta, e ficar ao alcance do polegar na
-              mesma fila dos botões do dia a dia é como se aperta sem querer.
-              O aviso do que vai acontecer está no modal, não aqui.
-            */}
-            {(mesAtual?.apostas ?? 0) > 0 && (
-              <div className="flex items-center justify-between gap-3 flex-wrap border-t border-line pt-5">
-                <div>
-                  <p className="text-xs text-ink-2 font-semibold">Recomeçar {mesAtual!.label}</p>
-                  <p className="text-[11px] text-ink-4 mt-0.5">
-                    Tira as {mesAtual!.apostas} apostas deste mês da banca. Meses anteriores não mudam.
-                  </p>
-                </div>
-                <button
-                  onClick={() => setShowReset(true)}
-                  className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-red-400 border border-line hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" />
-                  Zerar o mês
-                </button>
-              </div>
-            )}
 
           </div>
         )}

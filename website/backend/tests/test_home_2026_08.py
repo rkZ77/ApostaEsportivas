@@ -391,3 +391,40 @@ def test_modal_esconde_a_forma_em_multipla_e_alavancagem():
     """Bilhete de varias pernas nao tem UMA serie que o descreva."""
     src = _front("components/AnalysisModal.tsx")
     assert "data.pickId != null && data.pickType" in src
+
+
+# ────────────────────── Meta de banca removida ─────────────────────────
+
+
+def test_meta_de_banca_saiu_da_api():
+    """Era opcional, quase ninguem preenchia, e a tela ficava com um card
+    tracejado convidando pra isso. Decisao do usuario em 07/08."""
+    src = _fonte("routers/banca.py")
+    # so' pode sobrar na explicacao de por que ela saiu
+    codigo = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
+    assert "bankroll_goal" not in codigo
+
+
+def test_meta_saiu_da_tela_mas_a_coluna_fica():
+    """DROP COLUMN nao tem volta e a coluna parada nao custa nada."""
+    assert "bankroll_goal" not in _front("pages/Banca.tsx")
+    assert "bankroll_goal" not in _front("components/MonthlyCloseModal.tsx")
+    assert "bankroll_goal" in _fonte("migrations.py"), "a coluna nao devia ser dropada"
+
+
+def test_barra_da_pagina_quebra_antes_de_espremer_o_titulo():
+    """A fila de acoes e' shrink-0: sem quebra, quem cede e' o titulo, que tem
+    min-w-0. Em 360px com tres botoes "Minha Banca" virava "Minha B..."."""
+    src = _front_codigo("components/PageShell.tsx")
+    assert "flex flex-wrap items-center justify-between" in src
+    assert "ml-auto" in src
+
+
+def test_zerar_mes_mantem_o_texto_no_celular():
+    """Seta circular sozinha le como "recarregar" -- ambiguidade dessas num
+    botao sem volta e' armadilha, e o publico e' mobile."""
+    src = _front_codigo("pages/Banca.tsx")
+    i = src.index("setShowReset(true)")
+    trecho = src[i:i + 700]
+    assert "Zerar mês" in trecho
+    assert "hidden sm:inline" not in trecho, "o texto nao pode sumir no celular"

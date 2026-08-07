@@ -34,8 +34,12 @@ def _check_banca_rate(user_id: int) -> None:
 
 
 class BancaSetup(BaseModel):
+    # `bankroll_goal` saiu em 2026-08-07, por decisao do usuario: meta era
+    # opcional, quase ninguem preenchia e a tela ficava com um card vazio
+    # convidando pra isso. A COLUNA continua no banco, sem DROP -- ela e'
+    # inofensiva parada e apagar coluna nao tem volta. Nada mais le nem
+    # escreve nela.
     bankroll_start: float
-    bankroll_goal: Optional[float] = None
     unit_value: Optional[float] = None  # R$ por unidade; None = manter atual
     monthly_close_month_key: Optional[str] = None  # 'YYYY-MM'; presente quando vem do fechamento mensal
 
@@ -430,10 +434,9 @@ def get_banca(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT bankroll_start, bankroll_goal, unit_value, last_manual_setup_month FROM user_banca WHERE user_id = %s", (user_id,))
+        cur.execute("SELECT bankroll_start, unit_value, last_manual_setup_month FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
-        bankroll_goal  = float(row["bankroll_goal"]) if row and row["bankroll_goal"] else None
         unit_value = float(row["unit_value"]) if row and row["unit_value"] else 1.0
         can_configure = not (row and row["last_manual_setup_month"] == _current_month_key())
 
@@ -627,7 +630,6 @@ def get_banca(
 
         return {
             "bankroll_start":       bankroll_start,
-            "bankroll_goal":        bankroll_goal,
             "bankroll_current":     bankroll_current_real,
             "unit_value":           unit_value,
             "can_configure":        can_configure,
@@ -663,7 +665,6 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
     _check_banca_rate(current_user["id"])
     if body.bankroll_start <= 0:
         raise HTTPException(400, "Banca deve ser maior que zero.")
-    if body.bankroll_goal is not None and body.bankroll_goal <= body.bankroll_start:
         raise HTTPException(400, "Meta deve ser maior que a banca inicial.")
     if body.unit_value is not None and body.unit_value <= 0:
         raise HTTPException(400, "Valor da unidade deve ser maior que zero.")
@@ -746,15 +747,14 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
 
         new_last_manual_month = _current_month_key() if manual_setup else None
         cur.execute("""
-            INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value, last_manual_setup_month)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO user_banca (user_id, bankroll_start, unit_value, last_manual_setup_month)
+            VALUES (%s, %s, %s, %s)
             ON CONFLICT (user_id) DO UPDATE
                 SET bankroll_start = EXCLUDED.bankroll_start,
-                    bankroll_goal  = EXCLUDED.bankroll_goal,
                     unit_value     = COALESCE(EXCLUDED.unit_value, user_banca.unit_value),
                     last_manual_setup_month = COALESCE(EXCLUDED.last_manual_setup_month, user_banca.last_manual_setup_month),
                     updated_at     = NOW()
-        """, (user_id, body.bankroll_start, body.bankroll_goal, body.unit_value, new_last_manual_month))
+        """, (user_id, body.bankroll_start, body.unit_value, new_last_manual_month))
         conn.commit()
         return {"ok": True}
     finally:
@@ -781,10 +781,9 @@ def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current
         # negativa (numero virtual, mas exibido/usado pra calculos futuros).
         cur.execute("SELECT pg_advisory_xact_lock(%s)", (user_id,))
 
-        cur.execute("SELECT bankroll_start, bankroll_goal, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        cur.execute("SELECT bankroll_start, unit_value FROM user_banca WHERE user_id = %s", (user_id,))
         row = cur.fetchone()
         bankroll_start = float(row["bankroll_start"]) if row else 100.0
-        bankroll_goal  = float(row["bankroll_goal"]) if row and row["bankroll_goal"] else None
         unit_value     = float(row["unit_value"])     if row and row["unit_value"] else 1.0
 
         bankroll_current = _compute_bankroll_current(cur, user_id, bankroll_start, unit_value)
@@ -799,12 +798,12 @@ def withdraw_banca(body: BancaWithdraw, current_user: dict = Depends(get_current
         """, (user_id, body.amount, bankroll_current, new_start))
 
         cur.execute("""
-            INSERT INTO user_banca (user_id, bankroll_start, bankroll_goal, unit_value)
-            VALUES (%s, %s, %s, %s)
+            INSERT INTO user_banca (user_id, bankroll_start, unit_value)
+            VALUES (%s, %s, %s)
             ON CONFLICT (user_id) DO UPDATE
                 SET bankroll_start = EXCLUDED.bankroll_start,
                     updated_at     = NOW()
-        """, (user_id, new_start, bankroll_goal, unit_value))
+        """, (user_id, new_start, unit_value))
         conn.commit()
         return {"ok": True, "bankroll_start": new_start}
     finally:
