@@ -25,6 +25,18 @@ def _front(caminho: str) -> str:
         return f.read()
 
 
+def _front_codigo(caminho: str) -> str:
+    """Fonte do componente SEM comentario.
+
+    Mesma armadilha que _codigo resolve do lado do Python: uma asserção de
+    ausência ("nao pode ter max-w-6xl") passa a falhar quando o comentario
+    EXPLICA que aquilo foi removido. O teste tem que ler codigo, nao prosa.
+    """
+    src = _front(caminho)
+    src = re.sub(r"/\*.*?\*/", "", src, flags=re.DOTALL)   # bloco e JSX {/* */}
+    return re.sub(r"(?<!:)//[^\n]*", "", src)              # linha, poupando URL
+
+
 def _codigo(caminho: str, nome: str) -> str:
     """Fonte de uma funcao, SEM a docstring.
 
@@ -51,7 +63,7 @@ def test_fila_da_home_nao_depende_de_sessao():
     Ela lia GET /api/fixtures/today, que exige login: pro publico da Home o
     resultado era sempre 401, e a faixa nunca aparecia pra ninguem deslogado.
     """
-    src = _front("home/NextGames.tsx")
+    src = _front_codigo("home/NextGames.tsx")
     assert "/public/next-fixtures" in src
     assert "/fixtures/today" not in src
 
@@ -166,11 +178,88 @@ def test_bundle_com_hash_nao_revalida_a_cada_carregamento():
 
 
 def test_ligas_da_home_sao_buscadas_uma_vez_so():
-    """A Home monta duas fitas de ligas; cada uma disparava a sua propria
+    """A Home montava duas fitas de ligas; cada uma disparava a sua propria
     chamada pra mesma lista."""
     src = _front("components/LeagueMarquee.tsx")
     assert "_leaguesPromise" in src
     assert src.count("api.get(") == 1
+
+
+# ──────────────────────── Fitas que passam sozinhas ────────────────────
+
+
+def test_fita_nao_repete_item_pra_encher_o_trilho():
+    """A lista era duplicada ate passar de 12 itens, entao com 8 ligas a mesma
+    liga saia quatro vezes -- as vezes duas delas visiveis juntas."""
+    src = _front_codigo("components/LeagueMarquee.tsx")
+    assert "Math.ceil(12" not in src
+    assert ".flat()" not in src
+    # cada liga entra uma vez: o map e' direto sobre a lista da API
+    assert "leagues.map(" in src
+
+
+def test_home_tem_uma_fita_de_ligas_so():
+    """Duas fitas cruzadas rodando a MESMA lista poem toda liga duas vezes na
+    tela ao mesmo tempo, uma indo e outra voltando."""
+    src = _front_codigo("home/Leagues.tsx")
+    assert src.count("<LeagueMarquee") == 1
+    assert "reverse" not in src
+
+
+def test_fita_decide_sozinha_se_anda():
+    """Quem chamava e' que resolvia encher o trilho. A decisao passa a ser do
+    Marquee, que mede: nao coube, anda; coube, fica parado e centralizado."""
+    src = _front("components/ui/Marquee.tsx")
+    assert "ResizeObserver" in src
+    assert "scrollWidth" in src
+    assert "prefers-reduced-motion" in src
+
+
+def test_fita_usa_padding_e_nao_gap_entre_itens():
+    """Com `gap`, o ultimo item de cada copia nao ganha vao depois dele e o
+    -50% da animacao cai meio espacamento fora -- a emenda salta a cada volta.
+    """
+    src = _front_codigo("components/ui/Marquee.tsx")
+    assert "spacing = 'pr-8'" in src
+    assert "gap-8" not in src
+
+
+def test_carrossel_de_jogos_nao_repete_jogo():
+    src = _front("home/NextGames.tsx")
+    assert "games.map(" in src
+    assert "Marquee" in src
+
+
+# ──────────────────────── Largura de aplicativo ────────────────────────
+
+
+def test_existe_degrau_de_largura_cheia():
+    src = _front("components/PageShell.tsx")
+    assert "full: 'max-w-none" in src
+    # o padding vem junto da largura, senao o conteudo encosta na borda do monitor
+    assert "lg:px-8" in src
+
+
+def test_telas_de_dado_usam_a_largura_cheia():
+    for pagina in ("Picks", "Banca", "MeusPicks", "Estatisticas", "Admin"):
+        src = _front(f"pages/{pagina}.tsx")
+        assert 'width="full"' in src, f"{pagina} ficou preso na largura antiga"
+
+
+def test_grade_de_picks_ganha_coluna_em_tela_larga():
+    """Largura cheia sem coluna nova so' faz o card inchar: em 1900px, duas
+    colunas dariam 900px por card."""
+    src = _front("pages/Picks.tsx")
+    assert "xl:grid-cols-3" in src
+    assert "md:grid-cols-2" in src
+
+
+def test_barra_do_app_acompanha_a_largura_do_conteudo():
+    """Barra presa em max-w-6xl com conteudo esticado desenha uma moldura
+    invisivel em volta de nada."""
+    src = _front_codigo("components/Navbar.tsx")
+    assert "max-w-6xl" not in src
+    assert "lg:px-8" in src
 
 
 if __name__ == "__main__":

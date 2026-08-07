@@ -60,25 +60,25 @@ export default function LeagueMarquee({
     return () => { vivo = false }
   }, [])
 
-  // Com poucas ligas o trilho não preenche a largura e a emenda entre as duas
-  // cópias aparece como um salto. Repetir até passar de 12 itens resolve.
   if (leagues.length === 0) return null
-  const items = leagues.length >= 12
-    ? leagues
-    : Array.from({ length: Math.ceil(12 / leagues.length) }, () => leagues).flat()
 
+  /*
+   * Cada liga entra uma vez, e só.
+   *
+   * Antes a lista era repetida até passar de 12 itens, pra tapar um salto na
+   * emenda da fita. Com 8 ligas cadastradas isso punha a mesma liga quatro
+   * vezes no trilho · às vezes duas delas visíveis lado a lado, o que lia como
+   * cobertura inflada de propósito. O salto era defeito do Marquee e foi
+   * corrigido lá; aqui não sobrou motivo para repetir nada.
+   */
   return (
     <Marquee
       reverse={reverse}
       className={cn('py-2', className)}
-      items={items.map((lg, i) => (
-        <div
-          key={`${lg.league_id}-${i}`}
-          className="flex items-center gap-2.5 px-1"
-          /* A fita já lista as ligas em texto pra quem lê a tela; repetir a
-             lista duplicada só faria o leitor anunciar tudo duas vezes. */
-          aria-hidden={i >= leagues.length ? 'true' : undefined}
-        >
+      spacing="pr-8"
+      speed={40}
+      items={leagues.map(lg => (
+        <div key={lg.league_id} className="flex items-center gap-2.5 px-1">
           <img
             src={lg.logo_url}
             alt=""
@@ -87,7 +87,7 @@ export default function LeagueMarquee({
             loading="lazy"
             /* Sem grayscale: o escudo em cor é o que o olho reconhece, e era
                justamente isso que a fita apagava. */
-            className="w-[26px] h-[26px] object-contain shrink-0" 
+            className="w-[26px] h-[26px] object-contain shrink-0"
             onError={e => (e.currentTarget.style.display = 'none')}
           />
           <span className="text-xs font-medium text-ink-3 whitespace-nowrap">{lg.name}</span>

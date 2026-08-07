@@ -348,7 +348,7 @@ export default function Admin() {
   const paymentsPage_ = payments.slice(paymentsPageSafe * PAYMENTS_PER_PAGE, (paymentsPageSafe + 1) * PAYMENTS_PER_PAGE)
 
   if (loading) return (
-    <PageShell title="Painel Admin" noindex width="admin" footer={false}>
+    <PageShell title="Painel Admin" noindex width="full" footer={false}>
       <SpinnerBlock />
     </PageShell>
   )
@@ -357,7 +357,7 @@ export default function Admin() {
     <PageShell
       title="Painel Admin"
       noindex
-      width="admin"
+      width="full"
       bar={{
         back: '/picks',
         title: 'Painel Admin',

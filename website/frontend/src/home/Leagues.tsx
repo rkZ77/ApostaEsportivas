@@ -7,9 +7,16 @@ import LeagueMarquee from '../components/LeagueMarquee'
  * Estava no rodapé e aparecia nas 23 telas, inclusive pra quem já assinou.
  * É argumento de venda, então o lugar dela é aqui, uma vez só.
  *
- * Duas fitas em direções opostas: uma só, sozinha na largura da tela, lê como
- * banner de patrocinador. Cruzadas, o movimento fica claramente decorativo e
- * o olho para nos escudos em vez de tentar acompanhar a rolagem.
+ * Uma fita só, com cada liga uma vez.
+ *
+ * Eram duas cruzadas, em sentidos opostos, e cada uma rodava a lista inteira ·
+ * ou seja, toda liga aparecia duas vezes na tela ao mesmo tempo, uma indo e
+ * outra voltando. Somado à repetição que a fita fazia por dentro pra encher o
+ * trilho, a mesma liga chegava a sair seis vezes. Lido de fora, isso não passa
+ * a impressão de cobertura ampla: passa a de lista curta sendo esticada.
+ *
+ * Com uma fita só e a lista inteira nela, o trilho fica mais largo e a rolagem
+ * tem mais chance de acontecer de verdade, em vez de ser preenchimento.
  */
 export default function Leagues() {
   return (
@@ -21,10 +28,7 @@ export default function Leagues() {
         />
       </div>
 
-      <div className="space-y-3">
-        <LeagueMarquee />
-        <LeagueMarquee reverse />
-      </div>
+      <LeagueMarquee />
     </section>
   )
 }
