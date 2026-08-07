@@ -209,14 +209,33 @@ export default function MeusPicks() {
         back: true,
         title: 'Meus Picks',
         sub: 'Suas apostas pendentes e resolvidas',
-        actions: (mesAtual?.apostas ?? 0) > 0 ? (
-          /* No celular some o ÍCONE, nunca o texto: seta circular sozinha lê
-             como "recarregar", e ambiguidade dessas num botão sem volta é
-             armadilha. O clique aqui só ABRE o aviso · nada é apagado nele. */
+        /*
+         * Aparece pra quem tem aposta registrada, mesmo que nenhuma seja do
+         * mês corrente · nesse caso vem desabilitado, dizendo por quê.
+         *
+         * A regra anterior escondia o botão quando o mês estava vazio, e isso
+         * dava um efeito perverso: logo depois de zerar, que é justamente
+         * quando se volta pra conferir se funcionou, ele sumia. Controle que
+         * desaparece sem explicação confunde mais do que controle desabilitado
+         * que diz o motivo.
+         *
+         * Some de vez só pra quem nunca registrou nada: aí não é falta de
+         * explicação, é função que ainda não faz sentido existir.
+         *
+         * No celular some o ÍCONE, nunca o texto: seta circular sozinha lê
+         * como "recarregar", e ambiguidade dessas num botão sem volta é
+         * armadilha. O clique aqui só ABRE o aviso · nada é apagado nele.
+         */
+        actions: (data?.entries?.length ?? 0) > 0 ? (
           <button
             onClick={() => setShowReset(true)}
-            title={`Tirar as ${mesAtual!.apostas} apostas de ${mesAtual!.label} da banca`}
-            className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-red-400 border border-line-strong hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
+            disabled={(mesAtual?.apostas ?? 0) === 0}
+            title={
+              (mesAtual?.apostas ?? 0) > 0
+                ? `Tirar as ${mesAtual!.apostas} apostas de ${mesAtual!.label} da banca`
+                : `Nenhuma aposta registrada em ${mesAtual?.label ?? 'no mês atual'}`
+            }
+            className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 enabled:hover:text-red-400 border border-line-strong enabled:hover:border-red-500/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px] disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
             Zerar mês
