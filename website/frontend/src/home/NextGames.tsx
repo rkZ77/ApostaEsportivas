@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import api from '../services/api'
+import { Check } from 'lucide-react'
 import { LiveDot, Marquee, Skeleton } from '../components/ui'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 
@@ -39,6 +40,9 @@ interface UpcomingFixture {
   league_name: string
   /** Horário de Brasília SEM fuso: "2026-08-07T21:30:00". */
   match_datetime: string
+  /** Já saiu pick para esta partida. NUNCA vem o mercado junto. */
+  has_pick?: boolean
+  pick_type?: 'vip' | 'free' | null
 }
 
 /** Hoje em Brasília, "YYYY-MM-DD". en-CA é o locale que devolve nessa ordem. */
@@ -78,7 +82,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
 
   return (
     <article
-      className="shrink-0 w-[164px] sm:w-[176px] bg-surface-0 border border-line rounded-lg p-3
+      className="shrink-0 w-[196px] sm:w-[212px] bg-surface-0 border border-line rounded-lg p-3
                  hover:border-line-strong transition-colors duration-1 ease-smooth"
     >
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -100,8 +104,8 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
           { id: game.away_team_id, nome: game.away_team },
         ].map(({ id, nome }) => (
           <div key={nome} className="flex items-center gap-2 min-w-0">
-            <TeamLogo id={id} name={nome} size={18} />
-            <span className="text-xs text-ink-1 font-medium truncate">{nome}</span>
+            <TeamLogo id={id} name={nome} size={20} />
+            <span className="text-sm text-ink-1 font-medium truncate">{nome}</span>
           </div>
         ))}
       </div>
@@ -109,6 +113,33 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
       <div className="flex items-center gap-1.5 mt-3 pt-2.5 border-t border-line/60 min-w-0">
         <LeagueLogo id={game.league_id} name={game.league_name} />
         <span className="text-[10px] text-ink-4 truncate">{game.league_name}</span>
+      </div>
+
+      {/*
+        Estado da análise.
+        
+        Diz SE saiu pick, nunca QUAL · o mercado é o que a Dica do Dia esconde
+        atrás de cadastro três blocos acima nesta mesma página, e entregá-lo
+        aqui de graça esvaziaria os dois.
+
+        Sem pick, o rótulo é "na fila" e o card já mostra o dia do jogo logo
+        acima. Nenhum horário de publicação é prometido: não existe um fixo, e
+        prometer o que não se cumpre custa mais caro que não avisar.
+      */}
+      <div className="mt-2 flex items-center gap-1.5">
+        {game.has_pick ? (
+          <>
+            <Check className="w-3 h-3 text-accent shrink-0" />
+            <span className="text-[10px] font-semibold text-accent">
+              {game.pick_type === 'free' ? 'Pick grátis publicado' : 'Pick publicado'}
+            </span>
+          </>
+        ) : (
+          <>
+            <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-ink-4 shrink-0" />
+            <span className="text-[10px] text-ink-4">Análise na fila</span>
+          </>
+        )}
       </div>
     </article>
   )
@@ -130,7 +161,7 @@ export default function NextGames() {
       <div className="-mx-4 sm:mx-0">
         <div className="flex gap-3 overflow-hidden px-4 sm:px-0">
           {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-[148px] w-[164px] sm:w-[176px] shrink-0" />
+            <Skeleton key={i} className="h-[148px] w-[196px] sm:w-[212px] shrink-0" />
           ))}
         </div>
       </div>

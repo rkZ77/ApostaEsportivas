@@ -140,8 +140,11 @@
      Vocabulario tirado da pagina de Resultados, que e' a referencia aprovada.
      A Landing tinha 5 paddings verticais e 6 larguras de container; aqui vira
      um par so'. */
+  /* Um degrau acima do que era (max-w-5xl). A Home e as páginas públicas já
+     seguem o padrão certo · faixa de fundo de ponta a ponta, texto preso na
+     medida de leitura · então aqui não se solta, só se abre um pouco. */
   .shell {
-    @apply max-w-5xl mx-auto px-4;
+    @apply max-w-6xl mx-auto px-4;
   }
   /* Conteudo de leitura/placar, onde linha longa atrapalha em vez de ajudar */
   .shell-narrow {

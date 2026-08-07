@@ -462,21 +462,28 @@ export default function Banca() {
               </button>
             )}
 
-            {/* Gráfico de evolução */}
-            {chartData.length >= 2 && (
-              <div className="card p-5">
-                <div className="flex items-center justify-between mb-4">
-                  <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
-                  <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                    {fmtSigned(data?.total_pnl ?? 0)}
-                  </span>
-                </div>
-                <ProfitChart data={chartData} unit="R$" />
-              </div>
-            )}
+            {/*
+              Painel: gráfico à esquerda, sequência e distribuição à direita.
+              Empilhados, os três ocupavam três telas de rolagem numa página que
+              agora tem largura de sobra · e o gráfico, sozinho na faixa toda,
+              era o que mais crescia. Lado a lado, a leitura fecha num golpe:
+              a curva, o momento e o saldo por tipo de resultado.
+              Abaixo de xl volta a empilhar, que é o certo no celular.
+            */}
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
 
-            {/* Streak + Distribuição */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Gráfico de evolução */}
+              {chartData.length >= 2 && (
+                <div className="card p-5 xl:col-span-2">
+                  <div className="flex items-center justify-between mb-4">
+                    <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
+                    <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      {fmtSigned(data?.total_pnl ?? 0)}
+                    </span>
+                  </div>
+                  <ProfitChart data={chartData} unit="R$" height={240} />
+                </div>
+              )}
 
               {/* Streak pessoal */}
               <div className="card p-5">

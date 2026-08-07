@@ -1,5 +1,7 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { cn } from '../lib/cn'
+import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
@@ -19,7 +21,7 @@ const planBadge: Record<string, string> = {
   admin: 'badge-admin',
 }
 
-export default function Navbar() {
+export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
   const { user, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
@@ -67,13 +69,16 @@ export default function Navbar() {
   return (
     <>
       <nav className="bg-surface-0 border-b border-line sticky top-0 z-50">
-        {/* Sem max-w: a barra vai de borda a borda, como em qualquer aplicativo.
-            Presa em max-w-6xl, ela ficava flutuando no meio de uma tela larga
-            com o logo longe da esquerda · e agora que o conteúdo estica, a
-            barra estreita passaria a desenhar uma moldura invisível em volta
-            de nada. O padding cresce junto com o do PageShell pra logo e
-            avatar caírem na mesma coluna do conteúdo. */}
-        <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+        {/* O FUNDO da barra vai sempre de ponta a ponta · é ele que segura a
+            borda inferior atravessando a tela. Já o CONTEÚDO dela (logo, links,
+            avatar) alinha com a coluna da página, e é por isso que a largura
+            desce como propriedade: numa tela de app o logo encosta na borda,
+            nos Termos ele cai na mesma vertical do primeiro parágrafo.
+
+            Fixa em max-w-6xl, como era, a barra ficava desalinhada nos dois
+            sentidos ao mesmo tempo · sobrando nas telas estreitas e boiando no
+            meio das largas. */}
+        <div className={cn('mx-auto h-16 flex items-center justify-between', PAGE_WIDTH[width])}>
 
           {/* Marca. Escudo menor que antes (40px o fazia dominar o conjunto,
               e nesse tamanho o texto do anel dele já era ilegível de qualquer

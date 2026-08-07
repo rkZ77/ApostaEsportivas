@@ -272,7 +272,7 @@ export default function Profile() {
       title="Meu Perfil"
       description="Gerencie suas informações, senha, avatar e preferências de conta."
       noindex
-      width="narrow"
+      width="default"
       bar={{ back: true, title: 'Meu Perfil', sub: 'Gerencie suas informações e preferências' }}
       mainClassName="space-y-6"
     >

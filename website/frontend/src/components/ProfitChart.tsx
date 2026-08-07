@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 interface DayData {
@@ -16,8 +16,41 @@ function niceStep(range: number): number {
   return mag * 10
 }
 
-export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; unit?: string }) {
+export default function ProfitChart({
+  data,
+  unit = 'u',
+  /** Altura em pixels. Fixa de propósito · ver o comentário do viewBox. */
+  height = 220,
+}: {
+  data: DayData[]
+  unit?: string
+  height?: number
+}) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const caixa = useRef<HTMLDivElement>(null)
+  const [larguraMedida, setLarguraMedida] = useState(0)
+
+  /*
+   * O viewBox acompanha a largura real, e a altura é fixa.
+   *
+   * Era `viewBox="0 0 600 200"` com `h-auto`: a proporção ficava presa em 3:1
+   * e a altura crescia junto com a largura. Numa faixa de 1800px o gráfico
+   * virava um paredão de 600px de altura, mais alto que a tela do celular ·
+   * apareceu assim que as páginas passaram a ocupar o monitor inteiro.
+   *
+   * Medindo, cada unidade do viewBox vale um pixel de tela: nada é escalado,
+   * então o texto dos eixos sai no tamanho declarado em vez de esticar junto
+   * com a largura, e a linha mantém a espessura em qualquer monitor.
+   */
+  useEffect(() => {
+    const el = caixa.current
+    if (!el) return
+    const medir = () => setLarguraMedida(el.clientWidth)
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   if (!data || data.length < 2) return null
 
@@ -26,7 +59,9 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
   const points = sorted.map(d => { cum += Number(d.profit); return cum })
   const dates  = sorted.map(d => d.match_date)
 
-  const W = 600, H = 200
+  // Antes da primeira medida, 600 mantém o desenho válido no render inicial.
+  const W = larguraMedida || 600
+  const H = height
   const PL = 56, PR = 16, PT = 16, PB = 28
   const innerW = W - PL - PR
   const innerH = H - PT - PB
@@ -49,8 +84,15 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
     yTicks.push(parseFloat(v.toFixed(10)))
   }
 
-  // X-axis ticks · máximo 6 labels espaçadas uniformemente
-  const maxXTicks = Math.min(6, points.length)
+  /*
+   * Rótulos do eixo X · um a cada ~110px, não seis fixos.
+   *
+   * Com a largura travada em 600 dava para chutar um número; agora que o
+   * gráfico ocupa a tela, seis datas em 1700px deixavam quase 300px de vazio
+   * entre uma e outra. O piso de 2 é obrigatório: a conta abaixo divide por
+   * (maxXTicks - 1).
+   */
+  const maxXTicks = Math.max(2, Math.min(Math.floor(innerW / 110), points.length))
   const xTicks = Array.from({ length: maxXTicks }, (_, i) =>
     Math.round(i * (points.length - 1) / (maxXTicks - 1))
   )
@@ -87,11 +129,12 @@ export default function ProfitChart({ data, unit = 'u' }: { data: DayData[]; uni
   const hv = hoverIdx !== null ? points[hoverIdx] : null
 
   return (
-    <div className="w-full relative select-none">
+    <div ref={caixa} className="w-full relative select-none">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-auto"
-        preserveAspectRatio="xMidYMid meet"
+        width="100%"
+        height={H}
+        className="block"
         onMouseLeave={() => setHoverIdx(null)}
       >
         {/* Y-axis grid + labels */}

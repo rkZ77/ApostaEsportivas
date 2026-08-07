@@ -75,22 +75,22 @@ export default function LeagueMarquee({
     <Marquee
       reverse={reverse}
       className={cn('py-2', className)}
-      spacing="pr-8"
+      spacing="pr-10"
       speed={40}
       items={leagues.map(lg => (
         <div key={lg.league_id} className="flex items-center gap-2.5 px-1">
           <img
             src={lg.logo_url}
             alt=""
-            width={22}
-            height={22}
+            width={32}
+            height={32}
             loading="lazy"
             /* Sem grayscale: o escudo em cor é o que o olho reconhece, e era
                justamente isso que a fita apagava. */
-            className="w-[26px] h-[26px] object-contain shrink-0"
+            className="w-8 h-8 object-contain shrink-0"
             onError={e => (e.currentTarget.style.display = 'none')}
           />
-          <span className="text-xs font-medium text-ink-3 whitespace-nowrap">{lg.name}</span>
+          <span className="text-sm font-medium text-ink-2 whitespace-nowrap">{lg.name}</span>
         </div>
       ))}
     />
