@@ -27,7 +27,10 @@ from services.pick_engine import stats_model
 from services.pick_engine import ranking
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
-from engine_pipelines.decision_log import log_decision
+from engine_pipelines.decision_log import (
+    MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
+    log_decision, log_run, log_skip,
+)
 
 
 WC_LEAGUE_ID = 1
@@ -208,16 +211,19 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
     for fixture in fixtures:
         structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
         if not structured_odds:
+            log_skip("DICA_ENGINE", fixture, MOTIVO_SEM_ODDS)
             continue
 
         last10_home = _load_history(match_stats, fixture["home_team_id"], fixture["season"], fixture["league_id"])
         last10_away = _load_history(match_stats, fixture["away_team_id"], fixture["season"], fixture["league_id"])
         if not last10_home or not last10_away:
+            log_skip("DICA_ENGINE", fixture, MOTIVO_SEM_HISTORICO)
             continue
 
         hist_home_val = dv.validate_history(last10_home)
         hist_away_val = dv.validate_history(last10_away)
         if not hist_home_val["passed"] or not hist_away_val["passed"]:
+            log_skip("DICA_ENGINE", fixture, MOTIVO_HISTORICO_REPROVADO)
             continue
 
         profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
@@ -412,8 +418,10 @@ def run_dica_engine():
 
     result = _best_candidate_across_fixtures(fixtures, used_groups, vip_por_fixture)
     if not result:
-        print("[DICA_ENGINE] Nenhum candidato passou nos critérios mínimos (DICA_CONFIG) "
-              "ou o que sobrou repetiria um pick que o VIP ja publicou.")
+        motivo = ("nenhum candidato passou no DICA_CONFIG, ou o que sobrou repetiria "
+                  "um pick que o VIP ja publicou hoje")
+        print(f"[DICA_ENGINE] {motivo}.")
+        log_run("DICA_ENGINE", motivo)
         cur.close()
         conn.close()
         return

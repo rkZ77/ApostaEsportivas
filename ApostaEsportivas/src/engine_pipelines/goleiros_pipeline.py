@@ -45,7 +45,10 @@ from services.pick_engine.goalkeeper_model import (
 )
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
-from engine_pipelines.decision_log import log_decision
+from engine_pipelines.decision_log import (
+    MOTIVO_ERRO, MOTIVO_SEM_CANDIDATO,
+    log_decision, log_run, log_skip,
+)
 
 ODD_MIN = 1.35
 ODD_MAX = 2.00
@@ -402,14 +405,25 @@ def run_goleiros_engine():
     candidatos = []
     for fixture in fixtures:
         try:
-            candidatos.extend(_avaliar_fixture(fixture, goleiros, match_stats, odds_service))
+            do_fixture = _avaliar_fixture(fixture, goleiros, match_stats, odds_service)
         except Exception as e:
             print(f"[GOLEIROS_ENGINE] Erro no fixture {fixture['fixture_id']}: {e}")
+            log_skip("GOLEIROS_ENGINE", fixture, f"{MOTIVO_ERRO}: {e}")
+            continue
+        if do_fixture:
+            candidatos.extend(do_fixture)
+        else:
+            # Este pipeline e' o que mais precisa do registro do jogo vazio:
+            # defesa aparece em 0.86% das atuacoes, entao o dia sem pick e' o
+            # caso NORMAL. Sem esta linha nao dava pra separar "avaliou os
+            # jogos e nenhum goleiro qualificou" de "o pipeline nem rodou".
+            log_skip("GOLEIROS_ENGINE", fixture, MOTIVO_SEM_CANDIDATO)
 
     if not candidatos:
-        print("[GOLEIROS_ENGINE] Nenhum candidato passou. Lembrete: defesas "
-              "apareceram em 0.86% das atuacoes medidas -- dia sem pick e' o "
-              "normal desse mercado, nao falha.")
+        motivo = ("nenhum candidato passou (defesas aparecem em 0.86% das atuacoes "
+                  "medidas -- dia sem pick e' o normal desse mercado, nao falha)")
+        print(f"[GOLEIROS_ENGINE] {motivo.capitalize()}.")
+        log_run("GOLEIROS_ENGINE", motivo)
         cur.close()
         conn.close()
         return
