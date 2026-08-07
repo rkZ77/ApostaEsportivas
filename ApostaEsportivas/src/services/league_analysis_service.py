@@ -1,16 +1,28 @@
 ﻿import os
 import json
-from openai import OpenAI
+from anthropic import Anthropic
 from utils.db_utils import get_connection
 from dotenv import load_dotenv, find_dotenv
 
 load_dotenv(find_dotenv())
 
+# Quanto o parecer da liga pode ocupar. E' um texto curto e de formato fixo
+# (ver LEAGUE_ANALYSIS_PROMPT), entao 1500 sobra -- e max_tokens no Anthropic e'
+# obrigatorio, diferente do chat.completions que estava aqui antes.
+MAX_TOKENS = 1500
+
 
 class LeagueAnalysisService:
 
     def __init__(self):
-        self.client = OpenAI()
+        # Era OpenAI() recebendo AI_MODEL_NAME, que no .env vale
+        # "claude-sonnet-4-6": a OpenAI nao conhece esse ID, entao TODA geracao
+        # de perfil de liga estourava (atualizar_ligas.py e main.py::cmd). A
+        # mesma variavel ja' alimentava clientes Anthropic no resto do projeto
+        # (ai/dica_do_dia_pipeline.py, ai/multipla_pipeline.py) -- quem estava
+        # fora do padrao era o cliente daqui, nao o valor da variavel.
+        # Corrigido em 2026-08-07 trocando o cliente, nao o env.
+        self.client = Anthropic()
         self.model = os.getenv("AI_MODEL_NAME")
 
         self.LEAGUE_ANALYSIS_PROMPT = """
@@ -184,18 +196,19 @@ FORMATO OBRIGATÓRIO:
             "league_averages": averages
         }
 
-        messages = [
-            {"role": "user", "content": self.LEAGUE_ANALYSIS_PROMPT},
-            {"role": "user", "content": json.dumps(
-                payload, ensure_ascii=False)}
-        ]
-
-        response = self.client.chat.completions.create(
+        # As regras viram system (e' instrucao, nao conteudo do usuario) e o
+        # JSON fica no turno do usuario -- mesmo formato do gate em
+        # pick_engine/ai_review.py.
+        response = self.client.messages.create(
             model=self.model,
-            messages=messages,
+            max_tokens=MAX_TOKENS,
+            system=self.LEAGUE_ANALYSIS_PROMPT,
+            messages=[{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
         )
 
-        analysis_text = response.choices[0].message.content
+        # content pode comecar com bloco de thinking (adaptive vem ligado por
+        # padrao no Sonnet 5 / Opus 5), entao nunca indexar content[0] direto.
+        analysis_text = next((b.text for b in response.content if b.type == "text"), "")
 
         conn = get_connection()
         cur = conn.cursor()

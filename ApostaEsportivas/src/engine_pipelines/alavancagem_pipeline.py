@@ -6,11 +6,12 @@ ai/alavancagem_pipeline.py -- esse modulo instancia Anthropic() no nivel
 de modulo). Mesmo algoritmo guloso da multipla, adaptado: aceita fixtures
 de QUALQUER liga cadastrada (nao mais restrito a Copa do Mundo -- ver
 atualizacao abaixo), permite pernas do mesmo fixture ou de fixtures
-diferentes (regra original), tenta simples -> dupla -> tripla ate bater o
-alvo [1.39, 1.55] de odd combinada (2-3 pernas de odd individual bem baixa
-somando ~1.50 -- pedido explicito do usuario, 2026-07-22); so' cai pro
-fallback [1.45, 1.90] se o alvo estreito nao achar combo nenhum no dia (ver
-ODD_COMBINED_TARGET_*/ODD_COMBINED_FALLBACK_*).
+diferentes (regra original), e tenta dupla -> tripla -> simples ate bater
+[1.40, 1.55] de odd combinada. Essa faixa e' unica e nao tem fallback: os
+tres formatos validos (dois mercados no mesmo jogo, dois jogos, ou um pick
+so') sao aceitos desde que o TOTAL caia entre 1.40 e 1.55 -- pedido
+explicito do usuario (2026-08-07, depois de uma alavancagem sair @1.80 pelo
+fallback antigo [1.45, 1.90], que foi removido).
 
 Atualizacao: pipeline nasceu restrito a WC_LEAGUE_ID (so fixtures da Copa
 do Mundo, torneio concentrado que facilitava achar combos no mesmo dia).
@@ -38,24 +39,31 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
-from engine_pipelines.decision_log import log_decision
+from services.pick_engine import ranking
+from engine_pipelines.decision_log import (
+    MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
+    log_decision, log_run, log_skip,
+)
 
 
-# Alvo real da alavancagem ("odd 1.50"): 2-3 pernas de odd individual bem
-# baixa somando ~1.50 de odd combinada -- pedido explicito do usuario
-# (2026-07-22). Tentado PRIMEIRO; so cai no fallback largo abaixo se nenhum
-# combo bater essa faixa estreita no dia.
-ODD_COMBINED_TARGET_MIN = 1.39
-ODD_COMBINED_TARGET_MAX = 1.55
-
-# Fallback: mesmo range largo criado em 2026-07-21 (achado real: com poucos
-# jogos no dia, a odd individual mais barata disponivel ja passa de 1.65,
-# zerando os candidatos elegiveis o dia inteiro se so existisse a faixa
-# estreita acima). So' usado quando o alvo 1.39-1.55 nao acha combo nenhum.
-ODD_COMBINED_FALLBACK_MIN = 1.45
-ODD_COMBINED_FALLBACK_MAX = 1.90
+# Faixa da alavancagem ("odd 1.50"), unica e sem fallback: o TOTAL do bilhete
+# tem que cair aqui, seja ele dois mercados no mesmo jogo, dois jogos ou um
+# pick so'. Pedido explicito do usuario em 2026-08-07.
+#
+# O fallback [1.45, 1.90] que existia aqui foi REMOVIDO nessa mesma data. Ele
+# nasceu em 2026-07-21 pra salvar dia magro (com poucos jogos, a odd individual
+# mais barata do dia ja passa de 1.65 e zera os candidatos), mas o efeito real
+# foi publicar alavancagem @1.80 -- fora do que o produto promete. Dia sem combo
+# na faixa agora e' dia sem alavancagem, que e' a decisao correta: e' melhor nao
+# publicar do que publicar uma odd que nao e' alavancagem.
+ODD_COMBINED_MIN = 1.40
+ODD_COMBINED_MAX = 1.55
 ODD_INDIVIDUAL_MIN = 1.05
-ODD_INDIVIDUAL_MAX = 2.00  # = ODD_COMBINED_FALLBACK_MAX(1.90) + 0.10, mesma folga de sempre
+# Teto individual = teto do combinado. Perna acima de 1.55 nao entra em combo
+# nenhum: multiplicar por outra perna (>= 1.05) so' afasta mais da faixa, e
+# sozinha ela ja' estoura o teto. Antes era 2.00 (fallback 1.90 + folga), o que
+# so' servia pra carregar candidato impossivel pelo pipeline inteiro.
+ODD_INDIVIDUAL_MAX = ODD_COMBINED_MAX
 # Sem teto de fixtures desde 2026-08-05 (pedido do usuario): todos os jogos do
 # dia entram. O LIMIT 15 era heranca da era em que a IA montava a alavancagem e
 # cada fixture ia dentro do prompt ("teto de fixtures por chamada · controla
@@ -126,6 +134,28 @@ def _fixtures_with_odds_today(cur) -> list:
     ]
 
 
+def _today_used_pairs(cur) -> set:
+    """(fixture_id, familia_de_mercado) ja publicados em picks_vip/picks_free
+    hoje. Perna que caia num desses pares e' PROIBIDA, nao ultima opcao.
+
+    A multipla ja' tinha essa regra (_today_used_pairs la'), a alavancagem
+    nao -- ela so' preferia jogo livre do VIP e, quando nao achava combo,
+    reaproveitava o jogo sem olhar o mercado. O resultado em 2026-08-07 foi
+    uma alavancagem publicando o pick IDENTICO do VIP do dia.
+
+    Usa correlation_group e nao o market_type cru (a multipla usa o cru) pelo
+    mesmo motivo que a Free: "cards" e "handicap_cards" saem do mesmo dado
+    bruto, entao repetir um como se fosse outro e' o mesmo pick com outra
+    roupa. O escopo e' por JOGO: a mesma familia continua liberada em outra
+    partida, senao um bilhete de 2-3 pernas nao fecha.
+    """
+    pares = set()
+    for tabela in ("picks_vip", "picks_free"):
+        cur.execute(f"SELECT fixture_id, market_type FROM {tabela} WHERE match_date = {HOJE_BR}")
+        pares |= {(r[0], ranking.correlation_group(r[1])) for r in cur.fetchall() if r[0] and r[1]}
+    return pares
+
+
 def _load_history(match_stats: MatchStatsService, team_id: int, season: int, league_id: int) -> list:
     # Fase 1.6 (2026-07-25): jogos anteriores a uma mudanca estrutural
     # marcada (troca de tecnico/elenco relevante) nao entram no historico --
@@ -139,9 +169,10 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
     return match_stats.get_all_matches_full(team_id, season, league_id, since_date=since_date)
 
 
-def _gather_leg_candidates(fixtures: list) -> list:
-    """Roda o motor por fixture da Copa, mantem so candidatos com odd
-    individual na faixa exigida pra combos."""
+def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
+    """Roda o motor por fixture, mantem so candidatos com odd individual na
+    faixa exigida pra combos e que nao repitam pick ja publicado hoje
+    (used_pairs, ver _today_used_pairs)."""
     match_stats = MatchStatsService()
     odds_service = OddsService()
     team_stats_service = TeamStatsService()
@@ -153,16 +184,19 @@ def _gather_leg_candidates(fixtures: list) -> list:
         try:
             structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
             if not structured_odds:
+                log_skip("ALAVANCAGEM_ENGINE", fixture, MOTIVO_SEM_ODDS)
                 continue
 
             last10_home = _load_history(match_stats, fixture["home_team_id"], fixture["season"], fixture["league_id"])
             last10_away = _load_history(match_stats, fixture["away_team_id"], fixture["season"], fixture["league_id"])
             if not last10_home or not last10_away:
+                log_skip("ALAVANCAGEM_ENGINE", fixture, MOTIVO_SEM_HISTORICO)
                 continue
 
             hist_home_val = dv.validate_history(last10_home)
             hist_away_val = dv.validate_history(last10_away)
             if not hist_home_val["passed"] or not hist_away_val["passed"]:
+                log_skip("ALAVANCAGEM_ENGINE", fixture, MOTIVO_HISTORICO_REPROVADO)
                 continue
 
             profile_home = tpm.build_profile(last10_home, fixture["home_team_id"])
@@ -228,6 +262,8 @@ def _gather_leg_candidates(fixtures: list) -> list:
             for p in picks:
                 if not (ODD_INDIVIDUAL_MIN <= p["odd"] <= ODD_INDIVIDUAL_MAX):
                     continue
+                if (fixture["fixture_id"], ranking.correlation_group(p["market_type"])) in used_pairs:
+                    continue  # VIP/Free ja publicaram esse pick hoje
                 legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
 
         except Exception as e:
@@ -259,18 +295,16 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
     """Tenta dupla -> tripla -> simples (pernas podem ser do mesmo fixture
     ou de fixtures diferentes) ate o produto real das odds cair em
     [odd_min, odd_max]. Rejeita combo com todas as pernas do mesmo
-    market_type. Faixa recebida por parametro pra permitir tentar o alvo
-    estreito primeiro e cair pro fallback largo depois (ver
-    run_alavancagem_engine).
+    market_type. Faixa continua por parametro pra facilitar teste, mas hoje
+    so' existe uma: [ODD_COMBINED_MIN, ODD_COMBINED_MAX].
 
     A ORDEM importa e ja' foi um bug: com (1, 2, 3), uma perna unica de odd
-    1.40 sempre cabia no alvo [1.39, 1.55] e vencia antes de qualquer combo
-    ser testado -- as 30 alavancagens geradas em producao ate 2026-08-02
-    sairam TODAS como 'simples', contra o que o modulo documenta como pedido
-    explicito do usuario ("2-3 pernas de odd individual bem baixa somando
-    ~1.50", 2026-07-22). Uma aposta unica de odd 1.40 nao e' alavancagem.
-    Simples continua no fim como ultimo recurso: em dia magro, e' melhor
-    entregar uma perna do que nao entregar nada."""
+    1.40 sempre cabia na faixa e vencia antes de qualquer combo ser testado
+    -- as 30 alavancagens geradas em producao ate 2026-08-02 sairam TODAS
+    como 'simples'. Os tres formatos sao validos (o usuario confirmou em
+    2026-08-07 que "somente um pick" tambem serve), mas combo e' o formato
+    preferido do produto, entao simples fica por ultimo: e' o que se entrega
+    quando nenhuma dupla ou tripla fecha na faixa."""
     pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
 
     for combo_size in (2, 3, 1):
@@ -368,9 +402,17 @@ def run_alavancagem_engine():
         conn.close()
         return
 
-    legs = _gather_leg_candidates(fixtures)
+    used_pairs = _today_used_pairs(cur)
+    if used_pairs:
+        print(f"[ALAVANCAGEM_ENGINE] {len(used_pairs)} pick(s) de VIP/Free bloqueado(s) hoje "
+              f"(mesmo jogo + mesma familia de mercado).")
+
+    legs = _gather_leg_candidates(fixtures, used_pairs)
     if not legs:
-        print("[ALAVANCAGEM_ENGINE] Nenhum candidato elegível com odd individual na faixa.")
+        motivo = ("nenhum candidato com odd individual na faixa que ja nao tenha "
+                  "saido em VIP/Free hoje")
+        print(f"[ALAVANCAGEM_ENGINE] {motivo}.")
+        log_run("ALAVANCAGEM_ENGINE", motivo)
         cur.close()
         conn.close()
         return
@@ -387,17 +429,19 @@ def run_alavancagem_engine():
 
     result = None
     for rotulo, pool in tentativas:
-        result = _find_combo(pool, ODD_COMBINED_TARGET_MIN, ODD_COMBINED_TARGET_MAX)
-        if not result:
-            result = _find_combo(pool, ODD_COMBINED_FALLBACK_MIN, ODD_COMBINED_FALLBACK_MAX)
+        result = _find_combo(pool, ODD_COMBINED_MIN, ODD_COMBINED_MAX)
         if result:
             if rotulo != "jogos livres do VIP":
                 print("[ALAVANCAGEM_ENGINE] Sem combo possivel so' com jogo livre · "
-                      "reaproveitando jogo que o VIP ja usou hoje.")
+                      "reaproveitando jogo que o VIP ja usou hoje (com outro mercado: "
+                      "o pick do VIP em si ja foi bloqueado antes).")
             break
 
     if not result:
-        print(f"[ALAVANCAGEM_ENGINE] Nenhuma combinação bateu nem o alvo [{ODD_COMBINED_TARGET_MIN}, {ODD_COMBINED_TARGET_MAX}] nem o fallback [{ODD_COMBINED_FALLBACK_MIN}, {ODD_COMBINED_FALLBACK_MAX}].")
+        motivo = (f"nenhuma combinacao caiu na faixa [{ODD_COMBINED_MIN}, {ODD_COMBINED_MAX}] "
+                  f"(nao existe mais fallback de odd mais alta)")
+        print(f"[ALAVANCAGEM_ENGINE] {motivo}.")
+        log_run("ALAVANCAGEM_ENGINE", motivo)
         cur.close()
         conn.close()
         return
