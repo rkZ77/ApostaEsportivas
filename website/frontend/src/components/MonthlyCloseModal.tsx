@@ -129,7 +129,6 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     try {
       await api.post('/banca/setup', {
         bankroll_start: data.bankroll_current,
-        bankroll_goal: null,
         unit_value: data.unit_value,
         monthly_close_month_key: data.month_key,
       })
@@ -149,7 +148,6 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     try {
       await api.post('/banca/setup', {
         bankroll_start: value,
-        bankroll_goal: null,
         unit_value: data.unit_value,
         monthly_close_month_key: data.month_key,
       })

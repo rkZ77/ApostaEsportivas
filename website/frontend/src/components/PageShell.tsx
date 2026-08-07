@@ -84,7 +84,14 @@ export default function PageShell({
 
       {bar && (
         <div className="border-b border-line">
-          <div className={cn('mx-auto py-4 flex items-center justify-between gap-3', PAGE_WIDTH[width])}>
+          {/* Quebra em duas linhas antes de espremer o título.
+              A fila de ações é `shrink-0`, então ela nunca cede largura · sem
+              `flex-wrap` aqui, quem cedia era o título, que tem `min-w-0` e
+              truncava. Numa tela de 360px com três botões (a Banca tem
+              Sacar, Configurar e Zerar mês) "Minha Banca" virava "Minha B...".
+              Com a quebra, as ações descem inteiras para a linha de baixo e o
+              título fica legível, que é a ordem certa de prioridade. */}
+          <div className={cn('mx-auto py-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2', PAGE_WIDTH[width])}>
             <div className="flex items-center gap-3 min-w-0">
               {bar.back && <BackButton to={typeof bar.back === 'string' ? bar.back : undefined} />}
               <div className="min-w-0">
@@ -96,8 +103,11 @@ export default function PageShell({
                 )}
               </div>
             </div>
+            {/* `ml-auto` mantém as ações à direita também quando elas descem
+                para a própria linha · `justify-between` do pai só alinha itens
+                que dividem a MESMA linha. */}
             {bar.actions && (
-              <div className="flex items-center gap-2 flex-wrap justify-end shrink-0">
+              <div className="flex items-center gap-2 flex-wrap justify-end shrink-0 ml-auto">
                 {bar.actions}
               </div>
             )}
