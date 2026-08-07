@@ -186,6 +186,7 @@ export default function PerformanceIA() {
       title="Performance da IA"
       description="Assertividade, ROI e valor de fechamento dos picks gerados pela IA. Histórico público e auditável."
       canonical="https://pickia.com.br/performance"
+      width="full"
       bar={{
         back: true,
         title: 'Performance da IA',

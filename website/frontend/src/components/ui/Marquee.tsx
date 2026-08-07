@@ -4,38 +4,40 @@ import { cn } from '../../lib/cn'
 /*
  * Fita que passa sozinha.
  *
- * Três coisas que a versão anterior errava, todas visíveis na Home:
+ * A fita SEMPRE anda. Para isso o trilho precisa ser mais largo que a tela, e
+ * é aí que mora a única decisão difícil deste arquivo: quando a lista real não
+ * enche a largura, alguém tem que repetir alguma coisa.
  *
- * 1. Repetia item para encher o trilho. Quem chamava é que resolvia isso ·
- *    LeagueMarquee duplicava a lista até passar de 12 itens, então com 8 ligas
- *    cadastradas a mesma liga aparecia quatro vezes, às vezes duas delas na
- *    tela ao mesmo tempo. Lido de fora, parecia catálogo inflado. Agora, se a
- *    lista não enche a largura, a fita simplesmente NÃO anda: fica parada e
- *    centralizada, com cada item uma vez só. Não ter o que rolar é uma
- *    informação legítima, não um defeito para disfarçar.
+ * A versão original repetia até passar de 12 itens · número escolhido no olho.
+ * Com 8 ligas cadastradas isso punha a mesma liga quatro vezes no trilho, às
+ * vezes duas delas visíveis juntas, e lia como lista curta sendo esticada.
+ * Depois eu tentei o extremo oposto: não coube, não anda. Também errado ·
+ * o movimento é parte do desenho, e a fita parada vira uma lista torta.
  *
- * 2. A emenda dava um salto. Os dois trilhos eram irmãos num flex com `gap`, e
- *    cada um animava -50% da PRÓPRIA largura · ou seja, um quarto do conjunto,
- *    e ainda por cima sem contar o vão entre eles. A cada volta a fita pulava.
- *    O espaçamento agora é `padding-right` em cada item, e não `gap` no flex:
- *    assim a largura total é exatamente duas cópias, e -50% cai no ponto certo.
- *    Com `gap`, o último item de cada cópia não ganha vão depois dele e a conta
- *    fecha sempre meio espaçamento errada.
+ * O certo é repetir o MÍNIMO que faz o trilho cobrir a tela, medido, e nunca
+ * mais que isso. Com lista longa esse mínimo é 1, ou seja, nenhuma repetição:
+ * cada item aparece uma vez e o resto já está fora da tela. Com lista curta,
+ * repete duas vezes em vez de quatro. A conta é `ceil(largura da caixa /
+ * largura da lista)`, e ela se refaz sozinha quando a tela muda de tamanho.
  *
- * 3. A velocidade dependia da quantidade. Era 28s para dar a volta, fossem 5
- *    itens ou 30 · quanto mais item, mais rápido corria. Agora o parâmetro é
- *    pixels por segundo e a duração sai da largura medida.
+ * Duas armadilhas que já custaram caro aqui:
  *
- * A segunda cópia existe só enquanto a fita anda, e é ela que faz o laço não
- * ter fim. Como o trilho só anda quando é mais largo que a tela, as duas
- * cópias do mesmo item nunca ficam visíveis ao mesmo tempo.
+ * · A emenda saltava a cada volta. Os dois trilhos eram irmãos num flex com
+ *   `gap`, e cada um animava -50% da PRÓPRIA largura · um quarto do conjunto,
+ *   e ainda sem contar o vão entre eles. O espaçamento é `padding-right` em
+ *   cada item justamente por isso: assim a largura total é exatamente duas
+ *   cópias e o -50% cai no ponto certo. Com `gap`, o último item de cada cópia
+ *   não ganha vão depois dele e a conta fecha meio espaçamento errada.
+ *
+ * · A velocidade dependia da quantidade · eram 28s para dar a volta, fossem 5
+ *   itens ou 30. O parâmetro é pixel por segundo e a duração sai da medida.
  */
 
 export default function Marquee({
   items,
   className,
   reverse = false,
-  /** Espaçamento entre itens, como classe de padding-right (ver comentário 2). */
+  /** Espaçamento entre itens, como classe de padding-right (ver acima). */
   spacing = 'pr-8',
   /** Pixels por segundo. Item grande pede mais lento: o olho precisa ler. */
   speed = 50,
@@ -48,25 +50,35 @@ export default function Marquee({
 }) {
   const caixa = useRef<HTMLDivElement>(null)
   const copia = useRef<HTMLDivElement>(null)
-  const [cabe, setCabe] = useState(true)
-  const [andando, setAndando] = useState(false)
+  const [vezes, setVezes] = useState(1)
   const [duracao, setDuracao] = useState(0)
+  const [semMovimento, setSemMovimento] = useState(false)
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const ler = () => setSemMovimento(mq.matches)
+    ler()
+    mq.addEventListener('change', ler)
+    return () => mq.removeEventListener('change', ler)
+  }, [])
 
   useEffect(() => {
     const c = caixa.current
     const um = copia.current
     if (!c || !um) return
 
-    const semMovimento = window.matchMedia('(prefers-reduced-motion: reduce)').matches
-
-    // Mede sempre a PRIMEIRA cópia, nunca o trilho: o trilho dobra de tamanho
-    // quando a animação liga, e medir ele realimentaria a própria decisão.
+    /*
+     * Mede a primeira cópia e divide por `vezes` para chegar na largura de uma
+     * passada da lista. Medir o trilho inteiro não serviria: ele dobra quando
+     * a segunda cópia entra, e a medida realimentaria a própria decisão.
+     */
     const medir = () => {
-      const largura = um.scrollWidth
-      const coube = largura <= c.clientWidth + 4
-      setDuracao(largura / speed)
-      setCabe(coube)
-      setAndando(!semMovimento && !coube)
+      const copiaLarga = um.scrollWidth
+      if (copiaLarga === 0) return
+      const umaLista = copiaLarga / vezes
+      const precisa = Math.max(1, Math.ceil((c.clientWidth + 1) / umaLista))
+      setDuracao((umaLista * precisa) / speed)
+      setVezes(v => (v === precisa ? v : precisa))
     }
 
     medir()
@@ -74,18 +86,36 @@ export default function Marquee({
     ro.observe(c)
     ro.observe(um)
     return () => ro.disconnect()
-  }, [items.length, speed])
+  }, [items.length, speed, vezes])
 
+  const andando = !semMovimento && duracao > 0
   const linha = 'flex w-max items-center'
+
+  // A lista repetida `vezes`. O que passa de uma volta é enfeite de largura,
+  // não conteúdo novo · o leitor de tela anuncia a lista uma vez só.
+  const umaCopia = (chave: string, oculto: boolean, ref?: React.Ref<HTMLDivElement>) => (
+    <div ref={ref} className={cn(linha, 'shrink-0')} aria-hidden={oculto || undefined}>
+      {Array.from({ length: vezes }).map((_, volta) =>
+        items.map((item, i) => (
+          <div
+            key={`${chave}-${volta}-${i}`}
+            className={cn('shrink-0', spacing, !andando && 'last:pr-0')}
+            aria-hidden={volta > 0 || undefined}
+          >
+            {item}
+          </div>
+        )),
+      )}
+    </div>
+  )
 
   return (
     <div
       ref={caixa}
       className={cn(
         'group relative flex overflow-hidden',
-        // Maior que a tela e parada · só acontece com movimento reduzido
-        // ligado no sistema. Aí ainda tem que dar para arrastar com o dedo.
-        !cabe && !andando && 'overflow-x-auto scrollbar-none',
+        // Movimento reduzido no sistema: fica parada e arrastável com o dedo.
+        !andando && 'overflow-x-auto scrollbar-none',
         andando && '[mask-image:linear-gradient(90deg,transparent,black_6%,black_94%,transparent)]',
         className,
       )}
@@ -98,28 +128,11 @@ export default function Marquee({
           // Pausa sob o cursor e sob o dedo: no toque o :hover gruda, que aqui
           // é justamente o comportamento útil · quem encostou quer ler.
           andando && 'group-hover:[animation-play-state:paused]',
-          // Sem nada para rolar, a fita fica centrada em vez de encostada à
-          // esquerda com um vazio do lado direito.
-          cabe && 'mx-auto',
         )}
         style={andando ? { animationDuration: `${duracao}s` } : undefined}
       >
-        {/* Parada, o espaçamento do último item vira um vão morto que desloca
-            o conjunto centralizado. Andando ele é obrigatório: é o que fecha
-            a conta do -50%. */}
-        <div ref={copia} className={cn(linha, 'shrink-0')}>
-          {items.map((item, i) => (
-            <div key={`a-${i}`} className={cn('shrink-0', spacing, cabe && 'last:pr-0')}>{item}</div>
-          ))}
-        </div>
-
-        {andando && (
-          <div className={cn(linha, 'shrink-0')} aria-hidden="true">
-            {items.map((item, i) => (
-              <div key={`b-${i}`} className={cn('shrink-0', spacing)}>{item}</div>
-            ))}
-          </div>
-        )}
+        {umaCopia('a', false, copia)}
+        {andando && umaCopia('b', true)}
       </div>
     </div>
   )

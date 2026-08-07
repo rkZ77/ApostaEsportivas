@@ -133,7 +133,7 @@ export default function Planos() {
       title="Planos · Pick IA | VIP e Free para Apostas Esportivas"
       description="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias."
       canonical="https://pickia.com.br/planos"
-      width="prose"
+      width="wide"
       bar={{ back: true, title: 'Meu Plano', sub: 'Status e detalhes do seu acesso' }}
       mainClassName="space-y-6"
     >
