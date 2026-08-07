@@ -43,6 +43,11 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS home_goals_ht INTEGER;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS away_goals_ht INTEGER;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash VARCHAR(100);")
+        # Marca "esta pessoa foi pro MercadoPago". Sem isso nao da pra saber em
+        # quem vale a pena gastar consulta a API no login: e' o que permite
+        # ativar o VIP de quem pagou por boleto/Pix e so' voltou dias depois,
+        # sem varrer a base inteira nem depender do webhook.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS checkout_started_at TIMESTAMP;")
         cur.execute("UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64")
         cur.execute("UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64")
         cur.execute("UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11")
