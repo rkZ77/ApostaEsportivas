@@ -12,6 +12,12 @@ const TIP_WIDTH = 240
  * ser cortada por container com overflow-hidden (card de pick, linha de lista).
  * Abre no toque e também no hover/foco, porque a maior parte do público é
  * mobile mas quem usa teclado precisa chegar nela também.
+ *
+ * O hover só é ligado em quem realmente tem cursor. No celular o navegador
+ * dispara `mouseenter` sintético ANTES do `click` do mesmo toque: o mouseenter
+ * abria a dica e o clique, achando que ela já estava aberta, fechava de volta.
+ * O resultado era a dica piscando e sumindo · lida como "não funciona", que
+ * foi exatamente a queixa. Em toque, só o clique manda.
  */
 export default function Tooltip({
   text,
@@ -25,8 +31,17 @@ export default function Tooltip({
 }) {
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null)
+  const [temCursor, setTemCursor] = useState(false)
   const ref = useRef<HTMLSpanElement>(null)
   const id = useId()
+
+  useEffect(() => {
+    const mq = window.matchMedia('(hover: hover) and (pointer: fine)')
+    const ler = () => setTemCursor(mq.matches)
+    ler()
+    mq.addEventListener('change', ler)
+    return () => mq.removeEventListener('change', ler)
+  }, [])
 
   const place = () => {
     const el = ref.current?.firstElementChild ?? ref.current
@@ -66,10 +81,11 @@ export default function Tooltip({
       children.props.onClick?.(e)
       open ? hide() : show()
     },
-    onMouseEnter: show,
-    onMouseLeave: hide,
+    // Foco continua sempre ligado: é por ele que se chega aqui pelo teclado,
+    // em qualquer aparelho.
     onFocus: show,
     onBlur: hide,
+    ...(temCursor ? { onMouseEnter: show, onMouseLeave: hide } : null),
   })
 
   return (

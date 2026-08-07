@@ -211,12 +211,18 @@ export default function SuggestionCard({
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
-      whileTap={{ scale: 0.985 }}
+      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       /* Casca comum dos 6 tipos de card (ver .pick-card em index.css). A cor da
-         borda vem de PICK_TYPE_BORDER, que é a mesma convenção do badge. */
-      className={`pick-card group cursor-pointer ${isCopa ? 'border-yellow-500/20 hover:border-yellow-500/40' : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
+         borda vem de PICK_TYPE_BORDER, que é a mesma convenção do badge.
+
+         Cursor e levantada só existem quando há clique de verdade. O card
+         inteiro era um botão gigante que abria o detalhe, e isso disparava sem
+         querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
+         "Entenda esta análise", o coração de favorito e o ícone de informação.
+         Errar o alvo entre eles abria uma tela cheia por engano. */
+      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
     >
       {/* Header */}
@@ -385,6 +391,9 @@ export default function SuggestionCard({
         data={{
           market: translateMarket(s.market),
           line: translateLine(s.line),
+          // Crus, pra regra do mercado: explainMarket casa por chave em inglês.
+          marketRaw: s.market,
+          lineRaw: s.line,
           odd: Number(s.odd),
           confidence: s.confidence,
           probability: s.probability,

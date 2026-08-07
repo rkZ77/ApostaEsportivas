@@ -582,6 +582,9 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
         data={{
           market: translateMarket(dica.market),
           line: translateLine(dica.line),
+          // Crus, pra regra do mercado: explainMarket casa por chave em inglês.
+          marketRaw: dica.market,
+          lineRaw: dica.line,
           odd: Number(dica.odd),
           confidence: dica.confidence,
           probability: dica.probability ?? null,
@@ -720,10 +723,10 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
-      whileTap={{ scale: 0.985 }}
+      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.multipla}`}
+      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -1008,10 +1011,10 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={{ y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' }}
-      whileTap={{ scale: 0.985 }}
+      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group cursor-pointer ${PICK_TYPE_BORDER.alavancagem}`}
+      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1291,12 +1294,11 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
   }
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onOpen }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
   tipo: 'faltas' | 'goleiros'
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
-  onOpen?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
 }) {
   return (
     <div>
@@ -1337,7 +1339,6 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
               key={p.id}
               s={mercadoParaSuggestion(p, tipo)}
               banca={banca}
-              onClick={onOpen ? () => onOpen(p, tipo) : undefined}
             />
           ))}
         </div>
@@ -2123,7 +2124,7 @@ export default function Picks() {
               {today?.dica_do_dia && (
                 <section>
                   <SectionHeader color="bg-green-500" label="Pick do Dia · Free" />
-                  <PickSeguroCard dica={today.dica_do_dia} compact onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} />
+                  <PickSeguroCard dica={today.dica_do_dia} compact banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} />
                 </section>
               )}
 
@@ -2143,7 +2144,7 @@ export default function Picks() {
                       <>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                            <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
                         </motion.div>
                         {vips.length > 4 && (
@@ -2169,7 +2170,7 @@ export default function Picks() {
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
+                        {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </motion.div>
                     )}
                   </section>
@@ -2193,7 +2194,6 @@ export default function Picks() {
                       </div>
                       <AlavancagemCard
                         pick={today.alavancagem}
-                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
@@ -2225,7 +2225,6 @@ export default function Picks() {
                         key={`f-${p.id}`}
                         s={mercadoParaSuggestion(p, 'faltas')}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onClick={() => openDetail(p.id, 'faltas')}
                       />
                     ))}
                     {(today?.goleiros ?? []).map((p: MercadoPick) => (
@@ -2233,7 +2232,6 @@ export default function Picks() {
                         key={`g-${p.id}`}
                         s={mercadoParaSuggestion(p, 'goleiros')}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onClick={() => openDetail(p.id, 'goleiros')}
                       />
                     ))}
                   </div>
@@ -2283,7 +2281,7 @@ export default function Picks() {
             {todayLoading ? <PickLoading /> : (
               <div>
                 <SectionHeader color="bg-green-500" label={`Pick do Dia · ${todayDateStr}`} />
-                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} onClick={() => openDetail(today.dica_do_dia.id, 'free')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
+                {today?.dica_do_dia ? <PickSeguroCard dica={today.dica_do_dia} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(today.dica_do_dia.fixture_id)} /> : <PickSeguroEmpty />}
               </div>
             )}
 
@@ -2356,7 +2354,7 @@ export default function Picks() {
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
-                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                          <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
                       </motion.div>
                     ) : (
@@ -2413,7 +2411,7 @@ export default function Picks() {
               {!canSeeVip ? <VipLockOverlay color="blue" /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
-                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
+                    {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                   </motion.div>
                 ) : (
                   <div className="card p-8 text-center border-dashed">
@@ -2531,7 +2529,6 @@ export default function Picks() {
                     {today?.alavancagem ? (
                       <AlavancagemCard
                         pick={today.alavancagem}
-                        onClick={() => openDetail(today.alavancagem.id, 'alavancagem')}
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
@@ -2643,7 +2640,6 @@ export default function Picks() {
                               )}
                             </div>
                             <div
-                              onClick={() => openDetail(pick.id, 'alavancagem')}
                               className={`flex-1 mb-2 rounded-md border px-3 py-2.5 cursor-pointer hover:border-orange-500/40 transition-colors ${
                                 !res ? 'border-orange-500/40 bg-orange-500/5' : 'border-line bg-surface-1'
                               }`}
@@ -2734,7 +2730,6 @@ export default function Picks() {
                         picks={faltas === null ? null : faltasFiltradas}
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
                     {mercadoFiltro.categoria !== 'faltas' && (
@@ -2746,7 +2741,6 @@ export default function Picks() {
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={mercadosLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onOpen={(mp, t) => { setSelectedPickType(t); setSelectedId(mp.id) }}
                       />
                     )}
                   </>
