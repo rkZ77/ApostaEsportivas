@@ -4,7 +4,9 @@ Os dois pontos onde uma oferta real morre em silencio: a notacao do value_name
 (as casas escrevem o mesmo produto de formas diferentes) e o casamento de nome
 com `player_match_stats`. Casos tirados de dados reais de 2026-08-05.
 """
-from engine_pipelines.goleiros_pipeline import _parse_valor, _resolver_goleiro
+from engine_pipelines.goleiros_pipeline import (
+    _parse_valor, _resolver_goleiro, melhor_por_goleiro,
+)
 
 PALMEIRAS, FORTALEZA, GREMIO = 121, 154, 130
 
@@ -77,3 +79,55 @@ def test_acento_nao_atrapalha():
     base = [_gk("joao ricardo", FORTALEZA, 1)]
 
     assert _resolver_goleiro("João Ricardo", base, FORTALEZA, PALMEIRAS)["player_id"] == 1
+
+
+# --------------------------------------------------------------------------
+# Deduplicacao por goleiro (2026-08-07)
+# --------------------------------------------------------------------------
+def _cand(player_id, n_defesas, odd, edge):
+    return {
+        "goleiro": {"player_id": player_id, "player_name": f"gk-{player_id}"},
+        "n_defesas": n_defesas, "odd": odd, "edge": edge,
+    }
+
+
+def test_linhas_do_mesmo_goleiro_viram_um_pick_so():
+    """Regressao 2026-08-07: assim que o teto de odd 2.00 saiu, os jogos do dia
+    devolveram QUATRO candidatos do mesmo goleiro (4+ @ 3.75, 5+ @ 7.00, 5+ @
+    5.70 de outra casa e 6+ @ 10.50). Sao a mesma aposta em graus diferentes --
+    6+ implica 5+ implica 4+ -- e publicar os quatro multiplicaria por quatro a
+    exposicao do assinante num goleiro so'."""
+    vagner = 900
+    candidatos = [
+        _cand(vagner, 4, 3.75, 0.1005),
+        _cand(vagner, 5, 7.00, 0.1025),
+        _cand(vagner, 5, 5.70, 0.0699),
+        _cand(vagner, 6, 10.50, 0.0632),
+    ]
+
+    reduzidos = melhor_por_goleiro(candidatos)
+
+    assert len(reduzidos) == 1
+    assert reduzidos[0]["odd"] == 7.00
+    assert reduzidos[0]["n_defesas"] == 5
+
+
+def test_mesma_linha_em_duas_casas_fica_com_a_odd_maior():
+    """Este pipeline le odd RAW, entao nao tem o 'melhor preco por linha' que o
+    de faltas faz. Maior edge resolve: na mesma linha, odd maior tem edge
+    maior."""
+    reduzidos = melhor_por_goleiro([
+        _cand(900, 5, 5.70, 0.0699),
+        _cand(900, 5, 7.00, 0.1025),
+    ])
+
+    assert len(reduzidos) == 1
+    assert reduzidos[0]["odd"] == 7.00
+
+
+def test_goleiros_diferentes_continuam_sendo_dois_picks():
+    """A reducao e' por goleiro, nao por jogo: os dois goleiros da partida sao
+    apostas distintas e ambos podem sair."""
+    reduzidos = melhor_por_goleiro([_cand(900, 5, 7.00, 0.10), _cand(901, 3, 2.50, 0.08)])
+
+    assert len(reduzidos) == 2
