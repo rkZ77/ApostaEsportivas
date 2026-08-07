@@ -2,7 +2,8 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
-import PageShell, { PAGE_WIDTH } from '../components/PageShell'
+import PageShell from '../components/PageShell'
+import { PAGE_WIDTH } from '../lib/pageWidth'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
@@ -231,6 +232,7 @@ export default function Fixtures() {
       title="Jogos"
       description="Agenda dos jogos das ligas cobertas, com quais deles já têm pick da IA."
       noindex
+      width="full"
       bar={{
         back: true,
         title: 'Jogos',
@@ -255,7 +257,7 @@ export default function Fixtures() {
               ponta), então o alinhamento com o conteúdo é por conta de quem
               chama. Lendo a largura do PageShell em vez de repetir o valor,
               mudar a página de faixa não deixa a régua de abas para trás. */}
-          <div className={`mx-auto ${PAGE_WIDTH.default}`}>
+          <div className={`mx-auto ${PAGE_WIDTH.full}`}>
             {pageTab === 'jogos' && (
               <div className="py-3">
                 <DateStrip date={date} onChange={handleDateChange} />

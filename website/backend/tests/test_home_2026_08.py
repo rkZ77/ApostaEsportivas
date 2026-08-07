@@ -234,7 +234,7 @@ def test_carrossel_de_jogos_nao_repete_jogo():
 
 
 def test_existe_degrau_de_largura_cheia():
-    src = _front("components/PageShell.tsx")
+    src = _front("lib/pageWidth.ts")
     assert "full: 'max-w-none" in src
     # o padding vem junto da largura, senao o conteudo encosta na borda do monitor
     assert "lg:px-8" in src
@@ -255,11 +255,35 @@ def test_grade_de_picks_ganha_coluna_em_tela_larga():
 
 
 def test_barra_do_app_acompanha_a_largura_do_conteudo():
-    """Barra presa em max-w-6xl com conteudo esticado desenha uma moldura
-    invisivel em volta de nada."""
+    """O FUNDO da barra e' sempre cheio; o CONTEUDO segue a largura da pagina.
+
+    Fixa em max-w-6xl a barra ficava desalinhada nos dois sentidos: sobrando
+    nas telas estreitas e boiando no meio das largas.
+    """
     src = _front_codigo("components/Navbar.tsx")
     assert "max-w-6xl" not in src
-    assert "lg:px-8" in src
+    assert "PAGE_WIDTH[width]" in src
+
+    casca = _front_codigo("components/PageShell.tsx")
+    assert "<Navbar width={width} />" in casca
+
+
+def test_texto_para_ler_nao_vai_pra_largura_cheia():
+    """A medida de leitura e' o unico teto que nao se negocia: 45 a 75
+    caracteres por linha. Estas telas sao texto corrido ou formulario."""
+    for pagina, largura in (
+        ("Termos", "prose"), ("Privacidade", "prose"), ("ComoFunciona", "prose"),
+        ("Blog", "prose"), ("BlogPost", "narrow"),
+        ("Checkout", "narrow"), ("Agente", "narrow"),
+    ):
+        src = _front(f"pages/{pagina}.tsx")
+        assert f'width="{largura}"' in src, f"{pagina} devia seguir em {largura}"
+
+
+def test_grade_e_tabela_vao_pra_largura_cheia():
+    for pagina in ("Fixtures", "ResultadosPublicos", "PerformanceIA"):
+        src = _front(f"pages/{pagina}.tsx")
+        assert 'width="full"' in src, f"{pagina} ficou preso na largura antiga"
 
 
 if __name__ == "__main__":

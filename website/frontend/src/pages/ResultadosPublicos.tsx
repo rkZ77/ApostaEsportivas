@@ -9,6 +9,7 @@ import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
+import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
 import DailyGreensChart from '../components/DailyGreensChart'
@@ -173,9 +174,10 @@ export default function ResultadosPublicos() {
       title="Resultados · Pick IA"
       description="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir."
       canonical="https://pickia.com.br/resultados"
+      width="full"
       nav={user ? true : (
         <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
-          <div className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
+          <div className={`mx-auto h-14 flex items-center justify-between ${PAGE_WIDTH.full}`}>
             <Link to="/" className="font-display text-ink-1 font-semibold text-lg tracking-tight">
               Pick<span className="text-accent">IA</span>
             </Link>

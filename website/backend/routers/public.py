@@ -602,7 +602,9 @@ def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
             SELECT f.fixture_id, f.home_team, f.away_team,
                    f.home_team_id, f.away_team_id,
                    f.league_id, COALESCE(l.name, 'Liga ' || f.league_id) AS league_name,
-                   f.match_datetime
+                   f.match_datetime,
+                   EXISTS (SELECT 1 FROM picks_vip  pv WHERE pv.fixture_id = f.fixture_id) AS tem_vip,
+                   EXISTS (SELECT 1 FROM picks_free pf WHERE pf.fixture_id = f.fixture_id) AS tem_free
             FROM fixtures f
             LEFT JOIN leagues l ON l.league_id = f.league_id
             WHERE f.status IN ('NS', 'TBD')
@@ -615,6 +617,17 @@ def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
             d = dict(r)
             if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
                 d["match_datetime"] = d["match_datetime"].isoformat()
+
+            # So' a EXISTENCIA do pick, nunca o mercado.
+            #
+            # A rota e' publica: mandar market/line aqui daria de graca o que a
+            # Dica do Dia esconde atras de cadastro tres blocos acima na mesma
+            # pagina -- bastaria trocar de endpoint no DevTools. "Ja tem pick"
+            # e' chamariz; "qual e' o pick" e' o produto.
+            tem_vip  = bool(d.pop("tem_vip", False))
+            tem_free = bool(d.pop("tem_free", False))
+            d["has_pick"]  = tem_vip or tem_free
+            d["pick_type"] = "vip" if tem_vip else ("free" if tem_free else None)
             result.append(d)
         return result
     finally:

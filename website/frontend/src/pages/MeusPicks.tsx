@@ -276,15 +276,59 @@ export default function MeusPicks() {
                 : (() => { const r = monthBounds(daysBack === 'thismonth' ? 0 : -1); return allChart.filter((c: any) => c.match_date >= r.from && c.match_date <= r.to) })()
               if (chartFiltered.length < 2) return null
               const pnl = data?.total_pnl ?? 0
+
+              /*
+               * Leitura do dia a dia, tirada da mesma série do gráfico.
+               *
+               * A curva mostra para onde foi; estes três números dizem como.
+               * Saldo igual pode vir de constância ou de um dia salvando o mês,
+               * e a linha sozinha não separa os dois casos.
+               */
+              const dias = chartFiltered.map((c: any) => Number(c.profit) || 0)
+              const positivos = dias.filter((v: number) => v > 0).length
+              const melhor = chartFiltered.reduce((a: any, b: any) => (Number(b.profit) > Number(a.profit) ? b : a))
+              const pior   = chartFiltered.reduce((a: any, b: any) => (Number(b.profit) < Number(a.profit) ? b : a))
+              const diaBR  = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`
+
               return (
-                <div className="card p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-xs font-semibold text-ink-3">Evolução da Banca</h3>
-                    <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                      {fmtSigned(pnl)}
-                    </span>
+                <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
+                  <div className="card p-4 xl:col-span-2">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="text-xs font-semibold text-ink-3">Evolução da Banca</h3>
+                      <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                        {fmtSigned(pnl)}
+                      </span>
+                    </div>
+                    <ProfitChart data={chartFiltered} unit="R$" height={240} />
                   </div>
-                  <ProfitChart data={chartFiltered} unit="R$" />
+
+                  <div className="card p-4 flex flex-col">
+                    <h3 className="text-xs font-semibold text-ink-3 mb-4">Como foi por dia</h3>
+                    <dl className="flex flex-col gap-4 flex-1 justify-center">
+                      <div>
+                        <dd className="font-mono text-2xl font-black text-ink-1">
+                          {positivos}<span className="text-ink-4 text-base">/{dias.length}</span>
+                        </dd>
+                        <dt className="text-[11px] text-ink-3 mt-0.5">Dias no positivo</dt>
+                      </div>
+                      <div>
+                        <dd className="font-mono text-lg font-black text-green-500">
+                          {fmtSigned(Number(melhor.profit) || 0)}
+                        </dd>
+                        <dt className="text-[11px] text-ink-3 mt-0.5">
+                          Melhor dia · {diaBR(melhor.match_date)}
+                        </dt>
+                      </div>
+                      <div>
+                        <dd className="font-mono text-lg font-black text-red-400">
+                          {fmtSigned(Number(pior.profit) || 0)}
+                        </dd>
+                        <dt className="text-[11px] text-ink-3 mt-0.5">
+                          Pior dia · {diaBR(pior.match_date)}
+                        </dt>
+                      </div>
+                    </dl>
+                  </div>
                 </div>
               )
             })()}
