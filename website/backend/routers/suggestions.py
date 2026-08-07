@@ -5,6 +5,8 @@ import psycopg2.extras
 from database import get_connection
 from auth_utils import get_current_user, require_vip, is_vip_active
 from routers.banca import _compute_bankroll_current
+from routers.live import _stat_for_market
+import market_form
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
@@ -2158,6 +2160,104 @@ def get_goleiros(
             ORDER BY pg.match_date DESC, pg.edge DESC
         """, params)
         return _paginar(rows, offset, limit)
+    finally:
+        cur.close()
+        conn.close()
+
+
+# Tabela e nome das colunas de time por tipo de pick. Faltas e goleiros tem
+# tabela propria (pipeline proprio), free/vip usam nomes de coluna diferentes
+# pro mesmo dado -- e' o mesmo mapa que get_suggestion_detail resolve em
+# ramos separados, aqui condensado porque so' precisamos de 5 campos.
+_PICK_FONTE = {
+    "vip":      ("picks_vip",      "home_team_name", "away_team_name"),
+    "free":     ("picks_free",     "home_team",      "away_team"),
+    "faltas":   ("picks_faltas",   "home_team",      "away_team"),
+    "goleiros": ("picks_goleiros", "home_team",      "away_team"),
+}
+
+
+@router.get("/{suggestion_id}/market-form")
+def get_market_form(
+    suggestion_id: int,
+    pick_type: str = Query("vip"),
+    limit: int = Query(8, ge=3, le=15),
+    current_user: dict = Depends(get_current_user),
+):
+    """Ultimos jogos dos dois times MEDIDOS PELO MERCADO do pick.
+
+    Nao e' a forma do time (V/E/D): e' o contador que a aposta observa, jogo a
+    jogo, contra a linha do pick -- verde no que teria pago, vermelho no que
+    nao. Alimenta o bloco "Como esse mercado vem se comportando" dentro do
+    "Entenda esta analise".
+
+    A conta nao mora aqui: market_form.py monta a serie reusando
+    _stat_for_market (dispatch de familia, com as duas armadilhas de producao
+    ja resolvidas) e services/settlement.py (meia-linha asiatica, PUSH em linha
+    cheia). Ver a docstring de market_form pro porque.
+
+    Multipla e alavancagem ficam de fora: sao varias pernas de mercados
+    diferentes, entao nao existe UMA serie que descreva o bilhete. Cada perna
+    ja tem o proprio icone de regra no card.
+    """
+    fonte = _PICK_FONTE.get(pick_type)
+    if not fonte:
+        return {"available": False, "reason": "tipo sem serie unica"}
+    tabela, col_casa, col_fora = fonte
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT p.fixture_id, p.market, p.line, p.market_type,
+                   COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
+                   p.{col_casa} AS home_team, p.{col_fora} AS away_team
+              FROM {tabela} p
+         LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+             WHERE p.id = %s
+        """, (suggestion_id,))
+        pick = cur.fetchone()
+        if not pick:
+            raise HTTPException(404, "Pick nao encontrado")
+        pick = dict(pick)
+
+        # A serie fala do CONFRONTO, entao pega os jogos dos dois times. Um
+        # time so' contaria metade da historia num mercado de total.
+        ids = [t for t in (pick["home_team_id"], pick["away_team_id"]) if t]
+        if not ids:
+            return {"available": False, "reason": "pick sem times identificados"}
+
+        cur.execute("""
+            SELECT fixture_id, match_date, home_goals, away_goals,
+                   home_corners, away_corners,
+                   home_yellow_cards, away_yellow_cards,
+                   home_red_cards, away_red_cards,
+                   home_fouls, away_fouls,
+                   home_shots_on, away_shots_on
+              FROM match_statistics
+             WHERE (home_team_id = ANY(%s) OR away_team_id = ANY(%s))
+               AND status IN ('FT','AET','PEN')
+               AND fixture_id <> COALESCE(%s, -1)
+          ORDER BY match_date DESC
+             LIMIT %s
+        """, (ids, ids, pick.get("fixture_id"), limit))
+        jogos = [dict(r) for r in cur.fetchall()]
+        if not jogos:
+            return {"available": False, "reason": "sem historico"}
+
+        serie = market_form.serie_do_mercado(
+            jogos, pick["market"], pick.get("market_type"), pick["line"],
+            _stat_for_market,
+        )
+        # Sem nenhum jogo resolvido a serie nao diz nada -- resultado, BTTS,
+        # placar exato e defesas de goleiro caem aqui (nao ha contador por jogo
+        # em match_statistics pra eles). Melhor a secao sumir do que desenhar
+        # uma fileira de barras cinza.
+        if not serie["resolved"]:
+            return {"available": False, "reason": "mercado sem serie por jogo"}
+
+        return {"available": True, **serie}
     finally:
         cur.close()
         conn.close()

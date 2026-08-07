@@ -394,6 +394,8 @@ export default function SuggestionCard({
           // Crus, pra regra do mercado: explainMarket casa por chave em inglês.
           marketRaw: s.market,
           lineRaw: s.line,
+          pickId: s.id,
+          pickType,
           odd: Number(s.odd),
           confidence: s.confidence,
           probability: s.probability,
