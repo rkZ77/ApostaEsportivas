@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 
 interface DayData {
@@ -14,8 +14,35 @@ interface DayData {
 const fmtDate = (s: string) =>
   new Date(s + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 
-export default function DailyGreensChart({ data }: { data: DayData[] }) {
+export default function DailyGreensChart({
+  data,
+  /** Altura em pixels. Fixa · ver o comentário do viewBox. */
+  height = 200,
+}: {
+  data: DayData[]
+  height?: number
+}) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null)
+  const caixa = useRef<HTMLDivElement>(null)
+  const [larguraMedida, setLarguraMedida] = useState(0)
+
+  /*
+   * Mesma correção do ProfitChart: viewBox medido, altura fixa.
+   *
+   * Era `0 0 600 180` com `h-auto`, ou seja, proporção presa em 10:3. Depois
+   * que a página passou a ocupar o monitor, 1800px de largura viravam 540px de
+   * altura e as barras cresciam junto · o gráfico deixava de ser leitura de
+   * relance e virava paisagem para rolar.
+   */
+  useEffect(() => {
+    const el = caixa.current
+    if (!el) return
+    const medir = () => setLarguraMedida(el.clientWidth)
+    medir()
+    const ro = new ResizeObserver(medir)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
 
   if (!data || data.length < 2) return null
 
@@ -25,7 +52,8 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
 
   const maxTotal = Math.max(...sorted.map(d => d.total), 1)
 
-  const W = 600, H = 180
+  const W = larguraMedida || 600
+  const H = height
   const PL = 28, PR = 8, PT = 12, PB = 28
   const innerW = W - PL - PR
   const innerH = H - PT - PB
@@ -36,7 +64,7 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
   const barH   = (v: number) => (v / maxTotal) * innerH
   const barY   = (v: number) => PT + innerH - barH(v)
 
-  const maxXTicks = Math.min(7, sorted.length)
+  const maxXTicks = Math.max(2, Math.min(Math.floor(innerW / 120), sorted.length))
   const xTicks = Array.from({ length: maxXTicks }, (_, i) =>
     Math.round(i * (sorted.length - 1) / Math.max(maxXTicks - 1, 1))
   )
@@ -46,11 +74,12 @@ export default function DailyGreensChart({ data }: { data: DayData[] }) {
     ? Math.round((hovered.greens / hovered.total) * 100) : null
 
   return (
-    <div className="w-full relative select-none">
+    <div ref={caixa} className="w-full relative select-none">
       <svg
         viewBox={`0 0 ${W} ${H}`}
-        className="w-full h-auto"
-        preserveAspectRatio="xMidYMid meet"
+        width="100%"
+        height={H}
+        className="block"
         onMouseLeave={() => setHoverIdx(null)}
       >
         {/* Horizontal grid lines */}

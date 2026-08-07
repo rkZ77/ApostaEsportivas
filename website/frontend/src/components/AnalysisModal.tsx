@@ -1,6 +1,7 @@
-import { Percent, Target, TrendingUp, Scale } from 'lucide-react'
+import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
+import { explainMarket } from '../utils/marketTranslate'
 
 /*
  * "Entenda esta análise".
@@ -12,11 +13,31 @@ import { Badge } from './ui'
  * A leitura é sempre a mesma conta, e ela fica explícita no rodapé do modal:
  * vale a pena quando a nossa probabilidade é maior que a probabilidade
  * implícita na odd. Sem isso o número de EV vira só mais um selo.
+ *
+ * A explicação das REGRAS do mercado abre o modal, antes dos números. Ela
+ * existia só no ícone de informação ao lado da linha, o que colocava duas
+ * perguntas diferentes em dois lugares diferentes: "o que preciso que aconteça
+ * para ganhar" (regra) e "por que a IA acha que acontece" (análise). A
+ * primeira vem antes, porque sem ela a segunda não quer dizer nada · não
+ * adianta saber que a probabilidade é 70% sem saber 70% de quê.
+ *
+ * Continua também no ícone, que serve à leitura rápida na lista sem abrir modal.
  */
 
 export interface AnalysisData {
+  /** Já traduzido, para exibir. */
   market: string
   line?: string | null
+  /**
+   * Mercado e linha CRUS, como vieram da API ("Cards Over/Under", "Over 4.5").
+   *
+   * Separados dos traduzidos de propósito: explainMarket casa por chave em
+   * inglês, então passar "Cartões Mais/Menos" para ele não bate com nada e cai
+   * no texto genérico, em silêncio. Ausentes, a seção de regra some, que é
+   * melhor do que uma explicação vaga.
+   */
+  marketRaw?: string | null
+  lineRaw?: string | null
   odd: number
   confidence?: number | null
   probability?: number | null
@@ -76,6 +97,8 @@ export default function AnalysisModal({
   const mostraProb = ourProb ?? (conf != null ? conf : null)
   const edge = mostraProb != null ? mostraProb - implied : null
 
+  const regra = data.marketRaw ? explainMarket(data.marketRaw, data.lineRaw ?? undefined) : ''
+
   return (
     <Modal
       onClose={onClose}
@@ -84,6 +107,17 @@ export default function AnalysisModal({
       description={`${data.market}${data.line ? ` · ${data.line}` : ''}`}
     >
       <div className="p-5 space-y-5">
+
+        {/* A regra do mercado, antes de qualquer número. */}
+        {regra && (
+          <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <BookOpen className="w-3.5 h-3.5 text-accent" />
+              <span className="panel-label">Como este mercado funciona</span>
+            </div>
+            <p className="text-xs text-ink-2 leading-relaxed">{regra}</p>
+          </div>
+        )}
 
         {/*
           * Uma probabilidade so'.

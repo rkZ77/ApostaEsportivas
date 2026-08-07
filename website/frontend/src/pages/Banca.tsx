@@ -470,7 +470,7 @@ export default function Banca() {
               a curva, o momento e o saldo por tipo de resultado.
               Abaixo de xl volta a empilhar, que é o certo no celular.
             */}
-            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+            <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-stretch">
 
               {/* Gráfico de evolução */}
               {chartData.length >= 2 && (
@@ -484,6 +484,12 @@ export default function Banca() {
                   <ProfitChart data={chartData} unit="R$" height={240} />
                 </div>
               )}
+
+              {/* Coluna da direita: os dois painéis empilhados, ocupando a mesma
+                  altura do gráfico ao lado. Separados, a sequência ficava com
+                  meio metro de vazio embaixo e a distribuição sobrava solta na
+                  linha seguinte, estreita. */}
+              <div className="flex flex-col gap-4">
 
               {/* Streak pessoal */}
               <div className="card p-5">
@@ -528,6 +534,7 @@ export default function Banca() {
                     ))}
                   </div>
                 )}
+              </div>
               </div>
             </div>
 
