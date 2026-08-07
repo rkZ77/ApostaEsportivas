@@ -490,64 +490,74 @@ class SyncPaymentBody(BaseModel):
 
 @router.post("/sync-payment")
 async def sync_payment(body: SyncPaymentBody, current_user: dict = Depends(require_admin)):
-    """Reprocessa um pagamento do MercadoPago pelo ID · ativa VIP manualmente se aprovado."""
+    """Reprocessa um pagamento do MercadoPago pelo ID · ativa VIP manualmente se aprovado.
+
+    A regra de ativação (estender em vez de sobrescrever, creditar indicação,
+    mandar e-mail) vive em routers/payments.py e é a mesma do webhook. Esta
+    rota já teve a sua própria cópia dela, que silenciosamente esquecia o
+    crédito de indicação e o e-mail.
+    """
     import mercadopago as _mp
-    from datetime import timedelta, timezone
+    from routers.payments import _apply_approved_payment
+
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
         raise HTTPException(500, "MERCADOPAGO_ACCESS_TOKEN não configurado")
 
     sdk = _mp.SDK(access_token)
-    info = sdk.payment().get(body.mp_payment_id)
-    payment = info.get("response", {})
+    payment = (sdk.payment().get(body.mp_payment_id) or {}).get("response") or {}
 
-    status = payment.get("status")
-    if status != "approved":
-        raise HTTPException(400, f"Pagamento não aprovado (status={status})")
+    resultado = _apply_approved_payment(payment, "admin_sync")
+    if resultado["status"] == "not_approved":
+        raise HTTPException(400, f"Pagamento não aprovado ({resultado['detail']})")
+    if resultado["status"] == "error":
+        raise HTTPException(400, resultado["detail"])
+    if resultado["status"] == "duplicate":
+        return {"ok": True, "duplicate": True, "detail": "Pagamento já estava registrado."}
 
-    external_ref = payment.get("external_reference", "")
-    parts = external_ref.split(":", 1)
-    if len(parts) != 2:
-        raise HTTPException(400, f"external_reference inválido: {external_ref}")
+    return {
+        "ok":   True,
+        "user": {"id": resultado["user_id"], "name": resultado["user_name"], "email": resultado["user_email"]},
+        "plan": resultado["plan"],
+        "expires_at": resultado["expires_at"].isoformat(),
+    }
 
-    user_id, plan_key = parts
-    PLANS_DAYS = {"mensal": 30, "trimestral": 90, "semestral": 180, "anual": 365}
-    days = PLANS_DAYS.get(plan_key)
-    if not days:
-        raise HTTPException(400, f"Plano inválido: {plan_key}")
 
-    amount         = float(payment.get("transaction_amount") or 0)
-    payment_method = payment.get("payment_type_id") or "unknown"
+class ReconcileBody(BaseModel):
+    days: int = 30
 
+
+@router.post("/reconcile-payments")
+async def reconcile_payments(body: ReconcileBody, current_user: dict = Depends(require_admin)):
+    """Varre os pagamentos aprovados no MercadoPago e ativa o que faltou.
+
+    Rede de segurança do dinheiro: não depende de webhook nenhum, pergunta ao
+    MercadoPago o que ele registrou e compara com a tabela `payments`. Quem já
+    está lá cai no ON CONFLICT, então rodar de novo não estende VIP de ninguém.
+    """
+    from routers.payments import _reconcile
+
+    dias = max(1, min(int(body.days or 30), 180))
+    return _reconcile(f"NOW-{dias}DAYS", "admin_reconcile")
+
+
+@router.get("/payment-events")
+def admin_payment_events(current_user: dict = Depends(require_admin)):
+    """Últimas tentativas de processar pagamento · inclui as recusadas.
+
+    É aqui que aparece webhook rejeitado por assinatura, que antes não deixava
+    rastro em lugar nenhum.
+    """
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Mesmo criterio de GET /payments/webhook: estende a partir do maior
-        # entre "agora" e o expires_at atual, nao sobrescreve (perderia dias
-        # restantes se o usuario ja tiver VIP ativo).
-        cur.execute("SELECT expires_at FROM users WHERE id = %s", (int(user_id),))
-        row_exp = cur.fetchone()
-        current_expires = row_exp["expires_at"] if row_exp else None  # naive UTC
-        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-        base = current_expires if (current_expires and current_expires > now_naive) else now_naive
-        expires_at = base + timedelta(days=days)
-
-        cur.execute(
-            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s RETURNING id, name, email",
-            (expires_at, plan_key, int(user_id)),
-        )
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(404, f"Usuário {user_id} não encontrado")
-
-        cur.execute(
-            """INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
-               VALUES (%s, %s, %s, %s, 'approved', %s, %s)
-               ON CONFLICT (mp_payment_id) DO NOTHING""",
-            (int(user_id), str(body.mp_payment_id), plan_key, amount, expires_at, payment_method),
-        )
-        conn.commit()
-        return {"ok": True, "user": dict(row), "plan": plan_key, "expires_at": expires_at.isoformat()}
+        cur.execute("""
+            SELECT source, status, mp_payment_id, detail, created_at
+            FROM payment_events
+            ORDER BY created_at DESC
+            LIMIT 50
+        """)
+        return [dict(r) for r in cur.fetchall()]
     finally:
         cur.close()
         conn.close()

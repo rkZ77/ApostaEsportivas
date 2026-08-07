@@ -2,6 +2,7 @@ import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
 import { explainMarket } from '../utils/marketTranslate'
+import MarketForm from './MarketForm'
 
 /*
  * "Entenda esta análise".
@@ -44,6 +45,15 @@ export interface AnalysisData {
   ev?: number | null
   reasoning?: string | null
   updatedAt?: string | null
+  /**
+   * Identidade do pick, pra buscar a forma recente do mercado.
+   *
+   * Opcionais porque múltipla e alavancagem não têm UMA série que descreva o
+   * bilhete: são pernas de mercados diferentes. Sem eles o bloco some, em vez
+   * de desenhar a série de uma perna e passar por ser a do conjunto.
+   */
+  pickId?: number
+  pickType?: string
 }
 
 /** Probabilidade que a casa está embutindo na odd. */
@@ -179,6 +189,11 @@ export default function AnalysisModal({
               )}
             </p>
           </div>
+        )}
+
+        {/* O que aconteceu de verdade, antes do que a IA escreveu. */}
+        {data.pickId != null && data.pickType && (
+          <MarketForm pickId={data.pickId} pickType={data.pickType} />
         )}
 
         {/* Texto do motor */}

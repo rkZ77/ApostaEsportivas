@@ -338,3 +338,56 @@ def test_aviso_mostra_o_que_some_antes_de_confirmar():
     assert "Continua como está" in src
     # o numero do aviso vem do mesmo calculo do servidor, nao da lista filtrada
     assert "/banca/monthly-close" in src
+
+# ─────────────── Forma recente do mercado (Entenda esta analise) ───────
+
+
+def test_forma_do_mercado_nao_inventa_mapeamento_de_familia():
+    """Qual contador cada familia observa e' pergunta ja respondida em
+    routers/live.py::_stat_for_market -- e mal respondida custou dois bugs de
+    producao (chutes totais somados como chutes no alvo, mercado de time
+    resolvido pelo total). Reusar, nao reescrever."""
+    src = _fonte("routers/suggestions.py")
+    assert "from routers.live import _stat_for_market" in src
+    forma = _fonte("market_form.py")
+    # o modulo recebe a funcao, nao reimplementa o dispatch
+    assert "stat_para_mercado" in forma
+    for palavra in ("Corner Kicks", "Shots on Goal"):
+        assert palavra in forma, "adaptador precisa falar o nome da API"
+
+
+def test_forma_do_mercado_liquida_pelo_settlement():
+    """`valor > linha` pareceria inofensivo e erraria em meia-linha asiatica e
+    em PUSH de linha cheia -- as duas ja resolvidas no settlement."""
+    src = _fonte("market_form.py")
+    assert "settlement.settle_over_under" in src
+    assert "settlement.parse_line" in src
+
+
+def test_forma_do_mercado_nao_transforma_ausencia_em_zero():
+    """O RED de 05/08 nasceu de tratar "nao sei" como "zero"."""
+    src = _fonte("market_form.py")
+    assert '.get(col_casa, 0)' not in src
+    assert '.get(col_fora, 0)' not in src
+    assert "is not None" in src
+    # jogo sem dado nao pode entrar na taxa
+    assert 'i["result"] is not None' in src
+
+
+def test_forma_some_quando_o_mercado_nao_tem_serie_por_jogo():
+    """Resultado, BTTS e placar exato nao tem contador em match_statistics.
+    Melhor a secao sumir do que desenhar barra cinza sem significado."""
+    corpo = _codigo("routers/suggestions.py", "get_market_form")
+    assert 'if not serie["resolved"]' in corpo
+    assert '"available": False' in corpo
+
+
+def test_forma_do_mercado_exige_sessao():
+    corpo = _codigo("routers/suggestions.py", "get_market_form")
+    assert "Depends(get_current_user)" in corpo
+
+
+def test_modal_esconde_a_forma_em_multipla_e_alavancagem():
+    """Bilhete de varias pernas nao tem UMA serie que o descreva."""
+    src = _front("components/AnalysisModal.tsx")
+    assert "data.pickId != null && data.pickType" in src

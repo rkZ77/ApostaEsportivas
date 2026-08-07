@@ -11,54 +11,97 @@ import api from '../services/api'
    período, desconto) vem de usePlans. */
 const POPULAR_PLAN = 'trimestral'
 
+const WA_SUPORTE =
+  'https://wa.me/5517992323916?text=Ol%C3%A1!%20Paguei%20a%20assinatura%20e%20meu%20acesso%20VIP%20n%C3%A3o%20foi%20liberado.'
+
 function SuccessPage() {
   const navigate = useNavigate()
   const { refreshUser } = useAuth()
-  const [ready, setReady] = useState(false)
+  const [estado, setEstado] = useState<'ativando' | 'ativo' | 'sem_confirmacao'>('ativando')
 
+  /* Não espera o webhook de braços cruzados: pergunta ao MercadoPago pelo
+     /payments/confirm, que ativa o VIP na hora se o pagamento estiver
+     aprovado. Foi exatamente o que faltou em 07/08/2026, quando o webhook
+     começou a rejeitar as notificações e quem pagou continuou free sem
+     ninguém perceber. */
   useEffect(() => {
-    let attempts = 0
-    const MAX = 15
-    let cancelled = false
+    let tentativas = 0
+    const MAX = 12
+    let cancelado = false
 
-    const poll = async () => {
-      if (cancelled) return
+    const virouVip = (plano?: string) => plano === 'vip' || plano === 'admin'
+
+    const verificar = async () => {
+      if (cancelado) return
       try {
+        // A cada três voltas, cobra a confirmação do MercadoPago de novo:
+        // boleto e Pix podem levar alguns segundos para aprovar.
+        if (tentativas % 3 === 0) {
+          await api.post('/payments/confirm').catch(() => {})
+        }
         // Busca o plano direto da API para evitar stale closure
         const { data } = await api.get('/auth/me')
         await refreshUser()
-        if (data.plan === 'vip' || data.plan === 'admin') {
-          setReady(true)
+        if (virouVip(data.plan)) {
+          setEstado('ativo')
           return
         }
       } catch { /* ignora */ }
-      attempts++
-      if (attempts >= MAX) { setReady(true); return }
-      setTimeout(poll, 2000)
+      tentativas++
+      if (tentativas >= MAX) { setEstado('sem_confirmacao'); return }
+      setTimeout(verificar, 2000)
     }
 
-    // Primeira tentativa após 2s (tempo mínimo para webhook chegar)
-    const t = setTimeout(poll, 2000)
-    return () => { cancelled = true; clearTimeout(t) }
+    verificar()
+    return () => { cancelado = true }
   }, [])
+
+  const confirmado = estado === 'ativo'
 
   return (
     <div className="min-h-screen bg-surface-0 flex items-center justify-center px-4">
-      <div className="text-center space-y-4">
+      <div className="text-center space-y-4 max-w-sm">
         <motion.div
           initial={{ scale: 0.5, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: 'spring', stiffness: 400, damping: 20 }}
-          className="w-20 h-20 rounded-full bg-green-500/10 border border-green-500/30 flex items-center justify-center mx-auto"
+          className={`w-20 h-20 rounded-full flex items-center justify-center mx-auto border
+            ${estado === 'sem_confirmacao'
+              ? 'bg-yellow-500/10 border-yellow-500/30'
+              : 'bg-green-500/10 border-green-500/30'}`}
         >
-          <CheckCircle className="w-10 h-10 text-green-400" />
+          {estado === 'sem_confirmacao'
+            ? <Clock className="w-9 h-9 text-yellow-400" />
+            : <CheckCircle className="w-10 h-10 text-green-400" />}
         </motion.div>
-        <h1 className="text-2xl font-bold text-ink-1">Pagamento aprovado!</h1>
-        <p className="text-ink-2">Seu plano VIP foi ativado. Bem-vindo!</p>
-        {!ready
-          ? <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso VIP…</p>
-          : <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
-        }
+
+        {estado === 'sem_confirmacao' ? (
+          <>
+            <h1 className="text-2xl font-bold text-ink-1">Pagamento recebido</h1>
+            <p className="text-ink-2">
+              Ainda não conseguimos confirmar a liberação do seu acesso. Se já foi debitado,
+              fale com o suporte que a gente ativa na hora.
+            </p>
+            <div className="flex flex-col gap-2 pt-1">
+              <a href={WA_SUPORTE} target="_blank" rel="noopener noreferrer"
+                 className="btn-primary px-8 py-3">Falar com o suporte</a>
+              <button onClick={() => navigate('/picks')} className="btn-ghost px-8 py-3">
+                Voltar aos Picks
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <h1 className="text-2xl font-bold text-ink-1">Pagamento aprovado!</h1>
+            <p className="text-ink-2">
+              {confirmado ? 'Seu plano VIP foi ativado. Bem-vindo!' : 'Estamos liberando seu acesso.'}
+            </p>
+            {confirmado
+              ? <button onClick={() => navigate('/picks')} className="btn-primary px-8 py-3">Ver Picks VIP</button>
+              : <p className="text-ink-4 text-sm animate-pulse">Ativando seu acesso VIP…</p>
+            }
+          </>
+        )}
       </div>
     </div>
   )
@@ -96,6 +139,9 @@ function PendingPage() {
   const checkPayment = async () => {
     setChecking(true)
     try {
+      // Pergunta ao MercadoPago antes de olhar o plano: se o Pix já compensou,
+      // o acesso é liberado neste clique, sem depender do webhook.
+      await api.post('/payments/confirm').catch(() => {})
       const { data } = await api.get('/auth/me')
       await refreshUser()
       if (data.plan === 'vip' || data.plan === 'admin') setActivated(true)

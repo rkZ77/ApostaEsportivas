@@ -585,6 +585,8 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
           // Crus, pra regra do mercado: explainMarket casa por chave em inglês.
           marketRaw: dica.market,
           lineRaw: dica.line,
+          pickId: dica.id,
+          pickType: 'free',
           odd: Number(dica.odd),
           confidence: dica.confidence,
           probability: dica.probability ?? null,
