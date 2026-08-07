@@ -299,11 +299,17 @@ export default function Banca() {
         ),
         actions: (
           <>
-            <Button to="/meus-picks" variant="ghost" size="sm" className="hidden sm:inline-flex">
-              Meus Picks
-            </Button>
             <Button variant="ghost" size="sm" onClick={() => navigate('/banca/saque')}>
               Sacar
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowSetup(true)}
+              className={data?.can_configure === false ? 'opacity-50' : undefined}
+              title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
+            >
+              Configurar
             </Button>
           </>
         ),

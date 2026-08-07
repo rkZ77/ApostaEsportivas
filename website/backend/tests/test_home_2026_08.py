@@ -435,7 +435,31 @@ def test_zerar_mes_mantem_o_texto_no_celular():
     """Seta circular sozinha le como "recarregar" -- ambiguidade dessas num
     botao sem volta e' armadilha, e o publico e' mobile."""
     src = _front_codigo("pages/MeusPicks.tsx")
+    # Recorta o ELEMENTO inteiro, nao uma janela de N caracteres: a primeira
+    # versao usava 700 e quebrou assim que o botao ganhou `disabled` e um
+    # `title` mais longo -- o teste falhava sem nada ter piorado na tela.
     i = src.index("setShowReset(true)")
-    trecho = src[i:i + 700]
-    assert "Zerar mês" in trecho
-    assert "hidden sm:inline" not in trecho, "o texto nao pode sumir no celular"
+    botao = src[i:src.index("</button>", i)]
+    assert "Zerar mês" in botao
+    assert "hidden sm:inline" not in botao, "o texto nao pode sumir no celular"
+
+
+def test_zerar_mes_desabilita_em_vez_de_sumir():
+    """Escondido quando o mes esta vazio, o botao sumia justamente depois de
+    zerar -- que e' quando se volta pra conferir se funcionou. Controle que
+    desaparece sem explicacao confunde mais que controle desabilitado."""
+    src = _front_codigo("pages/MeusPicks.tsx")
+    i = src.index("setShowReset(true)")
+    botao = src[i:src.index("</button>", i)]
+    assert "disabled={(mesAtual?.apostas ?? 0) === 0}" in botao
+    assert "Nenhuma aposta registrada em" in botao
+
+
+def test_banca_mantem_sacar_e_configurar():
+    """Pedido do usuario: a barra da Banca fica so' com esses dois."""
+    src = _front_codigo("pages/Banca.tsx")
+    inicio = src.index("actions: (")
+    barra = src[inicio:src.index("}}", inicio)]
+    assert "Sacar" in barra
+    assert "Configurar" in barra
+    assert "Meus Picks" not in barra
