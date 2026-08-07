@@ -12,6 +12,7 @@ from engine_pipelines.alavancagem_pipeline import (
     _find_combo,
     _today_used_pairs,
 )
+from services.pick_engine.config import ALAVANCAGEM_CONFIG
 
 
 class _CursorFake:
@@ -39,6 +40,34 @@ def _leg(odd, market_type, final_score, confidence=0.80, taxa_real=0.75, fixture
         "taxa_real": taxa_real,
         "_fixture": {"fixture_id": fixture_id},
     }
+
+
+def test_dupla_cabe_na_faixa_com_o_piso_de_odd_do_motor():
+    """O invariante que estava quebrado sem ninguem ver, ate 2026-08-07.
+
+    A alavancagem herdava o min_odd=1.39 do motor (piso do VIP). A dupla mais
+    barata possivel virava 1.39 * 1.39 = 1.93, ja' acima do teto de 1.55 do
+    bilhete: NENHUMA dupla cabia na faixa, nunca. Nao era dupla rara, era
+    aritmeticamente impossivel -- e foi por isso que as 30 alavancagens geradas
+    ate essa data sairam todas 'simples'. Trocar a ordem de tentativa pra
+    (2, 3, 1) em 02/08 nao resolveu porque nao havia dupla pra testar.
+
+    Este teste liga as duas pontas (config do motor e faixa do bilhete) pra que
+    subir o piso de volta, ou baixar o teto, quebre aqui em vez de silenciosamente
+    zerar a dupla de novo em producao.
+    """
+    dupla_mais_barata = ALAVANCAGEM_CONFIG.min_odd ** 2
+
+    assert dupla_mais_barata <= ODD_COMBINED_MAX, (
+        f"dupla minima {dupla_mais_barata:.4f} nao cabe em "
+        f"[{ODD_COMBINED_MIN}, {ODD_COMBINED_MAX}] -- alavancagem volta a ser so' simples"
+    )
+
+
+def test_teto_da_perna_nao_passa_do_teto_do_bilhete():
+    """Perna acima do teto do combinado nao entra em combo nenhum: sozinha ja'
+    estoura a faixa, e multiplicada por outra (>= 1.05) so' se afasta mais."""
+    assert ALAVANCAGEM_CONFIG.max_odd <= ODD_COMBINED_MAX
 
 
 def test_prefere_combo_de_duas_pernas_a_uma_simples():

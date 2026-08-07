@@ -32,6 +32,7 @@ from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
 from services.pick_engine.ai_review import review_gate
+from services.pick_engine.config import ALAVANCAGEM_CONFIG
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
 from services.pick_engine import team_strength as ts
@@ -246,8 +247,12 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             )
             match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
 
+            # ALAVANCAGEM_CONFIG e nao a config padrao: o piso de 1.39 do motor
+            # tornava a dupla aritmeticamente impossivel (1.39 * 1.39 = 1.93, ja'
+            # acima do teto de 1.55 do bilhete). Ver o comentario da constante.
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
+                config=ALAVANCAGEM_CONFIG,
                 context_data=context_data, matchup_data=matchup, team_strength_data=team_strength_data,
                 referee_stats=referee_stats, league_stats=league_stats,
                 league_id=fixture["league_id"], data_quality_score=quality["score"],
@@ -256,7 +261,7 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
             )
-            picks = rank_market_candidates(candidates)
+            picks = rank_market_candidates(candidates, config=ALAVANCAGEM_CONFIG)
             log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
 
             for p in picks:

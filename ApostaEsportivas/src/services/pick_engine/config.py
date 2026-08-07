@@ -164,3 +164,24 @@ DEFAULT_CONFIG = PickEngineConfig()
 # de 15.0): pick gratuita precisa ser mais "segura" que VIP, odd muito alta
 # tipicamente reflete evento menos provavel (decisao explicita do usuario).
 DICA_CONFIG = PickEngineConfig(min_confidence=0.72, min_odd=1.39, max_odd=1.90)
+
+# Alavancagem precisa do EXATO oposto do resto do motor: perna barata.
+#
+# O produto e' "2-3 mercados que juntos dao 1.40 a 1.55". Com o piso padrao de
+# 1.39, isso nunca foi alcancavel -- a dupla mais barata possivel era
+# 1.39 * 1.39 = 1.93, ja' acima do teto de 1.55. Nao e' que dupla fosse rara:
+# era aritmeticamente impossivel, e por isso TODAS as 30 alavancagens geradas
+# ate 2026-08-07 sairam 'simples'. A troca da ordem de tentativa pra (2, 3, 1)
+# em 2026-08-02 nao mudou nada porque nao havia dupla pra testar.
+#
+# Pra uma dupla fechar em [1.40, 1.55], cada perna precisa ficar por volta de
+# 1.18-1.25 -- regiao que o motor descartava antes de a alavancagem enxergar.
+#
+# max_odd=1.55 casa com ODD_INDIVIDUAL_MAX do pipeline: perna acima do teto do
+# combinado nao entra em combo nenhum, entao nem vale gerar candidato.
+#
+# O que protege a perna barata de virar lixo NAO e' o piso de odd, e' o min_edge
+# de 0.05 que continua valendo: numa odd de 1.20 ele exige taxa real de 87.5%,
+# e numa de 1.28 exige 82%. Odd baixa so' passa quando a probabilidade e'
+# realmente alta -- que e' exatamente a premissa da alavancagem.
+ALAVANCAGEM_CONFIG = PickEngineConfig(min_odd=1.10, max_odd=1.55)
