@@ -82,9 +82,14 @@
       Não recolocar preço aqui.
     -->
 
-    <!-- Google Analytics -->
+    <!--
+      Google Analytics. O segundo script estava sem atributo nenhum, então
+      bloqueava o parse do HTML até baixar · medição não pode atrasar o
+      primeiro pixel. `defer` mantém a ordem entre os dois (o gtag.js local
+      depende do dataLayer criado pelo de fora) e roda depois do documento.
+    -->
     <script async src="https://www.googletagmanager.com/gtag/js?id=G-L801QMZ5ZS"></script>
-    <script src="/gtag.js"></script>
+    <script defer src="/gtag.js"></script>
 
     <!-- PWA -->
     <link rel="manifest" href="/manifest.json" />

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
-import { ArrowRight, Check, X as XIcon, Trophy } from 'lucide-react'
+import { ArrowRight, Check, X as XIcon } from 'lucide-react'
 
 import api from '../services/api'
 import SiteHeader from '../components/SiteHeader'
@@ -11,7 +11,6 @@ import {
   SectionHead, Spinner,
 } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
-import { winRate as calcWinRate } from '../utils/format'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
@@ -21,7 +20,7 @@ import HowItWorks from '../home/HowItWorks'
 import Products from '../home/Products'
 import FinalCTA from '../home/FinalCTA'
 import Leagues from '../home/Leagues'
-import LivePreviewSection from '../home/LivePreview'
+import NextGames from '../home/NextGames'
 
 /*
  * Home.
@@ -379,8 +378,12 @@ export default function Home() {
   const { plans, monthly } = usePlans()
 
   // Uma chamada só: alimenta a faixa de indicadores e a lista de resultados.
+  //
+  // recent_limit=10 porque a lista mostra 10. Estava em 50: o backend roda uma
+  // sub-query por tipo de pick (seis) buscando 50 linhas cada, ordenava as 300
+  // e devolvia todas · para a Home jogar 40 fora no `.slice(0, 10)`.
   useEffect(() => {
-    api.get('/public/results', { params: { recent_limit: 50 } })
+    api.get('/public/results', { params: { recent_limit: 10 } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoaded(true))
@@ -500,9 +503,15 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Indicadores reais logo abaixo do mockup ilustrativo, de propósito:
-              o que é exemplo e o que é dado medido fica lado a lado. */}
-          <div className="mt-14 md:mt-20">
+          {/* Fila, depois números · nessa ordem de propósito.
+              O card acima é um pick só, os indicadores abaixo são o histórico
+              inteiro; a fila é o presente entre os dois, e antes ela vinha
+              depois de tudo, onde ninguém a lia como "está acontecendo". */}
+          <div className="mt-12 md:mt-16">
+            <NextGames />
+          </div>
+
+          <div className="mt-8 md:mt-10">
             <StatsBand
               summary={data?.summary ?? null}
               leaguesCount={data?.by_league?.length ?? 0}
@@ -511,10 +520,6 @@ export default function Home() {
           </div>
         </div>
       </section>
-
-      {/* Prova pública, sem login. A seção se esconde sozinha quando não há
-          nem jogo na fila nem pick free do dia. */}
-      <LivePreviewSection />
 
       <RecentResults data={data} loading={!loaded} />
 
