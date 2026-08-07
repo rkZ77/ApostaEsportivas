@@ -1,3 +1,4 @@
+import logging
 import time
 from collections import defaultdict
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -8,6 +9,8 @@ from zoneinfo import ZoneInfo
 from database import get_connection
 from auth_utils import get_current_user
 from routers.payments import PLANS
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/banca", tags=["banca"])
 
@@ -1344,6 +1347,57 @@ def list_monthly_closes(current_user: dict = Depends(get_current_user), limit: i
                 "closed_at":      d["closed_at"].isoformat() if d["closed_at"] else None,
             })
         return out
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/reset-month")
+def reset_current_month(current_user: dict = Depends(get_current_user)):
+    """Descadastra as apostas do MES CORRENTE, pro usuario recomecar o mes.
+
+    Irreversivel, entao tres cercas:
+
+    1. So o mes corrente. O recorte usa _current_month_key() + _month_bounds(),
+       os mesmos do fechamento mensal, e a comparacao e' por
+       `followed_at AT TIME ZONE 'America/Sao_Paulo'` -- identica a de
+       _compute_month_stats. Isso importa: se o filtro daqui divergisse do que
+       a tela soma, o usuario veria "13 apostas" no aviso e o comando apagaria
+       outro conjunto. Mes anterior nao e' alcancavel por esta rota, nem por
+       parametro: nao existe parametro.
+
+    2. Alavancagem fica de fora, com o mesmo `pick_type != 'alavancagem'` do
+       resto do arquivo. Ela nao entra nesta banca (a tela diz isso em texto) e
+       tem banca propria em user_banca.alavancagem_init -- apagar o que a conta
+       nem soma seria destruicao sem beneficio.
+
+    3. Nada de fechamento mensal e' tocado. banca_monthly_closes e
+       banca_withdrawals sao historico assinado: o mes corrente, por definicao,
+       ainda nao foi fechado.
+
+    bankroll_start tambem nao muda. Ele e' a base; sem as apostas do mes a
+    banca atual volta sozinha pro que era no comeco dele, que e' exatamente o
+    que "recomecar o mes" quer dizer.
+    """
+    _check_banca_rate(current_user["id"])
+    user_id = current_user["id"]
+    _, _, month_start, month_end = _month_bounds(_current_month_key())
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            DELETE FROM user_followed_picks
+            WHERE user_id = %s
+              AND pick_type != 'alavancagem'
+              AND (followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
+              AND (followed_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+        """, (user_id, month_start, month_end))
+        removidas = cur.rowcount
+        conn.commit()
+        logger.info("[BANCA] reset do mes %s · user=%s · %s aposta(s) removida(s)",
+                    month_start[:7], user_id, removidas)
+        return {"ok": True, "removed": removidas, "month": month_start[:7]}
     finally:
         cur.close()
         conn.close()
