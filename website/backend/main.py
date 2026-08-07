@@ -36,6 +36,9 @@ logger = logging.getLogger("main")
 _REQUIRED_VARS = ["JWT_SECRET"]
 _OPTIONAL_VARS = {
     "MERCADOPAGO_ACCESS_TOKEN": "pagamentos",
+    # Sem o secret o webhook falha FECHADO (403 em tudo), entao a assinatura
+    # some do site sem nenhum sinal. Faltar aqui e' incidente, nao detalhe.
+    "MERCADOPAGO_WEBHOOK_SECRET": "confirmacao automatica de pagamento (webhook)",
     "ANTHROPIC_API_KEY": "IA / picks",
     "RESEND_API_KEY": "envio de emails",
     "TURNSTILE_SECRET_KEY": "verificação anti-bot (captcha) no login/cadastro",

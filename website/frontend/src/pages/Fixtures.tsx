@@ -326,7 +326,12 @@ export default function Fixtures() {
             <p className="text-ink-4 text-xs mt-2">As ligas monitoradas não têm jogos programados neste dia.</p>
           </div>
         ) : (
-          <div className="space-y-5">
+          /* Duas colunas em tela larga: cada liga é um card fechado em si, e
+             empilhados eles deixavam uma partida sozinha ocupando 1800px de
+             linha. Lado a lado cabe o dobro de jogo sem rolar · `items-start`
+             porque as ligas têm quantidades diferentes e esticar a menor pra
+             altura da maior só cria vazio. */
+          <div className="grid gap-5 xl:grid-cols-2 items-start">
             {grouped.map(({ key: league, league_id, logo, flag, country, games }) => {
               const isCopa = league_id === 1
               return (

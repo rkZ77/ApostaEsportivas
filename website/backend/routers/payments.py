@@ -17,25 +17,18 @@ logger = logging.getLogger(__name__)
 # Rate limit por usuario ao criar preferencia de pagamento -- sem isso, um
 # script podia gerar preferencias no MercadoPago sem limite (nao afeta
 # integridade do plano/saldo, so evita ruido/custo na API do MP).
-_create_pref_rate: dict[int, list[float]] = defaultdict(list)
-_CREATE_PREF_LIMIT  = 6
-_CREATE_PREF_WINDOW = 60
+_rate_buckets: dict[str, dict[int, list[float]]] = defaultdict(lambda: defaultdict(list))
+_RATE_WINDOW = 60
 
 
-def _check_create_pref_rate(user_id: int) -> None:
+def _check_rate(bucket: str, user_id: int, limit: int) -> None:
     now = time.time()
-    _create_pref_rate[user_id] = [t for t in _create_pref_rate[user_id] if now - t < _CREATE_PREF_WINDOW]
-    if len(_create_pref_rate[user_id]) >= _CREATE_PREF_LIMIT:
+    marcas = _rate_buckets[bucket][user_id] = [
+        t for t in _rate_buckets[bucket][user_id] if now - t < _RATE_WINDOW
+    ]
+    if len(marcas) >= limit:
         raise HTTPException(429, "Muitas tentativas. Aguarde um momento e tente novamente.")
-    _create_pref_rate[user_id].append(now)
-
-PLAN_LABELS = {
-    "mensal":     "Mensal",
-    "trimestral": "Trimestral",
-    "semestral":  "Semestral",
-    "anual":      "Anual",
-}
-
+    marcas.append(now)
 
 def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
     api_key   = os.getenv("RESEND_API_KEY", "")
@@ -110,19 +103,55 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
         logger.warning("[EMAIL] Falha ao enviar VIP email para %s: %s", to, e)
 
 
-def _verify_mp_signature(body: bytes, x_signature: str, x_request_id: str, data_id: str, secret: str) -> bool:
-    """Verifica assinatura HMAC-SHA256 do MercadoPago conforme documentação oficial."""
+def _mp_manifest(data_id: str, request_id: str, ts: str) -> str:
+    """Template oficial do MercadoPago:
+
+        id:<data.id>;request-id:<x-request-id>;ts:<ts>;
+
+    Dois detalhes que a doc exige e que já custaram caro aqui:
+
+      1. O ponto e vírgula FINAL, depois do ts, faz parte da mensagem. Sem ele
+         o hash nunca bate e toda notificação legítima vira 403.
+      2. Campo ausente sai do template inteiro, junto com o seu ';' -- não
+         entra como string vazia.
+    """
+    pedacos = []
+    if data_id:
+        pedacos.append(f"id:{data_id};")
+    if request_id:
+        pedacos.append(f"request-id:{request_id};")
+    if ts:
+        pedacos.append(f"ts:{ts};")
+    return "".join(pedacos)
+
+
+def _verify_mp_signature(x_signature: str, x_request_id: str, data_id: str, secret: str) -> bool:
+    """Verifica a assinatura HMAC-SHA256 do MercadoPago.
+
+    `data_id` tem que vir do QUERY STRING da notificação (`?data.id=...`), não
+    do corpo: é sobre o valor da URL que o MercadoPago assina.
+    """
     try:
         # O MercadoPago envia: x-signature = ts=<timestamp>,v1=<hash>
-        parts = dict(p.split("=", 1) for p in x_signature.split(",") if "=" in p)
-        ts = parts.get("ts", "")
-        v1 = parts.get("v1", "")
+        partes = dict(
+            (k.strip(), v.strip())
+            for k, v in (p.split("=", 1) for p in x_signature.split(",") if "=" in p)
+        )
+        ts = partes.get("ts", "")
+        v1 = partes.get("v1", "")
         if not ts or not v1:
             return False
-        # Template: id:<data.id>;request-id:<x-request-id>;ts:<ts>
-        signed_template = f"id:{data_id};request-id:{x_request_id};ts:{ts}"
-        expected = hmac.new(secret.encode(), signed_template.encode(), hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected, v1)
+
+        # A doc manda usar o id em minúsculo quando ele é alfanumérico. Como
+        # nem toda notificação é de pagamento (id numérico), testa as duas
+        # formas -- ambas continuam sendo HMAC com o segredo, então aceitar a
+        # variante não afrouxa nada.
+        for candidato in dict.fromkeys([data_id, data_id.lower()]):
+            manifesto = _mp_manifest(candidato, x_request_id, ts)
+            esperado = hmac.new(secret.encode(), manifesto.encode(), hashlib.sha256).hexdigest()
+            if hmac.compare_digest(esperado, v1):
+                return True
+        return False
     except Exception:
         return False
 
@@ -206,13 +235,282 @@ def list_plans():
     }
 
 
+# Teto para o registro de recusa vinda de fora. O /webhook nao tem
+# autenticacao -- quem descobrir a URL consegue disparar recusa a vontade, e
+# sem teto isso vira insercao ilimitada numa tabela do banco.
+_recusas_registradas: list[float] = []
+_LIMITE_RECUSAS = 20
+_JANELA_RECUSAS = 600
+
+
+def _pode_registrar_recusa() -> bool:
+    agora = time.time()
+    _recusas_registradas[:] = [t for t in _recusas_registradas if agora - t < _JANELA_RECUSAS]
+    if len(_recusas_registradas) >= _LIMITE_RECUSAS:
+        return False
+    _recusas_registradas.append(agora)
+    return True
+
+
+def _record_event(source: str, status: str, mp_payment_id="", detail: str = "") -> None:
+    """Deixa rastro de toda tentativa de processar pagamento.
+
+    Existe porque o modo de falha real foi silencioso: o webhook rejeitava a
+    notificação por assinatura e ninguém ficava sabendo -- nem o comprador,
+    que continuava free, nem o relatório, que não contava a venda. Com a
+    trilha, "o MercadoPago chamou?" vira uma consulta em vez de um palpite.
+
+    Nunca propaga erro: falha em registrar não pode derrubar uma ativação.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute(
+                """INSERT INTO payment_events (source, status, mp_payment_id, detail)
+                   VALUES (%s, %s, %s, %s)""",
+                (source[:20], status[:30], str(mp_payment_id or "")[:50], (detail or "")[:300]),
+            )
+            conn.commit()
+        finally:
+            cur.close()
+            conn.close()
+    except Exception as e:
+        logger.warning("[PAYMENTS] Falha ao registrar evento %s/%s: %s", source, status, e)
+
+
+def _apply_approved_payment(payment: dict, source: str) -> dict:
+    """Grava o pagamento e ativa o VIP a partir de um objeto de pagamento do MP.
+
+    Único caminho de ativação do sistema: webhook, retorno do checkout e as
+    duas rotas de admin passam todos por aqui. Antes cada um tinha a sua
+    versão da regra e elas já divergiam -- o /admin/sync-payment, por exemplo,
+    não creditava a indicação nem mandava o e-mail que o webhook mandava.
+
+    Idempotente pelo mp_payment_id: reprocessar o mesmo pagamento não estende
+    o VIP de novo.
+    """
+    payment_id = str(payment.get("id") or "")
+    status     = payment.get("status")
+
+    if status != "approved":
+        return {"status": "not_approved", "payment_id": payment_id, "detail": f"status={status}"}
+
+    external_ref = payment.get("external_reference") or ""
+    parts = external_ref.split(":", 1)
+    if len(parts) != 2:
+        _record_event(source, "ref_invalida", payment_id, f"external_reference={external_ref!r}")
+        return {"status": "error", "payment_id": payment_id, "detail": "external_reference inválido"}
+
+    user_id, plan_key = parts
+    plan_info = PLANS.get(plan_key)
+    if not plan_info:
+        _record_event(source, "plano_invalido", payment_id, f"plano={plan_key!r}")
+        return {"status": "error", "payment_id": payment_id, "detail": f"plano inválido: {plan_key}"}
+
+    try:
+        user_id_int = int(user_id)
+    except ValueError:
+        _record_event(source, "ref_invalida", payment_id, f"user_id={user_id!r}")
+        return {"status": "error", "payment_id": payment_id, "detail": "user_id inválido"}
+
+    amount         = float(payment.get("transaction_amount") or plan_info["price"])
+    payment_method = payment.get("payment_type_id") or payment.get("payment_method_id") or "unknown"
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # Renovacao/upgrade estende a partir do maior entre "agora" e o expires_at
+        # atual (se o usuario ainda tem VIP ativo), em vez de sempre sobrescrever
+        # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
+        # (comportamento comum) perdia os dias restantes que ja tinha pago.
+        # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
+        cur.execute("SELECT name, email, expires_at FROM users WHERE id = %s", (user_id_int,))
+        row = cur.fetchone()
+        if not row:
+            logger.error("[PAYMENTS] user_id=%s não encontrado · pagamento %s ignorado", user_id, payment_id)
+            _record_event(source, "usuario_inexistente", payment_id, f"user_id={user_id}")
+            return {"status": "error", "payment_id": payment_id, "detail": "usuário não encontrado"}
+
+        user_name  = row["name"]
+        user_email = row["email"]
+        current_expires = row["expires_at"]  # naive UTC (coluna timestamp without time zone)
+        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        base = current_expires if (current_expires and current_expires > now_naive) else now_naive
+        expires_at = base + timedelta(days=plan_info["days"])
+
+        # Registra pagamento ANTES do UPDATE · garante idempotência real
+        # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
+        cur.execute(
+            """
+            INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
+            VALUES (%s, %s, %s, %s, 'approved', %s, %s)
+            ON CONFLICT (mp_payment_id) DO NOTHING
+            """,
+            (user_id_int, payment_id, plan_key, amount, expires_at, payment_method),
+        )
+        if cur.rowcount == 0:
+            conn.rollback()
+            logger.info("[PAYMENTS] Pagamento %s já processado anteriormente · ignorando", payment_id)
+            return {"status": "duplicate", "payment_id": payment_id, "user_id": user_id_int, "plan": plan_key}
+
+        logger.info("[PAYMENTS] Ativando VIP para user_id=%s plano=%s expires=%s (via %s)",
+                    user_id, plan_key, expires_at, source)
+        cur.execute(
+            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s",
+            (expires_at, plan_key, user_id_int),
+        )
+
+        # Crédito de indicação: +2 dias VIP para o referrer quando indicado assina VIP
+        cur.execute(
+            "SELECT referred_by FROM users WHERE id = %s AND referred_by IS NOT NULL",
+            (user_id_int,),
+        )
+        ref_row = cur.fetchone()
+        if ref_row:
+            cur.execute(
+                """
+                UPDATE users
+                SET plan       = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
+                    expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '2 days'
+                WHERE id = %s
+                """,
+                (ref_row["referred_by"],),
+            )
+
+        conn.commit()
+        logger.info("[PAYMENTS] VIP ativado para user_id=%s email=%s", user_id, user_email)
+    finally:
+        cur.close()
+        conn.close()
+
+    _record_event(source, "ativado", payment_id, f"user_id={user_id} plano={plan_key}")
+
+    # Email de confirmação de VIP (em thread separada para não atrasar a resposta)
+    if user_email and user_name:
+        import threading
+        threading.Thread(
+            target=_send_vip_email,
+            args=(user_email, user_name, plan_key, expires_at),
+            daemon=True,
+        ).start()
+
+    return {
+        "status":     "activated",
+        "payment_id": payment_id,
+        "user_id":    user_id_int,
+        "plan":       plan_key,
+        "amount":     amount,
+        "expires_at": expires_at,
+        "user_email": user_email,
+        "user_name":  user_name,
+    }
+
+
+# Só é assinatura do site o pagamento cujo external_reference tem a forma que
+# `create_preference` monta. A conta do MercadoPago é a mesma usada para a vida
+# pessoal e tem milhares de transferências no meio; sem esse filtro a
+# reconciliação tentaria "ativar VIP" para cada uma delas.
+def _e_assinatura(payment: dict) -> bool:
+    ref = str(payment.get("external_reference") or "")
+    partes = ref.split(":", 1)
+    return len(partes) == 2 and partes[0].isdigit() and partes[1] in PLANS
+
+
+def _search_subscription_payments(sdk, begin: str, max_pages: int = 20) -> list[dict]:
+    """Assinaturas aprovadas na conta do MercadoPago desde `begin` (ex.: 'NOW-30DAYS').
+
+    É a rede de segurança: independe de o webhook ter chegado, porque pergunta
+    ao MercadoPago o que ele tem, e não o que nos foi entregue.
+    """
+    LIMIT = 50
+    encontrados: list[dict] = []
+    offset = 0
+    for _ in range(max_pages):
+        resposta = (sdk.payment().search(filters={
+            "sort":       "date_created",
+            "criteria":   "desc",
+            "range":      "date_created",
+            "begin_date": begin,
+            "end_date":   "NOW",
+            "status":     "approved",
+            "limit":      LIMIT,
+            "offset":     offset,
+        }) or {}).get("response") or {}
+        pagina = resposta.get("results") or []
+        encontrados.extend(p for p in pagina if _e_assinatura(p))
+        if len(pagina) < LIMIT:
+            break
+        offset += LIMIT
+    return encontrados
+
+
+def _search_user_payments(sdk, user_id: int) -> list[dict]:
+    """Assinaturas aprovadas de UM usuário, por busca exata de external_reference.
+
+    Consulta direta em vez de varrer a janela de datas: a conta tem milhares de
+    pagamentos que não são do site, e a varredura poderia paginar sem nunca
+    chegar no que interessa. São quatro consultas exatas, uma por plano.
+    """
+    encontrados: list[dict] = []
+    for plano in PLANS:
+        resposta = (sdk.payment().search(filters={
+            "external_reference": f"{user_id}:{plano}",
+            "status":             "approved",
+        }) or {}).get("response") or {}
+        encontrados.extend(p for p in (resposta.get("results") or []) if _e_assinatura(p))
+    return encontrados
+
+
+def _reconcile(begin: str, source: str, user_id: int | None = None) -> dict:
+    """Reprocessa no banco toda assinatura aprovada que o MercadoPago conhece.
+
+    Quem já está em `payments` cai no ON CONFLICT e não mexe em nada, então
+    rodar duas vezes é inofensivo.
+    """
+    access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
+    if not access_token:
+        raise HTTPException(500, "MERCADOPAGO_ACCESS_TOKEN não configurado")
+
+    sdk = mercadopago.SDK(access_token)
+    try:
+        pagamentos = (_search_user_payments(sdk, user_id) if user_id is not None
+                      else _search_subscription_payments(sdk, begin))
+    except Exception as e:
+        logger.error("[PAYMENTS] Falha ao consultar o MercadoPago: %s", e)
+        raise HTTPException(502, "Não foi possível consultar o MercadoPago agora.")
+
+    ativados, ja_tinha, falhas = [], 0, []
+    for pagamento in pagamentos:
+        resultado = _apply_approved_payment(pagamento, source)
+        if resultado["status"] == "activated":
+            ativados.append({
+                "payment_id": resultado["payment_id"],
+                "user_id":    resultado["user_id"],
+                "plan":       resultado["plan"],
+                "amount":     resultado["amount"],
+                "email":      resultado.get("user_email"),
+            })
+        elif resultado["status"] == "duplicate":
+            ja_tinha += 1
+        else:
+            falhas.append({"payment_id": resultado["payment_id"], "detail": resultado.get("detail", "")})
+
+    return {
+        "encontrados":  len(pagamentos),
+        "ativados":     ativados,
+        "ja_registrados": ja_tinha,
+        "falhas":       falhas,
+    }
+
+
 class CreatePreferenceBody(BaseModel):
     plan: str
 
 
 @router.post("/create")
 def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(get_current_user)):
-    _check_create_pref_rate(current_user["id"])
+    _check_rate("create_pref", current_user["id"], 6)
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
         raise HTTPException(500, "MERCADOPAGO_ACCESS_TOKEN não configurado")
@@ -279,13 +577,18 @@ async def webhook(request: Request):
 
     x_signature  = request.headers.get("x-signature", "")
     x_request_id = request.headers.get("x-request-id", "")
-    data_id      = str(data.get("data", {}).get("id", ""))
-    if not x_signature or not _verify_mp_signature(body, x_signature, x_request_id, data_id, webhook_secret):
-        logger.warning("[WEBHOOK] Assinatura inválida · rejeitando requisição de %s",
-                       request.client.host if request.client else "unknown")
+    # O `data.id` assinado é o do QUERY STRING. O corpo é só fallback pro caso
+    # de notificação sem query param -- foi usar o do corpo, e sem o ';' final
+    # do template, que fez toda notificação legítima virar 403 aqui.
+    data_id = request.query_params.get("data.id") or str(data.get("data", {}).get("id") or "")
+    if not x_signature or not _verify_mp_signature(x_signature, x_request_id, data_id, webhook_secret):
+        logger.warning("[WEBHOOK] Assinatura inválida · rejeitando requisição de %s (data.id=%s)",
+                       request.client.host if request.client else "unknown", data_id)
+        if _pode_registrar_recusa():
+            _record_event("webhook", "assinatura_invalida", data_id)
         raise HTTPException(403, "Assinatura inválida")
 
-    event_type = data.get("type")
+    event_type = data.get("type") or request.query_params.get("type") or ""
     logger.info("[WEBHOOK] Evento recebido: type=%s data=%s", event_type, data.get("data"))
 
     if event_type != "payment":
@@ -295,116 +598,52 @@ async def webhook(request: Request):
     access_token = os.getenv("MERCADOPAGO_ACCESS_TOKEN")
     if not access_token:
         logger.error("[WEBHOOK] MERCADOPAGO_ACCESS_TOKEN não configurado")
+        _record_event("webhook", "sem_token", data_id)
         return {"status": "error", "detail": "token missing"}
 
-    payment_id = data.get("data", {}).get("id")
+    payment_id = data.get("data", {}).get("id") or data_id
     if not payment_id:
         logger.warning("[WEBHOOK] payment_id ausente no payload")
         return {"status": "ignored"}
 
     logger.info("[WEBHOOK] Consultando pagamento id=%s", payment_id)
     sdk = mercadopago.SDK(access_token)
-    payment_info = sdk.payment().get(payment_id)
-    payment = payment_info.get("response", {})
+    payment = (sdk.payment().get(payment_id) or {}).get("response") or {}
 
-    status = payment.get("status")
-    logger.info("[WEBHOOK] Pagamento id=%s status=%s external_ref=%s", payment_id, status, payment.get("external_reference"))
-
-    if status != "approved":
-        logger.info("[WEBHOOK] Pagamento não aprovado (status=%s), ignorando", status)
+    resultado = _apply_approved_payment(payment, "webhook")
+    if resultado["status"] == "not_approved":
+        logger.info("[WEBHOOK] Pagamento %s não aprovado · %s", payment_id, resultado["detail"])
         return {"status": "pending"}
-
-    external_ref = payment.get("external_reference", "")
-    parts = external_ref.split(":", 1)
-    if len(parts) != 2:
-        logger.error("[WEBHOOK] external_reference inválido: %s", external_ref)
-        return {"status": "error", "detail": "external_reference inválido"}
-
-    user_id, plan_key = parts
-    plan_info = PLANS.get(plan_key)
-    if not plan_info:
-        logger.error("[WEBHOOK] Plano inválido: %s", plan_key)
-        return {"status": "error", "detail": "plano inválido"}
-
-    amount        = float(payment.get("transaction_amount") or plan_info["price"])
-    payment_method = payment.get("payment_type_id") or payment.get("payment_method_id") or "unknown"
-
-    conn = get_connection()
-    cur = conn.cursor()
-    user_name  = None
-    user_email = None
-    try:
-        # Renovacao/upgrade estende a partir do maior entre "agora" e o expires_at
-        # atual (se o usuario ainda tem VIP ativo), em vez de sempre sobrescrever
-        # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
-        # (comportamento comum) perdia os dias restantes que ja tinha pago.
-        # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
-        cur.execute("SELECT name, email, expires_at FROM users WHERE id = %s", (int(user_id),))
-        row = cur.fetchone()
-        if not row:
-            logger.error("[WEBHOOK] user_id=%s não encontrado no banco · pagamento %s ignorado", user_id, payment_id)
-            return {"status": "error", "detail": "user not found"}
-        user_name  = row["name"]
-        user_email = row["email"]
-        current_expires = row["expires_at"]  # naive UTC (coluna timestamp without time zone)
-        now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
-        base = current_expires if (current_expires and current_expires > now_naive) else now_naive
-        expires_at = base + timedelta(days=plan_info["days"])
-        logger.info("[WEBHOOK] Ativando VIP para user_id=%s plano=%s expires=%s", user_id, plan_key, expires_at)
-
-        # Registra pagamento ANTES do UPDATE · garante idempotência real
-        # ON CONFLICT DO NOTHING: se payment_id já existe, rowcount=0 e não ativa VIP de novo
-        cur.execute(
-            """
-            INSERT INTO payments (user_id, mp_payment_id, plan_key, amount, status, expires_at, payment_method)
-            VALUES (%s, %s, %s, %s, 'approved', %s, %s)
-            ON CONFLICT (mp_payment_id) DO NOTHING
-            """,
-            (int(user_id), str(payment_id), plan_key, amount, expires_at, payment_method),
-        )
-        if cur.rowcount == 0:
-            logger.info("[WEBHOOK] Pagamento %s já processado anteriormente · ignorando", payment_id)
-            return {"status": "ok", "detail": "already processed"}
-
-        cur.execute(
-            "UPDATE users SET plan='vip', expires_at=%s, subscription_type=%s WHERE id=%s",
-            (expires_at, plan_key, int(user_id)),
-        )
-
-        # Crédito de indicação: +2 dias VIP para o referrer quando indicado assina VIP
-        cur.execute(
-            "SELECT referred_by FROM users WHERE id = %s AND referred_by IS NOT NULL",
-            (int(user_id),),
-        )
-        ref_row = cur.fetchone()
-        if ref_row:
-            referrer_id = ref_row["referred_by"]
-            cur.execute(
-                """
-                UPDATE users
-                SET plan       = CASE WHEN plan IN ('free', 'trial') THEN 'vip' ELSE plan END,
-                    expires_at = GREATEST(COALESCE(expires_at, NOW()), NOW()) + INTERVAL '2 days'
-                WHERE id = %s
-                """,
-                (referrer_id,),
-            )
-
-        conn.commit()
-        logger.info("[WEBHOOK] VIP ativado com sucesso para user_id=%s email=%s", user_id, user_email)
-    finally:
-        cur.close()
-        conn.close()
-
-    # Email de confirmação de VIP (em thread separada para não atrasar a resposta)
-    if user_email and user_name:
-        import threading
-        threading.Thread(
-            target=_send_vip_email,
-            args=(user_email, user_name, plan_key, expires_at),
-            daemon=True,
-        ).start()
+    if resultado["status"] == "duplicate":
+        return {"status": "ok", "detail": "already processed"}
+    if resultado["status"] == "error":
+        return {"status": "error", "detail": resultado["detail"]}
 
     return {"status": "ok"}
+
+
+@router.post("/confirm")
+def confirm_payment(current_user: dict = Depends(get_current_user)):
+    """Ativa o VIP perguntando ao MercadoPago, sem depender do webhook.
+
+    A tela de retorno do checkout chama isto. É o que impede a falha de hoje
+    de se repetir do ponto de vista de quem pagou: mesmo com o webhook fora do
+    ar, quem volta do MercadoPago sai da página já como VIP.
+
+    Idempotente, e olha só os pagamentos do próprio usuário logado.
+    """
+    # Teto mais folgado que o de criar preferência: a tela de retorno repete a
+    # chamada enquanto espera a confirmação, e travar justo aí é o pior momento.
+    _check_rate("confirm", current_user["id"], 12)
+    user_id = int(current_user["sub"])
+    resultado = _reconcile("NOW-3DAYS", "checkout", user_id=user_id)
+
+    ativados = resultado["ativados"]
+    return {
+        "activated":  len(ativados),
+        "plan":       ativados[0]["plan"] if ativados else None,
+        "already_ok": resultado["ja_registrados"] > 0,
+    }
 
 
 @router.get("/history")

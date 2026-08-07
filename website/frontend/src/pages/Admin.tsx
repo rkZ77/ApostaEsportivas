@@ -129,6 +129,8 @@ export default function Admin() {
   const [expandedLog, setExpandedLog] = useState<string | null>(null)
   const [payments, setPayments] = useState<any[]>([])
   const [paymentsLoading, setPaymentsLoading] = useState(false)
+  const [paymentEvents, setPaymentEvents] = useState<any[]>([])
+  const [sincronizando, setSincronizando] = useState(false)
   const [revenue, setRevenue] = useState<{
     total: number; count: number; avg_ticket: number; active_vip: number;
     monthly: { month: string; total: number; count: number }[];
@@ -243,6 +245,7 @@ export default function Admin() {
     setPaymentsLoading(true)
     api.get('/admin/payments').then(r => setPayments(r.data)).catch(() => {}).finally(() => setPaymentsLoading(false))
     api.get('/admin/revenue').then(r => setRevenue(r.data)).catch(() => {})
+    api.get('/admin/payment-events').then(r => setPaymentEvents(r.data)).catch(() => {})
   }, [isAdmin])
 
   const setPlan = async (id: number, plan: string) => {
@@ -793,15 +796,41 @@ export default function Admin() {
         <div className="card overflow-hidden mb-6">
           <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3 flex-wrap">
             <h2 className="text-xs font-semibold text-ink-3">Pagamentos</h2>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="text-xs text-ink-4">{payments.length} registro(s)</span>
+              {/* Rede de segurança do dinheiro: pergunta ao MercadoPago quais
+                  assinaturas foram aprovadas e ativa o que faltou, sem precisar
+                  saber o ID de ninguém. Rodar de novo não estende VIP repetido. */}
+              <button
+                disabled={sincronizando}
+                onClick={async () => {
+                  setSincronizando(true)
+                  try {
+                    const r = await api.post('/admin/reconcile-payments', { days: 30 })
+                    const ativados = r.data?.ativados ?? []
+                    showToast(ativados.length > 0
+                      ? `${ativados.length} assinatura(s) ativada(s): ${ativados.map((a: any) => a.email ?? a.user_id).join(', ')}`
+                      : `Nada pendente · ${r.data?.ja_registrados ?? 0} já registrada(s) nos últimos 30 dias.`)
+                    api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
+                    api.get('/admin/payment-events').then(r2 => setPaymentEvents(r2.data)).catch(() => {})
+                    api.get('/admin/revenue').then(r2 => setRevenue(r2.data)).catch(() => {})
+                  } catch (e: any) {
+                    showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
+                  } finally { setSincronizando(false) }
+                }}
+                className="px-2 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 hover:border-green-600 transition-colors disabled:opacity-40"
+              >
+                {sincronizando ? 'Sincronizando…' : 'Sincronizar com MercadoPago'}
+              </button>
               <button
                 onClick={async () => {
                   const id = prompt('ID do pagamento MercadoPago:')
                   if (!id) return
                   try {
                     const r = await api.post('/admin/sync-payment', { mp_payment_id: id })
-                    showToast(`VIP ativado: ${r.data.user.name} · ${r.data.plan}`)
+                    showToast(r.data.duplicate
+                      ? 'Pagamento já estava registrado.'
+                      : `VIP ativado: ${r.data.user.name} · ${r.data.plan}`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                   } catch (e: any) {
                     showToast('Erro: ' + (e.response?.data?.detail || e.message), false)
@@ -809,7 +838,7 @@ export default function Admin() {
                 }}
                 className="px-2 py-1 text-xs rounded border border-line-strong text-ink-2 hover:text-ink-1 hover:border-green-600 transition-colors"
               >
-                + Reprocessar pagamento
+                + Reprocessar por ID
               </button>
             </div>
           </div>
@@ -860,6 +889,48 @@ export default function Admin() {
                 </div>
               )}
             </>
+          )}
+        </div>
+
+        {/* Trilha de processamento. O webhook rejeitado por assinatura não
+            deixava rastro nenhum: o comprador seguia free e a venda sumia do
+            relatório sem nada para olhar. Aqui a recusa aparece. */}
+        <div className="card overflow-hidden mb-6">
+          <div className="px-4 py-3 border-b border-line">
+            <h2 className="text-xs font-semibold text-ink-3">Eventos de pagamento</h2>
+            <p className="text-[11px] text-ink-4 mt-0.5">
+              Últimas tentativas de processar pagamento, inclusive as recusadas.
+            </p>
+          </div>
+          {paymentEvents.length === 0 ? (
+            <p className="text-center text-ink-4 text-sm py-6">Nenhum evento registrado.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="border-b border-line">
+                    {['Quando', 'Origem', 'Status', 'Pagamento', 'Detalhe'].map(h => (
+                      <th key={h} className="text-left text-ink-3 font-medium px-4 py-2 whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {paymentEvents.map((e, i) => (
+                    <tr key={i} className="border-b border-line/40 hover:bg-surface-1/40">
+                      <td className="px-4 py-2 text-ink-3 whitespace-nowrap">
+                        {new Date(e.created_at).toLocaleString('pt-BR')}
+                      </td>
+                      <td className="px-4 py-2 text-ink-2">{e.source}</td>
+                      <td className="px-4 py-2">
+                        <span className={e.status === 'ativado' ? 'badge-green' : 'badge-free'}>{e.status}</span>
+                      </td>
+                      <td className="px-4 py-2 font-mono text-ink-3">{e.mp_payment_id}</td>
+                      <td className="px-4 py-2 text-ink-3">{e.detail}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </div>
         </>)}

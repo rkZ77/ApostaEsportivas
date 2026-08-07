@@ -59,6 +59,26 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 created_at        TIMESTAMP DEFAULT NOW()
             )
         """)
+        # Trilha de tentativas de processar pagamento (webhook, retorno do
+        # checkout, botao do admin). Nao guarda corpo de requisicao: o webhook
+        # e' publico, entao aqui so' entra campo curto e ja' validado.
+        #
+        # Existe por causa da falha de agosto/2026: o webhook rejeitava a
+        # notificacao do MercadoPago por assinatura e nao sobrava rastro
+        # nenhum -- o comprador seguia free e a venda nao aparecia no
+        # relatorio. Sem essa tabela, a pergunta "o MercadoPago chegou a
+        # chamar?" nao tinha como ser respondida.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS payment_events (
+                id             SERIAL PRIMARY KEY,
+                source         VARCHAR(20)  NOT NULL,
+                status         VARCHAR(30)  NOT NULL,
+                mp_payment_id  VARCHAR(50),
+                detail         VARCHAR(300),
+                created_at     TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_payment_events_created ON payment_events(created_at DESC);")
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_banca (
                 user_id        INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
