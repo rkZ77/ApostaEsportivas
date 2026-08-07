@@ -44,10 +44,27 @@ from engine_pipelines.decision_log import (
     log_decision, log_run, log_skip,
 )
 
-# Mesma faixa de odd dos outros pipelines: fora dela o pick nao interessa
-# comercialmente (odd baixa demais nao paga, alta demais e' loteria).
-ODD_MIN = 1.35
-ODD_MAX = 2.00
+# SEM FAIXA DE ODD desde 2026-08-07 (decisao do usuario, junto com a mesma
+# remocao em goleiros). Era [1.35, 2.00], copiada dos pipelines de over/under
+# de time com a justificativa de que "fora dela o pick nao interessa
+# comercialmente". As constantes ficam como None em vez de sumir: documentam a
+# decisao e voltar atras e' trocar o valor, nao reescrever a checagem.
+#
+# ATENCAO -- aqui o efeito e' diferente do de goleiros, e mais forte. A
+# probabilidade de faltas NAO e' calculada por jogo: sai de uma tabela empirica
+# cujo menor valor e' 0.26 (linha 26.5, faixa ate 22.0 de previsao). Com
+# EDGE_MIN de 0.04, qualquer odd a partir de ~4.00 passa no corte de edge
+# SOZINHA, so' pela aritmetica (0.26 * 4.00 - 1 = +0.04), sem o modelo ter
+# opinado nada a favor. Na faixa mais forte da tabela (0.716) isso comeca ja'
+# em ~1.45.
+#
+# Enquanto existiu teto de 2.00, ele funcionava como rede contra dado ruim
+# (odd digitada errada, mercado mapeado no lugar errado) sem que ninguem tivesse
+# escrito isso em lugar nenhum. Sem o teto essa rede sumiu: uma unica odd
+# absurda numa linha suportada vira pick. Se aparecer pick de faltas com odd
+# muito fora do padrao do mercado, desconfie do DADO antes de comemorar o edge.
+ODD_MIN = None
+ODD_MAX = None
 
 # Edge minimo pra gravar. Abaixo disso a margem nao cobre o erro do proprio
 # modelo -- a faixa mais forte da tabela empirica foi medida em 159 jogos, o
@@ -125,7 +142,7 @@ def _odds_over_faltas(structured_odds: list) -> dict[float, dict]:
             continue
         if linha not in LINHAS_SUPORTADAS:
             continue
-        if odd < ODD_MIN or odd > ODD_MAX:
+        if (ODD_MIN is not None and odd < ODD_MIN) or (ODD_MAX is not None and odd > ODD_MAX):
             continue
         atual = melhores.get(linha)
         if atual is None or odd > atual["odd"]:

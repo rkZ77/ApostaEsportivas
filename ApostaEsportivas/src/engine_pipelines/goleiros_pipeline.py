@@ -50,21 +50,27 @@ from engine_pipelines.decision_log import (
     log_decision, log_run, log_skip,
 )
 
-ODD_MIN = 1.35
-# Sem teto de odd desde 2026-08-07 (decisao do usuario, tomada depois de ver a
-# medicao abaixo). O teto era 2.00, herdado dos pipelines de over/under de
-# TIME. Prop de jogador nao precifica igual, e a consequencia era estrutural:
-# nos jogos de 07/08, TODA linha dentro de [1.35, 2.00] tinha edge negativo, e
-# as duas unicas que passavam o EDGE_MIN estavam fora e do lado alto (Vagner
-# 5+ @ 5.70 com edge +0.070 e 6+ @ 10.50 com +0.063). Com o teto, este pipeline
-# nunca geraria pick -- e de fato nao gerou nenhum desde que existe.
+# SEM FAIXA DE ODD desde 2026-08-07 (decisao do usuario, tomada depois de ver a
+# medicao abaixo). Era [1.35, 2.00], herdada dos pipelines de over/under de
+# TIME. Prop de jogador nao precifica igual, e a consequencia era estrutural,
+# nao azar: nos jogos de 07/08, TODA linha dentro de [1.35, 2.00] tinha edge
+# negativo, e as unicas que passavam o EDGE_MIN estavam fora e do lado alto
+# (Vagner 5+ @ 5.70 com edge +0.070 e 6+ @ 10.50 com +0.063). Com a faixa, este
+# pipeline nunca geraria pick -- e de fato nao gerou nenhum desde que existe.
 #
-# RISCO ASSUMIDO, deixado escrito de proposito: o modelo acha valor justamente
-# na cauda, que e' onde a estimativa dele e' mais fragil -- o EDGE_MIN daqui ja'
-# e' 0.06 contra 0.04 de faltas exatamente porque "a amostra por goleiro e'
-# pequena e a distribuicao e' superdispersa". Um edge de +0.06 calculado em cima
-# de uma probabilidade de 15% erra facil de sinal. Se aparecer pick de odd alta
-# resolvendo RED com frequencia, o teto e' o primeiro lugar pra olhar.
+# As constantes ficam como None em vez de sumir: documentam a decisao e voltar
+# atras e' trocar o valor, nao reescrever a checagem.
+#
+# O que continua filtrando: EDGE_MIN. Odd <= 1.00 nao precisa de guarda propria
+# porque edge = prob * odd - 1 fica negativo sozinho e o corte de edge pega.
+#
+# RISCO ASSUMIDO, escrito aqui de proposito: o modelo acha valor justamente na
+# cauda, que e' onde a estimativa dele e' mais fragil -- o EDGE_MIN daqui ja' e'
+# 0.06 contra 0.04 de faltas exatamente porque "a amostra por goleiro e' pequena
+# e a distribuicao e' superdispersa". Um edge de +0.06 calculado sobre uma
+# probabilidade de 15% erra de sinal com facilidade. Se odd alta comecar a
+# resolver RED com frequencia, esta faixa e' o primeiro lugar pra olhar.
+ODD_MIN = None
 ODD_MAX = None
 
 # Margem minima pra gravar. Mais exigente que faltas (0.04) porque aqui a
@@ -304,7 +310,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
         if nome_mercado not in NOMES_MERCADO:
             continue
         odd = float(o.get("odd") or 0)
-        if odd < ODD_MIN or (ODD_MAX is not None and odd > ODD_MAX):
+        if (ODD_MIN is not None and odd < ODD_MIN) or (ODD_MAX is not None and odd > ODD_MAX):
             continue
 
         parsed = _parse_valor(o.get("value_name"))
