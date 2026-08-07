@@ -650,6 +650,43 @@ def login(body: LoginBody, response: Response, request: Request):
             conn.rollback()
             logger.warning("[LOGIN] Falha ao avisar plano expirando (user %s): %s", user["id"], e)
 
+        # Auto-reparo de assinatura. Se a pessoa foi pro MercadoPago e voltou
+        # sem acesso, pergunta ao MercadoPago antes de montar o token · assim
+        # ela entra ja como VIP, sem precisar recarregar.
+        #
+        # Fecha o unico caso que as outras camadas nao pegam: pagou por boleto
+        # ou Pix, fechou o navegador antes da aprovacao, o webhook falhou, e so'
+        # voltou dias depois. Custa consulta a API, entao so' roda pra quem
+        # comecou um checkout ha' pouco e continua sem plano -- nao pra todo
+        # login. Mesma logica do aviso de plano expirando acima: este backend
+        # nao tem scheduler, e o login e' o momento em que a pessoa esta aqui.
+        # A leitura de checkout_started_at fica FORA da query principal, e num
+        # try proprio, de proposito: a coluna nasce numa migration de startup, e
+        # se por qualquer motivo ela nao existir no banco, o pior que acontece e'
+        # o auto-reparo nao rodar. Dentro do SELECT do login, a mesma ausencia
+        # derrubaria o login de todo mundo.
+        if user["plan"] in ("free", "trial"):
+            iniciado = None
+            try:
+                cur.execute("SELECT checkout_started_at FROM users WHERE id = %s", (user["id"],))
+                linha = cur.fetchone()
+                iniciado = linha["checkout_started_at"] if linha else None
+            except Exception as e:
+                conn.rollback()
+                logger.warning("[LOGIN] checkout_started_at indisponivel: %s", e)
+
+            if iniciado:
+                if iniciado.tzinfo is None:
+                    iniciado = iniciado.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) - iniciado < timedelta(days=30):
+                    from routers.payments import try_activate_pending
+                    ativado = try_activate_pending(user["id"])
+                    if ativado:
+                        logger.info("[LOGIN] VIP ativado no login para user %s (pagamento %s)",
+                                    user["id"], ativado["payment_id"])
+                        user["plan"] = "vip"
+                        user["expires_at"] = ativado["expires_at"]
+
         plan_expires_at = user["expires_at"].isoformat() if user.get("expires_at") else None
         token_data = {
             "sub": str(user["id"]), "id": user["id"],

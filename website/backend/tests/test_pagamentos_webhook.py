@@ -129,3 +129,58 @@ def test_plano_desconhecido_para_antes_do_banco():
         {"id": 1, "status": "approved", "external_reference": "22:vitalicio"}, "teste"
     )
     assert r["status"] == "error"
+
+
+# ─────────────── Auto-reparo no login ───────────────
+
+
+def test_auto_reparo_no_login_nunca_estoura(monkeypatch):
+    """Nada no auto-reparo pode derrubar um login.
+
+    Se o MercadoPago cair, o login tem que continuar acontecendo -- so' sem
+    ativar VIP nenhum nessa volta.
+    """
+    from routers import payments
+
+    def _explode(*_a, **_kw):
+        raise RuntimeError("MercadoPago fora do ar")
+
+    monkeypatch.setattr(payments, "_reconcile", _explode)
+    assert payments.try_activate_pending(22) is None
+
+
+def test_auto_reparo_devolve_a_ativacao_quando_encontra(monkeypatch):
+    from routers import payments
+
+    monkeypatch.setattr(payments, "_reconcile", lambda *_a, **_kw: {
+        "encontrados": 1, "ja_registrados": 0, "falhas": [],
+        "ativados": [{"payment_id": "171620546785", "user_id": 22, "plan": "mensal"}],
+    })
+    ativado = payments.try_activate_pending(22)
+    assert ativado["payment_id"] == "171620546785"
+
+
+def test_auto_reparo_devolve_none_quando_nao_ha_pagamento(monkeypatch):
+    from routers import payments
+
+    monkeypatch.setattr(payments, "_reconcile", lambda *_a, **_kw: {
+        "encontrados": 0, "ja_registrados": 0, "falhas": [], "ativados": [],
+    })
+    assert payments.try_activate_pending(22) is None
+
+
+def test_login_nao_le_checkout_started_at_na_query_principal():
+    """A coluna nasce numa migration de startup.
+
+    Se ela entrasse no SELECT do login e por algum motivo nao existisse no
+    banco, o login inteiro cairia. Fora dele, a ausencia so' desliga o
+    auto-reparo.
+    """
+    import io
+    import os
+
+    base = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    fonte = io.open(os.path.join(base, "routers", "auth.py"), encoding="utf-8").read()
+    cols = fonte[fonte.index("_LOGIN_COLS = "):]
+    cols = cols[:cols.index("\n")]
+    assert "checkout_started_at" not in cols
