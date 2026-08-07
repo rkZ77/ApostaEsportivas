@@ -67,15 +67,24 @@ export default function Navbar() {
   return (
     <>
       <nav className="bg-surface-0 border-b border-line sticky top-0 z-50">
-        <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+        {/* Sem max-w: a barra vai de borda a borda, como em qualquer aplicativo.
+            Presa em max-w-6xl, ela ficava flutuando no meio de uma tela larga
+            com o logo longe da esquerda · e agora que o conteúdo estica, a
+            barra estreita passaria a desenhar uma moldura invisível em volta
+            de nada. O padding cresce junto com o do PageShell pra logo e
+            avatar caírem na mesma coluna do conteúdo. */}
+        <div className="px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
 
-          {/* Logo */}
-          <Link to="/picks" className="flex items-center gap-3">
-            <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 rounded-full object-cover" />
-            <div className="hidden sm:block">
-              <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">Pick</span>
-              <span className="font-display text-green-500 font-semibold text-lg">IA</span>
-            </div>
+          {/* Marca. Escudo menor que antes (40px o fazia dominar o conjunto,
+              e nesse tamanho o texto do anel dele já era ilegível de qualquer
+              forma) e o nome aparecendo também no celular · uma palavra
+              legível identifica melhor que um selo borrado. */}
+          <Link to="/picks" className="flex items-center gap-2.5 shrink-0">
+            <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
+            <span className="font-display font-semibold text-lg tracking-tight leading-none">
+              <span className="text-ink-1">Pick</span>
+              <span className="text-green-500">IA</span>
+            </span>
           </Link>
 
           {/* Nav links · desktop only */}

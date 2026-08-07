@@ -422,6 +422,7 @@ export default function Estatisticas() {
       title="Estatísticas"
       description="Tendências por liga e ranking por time nos mercados que a IA analisa."
       noindex
+      width="full"
       bar={{
         title: 'Estatísticas',
         sub: 'Tendências por liga · clique em um card para ver o ranking por time',

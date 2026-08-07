@@ -1331,7 +1331,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
           />
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {picks.map(p => (
             <SuggestionCard
               key={p.id}
@@ -1612,7 +1612,7 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
     : { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black' }
   return (
     <div className="relative rounded-lg overflow-hidden">
-      <div className="grid gap-4 md:grid-cols-2 select-none pointer-events-none" style={{ filter: 'blur(5px)', opacity: 0.35 }}>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 select-none pointer-events-none" style={{ filter: 'blur(5px)', opacity: 0.35 }}>
         {[1, 2, 3, 4].map(i => (
           <div key={i} className="card p-5 space-y-3">
             <div className="flex items-center justify-between">
@@ -1915,7 +1915,7 @@ export default function Picks() {
       title="Picks"
       description="Os picks da IA de hoje: VIP, free, múltiplas, alavancagem e mercados de faltas e defesas."
       noindex
-      width="wide"
+      width="full"
       bar={{
         title: 'Picks',
         sub: tab === 'hoje' ? (
@@ -2141,7 +2141,7 @@ export default function Picks() {
                     />
                     {!canSeeVip ? <VipLockOverlay color="yellow" /> : (
                       <>
-                        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
+                        <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
                             <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
@@ -2168,7 +2168,7 @@ export default function Picks() {
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
-                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
+                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} onClick={() => openDetail(m.id, 'multipla')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </motion.div>
                     )}
@@ -2213,7 +2213,7 @@ export default function Picks() {
               {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0) && (
                 <section>
                   <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {/* Era aqui que o card de mercado aparecia SEM ação nenhuma:
                         o MercadoCard antigo só mostrava o botão Apostar quando
                         recebia `onBet`, e nesta aba (a que o usuário abre
@@ -2354,7 +2354,7 @@ export default function Picks() {
                   <>
                     {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} />}
                     {filteredVips.length > 0 ? (
-                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2">
+                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
                           <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}

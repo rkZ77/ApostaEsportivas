@@ -12,19 +12,35 @@ import BackButton from './BackButton'
  * delas; e só 8 declaravam <Helmet>, então metade do site compartilhava o
  * mesmo título de aba e a mesma description no resultado de busca.
  *
- * Largura: `wide` para grade de dados (picks, admin), `default` para o corpo
- * do app, `narrow` para formulário, `prose` para leitura. É a mesma escala do
- * .shell / .shell-narrow do CSS, com um degrau largo em cima.
+ * Largura: `full` para tela de aplicativo, `wide`/`default` para o corpo, e
+ * `prose`/`narrow` para leitura e formulário. É a mesma escala do .shell /
+ * .shell-narrow do CSS, com dois degraus largos em cima.
+ *
+ * Texto tem largura ideal e ela é curta · linha longa demais faz o olho perder
+ * a volta. Grade de card não tem esse limite: o que ela quer é caber mais
+ * coluna. Por isso a escala vai de 42rem a "sem teto", e não é a mesma decisão
+ * nas duas pontas.
  */
 
-const WIDTH = {
+export const PAGE_WIDTH = {
+  /**
+   * Sem teto, como aplicativo. Numa tela de 1900px o `wide` deixava 380px de
+   * preto de cada lado enquanto os cards de pick se espremiam em duas colunas.
+   * O padding cresce com a tela para o conteúdo não encostar na borda do
+   * monitor, que é o que separa "ocupa a tela" de "vazou".
+   */
+  full: 'max-w-none px-4 sm:px-6 lg:px-8',
   /** Só o Admin. Tabela de operação com muitas colunas. */
-  admin: 'max-w-7xl',
-  wide: 'max-w-6xl',
-  default: 'max-w-5xl',
-  prose: 'max-w-3xl',
-  narrow: 'max-w-2xl',
+  admin: 'max-w-7xl px-4',
+  wide: 'max-w-6xl px-4',
+  default: 'max-w-5xl px-4',
+  prose: 'max-w-3xl px-4',
+  narrow: 'max-w-2xl px-4',
 } as const
+
+/** Precisa dos mesmos limites do conteúdo (ver `beforeMain`, que é full-bleed
+ *  de propósito e monta o próprio container). */
+export type PageWidth = keyof typeof PAGE_WIDTH
 
 export interface PageBar {
   title: React.ReactNode
@@ -59,7 +75,7 @@ export default function PageShell({
   description?: string
   canonical?: string
   noindex?: boolean
-  width?: keyof typeof WIDTH
+  width?: PageWidth
   /**
    * true usa a Navbar do app, false não põe nenhuma, e um nó monta a sua.
    * O nó existe para página pública que também abre logada (Resultados, pick
@@ -94,7 +110,7 @@ export default function PageShell({
 
       {bar && (
         <div className="border-b border-line">
-          <div className={cn('mx-auto px-4 py-4 flex items-center justify-between gap-3', WIDTH[width])}>
+          <div className={cn('mx-auto py-4 flex items-center justify-between gap-3', PAGE_WIDTH[width])}>
             <div className="flex items-center gap-3 min-w-0">
               {bar.back && <BackButton to={typeof bar.back === 'string' ? bar.back : undefined} />}
               <div className="min-w-0">
@@ -117,7 +133,7 @@ export default function PageShell({
 
       {beforeMain}
 
-      <main className={cn('flex-1 w-full mx-auto px-4 py-6 md:py-8', WIDTH[width], mainClassName)}>
+      <main className={cn('flex-1 w-full mx-auto py-6 md:py-8', PAGE_WIDTH[width], mainClassName)}>
         {children}
       </main>
 

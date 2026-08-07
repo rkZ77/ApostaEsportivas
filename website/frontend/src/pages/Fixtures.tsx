@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
-import PageShell from '../components/PageShell'
+import PageShell, { PAGE_WIDTH } from '../components/PageShell'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
@@ -251,7 +251,11 @@ export default function Fixtures() {
       }}
       beforeMain={
         <div className="border-b border-line">
-          <div className="max-w-5xl mx-auto px-4">
+          {/* `beforeMain` é full-bleed de propósito (a borda vai de ponta a
+              ponta), então o alinhamento com o conteúdo é por conta de quem
+              chama. Lendo a largura do PageShell em vez de repetir o valor,
+              mudar a página de faixa não deixa a régua de abas para trás. */}
+          <div className={`mx-auto ${PAGE_WIDTH.default}`}>
             {pageTab === 'jogos' && (
               <div className="py-3">
                 <DateStrip date={date} onChange={handleDateChange} />
