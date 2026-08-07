@@ -167,6 +167,7 @@ export default function MeusPicks() {
       title="Meus Picks"
       description="Suas apostas pendentes e resolvidas, com resultado e saldo de cada uma."
       noindex
+      width="full"
       bar={{ back: true, title: 'Meus Picks', sub: 'Suas apostas pendentes e resolvidas' }}
     >
       <AnimatePresence>

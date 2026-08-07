@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import api from '../services/api'
-import { LiveDot, Skeleton } from '../components/ui'
+import { LiveDot, Marquee, Skeleton } from '../components/ui'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 
 /*
@@ -19,11 +19,14 @@ import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
  *    o corte é por horário e a lista atravessa a virada do dia sozinha · por
  *    isso cada card carrega o dia dele.
  *
- * 2. Virou esteira horizontal. A lista vertical de cinco linhas empurrava os
+ * 2. Virou carrossel horizontal. A lista vertical de cinco linhas empurrava os
  *    indicadores para fora da primeira tela no celular, e cada linha só cabia
  *    horário e nomes espremidos. Deitada, o mesmo espaço leva escudo, os dois
- *    times em linhas próprias e a liga · e sobra o gesto de arrastar, que já é
- *    o que o dedo faz numa fila de jogos.
+ *    times em linhas próprias e a liga.
+ *
+ * Ela anda sozinha (components/ui/Marquee), e cada jogo entra UMA vez · quem
+ * encostar o cursor ou o dedo pausa. Se os jogos couberem na largura, a fita
+ * não anda: fica parada e centralizada, sem repetir card para fingir volume.
  */
 
 interface UpcomingFixture {
@@ -75,7 +78,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
 
   return (
     <article
-      className="snap-start shrink-0 w-[164px] sm:w-[176px] bg-surface-0 border border-line rounded-lg p-3
+      className="shrink-0 w-[164px] sm:w-[176px] bg-surface-0 border border-line rounded-lg p-3
                  hover:border-line-strong transition-colors duration-1 ease-smooth"
     >
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -114,8 +117,6 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
 export default function NextGames() {
   const [games, setGames] = useState<UpcomingFixture[] | null>(null)
   const [loading, setLoading] = useState(true)
-  const rolador = useRef<HTMLDivElement>(null)
-  const [temMais, setTemMais] = useState(false)
 
   useEffect(() => {
     api.get('/public/next-fixtures', { params: { limit: 8 } })
@@ -123,22 +124,6 @@ export default function NextGames() {
       .catch(() => setGames([]))
       .finally(() => setLoading(false))
   }, [])
-
-  /*
-   * O esmaecido da direita só existe se houver mesmo card escondido lá.
-   * Fixo, ele virava uma mancha sem explicação sempre que os jogos do dia
-   * coubessem na largura da tela · o degradê é uma dica de que dá para
-   * arrastar, e dica que mente é pior do que dica nenhuma.
-   */
-  useEffect(() => {
-    const el = rolador.current
-    if (!el) return
-    const medir = () => setTemMais(el.scrollWidth - el.clientWidth > 8)
-    medir()
-    const ro = new ResizeObserver(medir)
-    ro.observe(el)
-    return () => ro.disconnect()
-  }, [games])
 
   if (loading) {
     return (
@@ -175,28 +160,20 @@ export default function NextGames() {
         </span>
       </div>
 
-      {/* A sangria negativa fica no invólucro, não no rolador: é ela que
-          alinha o esmaecido com a borda real da tela no celular. Com a
-          margem no rolador, a faixa parava 16px antes e deixava um naco de
-          card nítido do lado de fora do degradê. */}
-      <div className="relative -mx-4 sm:mx-0">
-        <div
-          ref={rolador}
-          className="flex gap-3 overflow-x-auto scrollbar-none snap-x snap-mandatory px-4 sm:px-0"
-        >
-          {games.map(g => (
+      {/* Sangria até a borda da tela no celular: o esmaecido das pontas é do
+          próprio Marquee, e com a fita parando 16px antes da borda ele
+          deixaria um naco de card nítido do lado de fora do degradê. */}
+      <div className="-mx-4 sm:mx-0">
+        <Marquee
+          spacing="pr-3"
+          /* Devagar de propósito: o card tem cinco informações e some da
+             tela em ~6s neste ritmo. Na velocidade da fita de ligas · que
+             são duas palavras e um escudo · não daria para ler nenhuma. */
+          speed={28}
+          items={games.map(g => (
             <GameCard key={g.fixture_id} game={g} hoje={hoje} />
           ))}
-        </div>
-
-        {/* pointer-events-none para não roubar o arrasto de quem começa o
-            gesto justamente em cima do degradê. */}
-        {temMais && (
-          <div
-            aria-hidden="true"
-            className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-surface-0 to-transparent"
-          />
-        )}
+        />
       </div>
     </motion.section>
   )

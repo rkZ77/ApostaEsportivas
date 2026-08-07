@@ -292,6 +292,7 @@ export default function Banca() {
       title="Minha Banca"
       description="Acompanhe o crescimento da sua banca a partir dos picks que você apostou."
       noindex
+      width="full"
       bar={{
         back: true,
         title: 'Minha Banca',
