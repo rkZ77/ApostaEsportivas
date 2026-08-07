@@ -24,7 +24,10 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
-from engine_pipelines.decision_log import log_decision
+from engine_pipelines.decision_log import (
+    MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
+    log_decision, log_run, log_skip,
+)
 
 
 
@@ -133,11 +136,13 @@ def run_vip_engine():
         try:
             structured_odds = odds_service.load_odds_structured(fixture["fixture_id"])
             if not structured_odds:
+                log_skip("VIP_ENGINE", fixture, MOTIVO_SEM_ODDS)
                 continue
 
             last10_home = _load_history(match_stats, fixture["home_team_id"], fixture["season"], fixture["league_id"])
             last10_away = _load_history(match_stats, fixture["away_team_id"], fixture["season"], fixture["league_id"])
             if not last10_home or not last10_away:
+                log_skip("VIP_ENGINE", fixture, MOTIVO_SEM_HISTORICO)
                 continue
 
             # Data Validation Engine -- roda ANTES de qualquer analise de
@@ -146,6 +151,7 @@ def run_vip_engine():
             hist_home_val = dv.validate_history(last10_home)
             hist_away_val = dv.validate_history(last10_away)
             if not hist_home_val["passed"] or not hist_away_val["passed"]:
+                log_skip("VIP_ENGINE", fixture, MOTIVO_HISTORICO_REPROVADO)
                 continue
 
             standing_home, standing_away = standings_service.get_for_fixture(

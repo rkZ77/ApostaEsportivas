@@ -39,7 +39,10 @@ from services.pick_engine.fouls_model import (
 )
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
-from engine_pipelines.decision_log import log_decision
+from engine_pipelines.decision_log import (
+    MOTIVO_ERRO, MOTIVO_SEM_CANDIDATO,
+    log_decision, log_run, log_skip,
+)
 
 # Mesma faixa de odd dos outros pipelines: fora dela o pick nao interessa
 # comercialmente (odd baixa demais nao paga, alta demais e' loteria).
@@ -314,13 +317,21 @@ def run_faltas_engine():
             c = _avaliar_fixture(fixture, match_stats, odds_service, referee_service)
         except Exception as e:
             print(f"[FALTAS_ENGINE] Erro no fixture {fixture['fixture_id']}: {e}")
+            log_skip("FALTAS_ENGINE", fixture, f"{MOTIVO_ERRO}: {e}")
             continue
         if c:
             candidatos.append(c)
+        else:
+            # Ate 2026-08-07 o jogo que nao virava candidato saia daqui sem
+            # deixar rastro: log_decision so' era chamado no loop de baixo, com
+            # os aprovados. Dia sem pick era indistinguivel de dia sem rodar.
+            log_skip("FALTAS_ENGINE", fixture, MOTIVO_SEM_CANDIDATO)
 
     if not candidatos:
-        print("[FALTAS_ENGINE] Nenhum candidato passou (odd fora da faixa, "
-              "historico curto ou margem abaixo do minimo).")
+        motivo = ("nenhum candidato passou (odd fora da faixa, historico curto "
+                  "ou margem abaixo do minimo)")
+        print(f"[FALTAS_ENGINE] {motivo.capitalize()}.")
+        log_run("FALTAS_ENGINE", motivo)
         cur.close()
         conn.close()
         return

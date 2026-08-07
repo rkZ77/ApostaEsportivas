@@ -29,7 +29,33 @@ DEFAULT_PROVIDERS = {
 # Nao existe default de modelo pra OpenAI: o ID tem que vir do env. Chutar um
 # ID errado faz a chamada falhar e o gate aprovar em silencio -- exatamente o
 # bug que o claude-3-5-haiku-latest (aposentado em 19/02/2026) causava aqui.
-DEFAULT_MODELS = {"anthropic": "claude-opus-5", "openai": ""}
+#
+# Anthropic saiu do claude-opus-5 pro claude-sonnet-5 em 2026-08-07: o parecer
+# aqui e' classificacao binaria com schema fechado ("vete so' com contradicao
+# objetiva no JSON", ver _system_prompt) -- nao e' trabalho de modelo de
+# fronteira. Sonnet 5 custa 3/15 por milhao de tokens contra 5/25 do Opus 5,
+# aceita effort igual e nao muda uma linha de codigo. Pra cortar mais, o
+# claude-haiku-4-5 (1/5) ja' e' seguro desde que _aceita_effort exista.
+DEFAULT_MODELS = {"anthropic": "claude-sonnet-5", "openai": ""}
+
+# `output_config.effort` nao existe na linha inteira: Haiku 4.5 e Sonnet 4.5
+# devolvem 400 quando o campo vem junto. Como este gate FALHA ABERTO, esse 400
+# nao apareceria como erro no produto -- viraria status "unavailable" e decision
+# "approve", ou seja: baixar o modelo pra economizar desligaria a revisao em
+# silencio. Mesmo modo de falha do comentario acima.
+#
+# A lista e' de quem ACEITA effort, nunca de quem rejeita: modelo novo que nao
+# esteja aqui entra sem o campo, que e' o lado seguro (perde o controle de
+# profundidade, nao a revisao inteira).
+_MODELOS_COM_EFFORT = (
+    "claude-opus-5", "claude-opus-4-8", "claude-opus-4-7", "claude-opus-4-6",
+    "claude-opus-4-5", "claude-sonnet-5", "claude-sonnet-4-6",
+    "claude-fable-5", "claude-mythos-5",
+)
+
+
+def aceita_effort(model: str) -> bool:
+    return model.startswith(_MODELOS_COM_EFFORT)
 
 # Formato do parecer. No Anthropic vira structured output (o modelo nao
 # consegue devolver fora do schema); no OpenAI o json_object nao valida
@@ -51,7 +77,7 @@ REVIEW_SCHEMA = {
 class AIReviewSettings:
     mode: str = "off"
     provider: str = "anthropic"
-    model: str = "claude-opus-5"
+    model: str = "claude-sonnet-5"
     cache_hours: int = 24
     # No Opus 5 o thinking vem ligado por padrao e max_tokens limita thinking
     # + resposta juntos: 350 truncava o JSON antes de fechar.
@@ -214,12 +240,15 @@ class AIReviewGate:
             from anthropic import Anthropic
             # Sem temperature: removido do Opus 4.7 em diante, retorna 400.
             # output_config.format garante JSON valido pelo schema; effort=low
-            # mantem o thinking curto num parecer que e so um veredito.
+            # mantem o thinking curto num parecer que e so um veredito -- mas so
+            # entra pra modelo que aceita o campo (ver _MODELOS_COM_EFFORT).
+            output_config = {"format": {"type": "json_schema", "schema": REVIEW_SCHEMA}}
+            if aceita_effort(self.settings.model):
+                output_config["effort"] = self.settings.effort
             response = Anthropic().messages.create(
                 model=self.settings.model, max_tokens=self.settings.max_tokens,
                 system=self._system_prompt(),
-                output_config={"effort": self.settings.effort,
-                               "format": {"type": "json_schema", "schema": REVIEW_SCHEMA}},
+                output_config=output_config,
                 messages=[{"role": "user", "content": payload}],
             )
             if response.stop_reason == "refusal":

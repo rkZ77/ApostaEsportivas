@@ -6,16 +6,119 @@ reproduzir manualmente toda vez que algo parecer estranho (ex: motor
 "só escolhendo cartão" -- com esse log da pra ver na hora se e sinal
 real ou algum termo do Score Final dominando os outros).
 
-Grava em logs/engine_decisions.jsonl (uma linha por fixture) e imprime um
-resumo legivel no console. Nunca derruba o pipeline -- qualquer falha de
-log e engolida e so avisada."""
+ONDE GRAVA (mudou em 2026-08-07)
+--------------------------------
+Tres destinos, em ordem de durabilidade:
+
+  1. tabela `engine_decisions` no Postgres  <- fonte de verdade
+  2. logs/engine_decisions.jsonl            <- conveniencia local
+  3. resumo legivel no stdout               <- acompanhar a rodada ao vivo
+
+O arquivo era o unico destino ate 2026-08-07 e em producao ele nao existe na
+pratica: o Dockerfile copia `src/` pra `/app/pipeline/`, entao LOGS_DIR resolve
+pra `/app/logs`, que e' filesystem de container sem volume no Railway -- some
+em todo deploy e todo restart. O resultado era que a pergunta "por que o Free
+nao gerou hoje?" so' tinha resposta se alguem estivesse olhando o stdout na
+hora. Foi exatamente o que aconteceu em 07/08 (ver log_skip abaixo).
+
+O QUE MAIS FALTAVA
+------------------
+Registrar o fixture que o pipeline AVALIOU nao bastava: o motor descarta jogo
+antes disso, em `continue` mudo (sem odds estruturadas, sem historico,
+historico reprovado). Em 07/08 o unico jogo livre do dia (Estoril x Famalicao)
+caiu num desses -- os dois times tinham zero jogos coletados -- e o dia inteiro
+ficou sem Free sem nenhuma linha de log explicando. `log_skip` cobre esse caso,
+e `log_run` cobre o pipeline que termina sem candidato nenhum.
+
+Nada aqui derruba pipeline: toda falha de log e' engolida e so' avisada.
+"""
 import os
 import json
 from datetime import datetime
 
+from utils.db_utils import get_connection
+from utils.data_br import HOJE_BR
 from utils.paths import LOGS_DIR as LOG_DIR, log_path
 
 LOG_PATH = log_path("engine_decisions.jsonl")
+
+# Status possiveis de uma linha em engine_decisions.
+STATUS_AVALIADO = "avaliado"      # fixture rodou o motor; candidates preenchido
+STATUS_DESCARTADO = "descartado"  # fixture caiu antes do motor; reason explica
+STATUS_SEM_PICK = "sem_pick"      # pipeline terminou sem candidato (fixture NULL)
+
+_tabela_pronta = False
+
+
+def _ensure_table() -> None:
+    global _tabela_pronta
+    if _tabela_pronta:
+        return
+    conn = get_connection()
+    cur = conn.cursor()
+    cur.execute("""CREATE TABLE IF NOT EXISTS engine_decisions (
+        id          BIGSERIAL PRIMARY KEY,
+        match_date  DATE NOT NULL,
+        pipeline    TEXT NOT NULL,
+        fixture_id  INTEGER,
+        home_team   TEXT,
+        away_team   TEXT,
+        status      TEXT NOT NULL,
+        reason      TEXT,
+        candidates  JSONB NOT NULL DEFAULT '[]'::jsonb,
+        matchup     JSONB,
+        context     JSONB,
+        created_at  TIMESTAMP DEFAULT NOW()
+    )""")
+    # A consulta real e' sempre "o que aconteceu no dia X no pipeline Y".
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_dia "
+                "ON engine_decisions (match_date DESC, pipeline)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_fixture "
+                "ON engine_decisions (fixture_id)")
+    conn.commit()
+    cur.close()
+    conn.close()
+    _tabela_pronta = True
+
+
+def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None,
+            candidates: list, matchup: dict | None, context_data: dict | None) -> None:
+    """Um INSERT por chamada. Conexao propria de proposito: log_decision e'
+    chamado de dentro de funcoes que nao tem cursor a mao
+    (_best_candidate_across_fixtures, _gather_leg_candidates), e passar cursor
+    por parametro ate' la' acoplaria o motor ao log."""
+    fixture = fixture or {}
+    try:
+        _ensure_table()
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute(
+            f"""INSERT INTO engine_decisions
+            (match_date, pipeline, fixture_id, home_team, away_team, status, reason,
+             candidates, matchup, context)
+            VALUES ({HOJE_BR}, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)""",
+            (pipeline, fixture.get("fixture_id"), fixture.get("home_team"),
+             fixture.get("away_team"), status, reason,
+             json.dumps(candidates, ensure_ascii=False, default=str),
+             json.dumps(matchup, ensure_ascii=False, default=str) if matchup else None,
+             json.dumps(context_data, ensure_ascii=False, default=str) if context_data else None),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"[DECISION_LOG] Aviso: falha ao gravar no banco (não afeta o pick): {e}")
+
+
+def _gravar_arquivo(entry: dict) -> bool:
+    try:
+        os.makedirs(LOG_DIR, exist_ok=True)
+        with open(LOG_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
+        return True
+    except Exception as e:
+        print(f"[DECISION_LOG] Aviso: falha ao gravar arquivo (não afeta o pick): {e}")
+        return False
 
 
 def _candidate_summary(c: dict) -> dict:
@@ -55,8 +158,6 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
     nao tem 'final_score' calculado, aparecem com eligible=False).
     `eligible_picks` = saida de rank_market_candidates (so os aprovados)."""
     try:
-        os.makedirs(LOG_DIR, exist_ok=True)
-
         candidates_summary = []
         for c in all_candidates:
             key = (c.get("market_type"), c.get("value_label"))
@@ -69,23 +170,22 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
             # pick ESCOLHIDO aparecia no log como "REJEITADO".
             summary["eligible"] = matched is not None
             candidates_summary.append(summary)
-
-        entry = {
-            "logged_at": datetime.now().isoformat(),
-            "pipeline": pipeline,
-            "fixture_id": fixture.get("fixture_id"),
-            "home_team": fixture.get("home_team"),
-            "away_team": fixture.get("away_team"),
-            "matchup": matchup,
-            "context": context_data,
-            "candidates": candidates_summary,
-        }
-
-        with open(LOG_PATH, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False, default=str) + "\n")
     except Exception as e:
-        print(f"[DECISION_LOG] Aviso: falha ao gravar log (não afeta o pick): {e}")
+        print(f"[DECISION_LOG] Aviso: falha ao montar resumo (não afeta o pick): {e}")
         return
+
+    _gravar(pipeline, fixture, STATUS_AVALIADO, None, candidates_summary, matchup, context_data)
+    _gravar_arquivo({
+        "logged_at": datetime.now().isoformat(),
+        "pipeline": pipeline,
+        "status": STATUS_AVALIADO,
+        "fixture_id": fixture.get("fixture_id"),
+        "home_team": fixture.get("home_team"),
+        "away_team": fixture.get("away_team"),
+        "matchup": matchup,
+        "context": context_data,
+        "candidates": candidates_summary,
+    })
 
     # Fora do try do arquivo de proposito: falha ao IMPRIMIR nao e' falha ao
     # GRAVAR, e a mensagem generica acima ja' mandou investigar o lugar errado
@@ -94,6 +194,59 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
         _print_summary(pipeline, fixture, candidates_summary)
     except Exception as e:
         print(f"[DECISION_LOG] Aviso: log gravado, falha só ao imprimir o resumo: {e}")
+
+
+def log_skip(pipeline: str, fixture: dict, reason: str) -> None:
+    """Fixture descartado ANTES de rodar o motor.
+
+    Todo `continue` mudo do pipeline passa a ter uma linha aqui. Sem isso, o
+    jogo simplesmente nao aparecia em lugar nenhum -- nem como avaliado, nem
+    como rejeitado -- e a unica leitura possivel era "o motor ignorou o jogo",
+    que nao diz se faltou odd, faltou historico ou o historico reprovou.
+
+    `reason` e' texto curto e estavel (vira filtro em SQL depois): use as
+    constantes MOTIVO_* abaixo em vez de escrever a frase na mao.
+    """
+    _gravar(pipeline, fixture, STATUS_DESCARTADO, reason, [], None, None)
+    _gravar_arquivo({
+        "logged_at": datetime.now().isoformat(),
+        "pipeline": pipeline,
+        "status": STATUS_DESCARTADO,
+        "fixture_id": fixture.get("fixture_id"),
+        "home_team": fixture.get("home_team"),
+        "away_team": fixture.get("away_team"),
+        "reason": reason,
+    })
+    print(f"[DECISION_LOG] {pipeline} | {fixture.get('home_team')} x {fixture.get('away_team')} "
+          f"(fixture {fixture.get('fixture_id')}) DESCARTADO: {reason}")
+
+
+def log_run(pipeline: str, reason: str) -> None:
+    """Pipeline terminou sem candidato nenhum (fixture_id NULL).
+
+    Faltas e goleiros precisam disso mais que os outros: os dois so' chamavam
+    log_decision dentro do loop de candidatos, entao dia sem candidato nao
+    gerava linha nenhuma e ficava impossivel distinguir "avaliou e nao achou"
+    de "nem rodou" -- especialmente em goleiros, onde defesa aparece em 0.86%
+    das atuacoes e o dia vazio e' o caso NORMAL, nao a excecao.
+    """
+    _gravar(pipeline, None, STATUS_SEM_PICK, reason, [], None, None)
+    _gravar_arquivo({
+        "logged_at": datetime.now().isoformat(),
+        "pipeline": pipeline,
+        "status": STATUS_SEM_PICK,
+        "reason": reason,
+    })
+
+
+# Motivos de descarte. Constantes porque viram filtro de SQL ("quantos jogos o
+# motor perdeu por falta de historico esta semana?") -- frase escrita na mao em
+# cada pipeline nao agrupa.
+MOTIVO_SEM_ODDS = "sem odds estruturadas"
+MOTIVO_SEM_HISTORICO = "sem historico coletado para um dos times"
+MOTIVO_HISTORICO_REPROVADO = "historico reprovado na validacao (amostra curta ou inconsistente)"
+MOTIVO_SEM_CANDIDATO = "nenhum candidato passou nos criterios do modelo"
+MOTIVO_ERRO = "erro ao avaliar o fixture"
 
 
 def _pct(v) -> str:

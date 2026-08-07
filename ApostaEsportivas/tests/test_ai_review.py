@@ -2,7 +2,21 @@ import os
 
 import pytest
 
-from services.pick_engine.ai_review import AIReviewGate, AIReviewSettings, build_review_payload, normalize_review
+from services.pick_engine.ai_review import (
+    AIReviewGate, AIReviewSettings, aceita_effort, build_review_payload, normalize_review,
+)
+
+
+def test_effort_so_vai_para_modelo_que_aceita():
+    """Regressao preventiva: Haiku 4.5 e Sonnet 4.5 devolvem 400 se
+    output_config.effort vier junto. Como o gate falha aberto, esse 400 nao
+    apareceria como erro -- viraria approve em silencio, desligando a revisao
+    justamente quando alguem troca pro modelo mais barato pra economizar."""
+    assert aceita_effort("claude-sonnet-5")
+    assert aceita_effort("claude-opus-5")
+    assert not aceita_effort("claude-haiku-4-5")
+    assert not aceita_effort("claude-haiku-4-5-20251001")
+    assert not aceita_effort("modelo-novo-que-ninguem-mapeou")
 
 
 @pytest.fixture
@@ -58,7 +72,7 @@ def test_provider_padrao_por_pipeline(env_limpo):
     assert AIReviewSettings.from_env("alavancagem").provider == "anthropic"
     assert AIReviewSettings.from_env("vip").provider == "openai"
     assert AIReviewSettings.from_env("multipla").provider == "openai"
-    assert AIReviewSettings.from_env("dica").model == "claude-opus-5"
+    assert AIReviewSettings.from_env("dica").model == "claude-sonnet-5"
 
 
 def test_env_do_pipeline_vence_o_global(env_limpo):
