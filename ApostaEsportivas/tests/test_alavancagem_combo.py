@@ -108,17 +108,40 @@ def test_cai_para_simples_quando_nenhum_combo_cabe_na_faixa():
     assert odd_combined == pytest.approx(1.45)
 
 
-def test_recusa_combo_com_todas_as_pernas_do_mesmo_mercado():
-    """Duas pernas do mesmo market_type sao a mesma aposta duas vezes."""
+def test_recusa_combo_com_pernas_do_mesmo_mercado_no_mesmo_jogo():
+    """Duas pernas da mesma familia NO MESMO JOGO sao a mesma aposta duas vezes.
+
+    Este teste ja' existiu com as duas pernas em fixtures DIFERENTES (1 e 2) e
+    passava, porque a regra de entao olhava so' o market_type. Ela vetava
+    correlacao que nao existe -- dois jogos diferentes, no mesmo dia, nao sao a
+    mesma aposta -- e o preco foi o produto: em 08/08 as 12 pernas candidatas
+    eram todas `goals` e nenhuma dupla chegou a ter a odd calculada. Ver
+    _find_combo. Aqui as duas passam a dividir o fixture 1, que e' o caso que a
+    regra sempre quis pegar.
+    """
     legs = [
         _leg(1.20, "corners", 0.90, fixture_id=1),
-        _leg(1.25, "corners", 0.89, fixture_id=2),
+        _leg(1.25, "corners", 0.89, fixture_id=1),
     ]
 
     resultado = _find_combo(legs, ODD_COMBINED_MIN, ODD_COMBINED_MAX)
 
     # Sobra so' o caminho de perna unica, e nenhuma das duas odds cabe no alvo.
     assert resultado is None
+
+
+def test_aceita_mesma_familia_em_jogos_diferentes():
+    """O contraponto do teste acima, que e' a mudanca de 2026-08-08."""
+    legs = [
+        _leg(1.20, "corners", 0.90, fixture_id=1),
+        _leg(1.25, "corners", 0.89, fixture_id=2),
+    ]
+
+    combo, _confidence, odd_combined = _find_combo(
+        legs, ODD_COMBINED_MIN, ODD_COMBINED_MAX)
+
+    assert len(combo) == 2
+    assert odd_combined == pytest.approx(1.50)
 
 
 def test_confianca_do_combo_e_o_produto_nao_a_media():
