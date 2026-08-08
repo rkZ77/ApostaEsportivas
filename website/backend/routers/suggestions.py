@@ -2285,6 +2285,24 @@ def get_market_form(
     Multipla e alavancagem ficam de fora: sao varias pernas de mercados
     diferentes, entao nao existe UMA serie que descreva o bilhete. Cada perna
     ja tem o proprio icone de regra no card.
+
+    A SERIE TEM QUE OLHAR O MESMO QUE O MOTOR OLHOU (corrigido 2026-08-08).
+    Duas divergencias reais, achadas comparando os picks de 08/08 com o banco:
+
+    1. MANDO. "Escanteios Visitante Mais/Menos" e' sobre quem joga fora, mas a
+       consulta pegava os jogos dos DOIS times e `_stat_for_market` lia o lado
+       "fora" de cada um deles, fosse de quem fosse. No pick #1573 (Botafogo x
+       Fluminense) 5 das 8 barras contavam outro time -- Vasco, Bahia, Botafogo,
+       Vitoria e Santos -- e a media exibida (3.00) nao era do Fluminense
+       (5.20 fora de casa). Filtrando por mando, o lado que `_stat_for_market`
+       le passa a ser sempre o time certo, sem tocar naquele dispatch.
+
+    2. COMPETICAO. O motor le historico da MESMA liga/temporada da fixture
+       (MatchStatsService.get_all_matches_full); a serie lia qualquer
+       competicao. No pick #1572 (Coritiba x Chapecoense) dois dos oito jogos
+       eram de Copa do Brasil, com 14 e 13 escanteios, e o motor nunca os viu.
+       Card e pick contando historias diferentes sobre o mesmo numero e' pior
+       que nao mostrar serie nenhuma.
     """
     fonte = _PICK_FONTE.get(pick_type)
     if not fonte:
@@ -2298,7 +2316,8 @@ def get_market_form(
             SELECT p.fixture_id, p.market, p.line, p.market_type,
                    COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                    COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
-                   p.{col_casa} AS home_team, p.{col_fora} AS away_team
+                   p.{col_casa} AS home_team, p.{col_fora} AS away_team,
+                   f.league_id, f.season
               FROM {tabela} p
          LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
              WHERE p.id = %s
@@ -2308,13 +2327,31 @@ def get_market_form(
             raise HTTPException(404, "Pick nao encontrado")
         pick = dict(pick)
 
-        # A serie fala do CONFRONTO, entao pega os jogos dos dois times. Um
-        # time so' contaria metade da historia num mercado de total.
-        ids = [t for t in (pick["home_team_id"], pick["away_team_id"]) if t]
-        if not ids:
+        escopo = market_form.escopo_do_mercado(pick["market"])
+        if escopo == "home":
+            # Mercado do mandante: so' os jogos EM CASA dele.
+            filtro_time, ids = "home_team_id = %s", [pick["home_team_id"]]
+        elif escopo == "away":
+            filtro_time, ids = "away_team_id = %s", [pick["away_team_id"]]
+        else:
+            # Total do jogo: a serie fala do CONFRONTO, entao pega os jogos dos
+            # dois times. Um time so' contaria metade da historia.
+            filtro_time = "(home_team_id = ANY(%s) OR away_team_id = ANY(%s))"
+            ids = [[t for t in (pick["home_team_id"], pick["away_team_id"]) if t]] * 2
+        if not all(i for i in ids):
             return {"available": False, "reason": "pick sem times identificados"}
 
-        cur.execute("""
+        # Mesma liga/temporada que o motor usou. Sem a fixture na tabela
+        # (pick antigo, join vazio) o filtro sai e a serie volta ao
+        # comportamento de antes -- serie um pouco mais larga e' melhor que
+        # secao vazia.
+        filtro_liga = ""
+        params_liga = []
+        if pick.get("league_id") and pick.get("season"):
+            filtro_liga = "AND league_id = %s AND season = %s"
+            params_liga = [pick["league_id"], pick["season"]]
+
+        cur.execute(f"""
             SELECT fixture_id, match_date, home_goals, away_goals,
                    home_corners, away_corners,
                    home_yellow_cards, away_yellow_cards,
@@ -2322,12 +2359,13 @@ def get_market_form(
                    home_fouls, away_fouls,
                    home_shots_on, away_shots_on
               FROM match_statistics
-             WHERE (home_team_id = ANY(%s) OR away_team_id = ANY(%s))
+             WHERE {filtro_time}
                AND status IN ('FT','AET','PEN')
                AND fixture_id <> COALESCE(%s, -1)
+               {filtro_liga}
           ORDER BY match_date DESC
              LIMIT %s
-        """, (ids, ids, pick.get("fixture_id"), limit))
+        """, (*ids, pick.get("fixture_id"), *params_liga, limit))
         jogos = [dict(r) for r in cur.fetchall()]
         if not jogos:
             return {"available": False, "reason": "sem historico"}

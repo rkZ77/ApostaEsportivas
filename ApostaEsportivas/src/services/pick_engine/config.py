@@ -88,6 +88,13 @@ class PickEngineConfig:
     opponent_weak_weight: float = 0.5
     opponent_unknown_weight: float = 1.0
 
+    # Desacordo entre a taxa empirica e o Poisson (orchestrator). Acima deste
+    # valor o motor passa a trabalhar com a MENOR das duas estimativas, em vez
+    # de publicar a maior. None desliga a regra (motor volta ao de antes de
+    # 2026-08-08). Ver o comentario longo em orchestrator.py -- o numero foi
+    # escolhido medindo contra os picks ja resolvidos, nao por gosto.
+    model_disagreement_threshold: float | None = 0.15
+
     # Amostra (Q)
     sample_rich_n: int = 8
     sample_rich_q: float = 1.00

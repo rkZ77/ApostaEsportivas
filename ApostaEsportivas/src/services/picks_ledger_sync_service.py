@@ -15,6 +15,8 @@ Auto-provisiona a tabela (CREATE TABLE IF NOT EXISTS) onde quer que rode
 -- mesmo padrao ja usado em engine_pipelines/*.py. Chamado a partir de
 atualizar_resultados_sugestoes.py, entao roda continuamente junto do
 fluxo de checagem de resultado que ja existe."""
+import json
+
 import psycopg2.extras
 from utils.db_utils import get_connection
 from services.pick_legs_extractor import fetch_all_legs, fixture_context
@@ -92,6 +94,18 @@ def _create_table_if_needed(cur):
         ("clv",              "NUMERIC"),   # (odd_entrada / odd_fechamento) - 1
         ("ev_realizado",     "NUMERIC"),   # profit efetivo da perna, alinhado ao ev esperado
         ("engine_version",   "TEXT"),      # commit_sha que gerou a pick
+        # ── Quem revisou o pick (2026-08-08) ──────────────────────────────
+        # O gate de IA (services/pick_engine/ai_review.py) usa provider
+        # diferente por pipeline. Sem estas colunas nao da' pra responder
+        # "qual modelo aprova o que da' green" -- so' da' pra contar chamada,
+        # que e' contabilidade de custo, nao de qualidade.
+        # ai_decision fica separado do parecer inteiro de proposito: e' o
+        # unico campo que entra em GROUP BY, e JSONB nao indexa de graca.
+        ("ai_provider",      "TEXT"),      # anthropic | openai | NULL (sem revisao)
+        ("ai_model",         "TEXT"),
+        ("ai_decision",      "TEXT"),      # approve | reject
+        ("ai_status",        "TEXT"),      # ok | unavailable | invalid_response | disabled | ...
+        ("ai_risk",          "TEXT"),      # low | medium | high
     ):
         cur.execute(f"ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
 
@@ -104,6 +118,7 @@ def _create_table_if_needed(cur):
         ("idx_picks_ledger_house",   "bet_house"),
         ("idx_picks_ledger_referee", "referee"),
         ("idx_picks_ledger_result",  "result"),
+        ("idx_picks_ledger_ai",      "ai_model, ai_decision"),
     ):
         cur.execute(f"CREATE INDEX IF NOT EXISTS {nome} ON picks_ledger ({colunas});")
 
@@ -217,6 +232,33 @@ def _closing_odd_for(cur, fixture_id: int | None, market_type: str | None, line:
         return None
 
 
+def _ai_review_fields(leg: dict) -> dict:
+    """Achata o parecer da IA guardado junto do pick em 5 colunas.
+
+    provider/model so' existem em pick gerado a partir de 2026-08-08 (quando
+    AIReviewGate._stamp passou a carimbar). Pick anterior tem decision e status
+    mas nao tem autor -- fica NULL aqui e a atribuicao retroativa acontece na
+    leitura (routers/admin.py::ai_performance infere por pipeline+dia a partir
+    de ai_pick_review_events). Preencher NULL com chute aqui congelaria o
+    palpite no banco; deixar NULL mantem o dado cru honesto."""
+    review = leg.get("ai_review")
+    if isinstance(review, str):
+        try:
+            review = json.loads(review)
+        except (ValueError, TypeError):
+            review = None
+    if not isinstance(review, dict):
+        return {"ai_provider": None, "ai_model": None, "ai_decision": None,
+                "ai_status": None, "ai_risk": None}
+    return {
+        "ai_provider": review.get("provider"),
+        "ai_model":    review.get("model"),
+        "ai_decision": review.get("decision"),
+        "ai_status":   review.get("status"),
+        "ai_risk":     review.get("risk_level"),
+    }
+
+
 def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profit) -> dict:
     """Todas as dimensoes de atribuicao de uma perna, num dict so'.
 
@@ -245,6 +287,7 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
         "ev_realizado": (float(profit) if profit is not None
                          else attribution.realized_ev(result, odd)),
         "engine_version": None,  # preenchido quando o pick passar a carimbar o commit
+        **_ai_review_fields(leg),
     }
 
 
@@ -292,9 +335,10 @@ def sync() -> dict:
                     result, profit, created_at,
                     season, competition_type, round_phase, round_label, referee,
                     kickoff_at, kickoff_hour, pick_side, is_favorite, odd_band,
-                    closing_odd, clv, ev_realizado, engine_version
+                    closing_odd, clv, ev_realizado, engine_version,
+                    ai_provider, ai_model, ai_decision, ai_status, ai_risk
                 ) VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,
-                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s)
+                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s)
                 ON CONFLICT (source_table, source_id, leg_number) DO UPDATE SET
                     result = EXCLUDED.result,
                     profit = EXCLUDED.profit,
@@ -311,6 +355,11 @@ def sync() -> dict:
                     pick_side = COALESCE(EXCLUDED.pick_side, picks_ledger.pick_side),
                     is_favorite = COALESCE(EXCLUDED.is_favorite, picks_ledger.is_favorite),
                     odd_band = COALESCE(EXCLUDED.odd_band, picks_ledger.odd_band),
+                    ai_provider = COALESCE(EXCLUDED.ai_provider, picks_ledger.ai_provider),
+                    ai_model = COALESCE(EXCLUDED.ai_model, picks_ledger.ai_model),
+                    ai_decision = COALESCE(EXCLUDED.ai_decision, picks_ledger.ai_decision),
+                    ai_status = COALESCE(EXCLUDED.ai_status, picks_ledger.ai_status),
+                    ai_risk = COALESCE(EXCLUDED.ai_risk, picks_ledger.ai_risk),
                     synced_at = NOW()
                 RETURNING (xmax = 0) AS inserted
             """, (
@@ -325,6 +374,8 @@ def sync() -> dict:
                 dim["referee"], dim["kickoff_at"], dim["kickoff_hour"], dim["pick_side"],
                 dim["is_favorite"], dim["odd_band"], dim["closing_odd"], dim["clv"],
                 dim["ev_realizado"], dim["engine_version"],
+                dim["ai_provider"], dim["ai_model"], dim["ai_decision"],
+                dim["ai_status"], dim["ai_risk"],
             ))
             was_inserted = plain_cur.fetchone()[0]
             if was_inserted:

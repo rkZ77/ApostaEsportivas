@@ -170,10 +170,20 @@ def _evidence_weight(n: int) -> float:
 
 def get_prior(market_type: str, calibration: dict, league_id: int | None = None) -> float | None:
     """Hit-rate real historico do market_type (com fallback por liga, ver
-    _resolve_stats), pra uso como prior no encolhimento Bayesiano
-    (bayesian_model.shrink_taxa) -- MESMO criterio de amostra que
-    calibration_adjustment ja usa. None quando nenhuma granularidade sustenta
-    um prior confiavel (nunca inventa)."""
+    _resolve_stats). None quando nenhuma granularidade sustenta um numero
+    confiavel (nunca inventa).
+
+    FORA DO CAMINHO DE PRODUCAO desde 2026-08-08. Era o prior do encolhimento
+    Bayesiano em orchestrator.py; hoje aquele prior e' a probabilidade de
+    mercado no-vig. O motivo esta' escrito por extenso la', mas em uma linha:
+    hit-rate de pick e' amostra selecionada pelo proprio motor, entao usa-lo
+    pra estimar "com que frequencia este time passa desta linha" realimenta o
+    motor com o proprio resultado.
+
+    Continua exposta porque descreve um numero real e util pra diagnostico
+    (e' a mesma base de calibration_adjustment, que segue em producao
+    corrigindo CONFIDENCE -- ali o hit-rate proprio e' exatamente a pergunta
+    certa: "quanto este mercado costuma prometer a mais do que entrega")."""
     stats = _resolve_stats(market_type, league_id, calibration)
     return stats.get("hit") if stats else None
 
