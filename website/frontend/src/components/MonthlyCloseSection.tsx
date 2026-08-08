@@ -1,35 +1,24 @@
 import { useCallback, useEffect, useState } from 'react'
-import { CalendarCheck, ChevronRight, TrendingDown, TrendingUp } from 'lucide-react'
+import { Link } from 'react-router-dom'
+import { CalendarCheck, ChevronRight, History } from 'lucide-react'
 import api from '../services/api'
-import { fmtBRL, fmtSigned } from '../utils/format'
+import { fmtSigned } from '../utils/format'
 import { useNotifications } from '../context/NotificationContext'
 
-interface CloseRow {
-  month_key: string
-  month_label: string
-  bankroll_start: number
-  bankroll_end: number
-  total_pnl: number
-  profit_units: number | null
-  greens: number
-  reds: number
-  half_wins: number
-  half_loss: number
-  push: number
-  total_resolved: number
-}
-
 /**
- * Fechamento pendente + histórico mês a mês.
+ * Fechamento PENDENTE, e um caminho pro histórico.
  *
- * O histórico já existia na tabela `banca_monthly_closes` desde que o
- * fechamento foi criado, mas nenhuma tela lia · o usuário só via o resumo do
- * mês uma vez, no popup, e nunca mais.
+ * A lista mês a mês morava aqui embaixo e foi pra /banca/fechamentos. A
+ * divisão é por natureza, não por tamanho: o fechamento pendente é AÇÃO (tem
+ * prazo, muda a banca, precisa de confirmação) e por isso continua na tela
+ * onde a banca é operada. O histórico é consulta, cresce um item por mês para
+ * sempre, e empurrava tudo pra baixo sem limite numa página que já fala do
+ * mês corrente.
  */
 export default function MonthlyCloseSection() {
   const { openMonthlyClose, monthlyCloseOpen } = useNotifications()
   const [pending, setPending] = useState<{ month_label: string; total_pnl: number } | null>(null)
-  const [history, setHistory] = useState<CloseRow[]>([])
+  const [historico, setHistorico] = useState(0)
   const [loading, setLoading] = useState(true)
 
   const load = useCallback(() => {
@@ -43,7 +32,7 @@ export default function MonthlyCloseSection() {
       setPending(c && !c.already_closed && hasActivity
         ? { month_label: c.month_label, total_pnl: c.total_pnl }
         : null)
-      setHistory(histRes?.data ?? [])
+      setHistorico((histRes?.data ?? []).length)
     }).finally(() => setLoading(false))
   }, [])
 
@@ -52,7 +41,7 @@ export default function MonthlyCloseSection() {
   // Recarrega quando o modal fecha · a banca pode ter acabado de ser confirmada
   useEffect(() => { if (!monthlyCloseOpen) load() }, [monthlyCloseOpen, load])
 
-  if (loading || (!pending && history.length === 0)) return null
+  if (loading || (!pending && historico === 0)) return null
 
   return (
     <div>
@@ -74,37 +63,20 @@ export default function MonthlyCloseSection() {
         </button>
       )}
 
-      {history.length > 0 && (
-        <div className="card overflow-hidden divide-y divide-line/60">
-          {history.map(h => {
-            const profit = h.total_pnl >= 0
-            return (
-              <div key={h.month_key} className="px-4 py-3 flex items-center gap-3">
-                {profit
-                  ? <TrendingUp className="w-4 h-4 shrink-0 text-green-500" />
-                  : <TrendingDown className="w-4 h-4 shrink-0 text-red-400" />}
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-bold text-ink-1 capitalize truncate">{h.month_label}</p>
-                  <p className="text-[11px] text-ink-3 truncate">
-                    {h.greens}G · {h.reds}R
-                    {h.total_resolved ? ` em ${h.total_resolved} picks` : ''}
-                    {' · '}{fmtBRL(h.bankroll_start)} para {fmtBRL(h.bankroll_end)}
-                  </p>
-                </div>
-                <div className="text-right shrink-0">
-                  <p className={`text-sm font-black ${profit ? 'text-green-500' : 'text-red-400'}`}>
-                    {fmtSigned(h.total_pnl)}
-                  </p>
-                  {h.profit_units != null && (
-                    <p className="text-[10px] text-ink-4">
-                      {h.profit_units >= 0 ? '+' : ''}{h.profit_units.toFixed(1)}u
-                    </p>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-        </div>
+      {historico > 0 && (
+        <Link
+          to="/banca/fechamentos"
+          className="card p-4 flex items-center gap-3 hover:border-line-strong transition-colors"
+        >
+          <History className="w-4 h-4 shrink-0 text-ink-3" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-ink-1">Ver fechamentos anteriores</p>
+            <p className="text-[11px] text-ink-3">
+              {historico === 1 ? '1 mês registrado' : `${historico} meses registrados`}
+            </p>
+          </div>
+          <ChevronRight className="w-4 h-4 shrink-0 text-ink-3" />
+        </Link>
       )}
     </div>
   )
