@@ -526,3 +526,60 @@ def test_favoritos_sairam_da_api_mas_a_tabela_fica():
     assert "/favorites" not in codigo
     assert "user_favorites" not in codigo.split('"""', 2)[-1]
     assert "user_favorites" in _fonte("migrations.py"), "a tabela nao devia ser dropada"
+
+
+# ─────────────────────────── Filtros do site ───────────────────────────
+
+
+def test_periodo_tem_um_vocabulario_so():
+    """Banca e Meus Picks filtram a MESMA lista de apostas (/banca) e diziam
+    coisas diferentes: "Tudo" contra "Todos", "7 dias" contra "Semana", e um
+    recorte de 30 dias que so' existia num lado."""
+    lib = _front("lib/periodo.ts")
+    for rotulo in ("Tudo", "Hoje", "7 dias", "30 dias", "Este mês", "Mês passado"):
+        assert f"'{rotulo}'" in lib, f"falta {rotulo} no vocabulario"
+
+    for pagina in ("pages/Banca.tsx", "pages/MeusPicks.tsx"):
+        src = _front(pagina)
+        assert "lib/periodo" in src, f"{pagina} nao usa o vocabulario compartilhado"
+        # e nenhuma das duas pode ter a propria regua de novo
+        codigo = _front_codigo(pagina)
+        assert "'thismonth'" not in codigo, f"{pagina} voltou a ter regua propria"
+        assert "'lastmonth'" not in codigo, f"{pagina} voltou a ter regua propria"
+
+
+def test_periodo_fica_a_vista_nas_duas_telas():
+    """Era painel dobravel com UM grupo dentro na Banca (tres cliques pro
+    filtro principal da tela) e fila aberta em Meus Picks."""
+    for pagina in ("pages/Banca.tsx", "pages/MeusPicks.tsx"):
+        src = _front_codigo(pagina)
+        assert "<PillGroup" in src, f"{pagina} devia mostrar o periodo em fila"
+    assert "FilterPanel" not in _front_codigo("pages/Banca.tsx")
+
+
+def test_janela_de_periodo_e_calculada_num_lugar_so():
+    """Com "7 dias" solto, cada tela fazia a propria conta de fuso e as duas
+    divergiam na virada da meia-noite."""
+    banca = _front_codigo("pages/Banca.tsx")
+    picks = _front_codigo("pages/MeusPicks.tsx")
+    assert "janelaDoPeriodo(" in banca
+    assert "dentroDoPeriodo(" in picks
+    for src, pagina in ((banca, "Banca"), (picks, "MeusPicks")):
+        assert "function monthBounds" not in src, f"{pagina} refez a conta local"
+        assert "function monthRange" not in src, f"{pagina} refez a conta local"
+
+
+def test_botao_do_painel_nao_promete_aplicar_o_que_ja_esta_aplicado():
+    """Dizia "Aplicar" e so' fechava o painel · cada opcao ja chama onChange no
+    clique. O rotulo prometia um estado pendente que nunca existiu."""
+    src = _front_codigo("components/FilterPanel.tsx")
+    assert ">\n              Aplicar\n" not in src
+    assert "Ver ${resultado} resultados" in src or "resultados`" in src
+
+
+def test_painel_de_filtro_diz_quantos_sobraram():
+    """Lista vazia por filtro apertado fica igualzinha a lista vazia por nao
+    existir dado. So' a aba Mercados respondia isso."""
+    assert "resultado?: number" in _front("components/FilterPanel.tsx")
+    for pagina in ("pages/Picks.tsx", "pages/ResultadosPublicos.tsx"):
+        assert "resultado={" in _front(pagina), f"{pagina} nao passa a contagem"
