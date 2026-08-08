@@ -1,8 +1,30 @@
 import { useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { SlidersHorizontal, X, ChevronDown } from 'lucide-react'
+import { SearchInput } from './ui'
 
 export interface FilterOption { value: string; label: string; icon?: React.ReactNode }
+
+/**
+ * Busca por texto. Opcional, mas quando existe fica FORA do painel dobrável.
+ *
+ * Busca não é recorte, é atalho: quem digita "Palmeiras" quer o resultado
+ * enquanto digita, não depois de abrir um painel. Era o que a aba Mercados
+ * fazia com controles próprios, e o motivo de ela parecer outra ferramenta.
+ */
+export interface FilterSearch {
+  value: string
+  onChange: (v: string) => void
+  placeholder?: string
+}
+
+/** Ordenação. Fica dentro do painel: é escolha rara, e são poucas opções. */
+export interface FilterSort {
+  label?: string
+  options: FilterOption[]
+  value: string
+  onChange: (v: string) => void
+}
 export interface FilterGroup {
   key: string
   label: string
@@ -21,9 +43,11 @@ const ACCENTS: Record<string, { chip: string; active: string; badge: string }> =
 }
 
 export default function FilterPanel({
-  groups, accent = 'green', extra, extraWhen, resultado,
+  groups, accent = 'green', extra, extraWhen, resultado, busca, ordem,
 }: {
   groups: FilterGroup[]
+  busca?: FilterSearch
+  ordem?: FilterSort
   accent?: 'green' | 'yellow' | 'blue'
   /** Conteudo extra dentro do painel aberto (ex: datepicker de periodo custom) */
   extra?: React.ReactNode
@@ -51,10 +75,28 @@ export default function FilterPanel({
     .filter(g => g.value !== neutral(g))
     .map(g => ({ key: g.key, label: g.options.find(o => o.value === g.value)?.label ?? g.value, onClear: () => g.onChange(neutral(g)) }))
 
-  const clearAll = () => groups.forEach(g => { if (g.value !== neutral(g)) g.onChange(neutral(g)) })
+  // A busca entra no rastro de chips: digitada e painel fechado, ela some da
+  // vista e o usuario fica sem entender por que a lista esta curta.
+  const chips = busca?.value.trim()
+    ? [{ key: '__busca', label: `"${busca.value.trim()}"`, onClear: () => busca.onChange('') }, ...activeChips]
+    : activeChips
+
+  const clearAll = () => {
+    groups.forEach(g => { if (g.value !== neutral(g)) g.onChange(neutral(g)) })
+    busca?.onChange('')
+  }
 
   return (
     <div className="mb-5">
+      {busca && (
+        <SearchInput
+          value={busca.value}
+          onChange={busca.onChange}
+          placeholder={busca.placeholder ?? 'Buscar'}
+          className="mb-3"
+        />
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
         <button
           onClick={() => setOpen(o => !o)}
@@ -62,21 +104,21 @@ export default function FilterPanel({
         >
           <SlidersHorizontal className="w-3.5 h-3.5" />
           Filtros
-          {activeChips.length > 0 && (
+          {chips.length > 0 && (
             <span className={`inline-flex items-center justify-center w-4 h-4 rounded-full text-[10px] font-black ${c.badge}`}>
-              {activeChips.length}
+              {chips.length}
             </span>
           )}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
 
-        {!open && activeChips.length > 0 && resultado != null && (
+        {!open && chips.length > 0 && resultado != null && (
           <span className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${resultado > 0 ? c.chip : 'border-line-strong text-ink-4'}`}>
             {resultado === 1 ? '1 resultado' : `${resultado} resultados`}
           </span>
         )}
 
-        {!open && activeChips.map(chip => (
+        {!open && chips.map(chip => (
           <motion.span
             key={chip.key}
             initial={{ opacity: 0, scale: 0.9 }}
@@ -134,12 +176,29 @@ export default function FilterPanel({
             </div>
           ))}
 
+          {ordem && (
+            <div>
+              <p className="text-xs text-ink-3 mb-2">{ordem.label ?? 'Ordenar por'}</p>
+              <div className="flex flex-wrap gap-2">
+                {ordem.options.map(opt => (
+                  <button
+                    key={opt.value}
+                    onClick={() => ordem.onChange(opt.value)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${ordem.value === opt.value ? c.active : 'border-line-strong text-ink-2 hover:border-ink-4'}`}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
           {extra && extraWhen !== false && extra}
 
           <div className="flex items-center justify-between pt-1 border-t border-line">
             <button
               onClick={clearAll}
-              disabled={activeChips.length === 0}
+              disabled={chips.length === 0}
               className="text-xs font-semibold text-ink-3 hover:text-ink-2 disabled:opacity-30 transition-colors"
             >
               Limpar filtros
