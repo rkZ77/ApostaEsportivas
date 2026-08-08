@@ -508,7 +508,7 @@ def test_favoritos_sairam_do_frontend():
     """Coracao no card, no cabecalho das secoes de mercado e na agenda, mais
     filtro em dois lugares · muita superficie pra uma preferencia sem uso."""
     for arq in ("App.tsx", "pages/Picks.tsx", "components/SuggestionCard.tsx",
-                "components/AgendaInteligente.tsx", "components/MercadosControls.tsx"):
+                "components/AgendaInteligente.tsx", "lib/mercadoFiltro.ts"):
         src = _front(arq)
         for termo in ("FavoriteButton", "useFavorites", "FavoritesProvider"):
             assert termo not in src, f"{arq} ainda usa {termo}"
@@ -583,3 +583,41 @@ def test_painel_de_filtro_diz_quantos_sobraram():
     assert "resultado?: number" in _front("components/FilterPanel.tsx")
     for pagina in ("pages/Picks.tsx", "pages/ResultadosPublicos.tsx"):
         assert "resultado={" in _front(pagina), f"{pagina} nao passa a contagem"
+
+
+def test_um_painel_de_filtro_pro_site_inteiro():
+    """A aba Mercados tinha controles proprios (busca inline, tres filas de
+    pill, um select de ordenacao) e parecia outra ferramenta dentro da mesma
+    pagina · a aba VIP, logo acima, filtrava com o painel dobravel."""
+    assert not os.path.exists(os.path.join(_FRONT, "components/MercadosControls.tsx")), \
+        "os controles proprios deviam ter sumido"
+    # o modulo que sobrou e' so' regra, sem casca
+    regras = _front("lib/mercadoFiltro.ts")
+    assert "aplicarFiltro" in regras
+    assert "import" not in regras, "regra de filtro nao devia importar componente"
+
+    src = _front_codigo("pages/Picks.tsx")
+    assert "MercadosControls" not in src
+    # e a aba passa a usar o mesmo painel, com busca e ordenacao
+    assert "busca={{" in src
+    assert "ordem={{" in src
+
+
+def test_busca_aparece_no_rastro_de_filtros():
+    """Digitada e painel fechado, ela sumia da vista e o usuario ficava sem
+    entender por que a lista estava curta."""
+    src = _front_codigo("components/FilterPanel.tsx")
+    assert "__busca" in src
+    # e limpar tudo tem que limpar a busca junto
+    assert "busca?.onChange('')" in src
+
+
+def test_detalhe_voltou_a_ter_porta_de_entrada_na_tela_de_picks():
+    """O card inteiro deixou de ser clicavel (abria o detalhe por engano), mas
+    o conteudo -- medias, forma dos times, odds por casa -- continua util."""
+    partes = _front_codigo("components/PickCardParts.tsx")
+    assert "onDetails" in partes
+    card = _front_codigo("components/SuggestionCard.tsx")
+    assert "onDetails={onClick}" in card
+    picks = _front_codigo("pages/Picks.tsx")
+    assert "openDetail(" in picks, "a tela precisa ligar o alvo"

@@ -12,7 +12,7 @@ import SuggestionDetail from '../components/SuggestionDetail'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
 import { LiveDot, Spinner, EmptyState, SkeletonPickGrid } from '../components/ui'
-import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../components/MercadosControls'
+import { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
@@ -1294,11 +1294,12 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
   }
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onDetalhes }: {
   tipo: 'faltas' | 'goleiros'
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
+  onDetalhes?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
 }) {
   return (
     <div>
@@ -1323,6 +1324,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
               key={p.id}
               s={mercadoParaSuggestion(p, tipo)}
               banca={banca}
+              onClick={onDetalhes ? () => onDetalhes(p, tipo) : undefined}
             />
           ))}
         </div>
@@ -2105,7 +2107,7 @@ export default function Picks() {
                       <>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
                         </motion.div>
                         {vips.length > 4 && (
@@ -2315,7 +2317,7 @@ export default function Picks() {
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
-                          <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
                       </motion.div>
                     ) : (
@@ -2660,12 +2662,50 @@ export default function Picks() {
               </div>
             ) : (
               <>
-                <MercadosControls
-                  filtro={mercadoFiltro}
-                  onChange={setMercadoFiltro}
-                  totalFaltas={faltas?.length ?? 0}
-                  totalGoleiros={goleiros?.length ?? 0}
-                  visiveis={faltasFiltradas.length + goleirosFiltrados.length}
+                {/* Mesmo painel da aba VIP, logo acima · a aba tinha controles
+                    próprios (busca inline, três filas de pill, um select de
+                    ordenação) e parecia outra ferramenta dentro da mesma
+                    página. A contagem de cada categoria fica no rótulo, que é
+                    onde ela responde "tem quantos de faltas hoje?". */}
+                <FilterPanel
+                  accent="green"
+                  busca={{
+                    value: mercadoFiltro.busca,
+                    onChange: v => setMercadoFiltro({ ...mercadoFiltro, busca: v }),
+                    placeholder: 'Buscar time, goleiro ou linha',
+                  }}
+                  groups={[
+                    {
+                      key: 'categoria', label: 'Mercado',
+                      options: [
+                        { value: 'todos',    label: `Todos (${(faltas?.length ?? 0) + (goleiros?.length ?? 0)})` },
+                        { value: 'faltas',   label: `Faltas (${faltas?.length ?? 0})` },
+                        { value: 'goleiros', label: `Defesas (${goleiros?.length ?? 0})` },
+                      ],
+                      value: mercadoFiltro.categoria,
+                      onChange: v => setMercadoFiltro({ ...mercadoFiltro, categoria: v as MercadoFiltro['categoria'] }),
+                    },
+                    {
+                      key: 'estado', label: 'Situação',
+                      options: [
+                        { value: 'todos',      label: 'Todos' },
+                        { value: 'pendentes',  label: 'Pendentes' },
+                        { value: 'resolvidos', label: 'Resolvidos' },
+                      ],
+                      value: mercadoFiltro.estado,
+                      onChange: v => setMercadoFiltro({ ...mercadoFiltro, estado: v as MercadoFiltro['estado'] }),
+                    },
+                  ]}
+                  ordem={{
+                    options: [
+                      { value: 'margem', label: 'Maior margem' },
+                      { value: 'odd',    label: 'Maior odd' },
+                      { value: 'data',   label: 'Data do jogo' },
+                    ],
+                    value: mercadoFiltro.ordem,
+                    onChange: v => setMercadoFiltro({ ...mercadoFiltro, ordem: v as MercadoFiltro['ordem'] }),
+                  }}
+                  resultado={faltasFiltradas.length + goleirosFiltrados.length}
                 />
 
                 {/* Nada bateu o filtro. Sem isso as duas seções apareciam com o
@@ -2690,6 +2730,7 @@ export default function Picks() {
                         picks={faltas === null ? null : faltasFiltradas}
                         carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onDetalhes={(mp, t) => openDetail(mp.id, t)}
                       />
                     )}
                     {mercadoFiltro.categoria !== 'faltas' && (
@@ -2701,6 +2742,7 @@ export default function Picks() {
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
+                        onDetalhes={(mp, t) => openDetail(mp.id, t)}
                       />
                     )}
                   </>
