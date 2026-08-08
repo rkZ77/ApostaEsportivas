@@ -1439,7 +1439,18 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Stats gerais · todos os picks com resultado (VIP + Free + Múltiplas + Alavancagem)
+        # Stats gerais · TODOS os seis pipelines com resultado.
+        #
+        # Faltas e goleiros ficavam de fora, e este e' o numero que a tela de
+        # Picks estampa como "Performance da IA · Geral": o site publicava os
+        # dois mercados, liquidava os dois, contava os dois na banca do usuario
+        # e no historico publico -- so' a porcentagem do topo os ignorava. Ou
+        # seja, o percentual anunciado nao descrevia o produto que estava sendo
+        # vendido logo abaixo dele.
+        #
+        # Cada tabela numa sub-query com _safe_query_one por fora ja' cobre o
+        # caso de ambiente sem a migracao; aqui bastou completar o UNION porque
+        # as duas tabelas nascem no mesmo setup das outras.
         month_row = _safe_query_one(cur, """
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
@@ -1454,6 +1465,10 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 SELECT result, profit FROM picks_multiplas
                 UNION ALL
                 SELECT result, profit FROM picks_alavancagem
+                UNION ALL
+                SELECT result, profit FROM picks_faltas
+                UNION ALL
+                SELECT result, profit FROM picks_goleiros
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1462,9 +1477,25 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
         greens = stats["greens"] or 0
         stats["win_rate"] = round(greens / total * 100, 1) if total > 0 else 0.0
 
-        # Sequência atual (últimos resultados ordenados)
+        # Sequência atual · mesma base do numero acima.
+        #
+        # Lia so' picks_vip, entao "5 greens seguidos" descrevia um pipeline e
+        # aparecia colado num total que somava todos. Dois numeros vizinhos
+        # falando de conjuntos diferentes e' pior que nao ter o segundo.
         recent = _safe_query(cur, """
-            SELECT result FROM picks_vip
+            SELECT result, match_date, id FROM (
+                SELECT result, match_date, id FROM picks_vip
+                UNION ALL
+                SELECT result, match_date, id FROM picks_free
+                UNION ALL
+                SELECT result, match_date, id FROM picks_multiplas
+                UNION ALL
+                SELECT result, match_date, id FROM picks_alavancagem
+                UNION ALL
+                SELECT result, match_date, id FROM picks_faltas
+                UNION ALL
+                SELECT result, match_date, id FROM picks_goleiros
+            ) AS todos
             WHERE result IS NOT NULL
             ORDER BY match_date DESC, id DESC
             LIMIT 20

@@ -732,12 +732,16 @@ def public_leaderboard():
                         WHEN 'free'        THEN pf.result
                         WHEN 'multipla'    THEN pm.result
                         WHEN 'alavancagem' THEN pa.result
+                        WHEN 'faltas'      THEN pfa.result
+                        WHEN 'goleiros'    THEN pg.result
                     END AS result,
                     CASE uf.pick_type
                         WHEN 'vip'         THEN COALESCE(pv.profit, 0)
                         WHEN 'free'        THEN COALESCE(pf.profit, 0)
                         WHEN 'multipla'    THEN COALESCE(pm.profit, 0)
                         WHEN 'alavancagem' THEN COALESCE(pa.profit, 0)
+                        WHEN 'faltas'      THEN COALESCE(pfa.profit, 0)
+                        WHEN 'goleiros'    THEN COALESCE(pg.profit, 0)
                         ELSE 0
                     END AS profit
                 FROM user_followed_picks uf
@@ -745,6 +749,13 @@ def public_leaderboard():
                 LEFT JOIN picks_free pf        ON pf.id = uf.pick_id AND uf.pick_type = 'free'
                 LEFT JOIN picks_multiplas pm   ON pm.id = uf.pick_id AND uf.pick_type = 'multipla'
                 LEFT JOIN picks_alavancagem pa ON pa.id = uf.pick_id AND uf.pick_type = 'alavancagem'
+                -- Faltas e defesas entravam no CASE como NULL, entao a aposta
+                -- do usuario nesses dois mercados era descartada pelo
+                -- FILTER (WHERE result IS NOT NULL) logo abaixo: ela contava
+                -- na banca dele e sumia do ranking. Quem apostasse so' nesses
+                -- dois nem aparecia na lista.
+                LEFT JOIN picks_faltas pfa     ON pfa.id = uf.pick_id AND uf.pick_type = 'faltas'
+                LEFT JOIN picks_goleiros pg    ON pg.id = uf.pick_id AND uf.pick_type = 'goleiros'
             ),
             user_stats AS (
                 SELECT
