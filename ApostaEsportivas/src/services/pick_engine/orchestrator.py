@@ -44,9 +44,14 @@ _HANDICAP_FAMILIES = ("handicap_goals", "handicap_corners", "handicap_cards")
 # _POISSON_FAMILIES (que so' reconhece "goals"/"corners"/"cards" literal),
 # entao NUNCA recebem o termo M (model_fit_adjustment) que pegaria esse
 # tipo de contradicao estatistica pra outras familias;
-# (2) por ser mercado raro/novo, calibration.get_prior() nao tem amostra
-# historica suficiente ainda pra esse market_type, get_prior() retorna None
-# e bayesian_model.shrink_taxa() devolve a taxa empirica SEM encolher.
+# (2) por ser mercado raro/novo, calibration.get_prior() nao tinha amostra
+# historica suficiente pra esse market_type, retornava None e
+# bayesian_model.shrink_taxa() devolvia a taxa empirica SEM encolher.
+# ATUALIZACAO 2026-08-08: esse (2) especifico deixou de valer -- o prior agora
+# e' o mercado no-vig, que existe pra qualquer linha cotada, entao a taxa passa
+# a ser encolhida tambem aqui. A exclusao continua de pe' pelo (1) e pela
+# matematica do paragrafo acima: o teto real de desvio de 50/50 e' baixo demais
+# pra sustentar edge, encolhido ou nao.
 # Resultado: um desvio de amostra pequena (n~10, p~0.5, erro padrao ~15.8pp
 # -- bater 70-80% "por sorte" e' estatisticamente comum) passa direto pelos
 # 2 unicos filtros que existem hoje pra pegar isso, e ainda compete pelo
@@ -178,11 +183,12 @@ def analyze_fixture_markets(
     pipelines: sem arbitro com amostra minima OU jogo classificado "frio"
     pelo contexto, cartoes nem vira candidato).
 
-    `league_id` e opcional -- quando presente, calibration.get_prior/
-    calibration_adjustment tentam a calibracao segmentada por
-    (market_type, league_id) antes de cair pro agregado so por market_type
-    (ver services/pick_engine/calibration.py, fallback gracioso quando a
-    liga especifica nao tem amostra suficiente).
+    `league_id` e opcional -- quando presente, calibration_adjustment tenta a
+    calibracao segmentada por (market_type, league_id) antes de cair pro
+    agregado so por market_type (ver services/pick_engine/calibration.py,
+    fallback gracioso quando a liga especifica nao tem amostra suficiente).
+    Isso corrige CONFIDENCE, nao a probabilidade -- desde 2026-08-08 o prior
+    da probabilidade e' o mercado no-vig, nao o hit-rate dos proprios picks.
 
     `debug=True` (fase de homologacao, ver services/pick_engine/homologation.py
     e o plano de validacao antes de promover o motor pra producao): retorno
@@ -259,10 +265,6 @@ def analyze_fixture_markets(
         # lado a estatistica contada era a do ADVERSARIO (ver
         # stats_model.resolve_side -- metade da amostra vinha do time errado).
         side_team_id = stats_model.scope_team_id(scope, home_team_id, away_team_id)
-        # Prioridade 6: prior Bayesiano pra encolher taxa em amostra pequena
-        # -- MESMA fonte que calibration_adjustment ja usa (hit-rate real
-        # historico do market_type), nao um numero novo/inventado.
-        bayes_prior = calibration.get_prior(market_type, calibration_data, league_id=league_id)
 
         line_candidates = []
         for m in entries:
@@ -294,13 +296,6 @@ def analyze_fixture_markets(
                         "family": family, "scope": scope, "reason": "sem taxa calculavel (amostra insuficiente)",
                     })
                 continue
-            # Encolhimento Bayesiano: puxa a taxa em direcao ao prior
-            # proporcional a quao pequena e' a amostra (n<<10 -> quase todo
-            # peso vai pro prior; n>>10 -> quase nao muda). taxa_bruta_raw
-            # preserva o valor original pra transparencia/debug -- taxa_real
-            # (usado daqui pra frente em edge/EV/confidence) e' o ajustado.
-            taxa_bruta_raw = taxa["taxa_ponderada"]
-            taxa_ajustada = bayesian_model.shrink_taxa(taxa_bruta_raw, taxa["amostra"], bayes_prior)
             # No-vig quando o par complementar (Over/Under, Yes/No) tiver
             # 2+ bookmakers dos dois lados -- probabilidade real de mercado
             # sem a margem da casa embutida, mais precisa que 1/odd puro
@@ -309,6 +304,44 @@ def analyze_fixture_markets(
             # via resolve_prob_baseline quando nao ha par ou nao ha consenso.
             sibling = _find_sibling(m, entries)
             prob_baseline = market_model.resolve_prob_baseline(m, sibling)
+            # Encolhimento Bayesiano: puxa a taxa em direcao ao prior
+            # proporcional a quao pequena e' a amostra (n<<10 -> quase todo
+            # peso vai pro prior; n>>10 -> quase nao muda). taxa_bruta_raw
+            # preserva o valor original pra transparencia/debug -- taxa_real
+            # (usado daqui pra frente em edge/EV/confidence) e' o ajustado.
+            #
+            # O PRIOR E' O MERCADO (2026-08-08), nao mais calibration.get_prior().
+            #
+            # Ate' aqui o prior era o hit-rate dos PROPRIOS picks daquele
+            # market_type. Medido em producao em 2026-08-08: get_prior("corners")
+            # devolvia 0.857, vindo de 14 picks resolvidos (12 GREEN, 2 RED).
+            # Duas coisas erradas nisso, e a segunda e' pior que a primeira:
+            #
+            #  1. E' amostra SELECIONADA. "Quanto os picks de escanteio que o
+            #     motor escolheu acertaram" nao responde "com que frequencia
+            #     este time passa desta linha" -- os picks so' existem porque
+            #     ja' tinham taxa alta, entao o prior nasce enviesado pra cima.
+            #  2. E' um LACO. Sequencia boa sobe o prior, o prior sobe a
+            #     probabilidade de todo pick novo, que sobe o edge, que aprova
+            #     mais pick. O motor ficava mais confiante por ter ganhado, nao
+            #     por ter aprendido. No pick VIP #1573 (Escanteios Visitante
+            #     Over 4.5), com n=15, esse prior respondeu por 40% da
+            #     probabilidade final: (15*0.7283 + 10*0.857)/25 = 0.7798.
+            #
+            # A probabilidade de mercado no-vig nao tem nenhum dos dois
+            # problemas: e' externa ao motor, ja' esta' calculada aqui do lado,
+            # e diz exatamente o que um prior deve dizer -- "na falta de
+            # evidencia propria, acredite no consenso das casas". Com ela,
+            # amostra curta deixa de virar edge: a taxa so' se afasta do
+            # mercado quando ha jogo suficiente pra sustentar o afastamento.
+            #
+            # Medido contra os 43 picks resolvidos com rastro (2026-08-08):
+            # os que sobrevivem a esta regra acertaram 80.0% (n=25) contra
+            # 55.6% (n=18) dos que ela corta.
+            taxa_bruta_raw = taxa["taxa_ponderada"]
+            taxa_ajustada = bayesian_model.shrink_taxa(
+                taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"]
+            )
             ev_edge = market_model.edge_and_ev(
                 taxa_ajustada, best_odd, prob_baseline["prob"]
             )
@@ -439,6 +472,56 @@ def analyze_fixture_markets(
                 poisson_prob = btts_prob if want_yes else round(1 - btts_prob, 4) if btts_prob is not None else None
                 model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
         m_adjustment = confidence.model_fit_adjustment(model_fit_diff) if has_poisson_signal else 0.0
+
+        # DESACORDO ENTRE OS DOIS MODELOS -> FICA COM A ESTIMATIVA MENOR
+        # (2026-08-08). Duas leituras independentes da mesma pergunta: a taxa
+        # empirica (contagem jogo a jogo) e o Poisson (media esperada de
+        # feitos-x-cedidos). Quando divergem muito, uma das duas esta' errada
+        # e nao ha como saber qual -- entao o motor passa a trabalhar com a
+        # mais conservadora em vez de escolher a que mais convem.
+        #
+        # Antes disso, o desacordo so' mexia em confidence (m_adjustment, e
+        # nem isso: o corte era 30pp). O pick VIP #1573 saiu com 78% de taxa
+        # empirica contra 53.5% do Poisson -- 24.5pp de desacordo, ajuste
+        # aplicado 0.0 -- e o numero publicado foi o maior dos dois.
+        #
+        # Nao e' um veto novo: rebaixada a probabilidade, os filtros que ja
+        # existem (min_taxa em ranking, min_edge/EV em select_smart_safe_line)
+        # decidem sozinhos se ainda ha pick. Isso mantem UM lugar so' definindo
+        # o que e' aposta aprovada.
+        #
+        # Limiar escolhido medindo, nao por gosto -- contra os 43 picks
+        # resolvidos com rastro (2026-08-08), junto com o prior de mercado:
+        #
+        #   L=0.10  sobreviventes 85.0% (n=20)  cortados 56.5% (n=23)
+        #   L=0.15  sobreviventes 81.8% (n=22)  cortados 57.1% (n=21)  <- adotado
+        #   L=0.20  sobreviventes 78.3% (n=23)  cortados 60.0% (n=20)
+        #   (linha de base publicada: 69.8%, n=43)
+        #
+        # L=0.10 separa melhor, mas faz o Poisson mandar em quase todo pick e
+        # foi ajustado contra a MESMA amostra de 43 -- 0.15 fica no meio do
+        # caminho, entre o "concordam" que ja existia (0.10) e o antigo
+        # "discordam" (0.30). Se a amostra crescer e 0.10 continuar melhor,
+        # e' so' baixar aqui.
+        if (config.model_disagreement_threshold is not None
+                and poisson_prob is not None and model_fit_diff is not None
+                and model_fit_diff > config.model_disagreement_threshold
+                and poisson_prob < best_line["taxa_real"]):
+            best_line = dict(best_line)
+            best_line["taxa_real_pre_desacordo"] = best_line["taxa_real"]
+            best_line["taxa_real"] = poisson_prob
+            baseline = best_line.get("prob_baseline_value")
+            if baseline is not None:
+                best_line["edge"] = round(poisson_prob - baseline, 4)
+            best_line["ev"] = round(poisson_prob * best_line["odd"] - 1, 4)
+            # confidence tambem sai da probabilidade nova: C e' a propria
+            # taxa_real, e deixar o score antigo em pe' daria um candidato
+            # anunciando 56% de chance com a confianca dos 83% de antes --
+            # justamente a dessincronia que esta regra existe pra fechar.
+            # Os deltas (calibracao/variancia/model-fit) entram logo abaixo,
+            # sobre esta base ja corrigida.
+            conf = confidence.confidence_score(
+                C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
 
         total_delta = (cal_delta or 0) - v_penalty + m_adjustment
         if total_delta:

@@ -17,7 +17,8 @@ def fetch_vip_free_legs(cur, table: str) -> list:
                {team_cols}, market, market_type, line, odd, bet_house,
                confidence, {"probability" if table == "picks_vip" else "prob_real AS probability"},
                {"ev" if table == "picks_vip" else "edge AS ev"},
-               reasoning, stake_pct, stake_units, result, profit, created_at
+               reasoning, stake_pct, stake_units, result, profit, created_at,
+               engine_debug -> 'ai_review' AS ai_review
         FROM {table}
         WHERE fixture_id IS NOT NULL
     """)
@@ -54,14 +55,30 @@ def fetch_multiplas_legs(cur) -> list:
                 "confidence": g.get("confidence"), "probability": g.get("prob_real"),
                 "ev": None, "reasoning": None, "stake_pct": None, "stake_units": None,
                 "result": g.get("result"), "profit": None, "created_at": row["created_at"],
+                # A multipla e' revisada como bilhete unico, entao toda perna
+                # carrega o mesmo parecer -- ver multipla_pipeline._save_multipla.
+                "ai_review": g.get("ai_review"),
             })
     return legs
 
 
+def _tem_coluna(cur, tabela: str, coluna: str) -> bool:
+    """Coluna nova em tabela que ja' existe em PROD so' aparece depois que o
+    pipeline correspondente rodou o ALTER. Ate' la', selecionar a coluna
+    derrubaria a extracao inteira -- e o ledger e' lido por todo o site."""
+    cur.execute("""
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = %s AND column_name = %s LIMIT 1
+    """, (tabela, coluna))
+    return cur.fetchone() is not None
+
+
 def fetch_alavancagem_legs(cur) -> list:
     """cur precisa ser RealDictCursor."""
-    cur.execute("""
-        SELECT id, match_date, created_at,
+    tem_review = _tem_coluna(cur, "picks_alavancagem", "ai_review")
+    cur.execute(f"""
+        SELECT {'ai_review' if tem_review else 'NULL::jsonb AS ai_review'},
+               id, match_date, created_at,
                fixture_id_1, home_team_1, away_team_1, market_1, market_type_1, line_1, odd_1,
                bet_house_1, confidence_1, prob_real_1, reasoning_1,
                fixture_id_2, home_team_2, away_team_2, market_2, market_type_2, line_2, odd_2,
@@ -86,6 +103,9 @@ def fetch_alavancagem_legs(cur) -> list:
                 "confidence": row[f"confidence_{i}"], "probability": row[f"prob_real_{i}"],
                 "ev": None, "reasoning": row[f"reasoning_{i}"], "stake_pct": None, "stake_units": None,
                 "result": None, "profit": None, "created_at": row["created_at"],
+                # Um parecer por bilhete, replicado nas 2-3 pernas (a coluna
+                # ai_review e' do bilhete inteiro, nao da perna).
+                "ai_review": row["ai_review"],
             })
     return legs
 

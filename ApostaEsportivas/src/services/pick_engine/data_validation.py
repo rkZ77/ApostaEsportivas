@@ -45,7 +45,7 @@ def validate_market_sample(family: str, scope: str, last10_home: list, last10_aw
     taxa_real/confidence, fora de escopo desta validacao) -- aqui so
     reporta quantos jogos do pool realmente TEM o dado, pra essa lacuna
     nao ficar invisivel."""
-    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away)
+    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away, team_id)
     if not pool:
         return {"passed": False, "amostra_total": 0, "amostra_com_dado": 0, "reasons": ["Sem jogos no pool desta familia"]}
 
@@ -203,7 +203,7 @@ def detect_outliers(family: str, scope: str, last10_home: list, last10_away: lis
     if family not in variance_model._VALUE_FAMILIES:
         return {"outliers": [], "outlier_count": 0, "checked": 0}
 
-    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away)
+    pool, _ = stats_model.pool_and_field(family, scope, last10_home, last10_away, team_id)
     if not pool or len(pool) < 2:
         return {"outliers": [], "outlier_count": 0, "checked": len(pool)}
 

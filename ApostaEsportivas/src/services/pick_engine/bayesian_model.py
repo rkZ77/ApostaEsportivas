@@ -10,11 +10,21 @@ conjugado pra taxa binomial): taxa_ajustada = (n*taxa + k*prior) / (n+k).
 n>>k: quase nao muda (amostra grande domina). n<<k: quase todo peso vai
 pro prior (amostra pequena nao sustenta a taxa bruta sozinha).
 
-O PRIOR usado e' o hit-rate real historico do market_type
-(calibration.get_market_calibration(), ja existente desde a Fase 1, mesma
-fonte que calibration_adjustment ja usa) -- nao um numero inventado. Sem
-prior confiavel disponivel (market_type sem historico com amostra
-suficiente), retorna a taxa empirica sem alterar -- nunca inventa dado."""
+QUEM E' O PRIOR e' decisao de quem chama, e as duas chamadas de producao
+usam fontes diferentes de proposito:
+
+  orchestrator.py  -> probabilidade de mercado no-vig da propria linha.
+  goalkeeper_model -> LEAGUE_MEAN_SAVES (media da liga).
+
+As duas tem em comum o que importa: sao EXTERNAS ao motor e descrevem a
+mesma quantidade que a taxa empirica estima. Ate' 2026-08-08 o orchestrator
+usava calibration.get_prior() (o hit-rate dos proprios picks daquele
+market_type) e isso era um laco -- ganhar subia o prior, o prior subia a
+probabilidade do pick seguinte. Ver o comentario longo em orchestrator.py,
+onde a troca esta' medida.
+
+Sem prior disponivel, retorna a taxa empirica sem alterar -- nunca inventa
+dado."""
 
 _DEFAULT_PRIOR_STRENGTH = 10
 

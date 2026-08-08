@@ -38,6 +38,7 @@ from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
 from services.match_stats_service import MatchStatsService
 from services.pick_engine import competition_profile as cp
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.odds_service import OddsService
 from services.pick_engine.goalkeeper_model import (
     MIN_OPPONENT_SAMPLE,
@@ -77,6 +78,25 @@ ODD_MAX = None
 # amostra por goleiro e' pequena e a distribuicao e' superdispersa: erro de
 # estimativa da media custa mais caro.
 EDGE_MIN = 0.06
+
+# PISO DE PROBABILIDADE (2026-08-08). O RISCO ASSUMIDO descrito acima deixou de
+# ser hipotetico: em 08/08 este pipeline gerou "Everson - 6 ou mais defesas" a
+# odd 11.00 com probabilidade de 15.4%. Passou no EDGE_MIN pela aritmetica
+# (0.154 * 11.00 - 1 = +0.69) sem o modelo ter dito nada a favor -- e' um pick
+# que perde 6 vezes a cada 7. Pedido do usuario no mesmo dia, em uma frase:
+# "quero picks que ganham estatisticamente, nao achar onde tem valor de odd".
+#
+# O numero nao e' novo: e' o mesmo PickEngineConfig.min_taxa que ranking.py ja
+# aplica em VIP, free, multipla e alavancagem desde sempre. Faltas e goleiros
+# nunca passaram por aquele caminho (pipeline proprio, ver docstring do modulo),
+# entao herdaram o EDGE_MIN e nenhum piso -- a assimetria era acidente de
+# arquitetura, nao decisao. Importado em vez de redigitado pra continuar
+# existindo UM lugar que define o que e' probabilidade aceitavel.
+#
+# Efeito conhecido: este pipeline ja gera pouco pick (defesas aparecem em 0.86%
+# das atuacoes) e vai gerar bem menos. O modelo acha valor na cauda, e a cauda
+# e' justamente o que este piso corta.
+PROB_MIN = DEFAULT_CONFIG.min_taxa
 
 NOMES_MERCADO = ("goalkeeper saves", "saves", "player saves")
 
@@ -344,6 +364,8 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             line=n_defesas - 0.5,
         )
         if not analise:
+            continue
+        if analise.get("probability", 0) < PROB_MIN:
             continue
         if analise.get("edge", 0) < EDGE_MIN:
             continue

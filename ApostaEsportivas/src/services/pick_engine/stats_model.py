@@ -466,13 +466,56 @@ def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
     return (m.get(fields["home"]) or 0) + (m.get(fields["away"]) or 0)
 
 
-def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list):
+def _somente_no_mando(pool: list, team_id: int | None, mando: str) -> list:
+    """Jogos em que o time atuou NO MANDO que o mercado descreve.
+
+    Sem team_id devolve o pool inteiro (comportamento antigo) -- nao da' pra
+    saber qual lado e' o time sem o id, e chutar seria pior que nao filtrar."""
+    if team_id is None:
+        return pool
+    chave = "home_team_id" if mando == "home" else "away_team_id"
+    return [m for m in pool if m.get(chave) == team_id]
+
+
+def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list,
+                    team_id: int | None = None):
+    """Pool de jogos que sustenta a taxa de um mercado, e o campo bruto (hoje
+    sempre None -- _extract_stat resolve o campo por familia).
+
+    MANDO (2026-08-08). Mercado de escopo home/away e' sobre o time NAQUELE
+    mando ("Escanteios Visitante Mais/Menos" = escanteios de quem joga fora),
+    mas o pool vinha de MatchStatsService.get_all_matches_full(), que filtra
+    por `(home_team_id = X OR away_team_id = X)` e devolve os 15 jogos do time
+    MISTURANDO casa e fora. resolve_side() ja corrigia a COLUNA lida em cada
+    jogo (achado de 2026-08-05); o que ninguem tinha corrigido e' que metade
+    daqueles jogos e' do mando ERRADO pro mercado em questao.
+
+    Nao e' um vies pequeno. Medido nos dados de producao em 2026-08-08:
+
+        Serie A 2026:  5.62 escanteios do mandante x 4.41 do visitante (+27%)
+        Serie B 2026:  5.78 x 4.25 (+36%)
+
+    O caso que motivou o fix (pick VIP #1573, Botafogo x Fluminense): "Escanteios
+    Visitante Over 4.5" saiu com 78% de probabilidade. O Fluminense fora de casa
+    na temporada bate essa linha em 4 de 10 jogos (40%); a media dele em casa
+    (6.18) e' que puxava a conta pra cima. O modelo Poisson do mesmo pick, que
+    le media ja' separada por mando em `team_statistics`, dizia 53.5% -- os dois
+    numeros nunca fecharam porque estavam medindo mandos diferentes.
+
+    Efeito colateral aceito: o pool cai de ~15 pra ~7-8 jogos, entao a amostra
+    encolhe e Q cai junto (sample_rich_n=8). Isso e' o numero honesto -- a
+    amostra grande de antes era grande por incluir jogo que nao respondia a
+    pergunta do mercado.
+
+    Sede neutra (Copa/selecao, via get_last_n_all_competitions) segue o mesmo
+    caminho: filtra por quem a fixture designou como mandante, que e' a mesma
+    convencao que a casa de aposta usa pra nomear o mercado."""
     if family == "btts":
         return last10_home + last10_away, None
     if scope == "home":
-        return last10_home, None
+        return _somente_no_mando(last10_home, team_id, "home"), None
     if scope == "away":
-        return last10_away, None
+        return _somente_no_mando(last10_away, team_id, "away"), None
     return last10_home + last10_away, None
 
 
@@ -537,7 +580,7 @@ def market_taxa(family: str, scope: str, value: str, line_str: str,
     Mercados novos (1X2/handicap/dupla-chance/etc) tem funcoes proprias
     abaixo (outcome_taxa, handicap_taxa, ...), despachadas pelo
     orchestrator via classify_market()."""
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away)
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
     if not pool:
         return None
 
@@ -564,7 +607,7 @@ def line_stability(family: str, scope: str, value: str, line_str: str,
     So cobre mercados 'classicos' (over/under/btts, mesmo escopo de
     market_taxa) -- amostra minima de 2 jogos por metade (4 no total),
     senao a comparacao vira ruido puro. None quando nao aplicavel."""
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away)
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
     if not pool or len(pool) < _MIN_MATCHES_PER_HALF_STABILITY * 2:
         return None
 

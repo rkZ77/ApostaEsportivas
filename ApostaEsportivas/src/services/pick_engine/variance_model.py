@@ -31,7 +31,7 @@ def variance_stats(family: str, scope: str, last10_home: list, last10_away: list
     if family not in _VALUE_FAMILIES:
         return None
 
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away)
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
     if not pool or len(pool) < 2:
         return None
 

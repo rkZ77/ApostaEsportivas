@@ -440,6 +440,224 @@ def ai_review_status(current_user: dict = Depends(require_admin)):
         conn.close()
 
 
+# Pipeline do gate de IA -> pick_type gravado no ledger. Sao vocabularios
+# diferentes pro mesmo fluxo ("dica" no motor, "free" no ledger) e a juncao
+# abaixo depende deste mapa.
+_PIPELINE_POR_PICK_TYPE = {
+    "vip": "vip", "free": "dica", "multipla": "multipla",
+    "alavancagem": "alavancagem", "faltas": "faltas", "goleiros": "goleiros",
+}
+
+# Status em que um modelo de fato emitiu parecer. Fora desta lista, o gate
+# falhou aberto (unavailable), nao rodou (disabled) ou bateu no teto do dia
+# (daily_limit_reached) -- o pick foi publicado sem nenhuma IA ter olhado pra
+# ele, e creditar esse resultado a um modelo seria mentira estatistica.
+_STATUS_COM_PARECER = {"ok"}
+
+
+def _bucket() -> dict:
+    return {"n": 0, "green": 0, "red": 0, "push": 0, "pendentes": 0,
+            "lucro": 0.0, "_clv": [], "_com_lucro": 0}
+
+
+def _add(bucket: dict, row: dict) -> None:
+    bucket["n"] += 1
+    resultado = (row.get("result") or "").upper()
+    if resultado == "GREEN":
+        bucket["green"] += 1
+    elif resultado == "RED":
+        bucket["red"] += 1
+    elif resultado == "PUSH":
+        bucket["push"] += 1
+    else:
+        bucket["pendentes"] += 1
+    if row.get("profit") is not None:
+        bucket["lucro"] += float(row["profit"])
+        bucket["_com_lucro"] += 1
+    if row.get("clv") is not None:
+        bucket["_clv"].append(float(row["clv"]))
+
+
+def _fechar(bucket: dict) -> dict:
+    resolvidos = bucket["green"] + bucket["red"]
+    clvs = bucket.pop("_clv")
+    com_lucro = bucket.pop("_com_lucro")
+    return {
+        **bucket,
+        "resolvidos": resolvidos,
+        # Sem PUSH no denominador: aposta anulada nao e' acerto nem erro.
+        "hit": round(bucket["green"] / resolvidos * 100, 1) if resolvidos else None,
+        "lucro": round(bucket["lucro"], 2),
+        # ROI a 1 unidade por perna -- o stake real varia por usuario (Kelly),
+        # entao unidade e' a unica base comparavel entre modelos.
+        "roi": round(bucket["lucro"] / com_lucro * 100, 1) if com_lucro else None,
+        "clv": round(sum(clvs) / len(clvs) * 100, 2) if clvs else None,
+    }
+
+
+@router.get("/ai-performance")
+def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
+    """Compara os modelos que revisam os picks, pelo resultado do que cada um
+    aprovou e do que cada um quis vetar.
+
+    O motor de picks e' deterministico: nenhuma IA escolhe a aposta, ela so'
+    aprova ou veta o que o motor ja' decidiu (ver AI_REVIEW.md). Entao "qual IA
+    da' mais green" so' tem resposta honesta por dois numeros:
+
+      1. hit dos picks que o modelo APROVOU;
+      2. hit dos picks que ele quis VETAR -- que so' existe porque o gate roda
+         em modo sombra, onde o veto e' registrado mas o pick sai assim mesmo.
+
+    O segundo e' o que realmente mede a IA. Se o que ela vetou deu MAIS red que
+    o que ela aprovou, o veto esta' separando certo e vale ligar o enforce; se
+    deu menos, ligar o enforce so' derrubaria pick bom.
+
+    A diferenca entre os dois e' o `lift`. Comparar `lift` entre modelos so'
+    vale dentro do MESMO pipeline: cada fluxo tem provider proprio e
+    dificuldade propria, entao o total por modelo mistura mercados diferentes.
+    Por isso `por_pipeline` vem junto e a tela mostra os dois.
+    """
+    days = max(1, min(int(days), 365))
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""SELECT 1 FROM information_schema.columns
+                       WHERE table_name = 'picks_ledger' AND column_name = 'ai_model' LIMIT 1""")
+        if not cur.fetchone():
+            return {"days": days, "migration_pending": True, "modelos": [],
+                    "por_pipeline": [], "falhas": [], "cobertura": {}}
+
+        cur.execute("""
+            SELECT pick_type, ai_provider, ai_model, ai_decision, ai_status,
+                   result, profit, clv, created_at::date AS dia
+            FROM picks_ledger
+            WHERE created_at >= NOW() - (%s * INTERVAL '1 day')
+        """, (days,))
+        legs = [dict(r) for r in cur.fetchall()]
+
+        # Contagem de chamadas por modelo: vem dos eventos, nao das pernas.
+        # Uma revisao cobre o bilhete inteiro (multipla/alavancagem tem 2-3
+        # pernas), entao contar perna inflaria o custo por modelo.
+        eventos_por_modelo: dict = {}
+        atribuicao_por_dia: dict = {}
+        try:
+            cur.execute("""
+                SELECT provider, model, pipeline, created_at::date AS dia,
+                       COUNT(*) AS n,
+                       COUNT(*) FILTER (WHERE cached) AS cache,
+                       COUNT(*) FILTER (WHERE decision = 'reject') AS vetos,
+                       COUNT(*) FILTER (WHERE status <> 'ok') AS falhas
+                FROM ai_pick_review_events
+                WHERE created_at >= NOW() - (%s * INTERVAL '1 day')
+                GROUP BY 1, 2, 3, 4
+            """, (days,))
+            for row in cur.fetchall():
+                chave = (row["provider"], row["model"])
+                acc = eventos_por_modelo.setdefault(chave, {
+                    "reviews": 0, "cache": 0, "vetos": 0, "falhas": 0, "pipelines": set()})
+                acc["reviews"] += row["n"]
+                acc["cache"] += row["cache"]
+                acc["vetos"] += row["vetos"]
+                acc["falhas"] += row["falhas"]
+                acc["pipelines"].add(row["pipeline"])
+                # Pick anterior a 2026-08-08 nao guarda quem o revisou. O
+                # provider e' configurado por pipeline, entao o modelo que mais
+                # revisou aquele fluxo naquele dia e' a melhor atribuicao
+                # possivel -- exata quando a configuracao nao mudou no dia, que
+                # e' o caso normal. Marcada como "inferida" na resposta.
+                dia_chave = (row["pipeline"], str(row["dia"]))
+                atual = atribuicao_por_dia.get(dia_chave)
+                if not atual or row["n"] > atual[1]:
+                    atribuicao_por_dia[dia_chave] = (chave, row["n"])
+        except Exception as error:
+            if "ai_pick_review_events" not in str(error):
+                raise
+            conn.rollback()
+
+        por_modelo: dict = {}
+        por_pipeline: dict = {}
+        falhas_por_status: dict = {}
+        cobertura = {"pernas": len(legs), "com_parecer": 0, "sem_parecer": 0,
+                     "autor_gravado": 0, "autor_inferido": 0, "autor_desconhecido": 0}
+
+        for leg in legs:
+            status = leg.get("ai_status")
+            if status and status not in _STATUS_COM_PARECER:
+                falhas_por_status[status] = falhas_por_status.get(status, 0) + 1
+            if status not in _STATUS_COM_PARECER:
+                cobertura["sem_parecer"] += 1
+                continue
+            cobertura["com_parecer"] += 1
+
+            if leg.get("ai_model"):
+                chave = (leg.get("ai_provider"), leg["ai_model"])
+                cobertura["autor_gravado"] += 1
+            else:
+                pipeline = _PIPELINE_POR_PICK_TYPE.get(leg["pick_type"], leg["pick_type"])
+                inferido = atribuicao_por_dia.get((pipeline, str(leg["dia"])))
+                if not inferido:
+                    cobertura["autor_desconhecido"] += 1
+                    continue
+                chave = inferido[0]
+                cobertura["autor_inferido"] += 1
+
+            lado = "vetados" if leg.get("ai_decision") == "reject" else "aprovados"
+
+            modelo = por_modelo.setdefault(chave, {"aprovados": _bucket(), "vetados": _bucket()})
+            _add(modelo[lado], leg)
+
+            chave_pipe = (leg["pick_type"], chave)
+            pipe = por_pipeline.setdefault(chave_pipe, {"aprovados": _bucket(), "vetados": _bucket()})
+            _add(pipe[lado], leg)
+
+        def _monta(provider, model, aprovados, vetados, evento=None) -> dict:
+            ap, vt = _fechar(aprovados), _fechar(vetados)
+            # Positivo = o modelo aprovou melhor do que vetou, ou seja, o veto
+            # esta' separando pick ruim de pick bom. Negativo = o veto derrubaria
+            # justamente os melhores.
+            lift = (round(ap["hit"] - vt["hit"], 1)
+                    if ap["hit"] is not None and vt["hit"] is not None else None)
+            return {
+                "provider": provider, "model": model,
+                "aprovados": ap, "vetados": vt, "lift": lift,
+                # Quanto o veto teria poupado (ou custado) em unidades se o
+                # enforce estivesse ligado: o lucro dos vetados, invertido.
+                "economia_do_veto": round(-vt["lucro"], 2) if vt["resolvidos"] else None,
+                **({"reviews": evento["reviews"], "cache": evento["cache"],
+                    "chamadas": evento["reviews"] - evento["cache"],
+                    "vetos": evento["vetos"], "falhas": evento["falhas"],
+                    "taxa_veto": round(evento["vetos"] / evento["reviews"] * 100, 1)
+                                 if evento["reviews"] else None,
+                    "pipelines": sorted(evento["pipelines"])} if evento else {}),
+            }
+
+        modelos = []
+        for chave in set(por_modelo) | set(eventos_por_modelo):
+            provider, model = chave
+            dados = por_modelo.get(chave) or {"aprovados": _bucket(), "vetados": _bucket()}
+            modelos.append(_monta(provider, model, dados["aprovados"], dados["vetados"],
+                                  eventos_por_modelo.get(chave)))
+        modelos.sort(key=lambda m: m["aprovados"]["resolvidos"], reverse=True)
+
+        pipelines = []
+        for (pick_type, chave), dados in por_pipeline.items():
+            item = _monta(chave[0], chave[1], dados["aprovados"], dados["vetados"])
+            pipelines.append({"pick_type": pick_type, **item})
+        pipelines.sort(key=lambda p: (p["pick_type"], -p["aprovados"]["resolvidos"]))
+
+        return {
+            "days": days,
+            "cobertura": cobertura,
+            "modelos": modelos,
+            "por_pipeline": pipelines,
+            "falhas": [{"status": s, "n": n} for s, n in
+                       sorted(falhas_por_status.items(), key=lambda kv: -kv[1])],
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/pipeline-status-public")
 def pipeline_status_public(current_user: dict = Depends(get_current_user)):
     """Status simplificado do pipeline (sem logs/erros técnicos) para a tela de espera dos usuários."""
