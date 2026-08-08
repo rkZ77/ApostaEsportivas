@@ -448,8 +448,25 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
 
     # ── BTTS ──
     if is_btts:
-        both = int(home_goals or 0) > 0 and int(away_goals or 0) > 0
-        return (1.0 if both else 0.0), "Ambas Marcam", None
+        # Valor = gols do time que MENOS marcou. "Ambas marcam" acontece
+        # exatamente quando esse numero e' >= 1, entao ele decide o mercado
+        # igual ao 1.0/0.0 que ficava aqui antes -- todo consumidor compara com
+        # 1.0 (_pick_status logo abaixo, e o travamento de is_locked), e a
+        # comparacao da o mesmo veredito nos dois formatos.
+        #
+        # O que muda e' o que sobra depois da decisao: 1.0/0.0 e' um booleano
+        # disfarcado de numero, e por isso "Como esse mercado vem se
+        # comportando" nao tinha o que desenhar pra BTTS e a secao inteira
+        # sumia do "Entenda esta analise" (achado pelo usuario em 2026-08-08,
+        # comparando com os cards de escanteios). O minimo do placar E' o
+        # contador que o mercado observa, jogo a jogo, com limiar em 0.5.
+        #
+        # Placar ausente devolve None, nunca 0: 0 aqui afirma "alguem levou a
+        # zero", e folha sem placar nao sustenta essa afirmacao -- mesma regra
+        # que _stat_side ja aplica aos outros contadores.
+        if home_goals is None or away_goals is None:
+            return None, "Ambas Marcam", None
+        return float(min(int(home_goals), int(away_goals))), "Ambas Marcam", None
 
     # ── Goals ──
     # Gols nao le folha de estatistica (o placar chega por parametro), mas o

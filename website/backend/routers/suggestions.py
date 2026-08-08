@@ -2374,10 +2374,13 @@ def get_market_form(
             jogos, pick["market"], pick.get("market_type"), pick["line"],
             _stat_for_market,
         )
-        # Sem nenhum jogo resolvido a serie nao diz nada -- resultado, BTTS,
-        # placar exato e defesas de goleiro caem aqui (nao ha contador por jogo
-        # em match_statistics pra eles). Melhor a secao sumir do que desenhar
-        # uma fileira de barras cinza.
+        # Sem nenhum jogo resolvido a serie nao diz nada -- resultado, placar
+        # exato e defesas de goleiro caem aqui (nao ha contador por jogo em
+        # match_statistics pra eles). Melhor a secao sumir do que desenhar uma
+        # fileira de barras cinza.
+        #
+        # BTTS saiu desta lista em 2026-08-08: o contador dele e' o placar do
+        # time que menos marcou, ver market_form.py.
         if not serie["resolved"]:
             return {"available": False, "reason": "mercado sem serie por jogo"}
 
