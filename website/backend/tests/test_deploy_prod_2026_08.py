@@ -223,10 +223,21 @@ def test_endpoints_pessoais_exigem_login():
 
 
 def test_queries_pessoais_filtram_por_usuario_do_token():
-    """Toda leitura e escrita tem que amarrar em current_user['id']."""
+    """Toda leitura e escrita tem que amarrar em current_user['id'].
+
+    A versao anterior citava duas consultas pelo texto exato ("DELETE FROM
+    user_favorites"). Quando os favoritos foram removidos em 07/08 o teste
+    quebrou sem que nada tivesse piorado -- e, pior, ele nunca teria pego uma
+    consulta NOVA sem filtro, porque so' olhava as duas que conhecia.
+
+    Agora varre todas: qualquer FROM/INTO numa tabela `user_*` precisa ter
+    user_id amarrado no mesmo comando.
+    """
     src = _fonte("routers/personal.py")
-    for verbo in ("SELECT id, kind, ref_id", "DELETE FROM user_favorites"):
-        assert "WHERE user_id = %s" in src[src.index(verbo):][:400]
+    comandos = re.findall(r"(?:FROM|INTO|UPDATE)\s+(user_\w+)[^;\"']*", src)
+    assert comandos, "nenhuma consulta pessoal encontrada"
+    for trecho in re.findall(r"(?:FROM|INTO|UPDATE)\s+user_\w+.{0,400}", src, re.DOTALL):
+        assert "user_id" in trecho, f"consulta pessoal sem user_id: {trecho[:80]}"
 
 
 # ─────────────────────── Fica de fora, verificar na mao ────────────────

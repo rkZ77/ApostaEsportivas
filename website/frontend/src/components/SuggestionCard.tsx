@@ -10,7 +10,6 @@ import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
-import FavoriteButton from './FavoriteButton'
 import { PickCardFooter, PickExplainButton, PickProbability } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
@@ -242,9 +241,6 @@ export default function SuggestionCard({
             </span>
           )}
         </div>
-        {s.home_team_id != null && (
-          <FavoriteButton kind="team" refId={s.home_team_id} label={s.home_team_name} size="sm" />
-        )}
         {s.result ? (
           <ResultBadge result={s.result} />
         ) : isLive ? (
