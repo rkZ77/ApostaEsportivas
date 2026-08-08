@@ -318,10 +318,19 @@ def test_zerar_mes_usa_o_mesmo_recorte_que_a_tela_soma():
 
 
 def test_zerar_mes_nao_toca_fechamento_saque_nem_banca_inicial():
-    """As tres coisas que o usuario NAO pediu pra apagar."""
+    """As tres coisas que o usuario NAO pediu pra apagar.
+
+    Proibe ESCRITA, nao leitura: a guarda de mes fechado precisa consultar
+    banca_monthly_closes justamente pra proteger o saldo (ver
+    test_zerar_mes_recusa_mes_ja_fechado).
+    """
     corpo = _codigo("routers/banca.py", "reset_current_month")
     for tabela in ("banca_monthly_closes", "banca_withdrawals", "user_banca"):
-        assert tabela not in corpo, f"reset nao pode tocar {tabela}"
+        for verbo in ("DELETE FROM", "UPDATE", "INSERT INTO"):
+            assert f"{verbo} {tabela}" not in corpo, f"reset nao pode escrever em {tabela}"
+    # a unica escrita permitida
+    assert corpo.count("DELETE FROM") == 1
+    assert "DELETE FROM user_followed_picks" in corpo
 
 
 def test_zerar_mes_tem_rate_limit_e_exige_sessao():
@@ -612,12 +621,67 @@ def test_busca_aparece_no_rastro_de_filtros():
     assert "busca?.onChange('')" in src
 
 
-def test_detalhe_voltou_a_ter_porta_de_entrada_na_tela_de_picks():
-    """O card inteiro deixou de ser clicavel (abria o detalhe por engano), mas
-    o conteudo -- medias, forma dos times, odds por casa -- continua util."""
-    partes = _front_codigo("components/PickCardParts.tsx")
-    assert "onDetails" in partes
-    card = _front_codigo("components/SuggestionCard.tsx")
-    assert "onDetails={onClick}" in card
+
+
+# ─────────── Entenda esta analise: mesmo padrao em todo pipeline ───────
+
+
+def test_regra_do_mercado_fala_em_numero_inteiro():
+    """A linha vem com meio ponto ("Menos de 10.5") por motivo tecnico: meio
+    escanteio nao existe, a fracao so' impede empate. Mas quem le isso pela
+    primeira vez trava, porque o jogo nunca vai ter 10.5 escanteios."""
+    src = _front("utils/marketTranslate.ts")
+    assert "export function regraDoMercado" in src
+    assert "ou menos" in src and "ou mais" in src
+    # os tres desfechos, nao so' o GREEN
+    for campo in ("green", "red", "devolve"):
+        assert f"{campo}:" in src
+
+
+def test_linha_cheia_e_quarto_de_linha_avisam_do_meio_termo():
+    """Linha cheia devolve a aposta no numero exato; quarto de linha resolve
+    metade. Quem descobre isso so' quando acontece acha que foi erro."""
+    src = _front("utils/marketTranslate.ts")
+    assert "a aposta volta pra você" in src
+    assert "metade da aposta ganha" in src
+    assert "metade da aposta perde" in src
+
+
+def test_sujeito_do_mercado_nao_e_raspado_por_regex():
+    """A primeira versao raspava o sujeito do texto pronto e trazia junto o
+    "for maior que 0" do exemplo."""
+    src = _front("utils/marketTranslate.ts")
+    assert "fn.sujeito = subject" in src
+    assert "_SUJEITO_RE" not in src
+
+
+def test_entenda_a_analise_cobre_os_seis_pipelines():
+    """VIP, free, faltas e goleiros tinham regra e forma recente; multipla e
+    alavancagem recebiam um modal degradado, sem explicacao nenhuma -- e sao
+    justamente os tipos em que se entende menos o que precisa acontecer."""
+    modal = _front_codigo("components/AnalysisModal.tsx")
+    assert "legs?:" in _front("components/AnalysisModal.tsx")
+    assert "O que precisa acontecer em cada jogo" in modal
+
     picks = _front_codigo("pages/Picks.tsx")
-    assert "openDetail(" in picks, "a tela precisa ligar o alvo"
+    assert picks.count("legs:") >= 2, "multipla e alavancagem precisam passar as pernas"
+    # e os de mercado unico continuam mandando o cru
+    assert "marketRaw:" in picks
+
+
+def test_botao_de_detalhes_saiu_do_card():
+    """O detalhe do jogo mora na aba Jogos (FixtureStatsModal). No card fica so'
+    "Entenda esta analise"."""
+    assert "onDetails" not in _front("components/PickCardParts.tsx")
+    assert "onDetails" not in _front("components/SuggestionCard.tsx")
+    assert "FixtureStatsModal" in _front("pages/Fixtures.tsx")
+
+
+def test_zerar_mes_recusa_mes_ja_fechado():
+    """Fechar rola o lucro do mes pra dentro de bankroll_start. Apagar as
+    apostas depois disso conta o mesmo dinheiro duas vezes."""
+    corpo = _codigo("routers/banca.py", "reset_current_month")
+    assert "FROM banca_monthly_closes" in corpo
+    assert "ja foi fechado" in corpo
+    # e a checagem tem que vir ANTES do DELETE
+    assert corpo.index("banca_monthly_closes") < corpo.index("DELETE FROM user_followed_picks")

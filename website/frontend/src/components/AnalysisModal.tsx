@@ -1,7 +1,7 @@
 import { BookOpen, Percent, Target, TrendingUp, Scale } from 'lucide-react'
 import Modal from './ui/Modal'
 import { Badge } from './ui'
-import { explainMarket } from '../utils/marketTranslate'
+import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 import MarketForm from './MarketForm'
 
 /*
@@ -54,6 +54,16 @@ export interface AnalysisData {
    */
   pickId?: number
   pickType?: string
+  /**
+   * Pernas do bilhete (múltipla, alavancagem), cruas.
+   *
+   * Sem isto os dois recebiam um modal degradado: sem regra de mercado e sem
+   * forma recente, porque nenhuma das duas descreve um bilhete de vários
+   * mercados. Mas ficar sem explicação nenhuma era pior · são justamente os
+   * tipos em que o apostador entende menos o que precisa acontecer. A regra
+   * aparece PERNA A PERNA, que é a versão honesta de "igual aos outros".
+   */
+  legs?: Array<{ market?: string | null; line?: string | null; odd?: number | null }>
 }
 
 /** Probabilidade que a casa está embutindo na odd. */
@@ -107,7 +117,12 @@ export default function AnalysisModal({
   const mostraProb = ourProb ?? (conf != null ? conf : null)
   const edge = mostraProb != null ? mostraProb - implied : null
 
-  const regra = data.marketRaw ? explainMarket(data.marketRaw, data.lineRaw ?? undefined) : ''
+  const regra = data.marketRaw ? regraDoMercado(data.marketRaw, data.lineRaw ?? undefined) : null
+  // Mercado que não é de contagem (resultado, ambas marcam) não vira número
+  // inteiro · aí vale o texto corrido de sempre.
+  const regraTexto = !regra && data.marketRaw
+    ? explainMarket(data.marketRaw, data.lineRaw ?? undefined)
+    : ''
 
   return (
     <Modal
@@ -118,14 +133,46 @@ export default function AnalysisModal({
     >
       <div className="p-5 space-y-5">
 
-        {/* A regra do mercado, antes de qualquer número. */}
-        {regra && (
+        {/*
+          A regra, antes de qualquer número, e em contagem inteira.
+
+          A linha vem com meio ponto ("Menos de 10.5") por motivo técnico: meio
+          escanteio não existe, a fração só serve pra impedir empate. Mas quem
+          lê "10.5 escanteios" pela primeira vez trava, porque o jogo nunca vai
+          ter isso. Aqui vira o que se conta no campo · 10 ou menos, 11 ou mais.
+        */}
+        {(regra || regraTexto) && (
           <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-2.5">
               <BookOpen className="w-3.5 h-3.5 text-accent" />
               <span className="panel-label">Como este mercado funciona</span>
             </div>
-            <p className="text-xs text-ink-2 leading-relaxed">{regra}</p>
+
+            {regra ? (
+              <>
+                <p className="text-xs text-ink-2 leading-relaxed mb-3">{regra.oQueE}</p>
+                <dl className="space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <dt className="text-[10px] font-black text-accent w-12 shrink-0 pt-0.5">GREEN</dt>
+                    <dd className="text-xs text-ink-1">{regra.green}</dd>
+                  </div>
+                  {regra.red && (
+                    <div className="flex items-start gap-2">
+                      <dt className="text-[10px] font-black text-red-400 w-12 shrink-0 pt-0.5">RED</dt>
+                      <dd className="text-xs text-ink-1">{regra.red}</dd>
+                    </div>
+                  )}
+                  {regra.devolve && (
+                    <div className="flex items-start gap-2">
+                      <dt className="text-[10px] font-black text-ink-4 w-12 shrink-0 pt-0.5">MEIO</dt>
+                      <dd className="text-xs text-ink-2">{regra.devolve}</dd>
+                    </div>
+                  )}
+                </dl>
+              </>
+            ) : (
+              <p className="text-xs text-ink-2 leading-relaxed">{regraTexto}</p>
+            )}
           </div>
         )}
 
@@ -187,6 +234,39 @@ export default function AnalysisModal({
                   {' '}Sem diferença a nosso favor, o pick não seria publicado.
                 </>
               )}
+            </p>
+          </div>
+        )}
+
+        {/* Bilhete de várias seleções: uma regra por perna. */}
+        {(data.legs?.length ?? 0) > 0 && (
+          <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-3">
+              <BookOpen className="w-3.5 h-3.5 text-accent" />
+              <span className="panel-label">O que precisa acontecer em cada jogo</span>
+            </div>
+            <ol className="space-y-3">
+              {data.legs!.map((leg, i) => {
+                const r = regraDoMercado(leg.market ?? undefined, leg.line ?? undefined)
+                const txt = r ? null : explainMarket(leg.market ?? undefined, leg.line ?? undefined)
+                return (
+                  <li key={i} className="flex gap-2.5">
+                    <span className="font-mono text-[10px] font-bold text-ink-4 pt-0.5 shrink-0">{i + 1}</span>
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold text-ink-1">
+                        {translateMarket(leg.market ?? '')}
+                        {leg.line && <span className="text-ink-3"> · {translateLine(leg.line)}</span>}
+                      </p>
+                      <p className="text-xs text-ink-2 leading-relaxed mt-0.5">
+                        {r ? r.green : txt}
+                      </p>
+                    </div>
+                  </li>
+                )
+              })}
+            </ol>
+            <p className="text-[10px] text-ink-4 leading-relaxed mt-3 pt-3 border-t border-line">
+              Todas as seleções precisam dar certo. Uma que falhe derruba o bilhete inteiro.
             </p>
           </div>
         )}

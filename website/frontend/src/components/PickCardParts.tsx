@@ -1,4 +1,4 @@
-import { BrainCircuit, Check as CheckIcon, ListTree, Loader2, Share2 } from 'lucide-react'
+import { BrainCircuit, Check as CheckIcon, Loader2, Share2 } from 'lucide-react'
 import { cn } from '../lib/cn'
 
 /*
@@ -25,20 +25,9 @@ export function PickCardFooter({
   hasBanca = true,
   onShare,
   shareState = 'idle',
-  /**
-   * Abre o detalhe (médias, forma dos times, classificação, odds por casa).
-   *
-   * Existe como BOTÃO porque o card inteiro deixou de ser clicável: ele abria
-   * essa mesma tela por engano toda vez que alguém errava o alvo entre
-   * "Apostar", "Compartilhar" e "Entenda esta análise". Alvo explícito resolve
-   * o engano sem tirar o acesso · o conteúdo continua alcançável de Meus
-   * Picks, Banca e Resultados pelo clique na linha, que ali é o gesto certo.
-   */
-  onDetails,
   className,
 }: {
   onBet?: (e: React.MouseEvent) => void
-  onDetails?: (e: React.MouseEvent) => void
   betState?: 'idle' | 'loading' | 'done'
   hasBanca?: boolean
   onShare?: (e: React.MouseEvent) => void
@@ -71,16 +60,6 @@ export function PickCardFooter({
       )}
 
       <div className="flex items-center gap-2 ml-auto">
-        {onDetails && (
-          <button
-            onClick={e => { e.stopPropagation(); onDetails(e) }}
-            title="Médias, forma dos times e odds por casa"
-            className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-ink-4 px-3 py-2 rounded-md transition-colors duration-1 ease-smooth min-h-[36px]"
-          >
-            <ListTree className="w-3.5 h-3.5 shrink-0" />
-            <span className="hidden sm:inline">Detalhes</span>
-          </button>
-        )}
         {onShare && (
           <button
             onClick={onShare}
