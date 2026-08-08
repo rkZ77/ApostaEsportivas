@@ -755,3 +755,34 @@ def test_resultado_liquidado_chega_na_aposta_do_usuario():
     pendente com o pick ja resolvido."""
     corpo = _codigo("routers/live.py", "_save_market_pick_result")
     assert "_sync_followed_result" in corpo
+
+
+# ─────────────── Fechamentos mensais em pagina propria ─────────────────
+
+
+def test_historico_de_fechamentos_saiu_do_rodape_da_banca():
+    """A lista cresce um item por mes e nunca para: empurrava a pagina pra
+    baixo sem limite, misturada com o que e' do MES CORRENTE."""
+    secao = _front_codigo("components/MonthlyCloseSection.tsx")
+    assert "/banca/fechamentos" in secao
+    # o pendente FICA: e' acao, tem prazo e muda a banca
+    assert "openMonthlyClose" in secao
+    # o historico nao e' mais desenhado aqui
+    assert "bankroll_start" not in secao
+
+
+def test_pagina_de_fechamentos_existe_e_e_privada():
+    app = _front("App.tsx")
+    assert 'path="/banca/fechamentos"' in app
+    assert "<PrivateRoute><BancaFechamentos />" in app
+    pagina = _front("pages/BancaFechamentos.tsx")
+    assert "noindex" in pagina, "tela de conta nao deve indexar"
+    assert "/banca/monthly-closes" in pagina
+
+
+def test_pagina_de_fechamentos_tem_volta_e_estado_vazio():
+    """Sem o `back` o usuario cai numa tela sem saida; sem o vazio, quem nunca
+    fechou um mes ve uma pagina em branco."""
+    pagina = _front("pages/BancaFechamentos.tsx")
+    assert "back: '/banca'" in pagina
+    assert "Nenhum fechamento ainda" in pagina
