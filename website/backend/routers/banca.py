@@ -1370,9 +1370,14 @@ def reset_current_month(current_user: dict = Depends(get_current_user)):
        tem banca propria em user_banca.alavancagem_init -- apagar o que a conta
        nem soma seria destruicao sem beneficio.
 
-    3. Nada de fechamento mensal e' tocado. banca_monthly_closes e
-       banca_withdrawals sao historico assinado: o mes corrente, por definicao,
-       ainda nao foi fechado.
+    3. Nada de fechamento mensal e' tocado, e mes JA FECHADO nao e' zeravel.
+       banca_monthly_closes e banca_withdrawals sao historico assinado. Na
+       pratica a tela so' fecha o mes anterior, entao o corrente costuma estar
+       aberto -- mas "costuma" nao serve aqui: fechar rola o lucro do mes pra
+       dentro de bankroll_start, e apagar as apostas depois disso contaria o
+       mesmo dinheiro duas vezes (a banca fica com o lucro E sem as apostas que
+       o produziram). Silencioso, e so' apareceria como saldo errado semanas
+       depois.
 
     bankroll_start tambem nao muda. Ele e' a base; sem as apostas do mes a
     banca atual volta sozinha pro que era no comeco dele, que e' exatamente o
@@ -1380,11 +1385,23 @@ def reset_current_month(current_user: dict = Depends(get_current_user)):
     """
     _check_banca_rate(current_user["id"])
     user_id = current_user["id"]
-    _, _, month_start, month_end = _month_bounds(_current_month_key())
+    month_key = _current_month_key()
+    _, _, month_start, month_end = _month_bounds(month_key)
 
     conn = get_connection()
     cur = conn.cursor()
     try:
+        cur.execute(
+            "SELECT 1 FROM banca_monthly_closes WHERE user_id = %s AND month_key = %s",
+            (user_id, month_key),
+        )
+        if cur.fetchone():
+            raise HTTPException(
+                400,
+                "Este mes ja foi fechado e o resultado dele entrou na sua banca inicial. "
+                "Zerar agora deixaria o saldo errado.",
+            )
+
         cur.execute("""
             DELETE FROM user_followed_picks
             WHERE user_id = %s

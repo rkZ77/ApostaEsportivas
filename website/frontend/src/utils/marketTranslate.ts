@@ -86,12 +86,21 @@ export function translateMarket(m?: string): string {
 // substring (ex.: "corners over/under" contém "over/under") acertaria a
 // explicação errada primeiro.
 type OverUnderInfo = { dir: 'maior' | 'menor'; value: string } | null
-type ExplainFn = (lineTxt: string, ou: OverUnderInfo) => string
+/** `sujeito` só existe nos mercados de CONTAGEM · é ele que permite explicar a
+ *  regra em número inteiro (ver regraDoMercado). */
+type ExplainFn = ((lineTxt: string, ou: OverUnderInfo) => string) & { sujeito?: string }
 
-const _ouOr = (subject: string) => (lineTxt: string, ou: OverUnderInfo) =>
-  ou
-    ? `Dá GREEN se ${subject} for ${ou.dir} que ${ou.value}.`
-    : `Dá GREEN se ${subject} bater com a linha ${lineTxt}.`
+const _ouOr = (subject: string): ExplainFn => {
+  const fn: ExplainFn = (lineTxt, ou) =>
+    ou
+      ? `Dá GREEN se ${subject} for ${ou.dir} que ${ou.value}.`
+      : `Dá GREEN se ${subject} bater com a linha ${lineTxt}.`
+  // Carregado na própria função em vez de raspado do texto com regex: a
+  // primeira versão fazia isso e trazia "o total de escanteios da partida for
+  // maior que 0" junto, porque o corte parava só no ponto final.
+  fn.sujeito = subject
+  return fn
+}
 
 const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'match winner':          lineTxt => `Dá GREEN se o resultado da partida for: ${lineTxt}.`,
@@ -143,11 +152,133 @@ const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'saves':                 () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais.',
 }
 
+/**
+ * O que o mercado conta, em uma frase, sem a linha.
+ *
+ * Sai de MARKET_EXPLAIN reaproveitando o sujeito que já está lá ("o total de
+ * escanteios da partida"), então não existe segunda lista pra manter em dia.
+ */
+function sujeitoDoMercado(market: string): string {
+  const fn = MARKET_EXPLAIN[market] ?? Object.entries(MARKET_EXPLAIN).find(([k]) => market.includes(k))?.[1]
+  return fn?.sujeito ?? ''
+}
+
+/** Unidade contável do mercado, pro texto falar "escanteios" e não "unidades". */
+function unidadeDoMercado(sujeito: string): string {
+  const s = sujeito.toLowerCase()
+  for (const [chave, palavra] of [
+    ['escanteio', 'escanteios'], ['cart', 'cartões'], ['falta', 'faltas'],
+    ['gol', 'gols'], ['chute', 'chutes'], ['defesa', 'defesas'],
+    ['impedimento', 'impedimentos'],
+  ] as const) {
+    if (s.includes(chave)) return palavra
+  }
+  return ''
+}
+
+export interface RegraDoMercado {
+  /** "Conta os escanteios dos dois times somados, no jogo inteiro." */
+  oQueE: string
+  /** Condição de GREEN, já em número inteiro. */
+  green: string
+  /** Condição de RED. Ausente quando o mercado não é de contagem. */
+  red?: string
+  /** Empate técnico devolve a aposta (linha cheia) ou metade dela (quarto). */
+  devolve?: string
+}
+
+/**
+ * Explicação da regra em número INTEIRO, pra quem não conhece o mercado.
+ *
+ * A linha vem com meio ponto ("Menos de 10.5") por um motivo técnico: meio
+ * escanteio não existe, então a fração só serve pra impedir empate. Mas quem
+ * lê "10.5 escanteios" pela primeira vez trava · o jogo nunca vai ter isso.
+ *
+ * Aqui a fração vira a contagem real do campo:
+ *
+ *   Menos de 10.5  ->  GREEN com 10 ou menos | RED com 11 ou mais
+ *   Mais de 9.5    ->  GREEN com 10 ou mais  | RED com 9 ou menos
+ *
+ * Linha cheia (10.0) tem um terceiro caso que o texto antigo escondia: sair
+ * exatamente 10 não é GREEN nem RED, devolve a aposta. E linha de quarto
+ * (9.75) é meia aposta em cada linha vizinha, então pode pagar metade. Os dois
+ * aparecem porque quem descobre isso só quando acontece acha que foi erro.
+ */
+export function regraDoMercado(market?: string, line?: string): RegraDoMercado | null {
+  if (!market) return null
+  const key = market.trim().toLowerCase()
+  const lineTxt = translateLine(line) || ''
+
+  const ouMatch = lineTxt.match(/^(Mais de|Menos de)\s+([\d.,]+)$/)
+  if (!ouMatch) return null
+
+  const acima = ouMatch[1] === 'Mais de'
+  const valor = parseFloat(ouMatch[2].replace(',', '.'))
+  if (!Number.isFinite(valor)) return null
+
+  const sujeito = sujeitoDoMercado(key)
+  if (!sujeito) return null
+  const unidade = unidadeDoMercado(sujeito)
+  const conta = (n: number) => (unidade ? `${n} ${unidade}` : String(n))
+
+  const oQueE = `Conta ${sujeito}.`
+  const frac = Math.round((valor % 1) * 100)
+
+  // Meia linha (x.5): o caso comum. Não existe empate, só GREEN ou RED.
+  if (frac === 50) {
+    const corte = Math.floor(valor)
+    return acima
+      ? { oQueE, green: `Saírem ${conta(corte + 1)} ou mais.`, red: `Saírem ${conta(corte)} ou menos.` }
+      : { oQueE, green: `Saírem ${conta(corte)} ou menos.`,   red: `Saírem ${conta(corte + 1)} ou mais.` }
+  }
+
+  // Linha cheia (x.0): bater o número exato devolve a aposta.
+  if (frac === 0) {
+    return {
+      oQueE,
+      green: acima ? `Saírem ${conta(valor + 1)} ou mais.` : `Saírem ${conta(valor - 1)} ou menos.`,
+      red:   acima ? `Saírem ${conta(valor - 1)} ou menos.` : `Saírem ${conta(valor + 1)} ou mais.`,
+      devolve: `Saírem exatamente ${conta(valor)}: a aposta volta pra você, sem ganho nem perda.`,
+    }
+  }
+
+  /*
+   * Quarto de linha (x.25 / x.75): a aposta é partida em duas metades, uma em
+   * cada linha vizinha. Existe um número inteiro no meio onde uma metade
+   * resolve e a outra empata · e QUAL metade muda conforme o quarto.
+   *
+   *   Mais de 9.75  -> metades em 9.5 e 10. Saindo 10: a de 9.5 ganha e a de
+   *                    10 empata, então metade GANHA.
+   *   Mais de 9.25  -> metades em 9 e 9.5. Saindo 9: a de 9 empata e a de 9.5
+   *                    perde, então metade PERDE.
+   *
+   * Dizer só "paga metade" nos dois casos avisaria que volta dinheiro num
+   * cenário em que metade some. É a diferença que o apostador só descobre
+   * quando acontece, e aí parece erro do site.
+   */
+  const meio = Math.round(valor)
+  const metadeGanha = acima ? frac === 75 : frac === 25
+  return {
+    oQueE,
+    green: acima ? `Saírem ${conta(meio + 1)} ou mais.` : `Saírem ${conta(meio - 1)} ou menos.`,
+    red:   acima ? `Saírem ${conta(meio - 1)} ou menos.` : `Saírem ${conta(meio + 1)} ou mais.`,
+    devolve: metadeGanha
+      ? `Saírem exatamente ${conta(meio)}: metade da aposta ganha e a outra metade volta.`
+      : `Saírem exatamente ${conta(meio)}: metade da aposta perde e a outra metade volta.`,
+  }
+}
+
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */
 export function explainMarket(market?: string, line?: string): string {
   if (!market) return ''
   const key = market.trim().toLowerCase()
   const lineTxt = translateLine(line) || 'valor definido pela IA'
+
+  // Quando dá pra falar em número inteiro, é essa a versão que vale · ver
+  // regraDoMercado. O texto com a linha fracionada fica de reserva.
+  const regra = regraDoMercado(market, line)
+  if (regra) return `${regra.oQueE} Dá GREEN se ${regra.green.charAt(0).toLowerCase()}${regra.green.slice(1)}`
+
   const ouMatch = lineTxt.match(/^(Mais de|Menos de)\s+([\d.,]+)$/)
   const ou: OverUnderInfo = ouMatch ? { dir: ouMatch[1] === 'Mais de' ? 'maior' : 'menor', value: ouMatch[2] } : null
   const fn = MARKET_EXPLAIN[key] ?? Object.entries(MARKET_EXPLAIN).find(([k]) => key.includes(k))?.[1]
