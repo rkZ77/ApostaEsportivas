@@ -21,7 +21,7 @@ const ACCENTS: Record<string, { chip: string; active: string; badge: string }> =
 }
 
 export default function FilterPanel({
-  groups, accent = 'green', extra, extraWhen,
+  groups, accent = 'green', extra, extraWhen, resultado,
 }: {
   groups: FilterGroup[]
   accent?: 'green' | 'yellow' | 'blue'
@@ -29,6 +29,15 @@ export default function FilterPanel({
   extra?: React.ReactNode
   /** So renderiza `extra` quando essa condicao for verdadeira (ex: periodo === 'custom') */
   extraWhen?: boolean
+  /**
+   * Quantos itens sobraram depois do filtro.
+   *
+   * Sem isto o painel nunca respondia a pergunta que o usuario tem ao filtrar:
+   * "sobrou alguma coisa?". Ele fechava e o resultado so' aparecia depois de
+   * rolar a pagina -- e uma lista vazia por filtro apertado fica igualzinha a
+   * uma lista vazia por nao existir dado. So' a aba Mercados mostrava isso.
+   */
+  resultado?: number
 }) {
   const [open, setOpen] = useState(false)
   const c = ACCENTS[accent]
@@ -60,6 +69,12 @@ export default function FilterPanel({
           )}
           <ChevronDown className={`w-3.5 h-3.5 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>
+
+        {!open && activeChips.length > 0 && resultado != null && (
+          <span className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-lg border ${resultado > 0 ? c.chip : 'border-line-strong text-ink-4'}`}>
+            {resultado === 1 ? '1 resultado' : `${resultado} resultados`}
+          </span>
+        )}
 
         {!open && activeChips.map(chip => (
           <motion.span
@@ -129,11 +144,22 @@ export default function FilterPanel({
             >
               Limpar filtros
             </button>
+            {/*
+              Dizia "Aplicar" e nao aplicava nada: cada opcao ja chama onChange
+              no clique, entao o botao so' fechava o painel. O rotulo prometia
+              um estado pendente que nunca existiu -- quem clicava numa opcao e
+              saia sem apertar aqui achava que tinha perdido a escolha.
+
+              Agora ele diz o que faz e, de quebra, entrega o numero: fechar o
+              painel e ver os N que sobraram e' a mesma acao.
+            */}
             <button
               onClick={() => setOpen(false)}
               className={`text-xs font-bold px-4 py-2 rounded-lg border ${c.active}`}
             >
-              Aplicar
+              {resultado == null
+                ? 'Fechar'
+                : resultado === 1 ? 'Ver 1 resultado' : `Ver ${resultado} resultados`}
             </button>
           </div>
         </div>

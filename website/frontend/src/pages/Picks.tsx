@@ -2311,7 +2311,7 @@ export default function Picks() {
                 ]
                 return (
                   <>
-                    {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} />}
+                    {filterGroups.length > 0 && <FilterPanel accent="yellow" groups={filterGroups} resultado={filteredVips.length} />}
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (

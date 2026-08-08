@@ -216,6 +216,7 @@ export default function ResultadosPublicos() {
                 value: month, onChange: handleMonthChange,
               } as FilterGroup] : []),
             ]}
+            resultado={recentTotal}
           />
 
           {/* Abas · Por Liga e' publica; Por Jogo/Por Mes exigem login (dado detalhado por usuario) */}
