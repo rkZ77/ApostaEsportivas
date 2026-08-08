@@ -307,9 +307,37 @@ def _legs_sem_jogo_do_vip(cur, legs: list) -> list:
 def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
     """Tenta dupla -> tripla -> simples (pernas podem ser do mesmo fixture
     ou de fixtures diferentes) ate o produto real das odds cair em
-    [odd_min, odd_max]. Rejeita combo com todas as pernas do mesmo
-    market_type. Faixa continua por parametro pra facilitar teste, mas hoje
-    so' existe uma: [ODD_COMBINED_MIN, ODD_COMBINED_MAX].
+    [odd_min, odd_max]. Faixa continua por parametro pra facilitar teste, mas
+    hoje so' existe uma: [ODD_COMBINED_MIN, ODD_COMBINED_MAX].
+
+    CORRELACAO E' POR JOGO (corrigido 2026-08-08)
+    ---------------------------------------------
+    A regra anterior rejeitava todo combo cujas pernas tivessem o MESMO
+    market_type, sem olhar de que partida cada uma vinha. Duas pernas de
+    `goals` em jogos diferentes nao sao correlacionadas -- sao times
+    diferentes, em estadios diferentes, no mesmo dia -- mas caiam no mesmo
+    veto que "Over 1.5 gols + Ambas Marcam no mesmo jogo", que e' correlacao
+    de verdade.
+
+    O custo era o produto inteiro. Em 08/08 o motor gerou 12 pernas candidatas
+    e TODAS eram `goals` (consequencia direta do teto de 1.55: mercado barato
+    com probabilidade alta e' quase sempre Over 0.5 / Under 4.5 / Under 5.5 de
+    gols). Toda dupla e toda tripla morreram nesse veto, sobrou o formato
+    simples, e a maior odd do dia era 1.39 contra um piso de 1.40 -- dia sem
+    alavancagem por um centavo, depois de um veto que nao descrevia risco
+    nenhum.
+
+    A chave do veto agora e' (fixture_id, correlation_group), a MESMA de
+    _today_used_pairs: duas pernas so' se excluem quando falam do mesmo jogo E
+    da mesma familia. Fica de pe o que o veto queria proteger, e some o que ele
+    protegia por acidente.
+
+    O QUE ESTA REGRA NAO COBRE, de proposito: erro sistematico do modelo. Tres
+    pernas de `goals` em tres jogos sao independentes no resultado, mas nao no
+    MODELO -- se a estimativa de gols estiver enviesada hoje, as tres erram
+    juntas. Diversificar por familia protegeria disso; o preco medido foi ficar
+    sem produto na maioria dos dias, entao a escolha aqui e' explicita, nao
+    esquecimento.
 
     A ORDEM importa e ja' foi um bug: com (1, 2, 3), uma perna unica de odd
     1.40 sempre cabia na faixa e vencia antes de qualquer combo ser testado
@@ -323,9 +351,14 @@ def _find_combo(legs: list, odd_min: float, odd_max: float) -> tuple | None:
     for combo_size in (2, 3, 1):
         best = None
         for combo in itertools.combinations(pool, combo_size):
-            market_types = {p["market_type"] for p in combo}
-            if combo_size > 1 and len(market_types) == 1:
-                continue  # todas as pernas com o mesmo mercado -- correlacionado, rejeita
+            # Mesmo jogo E mesma familia = a mesma aposta duas vezes. Familia
+            # repetida em jogos diferentes passa (ver docstring).
+            chaves = [
+                (p["_fixture"]["fixture_id"], ranking.correlation_group(p["market_type"]))
+                for p in combo
+            ]
+            if len(set(chaves)) != len(chaves):
+                continue
 
             odd_combined = round(1.0, 4)
             for p in combo:
