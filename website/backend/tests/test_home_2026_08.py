@@ -685,3 +685,73 @@ def test_zerar_mes_recusa_mes_ja_fechado():
     assert "ja foi fechado" in corpo
     # e a checagem tem que vir ANTES do DELETE
     assert corpo.index("banca_monthly_closes") < corpo.index("DELETE FROM user_followed_picks")
+
+
+# ───────── Faltas e defesas: integracao ponta a ponta no site ──────────
+
+
+def _uniao_de_picks(sql: str) -> set:
+    """Tabelas de pick citadas num UNION."""
+    return set(re.findall(r"FROM (picks_\w+)", sql))
+
+
+_SEIS = {"picks_vip", "picks_free", "picks_multiplas", "picks_alavancagem",
+         "picks_faltas", "picks_goleiros"}
+
+
+def test_performance_da_ia_conta_os_seis_pipelines():
+    """E' o numero que a tela de Picks estampa como "Performance da IA · Geral".
+
+    Faltas e goleiros ficavam de fora: o site publicava os dois, liquidava os
+    dois, contava os dois na banca do usuario e no historico publico -- so' a
+    porcentagem do topo os ignorava. O percentual anunciado nao descrevia o
+    produto vendido logo abaixo dele.
+    """
+    corpo = _codigo("routers/suggestions.py", "get_quick_stats")
+    assert _uniao_de_picks(corpo) == _SEIS, "stats/quick nao soma os seis"
+
+
+def test_sequencia_atual_usa_a_mesma_base_do_total():
+    """Lia so' picks_vip: "5 greens seguidos" descrevia um pipeline e aparecia
+    colado num total que somava todos."""
+    corpo = _codigo("routers/suggestions.py", "get_quick_stats")
+    trecho = corpo[corpo.index("Sequ"):]
+    assert _uniao_de_picks(trecho) == _SEIS
+
+
+def test_ranking_conta_aposta_em_faltas_e_defesas():
+    """Os dois entravam no CASE como NULL, entao a aposta era descartada pelo
+    FILTER (WHERE result IS NOT NULL): contava na banca do usuario e sumia do
+    ranking. Quem apostasse so' nesses dois nem aparecia na lista."""
+    corpo = _codigo("routers/public.py", "public_leaderboard")
+    assert "picks_faltas" in corpo and "picks_goleiros" in corpo
+    for tipo in ("'faltas'", "'goleiros'"):
+        assert corpo.count(tipo) >= 2, f"{tipo} precisa do CASE de result E de profit"
+
+
+def test_banca_do_usuario_conta_os_dois_mercados():
+    """Apostar num pick de faltas tem que mexer no saldo, nao so' aparecer na
+    lista."""
+    src = _fonte("routers/banca.py")
+    assert '_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros"}' in src
+    for fn in ("_compute_bankroll_current", "_compute_month_stats"):
+        assert "_mercado_maps(cur, followed)" in _codigo("routers/banca.py", fn), \
+            f"{fn} ignora os mercados"
+
+
+def test_liquidacao_cobre_faltas_e_defesas():
+    """Sem isso o pick ficaria pendente pra sempre: nunca entraria em nenhuma
+    estatistica (todas filtram result IS NOT NULL) e a aposta do usuario nunca
+    sairia de "pendente"."""
+    corpo = _codigo("routers/live.py", "resolve_all_pending")
+    assert "FROM picks_faltas" in corpo
+    assert "FROM picks_goleiros" in corpo
+    # defesa e' prop de JOGADOR: tem que ler player_match_stats, nao o total do time
+    assert "player_match_stats" in corpo
+
+
+def test_resultado_liquidado_chega_na_aposta_do_usuario():
+    """user_followed_picks.result precisa acompanhar, senao a tela mostra
+    pendente com o pick ja resolvido."""
+    corpo = _codigo("routers/live.py", "_save_market_pick_result")
+    assert "_sync_followed_result" in corpo
