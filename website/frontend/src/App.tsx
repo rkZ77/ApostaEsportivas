@@ -5,7 +5,6 @@ import { Spinner } from './components/ui'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider, useNotifications } from './context/NotificationContext'
-import { FavoritesProvider } from './context/FavoritesContext'
 import AgenteButton from './components/AgenteButton'
 import CookieBanner from './components/CookieBanner'
 import UpdateBanner from './components/UpdateBanner'
@@ -172,7 +171,6 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
-          <FavoritesProvider>
           {/* Fora do <Routes> de propósito: precisa sobreviver à troca de rota
               pra conseguir medi-la. Dentro, ela seria desmontada junto com a
               página que está saindo. */}
@@ -216,7 +214,6 @@ export default function App() {
               </Routes>
             </Suspense>
           </RouteErrorBoundary>
-          </FavoritesProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

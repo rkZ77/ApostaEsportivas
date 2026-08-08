@@ -463,3 +463,66 @@ def test_banca_mantem_sacar_e_configurar():
     assert "Sacar" in barra
     assert "Configurar" in barra
     assert "Meus Picks" not in barra
+
+
+# ────────────── Mercados: aba do dia, igual a de picks VIP ─────────────
+
+
+def test_mercados_saem_do_mesmo_endpoint_do_dia():
+    """A aba lia /suggestions/faltas e /goleiros com limit=50 e SEM filtro de
+    data: era historico, entao a aba do dia misturava pick de semanas atras, e
+    a navegacao por data no topo nao mexia nela."""
+    corpo = _codigo("routers/suggestions.py", "get_today_suggestions")
+    assert 'result["faltas"]' in corpo
+    assert 'result["goleiros"]' in corpo
+
+    tela = _front_codigo("pages/Picks.tsx")
+    assert "today?.faltas" in tela
+    assert "today?.goleiros" in tela
+    # e a busca separada deixa de existir
+    assert "/suggestions/faltas" not in tela
+    assert "/suggestions/goleiros" not in tela
+
+
+def test_mercados_usam_a_mesma_janela_dos_outros_tipos():
+    """Se a janela divergisse, a aba Mercados falaria de um dia e as outras de
+    outro dentro da MESMA resposta."""
+    corpo = _codigo("routers/suggestions.py", "get_today_suggestions")
+    assert "_merc_where" in corpo
+    # mesma cauda de pendentes que vip/multipla/alavancagem usam
+    assert corpo.count("INTERVAL '3 days'") >= 5
+
+
+def test_mercados_sabem_se_ja_foram_apostados():
+    """Sem is_followed o card nao sabe que a aposta ja foi registrada e o
+    botao "Apostar" reaparece como se nada tivesse acontecido."""
+    corpo = _codigo("routers/suggestions.py", "get_today_suggestions")
+    assert 'for _tipo in ("faltas", "goleiros")' in corpo
+    assert '_ufp_map(_tipo' in corpo
+
+
+# ─────────────────────────── Favoritos, fora ───────────────────────────
+
+
+def test_favoritos_sairam_do_frontend():
+    """Coracao no card, no cabecalho das secoes de mercado e na agenda, mais
+    filtro em dois lugares · muita superficie pra uma preferencia sem uso."""
+    for arq in ("App.tsx", "pages/Picks.tsx", "components/SuggestionCard.tsx",
+                "components/AgendaInteligente.tsx", "components/MercadosControls.tsx"):
+        src = _front(arq)
+        for termo in ("FavoriteButton", "useFavorites", "FavoritesProvider"):
+            assert termo not in src, f"{arq} ainda usa {termo}"
+
+
+def test_arquivos_de_favorito_foram_removidos():
+    for arq in ("components/FavoriteButton.tsx", "context/FavoritesContext.tsx"):
+        assert not os.path.exists(os.path.join(_FRONT, arq)), f"{arq} ainda existe"
+
+
+def test_favoritos_sairam_da_api_mas_a_tabela_fica():
+    """DROP TABLE nao tem volta; tabela parada nao custa nada."""
+    src = _fonte("routers/personal.py")
+    codigo = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
+    assert "/favorites" not in codigo
+    assert "user_favorites" not in codigo.split('"""', 2)[-1]
+    assert "user_favorites" in _fonte("migrations.py"), "a tabela nao devia ser dropada"

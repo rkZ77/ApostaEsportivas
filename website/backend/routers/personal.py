@@ -1,11 +1,16 @@
-"""Coisas do usuário: favoritos, alertas e conquistas.
+"""Coisas do usuário: alertas e conquistas.
 
-Os três moram no mesmo router porque compartilham a mesma forma (tabela pequena
-com user_id + chave, sempre lida inteira pela tela) e porque a tela de perfil
-mostra os três juntos. Separar em três arquivos daria três imports pro mesmo
-lugar sem ganhar nada.
+Favoritos moravam aqui e saíram em 2026-08-07, por decisão do usuário. O
+coração aparecia no card de pick, no cabeçalho das seções de mercado e na
+agenda, e servia de filtro em dois lugares · muita superfície para uma
+preferência que ninguém usava. A TABELA `user_favorites` continua no banco,
+sem DROP: coluna e tabela paradas não custam nada, e apagar não tem volta.
 
-Regra de segurança que vale pros três: TODA query filtra por user_id vindo do
+Os dois que ficaram moram no mesmo router porque compartilham a mesma forma
+(tabela pequena com user_id + chave, sempre lida inteira pela tela) e porque a
+tela de perfil mostra os dois juntos.
+
+Regra de segurança que vale pros dois: TODA query filtra por user_id vindo do
 token, nunca de parâmetro. Sem isso um id na URL vira leitura da conta alheia.
 """
 
@@ -22,134 +27,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/personal", tags=["personal"])
 
-FAVORITE_KINDS = {"league", "team", "market", "pick"}
-
-# Teto por usuário. Não é regra de negócio, é freio: sem isso um script guarda
-# favorito em laço e a listagem do perfil vira uma resposta de megabytes.
-MAX_FAVORITES_PER_KIND = 100
-
-
-# ─────────────────────────── Favoritos ────────────────────────────────
-
-
-class FavoriteBody(BaseModel):
-    kind: str
-    ref_id: str = Field(min_length=1, max_length=60)
-    label: str | None = Field(default=None, max_length=120)
-
-
-@router.get("/favorites")
-def list_favorites(
-    kind: str | None = Query(None, description="league|team|market|pick"),
-    current_user: dict = Depends(get_current_user),
-):
-    """Favoritos do usuário, opcionalmente de um tipo só."""
-    if kind and kind not in FAVORITE_KINDS:
-        raise HTTPException(400, "Tipo de favorito inválido")
-
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        sql = """
-            SELECT id, kind, ref_id, label, created_at
-              FROM user_favorites
-             WHERE user_id = %s
-        """
-        params: list = [current_user["id"]]
-        if kind:
-            sql += " AND kind = %s"
-            params.append(kind)
-        sql += " ORDER BY created_at DESC"
-
-        cur.execute(sql, params)
-        rows = cur.fetchall()
-    finally:
-        cur.close()
-        conn.close()
-
-    return [
-        {
-            "id": r["id"],
-            "kind": r["kind"],
-            "ref_id": r["ref_id"],
-            "label": r["label"],
-            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
-        }
-        for r in rows
-    ]
-
-
-@router.post("/favorites")
-def add_favorite(body: FavoriteBody, current_user: dict = Depends(get_current_user)):
-    """Marca um favorito. Repetir a chamada não duplica nem dá erro."""
-    if body.kind not in FAVORITE_KINDS:
-        raise HTTPException(400, "Tipo de favorito inválido")
-
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT COUNT(*) AS n FROM user_favorites WHERE user_id = %s AND kind = %s",
-            (current_user["id"], body.kind),
-        )
-        if cur.fetchone()["n"] >= MAX_FAVORITES_PER_KIND:
-            raise HTTPException(400, f"Limite de {MAX_FAVORITES_PER_KIND} favoritos por tipo atingido")
-
-        # ON CONFLICT em vez de checar antes: o botão de favoritar é clicável
-        # duas vezes em sequência e select-then-insert perde essa corrida.
-        cur.execute(
-            """
-            INSERT INTO user_favorites (user_id, kind, ref_id, label)
-                 VALUES (%s, %s, %s, %s)
-            ON CONFLICT (user_id, kind, ref_id)
-              DO UPDATE SET label = COALESCE(EXCLUDED.label, user_favorites.label)
-              RETURNING id, kind, ref_id, label
-            """,
-            (current_user["id"], body.kind, body.ref_id, body.label),
-        )
-        row = cur.fetchone()
-        conn.commit()
-    except HTTPException:
-        conn.rollback()
-        raise
-    except Exception as e:
-        conn.rollback()
-        logger.error("[FAVORITES] erro ao salvar: %s", e)
-        raise HTTPException(500, "Não foi possível salvar o favorito")
-    finally:
-        cur.close()
-        conn.close()
-
-    return {"id": row["id"], "kind": row["kind"], "ref_id": row["ref_id"], "label": row["label"]}
-
-
-@router.delete("/favorites/{kind}/{ref_id}")
-def remove_favorite(kind: str, ref_id: str, current_user: dict = Depends(get_current_user)):
-    """Desmarca. Idempotente: remover o que não existe devolve ok."""
-    if kind not in FAVORITE_KINDS:
-        raise HTTPException(400, "Tipo de favorito inválido")
-
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "DELETE FROM user_favorites WHERE user_id = %s AND kind = %s AND ref_id = %s",
-            (current_user["id"], kind, ref_id),
-        )
-        conn.commit()
-    finally:
-        cur.close()
-        conn.close()
-
-    return {"ok": True}
-
-
 # ──────────────────────────── Alertas ─────────────────────────────────
 
 ALERT_KINDS = {
     "new_value_bet": "Nova value bet publicada",
     "confidence": "Pick acima da confiança que eu escolher",
-    "favorite_team": "Pick de um time que eu favoritei",
 }
 
 

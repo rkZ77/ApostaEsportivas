@@ -13,11 +13,9 @@ import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
 import { LiveDot, Spinner, EmptyState, SkeletonPickGrid } from '../components/ui'
 import MercadosControls, { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../components/MercadosControls'
-import FavoriteButton from '../components/FavoriteButton'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
-import { useFavorites } from '../context/FavoritesContext'
 import LivePicks from '../components/LivePicks'
 import PicksPendingCard from '../components/PicksPendingCard'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
@@ -1304,23 +1302,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
 }) {
   return (
     <div>
-      {/* Favoritar o MERCADO (não o time) vive no cabeçalho da seção desde que
-          o card virou SuggestionCard: é uma preferência por categoria, então
-          repeti-la em cada card sempre foi redundante · o card agora favorita
-          o time, igual aos outros tipos. */}
-      <SectionHeader
-        color={cor}
-        label={titulo}
-        badge="VIP"
-        action={
-          <FavoriteButton
-            kind="market"
-            refId={tipo}
-            label={tipo === 'goleiros' ? 'Defesas de goleiro' : 'Faltas'}
-            size="sm"
-          />
-        }
-      />
+      <SectionHeader color={cor} label={titulo} badge="VIP" />
       <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>
       {carregando ? (
         <PickLoading />
@@ -1351,7 +1333,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
 
 function SectionHeader({ color, label, badge, action }: {
   color: string; label: string; badge?: string
-  /** Ação opcional alinhada à direita (ex.: favoritar o mercado da seção). */
+  /** Ação opcional alinhada à direita. */
   action?: React.ReactNode
 }) {
   return (
@@ -1697,22 +1679,22 @@ export default function Picks() {
   const [alavFilters,  setAlavFilters]  = useState<AlavFilters>(defaultAlavFilters)
   const [alavancagem,  setAlavancagem]  = useState<any[]>([])
   // null = ainda nao buscou (a aba carrega sob demanda, ver o efeito por aba)
-  const [faltas,    setFaltas]    = useState<MercadoPick[] | null>(null)
-  const [goleiros,  setGoleiros]  = useState<MercadoPick[] | null>(null)
-  const [mercadosLoading, setMercadosLoading] = useState(false)
   // Busca, categoria, ordem e estado da aba Mercados. Filtragem é local: a aba
   // já baixa os dois conjuntos inteiros, são poucas dezenas de picks por dia.
   const [mercadoFiltro, setMercadoFiltro] = useState<MercadoFiltro>(FILTRO_INICIAL)
-  const { isFavorite, favorites } = useFavorites()
-
-  // o próprio tipo de mercado estiver favoritado.
-  const mercadoEhFavorito = useCallback((p: MercadoPick & { tipo?: string }) => (
-    (p.home_team_id != null && isFavorite('team', p.home_team_id)) ||
-    (p.away_team_id != null && isFavorite('team', p.away_team_id))
-  ), [isFavorite])
-  const temFavoritos = favorites.some(f => f.kind === 'team')
-  const faltasFiltradas   = useMemo(() => aplicarFiltro(faltas ?? [], mercadoFiltro, mercadoEhFavorito), [faltas, mercadoFiltro, mercadoEhFavorito])
-  const goleirosFiltrados = useMemo(() => aplicarFiltro(goleiros ?? [], mercadoFiltro, mercadoEhFavorito), [goleiros, mercadoFiltro, mercadoEhFavorito])
+  /*
+   * A aba Mercados é a aba do DIA, igual à de picks VIP.
+   *
+   * Lia /suggestions/faltas e /suggestions/goleiros com limit=50 e sem filtro
+   * de data · ou seja, histórico: a aba do dia mostrava pick de semanas atrás
+   * misturado com o de hoje, e a navegação por data no topo não mexia nela.
+   * Agora sai de /suggestions/today, a mesma resposta que alimenta VIP,
+   * múltipla e alavancagem, então os cinco tipos falam sempre do mesmo dia.
+   */
+  const faltas   = (today?.faltas   ?? null) as MercadoPick[] | null
+  const goleiros = (today?.goleiros ?? null) as MercadoPick[] | null
+  const faltasFiltradas   = useMemo(() => aplicarFiltro(faltas ?? [], mercadoFiltro), [faltas, mercadoFiltro])
+  const goleirosFiltrados = useMemo(() => aplicarFiltro(goleiros ?? [], mercadoFiltro), [goleiros, mercadoFiltro])
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
   const [alavError,    setAlavError]    = useState(false)
@@ -1816,38 +1798,15 @@ export default function Picks() {
     }).catch(() => {})
   }, [])
 
-  /*
-   * Carga das abas que buscam sob demanda.
-   *
-   * Virou função (era o corpo do useEffect) pra poder ser chamada ANTES do
-   * clique · ver `prefetchAba`. As guardas de "já tenho" e "já estou buscando"
-   * ficam aqui dentro justamente porque agora há dois chamadores: o prefetch
-   * dispara primeiro e a troca de aba chega depois, e sem isso a mesma
-   * requisição sairia duas vezes.
-   */
-  const carregarMercados = useCallback(() => {
-    if (!canSeeVip || faltas !== null || mercadosLoading) return
-    setMercadosLoading(true)
-    // Os dois em paralelo: sao independentes, e serializar somaria a latencia
-    // de duas chamadas antes de pintar qualquer coisa na tela.
-    Promise.all([
-      api.get('/suggestions/faltas',   { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
-      api.get('/suggestions/goleiros', { params: { limit: 50 } }).then(r => r.data?.items ?? []).catch(() => []),
-    ])
-      .then(([f, g]) => { setFaltas(f); setGoleiros(g) })
-      .finally(() => setMercadosLoading(false))
-  }, [canSeeVip, faltas, mercadosLoading])
 
   const prefetchAba = useCallback((t: Tab) => {
-    if (t === 'mercados') carregarMercados()
     if (t === 'alavancagem' && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
-  }, [carregarMercados, canSeeVip, alavLoaded])
+  }, [canSeeVip, alavLoaded])
 
   /* A aba pode ser aberta sem passar pelo prefetch: deep link com hash
      (#mercados) ou botão de outra parte da tela. */
   useEffect(() => {
     if (tab === 'alavancagem' && canSeeVip && !alavLoaded) doFetchAlavancagem(defaultAlavFilters)
-    if (tab === 'mercados') carregarMercados()
   }, [tab, canSeeVip])
 
 
@@ -2707,13 +2666,12 @@ export default function Picks() {
                   totalFaltas={faltas?.length ?? 0}
                   totalGoleiros={goleiros?.length ?? 0}
                   visiveis={faltasFiltradas.length + goleirosFiltrados.length}
-                  temFavoritos={temFavoritos}
                 />
 
                 {/* Nada bateu o filtro. Sem isso as duas seções apareciam com o
                     vazio genérico de "nenhum pick ainda", que é outra coisa:
                     ali não existe pick, aqui existe e o filtro escondeu. */}
-                {faltasFiltradas.length === 0 && goleirosFiltrados.length === 0 && !mercadosLoading && (faltas?.length || goleiros?.length) ? (
+                {faltasFiltradas.length === 0 && goleirosFiltrados.length === 0 && !todayLoading && (faltas?.length || goleiros?.length) ? (
                   <EmptyState
                     Icon={SearchX}
                     title="Nenhum mercado com esses filtros"
@@ -2730,7 +2688,7 @@ export default function Picks() {
                         cor="bg-purple-400"
                         explicacao="Total de faltas do jogo. A previsão combina o histórico de faltas dos dois times com o do árbitro, e a probabilidade sai da taxa medida em jogos reais nessa faixa de previsão."
                         picks={faltas === null ? null : faltasFiltradas}
-                        carregando={mercadosLoading}
+                        carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
                     )}
@@ -2741,7 +2699,7 @@ export default function Picks() {
                         cor="bg-sky-400"
                         explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir."
                         picks={goleiros === null ? null : goleirosFiltrados}
-                        carregando={mercadosLoading}
+                        carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
                     )}

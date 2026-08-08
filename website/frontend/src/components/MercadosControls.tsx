@@ -36,12 +36,10 @@ export interface MercadoFiltro {
   categoria: MercadoCategoria
   ordem: MercadoOrdem
   estado: MercadoEstado
-  /** Só jogos de time favoritado. Fora de `categoria` porque acumula com ela. */
-  soFavoritos: boolean
 }
 
 export const FILTRO_INICIAL: MercadoFiltro = {
-  busca: '', categoria: 'todos', ordem: 'margem', estado: 'todos', soFavoritos: false,
+  busca: '', categoria: 'todos', ordem: 'margem', estado: 'todos',
 }
 
 /** Normaliza pra busca tolerar acento: "sao paulo" acha "São Paulo".
@@ -54,12 +52,9 @@ const norm = (s: string) =>
 export function aplicarFiltro<T extends Filtravel>(
   picks: T[],
   f: MercadoFiltro,
-  /** Devolve true se o pick envolve algo que o usuário favoritou. */
-  ehFavorito?: (p: T) => boolean,
 ): T[] {
   let out = picks
 
-  if (f.soFavoritos && ehFavorito) out = out.filter(ehFavorito)
 
   if (f.busca.trim()) {
     const q = norm(f.busca.trim())
@@ -87,7 +82,6 @@ export default function MercadosControls({
   totalFaltas,
   totalGoleiros,
   visiveis,
-  temFavoritos,
 }: {
   filtro: MercadoFiltro
   onChange: (f: MercadoFiltro) => void
@@ -95,8 +89,6 @@ export default function MercadosControls({
   totalGoleiros: number
   /** Quantos sobraram depois do filtro, pra dar retorno imediato à busca. */
   visiveis: number
-  /** Esconde o recorte de favoritos pra quem ainda não favoritou nada. */
-  temFavoritos?: boolean
 }) {
   const set = <K extends keyof MercadoFiltro>(k: K, v: MercadoFiltro[K]) =>
     onChange({ ...filtro, [k]: v })
@@ -104,7 +96,7 @@ export default function MercadosControls({
   const total = totalFaltas + totalGoleiros
   const filtrando =
     filtro.busca.trim() !== '' || filtro.estado !== 'todos'
-    || filtro.categoria !== 'todos' || filtro.soFavoritos
+    || filtro.categoria !== 'todos'
 
   const categorias = useMemo(() => ([
     { value: 'todos'    as const, label: <span className="flex items-center gap-1.5"><Layers className="w-3 h-3" />Todos <span className="text-ink-4">{total}</span></span> },
@@ -133,16 +125,6 @@ export default function MercadosControls({
           value={filtro.estado}
           onChange={v => set('estado', v)}
         />
-
-        {temFavoritos && (
-          <button
-            onClick={() => set('soFavoritos', !filtro.soFavoritos)}
-            aria-pressed={filtro.soFavoritos}
-            className={`pill ${filtro.soFavoritos ? 'pill-active' : ''}`}
-          >
-            Só favoritos
-          </button>
-        )}
 
         <label className="flex items-center gap-1.5 text-[11px] text-ink-4 shrink-0">
           <ArrowDownWideNarrow className="w-3.5 h-3.5" />

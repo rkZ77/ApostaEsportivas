@@ -1,10 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../services/api'
 import { Badge, EmptyState, IconButton, Panel, PanelHead, Spinner, StatTile } from './ui'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
-import FavoriteButton from './FavoriteButton'
-import { useFavorites } from '../context/FavoritesContext'
 
 /*
  * Agenda dos jogos por dia, marcando o que a IA já analisou.
@@ -39,8 +37,6 @@ export default function AgendaInteligente() {
   const [date, setDate] = useState(TODAY)
   const [fixtures, setFixtures] = useState<Fixture[] | null>(null)
   const [loading, setLoading] = useState(true)
-  const [onlyFavorites, setOnlyFavorites] = useState(false)
-  const { isFavorite, favorites } = useFavorites()
 
   useEffect(() => {
     setLoading(true)
@@ -50,17 +46,7 @@ export default function AgendaInteligente() {
       .finally(() => setLoading(false))
   }, [date])
 
-  const hasFavTeams = favorites.some(f => f.kind === 'team')
-
-  const visible = useMemo(() => {
-    const list = fixtures ?? []
-    if (!onlyFavorites) return list
-    return list.filter(f =>
-      (f.home_team_id != null && isFavorite('team', f.home_team_id)) ||
-      (f.away_team_id != null && isFavorite('team', f.away_team_id)) ||
-      isFavorite('league', f.league_id),
-    )
-  }, [fixtures, onlyFavorites, isFavorite])
+  const visible = fixtures ?? []
 
   const comPick = visible.filter(f => f.has_pick).length
   const label = date === TODAY
@@ -86,27 +72,14 @@ export default function AgendaInteligente() {
           </div>
         </PanelHead>
 
-        {hasFavTeams && (
-          <div className="px-4 pt-3">
-            <button
-              onClick={() => setOnlyFavorites(v => !v)}
-              aria-pressed={onlyFavorites}
-              className={`pill ${onlyFavorites ? 'pill-active' : ''}`}
-            >
-              Só os meus favoritos
-            </button>
-          </div>
-        )}
 
         {loading ? (
           <div className="flex justify-center py-10"><Spinner /></div>
         ) : visible.length === 0 ? (
           <EmptyState
             Icon={CalendarDays}
-            title={onlyFavorites ? 'Nenhum favorito joga nesse dia' : 'Nenhum jogo nas ligas cobertas'}
-            description={onlyFavorites
-              ? 'Tire o filtro para ver a agenda completa do dia.'
-              : 'Data FIFA e intervalo de temporada deixam a agenda vazia. Tente outro dia.'}
+            title="Nenhum jogo nas ligas cobertas"
+            description="Data FIFA e intervalo de temporada deixam a agenda vazia. Tente outro dia."
             compact
           />
         ) : (
@@ -129,9 +102,6 @@ export default function AgendaInteligente() {
                 {f.has_pick
                   ? <Badge tone="green">Pick</Badge>
                   : <span className="text-[10px] text-ink-4 shrink-0">sem valor</span>}
-                {f.home_team_id != null && (
-                  <FavoriteButton kind="team" refId={f.home_team_id} label={f.home_team} size="sm" />
-                )}
               </div>
             ))}
           </div>
