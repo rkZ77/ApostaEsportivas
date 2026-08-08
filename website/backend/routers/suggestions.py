@@ -243,6 +243,7 @@ def get_today_suggestions(
             _vip_where  = "s.match_date = %s"
             _m_where    = "match_date = %s"
             _alav_where = "pa.match_date = %s"
+            _merc_where = "match_date = %s"
         else:
             _d = ()
             TODAY_BR    = "(NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
@@ -250,6 +251,7 @@ def get_today_suggestions(
             _vip_where  = f"s.match_date = {TODAY_BR} OR (s.result IS NULL AND s.match_date >= {TODAY_BR} - INTERVAL '3 days')"
             _m_where    = f"match_date = {TODAY_BR} OR (result IS NULL AND match_date >= {TODAY_BR} - INTERVAL '3 days')"
             _alav_where = f"pa.match_date = {TODAY_BR} OR (pa.result IS NULL AND pa.match_date >= {TODAY_BR} - INTERVAL '3 days')"
+            _merc_where = f"match_date = {TODAY_BR} OR (result IS NULL AND match_date >= {TODAY_BR} - INTERVAL '3 days')"
 
         _picks_free_sql = f"""
             SELECT pf.id, pf.fixture_id, pf.match_date, pf.home_team, pf.away_team,
@@ -329,6 +331,45 @@ def get_today_suggestions(
                 LIMIT 1
             """, _d)
             result["alavancagem"] = dict(alav) if alav else None
+
+            # Mercados proprios (faltas e defesas de goleiro).
+            #
+            # Entram no /today junto com VIP e multipla porque a aba "Mercados"
+            # e' a aba do DIA, igual a de picks VIP -- pedido do usuario. Antes
+            # ela lia /suggestions/faltas e /suggestions/goleiros com limit=50 e
+            # sem filtro de data: era historico, entao a aba do dia mostrava
+            # pick de semanas atras misturado com o de hoje.
+            #
+            # A janela e' a mesma dos outros (`_merc_where`): o dia escolhido,
+            # mais o que ainda esta pendente ate' 3 dias atras. Sem essa cauda,
+            # pick de jogo adiado sumiria da tela antes de ser resolvido.
+            result["faltas"] = [dict(r) for r in _safe_query(cur, f"""
+                SELECT pf.id, pf.fixture_id, pf.match_date,
+                       pf.home_team, pf.away_team, pf.home_team_id, pf.away_team_id,
+                       pf.league_id, pf.market, pf.market_type, pf.line, pf.odd,
+                       pf.bet_house, pf.confidence, pf.prob_real,
+                       pf.prob_real AS probability, pf.edge,
+                       pf.reasoning, pf.stake_pct, pf.stake_units,
+                       pf.result, pf.profit, pf.created_at
+                FROM picks_faltas pf
+                WHERE {_merc_where.replace('match_date', 'pf.match_date').replace('result IS NULL', 'pf.result IS NULL')}
+                ORDER BY pf.match_date DESC, pf.edge DESC
+            """, _d)]
+
+            result["goleiros"] = [dict(r) for r in _safe_query(cur, f"""
+                SELECT pg.id, pg.fixture_id, pg.match_date,
+                       pg.home_team, pg.away_team, pg.home_team_id, pg.away_team_id,
+                       pg.league_id, pg.player_id, pg.player_name,
+                       pg.team_id, pg.team_name,
+                       pg.market, pg.market_type, pg.line, pg.line_value, pg.odd,
+                       pg.bet_house, pg.confidence, pg.prob_real,
+                       pg.prob_real AS probability, pg.edge,
+                       pg.reasoning, pg.stake_pct, pg.stake_units,
+                       pg.result, pg.profit, pg.created_at
+                FROM picks_goleiros pg
+                WHERE {_merc_where.replace('match_date', 'pg.match_date').replace('result IS NULL', 'pg.result IS NULL')}
+                ORDER BY pg.match_date DESC, pg.edge DESC
+            """, _d)]
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
@@ -354,6 +395,20 @@ def get_today_suggestions(
                 p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
                 p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
                 p["pick_type"] = "vip"
+
+        # Faltas e goleiros seguem a mesma regra do VIP: sem `is_followed` o
+        # card nao sabe que a aposta ja foi registrada e o botao "Apostar"
+        # reaparece como se nada tivesse acontecido.
+        for _tipo in ("faltas", "goleiros"):
+            if user_id and result.get(_tipo):
+                fm = _ufp_map(_tipo, [p["id"] for p in result[_tipo] if p.get("id")])
+                for p in result[_tipo]:
+                    fr = fm.get(p.get("id"))
+                    p["is_followed"]      = fr is not None
+                    p["user_stake_units"] = float(fr["stake_units"]) if fr else None
+                    p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
+                    p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
+                    p["pick_type"] = _tipo
 
         if user_id and result.get("dica_do_dia"):
             dica = result["dica_do_dia"]
