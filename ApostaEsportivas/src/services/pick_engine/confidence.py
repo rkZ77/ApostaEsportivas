@@ -50,14 +50,21 @@ def model_fit_adjustment(model_fit_diff: float | None) -> float:
     (stats_model) pra MESMA linha -- duas estimativas independentes
     concordando e sinal de que o padrao e real, nao ajuste por acaso.
     Diferenca pequena (<=10 pontos percentuais) -> +0.05 (confirmador
-    extra). Diferenca grande (>=30pp) -> -0.05 (os dois modelos discordam,
+    extra). Diferenca grande (>=15pp) -> -0.05 (os dois modelos discordam,
     desconfie). Entre os dois, ou sem dado (familia sem leitura Poisson) ->
-    0 (neutro)."""
+    0 (neutro).
+
+    O corte de baixo era 0.30 ate' 2026-08-08, e nessa faixa larga ele nunca
+    disparava na pratica: o pick #1573, com 24.5pp de desacordo, recebeu 0.0.
+    Hoje bate com config.model_disagreement_threshold, que e' onde o
+    orchestrator passa a usar a estimativa menor -- um desacordo que muda a
+    probabilidade tem que cobrar confidence tambem, senao o mesmo fato seria
+    tratado como grave num lugar e irrelevante no outro."""
     if model_fit_diff is None:
         return 0.0
     if model_fit_diff <= 0.10:
         return 0.05
-    if model_fit_diff >= 0.30:
+    if model_fit_diff >= 0.15:
         return -0.05
     return 0.0
 

@@ -11,6 +11,7 @@ from fastapi import APIRouter, Depends
 from database import get_connection
 from auth_utils import get_current_user
 from settlement_bridge import settlement
+import market_form
 
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
 
@@ -427,9 +428,10 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
     # forma. E, o principal: o valor vem de _stat_side(), que devolve None
     # quando o provedor ainda nao publicou aquele contador -- nenhum
     # `.get(chave, 0)` sobrou aqui. Ver services/settlement.py, invariante 1.
-    _side = ("home" if ("casa" in m or "home" in m)
-             else "away" if any(k in m for k in ["fora", "away", "visitante"])
-             else "total")
+    # Regra unica, em market_form -- a serie do "Entenda esta analise" precisa
+    # do MESMO escopo pra escolher os jogos que entram nas barras. Ver a
+    # docstring de market_form.escopo_do_mercado.
+    _side = market_form.escopo_do_mercado(m)
     for flag, keys, labels in (
         (is_corners,         ("Corner Kicks",),                   ("Escanteios Casa", "Escanteios Fora", "Escanteios")),
         (is_cards,           ("Yellow Cards", "Red Cards"),       ("Cartões Casa", "Cartões Fora", "Cartões")),
@@ -450,10 +452,14 @@ def _stat_for_market(market: str, line: str, home_stats: dict, away_stats: dict,
         return (1.0 if both else 0.0), "Ambas Marcam", None
 
     # ── Goals ──
+    # Gols nao le folha de estatistica (o placar chega por parametro), mas o
+    # ESCOPO e' a mesma pergunta das outras familias -- por isso sai do mesmo
+    # lugar. Tinha uma copia inline aqui, com a mesma lista de palavras, e duas
+    # definicoes da mesma regra e' como o bug de mando de 2026-08-08 nasceu.
     if is_goals:
-        if "casa" in m or "home" in m:
+        if _side == "home":
             return float(home_goals or 0), "Gols Casa", direction
-        if any(k in m for k in ["fora", "away", "visitante"]):
+        if _side == "away":
             return float(away_goals or 0), "Gols Fora", direction
         return float((home_goals or 0) + (away_goals or 0)), "Gols", direction
 

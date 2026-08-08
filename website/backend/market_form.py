@@ -43,6 +43,28 @@ _ADAPTADOR = (
 )
 
 
+def escopo_do_mercado(market: str) -> str:
+    """'home', 'away' ou 'total' -- de qual lado o mercado fala.
+
+    Mora aqui, e nao em routers/live.py, porque agora tem DOIS consumidores e
+    eles precisam concordar: `_stat_for_market` usa pra escolher de qual folha
+    ler o contador, e routers/suggestions.py::get_market_form usa pra escolher
+    QUAIS JOGOS entram na serie. Enquanto so' o primeiro existia, a regra podia
+    viver inline; com os dois, uma copia divergente traria de volta exatamente
+    o bug de 2026-08-08 (serie de "Escanteios Visitante" medindo o time errado
+    em 5 dos 8 jogos).
+
+    A ordem importa: "casa"/"home" e' testado antes de "fora"/"away" porque
+    nomes de mercado costumam trazer os dois times, e o rotulo do escopo vem
+    primeiro ("Escanteios Casa Mais/Menos")."""
+    m = (market or "").lower()
+    if "casa" in m or "home" in m:
+        return "home"
+    if any(k in m for k in ("fora", "away", "visitante")):
+        return "away"
+    return "total"
+
+
 def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
     """Converte uma linha de match_statistics nas duas folhas (casa, fora).
 

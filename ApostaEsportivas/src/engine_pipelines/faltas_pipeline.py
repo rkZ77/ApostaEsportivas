@@ -31,6 +31,7 @@ from services.match_stats_service import MatchStatsService
 from services.odds_service import OddsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import competition_profile as cp
+from services.pick_engine.config import DEFAULT_CONFIG
 from services.pick_engine.fouls_model import (
     LINHAS_SUPORTADAS,
     MIN_JOGOS_ARBITRO,
@@ -70,6 +71,23 @@ ODD_MAX = None
 # modelo -- a faixa mais forte da tabela empirica foi medida em 159 jogos, o
 # que ja carrega incerteza de alguns pontos percentuais.
 EDGE_MIN = 0.04
+
+# PISO DE PROBABILIDADE (2026-08-08). Fecha exatamente o buraco descrito no
+# bloco ODD_MIN/ODD_MAX acima: sem teto de odd, "qualquer odd a partir de ~4.00
+# passa no corte de edge SOZINHA, so' pela aritmetica". Com o piso, a faixa de
+# 0.26 da tabela nunca mais vira pick, por mais generosa que a odd esteja --
+# porque 26% de chance nao e' um pick, e' um bilhete.
+#
+# Mesmo numero e mesmo motivo do PROB_MIN de goleiros: e' o
+# PickEngineConfig.min_taxa que ranking.py ja aplica em VIP, free, multipla e
+# alavancagem. Faltas e goleiros nunca passaram por ali (pipeline proprio) e
+# ficaram sem piso por acidente de arquitetura. Pedido do usuario em 2026-08-08:
+# "quero picks que ganham estatisticamente, nao achar onde tem valor de odd".
+#
+# Consequencia direta na tabela de fouls_model: so' as faixas com taxa medida
+# >= 0.65 continuam podendo gerar pick. Se isso zerar a frequencia do pipeline,
+# a resposta certa e' medir faixas melhores, nao baixar o piso.
+PROB_MIN = DEFAULT_CONFIG.min_taxa
 
 
 def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> list:
@@ -226,7 +244,9 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             n_casa=n_casa, n_fora=n_fora, n_arbitro=n_arbitro,
             odd=oferta["odd"], linha=linha,
         )
-        if not analise or analise.get("edge", 0) < EDGE_MIN:
+        if not analise or analise.get("probability", 0) < PROB_MIN:
+            continue
+        if analise.get("edge", 0) < EDGE_MIN:
             continue
         if melhor is None or analise["edge"] > melhor[0]["edge"]:
             melhor = (analise, oferta)
@@ -345,8 +365,8 @@ def run_faltas_engine():
             log_skip("FALTAS_ENGINE", fixture, MOTIVO_SEM_CANDIDATO)
 
     if not candidatos:
-        motivo = ("nenhum candidato passou (odd fora da faixa, historico curto "
-                  "ou margem abaixo do minimo)")
+        motivo = ("nenhum candidato passou (historico curto, probabilidade "
+                  "abaixo do piso ou margem abaixo do minimo)")
         print(f"[FALTAS_ENGINE] {motivo.capitalize()}.")
         log_run("FALTAS_ENGINE", motivo)
         cur.close()
