@@ -11,8 +11,8 @@ import SuggestionDetail from '../components/SuggestionDetail'
 import { fmtBRL, fmtSigned } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
-import FilterPanel from '../components/FilterPanel'
-import { Button, NumberTicker, Spinner } from '../components/ui'
+import { Button, NumberTicker, PillGroup, Spinner } from '../components/ui'
+import { PERIODOS, PERIODO_PADRAO, janelaDoPeriodo, type PeriodoKey } from '../lib/periodo'
 import MonthlyCloseSection from '../components/MonthlyCloseSection'
 
 const SOURCE_LBL: Record<string, string> = {
@@ -187,29 +187,6 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
   )
 }
 
-function monthRange(offset: number) {
-  // offset 0 = este mes, -1 = mes passado
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = now.getMonth() + 1 + offset
-  const date = new Date(y, m - 1, 1)
-  const from = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-01`
-  const last = new Date(date.getFullYear(), date.getMonth() + 1, 0)
-  const to   = `${last.getFullYear()}-${String(last.getMonth() + 1).padStart(2, '0')}-${String(last.getDate()).padStart(2, '0')}`
-  return { from, to }
-}
-
-type PeriodKey = number | 'thismonth' | 'lastmonth'
-
-const PERIODS: { key: PeriodKey; label: string }[] = [
-  { key: 0,           label: 'Tudo' },
-  { key: 1,           label: 'Hoje' },
-  { key: 7,           label: '7 dias' },
-  { key: 30,          label: '30 dias' },
-  { key: 'thismonth', label: 'Este mês' },
-  { key: 'lastmonth', label: 'Mês passado' },
-]
-
 export default function Banca() {
   const navigate = useNavigate()
   const { user } = useAuth()
@@ -217,22 +194,19 @@ export default function Banca() {
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error,   setError]   = useState(false)
-  const [period,  setPeriod]  = useState<PeriodKey>(0)
+  const [period,  setPeriod]  = useState<PeriodoKey>(PERIODO_PADRAO)
   const [showSetup, setShowSetup]           = useState(false)
   const [detailPick, setDetailPick] = useState<{ id: number; pick_type: string } | null>(null)
 
 
-  const load = useCallback((p: PeriodKey) => {
+  const load = useCallback((p: PeriodoKey) => {
     setLoading(true)
     setError(false)
-    let params: Record<string, string | number> = {}
-    if (p === 'thismonth') {
-      const r = monthRange(0); params = { from_date: r.from, to_date: r.to }
-    } else if (p === 'lastmonth') {
-      const r = monthRange(-1); params = { from_date: r.from, to_date: r.to }
-    } else if (typeof p === 'number' && p > 0) {
-      params = { days: p }
-    }
+    // Sempre from/to, nunca `days`: a janela sai de lib/periodo, que e' a mesma
+    // conta que Meus Picks usa. Com `days` solto cada tela fazia o proprio
+    // calculo de fuso e as duas divergiam na virada da meia-noite.
+    const j = janelaDoPeriodo(p)
+    const params: Record<string, string> = j ? { from_date: j.de, to_date: j.ate } : {}
     api.get('/banca', { params })
       .then(r => setData(r.data))
       .catch(() => setError(true))
@@ -352,18 +326,18 @@ export default function Banca() {
         ) : (
           <div className="space-y-6">
 
-            {/* Filtro de período */}
-            <FilterPanel
-              accent="green"
-              groups={[{
-                key: 'period', label: 'Período',
-                options: PERIODS.map(p => ({ value: String(p.key), label: p.label })),
-                value: String(period),
-                onChange: v => {
-                  const found = PERIODS.find(p => String(p.key) === v)
-                  if (found) setPeriod(found.key)
-                },
-              }]}
+            {/* Período sempre à vista.
+                Era um painel dobrável com um grupo só dentro · dois cliques
+                (abrir, escolher) e mais um pra fechar, pro filtro PRINCIPAL da
+                tela. Meus Picks já mostrava a mesma escolha em fila aberta;
+                agora as duas usam a mesma fila e o mesmo vocabulário
+                (lib/periodo). Painel dobrável continua fazendo sentido onde há
+                vários grupos, como em Resultados e Estatísticas. */}
+            <PillGroup
+              options={PERIODOS.map(p => ({ value: p.key, label: p.label }))}
+              value={period}
+              onChange={setPeriod}
+              className="mb-5"
             />
 
             {/* Stats principais */}

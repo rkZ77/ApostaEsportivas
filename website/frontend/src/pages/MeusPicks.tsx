@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
-import { Spinner } from '../components/ui'
+import { PillGroup, Spinner } from '../components/ui'
+import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, type PeriodoKey } from '../lib/periodo'
 import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
@@ -115,31 +116,18 @@ export default function MeusPicks() {
     } catch { /* silently ignore */ }
   }
 
-  const [daysBack, setDaysBack] = useState<number | 'thismonth' | 'lastmonth'>(0)
+  const [daysBack, setDaysBack] = useState<PeriodoKey>(PERIODO_PADRAO)
   const [todayPage, setTodayPage] = useState(0)
   const PAGE_SIZE = 15
 
   const changeTab = (t: 'pendentes' | 'resolvidos') => {
     setTab(t)
     setDayOffset(0)
-    setDaysBack(0)
+    setDaysBack(PERIODO_PADRAO)
     setTodayPage(0)
   }
 
-  function isoDateDaysAgo(n: number) {
-    const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }))
-    d.setDate(d.getDate() - n)
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-  }
 
-  function monthBounds(offset: number) {
-    const now = new Date()
-    const y = now.getFullYear(), m = now.getMonth() + offset
-    const from = new Date(y, m, 1)
-    const to   = new Date(y, m + 1, 0)
-    const fmt  = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
-    return { from: fmt(from), to: fmt(to) }
-  }
 
   const allEntries: any[] = data?.entries ?? []
   const pendentes  = allEntries.filter(e => !e.result)
@@ -158,20 +146,15 @@ export default function MeusPicks() {
     : new Date(key + 'T12:00:00').toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })
 
   // Entradas filtradas pelo período selecionado (para stats + lista)
-  const filteredByPeriod = daysBack === 0
+  const filteredByPeriod = daysBack === 'tudo'
     ? allEntries
     : allEntries.filter((e: any) => {
         if (!e.followed_at) return false
-        const dayKey = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
-        if (daysBack === 'thismonth')  { const r = monthBounds(0);  return dayKey >= r.from && dayKey <= r.to }
-        if (daysBack === 'lastmonth') { const r = monthBounds(-1); return dayKey >= r.from && dayKey <= r.to }
-        if (typeof daysBack === 'number') {
-          return daysBack < 0 ? dayKey === todayKey : dayKey >= isoDateDaysAgo(daysBack)
-        }
-        return true
+        const dia = new Date(e.followed_at).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+        return dentroDoPeriodo(dia, daysBack)
       })
 
-  const filteredTabEntries = daysBack === 0 ? tabEntries : filteredByPeriod.filter((e: any) =>
+  const filteredTabEntries = daysBack === 'tudo' ? tabEntries : filteredByPeriod.filter((e: any) =>
     tab === 'pendentes' ? !e.result : !!e.result
   )
 
@@ -186,7 +169,7 @@ export default function MeusPicks() {
 
   const clampedOffset = Math.min(dayOffset, Math.max(0, uniqueDatesFiltered.length - 1))
   const selectedKey   = uniqueDatesFiltered[clampedOffset] ?? todayKey
-  const pageItems     = daysBack === 0
+  const pageItems     = daysBack === 'tudo'
     ? filteredTabEntries  // Hoje: mostra tudo sem separar por dia
     : filteredTabEntries.filter((e: any) =>
         e.followed_at &&
@@ -195,7 +178,7 @@ export default function MeusPicks() {
   const hasPrev = clampedOffset < uniqueDatesFiltered.length - 1
   const hasNext = clampedOffset > 0
 
-  const displayItems = daysBack === 0
+  const displayItems = daysBack === 'tudo'
     ? pageItems.slice(todayPage * PAGE_SIZE, (todayPage + 1) * PAGE_SIZE)
     : pageItems
 
@@ -280,28 +263,16 @@ export default function MeusPicks() {
           <div className="space-y-4">
 
             {/* Filtros de período · pills */}
+            {/* Mesmo vocabulário e mesma fila da Banca (lib/periodo). As duas
+                telas filtram a MESMA lista de apostas e diziam coisas
+                diferentes: "Todos" contra "Tudo", "Semana" contra "7 dias", e
+                um recorte de 30 dias que só existia lá. */}
             {allEntries.length > 0 && (
-              <div className="flex gap-2 flex-wrap">
-                {([
-                  { label: 'Todos',        value: 0 },
-                  { label: 'Hoje',         value: -1 },
-                  { label: 'Semana',       value: 7 },
-                  { label: 'Este mês',     value: 'thismonth' },
-                  { label: 'Mês passado',  value: 'lastmonth' },
-                ] as { label: string; value: number | 'thismonth' | 'lastmonth' }[]).map(({ label, value }) => (
-                  <button
-                    key={String(value)}
-                    onClick={() => { setDaysBack(value); setDayOffset(0); setTodayPage(0) }}
-                    className={`px-3 py-1.5 rounded-md text-xs font-bold border transition-colors ${
-                      daysBack === value
-                        ? 'bg-green-500/15 border-green-500/50 text-green-400'
-                        : 'border-line-strong text-ink-3 hover:border-ink-4 hover:text-ink-2'
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <PillGroup
+                options={PERIODOS.map(p => ({ value: p.key, label: p.label }))}
+                value={daysBack}
+                onChange={v => { setDaysBack(v); setDayOffset(0); setTodayPage(0) }}
+              />
             )}
 
             {/* Resumo · filtra pelo período selecionado */}
@@ -310,7 +281,7 @@ export default function MeusPicks() {
               const resolved = periodEntries.filter((e: any) => e.result)
               const greenCount = resolved.filter((e: any) => e.result === 'GREEN' || e.result === 'HALF-WIN').length
               const redCount   = resolved.filter((e: any) => e.result === 'RED'   || e.result === 'HALF-LOSS').length
-              const pnl = daysBack === 0
+              const pnl = daysBack === 'tudo'
                 ? (data?.total_pnl ?? 0)
                 : resolved.reduce((acc: number, e: any) => acc + (Number(e.pnl) || 0), 0)
               const wr = calcWinRate(greenCount, resolved.length) ?? 0
@@ -324,7 +295,7 @@ export default function MeusPicks() {
                   <div className="card p-3 text-center">
                     <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
                     <div className="text-[10px] text-ink-3 mt-1">
-                      {daysBack === 0 ? 'Total' : daysBack === 'thismonth' ? 'Este mês' : daysBack === 'lastmonth' ? 'Mês passado' : `Últimos ${daysBack}d`}
+                      {daysBack === 'tudo' ? 'Total' : PERIODOS.find(p => p.key === daysBack)?.label}
                     </div>
                   </div>
                   <div className="card p-3 text-center">
@@ -351,13 +322,9 @@ export default function MeusPicks() {
                   ? p.bankroll - (data?.bankroll_start ?? 100)
                   : p.bankroll - arr[i - 1].bankroll,
               }))
-              const chartFiltered = daysBack === 0
+              const chartFiltered = daysBack === 'tudo'
                 ? allChart
-                : (typeof daysBack === 'number' && daysBack < 0)
-                ? allChart.filter((c: any) => c.match_date === todayKey)
-                : typeof daysBack === 'number'
-                ? allChart.filter((c: any) => c.match_date >= isoDateDaysAgo(daysBack))
-                : (() => { const r = monthBounds(daysBack === 'thismonth' ? 0 : -1); return allChart.filter((c: any) => c.match_date >= r.from && c.match_date <= r.to) })()
+                : allChart.filter((c: any) => dentroDoPeriodo(c.match_date, daysBack))
               if (chartFiltered.length < 2) return null
               const pnl = data?.total_pnl ?? 0
 
@@ -578,7 +545,7 @@ export default function MeusPicks() {
                 )}
 
                 {/* Paginação · só no modo Todos (daysBack=0) */}
-                {daysBack === 0 && filteredTabEntries.length > PAGE_SIZE && (
+                {daysBack === 'tudo' && filteredTabEntries.length > PAGE_SIZE && (
                   <div className="flex items-center justify-center gap-2 flex-wrap">
                     <button
                       disabled={todayPage === 0}
@@ -597,7 +564,7 @@ export default function MeusPicks() {
                 )}
 
                 {/* Carregar mais resolvidos do servidor · histórico cresce sem limite */}
-                {tab === 'resolvidos' && daysBack === 0 && data?.has_more_resolved && (
+                {tab === 'resolvidos' && daysBack === 'tudo' && data?.has_more_resolved && (
                   <button
                     onClick={loadMoreResolved}
                     disabled={loadingMore}
