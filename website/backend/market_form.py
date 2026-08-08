@@ -23,6 +23,13 @@ Duas decisoes que sustentam o modulo inteiro:
 Estatistica ausente nunca vira zero. A partida entra na serie como "sem dado" e
 fica de fora da taxa -- o RED de 05/08 que motivou o modulo de liquidacao
 nasceu exatamente de tratar "nao sei" como "zero".
+
+AMBAS MARCAM (2026-08-08). O mercado ficava sem serie nenhuma: `_stat_for_market`
+devolvia 1.0/0.0, que decide o pick mas nao e' contador -- sem contador nao ha
+barra, e a secao inteira sumia do card. O contador existe e sempre existiu: e' o
+placar do time que MENOS marcou, que passa de 0 pra 1 exatamente quando o
+mercado vira GREEN. Hoje `_stat_for_market` devolve esse minimo (mesma decisao
+pra quem so compara com 1.0) e a regua do grafico fica em 0.5.
 """
 
 from settlement_bridge import settlement
@@ -108,6 +115,14 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
         resultado = None
         if valor is not None and op in ("over", "under"):
             resultado, _factor = settlement.settle_over_under(valor, valor_linha, op)
+        elif valor is not None and op in ("yes", "no"):
+            # Ambas marcam. NAO cai em settle_over_under com uma linha 0.5
+            # inventada: quem grada BTTS e' settle_btts, com o placar, igual o
+            # pick de verdade. A regua de 0.5 existe pro grafico (ver abaixo),
+            # nao pra decisao -- se um dia a definicao de BTTS mudar, ela muda
+            # em settlement e esta serie acompanha sozinha.
+            resultado, _factor = settlement.settle_btts(
+                ms.get("home_goals"), ms.get("away_goals"), op)
 
         itens.append({
             "fixture_id": ms.get("fixture_id"),
@@ -121,9 +136,22 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
     verdes = sum(1 for i in resolvidos if i["result"] == settlement.GREEN)
     com_valor = [i["value"] for i in itens if i["value"] is not None]
 
+    linha_grafico = float(valor_linha) if valor_linha is not None else None
+    if op in ("yes", "no"):
+        # BTTS nao tem numero no texto da linha ("Yes"), mas tem limiar: o
+        # mercado paga quando o time que menos marcou faz 1 ou mais. Sobre o
+        # contador que _stat_for_market devolve, isso e' 0.5 -- e' o que faz as
+        # barras terem uma regua contra a qual serem lidas, em vez de flutuarem
+        # sozinhas no grafico.
+        linha_grafico = 0.5
+        # "Ambas Marcam" nomeia o MERCADO, e serve pro ticker ao vivo. Aqui a
+        # barra mostra o CONTADOR, e chamar o contador pelo nome do mercado e'
+        # o que faria a regua em 0.5 parecer arbitraria.
+        rotulo = "Gols do time que menos marcou"
+
     return {
         "label": rotulo,
-        "line": float(valor_linha) if valor_linha is not None else None,
+        "line": linha_grafico,
         "op": op,
         "matches": itens,
         "resolved": len(resolvidos),
