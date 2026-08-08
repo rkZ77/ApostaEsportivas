@@ -377,6 +377,7 @@ export default function SuggestionCard({
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
+        onDetails={onClick}
       />
     </motion.div>
 
