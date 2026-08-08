@@ -200,14 +200,28 @@ class AIReviewGate:
         self._call_model_override = call_model
         self._cache_ready = False
 
+    def _stamp(self, review: dict, cached: bool) -> dict:
+        """Carimba QUEM deu o parecer. Sem isto o parecer fica salvo no pick
+        (engine_debug.ai_review) sem dizer qual modelo o emitiu, e o painel de
+        desempenho nao consegue separar Claude de OpenAI olhando o resultado --
+        so' da' pra inferir por pipeline+dia, que erra no dia em que o modelo
+        muda. Carimbar aqui e' seguro inclusive no cache: cache_key_for_payload
+        inclui provider e model, entao um HIT so' acontece pro mesmo par."""
+        return {**review, "mode": self.settings.mode, "cached": cached,
+                "provider": self.settings.provider, "model": self.settings.model}
+
     def review(self, picks: list[dict], pipeline: str, fixture: dict | None = None) -> dict:
+        # Sem carimbo de provider/model nos dois early-returns abaixo de
+        # proposito: nenhum modelo olhou o pick nesses casos, e um carimbo aqui
+        # faria o painel creditar (ou culpar) uma IA por um pick que ela nunca
+        # viu.
         if self.settings.mode == "off":
             return {"status": "disabled", "decision": "approve", "mode": "off", "cached": False}
         payload = build_review_payload(picks, pipeline, fixture)
         key = cache_key_for_payload(payload, self.settings)
         cached = self._load_cache(key)
         if cached:
-            review = {**cached, "mode": self.settings.mode, "cached": True}
+            review = self._stamp(cached, cached=True)
             self._record_event(key, pipeline, review)
             return review
         if self._daily_limit_reached():
@@ -218,7 +232,7 @@ class AIReviewGate:
         except Exception as error:
             print(f"[AI_REVIEW] Falha no provedor; mantendo pick do motor: {error}")
             review = {"status": "unavailable", "decision": "approve", "risk_level": "unknown", "reasons": []}
-        review = {**review, "mode": self.settings.mode, "cached": False}
+        review = self._stamp(review, cached=False)
         self._store_cache(key, pipeline, review)
         self._record_event(key, pipeline, review)
         return review

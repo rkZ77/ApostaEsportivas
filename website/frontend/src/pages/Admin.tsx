@@ -6,6 +6,7 @@ import { Plus, Play, AlertTriangle } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
+import AdminIAPerformance from '../components/AdminIAPerformance'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -92,6 +93,7 @@ const ABAS = [
   { key: 'visao',      label: 'Visão geral' },
   { key: 'usuarios',   label: 'Usuários'    },
   { key: 'pipeline',   label: 'Pipeline'    },
+  { key: 'ia',         label: 'IA'          },
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
   { key: 'ligas',      label: 'Ligas'       },
@@ -491,21 +493,31 @@ export default function Admin() {
           </div>
         </div>
 
-        {/* Revisão IA */}
+        {/* Revisão IA · contadores ao vivo enquanto o pipeline roda. A leitura
+            de desempenho por modelo (e a lista de pareceres) mora na aba IA,
+            que é onde ela é analisada com calma. */}
         <div className="card p-4 mb-6">
-          <div className="flex items-center justify-between mb-3">
-            <div>
+          <div className="flex items-center justify-between mb-3 gap-3">
+            <div className="min-w-0">
               <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
               <p className="text-[11px] text-ink-4 mt-1">
                 {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
                   `${aiReviewStatus?.config.mode ?? 'off'} · ${aiReviewStatus?.config.environment ?? 'prod'} · limite ${aiReviewStatus?.config.daily_limit ?? 0}/dia`}
               </p>
             </div>
-            <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
-              {aiReviewStatus?.config.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
-            </span>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => { setAba('ia'); window.location.hash = 'ia' }}
+                className="text-[10px] px-2 py-1 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors"
+              >
+                analisar por modelo
+              </button>
+              <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
+                {aiReviewStatus?.config.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
+              </span>
+            </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
               ['Hoje', aiReviewStatus?.summary.reviews_today ?? 0],
               ['24h', aiReviewStatus?.summary.reviews_24h ?? 0],
@@ -515,18 +527,10 @@ export default function Admin() {
               <p className="text-[10px] text-ink-4">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
             </div>)}
           </div>
-          <div className="space-y-1 max-h-40 overflow-y-auto">
-            {(aiReviewStatus?.events ?? []).slice(0, 8).map((event, index) => (
-              <div key={`${event.created_at}-${index}`} className="text-[11px] rounded bg-surface-0 px-2 py-1.5 flex gap-2 text-ink-2">
-                <span className={event.decision === 'reject' ? 'text-red-400 font-bold' : 'text-green-400 font-bold'}>{event.decision === 'reject' ? 'VETADO' : 'OK'}</span>
-                <span>{event.pipeline}</span><span>{event.model}</span><span>{event.cached ? 'cache' : 'novo'}</span>
-                <span className="ml-auto truncate">{event.review?.reasons?.[0] ?? event.status}</span>
-              </div>
-            ))}
-            {!aiReviewStatus?.events?.length && <p className="text-xs text-ink-4 py-2">Sem revisões registradas ainda.</p>}
-          </div>
         </div>
         </>)}
+
+        {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
         {aba === 'visao' && (<>
 

@@ -20,7 +20,7 @@ fixtures de QUALQUER liga cadastrada em `leagues`, mesmo criterio de
 selecao de fixture-do-dia que VIP/Dica/Multipla ja usam -- so 1 alavancagem
 por dia, escolhida entre todos os candidatos elegiveis de todas as ligas."""
 import itertools
-
+import json
 import textwrap
 import traceback
 from utils.db_utils import get_connection
@@ -101,6 +101,14 @@ def _create_table_if_needed(cur):
             created_at      TIMESTAMP DEFAULT NOW()
         )
     """)
+    # A alavancagem era o unico pipeline que chamava a revisao de IA e jogava o
+    # parecer fora: `apply()` devolvia as pernas com ai_review e _save_pick nao
+    # gravava nada. Resultado pratico -- no painel de desempenho por modelo, a
+    # alavancagem aparecia como "sem revisao", como se o gate nem rodasse nela.
+    # Tabela ja' existe em PROD, entao ALTER (CREATE TABLE IF NOT EXISTS acima
+    # nao adiciona coluna em tabela criada antes; mesmo gap de migracao ja'
+    # documentado em multipla_pipeline.py).
+    cur.execute("ALTER TABLE picks_alavancagem ADD COLUMN IF NOT EXISTS ai_review JSONB;")
 
 
 def _has_today_pick(cur) -> bool:
@@ -383,6 +391,14 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
     cols += ["odd_combined", "confidence_media", "ev_combined"]
     vals += ["%s", "%s", "%s"]
     params += [odd_combined, confidence_media, ev_combined]
+
+    # Parecer da IA sobre o bilhete. A revisao e' UMA por combo (review_gate
+    # .apply recebe a combinacao inteira), entao todas as pernas carregam o
+    # mesmo dict -- guardar o da primeira e' guardar o parecer do bilhete.
+    ai_review = legs[0].get("ai_review") if legs else None
+    cols += ["ai_review"]
+    vals += ["%s"]
+    params += [json.dumps(ai_review, ensure_ascii=False, default=str) if ai_review else None]
 
     cur.execute(f"INSERT INTO picks_alavancagem ({', '.join(cols)}) VALUES ({', '.join(vals)})", params)
     return tipo
