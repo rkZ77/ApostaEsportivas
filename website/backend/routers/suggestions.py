@@ -1,12 +1,15 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+import logging
 import re
 import psycopg2.extras
 from database import get_connection
 from auth_utils import get_current_user, require_vip, is_vip_active
 from routers.banca import _compute_bankroll_current
-from routers.live import _stat_for_market
+from routers.live import _stat_for_market, maybe_resolve_pending
 import market_form
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/suggestions", tags=["suggestions"])
 
@@ -232,6 +235,15 @@ def get_today_suggestions(
     date: Optional[str] = Query(None, description="YYYY-MM-DD · deixar vazio para hoje"),
 ):
     is_vip = is_vip_active(current_user)
+    # Abrir a tela de picks é o que mantém os resultados em dia: a varredura
+    # roda em segundo plano (no máximo uma a cada poucos minutos, e só quando
+    # há pick pendente de jogo já iniciado), então esta chamada não espera por
+    # ela nem falha por causa dela. Ver routers/live.py::maybe_resolve_pending.
+    try:
+        maybe_resolve_pending()
+    except Exception:
+        logger.warning("[AUTO-RESULT] gatilho em /today falhou", exc_info=True)
+
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -262,7 +274,8 @@ def get_today_suggestions(
                         ELSE NULL END AS ev,
                    pf.reasoning, pf.result, pf.profit,
                    COALESCE(pf.home_team_id, f.home_team_id) AS home_team_id,
-                   COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id
+                   COALESCE(pf.away_team_id, f.away_team_id) AS away_team_id,
+                   f.match_datetime
             FROM picks_free pf
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE {_pf_where}
@@ -284,6 +297,7 @@ def get_today_suggestions(
                        s.stake_pct,
                        s.reasoning, s.result, s.profit,
                        f.league_id,
+                       f.match_datetime,
                        l.name AS league_name
                 FROM picks_vip s
                 LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id

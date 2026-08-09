@@ -39,3 +39,19 @@ def side_effects_note() -> str:
     if side_effects_enabled():
         return "efeitos colaterais LIGADOS (scheduler, e-mail e push ativos)"
     return "efeitos colaterais DESLIGADOS via SIDE_EFFECTS=off (modo staging)"
+
+
+def is_production() -> bool:
+    """True só no serviço de produção.
+
+    Mesmo vocabulário de auth_utils.py (`APP_ENV`, com "production" no
+    default), pra não existirem duas ideias de "que ambiente é este" no
+    backend. O default aponta pra produção pelo mesmo motivo de lá: esquecer a
+    variável no serviço real não pode desligar comportamento em silêncio.
+
+    Diferente de `side_effects_enabled`, que separa staging de real: esta
+    separa PRODUÇÃO de todo o resto (dev inclusive). Serve pro que consome
+    recurso externo pago -- cota da API-Football -- e não faz sentido gastar
+    fora de produção.
+    """
+    return os.getenv("APP_ENV", "production").strip().lower() in ("production", "prod")

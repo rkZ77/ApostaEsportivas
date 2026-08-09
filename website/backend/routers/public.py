@@ -250,6 +250,16 @@ def public_results(
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
 ):
     """Resultados públicos consolidados para a Landing page."""
+    # Mesma varredura em segundo plano de /suggestions/today. Entra aqui
+    # também porque esta é a tela que o visitante DESLOGADO abre: sem isso,
+    # num dia em que nenhum assinante entrasse no site, o placar público
+    # continuaria mostrando "pendente" com os jogos já encerrados.
+    try:
+        from routers.live import maybe_resolve_pending
+        maybe_resolve_pending()
+    except Exception:
+        logger.warning("[AUTO-RESULT] gatilho em /results falhou", exc_info=True)
+
     conn = get_connection()
     cur  = conn.cursor()
     try:
