@@ -1288,7 +1288,13 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
     probability: p.prob_real != null ? Number(p.prob_real) : null,
     market_type: p.market_type ?? tipo,
     ev: p.edge != null ? Number(p.edge) : undefined,
-    match_date: p.match_datetime ?? p.match_date,
+    /* Os dois vão separados de propósito: `match_date` é a DATA (coluna DATE)
+       e `match_datetime` é o horário do jogo. Enquanto o card lia a hora de
+       `match_date`, isto aqui era `p.match_datetime ?? p.match_date` -- e
+       quando o fixture não estava mais na tabela `fixtures` caía na data pura
+       e o card imprimia 21:00. */
+    match_date: p.match_date,
+    match_datetime: p.match_datetime ?? null,
     reasoning: p.reasoning,
     result: p.result ?? undefined,
     pick_type: tipo,
