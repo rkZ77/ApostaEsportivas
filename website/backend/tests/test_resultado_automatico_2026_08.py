@@ -64,12 +64,19 @@ def _codigo(caminho: str, nome: str) -> str:
 
 @pytest.fixture
 def live(monkeypatch):
-    """Modulo live com o estado da varredura zerado e sem efeito real.
+    """Modulo live com o estado da varredura zerado e em modo producao.
 
     O estado e' de processo (dict de modulo), entao um teste que dispara a
     varredura contaminaria o proximo se nao fosse zerado aqui.
+
+    APP_ENV entra como producao porque o conftest da suite fixa
+    `APP_ENV=development` (pra nao exigir JWT_SECRET), e nesse modo a
+    varredura esta desligada de proposito -- sem isto TODO teste de gatilho
+    passaria por engano, sempre pelo mesmo motivo errado.
     """
     import routers.live as mod
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("PICK_SWEEP", raising=False)
     monkeypatch.setattr(mod, "_sweep_state", {"last": 0.0, "running": False})
     return mod
 
@@ -138,7 +145,7 @@ def test_falha_na_checagem_nao_libera_varredura(live, monkeypatch):
     assert live._sweep_state["running"] is False
 
 
-# ─────────────────────── Staging ───────────────────────
+# ─────────────────────── So' em producao ───────────────────────
 
 
 def test_staging_nao_varre(live, monkeypatch):
@@ -147,6 +154,40 @@ def test_staging_nao_varre(live, monkeypatch):
     monkeypatch.setenv("SIDE_EFFECTS", "off")
     monkeypatch.setattr(live, "_ha_pendente_em_jogo", lambda: True)
     assert live.maybe_resolve_pending() is False
+
+
+def test_dev_nao_varre(live, monkeypatch):
+    """A cota da API-Football e' UMA conta so' pros tres ambientes: uma janela
+    aberta no dev consumiria a cota do site real sem nenhum usuario do outro
+    lado. Pedido explicito do usuario em 2026-08-09."""
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.setattr(live, "_ha_pendente_em_jogo", lambda: True)
+    assert live.maybe_resolve_pending() is False
+
+
+def test_producao_varre(live, monkeypatch):
+    """A trava de ambiente nao pode ter desligado tambem a producao."""
+    monkeypatch.setattr(live, "_ha_pendente_em_jogo", lambda: True)
+    monkeypatch.setattr(live.threading, "Thread",
+                        lambda **kw: type("T", (), {"start": lambda _s: None})())
+    assert live.maybe_resolve_pending() is True
+
+
+def test_desligavel_sem_redeploy(live, monkeypatch):
+    """PICK_SWEEP=off e' a valvula pra fechar na mao se a cota apertar, sem
+    precisar subir codigo."""
+    monkeypatch.setenv("PICK_SWEEP", "off")
+    monkeypatch.setattr(live, "_ha_pendente_em_jogo", lambda: True)
+    assert live.maybe_resolve_pending() is False
+
+
+def test_botao_do_admin_nao_passa_pela_trava():
+    """Acao de gente vale em qualquer ambiente -- e' o automatico que precisa
+    declarar intencao. Sem isso, o /admin do dev pararia de resolver."""
+    corpo = _codigo("routers/admin.py", "admin_resolve_picks")
+    assert "resolve_all_pending()" in corpo
+    assert "_varredura_habilitada" not in corpo
+    assert "maybe_resolve_pending" not in corpo
 
 
 # ─────────────────────── Custo de API ───────────────────────

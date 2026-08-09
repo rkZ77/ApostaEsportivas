@@ -1803,6 +1803,32 @@ _sweep_lock = threading.Lock()
 _sweep_state: dict = {"last": 0.0, "running": False}
 
 
+def _varredura_habilitada() -> bool:
+    """A varredura automática só existe em PRODUÇÃO.
+
+    Três ambientes rodam este mesmo código e só um deles deve gastar cota da
+    API-Football sozinho:
+
+    - dev: banco próprio, mas a cota da API é a MESMA conta de produção (só
+      existe uma chave). Uma janela aberta no dev consumiria a cota do site
+      real sem nenhum usuário do outro lado. Foi o pedido explícito do usuário
+      em 2026-08-09: "em dev eu não quero que fica rodando, só em produção".
+    - noprod: pior ainda, aponta pro banco de PRODUÇÃO -- gravaria resultado e
+      notificaria o usuário real em duplicata com o serviço de verdade.
+    - produção: o único que varre.
+
+    `PICK_SWEEP=off` desliga na mão em qualquer ambiente, sem redeploy de
+    código, se algum dia a cota apertar. O disparo manual pelo /admin
+    (`POST /api/admin/resolve-picks`) não passa por aqui e continua valendo em
+    todo ambiente -- ação de gente é sempre permitida, é o automático que
+    precisa declarar intenção.
+    """
+    from runtime_env import is_production, side_effects_enabled
+    if os.getenv("PICK_SWEEP", "on").strip().lower() in ("off", "0", "false", "no"):
+        return False
+    return is_production() and side_effects_enabled()
+
+
 def _ha_pendente_em_jogo() -> bool:
     """Existe pick pendente de jogo que já começou? Só banco, zero API.
 
@@ -1889,11 +1915,7 @@ def maybe_resolve_pending() -> bool:
     não quando começa -- uma varredura lenta não vira gatilho pra próxima
     empilhar em cima.
     """
-    # Staging aponta pro banco de produção: varrer aqui gravaria resultado e
-    # dispararia notificação em cima do usuário real, em duplicata com o
-    # serviço de verdade. Mesma regra do resto dos efeitos automáticos.
-    from runtime_env import side_effects_enabled
-    if not side_effects_enabled():
+    if not _varredura_habilitada():
         return False
 
     agora = time.time()
