@@ -30,6 +30,21 @@ barra, e a secao inteira sumia do card. O contador existe e sempre existiu: e' o
 placar do time que MENOS marcou, que passa de 0 pra 1 exatamente quando o
 mercado vira GREEN. Hoje `_stat_for_market` devolve esse minimo (mesma decisao
 pra quem so compara com 1.0) e a regua do grafico fica em 0.5.
+
+UMA SERIE POR TIME, CASA E FORA SEPARADOS (2026-08-10). Ate' aqui o mercado de
+total desenhava UMA fileira de barras com os jogos dos dois times embaralhados
+por data -- nao dava pra saber de quem era cada barra, e as duas perguntas que
+o apostador faz ("como esse time vem indo?" e "muda muito jogando fora?")
+ficavam as duas sem resposta. Agora a rota monta uma serie POR TIME e este
+modulo devolve, junto da serie inteira, o recorte de cada mando (`splits`).
+
+O recorte so' e' possivel porque a serie passou a saber DE QUEM ela fala:
+`team_id`. Ele resolve o mando por partida e, nos mercados de um time so'
+("Escanteios Casa"), poe o time no lado que o nome do mercado nomeia -- e' o
+que deixa os jogos FORA de casa desse time entrarem no grafico sem virarem o
+numero do adversario. A diferenca que isso expoe nao e' decoracao: na Serie A
+2026 o mandante faz 5.62 escanteios contra 4.41 do visitante (+27%), e era
+exatamente essa mistura que produzia o pick #1573 (ver pool_and_field no motor).
 """
 
 from settlement_bridge import settlement
@@ -89,25 +104,80 @@ def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
     return casa, fora
 
 
+def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str) -> tuple:
+    """(casa, fora, gols_casa, gols_fora, jogou_em_casa) do ponto de vista do time.
+
+    Num mercado de UM time ("Escanteios Casa Mais/Menos"), `_stat_for_market` le
+    sempre a folha do lado que o nome do mercado cita. Enquanto a serie so'
+    mostrava jogos daquele mando, isso bastava; mostrando os 10 jogos do time
+    (casa E fora, que e' a comparacao que o card existe pra fazer), metade deles
+    entregaria o numero do ADVERSARIO -- o bug de 2026-08-08 de volta, agora
+    dentro da propria serie.
+
+    A correcao e' girar a folha, nao ensinar um segundo dispatch: o time vai
+    sempre pro slot que o mercado nomeia, e `_stat_for_market` continua lendo o
+    lado que sempre leu. O placar acompanha o giro, senao BTTS e gols contariam
+    o lado errado no mesmo jogo.
+
+    Mercado de total nao gira nada: ele soma os dois lados de qualquer jeito.
+    """
+    casa, fora = folha_do_jogo(ms)
+    gols_casa, gols_fora = ms.get("home_goals"), ms.get("away_goals")
+
+    if team_id is None or ms.get("home_team_id") is None:
+        return casa, fora, gols_casa, gols_fora, None
+
+    em_casa = ms.get("home_team_id") == team_id
+    lado_do_time = "home" if em_casa else "away"
+    if escopo in ("home", "away") and lado_do_time != escopo:
+        casa, fora = fora, casa
+        gols_casa, gols_fora = gols_fora, gols_casa
+    return casa, fora, gols_casa, gols_fora, em_casa
+
+
+def resumo(itens: list) -> dict:
+    """Taxa e media de um conjunto de jogos ja liquidados.
+
+    Sai daqui e nao do fim de `serie_do_mercado` porque agora tem tres
+    consumidores -- a serie inteira e os dois recortes de mando -- e a regra que
+    nao pode divergir entre eles e' justamente a de "sem dado nao entra na
+    conta", em nenhuma das duas pontas (taxa e media)."""
+    resolvidos = [i for i in itens if i["result"] is not None]
+    verdes = sum(1 for i in resolvidos if i["result"] == settlement.GREEN)
+    com_valor = [i["value"] for i in itens if i["value"] is not None]
+    return {
+        "games": len(itens),
+        "resolved": len(resolvidos),
+        "greens": verdes,
+        "hit_rate": round(verdes / len(resolvidos), 4) if resolvidos else None,
+        "average": round(sum(com_valor) / len(com_valor), 2) if com_valor else None,
+    }
+
+
 def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: str,
-                     stat_para_mercado) -> dict:
+                     stat_para_mercado, team_id: int | None = None) -> dict:
     """Monta a serie do mercado sobre `jogos` (mais recente primeiro).
 
     `stat_para_mercado` e' routers/live.py::_stat_for_market, recebida por
     parametro em vez de importada: este modulo nao depende de rota nenhuma e da
     pra testar cada regra sem subir FastAPI -- mesma escolha de
     services/settlement.py, e pelo mesmo motivo.
+
+    `team_id` e' de quem sao os jogos. Sem ele a serie ainda sai (comportamento
+    antigo), mas sem mando por partida: nenhuma barra sabe dizer se foi em casa,
+    e `splits` vem vazio.
     """
     parsed = settlement.parse_line(line)
     op, valor_linha = parsed["op"], parsed["value"]
+    escopo = escopo_do_mercado(market)
 
     itens: list[dict] = []
     rotulo = ""
     for ms in jogos:
-        casa, fora = folha_do_jogo(ms)
+        casa, fora, gols_casa, gols_fora, em_casa = perspectiva_do_time(ms, team_id, escopo)
         valor, rotulo_jogo, _dir = stat_para_mercado(
             market, line, casa, fora,
-            ms.get("home_goals"), ms.get("away_goals"),
+            gols_casa, gols_fora,
             market_type,
         )
         rotulo = rotulo or rotulo_jogo
@@ -129,12 +199,11 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
             "match_date": str(ms["match_date"]) if ms.get("match_date") else None,
             "value": float(valor) if valor is not None else None,
             "result": resultado,
+            # None = serie sem team_id, entao nao da' pra afirmar o mando. O
+            # grafico so' separa casa de fora quando isto vem preenchido.
+            "is_home": em_casa,
+            "opponent": ms.get("opponent"),
         })
-
-    # Sem dado nao entra na conta, em nenhuma das duas pontas.
-    resolvidos = [i for i in itens if i["result"] is not None]
-    verdes = sum(1 for i in resolvidos if i["result"] == settlement.GREEN)
-    com_valor = [i["value"] for i in itens if i["value"] is not None]
 
     linha_grafico = float(valor_linha) if valor_linha is not None else None
     if op in ("yes", "no"):
@@ -149,13 +218,20 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
         # o que faria a regua em 0.5 parecer arbitraria.
         rotulo = "Gols do time que menos marcou"
 
+    em_casa_itens = [i for i in itens if i["is_home"] is True]
+    fora_itens = [i for i in itens if i["is_home"] is False]
+
     return {
         "label": rotulo,
         "line": linha_grafico,
         "op": op,
+        "escopo": escopo,
         "matches": itens,
-        "resolved": len(resolvidos),
-        "greens": verdes,
-        "hit_rate": round(verdes / len(resolvidos), 4) if resolvidos else None,
-        "average": round(sum(com_valor) / len(com_valor), 2) if com_valor else None,
+        # Recorte por mando. Vazio quando a serie nao sabe de quem sao os jogos
+        # -- um dicionario com zeros afirmaria "esse time nunca jogou em casa".
+        "splits": {
+            "home": resumo(em_casa_itens) if em_casa_itens else None,
+            "away": resumo(fora_itens) if fora_itens else None,
+        },
+        **resumo(itens),
     }

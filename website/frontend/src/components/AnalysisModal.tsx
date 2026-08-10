@@ -48,9 +48,11 @@ export interface AnalysisData {
   /**
    * Identidade do pick, pra buscar a forma recente do mercado.
    *
-   * Opcionais porque múltipla e alavancagem não têm UMA série que descreva o
-   * bilhete: são pernas de mercados diferentes. Sem eles o bloco some, em vez
-   * de desenhar a série de uma perna e passar por ser a do conjunto.
+   * Múltipla e alavancagem também passam por aqui desde 2026-08-10: continuam
+   * sem UMA série que descreva o bilhete (são mercados diferentes), então a
+   * rota devolve uma série POR PERNA · mesma decisão que a regra de mercado
+   * perna a perna logo abaixo. Opcionais porque um chamador sem id de pick
+   * ainda deve renderizar o resto do modal.
    */
   pickId?: number
   pickType?: string

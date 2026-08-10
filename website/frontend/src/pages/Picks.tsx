@@ -905,6 +905,9 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           probability: null,
           ev: m.ev ?? null,
           reasoning: m.reasoning,
+          // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
+          pickId: m.id,
+          pickType: 'multipla',
           // Regra perna a perna: e' o "igual aos outros pipelines" possivel
           // num bilhete de varios mercados.
           legs: (m.games ?? []).map((g: any) => ({ market: g.market, line: g.line, odd: g.odd })),
@@ -1186,6 +1189,9 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
           confidence: pick.confidence_media ?? null,
           probability: null,
           ev: pick.ev_combined ?? null,
+          // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
+          pickId: pick.id,
+          pickType: 'alavancagem',
           legs: [
             { market: pick.market_1, line: pick.line_1, odd: pick.odd_1 },
             { market: pick.market_2, line: pick.line_2, odd: pick.odd_2 },
@@ -1288,7 +1294,13 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
     probability: p.prob_real != null ? Number(p.prob_real) : null,
     market_type: p.market_type ?? tipo,
     ev: p.edge != null ? Number(p.edge) : undefined,
-    match_date: p.match_datetime ?? p.match_date,
+    /* Os dois vão separados de propósito: `match_date` é a DATA (coluna DATE)
+       e `match_datetime` é o horário do jogo. Enquanto o card lia a hora de
+       `match_date`, isto aqui era `p.match_datetime ?? p.match_date` -- e
+       quando o fixture não estava mais na tabela `fixtures` caía na data pura
+       e o card imprimia 21:00. */
+    match_date: p.match_date,
+    match_datetime: p.match_datetime ?? null,
     reasoning: p.reasoning,
     result: p.result ?? undefined,
     pick_type: tipo,

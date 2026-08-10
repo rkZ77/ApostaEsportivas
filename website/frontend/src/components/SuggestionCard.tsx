@@ -50,6 +50,7 @@ interface Suggestion {
   market_type?: string | null
   ev?: number
   match_date?: string
+  match_datetime?: string | null
   reasoning?: string
   result?: string
   profit?: number
@@ -191,13 +192,23 @@ export default function SuggestionCard({
   const isCopa = s.league_id === 1
   const pickType = s.pick_type ?? 'vip'
 
-  // Horário do jogo. O card mostrava só a data em outro lugar, e "hoje 16:00"
-  // é justamente o que decide se ainda dá tempo de entrar na aposta.
-  const kickoff = s.match_date
-    ? new Date(s.match_date).toLocaleTimeString('pt-BR', {
-        hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo',
-      })
-    : null
+  /*
+   * Horário do jogo. O card mostrava só a data em outro lugar, e "hoje 16:00"
+   * é justamente o que decide se ainda dá tempo de entrar na aposta.
+   *
+   * Sai de `match_datetime` por fatia de string, nunca de `match_date`. Duas
+   * armadilhas, as duas já vividas aqui:
+   *
+   * 1. `match_date` é coluna DATE -- "2026-08-09", sem hora nenhuma.
+   *    `new Date("2026-08-09")` é meia-noite UTC, e imprimir isso em
+   *    America/Sao_Paulo dava 21:00 do dia ANTERIOR. Não era um horário
+   *    errado por pouco: era 21:00 em TODO pick, sempre, fosse o jogo
+   *    11:00 ou 18:30.
+   * 2. `match_datetime` já chega em horário de Brasília sem fuso, então
+   *    deixar o navegador interpretar joga o horário pro fuso de quem lê.
+   *    Mesma regra de home/FreePickHero.tsx e home/NextGames.tsx.
+   */
+  const kickoff = s.match_datetime ? String(s.match_datetime).slice(11, 16) : null
 
   const probPct = s.probability != null ? Number(s.probability) * 100 : null
 

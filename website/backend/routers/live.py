@@ -3,6 +3,7 @@ import re
 import json
 import time
 import logging
+import threading
 import requests
 from decimal import Decimal
 from datetime import datetime, timedelta
@@ -1369,33 +1370,113 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
 
 # ─── Job de background ───────────────────────────────────────────────────────
 
-def resolve_all_pending() -> dict:
+def _fixtures_nao_iniciadas(cur, agora_br: datetime) -> set:
+    """Fixtures cujo apito inicial ainda não chegou, pela tabela local.
+
+    Uma consulta ao banco, zero chamada de API -- e é o filtro que mais corta
+    custo na varredura: pick publicado de manhã pra jogo das 21h não tem NADA
+    a resolver antes das 21h, mas era reconsultado na API em toda passada
+    (`match_date <= hoje` entra no filtro desde 00:00). Com a varredura
+    automática ligada isso seria a maior fonte de consumo de cota do sistema.
+
+    O default é seguro nos dois sentidos: fixture ausente da tabela (jogo
+    antigo já expurgado, pick gravado sem fixture correspondente) NÃO entra no
+    conjunto e portanto continua sendo resolvida como antes. Só sai da fila
+    quem o banco afirma que ainda vai começar.
+
+    `fixtures.match_datetime` está gravado em horário de Brasília SEM fuso (o
+    coletor converte na entrada, ver collectors/fixture_collector_service.py
+    ::get_fixtures_by_date), então a comparação é contra o relógio de Brasília.
+    Comparar com NOW() do Postgres, que é UTC, adiantaria o corte em 3 horas e
+    liberaria pra varredura justamente os jogos que ainda não começaram.
+    """
+    try:
+        cur.execute(
+            "SELECT fixture_id FROM fixtures WHERE match_datetime > %s",
+            (agora_br,),
+        )
+        return {r["fixture_id"] for r in cur.fetchall()}
+    except Exception as e:
+        logger.error("[AUTO-RESULT] fixtures nao iniciadas: %s", e)
+        return set()  # sem o filtro a varredura só fica mais cara, nunca errada
+
+
+def _leg_nao_iniciada(fid: int, market: str, line: str, odd: float,
+                      market_type: str | None = None,
+                      home_team: str = "", away_team: str = "") -> dict:
+    """Perna de bilhete cujo jogo ainda não começou: nada a liquidar, zero API.
+
+    Existe porque perna de múltipla/alavancagem NÃO pode simplesmente ser
+    pulada como um pick simples: o resultado do bilhete sai de combinar TODAS
+    as pernas, e uma lista mais curta faria `all(r is not None)` concluir que
+    o bilhete inteiro fechou com pernas de menos -- gravando um combinado
+    errado. A perna entra na lista, com o mesmo veredito que a chamada de API
+    daria (`is_ft` e `is_locked` falsos -> `_locked_leg_result` devolve None),
+    só que sem gastar a chamada.
+    """
+    return {
+        "fixture_id": fid, "market": market, "line": line, "odd": odd,
+        "market_type": market_type, "home_team": home_team, "away_team": away_team,
+        "status": "NS", "elapsed": None,
+        "home_goals": 0, "away_goals": 0,
+        "current_val": None, "line_val": None,
+        "home_stats": {}, "away_stats": {},
+        "is_live": False, "is_ft": False, "is_locked": False,
+        "went_to_extra_time": False,
+    }
+
+
+def resolve_all_pending(max_age_days: int | None = None) -> dict:
     """
     Tenta resolver todos os picks pendentes usando dados ao vivo da API.
-    Chamado pelo APScheduler a cada 5 min. Retorna contagem de resolvidos por tipo.
+    Retorna contagem de resolvidos por tipo.
+
+    Dois caminhos chegam aqui, com apetites diferentes de custo:
+
+    - botão do /admin (`POST /api/admin/resolve-picks`), sem argumento: varre
+      TODO pick pendente, por mais velho que seja. É a rede de segurança
+      manual, e o custo é aceitável porque é uma vez, quando alguém pede.
+    - varredura automática (`maybe_resolve_pending`), com `max_age_days`: só
+      olha a janela recente. Sem esse corte, pick que nunca vai resolver (jogo
+      adiado, estatística que o provedor não publicou) seria reconsultado na
+      API em TODA passada, pra sempre -- um vazamento de cota que só cresce.
+
+    Em ambos os casos jogo que ainda não começou fica de fora (não há o que
+    liquidar) e os fixtures são buscados em lote.
     """
     conn = get_connection()
     cur  = conn.cursor()
     resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
                       "faltas": 0, "goleiros": 0}
-    # Picks de jogos que ainda nem começaram não têm nada pra resolver --
-    # sem esse filtro o job (roda a cada 5 min, 24/7) reconsultava a
-    # API-Football pra TODO pick pendente do sistema, inclusive os
-    # publicados com antecedência pra dias futuros. Maior consumidor de
-    # cota do que a própria aba "Minhas Apostas".
     today_br = datetime.now(_BR_TZ).date()
+    agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)
+    desde = today_br - timedelta(days=max_age_days) if max_age_days is not None else None
+
+    # Filtro de data das tabelas de pick. `match_date <= hoje` sozinho pega
+    # pick de qualquer época; com `desde` a varredura automática se limita à
+    # janela recente. Os dois parâmetros seguem posicionais pra não mexer nas
+    # queries que já existiam.
+    _janela = "AND match_date >= %s" if desde is not None else ""
+
+    def _args(*extra):
+        return (today_br, *( (desde,) if desde is not None else () ), *extra)
 
     try:
+        nao_iniciados = _fixtures_nao_iniciadas(cur, agora_br)
         # ── VIP ──────────────────────────────────────────────────────────────
         try:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT id, fixture_id, market, market_type, line, odd,
                        home_team_name AS home_team, away_team_name AS away_team,
                        home_team_id, away_team_id
                 FROM picks_vip
                 WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
-            """, (today_br,))
-            for p in cur.fetchall():
+                {_janela}
+            """, _args())
+            pendentes_vip = [p for p in cur.fetchall()
+                             if p["fixture_id"] not in nao_iniciados]
+            _fetch_fixtures_bulk([p["fixture_id"] for p in pendentes_vip])
+            for p in pendentes_vip:
                 try:
                     odd = float(p["odd"] or 1)
                     leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
@@ -1419,13 +1500,17 @@ def resolve_all_pending() -> dict:
 
         # ── FREE ─────────────────────────────────────────────────────────────
         try:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT id, fixture_id, market, market_type, line, odd,
                        home_team, away_team, home_team_id, away_team_id
                 FROM picks_free
                 WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
-            """, (today_br,))
-            for p in cur.fetchall():
+                {_janela}
+            """, _args())
+            pendentes_free = [p for p in cur.fetchall()
+                              if p["fixture_id"] not in nao_iniciados]
+            _fetch_fixtures_bulk([p["fixture_id"] for p in pendentes_free])
+            for p in pendentes_free:
                 try:
                     odd = float(p["odd"] or 1)
                     leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
@@ -1450,10 +1535,20 @@ def resolve_all_pending() -> dict:
         # ── MÚLTIPLA ─────────────────────────────────────────────────────────
         try:
             cur.execute(
-                "SELECT id, games, total_odd FROM picks_multiplas WHERE result IS NULL AND match_date <= %s",
-                (today_br,),
+                "SELECT id, games, total_odd FROM picks_multiplas "
+                f"WHERE result IS NULL AND match_date <= %s {_janela}",
+                _args(),
             )
-            for p in cur.fetchall():
+            multiplas = cur.fetchall()
+            _fetch_fixtures_bulk([
+                g.get("fixture_id")
+                for p in multiplas
+                for g in (json.loads(p["games"]) if isinstance(p["games"], str)
+                          else (p["games"] or []))
+                if isinstance(g, dict) and g.get("fixture_id")
+                and g.get("fixture_id") not in nao_iniciados
+            ] if multiplas else [])
+            for p in multiplas:
                 try:
                     games = p["games"]
                     if isinstance(games, str):
@@ -1469,6 +1564,17 @@ def resolve_all_pending() -> dict:
                             continue
                         home = leg_data.get("home") or leg_data.get("home_team") or ""
                         away = leg_data.get("away") or leg_data.get("away_team") or ""
+                        # Perna de jogo que não começou entra como stub: sem
+                        # chamada de API, mas SEM sumir da lista -- ver
+                        # _leg_nao_iniciada.
+                        if fid in nao_iniciados:
+                            legs_out.append(_leg_nao_iniciada(
+                                fid, leg_data.get("market", ""), leg_data.get("line", ""),
+                                float(leg_data.get("odd", 1)),
+                                market_type=leg_data.get("market_type"),
+                                home_team=home, away_team=away,
+                            ))
+                            continue
                         legs_out.append(_enrich_leg(
                             fid,
                             leg_data.get("market", ""),
@@ -1504,7 +1610,7 @@ def resolve_all_pending() -> dict:
             # odd_combined das tres, virando GREEN indevido sempre que a 3
             # perdesse. Mesmo furo que existia em
             # services/ai_result_checker_alavancagem.py.
-            cur.execute("""
+            cur.execute(f"""
                 SELECT id, fixture_id_1, fixture_id_2, fixture_id_3,
                        market_1, market_type_1, line_1, odd_1, home_team_1, away_team_1,
                        market_2, market_type_2, line_2, odd_2, home_team_2, away_team_2,
@@ -1512,13 +1618,29 @@ def resolve_all_pending() -> dict:
                        odd_combined
                 FROM picks_alavancagem
                 WHERE result IS NULL AND match_date <= %s
-            """, (today_br,))
-            for p in cur.fetchall():
+                {_janela}
+            """, _args())
+            alavancagens = cur.fetchall()
+            _fetch_fixtures_bulk([
+                fid for p in alavancagens for i in (1, 2, 3)
+                if (fid := p.get(f"fixture_id_{i}")) and fid not in nao_iniciados
+            ])
+            for p in alavancagens:
                 try:
                     legs_out = []
                     for i in (1, 2, 3):
                         fid = p.get(f"fixture_id_{i}")
                         if not fid:
+                            continue
+                        if fid in nao_iniciados:
+                            legs_out.append(_leg_nao_iniciada(
+                                fid, p.get(f"market_{i}", "") or "",
+                                p.get(f"line_{i}", "") or "",
+                                float(p.get(f"odd_{i}") or 1),
+                                market_type=p.get(f"market_type_{i}"),
+                                home_team=p.get(f"home_team_{i}", "") or "",
+                                away_team=p.get(f"away_team_{i}", "") or "",
+                            ))
                             continue
                         c2 = conn.cursor()
                         try:
@@ -1563,13 +1685,17 @@ def resolve_all_pending() -> dict:
         # keyword "foul" em _stat_for_market, que soma home_fouls+away_fouls,
         # e a linha "Over 22.5" parseia normal em _calc_result.
         try:
-            cur.execute("""
+            cur.execute(f"""
                 SELECT id, fixture_id, market, market_type, line, odd,
                        home_team, away_team, home_team_id, away_team_id
                 FROM picks_faltas
                 WHERE result IS NULL AND fixture_id IS NOT NULL AND match_date <= %s
-            """, (today_br,))
-            for p in cur.fetchall():
+                {_janela}
+            """, _args())
+            pendentes_faltas = [p for p in cur.fetchall()
+                                if p["fixture_id"] not in nao_iniciados]
+            _fetch_fixtures_bulk([p["fixture_id"] for p in pendentes_faltas])
+            for p in pendentes_faltas:
                 try:
                     odd = float(p["odd"] or 1)
                     leg = _enrich_leg(p["fixture_id"], p["market"], p["line"],
@@ -1598,6 +1724,12 @@ def resolve_all_pending() -> dict:
         # player_match_stats.saves daquele jogador naquele fixture -- que ja
         # esta no banco (o collector roda como parte da coleta), entao aqui
         # nao ha nenhuma chamada de API.
+        #
+        # Por isso este bloco fica FORA da janela de `max_age_days`: o corte
+        # existe pra nao gastar cota reconsultando pick velho, e aqui nao ha
+        # cota pra gastar. Pick de goleiro atrasado (a estatistica do jogador
+        # as vezes so' entra horas depois) continua sendo resolvido assim que
+        # o dado aparece, em qualquer varredura.
         try:
             cur.execute("""
                 SELECT pg.id, pg.line_value, pg.odd, pg.player_name,
@@ -1631,6 +1763,199 @@ def resolve_all_pending() -> dict:
 
     logger.info("[AUTO-RESULT] resolvidos: %s", resolved)
     return resolved
+
+
+# ─── Gatilho sob demanda ─────────────────────────────────────────────────────
+#
+# O problema que isto resolve: a matemática de liquidação sempre esteve pronta
+# (resolve_all_pending acima resolve tanto o jogo encerrado quanto o pick que
+# já travou no meio, via `is_locked`), mas desde que o scheduler foi removido
+# em 2026-08-01 ninguém a chamava sozinho. Na prática o pick ficava "Pendente"
+# no site pra TODO MUNDO até alguém abrir o /admin e clicar. A única exceção
+# era oportunista e privada: quem tinha SEGUIDO o pick e abria "Minhas
+# Apostas" resolvia os próprios, e só os próprios.
+#
+# A alternativa óbvia seria devolver um job de intervalo fixo. Ela foi
+# descartada de propósito: um laço de 5 em 5 min bate na API-Football 24/7,
+# inclusive de madrugada com o site vazio, e foi justamente esse consumo que
+# motivou a remoção do scheduler. Aqui a varredura é puxada por visita: quando
+# alguém abre a tela de picks/resultados, o backend olha se vale a pena varrer
+# e, se valer, varre em segundo plano. Site parado não gasta nada -- e site
+# parado é exatamente quando não importa que o resultado demore.
+#
+# Três freios, nesta ordem, do mais barato pro mais caro:
+#   1. relógio  -- no máximo uma varredura a cada _SWEEP_INTERVAL segundos
+#   2. banco    -- só varre se existir pick pendente de jogo que já começou
+#   3. API      -- só então as chamadas, já filtradas e em lote
+
+#: Intervalo mínimo entre duas varreduras. 3 min cobre bem o "deu green no
+#: meio": escanteio e cartão mudam numa escala de minutos, não de segundos.
+_SWEEP_INTERVAL = int(os.getenv("PICK_SWEEP_INTERVAL_SECONDS", "180"))
+
+#: Janela da varredura automática. Pick mais velho que isso não é reconsultado
+#: sozinho -- sem esse corte, pick que nunca vai resolver (jogo adiado,
+#: estatística que o provedor não publicou) viraria custo fixo e permanente,
+#: consultado em toda passada pra sempre. O botão do /admin continua varrendo
+#: tudo, sem janela.
+_SWEEP_MAX_AGE_DAYS = int(os.getenv("PICK_SWEEP_MAX_AGE_DAYS", "3"))
+
+_sweep_lock = threading.Lock()
+_sweep_state: dict = {"last": 0.0, "running": False}
+
+
+def _varredura_habilitada() -> bool:
+    """A varredura automática só existe em PRODUÇÃO.
+
+    Três ambientes rodam este mesmo código e só um deles deve gastar cota da
+    API-Football sozinho:
+
+    - dev: banco próprio, mas a cota da API é a MESMA conta de produção (só
+      existe uma chave). Uma janela aberta no dev consumiria a cota do site
+      real sem nenhum usuário do outro lado. Foi o pedido explícito do usuário
+      em 2026-08-09: "em dev eu não quero que fica rodando, só em produção".
+    - noprod: pior ainda, aponta pro banco de PRODUÇÃO -- gravaria resultado e
+      notificaria o usuário real em duplicata com o serviço de verdade.
+    - produção: o único que varre.
+
+    `PICK_SWEEP=off` desliga na mão em qualquer ambiente, sem redeploy de
+    código, se algum dia a cota apertar. O disparo manual pelo /admin
+    (`POST /api/admin/resolve-picks`) não passa por aqui e continua valendo em
+    todo ambiente -- ação de gente é sempre permitida, é o automático que
+    precisa declarar intenção.
+    """
+    from runtime_env import is_production, side_effects_enabled
+    if os.getenv("PICK_SWEEP", "on").strip().lower() in ("off", "0", "false", "no"):
+        return False
+    return is_production() and side_effects_enabled()
+
+
+def _ha_pendente_em_jogo() -> bool:
+    """Existe pick pendente de jogo que já começou? Só banco, zero API.
+
+    É o freio que faz a varredura custar nada no caso comum. Na maior parte do
+    dia a resposta é não (os picks do dia ainda nem começaram, ou já foram
+    todos resolvidos), e aí nenhuma chamada de API acontece.
+
+    Uma resposta falsamente positiva é inofensiva -- a varredura roda e não
+    acha nada. Por isso o SQL prefere errar pra esse lado: `LEFT JOIN` com
+    `match_datetime IS NULL` conta como "pode ter começado", igual ao default
+    de _fixtures_nao_iniciadas.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            desde = datetime.now(_BR_TZ).date() - timedelta(days=_SWEEP_MAX_AGE_DAYS)
+            agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)
+            for tabela in ("picks_vip", "picks_free", "picks_faltas"):
+                cur.execute(f"""
+                    SELECT 1
+                    FROM {tabela} p
+                    LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                    WHERE p.result IS NULL
+                      AND p.fixture_id IS NOT NULL
+                      AND p.match_date BETWEEN %s AND %s
+                      AND (f.match_datetime IS NULL OR f.match_datetime <= %s)
+                    LIMIT 1
+                """, (desde, datetime.now(_BR_TZ).date(), agora_br))
+                if cur.fetchone():
+                    return True
+            # Bilhetes combinados não têm fixture_id em coluna própria (múltipla
+            # guarda as pernas em JSON), então aqui a pergunta é só pela data --
+            # são poucos por dia e o custo de um falso positivo é uma varredura
+            # que não acha nada.
+            for tabela in ("picks_multiplas", "picks_alavancagem"):
+                cur.execute(f"""
+                    SELECT 1 FROM {tabela}
+                    WHERE result IS NULL AND match_date BETWEEN %s AND %s
+                    LIMIT 1
+                """, (desde, datetime.now(_BR_TZ).date()))
+                if cur.fetchone():
+                    return True
+            cur.execute("""
+                SELECT 1
+                FROM picks_goleiros pg
+                JOIN player_match_stats pms
+                  ON pms.fixture_id = pg.fixture_id AND pms.player_id = pg.player_id
+                WHERE pg.result IS NULL AND pms.saves IS NOT NULL
+                LIMIT 1
+            """)
+            return cur.fetchone() is not None
+        finally:
+            cur.close()
+    except Exception as e:
+        logger.error("[AUTO-RESULT] checagem de pendentes: %s", e)
+        return False  # na dúvida NÃO gasta cota; a próxima visita tenta de novo
+    finally:
+        if conn is not None:
+            conn.close()
+
+
+def _sweep_now() -> None:
+    """Corpo da thread de varredura. Libera o `running` aconteça o que acontecer."""
+    try:
+        resolve_all_pending(max_age_days=_SWEEP_MAX_AGE_DAYS)
+    except Exception:
+        logger.error("[AUTO-RESULT] varredura sob demanda falhou", exc_info=True)
+    finally:
+        with _sweep_lock:
+            _sweep_state["running"] = False
+            _sweep_state["last"] = time.time()
+
+
+def maybe_resolve_pending() -> bool:
+    """Dispara a varredura em segundo plano se for a hora. Devolve se disparou.
+
+    Chamada dos endpoints de leitura de picks/resultados. Nunca levanta, nunca
+    bloqueia a resposta: a varredura roda numa thread própria, então a página
+    do usuário não espera pela API-Football.
+
+    O relógio só é reiniciado quando a varredura TERMINA (ver `_sweep_now`), e
+    não quando começa -- uma varredura lenta não vira gatilho pra próxima
+    empilhar em cima.
+    """
+    if not _varredura_habilitada():
+        return False
+
+    agora = time.time()
+    with _sweep_lock:
+        if _sweep_state["running"]:
+            return False
+        if agora - _sweep_state["last"] < _SWEEP_INTERVAL:
+            return False
+        # Marca ANTES de soltar a trava: duas requisições simultâneas (o caso
+        # normal, o front busca vários endpoints de uma vez) não podem virar
+        # duas varreduras.
+        _sweep_state["running"] = True
+
+    try:
+        if not _ha_pendente_em_jogo():
+            with _sweep_lock:
+                _sweep_state["running"] = False
+                _sweep_state["last"] = agora  # não repergunta ao banco a cada request
+            return False
+    except Exception:
+        with _sweep_lock:
+            _sweep_state["running"] = False
+        return False
+
+    threading.Thread(target=_sweep_now, name="pick-sweep", daemon=True).start()
+    return True
+
+
+@router.get("/sweep-status")
+def get_sweep_status(current_user: dict = Depends(get_current_user)):
+    """Estado da varredura automática · usado pelo /admin pra mostrar quando
+    foi a última passada, sem precisar ler log do Railway."""
+    with _sweep_lock:
+        ultima, rodando = _sweep_state["last"], _sweep_state["running"]
+    return {
+        "rodando": rodando,
+        "ha_quantos_segundos": round(time.time() - ultima) if ultima else None,
+        "intervalo_segundos": _SWEEP_INTERVAL,
+        "janela_dias": _SWEEP_MAX_AGE_DAYS,
+    }
 
 
 # ─── Re-verificação de resultados recentes (revisão tardia do provedor) ──────
