@@ -905,6 +905,9 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
           probability: null,
           ev: m.ev ?? null,
           reasoning: m.reasoning,
+          // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
+          pickId: m.id,
+          pickType: 'multipla',
           // Regra perna a perna: e' o "igual aos outros pipelines" possivel
           // num bilhete de varios mercados.
           legs: (m.games ?? []).map((g: any) => ({ market: g.market, line: g.line, odd: g.odd })),
@@ -1186,6 +1189,9 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
           confidence: pick.confidence_media ?? null,
           probability: null,
           ev: pick.ev_combined ?? null,
+          // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
+          pickId: pick.id,
+          pickType: 'alavancagem',
           legs: [
             { market: pick.market_1, line: pick.line_1, odd: pick.odd_1 },
             { market: pick.market_2, line: pick.line_2, odd: pick.odd_2 },

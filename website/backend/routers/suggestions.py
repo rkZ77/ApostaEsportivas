@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from typing import Optional
+import json
 import logging
 import re
 import psycopg2.extras
@@ -2277,14 +2278,222 @@ _PICK_FONTE = {
 }
 
 
+def _pernas_de_pick_simples(cur, tabela: str, col_casa: str, col_fora: str,
+                            suggestion_id: int) -> list:
+    """A unica perna de um pick de mercado unico (vip/free/faltas/goleiros)."""
+    cur.execute(f"""
+        SELECT p.fixture_id, p.market, p.line, p.market_type,
+               COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
+               COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
+               p.{col_casa} AS home_team, p.{col_fora} AS away_team,
+               f.league_id, f.season
+          FROM {tabela} p
+     LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+         WHERE p.id = %s
+    """, (suggestion_id,))
+    row = cur.fetchone()
+    return [dict(row)] if row else []
+
+
+def _pernas_de_multipla(cur, suggestion_id: int) -> list:
+    """Pernas de uma multipla, do JSONB `games`.
+
+    Liga/temporada e ids de time saem da fixture, nao do JSON: o bilhete guarda
+    o que era verdade no dia da geracao, e a serie precisa do mesmo recorte de
+    competicao que o motor usou (ver a docstring de get_market_form).
+    """
+    cur.execute("SELECT games FROM picks_multiplas WHERE id = %s", (suggestion_id,))
+    row = cur.fetchone()
+    if not row or not row["games"]:
+        return []
+    games = row["games"]
+    if isinstance(games, str):
+        games = json.loads(games)
+
+    pernas = []
+    for g in games:
+        fixture_id = g.get("fixture_id")
+        pernas.append({
+            "fixture_id": fixture_id,
+            "market": g.get("market"),
+            "line": g.get("line"),
+            "market_type": g.get("market_type"),
+            "home_team": g.get("home_team"),
+            "away_team": g.get("away_team"),
+            "home_team_id": g.get("home_team_id"),
+            "away_team_id": g.get("away_team_id"),
+            **_fixture_meta(cur, fixture_id, g.get("home_team_id"), g.get("away_team_id")),
+        })
+    return pernas
+
+
+def _pernas_de_alavancagem(cur, suggestion_id: int) -> list:
+    """Pernas de uma alavancagem -- ate' 3, em colunas numeradas."""
+    cur.execute("""
+        SELECT fixture_id_1, market_1, line_1, market_type_1, home_team_1, away_team_1,
+               fixture_id_2, market_2, line_2, market_type_2, home_team_2, away_team_2,
+               fixture_id_3, market_3, line_3, market_type_3, home_team_3, away_team_3
+          FROM picks_alavancagem WHERE id = %s
+    """, (suggestion_id,))
+    row = cur.fetchone()
+    if not row:
+        return []
+    row = dict(row)
+
+    pernas = []
+    for i in (1, 2, 3):
+        if not row.get(f"market_{i}"):
+            continue
+        fixture_id = row.get(f"fixture_id_{i}")
+        pernas.append({
+            "fixture_id": fixture_id,
+            "market": row.get(f"market_{i}"),
+            "line": row.get(f"line_{i}"),
+            "market_type": row.get(f"market_type_{i}"),
+            "home_team": row.get(f"home_team_{i}"),
+            "away_team": row.get(f"away_team_{i}"),
+            **_fixture_meta(cur, fixture_id),
+        })
+    return pernas
+
+
+def _fixture_meta(cur, fixture_id, home_team_id=None, away_team_id=None) -> dict:
+    """league_id/season/ids de time da fixture da perna.
+
+    picks_alavancagem guarda so' o NOME dos times, e a multipla guarda ids que
+    podem ter vindo vazios de um pick antigo -- os dois precisam da fixture pra
+    fechar a identidade do jogo. Sem fixture, o que faltar fica None e a perna
+    simplesmente nao desenha serie (melhor que serie do time errado)."""
+    if not fixture_id:
+        return {"league_id": None, "season": None}
+    cur.execute("""
+        SELECT home_team_id, away_team_id, league_id, season
+          FROM fixtures WHERE fixture_id = %s
+    """, (fixture_id,))
+    f = cur.fetchone()
+    if not f:
+        return {"league_id": None, "season": None}
+    f = dict(f)
+    return {
+        "league_id": f.get("league_id"),
+        "season": f.get("season"),
+        "home_team_id": home_team_id or f.get("home_team_id"),
+        "away_team_id": away_team_id or f.get("away_team_id"),
+    }
+
+
+def _jogos_do_time(cur, team_id: int, league_id, season, excluir_fixture, limit: int) -> list:
+    """Ultimos `limit` jogos encerrados do time, casa e fora, com o adversario.
+
+    Mesma liga/temporada que o motor leu (MatchStatsService.get_all_matches_full)
+    -- serie e pick contando historias diferentes sobre o mesmo numero e' pior
+    que nao mostrar serie nenhuma. Sem fixture na tabela (pick antigo) o filtro
+    sai e a serie fica um pouco mais larga."""
+    filtro_liga, params_liga = "", []
+    if league_id and season:
+        filtro_liga = "AND ms.league_id = %s AND ms.season = %s"
+        params_liga = [league_id, season]
+
+    cur.execute(f"""
+        SELECT ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
+               ms.home_team_id, ms.away_team_id,
+               ms.home_corners, ms.away_corners,
+               ms.home_yellow_cards, ms.away_yellow_cards,
+               ms.home_red_cards, ms.away_red_cards,
+               ms.home_fouls, ms.away_fouls,
+               ms.home_shots_on, ms.away_shots_on,
+               CASE WHEN ms.home_team_id = %s
+                    THEN COALESCE(f.away_team, t_away.name)
+                    ELSE COALESCE(f.home_team, t_home.name)
+               END AS opponent
+          FROM match_statistics ms
+     LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
+     LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
+     LEFT JOIN teams t_away   ON t_away.team_id = ms.away_team_id
+         WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
+           AND ms.status IN ('FT','AET','PEN')
+           AND ms.fixture_id <> COALESCE(%s, -1)
+           {filtro_liga}
+      ORDER BY ms.match_date DESC
+         LIMIT %s
+    """, (team_id, team_id, team_id, excluir_fixture, *params_liga, limit))
+    return [dict(r) for r in cur.fetchall()]
+
+
+def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
+    """Uma serie por TIME dentro de uma perna, ou None se nao houver o que ver.
+
+    Quem entra depende do escopo do mercado: "Escanteios Casa Mais/Menos" fala
+    de um time so', entao a serie do adversario seria outro numero na mesma
+    tela; "Escanteios Mais/Menos" fala do confronto, e ai os dois entram, cada
+    um com a propria fileira de barras.
+    """
+    escopo = market_form.escopo_do_mercado(perna.get("market"))
+    alvos = []
+    if escopo == "home":
+        alvos = [("home", perna.get("home_team_id"), perna.get("home_team"))]
+    elif escopo == "away":
+        alvos = [("away", perna.get("away_team_id"), perna.get("away_team"))]
+    else:
+        alvos = [
+            ("home", perna.get("home_team_id"), perna.get("home_team")),
+            ("away", perna.get("away_team_id"), perna.get("away_team")),
+        ]
+    if not all(team_id for _lado, team_id, _nome in alvos):
+        return None
+
+    series = []
+    for lado, team_id, nome in alvos:
+        jogos = _jogos_do_time(cur, team_id, perna.get("league_id"), perna.get("season"),
+                               perna.get("fixture_id"), limit)
+        if not jogos:
+            continue
+        serie = market_form.serie_do_mercado(
+            jogos, perna.get("market"), perna.get("market_type"), perna.get("line"),
+            _stat_for_market, team_id=team_id,
+        )
+        # Sem nenhum jogo resolvido a serie nao diz nada -- resultado, placar
+        # exato e defesas de goleiro caem aqui (nao ha contador por jogo em
+        # match_statistics pra eles). Melhor a secao sumir do que desenhar uma
+        # fileira de barras cinza.
+        #
+        # BTTS saiu desta lista em 2026-08-08: o contador dele e' o placar do
+        # time que menos marcou, ver market_form.py.
+        if not serie["resolved"]:
+            continue
+        series.append({
+            "team_id": team_id,
+            "team": nome,
+            # Mando NESTE jogo -- e' o que decide qual metade da serie pesa mais
+            # pro pick, e o que o card destaca.
+            "side": lado,
+            **serie,
+        })
+
+    if not series:
+        return None
+    return {
+        "fixture_id": perna.get("fixture_id"),
+        "market": perna.get("market"),
+        "line": perna.get("line"),
+        "home_team": perna.get("home_team"),
+        "away_team": perna.get("away_team"),
+        "label": series[0]["label"],
+        "line_value": series[0]["line"],
+        "op": series[0]["op"],
+        "escopo": escopo,
+        "teams": series,
+    }
+
+
 @router.get("/{suggestion_id}/market-form")
 def get_market_form(
     suggestion_id: int,
     pick_type: str = Query("vip"),
-    limit: int = Query(8, ge=3, le=15),
+    limit: int = Query(10, ge=3, le=15),
     current_user: dict = Depends(get_current_user),
 ):
-    """Ultimos jogos dos dois times MEDIDOS PELO MERCADO do pick.
+    """Ultimos jogos de CADA time MEDIDOS PELO MERCADO do pick.
 
     Nao e' a forma do time (V/E/D): e' o contador que a aposta observa, jogo a
     jogo, contra a linha do pick -- verde no que teria pago, vermelho no que
@@ -2296,9 +2505,17 @@ def get_market_form(
     ja resolvidas) e services/settlement.py (meia-linha asiatica, PUSH em linha
     cheia). Ver a docstring de market_form pro porque.
 
-    Multipla e alavancagem ficam de fora: sao varias pernas de mercados
-    diferentes, entao nao existe UMA serie que descreva o bilhete. Cada perna
-    ja tem o proprio icone de regra no card.
+    UMA SERIE POR TIME (2026-08-10). Antes o mercado de total devolvia UMA lista
+    com os jogos dos dois times ordenados por data. Ninguem conseguia ler de
+    quem era cada barra, e o card nao respondia a pergunta que o proprio dado
+    ja' continha: esse time muda muito jogando fora? Agora cada time tem a
+    propria serie de `limit` jogos, com o mando marcado barra a barra e o
+    recorte casa/fora resumido em `splits` (ver market_form.resumo).
+
+    MULTIPLA E ALAVANCAGEM ENTRARAM JUNTO. Continuam sem UMA serie que descreva
+    o bilhete -- isso nao existe, sao mercados diferentes -- mas cada PERNA tem
+    a sua, que e' a versao honesta de "igual aos outros pipelines" (mesma
+    decisao que a regra de mercado perna a perna ja' seguia no modal).
 
     A SERIE TEM QUE OLHAR O MESMO QUE O MOTOR OLHOU (corrigido 2026-08-08).
     Duas divergencias reais, achadas comparando os picks de 08/08 com o banco:
@@ -2308,8 +2525,11 @@ def get_market_form(
        "fora" de cada um deles, fosse de quem fosse. No pick #1573 (Botafogo x
        Fluminense) 5 das 8 barras contavam outro time -- Vasco, Bahia, Botafogo,
        Vitoria e Santos -- e a media exibida (3.00) nao era do Fluminense
-       (5.20 fora de casa). Filtrando por mando, o lado que `_stat_for_market`
-       le passa a ser sempre o time certo, sem tocar naquele dispatch.
+       (5.20 fora de casa). Hoje quem resolve isso e' market_form
+       .perspectiva_do_time: a serie e' de UM time e o time vai sempre pro lado
+       que o mercado nomeia, entao os jogos fora de casa dele entram no grafico
+       (e' a comparacao que o card existe pra fazer) sem virarem o numero do
+       adversario.
 
     2. COMPETICAO. O motor le historico da MESMA liga/temporada da fixture
        (MatchStatsService.get_all_matches_full); a serie lia qualquer
@@ -2318,87 +2538,25 @@ def get_market_form(
        Card e pick contando historias diferentes sobre o mesmo numero e' pior
        que nao mostrar serie nenhuma.
     """
-    fonte = _PICK_FONTE.get(pick_type)
-    if not fonte:
-        return {"available": False, "reason": "tipo sem serie unica"}
-    tabela, col_casa, col_fora = fonte
-
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute(f"""
-            SELECT p.fixture_id, p.market, p.line, p.market_type,
-                   COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
-                   COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
-                   p.{col_casa} AS home_team, p.{col_fora} AS away_team,
-                   f.league_id, f.season
-              FROM {tabela} p
-         LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
-             WHERE p.id = %s
-        """, (suggestion_id,))
-        pick = cur.fetchone()
-        if not pick:
-            raise HTTPException(404, "Pick nao encontrado")
-        pick = dict(pick)
-
-        escopo = market_form.escopo_do_mercado(pick["market"])
-        if escopo == "home":
-            # Mercado do mandante: so' os jogos EM CASA dele.
-            filtro_time, ids = "home_team_id = %s", [pick["home_team_id"]]
-        elif escopo == "away":
-            filtro_time, ids = "away_team_id = %s", [pick["away_team_id"]]
+        if pick_type == "multipla":
+            pernas = _pernas_de_multipla(cur, suggestion_id)
+        elif pick_type == "alavancagem":
+            pernas = _pernas_de_alavancagem(cur, suggestion_id)
         else:
-            # Total do jogo: a serie fala do CONFRONTO, entao pega os jogos dos
-            # dois times. Um time so' contaria metade da historia.
-            filtro_time = "(home_team_id = ANY(%s) OR away_team_id = ANY(%s))"
-            ids = [[t for t in (pick["home_team_id"], pick["away_team_id"]) if t]] * 2
-        if not all(i for i in ids):
-            return {"available": False, "reason": "pick sem times identificados"}
+            fonte = _PICK_FONTE.get(pick_type)
+            if not fonte:
+                return {"available": False, "reason": "tipo sem serie"}
+            pernas = _pernas_de_pick_simples(cur, *fonte, suggestion_id)
+            if not pernas:
+                raise HTTPException(404, "Pick nao encontrado")
 
-        # Mesma liga/temporada que o motor usou. Sem a fixture na tabela
-        # (pick antigo, join vazio) o filtro sai e a serie volta ao
-        # comportamento de antes -- serie um pouco mais larga e' melhor que
-        # secao vazia.
-        filtro_liga = ""
-        params_liga = []
-        if pick.get("league_id") and pick.get("season"):
-            filtro_liga = "AND league_id = %s AND season = %s"
-            params_liga = [pick["league_id"], pick["season"]]
-
-        cur.execute(f"""
-            SELECT fixture_id, match_date, home_goals, away_goals,
-                   home_corners, away_corners,
-                   home_yellow_cards, away_yellow_cards,
-                   home_red_cards, away_red_cards,
-                   home_fouls, away_fouls,
-                   home_shots_on, away_shots_on
-              FROM match_statistics
-             WHERE {filtro_time}
-               AND status IN ('FT','AET','PEN')
-               AND fixture_id <> COALESCE(%s, -1)
-               {filtro_liga}
-          ORDER BY match_date DESC
-             LIMIT %s
-        """, (*ids, pick.get("fixture_id"), *params_liga, limit))
-        jogos = [dict(r) for r in cur.fetchall()]
-        if not jogos:
-            return {"available": False, "reason": "sem historico"}
-
-        serie = market_form.serie_do_mercado(
-            jogos, pick["market"], pick.get("market_type"), pick["line"],
-            _stat_for_market,
-        )
-        # Sem nenhum jogo resolvido a serie nao diz nada -- resultado, placar
-        # exato e defesas de goleiro caem aqui (nao ha contador por jogo em
-        # match_statistics pra eles). Melhor a secao sumir do que desenhar uma
-        # fileira de barras cinza.
-        #
-        # BTTS saiu desta lista em 2026-08-08: o contador dele e' o placar do
-        # time que menos marcou, ver market_form.py.
-        if not serie["resolved"]:
-            return {"available": False, "reason": "mercado sem serie por jogo"}
-
-        return {"available": True, **serie}
+        legs = [s for s in (_series_da_perna(cur, p, limit) for p in pernas) if s]
+        if not legs:
+            return {"available": False, "reason": "sem serie por jogo"}
+        return {"available": True, "legs": legs}
     finally:
         cur.close()
         conn.close()

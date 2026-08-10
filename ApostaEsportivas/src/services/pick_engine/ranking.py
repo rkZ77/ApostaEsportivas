@@ -17,6 +17,26 @@ from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 _CORRELATION_GROUP_OVERRIDES = {
     "clean_sheet": "goals",     # depende do placar (gols sofridos = 0)
     "win_to_nil": "goals",      # depende do placar (vence e nao sofre gol)
+    # BTTS tambem sai do placar, e ficar de fora deste mapa custava caro na
+    # alavancagem (achado em 2026-08-10, a partir de uma pergunta do usuario).
+    # O veto de correlacao la' e' por (fixture_id, correlation_group) e a
+    # docstring de _find_combo cita "Over 1.5 gols + Ambas Marcam no mesmo
+    # jogo" como o exemplo do que ele protege -- so' que "btts" caia em grupo
+    # proprio, entao esse par exato PASSAVA e ia pro bilhete com as duas
+    # probabilidades multiplicadas como se fossem independentes.
+    #
+    # Nao sao, e o erro nao e' simetrico. Com Over o produto subestima (as duas
+    # pernas ganham juntas), o que e' conservador; com UNDER ele superestima, e
+    # muito: "Under 2.5 + Ambas Marcam" so' paga em 1-1 (~12%), enquanto
+    # 0.55 x 0.50 anunciava ~28%. Os dois sao mercado barato de probabilidade
+    # alta, exatamente o perfil que o teto de odd 1.55 faz o motor escolher.
+    # No limite havia bilhete IMPOSSIVEL: "Under 1.5 + Ambas Marcam" e' 0%.
+    #
+    # Efeito colateral aceito: em select_final_picks BTTS passa a disputar o
+    # slot de "goals" na mesma fixture, em vez de ocupar um proprio. E' a mesma
+    # decisao que clean_sheet/win_to_nil ja seguem, e pelo mesmo motivo -- dois
+    # recortes do mesmo placar nao sao dois confirmadores independentes.
+    "btts": "goals",
     "outcome": "result",
     "double_chance": "result",
     "draw_no_bet": "result",

@@ -395,11 +395,13 @@ def test_forma_do_mercado_nao_transforma_ausencia_em_zero():
 
 
 def test_forma_some_quando_o_mercado_nao_tem_serie_por_jogo():
-    """Resultado, BTTS e placar exato nao tem contador em match_statistics.
-    Melhor a secao sumir do que desenhar barra cinza sem significado."""
-    corpo = _codigo("routers/suggestions.py", "get_market_form")
+    """Resultado e placar exato nao tem contador em match_statistics (defesas
+    de goleiro tambem nao, e' prop de jogador). Melhor a secao sumir do que
+    desenhar barra cinza sem significado."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
     assert 'if not serie["resolved"]' in corpo
-    assert '"available": False' in corpo
+    corpo_rota = _codigo("routers/suggestions.py", "get_market_form")
+    assert '"available": False' in corpo_rota
 
 
 def test_forma_do_mercado_exige_sessao():
@@ -407,10 +409,17 @@ def test_forma_do_mercado_exige_sessao():
     assert "Depends(get_current_user)" in corpo
 
 
-def test_modal_esconde_a_forma_em_multipla_e_alavancagem():
-    """Bilhete de varias pernas nao tem UMA serie que o descreva."""
-    src = _front("components/AnalysisModal.tsx")
-    assert "data.pickId != null && data.pickType" in src
+def test_bilhete_de_varias_pernas_mostra_uma_serie_POR_PERNA():
+    """Nao existe UMA serie que descreva multipla/alavancagem -- sao mercados
+    diferentes. Existe a de cada perna, que e' a mesma decisao que a regra de
+    mercado no modal ja seguia. Ate 2026-08-10 os dois tipos nao passavam
+    pickId/pickType e a secao inteira sumia dos dois cards."""
+    src = _front_codigo("pages/Picks.tsx")
+    assert "pickType: 'multipla'" in src
+    assert "pickType: 'alavancagem'" in src
+    corpo = _codigo("routers/suggestions.py", "get_market_form")
+    assert "_pernas_de_multipla" in corpo
+    assert "_pernas_de_alavancagem" in corpo
 
 
 # ────────────────────── Meta de banca removida ─────────────────────────
