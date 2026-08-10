@@ -15,7 +15,9 @@ _VALUE_FAMILIES = {"goals", "corners", "cards", "shots", "shots_on_target", "off
 
 
 def variance_stats(family: str, scope: str, last10_home: list, last10_away: list,
-                    team_id: int | None = None) -> dict | None:
+                    team_id: int | None = None,
+                    home_team_id: int | None = None,
+                    away_team_id: int | None = None) -> dict | None:
     """Desvio-padrao populacional e coeficiente de variacao (CV = desvio/
     media) do valor bruto da familia/escopo, no pool de jogos correto. CV
     normaliza o desvio pela media -- compara dispersao entre mercados de
@@ -31,7 +33,11 @@ def variance_stats(family: str, scope: str, last10_home: list, last10_away: list
     if family not in _VALUE_FAMILIES:
         return None
 
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
+    # Mesmo pool da taxa, sempre: se a dispersao medisse um conjunto de jogos e
+    # a taxa outro, a penalidade de confidence estaria descrevendo uma amostra
+    # que nao e' a que sustenta o pick (ver pool_and_field).
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id,
+                             home_team_id, away_team_id)
     if not pool or len(pool) < 2:
         return None
 

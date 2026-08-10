@@ -2281,14 +2281,20 @@ _PICK_FONTE = {
 def _pernas_de_pick_simples(cur, tabela: str, col_casa: str, col_fora: str,
                             suggestion_id: int) -> list:
     """A unica perna de um pick de mercado unico (vip/free/faltas/goleiros)."""
+    # O arbitro sai da fixture e, se ela nao existir mais, de match_statistics
+    # (registro permanente, sem FK -- mesmo motivo pelo qual routers/public.py
+    # le liga de la'). Sem ele o mercado de cartoes perde a serie de quem apita.
     cur.execute(f"""
         SELECT p.fixture_id, p.market, p.line, p.market_type,
                COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
                p.{col_casa} AS home_team, p.{col_fora} AS away_team,
-               f.league_id, f.season
+               COALESCE(f.league_id, ms.league_id) AS league_id,
+               COALESCE(f.season, ms.season)       AS season,
+               COALESCE(f.referee, ms.referee)     AS referee
           FROM {tabela} p
      LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+     LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
          WHERE p.id = %s
     """, (suggestion_id,))
     row = cur.fetchone()
@@ -2364,22 +2370,45 @@ def _fixture_meta(cur, fixture_id, home_team_id=None, away_team_id=None) -> dict
     podem ter vindo vazios de um pick antigo -- os dois precisam da fixture pra
     fechar a identidade do jogo. Sem fixture, o que faltar fica None e a perna
     simplesmente nao desenha serie (melhor que serie do time errado)."""
+    vazio = {"league_id": None, "season": None, "referee": None}
     if not fixture_id:
-        return {"league_id": None, "season": None}
-    cur.execute("""
-        SELECT home_team_id, away_team_id, league_id, season
-          FROM fixtures WHERE fixture_id = %s
-    """, (fixture_id,))
-    f = cur.fetchone()
+        return vazio
+    # Duas buscas por chave primaria em vez de um join: `fixtures` e' fila
+    # operacional e a linha pode ter saido, `match_statistics` e' o registro
+    # permanente (mesma razao de routers/public.py ler liga de la').
+    for tabela in ("fixtures", "match_statistics"):
+        cur.execute(f"""
+            SELECT home_team_id, away_team_id, league_id, season, referee
+              FROM {tabela} WHERE fixture_id = %s
+        """, (fixture_id,))
+        f = cur.fetchone()
+        if f:
+            break
     if not f:
-        return {"league_id": None, "season": None}
+        return vazio
     f = dict(f)
     return {
         "league_id": f.get("league_id"),
         "season": f.get("season"),
+        "referee": f.get("referee"),
         "home_team_id": home_team_id or f.get("home_team_id"),
         "away_team_id": away_team_id or f.get("away_team_id"),
     }
+
+
+# Colunas que market_form.folha_do_jogo sabe traduzir pra folha da API, mais o
+# que a serie precisa pra identificar o jogo. Uma lista so' pras duas consultas
+# (time e arbitro): se elas divergirem, uma das duas series perde um contador em
+# silencio -- e o sintoma seria "sem dado" em barra que tem dado.
+_COLUNAS_DA_SERIE = """
+        ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
+        ms.home_team_id, ms.away_team_id,
+        ms.home_corners, ms.away_corners,
+        ms.home_yellow_cards, ms.away_yellow_cards,
+        ms.home_red_cards, ms.away_red_cards,
+        ms.home_fouls, ms.away_fouls,
+        ms.home_shots_on, ms.away_shots_on
+"""
 
 
 def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
@@ -2406,14 +2435,7 @@ def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
                   else "COALESCE(f.home_team, t_home.name)")
 
     cur.execute(f"""
-        SELECT ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
-               ms.home_team_id, ms.away_team_id,
-               ms.home_corners, ms.away_corners,
-               ms.home_yellow_cards, ms.away_yellow_cards,
-               ms.home_red_cards, ms.away_red_cards,
-               ms.home_fouls, ms.away_fouls,
-               ms.home_shots_on, ms.away_shots_on,
-               {adversario} AS opponent
+        SELECT {_COLUNAS_DA_SERIE}, {adversario} AS opponent
           FROM match_statistics ms
      LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
      LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
@@ -2425,6 +2447,37 @@ def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
       ORDER BY ms.match_date DESC
          LIMIT %s
     """, (team_id, excluir_fixture, *params_liga, limit))
+    return [dict(r) for r in cur.fetchall()]
+
+
+def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) -> list:
+    """Ultimos jogos apitados pelo arbitro, com os dois times no rotulo.
+
+    SEM filtro de liga, de proposito: arbitro nao pertence a competicao, apita
+    estadual, serie A e copa na mesma temporada, e a media de cartoes dele e' a
+    mesma pessoa nas tres. E' o mesmo recorte que o motor ja' usa
+    (RefereeStatsService.get_stats agrega por arbitro + temporada, sem liga) --
+    filtrar aqui faria o card mostrar uma amostra que o motor nunca olhou."""
+    filtro_season, params_season = "", []
+    if season:
+        filtro_season = "AND ms.season = %s"
+        params_season = [season]
+
+    cur.execute(f"""
+        SELECT {_COLUNAS_DA_SERIE},
+               COALESCE(f.home_team, t_home.name) || ' x ' ||
+               COALESCE(f.away_team, t_away.name) AS opponent
+          FROM match_statistics ms
+     LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
+     LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
+     LEFT JOIN teams t_away   ON t_away.team_id = ms.away_team_id
+         WHERE ms.referee = %s
+           AND ms.status IN ('FT','AET','PEN')
+           AND ms.fixture_id <> COALESCE(%s, -1)
+           {filtro_season}
+      ORDER BY ms.match_date DESC
+         LIMIT %s
+    """, (referee, excluir_fixture, *params_season, limit))
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -2484,6 +2537,7 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
 
     if not series:
         return None
+
     return {
         "fixture_id": perna.get("fixture_id"),
         "market": perna.get("market"),
@@ -2495,7 +2549,43 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
         "op": series[0]["op"],
         "escopo": escopo,
         "teams": series,
+        "referee": _serie_do_arbitro(cur, perna, escopo, limit),
     }
+
+
+def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
+    """Serie do ARBITRO, so' em mercado de cartoes de total.
+
+    Cartao e' o unico contador em que quem apita responde por parte do numero --
+    o motor ja' trata isso como fato (referee_model.cards_market_eligible chega a
+    VETAR o mercado quando o arbitro nao tem amostra), mas o card mostrava a
+    conta sem essa variavel. Duas equipes disciplinadas com um arbitro rigoroso
+    dao um jogo de 6 cartoes, e nenhuma das duas series de time explicava isso.
+
+    Fora de cartoes nao entra: em escanteios ou gols o arbitro nao e' causa, e
+    uma fileira de barras ali sugeriria uma relacao que nao existe.
+
+    Escopo de time tambem fica de fora: a linha de "Cartoes Casa" e' de um time
+    (~2.5) e o contador do arbitro e' do jogo inteiro (~4.8) -- as barras
+    ficariam todas de um lado da regua, dizendo o oposto do que parece.
+    """
+    referee = perna.get("referee")
+    if not referee or escopo != "total":
+        return None
+    if not market_form.e_mercado_de_cartoes(perna.get("market"), perna.get("market_type")):
+        return None
+
+    jogos = _jogos_do_arbitro(cur, referee, perna.get("season"),
+                              perna.get("fixture_id"), limit)
+    if not jogos:
+        return None
+    serie = market_form.serie_do_mercado(
+        jogos, perna.get("market"), perna.get("market_type"), perna.get("line"),
+        _stat_for_market,
+    )
+    if not serie["resolved"]:
+        return None
+    return {"name": referee, **serie}
 
 
 @router.get("/{suggestion_id}/market-form")
