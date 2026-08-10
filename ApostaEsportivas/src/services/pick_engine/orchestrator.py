@@ -288,6 +288,7 @@ def analyze_fixture_markets(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
                 team_id=side_team_id,
+                home_team_id=home_team_id, away_team_id=away_team_id,
             )
             if not taxa or taxa["taxa_ponderada"] is None:
                 if debug:
@@ -356,6 +357,7 @@ def analyze_fixture_markets(
             stability = stats_model.line_stability(
                 family, scope, m.get("value", ""), m.get("line", ""), last10_home, last10_away,
                 team_id=side_team_id,
+                home_team_id=home_team_id, away_team_id=away_team_id,
             )
             line_candidates.append({
                 "market_id":        m.get("market_id"),
@@ -423,7 +425,8 @@ def analyze_fixture_markets(
         # leitura de valor bruto, ex. btts/outcome -- variance_stats retorna
         # None e a penalidade fica 0).
         var_stats = variance_model.variance_stats(
-            family, scope, last10_home, last10_away, team_id=side_team_id)
+            family, scope, last10_home, last10_away, team_id=side_team_id,
+            home_team_id=home_team_id, away_team_id=away_team_id)
         v_penalty = variance_model.variance_penalty(
             var_stats["coefficient_of_variation"] if var_stats else None
         )

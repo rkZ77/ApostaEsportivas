@@ -163,3 +163,43 @@ def test_recorte_por_mando_sai_da_mesma_regra_da_taxa():
     assert r["greens"] == 1
     assert r["hit_rate"] == 0.5
     assert r["average"] == 10.0     # e fora da media
+
+
+# ─────────────────── serie do arbitro (cartoes) ───────────────────
+
+
+def test_arbitro_so_entra_em_mercado_de_cartoes():
+    """Cartao e' o unico contador em que quem apita responde por parte do
+    numero -- o motor ja' VETA o mercado quando o arbitro nao tem amostra
+    (referee_model.cards_market_eligible). Em escanteios ou gols o arbitro nao
+    e' causa, e uma fileira de barras ali sugeriria relacao que nao existe."""
+    corpo = _codigo("routers/suggestions.py", "_serie_do_arbitro")
+    assert "market_form.e_mercado_de_cartoes" in corpo
+    assert 'escopo != "total"' in corpo
+
+
+def test_reconhecimento_de_mercado_de_cartoes_tem_UMA_definicao():
+    """A mesma pergunta que routers/live.py faz pra escolher o contador."""
+    assert market_form.e_mercado_de_cartoes("Cartões Mais/Menos", None)
+    assert market_form.e_mercado_de_cartoes("Total Cards", "cards")
+    assert market_form.e_mercado_de_cartoes(None, "handicap_cards")
+    assert not market_form.e_mercado_de_cartoes("Escanteios Mais/Menos", "corners")
+    assert not market_form.e_mercado_de_cartoes("Ambas as Equipes Marcam", "btts")
+
+
+def test_serie_do_arbitro_nao_filtra_por_liga():
+    """Arbitro nao pertence a competicao: apita estadual, serie A e copa na
+    mesma temporada. E' o mesmo recorte de RefereeStatsService.get_stats
+    (arbitro + temporada), entao card e motor olham a mesma amostra."""
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_arbitro")
+    assert "ms.referee = %s" in corpo
+    assert "AND ms.season = %s" in corpo
+    assert "league_id" not in corpo
+
+
+def test_arbitro_sobrevive_a_fixture_apagada():
+    """`fixtures` e' fila operacional e a linha pode sumir; match_statistics e'
+    o registro permanente. Sem o fallback, pick antigo de cartoes perderia a
+    serie de quem apitou."""
+    corpo = _codigo("routers/suggestions.py", "_pernas_de_pick_simples")
+    assert "COALESCE(f.referee, ms.referee)" in corpo

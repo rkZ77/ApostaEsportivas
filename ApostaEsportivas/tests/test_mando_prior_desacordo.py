@@ -49,10 +49,24 @@ def test_pool_de_mercado_da_casa_so_pega_jogo_em_casa():
     assert all(j["home_team_id"] == 10 for j in pool)
 
 
-def test_pool_de_total_continua_somando_os_dois_times():
-    """Mercado de total e' sobre o jogo, nao sobre um time -- o filtro de mando
-    nao pode encolher esse pool."""
-    pool, _ = stats_model.pool_and_field("corners", "total", _HISTORICO_VISITANTE, _HISTORICO_VISITANTE, team_id=10)
+def test_pool_de_total_pega_o_mandante_em_casa_e_o_visitante_fora():
+    """Mercado de total e' sobre o JOGO, mas o jogo tem mando: o que descreve
+    "Goias x Londrina" e' o Goias em casa mais o Londrina fora. Estendido em
+    2026-08-10, ver o caso de producao na docstring de pool_and_field."""
+    pool, _ = stats_model.pool_and_field(
+        "corners", "total", _HISTORICO_VISITANTE, _HISTORICO_VISITANTE,
+        team_id=None, home_team_id=10, away_team_id=10)
+    assert len(pool) == 4          # 2 em casa do mandante + 2 fora do visitante
+    em_casa = [j for j in pool if j["home_team_id"] == 10]
+    fora = [j for j in pool if j["away_team_id"] == 10]
+    assert len(em_casa) == 2 and len(fora) == 2
+
+
+def test_pool_de_total_sem_os_ids_nao_filtra():
+    """Mesma regra de _somente_no_mando: sem id nao da' pra saber o mando, e
+    chutar seria pior que nao filtrar."""
+    pool, _ = stats_model.pool_and_field(
+        "corners", "total", _HISTORICO_VISITANTE, _HISTORICO_VISITANTE)
     assert len(pool) == len(_HISTORICO_VISITANTE) * 2
 
 
@@ -221,3 +235,56 @@ def test_desacordo_nunca_sobe_a_probabilidade():
     import inspect
     src = inspect.getsource(orchestrator.analyze_fixture_markets)
     assert 'poisson_prob < best_line["taxa_real"]' in src
+
+
+# ─────────── 4. o caso Goias x Londrina (2026-08-10) ───────────
+
+
+def test_taxa_de_total_nao_herda_mais_o_mando_errado():
+    """Pick real: "Escanteios Menos de 11.5" @1.73, publicado com 65.2%.
+
+    No card (que desde 2026-08-10 mostra so' o mando do jogo) o Goias EM CASA
+    tinha media 12.0 e o Londrina FORA media 14.4 -- a amostra que responde a
+    pergunta batia Under 11.5 em 4 de 10. Os outros ~20 jogos do pool eram
+    partidas hospedadas por outros times, e foram eles que sustentaram a taxa.
+
+    Aqui o formato do caso, reduzido: o mandante joga jogos de 13 escanteios em
+    casa e de 8 fora; o visitante, 8 em casa e 14 fora. Under 11.5 bate em 100%
+    do pool misto pela metade errada, e em 0% da metade que descreve o jogo.
+    """
+    mandante = [
+        {**_jogo("2026-08-01", 1, 90, 13, 0), "total_corners": 13},   # em casa
+        {**_jogo("2026-07-25", 91, 1, 8, 0),  "total_corners": 8},    # fora
+    ]
+    visitante = [
+        {**_jogo("2026-08-02", 2, 92, 8, 0),  "total_corners": 8},    # em casa
+        {**_jogo("2026-07-26", 93, 2, 14, 0), "total_corners": 14},   # fora
+    ]
+
+    misto = stats_model.market_taxa(
+        "corners", "total", "Under", "11.5", mandante, visitante)
+    assert misto["amostra"] == 4
+    assert misto["taxa_bruta"] == 0.5, "os jogos do mando errado seguravam a taxa"
+
+    no_mando = stats_model.market_taxa(
+        "corners", "total", "Under", "11.5", mandante, visitante,
+        home_team_id=1, away_team_id=2)
+    assert no_mando["amostra"] == 2       # mandante em casa + visitante fora
+    assert no_mando["taxa_ponderada"] == 0.0
+
+
+def test_variancia_e_taxa_medem_o_MESMO_pool():
+    """Penalidade de dispersao calculada sobre um conjunto de jogos e taxa sobre
+    outro descreveria uma amostra que nao e' a que sustenta o pick."""
+    mandante = [{**_jogo("2026-08-01", 1, 90, 13, 0), "total_corners": 13},
+                {**_jogo("2026-07-25", 91, 1, 8, 0), "total_corners": 8}]
+    visitante = [{**_jogo("2026-08-02", 2, 92, 8, 0), "total_corners": 8},
+                 {**_jogo("2026-07-26", 93, 2, 14, 0), "total_corners": 14}]
+
+    from services.pick_engine import variance_model
+    var = variance_model.variance_stats(
+        "corners", "total", mandante, visitante, home_team_id=1, away_team_id=2)
+    taxa = stats_model.market_taxa(
+        "corners", "total", "Under", "11.5", mandante, visitante,
+        home_team_id=1, away_team_id=2)
+    assert var["amostra"] == taxa["amostra"] == 2

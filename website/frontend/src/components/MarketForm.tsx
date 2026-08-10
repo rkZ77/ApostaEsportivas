@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity } from 'lucide-react'
+import { Activity, Gavel } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import { TeamLogo } from './TeamLogo'
@@ -10,7 +10,7 @@ import { translateLine, translateMarket } from '../utils/marketTranslate'
  *
  * Uma barra por jogo recente, medida pelo contador que a aposta observa
  * (escanteios, cartões, faltas, chutes no alvo, gols), com a linha do pick
- * atravessando o gráfico. Verde onde teria pago, vermelho onde não.
+ * atravessando o gráfico. GREEN onde teria pago, RED onde não.
  *
  * É a diferença entre "a IA acha que dá Over 9.5" e "nos últimos 5 jogos deu
  * 11, 8, 12, 10...". O número de probabilidade pede confiança; isto mostra o
@@ -25,6 +25,10 @@ import { translateLine, translateMarket } from '../utils/marketTranslate'
  * Não é preferência de layout. Na Série A o mandante faz 5.62 escanteios contra
  * 4.41 do visitante: juntar os dois mandos numa média só produz um número que
  * não descreve nem uma coisa nem outra.
+ *
+ * MERCADO DE CARTÃO GANHA A SÉRIE DO ÁRBITRO. Cartão é o único contador em que
+ * quem apita responde por parte do número · o motor já veta o mercado quando o
+ * árbitro não tem amostra, mas o card mostrava a conta sem essa variável.
  *
  * Bilhete de várias pernas (múltipla, alavancagem) repete a estrutura perna a
  * perna · não existe UMA série que descreva o bilhete inteiro.
@@ -50,11 +54,7 @@ interface FormMatch {
   opponent: string | null
 }
 
-interface TeamSeries {
-  team_id: number
-  team: string | null
-  /** Mando deste time na partida do pick · e de todos os jogos da série. */
-  side: 'home' | 'away'
+interface Serie {
   label: string
   line: number | null
   matches: FormMatch[]
@@ -65,6 +65,17 @@ interface TeamSeries {
   average: number | null
 }
 
+interface TeamSerie extends Serie {
+  team_id: number
+  team: string | null
+  /** Mando deste time na partida do pick · e de todos os jogos da série. */
+  side: 'home' | 'away'
+}
+
+interface RefereeSerie extends Serie {
+  name: string
+}
+
 interface Leg {
   fixture_id: number | null
   market: string | null
@@ -73,7 +84,8 @@ interface Leg {
   line_value: number | null
   home_team: string | null
   away_team: string | null
-  teams: TeamSeries[]
+  teams: TeamSerie[]
+  referee: RefereeSerie | null
 }
 
 interface MarketFormData {
@@ -91,20 +103,32 @@ function corDaTaxa(taxa: number) {
   return taxa >= 60 ? 'text-accent' : taxa >= 40 ? 'text-ink-2' : 'text-red-400'
 }
 
-function GraficoDoTime({ serie, teto }: { serie: TeamSeries; teto: number }) {
+function Grafico({
+  titulo, contexto, prefixo, serie, teto, logoId, Icone,
+}: {
+  titulo: string
+  /** Completa "últimos N jogos ___" · "em casa", "fora", "apitados". */
+  contexto: string
+  /** Liga a barra ao adversário no tooltip · "x Vasco", "em Vasco", "" no árbitro. */
+  prefixo: string
+  serie: Serie
+  teto: number
+  logoId?: number
+  Icone?: React.ComponentType<{ className?: string }>
+}) {
   // A API devolve do mais recente pro mais antigo; o gráfico é lido da
   // esquerda pra direita, então inverte.
   const jogos = serie.matches.slice().reverse()
   const alturaLinha = serie.line != null ? (serie.line / teto) * 100 : null
   const taxa = serie.hit_rate != null ? Math.round(serie.hit_rate * 100) : null
-  const mando = serie.side === 'home' ? 'em casa' : 'fora'
 
   return (
     <div>
       <div className="flex items-center justify-between gap-2 mb-1">
         <div className="flex items-center gap-2 min-w-0">
-          <TeamLogo id={serie.team_id} name={serie.team ?? ''} size={18} />
-          <span className="text-xs font-bold text-ink-1 truncate">{serie.team ?? 'Time'}</span>
+          {logoId != null && <TeamLogo id={logoId} name={titulo} size={18} />}
+          {Icone && <Icone className="w-3.5 h-3.5 text-ink-4 shrink-0" />}
+          <span className="text-xs font-bold text-ink-1 truncate">{titulo}</span>
         </div>
         {taxa != null && (
           <span className={`font-mono text-sm font-bold tabular-nums shrink-0 ${corDaTaxa(taxa)}`}>
@@ -114,9 +138,9 @@ function GraficoDoTime({ serie, teto }: { serie: TeamSeries; teto: number }) {
       </div>
 
       <p className="text-[11px] text-ink-4 mb-3">
-        {serie.label} · últimos {jogos.length} jogos {mando}
+        {serie.label} · últimos {jogos.length} jogos {contexto}
         {serie.average != null && <> · média {serie.average}</>}
-        {taxa != null && <> · bateu em {serie.greens} de {serie.resolved}</>}
+        {taxa != null && <> · {serie.greens} GREEN em {serie.resolved}</>}
       </p>
 
       <div className="relative h-20 flex items-end gap-1">
@@ -137,7 +161,7 @@ function GraficoDoTime({ serie, teto }: { serie: TeamSeries; teto: number }) {
         {jogos.map(m => {
           const altura = m.value != null ? Math.max((m.value / teto) * 100, 4) : 100
           const quando = m.match_date ?? ''
-          const contra = m.opponent ? ` · ${serie.side === 'home' ? 'x' : 'em'} ${m.opponent}` : ''
+          const contra = m.opponent ? ` · ${prefixo ? `${prefixo} ` : ''}${m.opponent}` : ''
           const titulo = m.value == null
             ? `${quando}${contra} · sem estatística publicada`
             : `${quando}${contra} · ${m.value}`
@@ -160,10 +184,11 @@ function GraficoDoTime({ serie, teto }: { serie: TeamSeries; teto: number }) {
 }
 
 function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
-  // Teto compartilhado pelos dois times: barras de gráficos diferentes só são
-  // comparáveis na mesma escala, e comparar os dois times é justamente o que a
-  // seção passou a permitir.
-  const valores = leg.teams.flatMap(t => t.matches.map(m => m.value)).filter((v): v is number => v != null)
+  // Teto compartilhado por todas as séries da perna, árbitro incluído: barras
+  // de gráficos diferentes só são comparáveis na mesma escala, e comparar as
+  // séries entre si é justamente o que a seção passou a permitir.
+  const series: Serie[] = [...leg.teams, ...(leg.referee ? [leg.referee] : [])]
+  const valores = series.flatMap(s => s.matches.map(m => m.value)).filter((v): v is number => v != null)
   if (!valores.length) return null
   const teto = Math.max(...valores, leg.line_value ?? 0) * 1.15 || 1
 
@@ -183,8 +208,29 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
       )}
 
       {leg.teams.map(t => (
-        <GraficoDoTime key={`${t.team_id}-${t.side}`} serie={t} teto={teto} />
+        <Grafico
+          key={`${t.team_id}-${t.side}`}
+          titulo={t.team ?? 'Time'}
+          contexto={t.side === 'home' ? 'em casa' : 'fora'}
+          prefixo={t.side === 'home' ? 'x' : 'em'}
+          logoId={t.team_id}
+          serie={t}
+          teto={teto}
+        />
       ))}
+
+      {leg.referee && (
+        <div className="pt-1">
+          <Grafico
+            titulo={leg.referee.name}
+            contexto="apitados"
+            prefixo=""
+            Icone={Gavel}
+            serie={leg.referee}
+            teto={teto}
+          />
+        </div>
+      )}
     </div>
   )
 }
@@ -229,15 +275,17 @@ export default function MarketForm({
         ))}
       </div>
 
+      {/* Vocabulário do produto: é GREEN, RED e PUSH em todo o resto do site
+          (ver utils/resultStyle.ts), não "bateu"/"não bateu". */}
       <div className="flex items-center gap-3 mt-4 pt-2.5 border-t border-line/60 flex-wrap">
         {[
-          ['bg-accent', 'bateu'],
-          ['bg-red-400', 'não bateu'],
-          ['bg-ink-4', 'devolveu'],
+          ['bg-accent', 'GREEN'],
+          ['bg-red-400', 'RED'],
+          ['bg-ink-4', 'PUSH'],
         ].map(([cls, txt]) => (
           <span key={txt} className="flex items-center gap-1.5">
             <span className={`w-2 h-2 rounded-sm ${cls}`} />
-            <span className="text-[10px] text-ink-4">{txt}</span>
+            <span className="text-[10px] font-bold text-ink-4">{txt}</span>
           </span>
         ))}
         <span className="flex items-center gap-1.5">

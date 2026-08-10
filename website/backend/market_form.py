@@ -89,6 +89,18 @@ def escopo_do_mercado(market: str) -> str:
     return "total"
 
 
+def e_mercado_de_cartoes(market: str | None, market_type: str | None) -> bool:
+    """Mercado da familia cartoes -- o unico em que quem apita muda o numero.
+
+    Mora aqui pelo mesmo motivo que escopo_do_mercado: routers/live.py ja'
+    responde essa pergunta (`is_cards`) pra escolher o contador, e
+    routers/suggestions.py precisa dela pra decidir se busca a serie do ARBITRO.
+    Duas copias da mesma regra e' como o bug de mando de 2026-08-08 nasceu."""
+    m = (market or "").lower()
+    mtype = (market_type or "").lower()
+    return mtype in ("cards", "handicap_cards") or any(k in m for k in ("cart", "card"))
+
+
 def folha_do_jogo(ms: dict) -> tuple[dict, dict]:
     """Converte uma linha de match_statistics nas duas folhas (casa, fora).
 
