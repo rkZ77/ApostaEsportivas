@@ -203,3 +203,23 @@ def test_arbitro_sobrevive_a_fixture_apagada():
     serie de quem apitou."""
     corpo = _codigo("routers/suggestions.py", "_pernas_de_pick_simples")
     assert "COALESCE(f.referee, ms.referee)" in corpo
+
+
+# ─────────── nome de time nunca por JOIN (achado 2026-08-10) ───────────
+
+
+def test_nome_do_time_sai_por_subconsulta_nao_por_join():
+    """`teams` tem ate' 3 linhas pro mesmo team_id (uma por liga). LEFT JOIN em
+    teams multiplica a PARTIDA por esse numero, e com os dois lados o fator vira
+    2x2, 2x3...
+
+    Medido em producao no dia: a serie do pick VIP #1581 (Goias x Londrina)
+    mostrou o jogo contra o Sport 4 vezes nas 5 barras, e a media do Londrina
+    fora saiu 14.4 (dois jogos repetidos) quando os 5 jogos reais dao 11.4. A
+    mesma consulta em /liga/jogos devolvia 706 linhas pros 207 jogos reais da
+    Serie B 2026."""
+    fonte = _fonte("routers/suggestions.py")
+    assert "LEFT JOIN teams" not in fonte, "JOIN em teams duplica a partida"
+    corpo = _codigo("routers/suggestions.py", "_nome_do_time")
+    assert "SELECT t.name FROM teams t WHERE t.team_id" in corpo
+    assert "LIMIT 1" in corpo
