@@ -31,20 +31,22 @@ placar do time que MENOS marcou, que passa de 0 pra 1 exatamente quando o
 mercado vira GREEN. Hoje `_stat_for_market` devolve esse minimo (mesma decisao
 pra quem so compara com 1.0) e a regua do grafico fica em 0.5.
 
-UMA SERIE POR TIME, CASA E FORA SEPARADOS (2026-08-10). Ate' aqui o mercado de
-total desenhava UMA fileira de barras com os jogos dos dois times embaralhados
-por data -- nao dava pra saber de quem era cada barra, e as duas perguntas que
-o apostador faz ("como esse time vem indo?" e "muda muito jogando fora?")
-ficavam as duas sem resposta. Agora a rota monta uma serie POR TIME e este
-modulo devolve, junto da serie inteira, o recorte de cada mando (`splits`).
+UMA SERIE POR TIME, NO MANDO DO JOGO (2026-08-10). Ate' aqui o mercado de total
+desenhava UMA fileira de barras com os jogos dos dois times embaralhados por
+data -- nao dava pra saber de quem era cada barra. Agora a rota monta uma serie
+POR TIME, e cada uma so' com os jogos NO MANDO que aquele time vai jogar: o
+mandante aparece com os ultimos jogos EM CASA dele, o visitante com os ultimos
+FORA. Se o Goias joga em casa, a serie do Goias e' de jogos em casa, ponto.
 
-O recorte so' e' possivel porque a serie passou a saber DE QUEM ela fala:
-`team_id`. Ele resolve o mando por partida e, nos mercados de um time so'
-("Escanteios Casa"), poe o time no lado que o nome do mercado nomeia -- e' o
-que deixa os jogos FORA de casa desse time entrarem no grafico sem virarem o
-numero do adversario. A diferenca que isso expoe nao e' decoracao: na Serie A
-2026 o mandante faz 5.62 escanteios contra 4.41 do visitante (+27%), e era
-exatamente essa mistura que produzia o pick #1573 (ver pool_and_field no motor).
+Nao e' preferencia de layout, e' a mesma correcao de 2026-08-08 aplicada ao
+card: na Serie A 2026 o mandante faz 5.62 escanteios contra 4.41 do visitante
+(+27%), entao juntar os dois mandos numa media so' produz um numero que nao
+descreve nem uma coisa nem outra (foi o que gerou o pick #1573, ver
+pool_and_field no motor).
+
+`team_id` e' o que torna isso possivel: a serie sabe DE QUEM ela fala, resolve o
+mando por partida e, nos mercados de um time so' ("Escanteios Casa"), poe o time
+no lado que o nome do mercado nomeia.
 """
 
 from settlement_bridge import settlement
@@ -138,10 +140,9 @@ def perspectiva_do_time(ms: dict, team_id: int | None, escopo: str) -> tuple:
 def resumo(itens: list) -> dict:
     """Taxa e media de um conjunto de jogos ja liquidados.
 
-    Sai daqui e nao do fim de `serie_do_mercado` porque agora tem tres
-    consumidores -- a serie inteira e os dois recortes de mando -- e a regra que
-    nao pode divergir entre eles e' justamente a de "sem dado nao entra na
-    conta", em nenhuma das duas pontas (taxa e media)."""
+    Funcao propria, e nao um trecho no fim de `serie_do_mercado`, porque a regra
+    que sustenta os dois numeros e' a mesma e nao pode divergir: jogo sem dado
+    nao entra na conta em nenhuma das duas pontas (taxa e media)."""
     resolvidos = [i for i in itens if i["result"] is not None]
     verdes = sum(1 for i in resolvidos if i["result"] == settlement.GREEN)
     com_valor = [i["value"] for i in itens if i["value"] is not None]
@@ -164,8 +165,8 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
     services/settlement.py, e pelo mesmo motivo.
 
     `team_id` e' de quem sao os jogos. Sem ele a serie ainda sai (comportamento
-    antigo), mas sem mando por partida: nenhuma barra sabe dizer se foi em casa,
-    e `splits` vem vazio.
+    antigo), mas nenhuma barra sabe dizer em que mando o jogo foi e a folha nao
+    e' girada pra perspectiva do time.
     """
     parsed = settlement.parse_line(line)
     op, valor_linha = parsed["op"], parsed["value"]
@@ -218,20 +219,11 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
         # o que faria a regua em 0.5 parecer arbitraria.
         rotulo = "Gols do time que menos marcou"
 
-    em_casa_itens = [i for i in itens if i["is_home"] is True]
-    fora_itens = [i for i in itens if i["is_home"] is False]
-
     return {
         "label": rotulo,
         "line": linha_grafico,
         "op": op,
         "escopo": escopo,
         "matches": itens,
-        # Recorte por mando. Vazio quando a serie nao sabe de quem sao os jogos
-        # -- um dicionario com zeros afirmaria "esse time nunca jogou em casa".
-        "splits": {
-            "home": resumo(em_casa_itens) if em_casa_itens else None,
-            "away": resumo(fora_itens) if fora_itens else None,
-        },
         **resumo(itens),
     }

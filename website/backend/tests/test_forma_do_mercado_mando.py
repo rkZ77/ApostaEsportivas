@@ -71,14 +71,22 @@ def test_serie_de_total_continua_olhando_os_dois_times():
     assert "team_id=team_id" in corpo
 
 
-def test_a_serie_de_um_time_traz_os_dois_mandos():
-    """O card existe pra comparar casa com fora -- filtrar por mando na consulta
-    (como era ate 2026-08-10) deixava metade da comparacao de fora. Quem impede
-    de ler o numero do adversario nos jogos fora e' perspectiva_do_time."""
+def test_a_serie_traz_so_o_mando_que_o_time_vai_jogar():
+    """Se o Goias joga em casa, a serie do Goias e' de jogos em casa. Os jogos
+    dele como visitante medem outra coisa (+27% de diferenca em escanteios na
+    Serie A) e diluiriam a media que o card mostra."""
     corpo = _codigo("routers/suggestions.py", "_jogos_do_time")
-    assert "ms.home_team_id = %s OR ms.away_team_id = %s" in corpo
-    # e quem gira a folha pra o time nao virar o adversario e' o modulo, nao a
-    # rota -- a rota so' diz de quem e' a serie
+    assert 'coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"' in corpo
+    assert "WHERE {coluna_mando} = %s" in corpo
+    # o mando de cada serie e' o lado do time NESTA partida
+    assert "lado, perna.get(\"league_id\")" in _codigo("routers/suggestions.py", "_series_da_perna")
+
+
+def test_o_time_ainda_vai_pro_lado_que_o_mercado_nomeia():
+    """Segunda trava, independente do filtro: quem le a folha e'
+    `_stat_for_market`, que escolhe o lado pelo NOME do mercado. Num mercado de
+    visitante a serie e' de jogos fora, entao os dois ja concordam -- mas a
+    garantia mora em market_form, nao no acaso da consulta."""
     assert "perspectiva_do_time" in _fonte("market_form.py")
 
 
