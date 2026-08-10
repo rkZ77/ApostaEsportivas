@@ -711,14 +711,13 @@ def get_suggestion_detail(
             fixture_ids = [leg["fixture_id"] for leg in legs if leg.get("fixture_id")]
             fixture_map: dict = {}
             if fixture_ids:
-                frows = _safe_query(cur, """
+                frows = _safe_query(cur, f"""
                     SELECT f.fixture_id,
                            f.home_team_id, f.away_team_id,
                            f.match_datetime,
-                           ht.name AS home_team, at.name AS away_team
+                           {_nome_do_time("home", "f")} AS home_team,
+                           {_nome_do_time("away", "f")} AS away_team
                     FROM fixtures f
-                    LEFT JOIN teams ht ON ht.team_id = f.home_team_id
-                    LEFT JOIN teams at ON at.team_id = f.away_team_id
                     WHERE f.fixture_id = ANY(%s)
                 """, (fixture_ids,))
                 for fr in frows:
@@ -1950,19 +1949,20 @@ def get_liga_tendencias(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        rows = _safe_query(cur, """
+        # Nome por subconsulta, nunca por JOIN em `teams` -- ver _nome_do_time.
+        # Com os dois JOINs esta consulta devolvia 706 linhas pros 207 jogos
+        # reais da Serie B 2026 (medido em prod, 2026-08-10): jogo repetido na
+        # lista, e a media do resumo pesava mais o jogo que duplicou mais.
+        rows = _safe_query(cur, f"""
             SELECT ms.fixture_id, ms.match_date,
                    ms.home_goals, ms.away_goals, ms.total_goals,
                    ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
                    ms.home_shots_on, ms.away_shots_on,
                    ms.home_fouls, ms.away_fouls,
                    ms.home_team_id, ms.away_team_id,
-                   COALESCE(f.home_team, ht.name) AS home_team,
-                   COALESCE(f.away_team, t_away.name) AS away_team
+                   {_nome_do_time("home")} AS home_team,
+                   {_nome_do_time("away")} AS away_team
             FROM match_statistics ms
-            LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
-            LEFT JOIN teams ht ON ht.team_id = ms.home_team_id
-            LEFT JOIN teams t_away ON t_away.team_id = ms.away_team_id
             WHERE ms.league_id = %s
               AND ms.status IN ('FT', 'AET', 'PEN')
             ORDER BY ms.match_date DESC
@@ -2009,9 +2009,14 @@ def get_liga_ranking(
     conn = get_connection()
     cur = conn.cursor()
     try:
-        _HOME = """
+        # Nome por subconsulta, nunca por JOIN em `teams` -- ver _nome_do_time.
+        # O JOIN duplicava a partida uma vez por liga em que o time esta
+        # cadastrado: 384 linhas pros 207 jogos da Serie B 2026 (medido em prod,
+        # 2026-08-10). As MEDIAS sobreviviam (soma e contagem inflavam junto),
+        # mas o "jogos" de cada time no ranking mostrava quase o dobro.
+        _HOME = f"""
             SELECT ms.home_team_id AS team_id,
-                   COALESCE(t.name, f.home_team) AS team_name,
+                   {_nome_do_time("home")} AS team_name,
                    ms.home_goals          AS goals,
                    ms.home_corners        AS corners,
                    ms.home_yellow_cards   AS yellow_cards,
@@ -2019,13 +2024,11 @@ def get_liga_ranking(
                    ms.home_fouls          AS fouls,
                    ms.home_shots_on       AS shots_on
             FROM match_statistics ms
-            LEFT JOIN teams t ON t.team_id = ms.home_team_id
-            LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
             WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
         """
-        _AWAY = """
+        _AWAY = f"""
             SELECT ms.away_team_id AS team_id,
-                   COALESCE(t.name, f.away_team) AS team_name,
+                   {_nome_do_time("away")} AS team_name,
                    ms.away_goals          AS goals,
                    ms.away_corners        AS corners,
                    ms.away_yellow_cards   AS yellow_cards,
@@ -2033,8 +2036,6 @@ def get_liga_ranking(
                    ms.away_fouls          AS fouls,
                    ms.away_shots_on       AS shots_on
             FROM match_statistics ms
-            LEFT JOIN teams t ON t.team_id = ms.away_team_id
-            LEFT JOIN fixtures f ON f.fixture_id = ms.fixture_id
             WHERE ms.league_id = %s AND ms.status IN ('FT', 'AET', 'PEN')
         """
         if context == "home":
@@ -2411,6 +2412,27 @@ _COLUNAS_DA_SERIE = """
 """
 
 
+def _nome_do_time(lado: str, alias: str = "ms") -> str:
+    """SQL do nome de um lado da partida, por SUBCONSULTA e nunca por JOIN.
+
+    `teams` tem ate' 3 linhas pro mesmo team_id (uma por liga em que o time
+    aparece). Um LEFT JOIN em teams multiplica a partida por esse numero, e com
+    os dois lados o fator vira 2x2, 2x3... A serie do card saiu errada em
+    producao por isso (pick VIP #1581, Goias x Londrina, 2026-08-10): o jogo do
+    Goias contra o Sport apareceu 4 vezes nas 5 barras, e a media do Londrina
+    fora virou 14.4 (dois jogos repetidos) quando os 5 jogos reais dao 11.4.
+
+    Subconsulta escalar com LIMIT 1 devolve uma linha por partida por
+    construcao, seja qual for o estado da tabela de times.
+
+    `alias` e' a tabela que dirige a consulta -- `ms` (match_statistics) na
+    maioria, `f` quando quem dirige e' a propria fixtures."""
+    return f"""COALESCE(
+        (SELECT f2.{lado}_team FROM fixtures f2 WHERE f2.fixture_id = {alias}.fixture_id LIMIT 1),
+        (SELECT t.name FROM teams t WHERE t.team_id = {alias}.{lado}_team_id LIMIT 1)
+    )"""
+
+
 def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
                    excluir_fixture, limit: int) -> list:
     """Ultimos `limit` jogos do time NO MANDO pedido, com o nome do adversario.
@@ -2431,15 +2453,11 @@ def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
         params_liga = [league_id, season]
 
     coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"
-    adversario = ("COALESCE(f.away_team, t_away.name)" if mando == "home"
-                  else "COALESCE(f.home_team, t_home.name)")
+    adversario = _nome_do_time("away" if mando == "home" else "home")
 
     cur.execute(f"""
         SELECT {_COLUNAS_DA_SERIE}, {adversario} AS opponent
           FROM match_statistics ms
-     LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
-     LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
-     LEFT JOIN teams t_away   ON t_away.team_id = ms.away_team_id
          WHERE {coluna_mando} = %s
            AND ms.status IN ('FT','AET','PEN')
            AND ms.fixture_id <> COALESCE(%s, -1)
@@ -2465,12 +2483,8 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
 
     cur.execute(f"""
         SELECT {_COLUNAS_DA_SERIE},
-               COALESCE(f.home_team, t_home.name) || ' x ' ||
-               COALESCE(f.away_team, t_away.name) AS opponent
+               {_nome_do_time("home")} || ' x ' || {_nome_do_time("away")} AS opponent
           FROM match_statistics ms
-     LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
-     LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
-     LEFT JOIN teams t_away   ON t_away.team_id = ms.away_team_id
          WHERE ms.referee = %s
            AND ms.status IN ('FT','AET','PEN')
            AND ms.fixture_id <> COALESCE(%s, -1)
