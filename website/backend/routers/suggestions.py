@@ -2382,8 +2382,15 @@ def _fixture_meta(cur, fixture_id, home_team_id=None, away_team_id=None) -> dict
     }
 
 
-def _jogos_do_time(cur, team_id: int, league_id, season, excluir_fixture, limit: int) -> list:
-    """Ultimos `limit` jogos encerrados do time, casa e fora, com o adversario.
+def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
+                   excluir_fixture, limit: int) -> list:
+    """Ultimos `limit` jogos do time NO MANDO pedido, com o nome do adversario.
+
+    O filtro de mando e' a regra inteira desta consulta. Se o Goias joga em casa
+    na partida do pick, o que responde a pergunta e' o Goias EM CASA -- os jogos
+    dele como visitante medem outra coisa (+27% de diferenca em escanteios na
+    Serie A 2026) e diluem a media que o card mostra. Mesma correcao de
+    2026-08-08 no motor, agora tambem no que o usuario le.
 
     Mesma liga/temporada que o motor leu (MatchStatsService.get_all_matches_full)
     -- serie e pick contando historias diferentes sobre o mesmo numero e' pior
@@ -2394,6 +2401,10 @@ def _jogos_do_time(cur, team_id: int, league_id, season, excluir_fixture, limit:
         filtro_liga = "AND ms.league_id = %s AND ms.season = %s"
         params_liga = [league_id, season]
 
+    coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"
+    adversario = ("COALESCE(f.away_team, t_away.name)" if mando == "home"
+                  else "COALESCE(f.home_team, t_home.name)")
+
     cur.execute(f"""
         SELECT ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
                ms.home_team_id, ms.away_team_id,
@@ -2402,21 +2413,18 @@ def _jogos_do_time(cur, team_id: int, league_id, season, excluir_fixture, limit:
                ms.home_red_cards, ms.away_red_cards,
                ms.home_fouls, ms.away_fouls,
                ms.home_shots_on, ms.away_shots_on,
-               CASE WHEN ms.home_team_id = %s
-                    THEN COALESCE(f.away_team, t_away.name)
-                    ELSE COALESCE(f.home_team, t_home.name)
-               END AS opponent
+               {adversario} AS opponent
           FROM match_statistics ms
      LEFT JOIN fixtures f     ON f.fixture_id = ms.fixture_id
      LEFT JOIN teams t_home   ON t_home.team_id = ms.home_team_id
      LEFT JOIN teams t_away   ON t_away.team_id = ms.away_team_id
-         WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
+         WHERE {coluna_mando} = %s
            AND ms.status IN ('FT','AET','PEN')
            AND ms.fixture_id <> COALESCE(%s, -1)
            {filtro_liga}
       ORDER BY ms.match_date DESC
          LIMIT %s
-    """, (team_id, team_id, team_id, excluir_fixture, *params_liga, limit))
+    """, (team_id, excluir_fixture, *params_liga, limit))
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -2427,6 +2435,10 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
     de um time so', entao a serie do adversario seria outro numero na mesma
     tela; "Escanteios Mais/Menos" fala do confronto, e ai os dois entram, cada
     um com a propria fileira de barras.
+
+    O lado de cada alvo e' o mando dele NESTA partida, e e' tambem o filtro dos
+    jogos que entram na serie -- mandante so' com jogos em casa, visitante so'
+    com jogos fora. Ver _jogos_do_time.
     """
     escopo = market_form.escopo_do_mercado(perna.get("market"))
     alvos = []
@@ -2444,8 +2456,8 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
 
     series = []
     for lado, team_id, nome in alvos:
-        jogos = _jogos_do_time(cur, team_id, perna.get("league_id"), perna.get("season"),
-                               perna.get("fixture_id"), limit)
+        jogos = _jogos_do_time(cur, team_id, lado, perna.get("league_id"),
+                               perna.get("season"), perna.get("fixture_id"), limit)
         if not jogos:
             continue
         serie = market_form.serie_do_mercado(
@@ -2464,8 +2476,8 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
         series.append({
             "team_id": team_id,
             "team": nome,
-            # Mando NESTE jogo -- e' o que decide qual metade da serie pesa mais
-            # pro pick, e o que o card destaca.
+            # Mando NESTE jogo, que e' tambem o mando de todos os jogos da
+            # serie -- o card usa pra dizer "ultimos N em casa"/"fora".
             "side": lado,
             **serie,
         })
@@ -2490,10 +2502,10 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
 def get_market_form(
     suggestion_id: int,
     pick_type: str = Query("vip"),
-    limit: int = Query(10, ge=3, le=15),
+    limit: int = Query(5, ge=3, le=15),
     current_user: dict = Depends(get_current_user),
 ):
-    """Ultimos jogos de CADA time MEDIDOS PELO MERCADO do pick.
+    """Ultimos jogos de CADA time, NO MANDO DO JOGO, medidos pelo MERCADO do pick.
 
     Nao e' a forma do time (V/E/D): e' o contador que a aposta observa, jogo a
     jogo, contra a linha do pick -- verde no que teria pago, vermelho no que
@@ -2505,12 +2517,23 @@ def get_market_form(
     ja resolvidas) e services/settlement.py (meia-linha asiatica, PUSH em linha
     cheia). Ver a docstring de market_form pro porque.
 
-    UMA SERIE POR TIME (2026-08-10). Antes o mercado de total devolvia UMA lista
-    com os jogos dos dois times ordenados por data. Ninguem conseguia ler de
-    quem era cada barra, e o card nao respondia a pergunta que o proprio dado
-    ja' continha: esse time muda muito jogando fora? Agora cada time tem a
-    propria serie de `limit` jogos, com o mando marcado barra a barra e o
-    recorte casa/fora resumido em `splits` (ver market_form.resumo).
+    UMA SERIE POR TIME, NO MANDO DO JOGO (2026-08-10). Antes o mercado de total
+    devolvia UMA lista com os jogos dos dois times ordenados por data. Ninguem
+    conseguia ler de quem era cada barra, e a media juntava mandos diferentes.
+    Agora cada time tem a propria serie, e ela so' traz os jogos NO MANDO que
+    aquele time vai jogar: mandante com jogos em casa, visitante com jogos fora.
+
+    O preco disso e' amostra menor (um time tem ~7 jogos em casa numa fase de
+    campeonato, nao 15) e e' aceito de proposito -- e' o mesmo trade da correcao
+    de 2026-08-08 no motor: amostra grande que responde a outra pergunta nao e'
+    amostra melhor. Ver _jogos_do_time.
+
+    NOTA sobre mercado de TOTAL: aqui o card ficou mais estrito que o motor, que
+    para totais ainda le os jogos dos dois times em qualquer mando
+    (stats_model.pool_and_field). A divergencia e' conhecida e o proximo passo
+    seria medir se vale alinhar o motor -- filtrar la' corta o pool de ~30 pra
+    ~14 jogos, e num contador de PARTIDA (nao de time) o vies de mando e' bem
+    menor que os +27% que motivaram o filtro nos mercados de um time so'.
 
     MULTIPLA E ALAVANCAGEM ENTRARAM JUNTO. Continuam sem UMA serie que descreva
     o bilhete -- isso nao existe, sao mercados diferentes -- mas cada PERNA tem
@@ -2525,11 +2548,9 @@ def get_market_form(
        "fora" de cada um deles, fosse de quem fosse. No pick #1573 (Botafogo x
        Fluminense) 5 das 8 barras contavam outro time -- Vasco, Bahia, Botafogo,
        Vitoria e Santos -- e a media exibida (3.00) nao era do Fluminense
-       (5.20 fora de casa). Hoje quem resolve isso e' market_form
-       .perspectiva_do_time: a serie e' de UM time e o time vai sempre pro lado
-       que o mercado nomeia, entao os jogos fora de casa dele entram no grafico
-       (e' a comparacao que o card existe pra fazer) sem virarem o numero do
-       adversario.
+       (5.20 fora de casa). Hoje sao duas travas: _jogos_do_time so' traz jogos
+       do mando certo, e market_form.perspectiva_do_time poe o time no lado que
+       o mercado nomeia antes de `_stat_for_market` ler a folha.
 
     2. COMPETICAO. O motor le historico da MESMA liga/temporada da fixture
        (MatchStatsService.get_all_matches_full); a serie lia qualquer
