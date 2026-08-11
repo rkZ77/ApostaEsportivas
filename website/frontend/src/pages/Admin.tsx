@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
@@ -207,17 +207,6 @@ export default function Admin() {
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
-  useEffect(() => {
-    const poll = () => {
-      api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
-      api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
-      carregarLive()
-    }
-    poll()
-    const id = setInterval(poll, 3000)
-    return () => clearInterval(id)
-  }, [carregarLive])
-
   /* ── Motor Ao Vivo · painel próprio ────────────────────────────────────
      Fora do grid de PIPELINE_ACTIONS de propósito: o Live não é etapa do
      pipeline diário, roda só durante os jogos, é DEV apenas e tem controles
@@ -240,6 +229,17 @@ export default function Admin() {
     api.get('/live-picks/diagnostico').then(r => setLiveDiag(r.data)).catch(() => setLiveDiag(null))
     api.get('/live-picks/run-status').then(r => setLiveRun(r.data)).catch(() => {})
   }, [])
+
+  useEffect(() => {
+    const poll = () => {
+      api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
+      api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
+      carregarLive()
+    }
+    poll()
+    const id = setInterval(poll, 3000)
+    return () => clearInterval(id)
+  }, [carregarLive])
 
   const rodarLive = async () => {
     try {
