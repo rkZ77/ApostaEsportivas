@@ -26,12 +26,18 @@
 
 export const PAGE_WIDTH = {
   /**
-   * Sem teto, como aplicativo: Picks, Banca, Meus Picks, Estatísticas, Jogos,
+   * Largura de aplicativo: Picks, Banca, Meus Picks, Estatísticas, Jogos,
    * Resultados, Admin. O padding cresce com a tela para o conteúdo não
    * encostar na borda do monitor, que é o que separa "ocupa a tela" de
    * "vazou".
+   *
+   * TEM TETO (2026-08-11). Era `max-w-none`, e num monitor grande a lista de
+   * jogos esticava de ponta a ponta: linha de 2500px pra caber um nome de time
+   * e um placar, e o olho fazendo uma travessia inteira entre o horário e o
+   * resultado. 1440px é o que os placares ao vivo usam, e é o suficiente pra
+   * uma lista mais um painel de detalhe lado a lado sem sobra.
    */
-  full: 'max-w-none px-4 sm:px-6 lg:px-8',
+  full: 'max-w-[1440px] px-4 sm:px-6 lg:px-8',
   /** Grade de poucos cards (planos) e painel de conta. */
   wide: 'max-w-6xl px-4',
   default: 'max-w-5xl px-4',

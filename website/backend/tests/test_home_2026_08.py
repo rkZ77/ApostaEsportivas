@@ -236,9 +236,17 @@ def test_carrossel_de_jogos_nao_repete_jogo():
 # ──────────────────────── Largura de aplicativo ────────────────────────
 
 
-def test_existe_degrau_de_largura_cheia():
+def test_largura_cheia_tem_teto():
+    """Era `max-w-none` ate 2026-08-11, e num monitor grande a lista de jogos
+    esticava de ponta a ponta: linha de 2500px pra caber nome de time e placar,
+    com o olho atravessando a tela inteira entre o horario e o resultado.
+
+    O teto e' o degrau de "aplicativo", nao de leitura -- continua bem acima do
+    max-w-6xl das outras telas, e cabe lista mais painel de detalhe lado a lado.
+    """
     src = _front("lib/pageWidth.ts")
-    assert "full: 'max-w-none" in src
+    assert "full: 'max-w-none" not in src, "voltou a esticar sem teto"
+    assert "full: 'max-w-[1440px]" in src
     # o padding vem junto da largura, senao o conteudo encosta na borda do monitor
     assert "lg:px-8" in src
 
