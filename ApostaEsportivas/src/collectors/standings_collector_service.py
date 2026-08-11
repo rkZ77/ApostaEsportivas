@@ -46,6 +46,7 @@ class StandingsCollectorService:
         cur.execute("""
         SELECT league_id, season
         FROM leagues
+        WHERE COALESCE(ativa, TRUE)
         """)
 
         leagues = cur.fetchall()

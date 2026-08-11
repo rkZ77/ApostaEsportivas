@@ -82,6 +82,8 @@ interface Liga {
   times: number; jogos_coletados: number; jogos_agendados: number
   /** null = ninguém marcou. Nesse estado a coleta roda completa. */
   temporada_iniciada: boolean | null
+  /** false = só histórico. A linha fica na tabela pra o nome não sumir do site. */
+  ativa: boolean
 }
 
 const PICK_LABEL: Record<string, string> = {
@@ -1558,6 +1560,11 @@ export default function Admin() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="text-sm text-ink-1 font-bold truncate">{l.name}</span>
                         <span className="font-mono text-[10px] text-ink-4">#{l.league_id} · {l.season}</span>
+                        {!l.ativa && (
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-surface-3 text-ink-3">
+                            SÓ HISTÓRICO
+                          </span>
+                        )}
                       </div>
                       <div className="text-[11px] text-ink-3 mt-0.5 font-mono">
                         {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
@@ -1613,6 +1620,21 @@ export default function Admin() {
                       onClick={() => setConfirmarColeta(l)}>
                       {ehEstaLiga && coletaAtual?.status === 'running' ? 'Coletando...' : 'Coletar'}
                     </button>
+                    {!l.ativa ? (
+                      <button
+                        className="text-xs text-ink-1 border border-line hover:border-accent/40 rounded px-3 py-2 shrink-0 transition-colors"
+                        onClick={async () => {
+                          try {
+                            const r = await api.post(`/admin/leagues/${l.league_id}/reativar`)
+                            showToast(`${r.data.liga} voltou pra coleta.`)
+                            carregarLigas()
+                          } catch (err: any) {
+                            showToast(err.response?.data?.detail || 'Erro ao reativar', false)
+                          }
+                        }}>
+                        Reativar
+                      </button>
+                    ) : (
                     <button
                       className="text-xs text-red-400 hover:text-red-300 border border-line hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
                       onClick={async () => {
@@ -1620,8 +1642,9 @@ export default function Admin() {
                         // pelo botao: para de COLETAR, mas o historico fica.
                         if (!window.confirm(
                           `Tirar "${l.name}" da coleta?\n\n` +
-                          `Os ${l.jogos_coletados} jogos já coletados, os times e os picks são PRESERVADOS, ` +
-                          `eles alimentam a calibração do motor. A liga apenas para de receber dados novos.`
+                          `Os ${l.jogos_coletados} jogos, os times, os picks e o NOME da liga são PRESERVADOS, ` +
+                          `ela só para de receber dados novos e continua legível no histórico do site. ` +
+                          `Dá pra reativar depois.`
                         )) return
                         try {
                           const r = await api.delete(`/admin/leagues/${l.league_id}`)
@@ -1631,8 +1654,9 @@ export default function Admin() {
                           showToast(err.response?.data?.detail || 'Erro ao remover liga', false)
                         }
                       }}>
-                      Remover
+                      Tirar da coleta
                     </button>
+                    )}
                   </div>
                   )
                 })}

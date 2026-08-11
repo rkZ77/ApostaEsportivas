@@ -21,7 +21,7 @@ def load_leagues_from_db():
     conn = get_connection()
     cur = conn.cursor()
 
-    cur.execute("SELECT league_id, season FROM leagues;")
+    cur.execute("SELECT league_id, season FROM leagues WHERE COALESCE(ativa, TRUE);")
     rows = cur.fetchall()
 
     cur.close()
