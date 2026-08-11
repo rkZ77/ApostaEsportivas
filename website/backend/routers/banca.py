@@ -164,6 +164,29 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
             WHERE pg.id = %s
         """, (pick_id,))
+    elif pick_type == "live":
+        # Pick Ao Vivo. Ramo ADITIVO: so' e' alcancado por pick_type='live',
+        # que nao existe em nenhum ambiente onde o motor Live nao rodou --
+        # nenhum tipo pre-jogo muda de caminho por causa deste bloco.
+        #
+        # O try/except cobre o ambiente sem a tabela (producao hoje): sem ele,
+        # um pick_type invalido chegando aqui derrubaria a rota inteira em vez
+        # de devolver "pick nao encontrado".
+        try:
+            cur.execute("""
+                SELECT pl.result, pl.profit, 1 AS stake,
+                       pl.home_team_name, pl.away_team_name,
+                       COALESCE(pl.home_team_id, f.home_team_id) AS home_team_id,
+                       COALESCE(pl.away_team_id, f.away_team_id) AS away_team_id,
+                       pl.market, pl.line, pl.odd,
+                       f.match_datetime
+                FROM picks_live pl
+                LEFT JOIN fixtures f ON f.fixture_id = pl.fixture_id
+                WHERE pl.id = %s
+            """, (pick_id,))
+        except Exception:
+            cur.connection.rollback()
+            return None
     else:
         return None
     row = cur.fetchone()
@@ -852,11 +875,16 @@ STAKE_LIMITS = {
     # calculada e boa.
     "faltas":     (1, 6),
     "goleiros":   (1, 6),
+    # Ao vivo. Teto mais baixo que qualquer produto pre-jogo, pelo mesmo
+    # motivo do cap em pick_engine/staking.py: o motor Live ainda nao tem
+    # historico proprio e a odd pode mudar entre a publicacao e a aposta.
+    "live":       (1, 4),
 }
 
 STAKE_LABELS = {
     "vip": "VIP", "free": "Free", "multipla": "Múltipla",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
+    "live": "Ao Vivo",
 }
 
 @router.post("/follow")

@@ -250,3 +250,25 @@ def test_queries_pessoais_filtram_por_usuario_do_token():
 #      so o banco confirma).
 #   3. /public/market-movement com dado real de closing_odds.
 #   4. Registrar aposta de mercado ponta a ponta.
+
+
+def test_pipeline_dev_coleta_dados_e_odds_no_banco_dev():
+    """Homologacao/no-prod precisa alimentar DEV antes de gerar picks DEV.
+
+    O bug era sutil: os passos de geracao tinham prefixo `dev_`, mas coleta de
+    jogos/odds nao. Como _run_and_track so aplica DB_ENV=dev para comandos com
+    esse prefixo, o pipeline alimentava PROD e depois tentava gerar picks em
+    DEV sem fixtures/odds recentes.
+    """
+    src = _fonte("routers/admin.py")
+    ns: dict = {"os": os}
+    tree = ast.parse(src)
+    wanted = {"_PIPELINE_SCRIPTS", "_DEV_PIPELINE_STEPS"}
+    nodes = [n for n in tree.body if isinstance(n, ast.Assign)
+             and any(isinstance(t, ast.Name) and t.id in wanted for t in n.targets)]
+    exec(compile(ast.Module(body=nodes, type_ignores=[]), "admin_subset", "exec"), ns)
+
+    assert ns["_DEV_PIPELINE_STEPS"][:2] == ["dev_atualizar_jogos", "dev_capturar_odds"]
+    assert all(step.startswith("dev_") for step in ns["_DEV_PIPELINE_STEPS"])
+    assert ns["_PIPELINE_SCRIPTS"]["dev_atualizar_jogos"] == "atualizar_jogos.py"
+    assert ns["_PIPELINE_SCRIPTS"]["dev_capturar_odds"] == "capturar_odds.py"

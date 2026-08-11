@@ -123,7 +123,17 @@ def _nivel_repeticao(pick: dict, fixture_id: int, vip_por_fixture: dict,
 def _fixtures_with_odds_in_range(cur) -> list:
     """Mesma query de ai/dica_do_dia_pipeline.py::get_fixtures_with_odds_in_range,
     reimplementada aqui para nao acoplar a esse modulo (que instancia
-    Anthropic() no import)."""
+    Anthropic() no import).
+
+    'LIVE' saiu do filtro de status em 2026-08-11. A dica e' um pick PRE-JOGO:
+    o motor le historico, contexto e odd de abertura e nao olha placar nem
+    tempo de jogo (isso e' o motor Ao Vivo, pick_engine_live/). Com 'LIVE' na
+    lista, um jogo que ja tinha comecado -- eventualmente ja perdendo de 1 a 0
+    -- continuava elegivel, e a odd usada era a pre-jogo, que naquele momento
+    ja nao existia mais em lugar nenhum. Era o unico dos seis geradores que
+    aceitava jogo em andamento: VIP e alavancagem exigem 'NS', faltas e
+    goleiros usam 'NS'/'TBD'.
+    """
     cur.execute(f"""
         SELECT DISTINCT
             f.fixture_id, f.league_id, f.season,
@@ -133,7 +143,7 @@ def _fixtures_with_odds_in_range(cur) -> list:
         JOIN odds_values ov ON ov.fixture_id = f.fixture_id
         LEFT JOIN leagues l ON l.league_id = f.league_id
         WHERE f.match_datetime::date = {HOJE_BR}
-          AND f.status IN ('NS', 'TBD', 'LIVE')
+          AND f.status IN ('NS', 'TBD')
           AND ov.odd_value BETWEEN %s AND %s
     """, (ODD_MIN, ODD_MAX))
 

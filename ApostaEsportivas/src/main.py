@@ -1,19 +1,14 @@
 """
 main.py · Orquestrador único do ApostaEsportivas (sem website).
 
-Uso:
-  python main.py dados            # Atualiza jogos, stats e classificação
-  python main.py dados full       # Temporada completa (liga nova)
-  python main.py odds             # Coleta odds pré-jogo
-  python main.py vip              # Gera picks VIP do dia
-  python main.py dica             # Gera pick free (Dica do Dia)
-  python main.py multiplas        # Gera múltipla do dia
-  python main.py alavancagem      # Gera pick de alavancagem
-  python main.py resultados       # Atualiza resultados de todos os picks
-  python main.py ligas            # Atualiza perfis de ligas (IA)
-  python main.py tudo             # Pipeline completo: dados → odds → picks → resultados
-  python main.py tudo full        # Pipeline completo com coleta total de stats
-  python main.py setup            # Só roda as migrações do banco
+  python main.py            # lista os comandos disponíveis
+  python main.py tudo       # pipeline completo do dia
+  python main.py setup      # só roda as migrações do banco
+
+A lista de comandos NÃO é repetida aqui de propósito: ela sai do registro
+COMANDOS (mais abaixo), que também alimenta o HELP, o `tudo` e os menus de
+run_dev.py / run_prod.py. Esta docstring já ficou desatualizada uma vez --
+listava `ligas` e ignorava faltas, goleiros, player_stats e live.
 """
 
 import sys
@@ -21,6 +16,8 @@ import os
 import time
 import textwrap
 import traceback
+from dataclasses import dataclass
+from typing import Callable
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 os.environ.setdefault("PYTHONUNBUFFERED", "1")
@@ -373,6 +370,38 @@ def cmd_goleiros():
     run_goleiros_engine()
 
 
+def cmd_live(*args):
+    """Motor de Picks Ao Vivo · UMA rodada, DEV apenas.
+
+    FORA do cmd_tudo de proposito, e nao por esquecimento: o Live nao e' uma
+    etapa do pipeline diario, e' um motor que so' faz sentido rodando durante
+    os jogos. Alem disso ele gasta cota da API por execucao e ainda nao tem
+    historico medido -- entrar no "Rodar Tudo" o transformaria em custo fixo
+    de uma coisa que ainda esta em validacao.
+
+    Recusa rodar sem DB_ENV=dev (ver pick_engine_live/config.exigir_ambiente_dev)
+    e nasce em dry run, entao `python main.py live` sem configurar nada nao
+    grava pick nem gasta requisicao.
+
+      python main.py live                    uma rodada (respeita o .env)
+      python main.py live gravar             sai do dry run nesta rodada
+      python main.py live fixture 123456     analisa so' essa partida
+    """
+    from engine_pipelines.live_pipeline import run_live_engine
+    fixture_id = None
+    dry_run = None
+    lista = [a.lower() for a in args if a]
+    if "gravar" in lista:
+        dry_run = False
+    if "dry" in lista or "dry-run" in lista or "dry_run" in lista:
+        dry_run = True
+    if "fixture" in lista:
+        i = lista.index("fixture")
+        if i + 1 < len(lista) and lista[i + 1].isdigit():
+            fixture_id = int(lista[i + 1])
+    run_live_engine(fixture_id=fixture_id, dry_run=dry_run)
+
+
 def cmd_resultados():
     from atualizar_resultados_sugestoes import AIUpdateResultsMain
     AIUpdateResultsMain().update_all_results()
@@ -414,24 +443,22 @@ def cmd_tudo(mode: str = "fast"):
     # tabela estiver vazia ele avisa e sai sem gravar (custo zero, nenhuma
     # chamada de API). Deixar de fora exigiria lembrar de rodar na mao no dia
     # em que o historico ficasse pronto.
-    etapas = [
-        ("DADOS",               lambda: cmd_dados(mode=mode)),
-        ("ODDS",                cmd_odds),
-        ("PICKS VIP",           cmd_vip),
-        ("DICA DO DIA",         cmd_dica),
-        ("MÚLTIPLA",            cmd_multiplas),
-        ("ALAVANCAGEM",         cmd_alavancagem),
-        ("FALTAS",              cmd_faltas),
-        ("DEFESAS DE GOLEIRO",  cmd_goleiros),
-        ("RESULTADOS",          cmd_resultados),
-    ]
+    #
+    # As etapas sao os proprios COMANDOS que declaram `etapa`, na ordem em que
+    # aparecem no registro -- ordem do registro E ordem do pipeline. Antes esta
+    # lista era escrita a mao aqui, o que ja deixou faltas e goleiros de fora
+    # do `tudo` por um tempo depois de existirem.
+    etapas = [c for c in COMANDOS if c.etapa]
+    # So' `dados` olha pro modo; os demais adaptadores ignoram o que nao usam.
+    extra_args = ("full",) if mode == "full" else ()
 
     falhas = []
     total_etapas = len(etapas)
-    for i, (label, funcao) in enumerate(etapas, start=1):
+    for i, comando in enumerate(etapas, start=1):
+        label = comando.etapa
         print(f"\n─── [{i}/{total_etapas}] {label} " + "─" * max(0, 38 - len(label)))
         try:
-            funcao()
+            comando.executar(*extra_args)
         except Exception as e:
             falhas.append(label)
             print(f"\n[PIPELINE] Etapa {label} FALHOU: {e}")
@@ -451,24 +478,121 @@ def cmd_tudo(mode: str = "fast"):
 
 
 # ─────────────────────────────────────────────────────────────
+# REGISTRO DE COMANDOS · fonte única
+# ─────────────────────────────────────────────────────────────
+# Até 2026-08-11 a lista de comandos vivia copiada em cinco lugares: o if/elif
+# do dispatch aqui embaixo, o texto do HELP, a lista de etapas do cmd_tudo, e o
+# par OPCOES + run() de run_dev.py e de run_prod.py. Toda etapa nova exigia
+# editar os cinco, e o que acontecia na prática era esquecer alguns:
+#
+#   · `faltas` e `goleiros` rodavam dentro do `tudo` mas só ganharam opção
+#     avulsa nos wrappers semanas depois -- em prod não dava pra rodar um dos
+#     dois sem passar o pipeline inteiro;
+#   · `player_stats` respondia no dispatch mas nunca apareceu no HELP;
+#   · `shadow` existia só no run_dev, `ligas` em nenhum dos dois wrappers;
+#   · `live` (2026-08-11) nasceu inalcançável pelo run_dev, justamente o
+#     wrapper do único ambiente onde ele aceita rodar.
+#
+# Agora a lista mora aqui e os outros quatro derivam dela: acrescentar um
+# Comando basta pra ele aparecer no HELP, no dispatch, no `tudo` (se declarar
+# `etapa`) e nos menus dos ambientes que ele declarar em `ambientes`.
+@dataclass(frozen=True)
+class Comando:
+    nome: str                    # como se digita: `python main.py <nome>`
+    label: str                   # rótulo no menu de run_dev.py / run_prod.py
+    ajuda: str                   # linha correspondente do HELP
+    executar: Callable           # recebe os args crus que vieram depois do nome
+    etapa: str = ""              # rótulo dentro do `tudo`; vazio = fora dele
+    ambientes: tuple = ("dev", "prod")
+    uso: str = ""                # forma no HELP quando difere do nome ("dados [full]")
+    detalhe: str = ""            # linhas extras do HELP, uma por linha
+    migrar: bool = True          # roda run_migrations() antes
+
+
+def _tem(args: tuple, palavra: str) -> bool:
+    return any(a and a.lower() == palavra for a in args)
+
+
+COMANDOS: tuple = (
+    # --- Etapas do pipeline diário, NESTA ordem (é a ordem do `tudo`) --------
+    Comando("dados", "Atualizar jogos (completo)",
+            "Atualiza jogos, stats, classificação",
+            lambda *a: cmd_dados(mode="full" if _tem(a, "full") else "fast"),
+            etapa="DADOS", uso="dados [full]"),
+    Comando("odds", "Capturar odds",
+            "Coleta odds pré-jogo",
+            lambda *a: cmd_odds(), etapa="ODDS"),
+    Comando("vip", "Gerar picks VIP (motor)",
+            "Gera picks VIP do dia",
+            lambda *a: cmd_vip(), etapa="PICKS VIP"),
+    Comando("dica", "Gerar pick Free (motor)",
+            "Gera pick free (Dica do Dia)",
+            lambda *a: cmd_dica(), etapa="DICA DO DIA"),
+    Comando("multiplas", "Gerar múltipla (motor)",
+            "Gera múltipla do dia",
+            lambda *a: cmd_multiplas(), etapa="MÚLTIPLA"),
+    Comando("alavancagem", "Gerar alavancagem (motor)",
+            "Gera pick de alavancagem",
+            lambda *a: cmd_alavancagem(), etapa="ALAVANCAGEM"),
+    Comando("faltas", "Gerar picks de faltas (motor)",
+            "Gera picks de faltas (Over 22.5 total do jogo)",
+            lambda *a: cmd_faltas(), etapa="FALTAS"),
+    Comando("goleiros", "Gerar defesas de goleiro (motor)",
+            "Gera picks de defesas por goleiro (prop de jogador)",
+            lambda *a: cmd_goleiros(), etapa="DEFESAS DE GOLEIRO"),
+    Comando("resultados", "Atualizar resultados (VIP+Free+Mult+Alav)",
+            "Atualiza resultados de todos os picks",
+            lambda *a: cmd_resultados(), etapa="RESULTADOS"),
+
+    # --- O comando que roda todas as etapas acima de uma vez ----------------
+    # Fica logo depois delas pra cair no numero 10 dos menus, que e' onde os
+    # wrappers ja o tinham.
+    Comando("tudo", "Tudo: jogos + odds + picks + resultados",
+            "Pipeline completo na ordem correta",
+            lambda *a: cmd_tudo(mode="full" if _tem(a, "full") else "fast"),
+            uso="tudo [full]"),
+
+    # --- Fora do pipeline diário (sem `etapa`) ------------------------------
+    Comando("shadow", "Modo sombra (log IA vs motor)",
+            "Motor de picks em modo sombra (só log, não afeta picks)",
+            lambda *a: cmd_shadow(), ambientes=("dev",)),
+    # Cota: 1 requisição da API por fixture, disputando a mesma cota diária da
+    # coleta de odds. Por isso fica fora do `tudo` e roda sob demanda.
+    Comando("player_stats", "Estatistica de jogador (API)",
+            "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
+            lambda *a: cmd_player_stats(a[0] if a else "50"),
+            uso="player_stats [limite]"),
+    # Só dev: cmd_live recusa rodar sem DB_ENV=dev (pick_engine_live/config).
+    # Estar no menu do run_prod seria oferecer um botão que só sabe recusar.
+    Comando("live", "Motor Ao Vivo · uma rodada (dry run)",
+            "Motor Ao Vivo · UMA rodada (DEV apenas, dry run por padrão)",
+            lambda *a: cmd_live(*a), ambientes=("dev",), migrar=False,
+            detalhe="live                    respeita o .env\n"
+                    "live gravar             grava de verdade nesta rodada\n"
+                    "live fixture 123456     analisa só essa partida"),
+    Comando("ligas", "Atualizar perfis de ligas (IA)",
+            "Atualiza perfis de ligas (IA · consome crédito da Anthropic)",
+            lambda *a: cmd_ligas()),
+)
+
+COMANDOS_POR_NOME = {c.nome: c for c in COMANDOS}
+
+
+# ─────────────────────────────────────────────────────────────
 # ENTRY POINT
 # ─────────────────────────────────────────────────────────────
-HELP = """
-Comandos disponíveis:
-  dados [full]     Atualiza jogos, stats, classificação
-  odds             Coleta odds pré-jogo
-  vip              Gera picks VIP do dia
-  dica             Gera pick free (Dica do Dia)
-  multiplas        Gera múltipla do dia
-  alavancagem      Gera pick de alavancagem
-  faltas           Gera picks de faltas (Over 22.5 total do jogo)
-  goleiros         Gera picks de defesas por goleiro (prop de jogador)
-  resultados       Atualiza resultados de todos os picks
-  ligas            Atualiza perfis de ligas (IA)
-  tudo [full]      Pipeline completo na ordem correta
-  setup            Roda apenas as migrações do banco
-  shadow           Motor de picks em modo sombra (só log, não afeta picks)
-"""
+def _montar_help() -> str:
+    largura = max([len(c.uso or c.nome) for c in COMANDOS] + [len("setup")])
+    linhas = ["", "Comandos disponíveis:"]
+    for c in COMANDOS:
+        linhas.append(f"  {(c.uso or c.nome).ljust(largura)}  {c.ajuda}")
+        for extra in c.detalhe.splitlines():
+            linhas.append(f"  {' ' * largura}    {extra}")
+    linhas.append(f"  {'setup'.ljust(largura)}  Roda apenas as migrações do banco")
+    return "\n".join(linhas) + "\n"
+
+
+HELP = _montar_help()
 
 if __name__ == "__main__":
     args = sys.argv[1:]
@@ -478,57 +602,27 @@ if __name__ == "__main__":
         sys.exit(0)
 
     cmd = args[0].lower()
-    extra = args[1].lower() if len(args) > 1 else ""
+    alvo = COMANDOS_POR_NOME.get(cmd)
 
-    run_migrations()
-
-    if cmd == "setup":
-        pass  # migrações já rodaram acima
-
-    elif cmd == "dados":
-        cmd_dados(mode="full" if extra == "full" else "fast")
-
-    elif cmd == "odds":
-        cmd_odds()
-
-    elif cmd == "player_stats":
-        cmd_player_stats(extra or "50")
-
-    elif cmd == "vip":
-        cmd_vip()
-
-    elif cmd == "dica":
-        cmd_dica()
-
-    elif cmd == "multiplas":
-        cmd_multiplas()
-
-    elif cmd == "alavancagem":
-        cmd_alavancagem()
-
-    elif cmd == "faltas":
-        cmd_faltas()
-
-    elif cmd == "goleiros":
-        cmd_goleiros()
-
-    elif cmd == "resultados":
-        cmd_resultados()
-
-    elif cmd == "shadow":
-        cmd_shadow()
-
-    elif cmd == "ligas":
-        cmd_ligas()
-
-    elif cmd == "tudo":
-        # Sai com codigo != 0 quando alguma etapa falhou: as etapas agora sao
-        # isoladas (o pipeline nao aborta mais no meio), entao sem isso um
-        # "tudo" com falha sairia 0 e quem chama por subprocesso -- admin,
-        # scripts -- leria como sucesso.
-        if cmd_tudo(mode="full" if extra == "full" else "fast"):
-            sys.exit(1)
-
-    else:
+    if cmd != "setup" and alvo is None:
         print(f"Comando desconhecido: '{cmd}'\n{HELP}")
         sys.exit(1)
+
+    # `live` NAO passa pelas migracoes do pre-jogo (2026-08-11, hoje declarado
+    # como migrar=False no registro). Duas razoes, e a segunda e' a que
+    # importa: o motor Live provisiona o proprio esquema
+    # (engine_pipelines/live_pipeline.criar_tabelas) e nao depende de nenhuma
+    # coluna nova das tabelas de pick pre-jogo; e rodar a lista inteira de
+    # ALTER TABLE toda vez que alguem testa uma rodada Live aproximaria o
+    # produto novo de escrever no esquema do produto que esta em producao.
+    if cmd == "setup" or alvo.migrar:
+        run_migrations()
+
+    if cmd != "setup":
+        # Sai com codigo != 0 quando o comando reporta falha -- hoje so' o
+        # `tudo` devolve algo (a lista de etapas que quebraram). As etapas dele
+        # sao isoladas e o pipeline nao aborta no meio, entao sem isso um
+        # "tudo" com falha sairia 0 e quem chama por subprocesso -- admin,
+        # scripts -- leria como sucesso.
+        if alvo.executar(*args[1:]):
+            sys.exit(1)

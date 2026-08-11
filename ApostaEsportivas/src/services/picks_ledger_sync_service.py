@@ -30,6 +30,10 @@ _PICK_TYPE_BY_TABLE = {
     "picks_alavancagem": "alavancagem",
     "picks_faltas": "faltas",
     "picks_goleiros": "goleiros",
+    # Ao vivo (2026-08-11). E' o rotulo que permite separar PRE_MATCH de LIVE
+    # em qualquer analise do ledger: `WHERE pick_type = 'live'` de um lado,
+    # `WHERE pick_type <> 'live'` do outro. Sem coluna nova.
+    "picks_live": "live",
 }
 
 

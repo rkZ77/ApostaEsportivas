@@ -6,17 +6,27 @@ Usado por scripts/backtest_pick_engine.py e services/picks_ledger_sync_service.p
 import json
 
 
+#: Tabelas que seguem a nomenclatura de picks_vip (home_team_name,
+#: probability, ev). picks_free, picks_faltas e picks_goleiros usam a outra
+#: (home_team, prob_real, edge) -- o desalinhamento historico entre as duas
+#: familias de nome, que picks_live NAO repete de proposito.
+_TABELAS_ESTILO_VIP = ("picks_vip", "picks_live")
+
+
 def fetch_vip_free_legs(cur, table: str) -> list:
-    """cur precisa ser RealDictCursor. table = 'picks_vip' ou 'picks_free'.
-    picks_vip guarda nome do time em home_team_name/away_team_name;
-    picks_free guarda em home_team/away_team -- colunas diferentes."""
+    """cur precisa ser RealDictCursor. Uma linha = uma perna.
+
+    picks_vip e picks_live guardam nome do time em home_team_name/
+    away_team_name; picks_free, picks_faltas e picks_goleiros guardam em
+    home_team/away_team -- colunas diferentes."""
+    estilo_vip = table in _TABELAS_ESTILO_VIP
     team_cols = ("home_team_name AS home_team, away_team_name AS away_team"
-                 if table == "picks_vip" else "home_team, away_team")
+                 if estilo_vip else "home_team, away_team")
     cur.execute(f"""
         SELECT id, fixture_id, match_date, home_team_id, away_team_id,
                {team_cols}, market, market_type, line, odd, bet_house,
-               confidence, {"probability" if table == "picks_vip" else "prob_real AS probability"},
-               {"ev" if table == "picks_vip" else "edge AS ev"},
+               confidence, {"probability" if estilo_vip else "prob_real AS probability"},
+               {"ev" if estilo_vip else "edge AS ev"},
                reasoning, stake_pct, stake_units, result, profit, created_at,
                engine_debug -> 'ai_review' AS ai_review
         FROM {table}
@@ -121,7 +131,12 @@ def fetch_all_legs(cur) -> list:
     # extractor -- os condicionais la' dentro so' distinguem picks_vip.
     # try/except porque instancia sem a migracao das tabelas novas nao pode
     # deixar de sincronizar o ledger inteiro.
-    for tabela in ("picks_faltas", "picks_goleiros"):
+    #
+    # picks_live entra na MESMA lista protegida (2026-08-11): a tabela so'
+    # existe onde o motor Live rodou, e em producao ela nao existe -- o
+    # except aqui e' o que garante que a sincronizacao do ledger do pre-jogo
+    # continua funcionando identica onde o Live nao foi implantado.
+    for tabela in ("picks_faltas", "picks_goleiros", "picks_live"):
         try:
             legs += fetch_vip_free_legs(cur, tabela)
         except Exception:

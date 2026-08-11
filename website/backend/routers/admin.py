@@ -174,6 +174,14 @@ def delete_user(user_id: int, current_user: dict = Depends(require_admin)):
 _PIPELINE_SCRIPTS = {
     "atualizar_jogos":      "atualizar_jogos.py",
     "capturar_odds":        "capturar_odds.py",
+    # Variantes DEV dos coletores: no pipeline de homologacao/no-prod, dados e
+    # odds tambem precisam cair no DB_ENV=dev. Antes so os passos `dev_gerar_*`
+    # tinham prefixo dev_; `atualizar_jogos` e `capturar_odds` rodavam sem
+    # prefixo, entao _run_and_track() mantinha o ambiente de producao. Resultado:
+    # o banco DEV ficava sem fixtures/odds frescos e o motor DEV nao tinha de
+    # onde gerar picks, apesar de PROD/no-prod mostrar jogos no dia.
+    "dev_atualizar_jogos":  "atualizar_jogos.py",
+    "dev_capturar_odds":    "capturar_odds.py",
     # Motor deterministico (services/pick_engine), mesmos modulos que
     # main.py::cmd_vip/cmd_dica/cmd_multiplas/cmd_alavancagem chamam desde o
     # corte de IA em producao (2026-07-17) -- os scripts de IA antigos
@@ -214,7 +222,7 @@ _PIPELINE_SCRIPTS = {
 }
 
 _DEV_PIPELINE_STEPS = [
-    "atualizar_jogos", "capturar_odds",
+    "dev_atualizar_jogos", "dev_capturar_odds",
     "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem",
     "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
 ]
@@ -233,18 +241,40 @@ _PIPELINE_TIMEOUTS = {
     "default":         1800.0,  # 30 min
 }
 
+# Mesma sequencia do `main.py tudo` (ver o registro COMANDOS la: as etapas do
+# pipeline sao as que declaram `etapa`). `atualizar_resultados` estava faltando
+# aqui desde que estes passos nasceram junto com o scheduler das 00:10
+# (9cdeb70e) -- o "Rodar Tudo" do site nunca liquidou pick nenhum, so' o CLI e
+# o botao avulso faziam isso. Hoje a varredura por visita (routers/live.py::
+# maybe_resolve_pending) cobre o caso comum, entao a etapa aqui e' rede: quem
+# clica "Rodar Tudo" espera o dia inteiro resolvido, e ela e' idempotente.
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
-               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros"]
+               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros",
+               "atualizar_resultados"]
 
 _STEP_LABELS = {
+<<<<<<< ours
+    "atualizar_jogos":      "Atualizando jogos",
+    "capturar_odds":        "Capturando odds",
+    "gerar_vip":            "Gerando picks VIP",
+    "gerar_free":           "Gerando pick gratuito",
+    "gerar_multipla":       "Gerando múltipla",
+    "gerar_alavancagem":    "Gerando alavancagem",
+    "gerar_faltas":         "Gerando picks de faltas",
+    "gerar_goleiros":       "Gerando defesas de goleiro",
+    "atualizar_resultados": "Atualizando resultados",
+=======
     "atualizar_jogos":   "Atualizando jogos",
     "capturar_odds":     "Capturando odds",
+    "dev_atualizar_jogos": "Atualizando jogos DEV",
+    "dev_capturar_odds":   "Capturando odds DEV",
     "gerar_vip":         "Gerando picks VIP",
     "gerar_free":        "Gerando pick gratuito",
     "gerar_multipla":    "Gerando múltipla",
     "gerar_alavancagem": "Gerando alavancagem",
     "gerar_faltas":      "Gerando picks de faltas",
     "gerar_goleiros":    "Gerando defesas de goleiro",
+>>>>>>> theirs
 }
 
 

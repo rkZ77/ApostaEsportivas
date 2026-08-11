@@ -16,9 +16,14 @@ const STATUS_LABEL: Record<string, string> = {
 const TYPE_CLS: Record<string, string> = {
   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
+  // Aposta que veio de um pick Ao Vivo. Sem isso o card aparecia aqui sem
+  // rótulo nenhum e o usuário não distinguia de uma aposta pré-jogo · são
+  // produtos com risco diferente e a origem precisa ficar visível.
+  live: 'text-red-300 bg-red-500/10',
 }
 const TYPE_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'FREE', multipla: 'MÚLT.', alavancagem: 'ALAV.',
+  live: 'AO VIVO',
 }
 
 // Poisson-based live win probability (same math bookmakers use)

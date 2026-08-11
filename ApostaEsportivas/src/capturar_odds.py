@@ -47,7 +47,7 @@ class OddsMain:
     # ----------------------------------------------------------------------
     # LIMPAR TODAS AS ODDS (ULTRA RÁPIDO)
     # ----------------------------------------------------------------------
-    def cleanup_all_odds(self):
+    def cleanup_all_odds(self, truncar: bool = True):
         """TRUNCATE nas tres tabelas de cotacao ANTES de recoletar.
 
         `odds_snapshots` NAO entra aqui de proposito: ela e' append-only e
@@ -55,22 +55,28 @@ class OddsMain:
         e' seguro pra ela porque nao ha chave estrangeira ligando as duas -- se
         alguem adicionar uma no futuro, o historico de preco desaparece toda
         madrugada e o CLV volta a ficar vazio sem nenhum aviso.
+
+        `truncar=False` roda so' a retencao dos retratos e deixa as cotacoes
+        onde estao. E' o caminho do dia sem jogo pre-jogo pra coletar -- ver o
+        comentario em run(), que e' onde essa decisao e' tomada.
         """
         start = time.perf_counter()
 
         conn = get_connection()
         cur = conn.cursor()
 
-        print("[ODDS] Limpando TODAS as odds do banco...")
+        if truncar:
+            print("[ODDS] Limpando TODAS as odds do banco...")
+            cur.execute("""
+                TRUNCATE odds_values,
+                         odds_markets,
+                         odds_bookmakers
+                RESTART IDENTITY CASCADE;
+            """)
 
-        cur.execute("""
-            TRUNCATE odds_values,
-                     odds_markets,
-                     odds_bookmakers
-            RESTART IDENTITY CASCADE;
-        """)
-
-        # Retencao dos retratos: uma vez por execucao, nao por fixture.
+        # Retencao dos retratos: uma vez por execucao, nao por fixture. Roda
+        # nos dois caminhos -- e' limpeza de historico, nao depende de haver
+        # coleta hoje.
         removidos = prune_odds_snapshots(cur)
         if removidos:
             print(f"[ODDS] {removidos} retrato(s) antigo(s) de cotacao removido(s).")
@@ -82,14 +88,18 @@ class OddsMain:
         end = time.perf_counter()
 
         print(f"[TIMER] Cleanup levou {end - start:.4f}s")
-        print("[ODDS] Banco limpo com TRUNCATE.")
+        if truncar:
+            print("[ODDS] Banco limpo com TRUNCATE.")
 
     # ----------------------------------------------------------------------
     # COLETAR ODDS
     # ----------------------------------------------------------------------
-    def collect_odds(self):
+    def collect_odds(self, fixtures=None):
 
-        fixtures = self.get_pre_match_fixtures()
+        # A lista pode vir pronta do run(), que precisa consultar ANTES de
+        # decidir se trunca. Sem isso seriam duas queries iguais por rodada.
+        if fixtures is None:
+            fixtures = self.get_pre_match_fixtures()
         print(f"[ODDS] Fixtures NS/TBD encontrados: {len(fixtures)}")
 
         total_start = time.perf_counter()
@@ -149,11 +159,32 @@ class OddsMain:
 
         global_start = time.perf_counter()
 
-        # 1️⃣ Limpa banco rápido
+        # 1️⃣ Descobre o que ha pra coletar ANTES de limpar qualquer coisa.
+        #
+        # A ordem era TRUNCATE-e-depois-coletar, incondicional (2026-08-11).
+        # Num dia em que a coleta nao tinha nada a fazer -- todos os jogos de
+        # hoje ja comecaram, entao nenhum esta mais em NS/TBD -- o TRUNCATE
+        # apagava as cotacoes que estavam la e a coleta repunha ZERO. O efeito
+        # nao era "rodei o pipeline a toa": era `odds_values` vazia, e os seis
+        # geradores logo depois (VIP, free, multipla, alavancagem, faltas,
+        # goleiros) ficando sem insumo e nao gerando NADA. Rodar o pipeline
+        # fora de hora destruia o dia em vez de so' nao adiantar -- e como
+        # cada etapa e' isolada e "termina OK", nada no log dizia isso.
+        fixtures = self.get_pre_match_fixtures()
+
+        if not fixtures:
+            print("[ODDS] Nenhum jogo pré-jogo (NS/TBD) hoje em Brasília.")
+            print("[ODDS] As cotações atuais ficam como estão · SEM truncar.")
+            self.cleanup_all_odds(truncar=False)
+            print(f"\n[TIMER] EXECUÇÃO TOTAL: {time.perf_counter() - global_start:.4f}s")
+            print("=========== FINALIZADO ===========\n")
+            return
+
+        # 2️⃣ Limpa banco rápido
         self.cleanup_all_odds()
 
-        # 2️⃣ Coleta odds
-        self.collect_odds()
+        # 3️⃣ Coleta odds
+        self.collect_odds(fixtures)
 
         global_time = time.perf_counter() - global_start
 

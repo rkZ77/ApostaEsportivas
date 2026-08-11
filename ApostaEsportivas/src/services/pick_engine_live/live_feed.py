@@ -1,0 +1,239 @@
+"""Cliente da API-Football com ORCAMENTO RIGIDO de requisicoes por rodada.
+
+O PROBLEMA QUE ISTO RESOLVE
+---------------------------
+O scheduler do projeto foi deletado em 2026-08-01 porque a coleta de amistosos
+das selecoes queimava ~768 requisicoes/dia e derrubava a coleta de odds das
+ligas ativas -- o motor ficava sem insumo do produto real. Um motor ao vivo
+e', por natureza, o tipo de coisa que repete esse acidente: dez jogos
+acompanhados a cada 60s por 90 minutos sao 1800 requisicoes.
+
+Por isso o contador nao e' telemetria, e' FREIO. `_get` verifica o orcamento
+ANTES de sair pela rede e levanta `OrcamentoEsgotado` quando a proxima chamada
+passaria do teto. Quem chama trata isso como fim de rodada, nao como erro.
+
+Nao ha retry e nao ha cache entre rodadas de proposito:
+  - retry esconde consumo (uma chamada que falha e' repetida e conta duas
+    vezes contra a cota real da conta, mas uma so' contra o orcamento local);
+  - cache entre rodadas nao faz sentido num motor manual, onde cada execucao
+    e' um instante diferente do jogo. O cache que existe e' DENTRO da rodada
+    (`_memoria`), pra o mesmo fixture consultado duas vezes na mesma passada
+    nao custar duas requisicoes.
+
+Este modulo nao decide nada. Ele so' busca, conta e para.
+"""
+from __future__ import annotations
+
+import os
+import time
+
+import requests
+
+API_BASE = "https://v3.football.api-sports.io"
+
+#: Status que a API-Football usa pra jogo em andamento. Mesmo conjunto de
+#: website/backend/routers/live.py -- duas listas divergentes de "o que e' um
+#: jogo ao vivo" seria a mesma classe de bug que a auditoria encontrou entre
+#: o job em lote e o caminho ao vivo do settlement.
+STATUS_AO_VIVO = {"1H", "HT", "2H", "ET", "BT", "P", "SUSP", "INT"}
+STATUS_ENCERRADO = {"FT", "AET", "PEN"}
+
+#: Intervalo (HT) e paralisacao nao tem minuto util pra estimar ritmo, mas o
+#: jogo continua. Sao tratados na selecao, nao aqui.
+STATUS_SEM_RELOGIO = {"HT", "BT", "SUSP", "INT", "P"}
+
+
+class OrcamentoEsgotado(RuntimeError):
+    """O teto de requisicoes da rodada foi atingido. Nao e' erro: e' o freio
+    funcionando. Quem chama encerra a rodada e reporta o que ja conseguiu."""
+
+
+class LiveFeed:
+    """Uma instancia por rodada. O orcamento vive no objeto, entao esquecer de
+    zerar entre rodadas e' impossivel -- a rodada seguinte cria outro."""
+
+    def __init__(self, limite_requisicoes: int, timeout: int = 12):
+        self.limite = int(limite_requisicoes)
+        self.usadas = 0
+        self.timeout = timeout
+        self._memoria: dict[tuple, object] = {}
+        self._trilha: list[dict] = []
+
+    # ── Contabilidade ────────────────────────────────────────────────────
+    @property
+    def restantes(self) -> int:
+        return max(0, self.limite - self.usadas)
+
+    def tem_orcamento(self, quantas: int = 1) -> bool:
+        return self.usadas + quantas <= self.limite
+
+    def trilha(self) -> list[dict]:
+        """O que foi chamado, em ordem. Vai pro log da rodada -- sem isso
+        'gastei 12 requisicoes' nao diz onde elas foram."""
+        return list(self._trilha)
+
+    # ── Transporte ───────────────────────────────────────────────────────
+    def _headers(self) -> dict:
+        chave = os.getenv("API_FOOTBALL_KEY", "")
+        if not chave:
+            raise RuntimeError("API_FOOTBALL_KEY nao definida no ambiente.")
+        return {"x-apisports-key": chave}
+
+    def _get(self, endpoint: str, params: dict) -> list:
+        chave_cache = (endpoint, tuple(sorted(params.items())))
+        if chave_cache in self._memoria:
+            return self._memoria[chave_cache]  # type: ignore[return-value]
+
+        if not self.tem_orcamento():
+            raise OrcamentoEsgotado(
+                f"Teto de {self.limite} requisicoes atingido antes de chamar "
+                f"{endpoint} {params}."
+            )
+
+        inicio = time.perf_counter()
+        # Conta ANTES de sair pela rede: uma chamada que estoura timeout
+        # consumiu cota da conta do mesmo jeito, e contar so' no sucesso
+        # deixaria o orcamento local mentir justo no dia ruim.
+        self.usadas += 1
+        erro = None
+        dados: list = []
+        try:
+            resposta = requests.get(
+                f"{API_BASE}/{endpoint}", headers=self._headers(),
+                params=params, timeout=self.timeout,
+            )
+            resposta.raise_for_status()
+            dados = resposta.json().get("response", []) or []
+        except Exception as e:  # rede, HTTP, JSON -- todos terminam igual aqui
+            erro = str(e)
+
+        self._trilha.append({
+            "endpoint": endpoint,
+            "params": params,
+            "ms": round((time.perf_counter() - inicio) * 1000),
+            "itens": len(dados),
+            "erro": erro,
+        })
+        self._memoria[chave_cache] = dados
+        return dados
+
+    # ── Endpoints ────────────────────────────────────────────────────────
+    def partidas_ao_vivo(self) -> list:
+        """UMA chamada pra o mundo inteiro. E' o endpoint mais barato que
+        existe pro Live: devolve todos os jogos em andamento do planeta, e a
+        filtragem por liga acontece aqui, de graca, em memoria."""
+        return self._get("fixtures", {"live": "all"})
+
+    def partida(self, fixture_id: int) -> dict | None:
+        """Um fixture especifico. Usado no modo dirigido (--fixture), pra
+        testar uma partida sem varrer o mundo."""
+        itens = self._get("fixtures", {"id": fixture_id})
+        return itens[0] if itens else None
+
+    def estatisticas(self, fixture_id: int) -> list:
+        return self._get("fixtures/statistics", {"fixture": fixture_id})
+
+    def eventos(self, fixture_id: int) -> list:
+        """Gol, cartao, penalti e substituicao COM O MINUTO de cada um.
+
+        E' a unica fonte de "quando" no feed: /fixtures/statistics so' sabe
+        somar. Sem isto o motor sabe que houve uma expulsao e nao sabe se foi
+        aos 12' ou aos 80' -- que sao partidas completamente diferentes pro
+        que ainda vai acontecer.
+        """
+        return self._get("fixtures/events", {"fixture": fixture_id})
+
+    def odds_ao_vivo(self, fixture_id: int) -> list:
+        """So' e' chamado DEPOIS de o modelo apontar oportunidade. E' a
+        economia central do desenho: partida sem sinal nao custa esta
+        requisicao."""
+        itens = self._get("odds/live", {"fixture": fixture_id})
+        return itens[0].get("odds", []) if itens else []
+
+
+# ── Leitura do que a API devolve ─────────────────────────────────────────
+#: Nomes que a folha de /fixtures/statistics usa. Iguais aos de
+#: routers/live.py::_stat_for_market -- mesmo motivo do STATUS_AO_VIVO acima.
+CHAVES_ESTATISTICA = {
+    "corners": ("Corner Kicks",),
+    "shots": ("Total Shots",),
+    "shots_on_target": ("Shots on Goal",),
+    "cards": ("Yellow Cards", "Red Cards"),
+    "fouls": ("Fouls",),
+    "possession": ("Ball Possession",),
+    "red_cards": ("Red Cards",),
+}
+
+
+def _numero(valor) -> int | None:
+    """Contador da folha, ou None se o provedor ainda nao publicou.
+
+    AUSENCIA NUNCA VIRA ZERO. E' a invariante 1 de services/settlement.py, e a
+    razao pela qual ela existe vale ainda mais aqui: no caminho ao vivo um
+    zero fabricado nao produz so' um resultado errado, produz um PICK errado.
+    'Zero escanteios aos 40 minutos' e' um sinal fortissimo de Under -- e
+    completamente falso quando o que aconteceu foi a folha nao ter chegado.
+    """
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        valor = valor.replace("%", "").strip()
+        if not valor:
+            return None
+    try:
+        return int(float(valor))
+    except (TypeError, ValueError):
+        return None
+
+
+def ler_estatisticas(bruto: list, home_id: int | None, away_id: int | None) -> tuple[dict, dict]:
+    """(stats casa, stats fora). O lado sai do team.id, nunca da posicao na
+    lista -- a API nao garante que o indice 0 seja o mandante, e assumir isso
+    liquidaria mercado de um lado com o numero do adversario."""
+    lidos: list[dict] = []
+    ids: list = []
+    for time_ in bruto or []:
+        d: dict = {}
+        for item in time_.get("statistics", []) or []:
+            chave, valor = item.get("type"), _numero(item.get("value"))
+            if chave is None or valor is None:
+                continue
+            d[chave] = valor
+        lidos.append(d)
+        ids.append((time_.get("team") or {}).get("id"))
+
+    if not lidos:
+        return {}, {}
+    if home_id is not None and away_id is not None:
+        por_id = {tid: d for tid, d in zip(ids, lidos) if tid is not None}
+        if home_id in por_id and away_id in por_id:
+            return por_id[home_id], por_id[away_id]
+    return (lidos[0] if lidos else {}), (lidos[1] if len(lidos) > 1 else {})
+
+
+#: Cartao vermelho vale 2 pontos. MESMA convencao de
+#: services/pick_engine/stats_model._cards_points, do checker em lote e de
+#: routers/live.py::_STAT_WEIGHTS. Contar de um jeito e liquidar de outro
+#: deixaria a probabilidade do pick sem relacao com o que decide o resultado.
+PESOS_ESTATISTICA = {"Red Cards": 2}
+
+
+def total_da_familia(home_stats: dict, away_stats: dict, familia: str) -> int | None:
+    """Total do jogo pra uma familia, ou None se qualquer lado faltar."""
+    chaves = CHAVES_ESTATISTICA.get(familia)
+    if not chaves:
+        return None
+    total = 0
+    for lado in (home_stats, away_stats):
+        for chave in chaves:
+            valor = lado.get(chave)
+            if valor is None:
+                return None
+            total += valor * PESOS_ESTATISTICA.get(chave, 1)
+    return total
+
+
+# `estado_da_partida` saiu daqui em 2026-08-11 e virou
+# live_state.montar_estado(): o retrato da partida passou a incluir pressao,
+# eventos, xG e freshness, e isso e' leitura de ESTADO, nao transporte. Este
+# modulo ficou so' com o que fala com a rede e conta requisicao.

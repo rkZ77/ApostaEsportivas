@@ -17,6 +17,7 @@ import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
 import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
 import LivePicks from '../components/LivePicks'
+import LivePicksFeed from '../components/LivePicksFeed'
 import PicksPendingCard from '../components/PicksPendingCard'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
@@ -70,7 +71,19 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
 }
 
 // Tipos
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'aovivo' | 'chat'
+/* `aovivo` foi renomeada pra `minhas_apostas` em 2026-08-11.
+ *
+ * A chave dizia "ao vivo" e a aba mostrava Minhas Apostas · era o único nome
+ * disponível pro produto novo de Picks Ao Vivo, que agora existe de verdade
+ * (`ao_vivo`). Manter as duas com nomes parecidos garantiria que alguém
+ * ligasse uma na outra mais cedo ou mais tarde.
+ *
+ * Links antigos (#aovivo) continuam abrindo Minhas Apostas · ver ALIAS_ABA.
+ */
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'ao_vivo' | 'minhas_apostas' | 'chat'
+
+/** Chave antiga na URL -> aba atual. */
+const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas' }
 
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
@@ -93,11 +106,19 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
     { key: 'alavancagem',  label: 'Alavancagem',      premiumOnly: true },
     { key: 'mercados',     label: 'Mercados',         premiumOnly: true },
     {
-      key: 'aovivo' as Tab, label: 'Minhas Apostas',
-      badge: (liveCount ?? 0) > 0 ? String(liveCount) : 'LIVE',
-      badgeCls: (liveCount ?? 0) > 0
-        ? 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse'
-        : 'bg-red-500/10 text-red-400 border-red-500/20',
+      /* O produto novo: oportunidades que o motor achou durante o jogo.
+         Sem badge próprio · o rótulo já diz o que é, e o selo VIP de
+         `premiumOnly` já ocupa esse espaço. Dois selos na mesma aba viram
+         ruído numa barra que rola no celular. */
+      key: 'ao_vivo' as Tab, label: 'Ao Vivo',
+      premiumOnly: true,
+    },
+    {
+      /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
+         porque é aqui que ele acompanha o dinheiro dele. */
+      key: 'minhas_apostas' as Tab, label: 'Minhas Apostas',
+      badge: (liveCount ?? 0) > 0 ? String(liveCount) : undefined,
+      badgeCls: 'bg-red-500/20 text-red-300 border-red-400/40 animate-pulse',
     },
   ]
 
@@ -1678,8 +1699,9 @@ export default function Picks() {
   }, [hasNew])
 
   useEffect(() => {
-    const hash = location.hash.replace('#', '') as Tab
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','aovivo','chat']
+    const bruto = location.hash.replace('#', '')
+    const hash = (ALIAS_ABA[bruto] ?? bruto) as Tab
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','ao_vivo','minhas_apostas','chat']
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
 
@@ -2003,7 +2025,7 @@ export default function Picks() {
         {/* Aparece só enquanto a análise do dia está rodando. */}
         <EngineStatus />
 
-        {hasLive && tab !== 'aovivo' && (
+        {hasLive && tab !== 'minhas_apostas' && (
           <div className="mb-4 flex items-center justify-between bg-red-500/10 border border-red-500/30 rounded-lg px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="w-2 h-2 bg-red-500 rounded-full animate-pulse shrink-0" />
@@ -2013,7 +2035,7 @@ export default function Picks() {
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { clearLive(); setTab('aovivo') }}
+                onClick={() => { clearLive(); setTab('minhas_apostas') }}
                 className="text-xs font-bold text-red-400 hover:text-red-300 border border-red-500/30 hover:border-red-400/50 px-2.5 py-1 rounded-lg transition-colors"
               >
                 Acompanhar
@@ -2029,7 +2051,7 @@ export default function Picks() {
         <TabBar
           tab={tab}
           setTab={(t) => {
-            if (t === 'aovivo') clearLive()
+            if (t === 'minhas_apostas') clearLive()
             /* Trocar de aba é uma espera igual à de trocar de página pra quem
                está usando, mas aqui não há mudança de rota pra barra do topo
                perceber sozinha (as abas são estado, o hash só entra no deep
@@ -2772,8 +2794,17 @@ export default function Picks() {
           </motion.div>
         )}
         </AnimatePresence>
-        <div className={tab !== 'aovivo' ? 'hidden' : ''}>
-          <LivePicks isActive={tab === 'aovivo'} unitValue={bancaSummary?.unit_value} />
+        {/* Ao Vivo · o produto novo (oportunidades do Motor Live).
+            Fora do AnimatePresence acima pelo mesmo motivo de Minhas Apostas:
+            as duas abas mantêm polling próprio e não podem ser desmontadas e
+            remontadas a cada troca de aba. */}
+        <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
+          <LivePicksFeed isActive={tab === 'ao_vivo'} />
+        </div>
+
+        {/* Minhas Apostas · o que o usuário decidiu seguir, pré-jogo e ao vivo. */}
+        <div className={tab !== 'minhas_apostas' ? 'hidden' : ''}>
+          <LivePicks isActive={tab === 'minhas_apostas'} unitValue={bancaSummary?.unit_value} />
         </div>
 
 
