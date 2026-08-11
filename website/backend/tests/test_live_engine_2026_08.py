@@ -17,6 +17,8 @@ O que esta bateria protege, em ordem de gravidade:
 4. O MODELO. Pressao, ritmo, tendencia, janelas, eventos, convergencia e
    projecao residual -- cada um com o caso que ele existe pra pegar.
 """
+import os
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
@@ -1270,3 +1272,150 @@ def test_config_le_o_ambiente(monkeypatch):
 
 def test_ia_generativa_esta_desligada_na_v1():
     assert LiveEngineConfig().ai_review is False
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 18 · AUTORIZACAO DE DISPARO (o botao do /admin)
+# ═════════════════════════════════════════════════════════════════════════
+def test_disparo_nao_exige_baixar_app_env(monkeypatch):
+    """APP_ENV controla a flag `Secure` do cookie de sessao (auth_utils.py:59
+    e :86). Se a autorizacao do motor dependesse dele, liberar o botao num
+    servico exposto na internet tiraria o Secure do cookie de autenticacao de
+    todo mundo naquele dominio.
+
+    Por isso a autorizacao e' flag PROPRIA -- mesmo padrao de SIDE_EFFECTS=off,
+    que separa staging de producao sem mexer em APP_ENV.
+    """
+    import routers.live_picks as lp
+
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.delenv("LIVE_ENGINE_ALLOW_RUN", raising=False)
+    autorizado, motivo = lp._pode_disparar()
+    assert autorizado is False
+    assert "LIVE_ENGINE_ALLOW_RUN" in motivo
+    assert "APP_ENV" in motivo  # o motivo avisa pra NAO baixar APP_ENV
+
+    monkeypatch.setenv("LIVE_ENGINE_ALLOW_RUN", "true")
+    assert lp._pode_disparar()[0] is True
+
+
+def test_fora_de_producao_o_disparo_e_liberado_sem_flag(monkeypatch):
+    import routers.live_picks as lp
+
+    monkeypatch.setenv("APP_ENV", "development")
+    monkeypatch.delenv("LIVE_ENGINE_ALLOW_RUN", raising=False)
+    assert lp._pode_disparar()[0] is True
+
+
+def test_credenciais_dev_nunca_sao_fabricadas_a_partir_de_db_host(monkeypatch):
+    """Mesma decisao de routers/admin.py::_dev_env, e pelo mesmo motivo:
+    DB_HOST neste processo pode apontar pra producao. Fabricar credencial
+    "de dev" a partir dele criaria o caminho em que o motor grava pick na base
+    errada acreditando que e' DEV."""
+    import routers.live_picks as lp
+
+    monkeypatch.setenv("DB_HOST", "host-de-producao")
+    for chave in lp._CHAVES_DEV:
+        monkeypatch.delenv(chave, raising=False)
+    faltando = lp._dev_configurado()
+    assert set(faltando) == set(lp._CHAVES_DEV)
+
+    for chave in lp._CHAVES_DEV:
+        monkeypatch.setenv(chave, "valor")
+    assert lp._dev_configurado() == []
+
+
+def test_diagnostico_lista_todas_as_precondicoes():
+    """Seis condicoes independentes. Sem o diagnostico, descobrir qual falhou
+    num ambiente remoto exige ler log de subprocesso."""
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.diagnostico)
+    for item in ("motor habilitado", "disparo autorizado", "credenciais _DEV",
+                 "codigo do motor", "chave da API-Football", "tabela picks_live"):
+        assert item in fonte, f"diagnostico nao cobre: {item}"
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 19 · ACOMPANHAMENTO AO VIVO (engine_pipelines/live_watch.py)
+# ═════════════════════════════════════════════════════════════════════════
+def _live_watch(monkeypatch):
+    """Importa o supervisor com o ambiente limpo.
+
+    O modulo crava DB_ENV=dev no IMPORT, de proposito -- e' o que garante que
+    nenhuma rodada do laco alcance producao. Limpar as variaveis antes do
+    primeiro import mantem a coleta do pytest previsivel numa maquina que por
+    acaso tenha DB_ENV=prod exportado.
+    """
+    monkeypatch.delenv("DB_ENV", raising=False)
+    monkeypatch.delenv("LIVE_ENGINE_ALLOW_PROD", raising=False)
+    import engine_pipelines.live_watch as lw
+    return lw
+
+
+def test_acompanhamento_recusa_banco_que_nao_seja_dev(monkeypatch):
+    """Uma rodada manual apontada pro lugar errado e' um erro; um LACO apontado
+    pro lugar errado e' o mesmo erro se repetindo a cada 7 minutos sem ninguem
+    olhando. Por isso a recusa e' mais dura aqui que em live_pipeline."""
+    lw = _live_watch(monkeypatch)
+
+    monkeypatch.setenv("DB_ENV", "prod")
+    with pytest.raises(SystemExit) as erro:
+        lw._cravar_dev()
+    assert "DEV" in str(erro.value)
+
+
+def test_acompanhamento_recusa_a_valvula_de_producao(monkeypatch):
+    """LIVE_ENGINE_ALLOW_PROD existe pra uma rodada unica consciente
+    (config.exigir_ambiente_dev). O laco nao aceita: decisao consciente nao se
+    repete sozinha trinta vezes."""
+    lw = _live_watch(monkeypatch)
+
+    monkeypatch.setenv("LIVE_ENGINE_ALLOW_PROD", "true")
+    with pytest.raises(SystemExit) as erro:
+        lw._cravar_dev()
+    assert "ALLOW_PROD" in str(erro.value)
+
+
+def test_acompanhamento_crava_dev_quando_o_ambiente_esta_vazio(monkeypatch):
+    """DB_ENV vazia faz get_connection cair no .env.prod. Cravar (em vez de so'
+    exigir) e' o que impede a sessao inteira de nascer apontada pra producao
+    por uma variavel esquecida."""
+    lw = _live_watch(monkeypatch)
+
+    monkeypatch.delenv("DB_ENV", raising=False)
+    lw._cravar_dev()
+    assert os.environ["DB_ENV"] == "dev"
+
+
+def test_sessao_para_quando_o_orcamento_acaba(monkeypatch):
+    lw = _live_watch(monkeypatch)
+    sessao = {"rodadas": 3, "requisicoes": 120}
+
+    assert lw._motivo_de_parada(sessao, 120, None, 40) is not None
+    assert lw._motivo_de_parada(sessao, 200, None, 40) is None
+    assert lw._motivo_de_parada(sessao, 200, None, 3) is not None
+
+
+def test_sessao_para_antes_de_dormir_quando_a_espera_passaria_do_horario(monkeypatch):
+    """A parada e' avaliada com a espera INCLUIDA. Sem isso a sessao dorme 7
+    minutos pra so' entao descobrir que ja tinha acabado, e o resumo chega
+    depois do apito final."""
+    lw = _live_watch(monkeypatch)
+    sessao = {"rodadas": 1, "requisicoes": 10}
+    ate = lw._agora() + timedelta(minutes=5)
+
+    assert lw._motivo_de_parada(sessao, 300, ate, 40, espera_min=0) is None
+    assert lw._motivo_de_parada(sessao, 300, ate, 40, espera_min=7) is not None
+
+
+def test_horario_de_parada_no_passado_significa_amanha(monkeypatch):
+    """`--ate 00:30` num jogo que comeca 22:00 tem que significar a madrugada
+    seguinte, nao uma sessao que encerra antes de comecar."""
+    lw = _live_watch(monkeypatch)
+
+    agora = lw._agora()
+    passado = (agora - timedelta(hours=1)).strftime("%H:%M")
+    assert lw._hora(passado) > agora
+    assert lw._hora(None) is None
