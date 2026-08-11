@@ -105,9 +105,19 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # LOAD FIXTURES (COM GOLS)
     # ---------------------------------------------------------
-    def _load_fixtures(self, use_date_filter=True, days=3):
+    def _load_fixtures(self, use_date_filter=True, days=3, apenas_liga=None):
         leagues = load_leagues_from_db()
         league_ids = tuple([l["league_id"] for l in leagues])
+        if apenas_liga is not None:
+            # Backfill de liga recem-cadastrada: sem esse recorte, "temporada
+            # inteira" significa a temporada inteira de TODAS as ligas, e o
+            # custo em requisicao (uma por jogo) e' o que ja' estourou a cota
+            # uma vez -- ver o comentario da coleta de amistosos em
+            # atualizar_jogos.py.
+            league_ids = tuple(lid for lid in league_ids if lid == apenas_liga)
+            if not league_ids:
+                print(f"[MATCH_STATS] Liga {apenas_liga} nao esta cadastrada em `leagues`.")
+                return []
 
         self.cur.execute(
             "SELECT team_id FROM teams WHERE league_id IN %s;", (league_ids,))
@@ -616,12 +626,12 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # MAIN
     # ---------------------------------------------------------
-    def sync_all_finished_fixtures(self, use_date_filter=True, days=3):
+    def sync_all_finished_fixtures(self, use_date_filter=True, days=3, apenas_liga=None):
         print("[MATCH_STATS] START")
 
         self._open()
 
-        fixtures = self._load_fixtures(use_date_filter, days)
+        fixtures = self._load_fixtures(use_date_filter, days, apenas_liga=apenas_liga)
         referee_batch = set()
 
         for fx in fixtures:

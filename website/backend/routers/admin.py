@@ -220,12 +220,17 @@ _DEV_PIPELINE_STEPS = [
 ]
 
 # Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
+# Teto por script. O padrao era 5 min e matava coleta no meio -- capturar_odds
+# em dia cheio passa disso com facilidade (uma requisicao por fixture), e o
+# sintoma nao era "demorou": era o script morto na metade, com odd de parte dos
+# jogos faltando e nenhum erro obvio. Pedido do usuario em 2026-08-11: 30 min
+# pra todo mundo.
+#
+# Backfill de liga nova fica maior ainda: e' uma requisicao por jogo ja
+# finalizado da temporada inteira, centenas numa liga de pontos corridos.
 _PIPELINE_TIMEOUTS = {
-    "atualizar_jogos": 900.0,   # 15 min
-    "gerar_vip":       600.0,   # 10 min · múltiplos fixtures com chamadas IA
-    "gerar_multipla":  600.0,   # 10 min · IA + carregamento de contexto
-    "gerar_alavancagem": 600.0, # 10 min
-    "default":         300.0,   # 5 min para os demais
+    "coletar_liga":    2700.0,  # 45 min
+    "default":         1800.0,  # 30 min
 }
 
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
@@ -268,7 +273,7 @@ def _dev_env(base_env: dict) -> dict:
     return env
 
 
-async def _run_and_track(command: str, script: str):
+async def _run_and_track(command: str, script: str, args: list | None = None):
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None}
@@ -279,7 +284,7 @@ async def _run_and_track(command: str, script: str):
         if command.startswith("dev_"):
             env = _dev_env(env)
         proc = await asyncio.create_subprocess_exec(
-            sys.executable, script,
+            sys.executable, script, *(args or []),
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             cwd=_PIPELINE_DIR,
@@ -1300,6 +1305,48 @@ def adicionar_liga(body: LigaBody, current_user: dict = Depends(require_admin)):
     finally:
         cur.close()
         conn.close()
+
+
+@router.post("/leagues/{league_id}/coletar")
+async def coletar_liga(league_id: int, current_user: dict = Depends(require_admin)):
+    """Coleta completa DESTA liga: times, jogos da janela e estatistica da
+    temporada inteira. Upsert, sem apagar nada.
+
+    Existe porque cadastrar a liga NAO coleta nada sozinho, e a dependencia que
+    faz isso doer e' invisivel na tela: FixtureCollectorService filtra por
+    `SELECT team_id FROM teams`, entao liga sem time cadastrado nunca salva
+    jogo, por mais que a API tenha. Estado real em 2026-08-11: Sul-Americana
+    cadastrada havia dias, 56 times e as oitavas em andamento na API, zero
+    linha no banco -- e nada na tela dizia isso.
+
+    Dispara em segundo plano (mesmo padrao de /run-pipeline): o backfill de
+    temporada faz uma requisicao por jogo finalizado e nao cabe num request
+    HTTP. O andamento sai em /admin/pipeline-status como "coletar_liga".
+
+    NAO e' o `new_league` do script: aquele faz TRUNCATE em match_statistics/
+    teams/fixtures/standings e recoleta tudo do zero.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT name FROM leagues WHERE league_id = %s", (league_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Liga nao cadastrada. Cadastre antes de coletar.")
+        nome = row["name"]
+    finally:
+        cur.close()
+        conn.close()
+
+    if _pipeline_status.get("coletar_liga", {}).get("status") == "running":
+        raise HTTPException(409, "Ja ha uma coleta de liga em andamento.")
+
+    script = os.path.join(_PIPELINE_DIR, "atualizar_jogos.py")
+    if not os.path.exists(script):
+        raise HTTPException(500, detail=f"Script nao encontrado: {script}")
+
+    asyncio.create_task(_run_and_track("coletar_liga", script, ["liga", str(league_id)]))
+    return {"ok": True, "status": "iniciado", "liga": nome, "league_id": league_id}
 
 
 @router.delete("/leagues/{league_id}")

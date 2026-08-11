@@ -169,6 +169,41 @@ class DataCollectorMain:
     # PIPELINE
     # ---------------------------------------------------------
 
+    def run_league(self, league_id: int):
+        """Coleta COMPLETA de UMA liga, sem tocar no resto do banco.
+
+        E' o que `new_league` deveria ter sido. Aquele comando faz TRUNCATE em
+        match_statistics/teams/fixtures/standings e recoleta tudo: perde a base
+        historica inteira (que sustenta a calibracao do motor) e gasta uma
+        montanha de requisicao pra recuperar o que ja' existia. Aqui e' upsert,
+        escopado na liga pedida.
+
+        A ordem nao e' opcional. FixtureCollectorService filtra por
+        `SELECT team_id FROM teams`, entao liga sem time cadastrado nao coleta
+        jogo nenhum, por mais que a API tenha -- foi exatamente o estado da
+        Sul-Americana em 2026-08-11: cadastrada em `leagues`, 56 times na API,
+        zero no banco, zero jogos.
+
+        Custo em requisicao: 1 (times) + 1 por data da janela (jogos) + 1 por
+        jogo ja finalizado da temporada (estatistica). O ultimo termo e' o que
+        pesa, e e' o que da' base pro motor analisar a liga.
+        """
+        print(f"\n========== COLETA DA LIGA {league_id} ==========\n")
+        print("[1/4] Times da liga...")
+        self._get_team_sync().sync_league_teams(apenas_liga=league_id)
+
+        print("[2/4] Jogos da janela...")
+        self.run_stage_2()
+
+        print("[3/4] Estatistica dos jogos ja finalizados (temporada inteira)...")
+        self._get_match_stats().sync_all_finished_fixtures(
+            use_date_filter=False, apenas_liga=league_id)
+
+        print("[4/4] Medias agregadas por time...")
+        self.run_stage_5(mode="full")
+
+        print(f"\n========== LIGA {league_id} COLETADA ==========\n")
+
     def run_new_league(self):
         print("\n========== NOVA LIGA · RESET + COLETA COMPLETA ==========\n")
         self.run_reset()
@@ -249,6 +284,15 @@ if __name__ == "__main__":
             days      = int(sys.argv[3]) if len(sys.argv) > 3 else 3
             collector.run_stage_5(mode=mode, days=days)
 
+        elif stage == "liga":
+            # Ex: python atualizar_jogos.py liga 11
+            # Coleta completa de UMA liga, sem TRUNCATE. E' o que o botao
+            # "Coletar" do /admin dispara.
+            if len(sys.argv) < 3:
+                print("Uso: python atualizar_jogos.py liga <league_id>")
+                sys.exit(2)
+            collector.run_league(int(sys.argv[2]))
+
         elif stage == "reset":
             collector.run_reset()
 
@@ -256,4 +300,4 @@ if __name__ == "__main__":
             collector.run_new_league()
 
         else:
-            print("Stage inválido. Use 0,1,2,3,4,5,reset,new_league")
+            print("Stage inválido. Use 0,1,2,3,4,5,liga <id>,reset,new_league")

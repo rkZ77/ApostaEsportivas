@@ -34,6 +34,8 @@ daqui e' DIRECIONAL, nao apenas um bonus de intensidade.
 """
 from __future__ import annotations
 
+from datetime import datetime
+
 import re
 
 # "2nd Leg", "1st leg", "Leg 2", "2ª Mão" -- a API-Football manda em ingles,
@@ -68,6 +70,27 @@ _PESO_FASE = {
 }
 
 
+_FASES_MATA_MATA = ("FINAL", "SEMIFINAL", "QUARTAS", "OITAVAS",
+                    "TRINTA_E_DOIS", "PLAYOFF", "TERCEIRO_LUGAR")
+
+# Distancia maxima entre ida e volta pra tratar dois encontros como o MESMO
+# confronto. Legs ficam de 6 a 9 dias; encontro de fase de grupos, meses. A
+# janela e' o que separa os dois casos -- ver inferir_leg.
+_JANELA_IDA_VOLTA_DIAS = 21
+
+
+def _para_data(valor):
+    """date de um match_date/match_datetime, aceitando str, date ou datetime."""
+    if valor is None:
+        return None
+    if isinstance(valor, str):
+        try:
+            valor = datetime.fromisoformat(valor.replace("Z", "+00:00"))
+        except ValueError:
+            return None
+    return valor.date() if isinstance(valor, datetime) else valor
+
+
 def parse_leg(round_str: str | None) -> int | None:
     """1 (ida), 2 (volta) ou None quando o texto nao diz."""
     if not round_str:
@@ -76,6 +99,32 @@ def parse_leg(round_str: str | None) -> int | None:
         if padrao.search(round_str):
             return numero
     return None
+
+
+def inferir_leg(round_str: str | None, jogo_de_ida: dict | None) -> tuple:
+    """(leg, origem) -- le o rotulo e, quando ele nao diz, INFERE pelo confronto.
+
+    A API-Football nem sempre manda a perna. Medido em producao em 2026-08-10:
+    os 8 jogos de oitavas da Libertadores no banco vinham todos como
+    "Round of 16", sem "1st leg"/"2nd leg". Com isso `parse_leg` devolvia None,
+    `is_jogo_de_volta` ficava False sempre e -- o pior -- `encontrar_jogo_de_ida`
+    nunca era consultado, porque estava atras de um `if leg != 2`. Nas VOLTAS o
+    motor trataria cada jogo como se fosse ida: sem agregado, sem saber quem
+    precisa do resultado, e sem os pontos de stakes que a decisao merece.
+
+    A inferencia usa a inversao de mando, que e' o que define ida e volta: num
+    confronto de dois jogos, quem visita hoje foi obrigatoriamente o MANDANTE da
+    ida. Quem aplica esse filtro (mais o da janela de dias e o da mesma
+    competicao) e' encontrar_jogo_de_ida; aqui so' se conclui.
+
+    Rotulo explicito sempre vence a inferencia -- quando a API diz, ela sabe.
+    """
+    leg = parse_leg(round_str)
+    if leg is not None:
+        return leg, "rotulo"
+    if jogo_de_ida is not None and parse_fase(round_str) in _FASES_MATA_MATA:
+        return 2, "inferido"
+    return None, None
 
 
 def parse_fase(round_str: str | None) -> str | None:
@@ -105,22 +154,55 @@ def _gols_do_time(jogo: dict, team_id: int) -> int | None:
     return None
 
 
-def encontrar_jogo_de_ida(h2h: list, league_id, season, before_date=None) -> dict | None:
+def encontrar_jogo_de_ida(h2h: list, league_id, season, before_date=None,
+                          mandante_da_ida=None, referencia=None,
+                          janela_dias: int = _JANELA_IDA_VOLTA_DIAS) -> dict | None:
     """A ida do confronto atual: encontro mais recente entre os dois times na
     MESMA competicao e temporada.
 
     Restringir a competicao e a temporada e' o que separa "a ida deste mata-
     mata" de "o classico do campeonato tres meses atras". Sem esse filtro o
     agregado sairia somando jogos que nao fazem parte do confronto.
+
+    Dois filtros opcionais, que existem pra sustentar a INFERENCIA de perna
+    quando a API nao manda o rotulo (ver inferir_leg) -- sem eles a funcao se
+    comporta como antes:
+
+    `mandante_da_ida`: time que precisa ter sido o MANDANTE naquele jogo. Num
+    confronto de dois jogos o mando inverte, entao quem visita hoje jogou em
+    casa na ida. E' o filtro que impede confundir a ida com o jogo do primeiro
+    turno de um grupo, que pode ter sido em qualquer mando.
+
+    `referencia`/`janela_dias`: data desta partida e distancia maxima ate' o
+    encontro anterior. Legs ficam de 6 a 9 dias; encontro de fase de grupos,
+    meses. E' o que impede tratar um jogo de grupo de marco como a ida de uma
+    quartas de agosto (cenario real: em Libertadores dois times do mesmo grupo
+    podem se reencontrar no mata-mata a partir das quartas).
     """
     if not h2h:
         return None
-    candidatos = [
-        j for j in h2h
-        if j.get("league_id") == league_id
-        and (season is None or j.get("season") is None or j.get("season") == season)
-        and (before_date is None or (j.get("match_date") and j["match_date"] < before_date))
-    ]
+    ref = _para_data(referencia)
+    if mandante_da_ida is not None and ref is None:
+        # Pediram a busca ESTRITA (a que sustenta a inferencia de perna) sem a
+        # data desta partida. Sem a janela nao da' pra separar a ida de um
+        # encontro de fase de grupos, e afirmar "e' a volta" com base so' no
+        # mando seria advinhar. Mesma postura de parse_fase: na duvida, None.
+        return None
+    candidatos = []
+    for j in h2h:
+        if j.get("league_id") != league_id:
+            continue
+        if not (season is None or j.get("season") is None or j.get("season") == season):
+            continue
+        if before_date is not None and not (j.get("match_date") and j["match_date"] < before_date):
+            continue
+        if mandante_da_ida is not None and j.get("home_team_id") != mandante_da_ida:
+            continue
+        if ref is not None:
+            quando = _para_data(j.get("match_date"))
+            if quando is None or not (0 <= (ref - quando).days <= janela_dias):
+                continue
+        candidatos.append(j)
     if not candidatos:
         return None
     return max(candidatos, key=lambda j: j.get("match_date") or 0)
@@ -138,13 +220,16 @@ def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
     Sempre devolve os numeros brutos junto dos rotulos.
     """
     fase = parse_fase(round_str)
-    leg = parse_leg(round_str)
-    is_mata_mata = fase in ("FINAL", "SEMIFINAL", "QUARTAS", "OITAVAS",
-                            "TRINTA_E_DOIS", "PLAYOFF", "TERCEIRO_LUGAR")
+    leg, leg_origem = inferir_leg(round_str, jogo_de_ida)
+    is_mata_mata = fase in _FASES_MATA_MATA
 
     contexto = {
         "fase": fase,
         "leg": leg,
+        # "rotulo" (a API disse) ou "inferido" (deduzido do confronto anterior
+        # com o mando invertido). Sempre exposto: quem explica o pick precisa
+        # poder dizer de onde veio a afirmacao de que este e' o jogo de volta.
+        "leg_origem": leg_origem,
         "is_mata_mata": bool(is_mata_mata),
         "is_jogo_de_volta": leg == 2,
         "peso_fase": peso_da_fase(fase),

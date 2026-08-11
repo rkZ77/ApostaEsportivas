@@ -47,7 +47,10 @@ def _codigo(caminho: str, nome: str) -> str:
     """
     fonte = _fonte(caminho)
     for no in ast.walk(ast.parse(fonte)):
-        if isinstance(no, ast.FunctionDef) and no.name == nome:
+        # AsyncFunctionDef junto: metade das rotas de acao pesada do admin e'
+        # async (elas disparam asyncio.create_task), e sem isto o helper
+        # respondia "funcao nao encontrada" pra uma funcao que existe.
+        if isinstance(no, (ast.FunctionDef, ast.AsyncFunctionDef)) and no.name == nome:
             bruto = ast.get_source_segment(fonte, no) or ""
             doc = ast.get_docstring(no, clean=False)
             return bruto.replace(doc, "") if doc else bruto
@@ -795,3 +798,44 @@ def test_pagina_de_fechamentos_tem_volta_e_estado_vazio():
     pagina = _front("pages/BancaFechamentos.tsx")
     assert "back: '/banca'" in pagina
     assert "Nenhum fechamento ainda" in pagina
+
+
+# ────────────────── Coleta de liga pelo /admin (2026-08-11) ──────────────────
+
+
+def test_cadastrar_liga_nao_coleta_sozinho_mas_a_tela_avisa():
+    """Cadastrar so' coloca a liga na fila. A dependencia que faz isso doer e'
+    invisivel: FixtureCollectorService filtra por `SELECT team_id FROM teams`,
+    entao liga sem time nunca salva jogo, por mais que a API tenha. Estado real
+    em 2026-08-11: Sul-Americana cadastrada, 56 times e as oitavas em andamento
+    na API, zero linha no banco -- e nada na tela dizia isso."""
+    tela = _front_codigo("pages/Admin.tsx")
+    assert "l.times === 0" in tela, "linha de liga sem time tem que avisar"
+    assert "/coletar" in tela
+
+
+def test_coletar_liga_e_escopado_e_nao_apaga_nada():
+    """`new_league` do script faz TRUNCATE em match_statistics/teams/fixtures/
+    standings. O botao do admin NAO pode cair nesse caminho -- ele existe pra
+    coletar uma liga sem perder a base historica, que sustenta a calibracao."""
+    corpo = _codigo("routers/admin.py", "coletar_liga")
+    assert '"liga", str(league_id)' in corpo
+    assert "new_league" not in corpo
+    assert "TRUNCATE" not in corpo
+    # e roda em segundo plano: backfill de temporada nao cabe num request HTTP
+    assert "asyncio.create_task" in corpo
+
+
+def test_coleta_de_liga_nao_roda_duas_de_uma_vez():
+    corpo = _codigo("routers/admin.py", "coletar_liga")
+    assert '_pipeline_status.get("coletar_liga"' in corpo
+    assert "409" in corpo
+
+
+def test_timeout_de_script_e_de_30_minutos():
+    """Era 5 min no padrao e matava coleta no meio -- capturar_odds em dia cheio
+    passa disso (uma requisicao por fixture), e o sintoma nao era "demorou": era
+    script morto na metade, com odd faltando e sem erro obvio."""
+    src = _fonte("routers/admin.py")
+    assert '"default":         1800.0' in src
+    assert '"coletar_liga":    2700.0' in src
