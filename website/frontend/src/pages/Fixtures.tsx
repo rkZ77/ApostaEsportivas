@@ -167,6 +167,20 @@ export default function Fixtures() {
   const [fixtures, setFixtures]    = useState<Fixture[]>([])
   const [loading, setLoading]      = useState(true)
   const [statsFixture, setStatsFixture] = useState<Fixture | null>(null)
+  /*
+   * lg é o mesmo corte que a Navbar e o sino usam.
+   *
+   * Acima dele o detalhe do jogo abre ao LADO da lista, como em qualquer
+   * placar ao vivo; abaixo continua folha sobreposta, porque não há largura
+   * pra duas colunas no celular.
+   */
+  const [isDesktop, setIsDesktop] = useState(() => window.matchMedia('(min-width: 1024px)').matches)
+  useEffect(() => {
+    const mq = window.matchMedia('(min-width: 1024px)')
+    const onChange = (e: MediaQueryListEvent) => setIsDesktop(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
   const [lockPrompt, setLockPrompt]    = useState(false)
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
@@ -333,12 +347,17 @@ export default function Fixtures() {
             <p className="text-ink-4 text-xs mt-2">As ligas monitoradas não têm jogos programados neste dia.</p>
           </div>
         ) : (
-          /* Duas colunas em tela larga: cada liga é um card fechado em si, e
-             empilhados eles deixavam uma partida sozinha ocupando 1800px de
-             linha. Lado a lado cabe o dobro de jogo sem rolar · `items-start`
-             porque as ligas têm quantidades diferentes e esticar a menor pra
-             altura da maior só cria vazio. */
-          <div className="grid gap-5 xl:grid-cols-2 items-start">
+          /*
+             Lista estreita à esquerda, detalhe à direita.
+
+             Antes as ligas ficavam lado a lado em duas colunas largas, pra não
+             deixar uma partida sozinha ocupando 1800px de linha. Só que linha
+             de jogo não precisa de 900px · precisa caber nome, horário e
+             placar. O espaço que sobrava agora vira o painel do jogo
+             selecionado, que é onde a largura de tela realmente ajuda.
+          */
+          <div className="lg:flex lg:gap-5 lg:items-start">
+          <div className="grid gap-5 items-start lg:w-[420px] xl:w-[460px] lg:shrink-0">
             {grouped.map(({ key: league, league_id, logo, flag, country, games }) => {
               const isCopa = league_id === 1
               return (
@@ -389,7 +408,12 @@ export default function Fixtures() {
                     return (
                       <div key={f.fixture_id}>
                       <div
-                        className={`flex items-center gap-3 px-4 py-3 hover:bg-surface-2/30 transition-colors cursor-pointer ${f.has_pick ? 'border-l-2 border-green-500/40' : ''}`}
+                        className={`flex items-center gap-3 px-3 sm:px-4 py-2.5 transition-colors cursor-pointer ${
+                          f.has_pick ? 'border-l-2 border-green-500/40' : ''} ${
+                          // Selecionado fica marcado: com o painel ao lado, sem
+                          // isso não dá pra saber de qual jogo ele fala.
+                          statsFixture?.fixture_id === f.fixture_id
+                            ? 'bg-surface-2/60' : 'hover:bg-surface-2/30'}`}
                         onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
                       >
 
@@ -503,12 +527,35 @@ export default function Fixtures() {
             )
             })}
           </div>
+
+          {/*
+            Painel do jogo selecionado. Só em tela larga · no celular o mesmo
+            componente abre como folha sobreposta, logo abaixo.
+          */}
+          <div className="hidden lg:block flex-1 min-w-0">
+            {statsFixture ? (
+              <FixtureStatsModal
+                key={statsFixture.fixture_id}
+                fixture={statsFixture}
+                onClose={() => setStatsFixture(null)}
+                inline
+              />
+            ) : (
+              <div className="card border-dashed p-12 text-center sticky top-4">
+                <p className="text-sm text-ink-3">Clique em um jogo para ver a análise.</p>
+                <p className="text-xs text-ink-4 mt-1.5">
+                  Forma recente dos dois times, gols, escanteios e cartões.
+                </p>
+              </div>
+            )}
+          </div>
+          </div>
         )}
       </motion.div>}
       </AnimatePresence>
 
       <AnimatePresence>
-      {statsFixture && (
+      {statsFixture && !isDesktop && (
         <FixtureStatsModal
           fixture={statsFixture}
           onClose={() => setStatsFixture(null)}
