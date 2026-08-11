@@ -158,6 +158,14 @@ export default function Admin() {
   const [disparando, setDisparando] = useState(false)
   const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
   const [salvandoLiga, setSalvandoLiga] = useState(false)
+  const [verificando, setVerificando] = useState(false)
+  /** Prévia da API antes de cadastrar: a temporada já começou, tem jogo? */
+  const [previaLiga, setPreviaLiga] = useState<{
+    existe: boolean; iniciada: boolean; total: number
+    finalizados: number; agendados: number
+    inicio?: string | null; fim?: string | null
+    rodada_atual?: string | null; nome?: string | null; aviso?: string
+  } | null>(null)
   // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
   // /admin#usuarios. Hash invalido cai na visao geral em vez de tela vazia.
   const [aba, setAba] = useState<AdminAba>(() => {
@@ -1383,13 +1391,31 @@ export default function Admin() {
             <div className="grid gap-2 sm:grid-cols-4">
               <input className="input" placeholder="ID da liga" inputMode="numeric"
                 value={novaLiga.league_id}
-                onChange={e => setNovaLiga(v => ({ ...v, league_id: e.target.value.replace(/\D/g, '') }))} />
+                onChange={e => { setNovaLiga(v => ({ ...v, league_id: e.target.value.replace(/\D/g, '') })); setPreviaLiga(null) }} />
               <input className="input" placeholder="Temporada" inputMode="numeric"
                 value={novaLiga.season}
-                onChange={e => setNovaLiga(v => ({ ...v, season: e.target.value.replace(/\D/g, '') }))} />
+                onChange={e => { setNovaLiga(v => ({ ...v, season: e.target.value.replace(/\D/g, '') })); setPreviaLiga(null) }} />
               <input className="input" placeholder="Nome (opcional)"
                 value={novaLiga.name}
                 onChange={e => setNovaLiga(v => ({ ...v, name: e.target.value }))} />
+              <button
+                className="text-xs text-ink-1 border border-line hover:border-accent/40 rounded px-3 py-2 transition-colors disabled:opacity-40"
+                disabled={verificando || !novaLiga.league_id || !novaLiga.season}
+                onClick={async () => {
+                  setVerificando(true); setPreviaLiga(null)
+                  try {
+                    const r = await api.get(
+                      `/admin/leagues/${novaLiga.league_id}/verificar`,
+                      { params: { season: Number(novaLiga.season) } })
+                    setPreviaLiga(r.data)
+                  } catch (err: any) {
+                    showToast(err.response?.data?.detail || 'Erro ao verificar liga', false)
+                  } finally {
+                    setVerificando(false)
+                  }
+                }}>
+                {verificando ? 'Verificando...' : 'Verificar'}
+              </button>
               <button
                 className="btn-primary disabled:opacity-40"
                 disabled={salvandoLiga || !novaLiga.league_id || !novaLiga.season}
@@ -1413,6 +1439,52 @@ export default function Admin() {
                 {salvandoLiga ? 'Salvando...' : 'Cadastrar'}
               </button>
             </div>
+
+            {/*
+              Prévia antes de gastar cota.
+              
+              Cadastrar uma liga cuja temporada não abriu, ou com o `season`
+              errado, resulta numa coleta que roda inteira e traz zero jogo · e
+              o único sintoma é a linha ficar em "0 times, 0 jogos", que se
+              confunde com falha de coleta.
+            */}
+            {previaLiga && (
+              <div className={`mt-3 rounded-lg border p-3 ${
+                !previaLiga.existe ? 'bg-red-500/5 border-red-500/25'
+                  : previaLiga.iniciada ? 'bg-accent/5 border-accent/25'
+                  : 'bg-yellow-500/5 border-yellow-500/25'}`}>
+                {!previaLiga.existe ? (
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+                    <p className="text-xs text-ink-2 leading-relaxed">{previaLiga.aviso}</p>
+                  </div>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                      <span className="text-sm font-bold text-ink-1">{previaLiga.nome}</span>
+                      <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
+                        previaLiga.iniciada ? 'bg-accent/15 text-accent'
+                                            : 'bg-yellow-500/15 text-yellow-400'}`}>
+                        {previaLiga.iniciada ? 'TEMPORADA EM ANDAMENTO' : 'AINDA NÃO COMEÇOU'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-ink-2 font-mono">
+                      {previaLiga.finalizados} jogos finalizados, {previaLiga.agendados} agendados,
+                      {' '}{previaLiga.total} no total
+                    </p>
+                    <p className="text-[11px] text-ink-4 mt-1">
+                      {previaLiga.inicio} a {previaLiga.fim}
+                      {previaLiga.rodada_atual ? ` · agora em "${previaLiga.rodada_atual}"` : ''}
+                    </p>
+                    <p className="text-[11px] text-ink-3 mt-2 leading-relaxed">
+                      {previaLiga.iniciada
+                        ? `Coletar vai buscar a estatística dos ${previaLiga.finalizados} jogos já finalizados, uma requisição por jogo.`
+                        : 'Nenhum jogo finalizado ainda, então Coletar só traz os times e os jogos agendados. A estatística vem quando a bola rolar.'}
+                    </p>
+                  </>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="card p-4">

@@ -79,7 +79,9 @@ class MatchStatisticsSyncService:
         self._ensure_columns()
 
     def _ensure_columns(self):
-        """Placar dos 90 MINUTOS, separado do placar final.
+        """Colunas que nasceram depois da tabela.
+
+        PLACAR DOS 90 MINUTOS, separado do placar final.
 
         `goals` da API-Football e' o placar do jogo inteiro: num jogo decidido
         na prorrogacao ele ja' inclui os gols do tempo extra (Belgium x
@@ -94,6 +96,17 @@ class MatchStatisticsSyncService:
         for coluna in ("home_goals_90", "away_goals_90"):
             self.cur.execute(
                 f"ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS {coluna} INTEGER;")
+
+        # RODADA (2026-08-11). `fixtures.round` sempre existiu, mas
+        # fixture_status_sync DELETA a linha da fixture assim que o jogo acaba
+        # -- entao a rodada existia enquanto o jogo era futuro e sumia depois.
+        # match_statistics e' o registro permanente e nao tinha onde guardar.
+        #
+        # Sem ela nao da' pra dizer de que fase foi um jogo passado: a
+        # inferencia de ida/volta precisou virar heuristica de data, e a tela de
+        # estatistica nao consegue recortar por rodada.
+        self.cur.execute(
+            "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS round TEXT;")
         self.conn.commit()
 
     def _close(self):
@@ -157,6 +170,7 @@ class MatchStatisticsSyncService:
 
         fixtures = []
         skipped = 0
+        rodadas_a_gravar: list = []
 
         if use_date_filter:
             limit_date = datetime.now(timezone.utc) - timedelta(days=days)
@@ -195,6 +209,23 @@ class MatchStatisticsSyncService:
                 if home_id not in valid_team_ids or away_id not in valid_team_ids:
                     continue
 
+                # A RODADA E' GRAVADA MESMO NO JOGO JA ESTABILIZADO.
+                #
+                # `league.round` vem nesta mesma resposta e ate' 2026-08-11 era
+                # descartado: ficava so' em `fixtures`, e fixture_status_sync
+                # DELETA a linha assim que o jogo acaba (FT/AET/PEN e afins).
+                # Ou seja, a rodada existia enquanto o jogo era futuro e sumia
+                # depois -- match_statistics, que e' o registro permanente, nao
+                # tinha a coluna. Sem ela nao da' pra dizer de que fase foi um
+                # jogo passado, e a inferencia de ida/volta precisou virar
+                # heuristica de data (ver match_context_model.inferir_leg).
+                #
+                # Fica ANTES do `continue` de propósito: preenche o historico
+                # inteiro na proxima passada, sem UMA requisicao a mais.
+                rodada = (fx.get("league") or {}).get("round")
+                if rodada:
+                    rodadas_a_gravar.append((rodada, fixture["id"]))
+
                 if fixture["id"] in settled_fixture_ids:
                     skipped += 1
                     continue
@@ -220,9 +251,31 @@ class MatchStatisticsSyncService:
                     "referee": fixture.get("referee"),
                 })
 
+        self._gravar_rodadas(rodadas_a_gravar)
+
         print(f"[INFO] {len(fixtures)} jogos carregados "
               f"({skipped} pulados · estatística já estabilizada no banco)")
         return fixtures
+
+    def _gravar_rodadas(self, pares: list):
+        """Grava `round` nos jogos que ainda nao tem, em lote.
+
+        Idempotente e barato: nao chama API nenhuma (o dado ja veio junto da
+        listagem de fixtures) e so' escreve onde esta faltando, entao rodar
+        todo dia nao gera escrita a toa."""
+        if not pares:
+            return
+        from psycopg2.extras import execute_values
+        execute_values(self.cur, """
+            UPDATE match_statistics ms
+               SET round = dados.round
+              FROM (VALUES %s) AS dados(round, fixture_id)
+             WHERE ms.fixture_id = dados.fixture_id
+               AND ms.round IS DISTINCT FROM dados.round
+        """, pares)
+        if self.cur.rowcount > 0:
+            print(f"[MATCH_STATS] rodada gravada em {self.cur.rowcount} jogo(s).")
+        self.conn.commit()
 
     def _fetch_match_stats(self, fixture_id):
         r = requests.get(STATS_URL, headers=HEADERS,
