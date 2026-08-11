@@ -22,8 +22,8 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-import market_form
-from tests.test_home_2026_08 import _codigo, _fonte
+import market_form  # noqa: E402
+from tests.test_home_2026_08 import _codigo, _fonte, _front, _front_codigo  # noqa: E402
 
 
 # ─────────────────────────── escopo ───────────────────────────
@@ -51,30 +51,192 @@ def test_regra_de_escopo_tem_UMA_definicao():
 # ─────────────────────────── a rota ───────────────────────────
 
 
-def test_serie_de_mercado_de_time_filtra_por_mando():
-    corpo = _codigo("routers/suggestions.py", "get_market_form")
+def test_serie_de_mercado_de_time_mostra_so_o_time_do_mercado():
+    """"Escanteios Casa" fala de um time so': a serie do adversario seria outro
+    numero na mesma tela. Total fala do confronto, e ai os dois entram."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
     assert "market_form.escopo_do_mercado" in corpo
-    # mercado do mandante olha os jogos EM CASA dele; do visitante, os de fora
-    assert 'home_team_id = %s' in corpo
-    assert 'away_team_id = %s' in corpo
+    assert 'if escopo == "home"' in corpo
+    assert 'elif escopo == "away"' in corpo
 
 
 def test_serie_de_total_continua_olhando_os_dois_times():
     """Mercado de total fala do CONFRONTO -- um time so' contaria metade da
-    historia. O filtro de mando nao pode vazar pra ca."""
-    corpo = _codigo("routers/suggestions.py", "get_market_form")
-    assert "home_team_id = ANY(%s) OR away_team_id = ANY(%s)" in corpo
+    historia. Cada um com a propria serie, nao os dois numa fileira misturada
+    por data (que era o que ninguem conseguia ler, corrigido em 2026-08-10)."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
+    assert '("home", perna.get("home_team_id"), perna.get("home_team")),' in corpo
+    assert '("away", perna.get("away_team_id"), perna.get("away_team")),' in corpo
+    # uma chamada por time, com o dono da serie identificado
+    assert "team_id=team_id" in corpo
+
+
+def test_a_serie_traz_so_o_mando_que_o_time_vai_jogar():
+    """Se o Goias joga em casa, a serie do Goias e' de jogos em casa. Os jogos
+    dele como visitante medem outra coisa (+27% de diferenca em escanteios na
+    Serie A) e diluiriam a media que o card mostra."""
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_time")
+    assert 'coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"' in corpo
+    assert "WHERE {coluna_mando} = %s" in corpo
+    # o mando de cada serie e' o lado do time NESTA partida
+    assert "lado, perna.get(\"league_id\")" in _codigo("routers/suggestions.py", "_series_da_perna")
+
+
+def test_o_time_ainda_vai_pro_lado_que_o_mercado_nomeia():
+    """Segunda trava, independente do filtro: quem le a folha e'
+    `_stat_for_market`, que escolhe o lado pelo NOME do mercado. Num mercado de
+    visitante a serie e' de jogos fora, entao os dois ja concordam -- mas a
+    garantia mora em market_form, nao no acaso da consulta."""
+    assert "perspectiva_do_time" in _fonte("market_form.py")
 
 
 def test_serie_usa_a_mesma_liga_e_temporada_que_o_motor():
-    corpo = _codigo("routers/suggestions.py", "get_market_form")
-    assert "AND league_id = %s AND season = %s" in corpo
-    assert "f.league_id, f.season" in corpo
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_time")
+    assert "AND ms.league_id = %s AND ms.season = %s" in corpo
 
 
 def test_sem_fixture_a_serie_nao_some():
     """Pick antigo pode nao ter a fixture na tabela (join vazio). Serie um pouco
     mais larga e' melhor que secao vazia -- o filtro sai, a serie fica."""
-    corpo = _codigo("routers/suggestions.py", "get_market_form")
-    assert 'if pick.get("league_id") and pick.get("season")' in corpo
-    assert 'filtro_liga = ""' in corpo
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_time")
+    assert "if league_id and season" in corpo
+    assert 'filtro_liga, params_liga = "", []' in corpo
+
+
+# ─────────────────── perspectiva do time (casa e fora) ───────────────────
+
+
+def test_time_vai_pro_lado_que_o_mercado_nomeia():
+    """Serie de "Escanteios Casa" com os jogos FORA do time: sem girar a folha,
+    `_stat_for_market` leria o lado "casa" daquele jogo, que e' o ADVERSARIO --
+    o bug de 2026-08-08 de volta, agora dentro da propria serie."""
+    jogo_fora = {"home_team_id": 99, "away_team_id": 7,
+                 "home_corners": 3, "away_corners": 8,
+                 "home_goals": 0, "away_goals": 2}
+    casa, fora, gc, ga, em_casa = market_form.perspectiva_do_time(jogo_fora, 7, "home")
+    assert em_casa is False
+    assert casa["Corner Kicks"] == 8          # o time, nao o mandante do jogo
+    assert fora["Corner Kicks"] == 3
+    assert (gc, ga) == (2, 0)                 # placar gira junto
+
+
+def test_jogo_no_mando_do_mercado_nao_gira():
+    jogo_casa = {"home_team_id": 7, "away_team_id": 99,
+                 "home_corners": 8, "away_corners": 3,
+                 "home_goals": 2, "away_goals": 0}
+    casa, fora, gc, ga, em_casa = market_form.perspectiva_do_time(jogo_casa, 7, "home")
+    assert em_casa is True
+    assert (casa["Corner Kicks"], fora["Corner Kicks"]) == (8, 3)
+    assert (gc, ga) == (2, 0)
+
+
+def test_mercado_de_total_nunca_gira():
+    """Total soma os dois lados de qualquer jeito -- girar so' embaralharia o
+    mando registrado em cada barra."""
+    jogo_fora = {"home_team_id": 99, "away_team_id": 7,
+                 "home_corners": 3, "away_corners": 8,
+                 "home_goals": 0, "away_goals": 2}
+    casa, fora, gc, ga, em_casa = market_form.perspectiva_do_time(jogo_fora, 7, "total")
+    assert em_casa is False
+    assert (casa["Corner Kicks"], fora["Corner Kicks"]) == (3, 8)
+    assert (gc, ga) == (0, 2)
+
+
+def test_sem_team_id_a_serie_nao_afirma_mando():
+    """None e' "nao sei", nao "jogou fora" -- mesma regra do contador ausente."""
+    jogo = {"home_team_id": 99, "away_team_id": 7, "home_corners": 3, "away_corners": 8}
+    *_, em_casa = market_form.perspectiva_do_time(jogo, None, "home")
+    assert em_casa is None
+
+
+def test_recorte_por_mando_sai_da_mesma_regra_da_taxa():
+    """Casa, fora e total tem que contar "sem dado" do mesmo jeito, senao os
+    tres numeros do card nao fecham entre si."""
+    itens = [
+        {"result": "GREEN", "value": 12.0},
+        {"result": "RED",   "value": 8.0},
+        {"result": None,    "value": None},   # sem estatistica publicada
+    ]
+    r = market_form.resumo(itens)
+    assert r["games"] == 3          # a barra aparece
+    assert r["resolved"] == 2       # mas fora da taxa
+    assert r["greens"] == 1
+    assert r["hit_rate"] == 0.5
+    assert r["average"] == 10.0     # e fora da media
+
+
+# ─────────────────── serie do arbitro (cartoes) ───────────────────
+
+
+def test_arbitro_so_entra_em_mercado_de_cartoes():
+    """Cartao e' o unico contador em que quem apita responde por parte do
+    numero -- o motor ja' VETA o mercado quando o arbitro nao tem amostra
+    (referee_model.cards_market_eligible). Em escanteios ou gols o arbitro nao
+    e' causa, e uma fileira de barras ali sugeriria relacao que nao existe."""
+    corpo = _codigo("routers/suggestions.py", "_serie_do_arbitro")
+    assert "market_form.e_mercado_de_cartoes" in corpo
+    assert 'escopo != "total"' in corpo
+
+
+def test_reconhecimento_de_mercado_de_cartoes_tem_UMA_definicao():
+    """A mesma pergunta que routers/live.py faz pra escolher o contador."""
+    assert market_form.e_mercado_de_cartoes("Cartões Mais/Menos", None)
+    assert market_form.e_mercado_de_cartoes("Total Cards", "cards")
+    assert market_form.e_mercado_de_cartoes(None, "handicap_cards")
+    assert not market_form.e_mercado_de_cartoes("Escanteios Mais/Menos", "corners")
+    assert not market_form.e_mercado_de_cartoes("Ambas as Equipes Marcam", "btts")
+
+
+def test_serie_do_arbitro_nao_filtra_por_liga():
+    """Arbitro nao pertence a competicao: apita estadual, serie A e copa na
+    mesma temporada. E' o mesmo recorte de RefereeStatsService.get_stats
+    (arbitro + temporada), entao card e motor olham a mesma amostra."""
+    corpo = _codigo("routers/suggestions.py", "_jogos_do_arbitro")
+    assert "ms.referee = %s" in corpo
+    assert "AND ms.season = %s" in corpo
+    assert "league_id" not in corpo
+
+
+def test_arbitro_sobrevive_a_fixture_apagada():
+    """`fixtures` e' fila operacional e a linha pode sumir; match_statistics e'
+    o registro permanente. Sem o fallback, pick antigo de cartoes perderia a
+    serie de quem apitou."""
+    corpo = _codigo("routers/suggestions.py", "_pernas_de_pick_simples")
+    assert "COALESCE(f.referee, ms.referee)" in corpo
+
+
+# ─────────── nome de time nunca por JOIN (achado 2026-08-10) ───────────
+
+
+def test_nome_do_time_sai_por_subconsulta_nao_por_join():
+    """`teams` tem ate' 3 linhas pro mesmo team_id (uma por liga). LEFT JOIN em
+    teams multiplica a PARTIDA por esse numero, e com os dois lados o fator vira
+    2x2, 2x3...
+
+    Medido em producao no dia: a serie do pick VIP #1581 (Goias x Londrina)
+    mostrou o jogo contra o Sport 4 vezes nas 5 barras, e a media do Londrina
+    fora saiu 14.4 (dois jogos repetidos) quando os 5 jogos reais dao 11.4. A
+    mesma consulta em /liga/jogos devolvia 706 linhas pros 207 jogos reais da
+    Serie B 2026."""
+    fonte = _fonte("routers/suggestions.py")
+    assert "LEFT JOIN teams" not in fonte, "JOIN em teams duplica a partida"
+    corpo = _codigo("routers/suggestions.py", "_nome_do_time")
+    assert "SELECT t.name FROM teams t WHERE t.team_id" in corpo
+    assert "LIMIT 1" in corpo
+
+
+def test_amostra_curta_e_avisada_na_tela():
+    """Filtrar por mando deixou amostra curta comum: um time tem ~7 jogos em
+    casa numa fase inteira, e no comeco de temporada tem 2. Tres barras verdes
+    lidas como "100%" sao muito menos do que parecem, e a regua e as cores sao
+    identicas as de uma serie cheia -- quem le nao tem como saber sozinho.
+
+    A regra fica no servidor: a tela nao precisa saber quantos jogos foram
+    pedidos pra decidir se avisa."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
+    assert '"amostra_curta": len(jogos) < limit' in corpo
+    arb = _codigo("routers/suggestions.py", "_serie_do_arbitro")
+    assert '"amostra_curta": len(jogos) < limit' in arb
+    tela = _front_codigo("components/MarketForm.tsx")
+    assert "serie.amostra_curta" in tela
+    assert "Histórico curto" in _front("components/MarketForm.tsx")

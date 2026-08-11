@@ -288,6 +288,7 @@ def analyze_fixture_markets(
                 family, scope, m.get("value", ""), m.get("line", ""),
                 last10_home, last10_away, reference_date, config,
                 team_id=side_team_id,
+                home_team_id=home_team_id, away_team_id=away_team_id,
             )
             if not taxa or taxa["taxa_ponderada"] is None:
                 if debug:
@@ -356,6 +357,7 @@ def analyze_fixture_markets(
             stability = stats_model.line_stability(
                 family, scope, m.get("value", ""), m.get("line", ""), last10_home, last10_away,
                 team_id=side_team_id,
+                home_team_id=home_team_id, away_team_id=away_team_id,
             )
             line_candidates.append({
                 "market_id":        m.get("market_id"),
@@ -423,7 +425,8 @@ def analyze_fixture_markets(
         # leitura de valor bruto, ex. btts/outcome -- variance_stats retorna
         # None e a penalidade fica 0).
         var_stats = variance_model.variance_stats(
-            family, scope, last10_home, last10_away, team_id=side_team_id)
+            family, scope, last10_home, last10_away, team_id=side_team_id,
+            home_team_id=home_team_id, away_team_id=away_team_id)
         v_penalty = variance_model.variance_penalty(
             var_stats["coefficient_of_variation"] if var_stats else None
         )
@@ -471,7 +474,31 @@ def analyze_fixture_markets(
                 want_yes = best_line["_direction"] in ("yes", "sim")
                 poisson_prob = btts_prob if want_yes else round(1 - btts_prob, 4) if btts_prob is not None else None
                 model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
-        m_adjustment = confidence.model_fit_adjustment(model_fit_diff) if has_poisson_signal else 0.0
+
+        # TERCEIRA ESTIMATIVA, SO' EM CARTOES: O ARBITRO (2026-08-10).
+        #
+        # As duas estimativas acima olham os TIMES -- a taxa conta o que eles
+        # fizeram, o Poisson cruza feitos-x-cedidos deles. Nenhuma das duas sabe
+        # quem vai apitar, e em cartao quem apita e' metade da resposta.
+        #
+        # Ate' aqui o arbitro so' existia como porteira (cards_market_eligible)
+        # e como -0.15..+0.15 num score de intensidade que nao chega na
+        # probabilidade. Ver referee_model.cards_probability pro caso de
+        # producao (#1579) e pela medicao que sustenta isto.
+        referee_prob = None
+        referee_fit_diff = None
+        if family in _CARDS_FAMILIES:
+            referee_prob = referee_model.cards_probability(
+                referee_sig, best_line["_line_val"], best_line["_direction"])
+            referee_fit_diff = probability_model.model_fit(best_line["taxa_real"], referee_prob)
+
+        # A penalidade de confidence olha o PIOR desacordo entre as estimativas
+        # disponiveis: duas leituras discordando ja e' motivo de desconfiar, e
+        # esconder a maior das duas divergencias atras da media anularia
+        # justamente o sinal que a regra existe pra capturar.
+        pior_fit = max((d for d in (model_fit_diff, referee_fit_diff) if d is not None), default=None)
+        m_adjustment = (confidence.model_fit_adjustment(pior_fit)
+                        if (has_poisson_signal or referee_prob is not None) else 0.0)
 
         # DESACORDO ENTRE OS DOIS MODELOS -> FICA COM A ESTIMATIVA MENOR
         # (2026-08-08). Duas leituras independentes da mesma pergunta: a taxa
@@ -503,17 +530,28 @@ def analyze_fixture_markets(
         # caminho, entre o "concordam" que ja existia (0.10) e o antigo
         # "discordam" (0.30). Se a amostra crescer e 0.10 continuar melhor,
         # e' so' baixar aqui.
-        if (config.model_disagreement_threshold is not None
-                and poisson_prob is not None and model_fit_diff is not None
-                and model_fit_diff > config.model_disagreement_threshold
-                and poisson_prob < best_line["taxa_real"]):
+        #
+        # Em cartoes sao TRES leituras desde 2026-08-10 (a do arbitro entrou), e
+        # a regra e' a mesma pras tres: vale a menor entre as que discordam
+        # alem do limiar. Nao e' um veto novo -- e' a mesma estimativa
+        # rebaixada, e quem decide se ainda ha pick continua sendo min_taxa/
+        # min_edge, num lugar so'.
+        candidatas_menores = [
+            p for p, d in ((poisson_prob, model_fit_diff), (referee_prob, referee_fit_diff))
+            if p is not None and d is not None
+            and config.model_disagreement_threshold is not None
+            and d > config.model_disagreement_threshold
+            and p < best_line["taxa_real"]
+        ]
+        if candidatas_menores:
+            menor = min(candidatas_menores)
             best_line = dict(best_line)
             best_line["taxa_real_pre_desacordo"] = best_line["taxa_real"]
-            best_line["taxa_real"] = poisson_prob
+            best_line["taxa_real"] = menor
             baseline = best_line.get("prob_baseline_value")
             if baseline is not None:
-                best_line["edge"] = round(poisson_prob - baseline, 4)
-            best_line["ev"] = round(poisson_prob * best_line["odd"] - 1, 4)
+                best_line["edge"] = round(menor - baseline, 4)
+            best_line["ev"] = round(menor * best_line["odd"] - 1, 4)
             # confidence tambem sai da probabilidade nova: C e' a propria
             # taxa_real, e deixar o score antigo em pe' daria um candidato
             # anunciando 56% de chance com a confianca dos 83% de antes --
@@ -542,6 +580,14 @@ def analyze_fixture_markets(
             "poisson_probability": poisson_prob,
             "model_fit_diff": model_fit_diff,
             "model_fit_adjustment": m_adjustment,
+            # A leitura do arbitro, sempre gravada -- inclusive quando nao
+            # rebaixou nada. Sem o numero no rastro nao da' pra medir depois se
+            # ele esta ajudando, que foi exatamente o que faltou pra descobrir
+            # o #1579 antes de ele acontecer.
+            "referee_probability": referee_prob,
+            "referee_fit_diff": referee_fit_diff,
+            "referee_lambda": (referee_model.cards_lambda(referee_sig)
+                               if family in _CARDS_FAMILIES else None),
             "context_score": ctx_score,
             "context_raw": context_data,
             "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),

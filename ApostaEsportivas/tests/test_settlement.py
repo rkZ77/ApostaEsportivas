@@ -174,6 +174,52 @@ def test_to_decimal_recusa_o_que_nao_e_numero(entrada):
     assert s.to_decimal(entrada) is None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Limiar inclusivo: "N ou mais" nao e' linha cheia
+# ─────────────────────────────────────────────────────────────────────────────
+def test_n_ou_mais_e_meia_linha_abaixo():
+    """"3 ou mais defesas" e' P(X >= 3). Lido como Over 3.0 (linha cheia), o
+    goleiro com exatamente 3 defesas virava PUSH -- stake devolvida num pick
+    que pagou -- e a liquidacao discordava do proprio motor, que calcula esse
+    mercado como prob_over(2.5) (ver goleiros_pipeline)."""
+    parsed = s.parse_line("Everson · 3 ou mais defesas")
+    assert parsed["op"] == "over"
+    assert parsed["value"] == Decimal("2.5")
+    assert s.settle_over_under(3, parsed["value"], parsed["op"]) == ("GREEN", Decimal("1"))
+    assert s.settle_over_under(4, parsed["value"], parsed["op"]) == ("GREEN", Decimal("1"))
+    assert s.settle_over_under(2, parsed["value"], parsed["op"]) == ("RED", Decimal("-1"))
+
+
+@pytest.mark.parametrize("linha,valor", [
+    ("Leo Jardim - 1 ou mais defesas", Decimal("0.5")),
+    ("2 ou mais gols", Decimal("1.5")),
+    ("3 or more saves", Decimal("2.5")),
+])
+def test_todas_as_escritas_do_limiar_inclusivo(linha, valor):
+    parsed = s.parse_line(linha)
+    assert (parsed["op"], parsed["value"]) == ("over", valor)
+
+
+def test_n_ou_menos_e_meia_linha_acima():
+    """Espelho do caso acima: "2 ou menos" inclui o proprio 2."""
+    parsed = s.parse_line("2 ou menos gols")
+    assert (parsed["op"], parsed["value"]) == ("under", Decimal("2.5"))
+    assert s.settle_over_under(2, parsed["value"], parsed["op"])[0] == "GREEN"
+
+
+@pytest.mark.parametrize("linha,op,valor", [
+    ("Mais de 3", "over", Decimal("3")),
+    ("Over 3.0", "over", Decimal("3.0")),
+    ("Menos de 3", "under", Decimal("3")),
+])
+def test_linha_cheia_normal_nao_vira_limiar_inclusivo(linha, op, valor):
+    """"Mais de 3" continua sendo Over 3.0, com PUSH no 3 -- so' "3 ou mais"
+    muda de leitura. Sao mercados diferentes escritos com a mesma palavra."""
+    parsed = s.parse_line(linha)
+    assert (parsed["op"], parsed["value"]) == (op, valor)
+    assert s.settle_over_under(3, parsed["value"], parsed["op"])[0] == "PUSH"
+
+
 def test_virgula_decimal_nao_e_lida_como_dois_numeros():
     """'9,5' tem que virar 9.5 e nao 9: sem a troca de virgula por ponto, a
     varredura de numeros devolveria ['9', '5'] e a linha viraria 9."""

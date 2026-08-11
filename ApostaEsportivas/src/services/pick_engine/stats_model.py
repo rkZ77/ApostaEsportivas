@@ -478,7 +478,8 @@ def _somente_no_mando(pool: list, team_id: int | None, mando: str) -> list:
 
 
 def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list,
-                    team_id: int | None = None):
+                    team_id: int | None = None,
+                    home_team_id: int | None = None, away_team_id: int | None = None):
     """Pool de jogos que sustenta a taxa de um mercado, e o campo bruto (hoje
     sempre None -- _extract_stat resolve o campo por familia).
 
@@ -509,14 +510,38 @@ def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list
 
     Sede neutra (Copa/selecao, via get_last_n_all_competitions) segue o mesmo
     caminho: filtra por quem a fixture designou como mandante, que e' a mesma
-    convencao que a casa de aposta usa pra nomear o mercado."""
-    if family == "btts":
-        return last10_home + last10_away, None
+    convencao que a casa de aposta usa pra nomear o mercado.
+
+    TOTAL E BTTS ENTRARAM NA MESMA REGRA (2026-08-10), com caso de producao.
+    Em 08/08 o filtro ficou so' nos mercados de UM time, com o argumento de que
+    num contador de PARTIDA os dois mandos se compensam. Nao se compensam, e o
+    pick que mostrou isso foi Goias x Londrina, "Escanteios Menos de 11.5" @1.73,
+    publicado com 65.2% de probabilidade e EV +12.7%:
+
+        Goias EM CASA:     media 12.0, bateu Under 11.5 em 4 de 5
+        Londrina FORA:     media 14.4, bateu em 0 de 5
+        -> a amostra que responde a pergunta da' 4 de 10 (40%)
+
+    Os outros ~20 jogos do pool (Goias fora + Londrina em casa) sao partidas
+    hospedadas por OUTROS times, com outro ritmo, e foram eles que levaram a
+    taxa ponderada pra perto de 70%. O usuario viu a discrepancia no card, que
+    desde 2026-08-10 mostra so' o mando do jogo.
+
+    O pool cai de ~30 pra ~14 jogos. Continua RICO (sample_rich_n=8), e o
+    encolhimento bayesiano fica mais forte -- que e' o efeito desejado: com
+    amostra menor a taxa so' se afasta do mercado quando ha evidencia real.
+
+    BTTS entra pelo mesmo argumento: "as duas marcam" e' propriedade da partida,
+    e a partida que interessa e' esta, com estes mandos."""
     if scope == "home":
         return _somente_no_mando(last10_home, team_id, "home"), None
     if scope == "away":
         return _somente_no_mando(last10_away, team_id, "away"), None
-    return last10_home + last10_away, None
+    # total e btts: o mandante nos jogos EM CASA dele, o visitante nos de FORA.
+    # Sem os ids o filtro nao acontece (mesma regra de _somente_no_mando) e o
+    # pool volta ao comportamento antigo, em vez de sair vazio.
+    return (_somente_no_mando(last10_home, home_team_id, "home")
+            + _somente_no_mando(last10_away, away_team_id, "away")), None
 
 
 def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
@@ -574,13 +599,15 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
 def market_taxa(family: str, scope: str, value: str, line_str: str,
                 last10_home: list, last10_away: list, reference_date=None,
                 config: PickEngineConfig = DEFAULT_CONFIG,
-                team_id: int | None = None):
+                team_id: int | None = None,
+                home_team_id: int | None = None, away_team_id: int | None = None):
     """Over/under (gols/escanteios/cartoes/chutes/impedimentos) e ambas
     marcam (btts) -- os mercados 'classicos' ja existiam desde a Fase 1.
     Mercados novos (1X2/handicap/dupla-chance/etc) tem funcoes proprias
     abaixo (outcome_taxa, handicap_taxa, ...), despachadas pelo
     orchestrator via classify_market()."""
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id,
+                             home_team_id, away_team_id)
     if not pool:
         return None
 
@@ -596,7 +623,9 @@ _MIN_MATCHES_PER_HALF_STABILITY = 2
 
 def line_stability(family: str, scope: str, value: str, line_str: str,
                     last10_home: list, last10_away: list,
-                    team_id: int | None = None) -> dict | None:
+                    team_id: int | None = None,
+                    home_team_id: int | None = None,
+                    away_team_id: int | None = None) -> dict | None:
     """Compara a taxa BRUTA (nao ponderada) da linha na metade mais
     recente do historico vs a metade mais antiga -- diferente da media
     agregada (que pode esconder uma linha que so comecou a bater
@@ -607,7 +636,8 @@ def line_stability(family: str, scope: str, value: str, line_str: str,
     So cobre mercados 'classicos' (over/under/btts, mesmo escopo de
     market_taxa) -- amostra minima de 2 jogos por metade (4 no total),
     senao a comparacao vira ruido puro. None quando nao aplicavel."""
-    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id)
+    pool, _ = pool_and_field(family, scope, last10_home, last10_away, team_id,
+                             home_team_id, away_team_id)
     if not pool or len(pool) < _MIN_MATCHES_PER_HALF_STABILITY * 2:
         return None
 
@@ -895,7 +925,8 @@ _DOUBLE_CHANCE_VALUE_MAP = {
 def compute_taxa(family: str, scope: str, value: str, line_str: str,
                   last10_home: list, last10_away: list, reference_date=None,
                   config: PickEngineConfig = DEFAULT_CONFIG,
-                  team_id: int | None = None):
+                  team_id: int | None = None,
+                  home_team_id: int | None = None, away_team_id: int | None = None):
     """Ponto de entrada unico do Modelo 1 -- despacha pra funcao de taxa
     certa conforme a familia (classify_market() ja devolveu family/scope).
     Mercados 'classicos' (goals/corners/cards/btts/shots/shots_on_target/
@@ -905,12 +936,17 @@ def compute_taxa(family: str, scope: str, value: str, line_str: str,
     `team_id` e' o time que o ESCOPO aponta (mandante pra scope='home',
     visitante pra scope='away') -- resolve o mando por partida no historico
     misto. Sem ele o calculo volta ao comportamento antigo, que le metade da
-    amostra na coluna do adversario (ver resolve_side())."""
+    amostra na coluna do adversario (ver resolve_side()).
+
+    `home_team_id`/`away_team_id` sao os dois lados da partida analisada, e
+    valem pro escopo TOTAL (e btts), onde nao existe "o time do escopo": e' com
+    eles que pool_and_field pega o mandante em casa e o visitante fora."""
     direction = (value or "").strip().lower()
 
     if family in ("goals", "corners", "cards", "btts", "shots", "shots_on_target", "offsides", "fouls", "saves"):
         return market_taxa(family, scope, value, line_str, last10_home, last10_away,
-                            reference_date, config, team_id=team_id)
+                            reference_date, config, team_id=team_id,
+                            home_team_id=home_team_id, away_team_id=away_team_id)
 
     if family == "outcome":
         if direction not in ("home", "draw", "away"):

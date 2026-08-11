@@ -106,6 +106,13 @@ _AWAY_WORDS = ("away", "visitante", "visita", "fora")
 
 _NUMBER_RE = re.compile(r"[+-]?\d+(?:\.\d+)?")
 
+# Limiar inclusivo: "3 ou mais defesas" e' P(X >= 3), nao Over 3.0. As duas
+# leituras so' divergem em UM ponto -- o proprio 3 -- e e' justamente o ponto
+# que decide o pick. Ver o comentario em parse_line.
+_OU_MAIS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:ou\s+mais|or\s+more)")
+_OU_MENOS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:ou\s+menos|or\s+less|or\s+fewer)")
+_MEIA_LINHA = Decimal("0.5")
+
 
 def parse_line(line, home_team: str | None = None, away_team: str | None = None) -> dict:
     """Le o texto da linha e devolve {op, value, side, raw}.
@@ -132,11 +139,34 @@ def parse_line(line, home_team: str | None = None, away_team: str | None = None)
         out["op"] = "no"
         return out
 
-    numbers = _NUMBER_RE.findall(ln.replace(",", "."))
+    ln_num = ln.replace(",", ".")
+    numbers = _NUMBER_RE.findall(ln_num)
     if numbers:
         out["value"] = to_decimal(numbers[0])
 
-    if any(w in ln for w in _OVER_WORDS):
+    # LIMIAR INCLUSIVO ("N ou mais"), corrigido em 2026-08-10.
+    #
+    # Este e' o formato do pick de defesas de goleiro -- engine_pipelines/
+    # goleiros_pipeline.py grava "Everson · 3 ou mais defesas" e calcula a
+    # probabilidade como P(X >= 3) = prob_over(2.5). A leitura generica abaixo
+    # via "mais" e devolvia Over 3.0, uma LINHA CHEIA: goleiro com exatamente 3
+    # defesas era gravado PUSH ("stake devolvida") num pick que pagou. Motor e
+    # liquidacao discordando sobre o mesmo numero, no unico ponto em que as
+    # duas leituras diferem.
+    #
+    # A traducao pra meia-linha (>= 3 vira Over 2.5) e' o que mantem UMA
+    # gramatica: settle_over_under nao precisa aprender um terceiro operador, e
+    # o ticker ao vivo (que le a linha por aqui, via _extract_line) passa a
+    # concordar com o job em lote de graca.
+    limiar_mais = _OU_MAIS_RE.search(ln_num)
+    limiar_menos = _OU_MENOS_RE.search(ln_num)
+    if limiar_mais:
+        out["op"] = "over"
+        out["value"] = to_decimal(limiar_mais.group(1)) - _MEIA_LINHA
+    elif limiar_menos:
+        out["op"] = "under"
+        out["value"] = to_decimal(limiar_menos.group(1)) + _MEIA_LINHA
+    elif any(w in ln for w in _OVER_WORDS):
         out["op"] = "over"
     elif any(w in ln for w in _UNDER_WORDS):
         out["op"] = "under"

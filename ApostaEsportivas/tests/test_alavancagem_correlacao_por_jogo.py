@@ -51,6 +51,24 @@ def test_familias_do_mesmo_dado_bruto_contam_como_uma_so():
     assert _combinar([perna(7, "cards", 1.39), perna(7, "handicap_cards", 1.11)]) is None
 
 
+def test_ambas_marcam_e_gols_no_mesmo_jogo_nao_combinam():
+    """O exemplo que a docstring de _find_combo sempre citou como correlacao de
+    verdade -- e que passava, porque "btts" tinha grupo proprio (2026-08-10).
+
+    "Under 2.5 + Ambas Marcam" so' paga em 1-1: o produto das probabilidades
+    anunciava ~28% onde a chance real e' ~12%. E "Under 1.5 + Ambas Marcam" e'
+    impossivel."""
+    assert _combinar([perna(7, "goals", 1.39), perna(7, "btts", 1.11)]) is None
+
+
+def test_ambas_marcam_em_outro_jogo_continua_combinando():
+    """Correlacao e' por JOGO. Ambas Marcam num jogo e gols em outro sao times
+    diferentes, em estadios diferentes -- o veto nao pode voltar a ser global."""
+    combo = _combinar([perna(1, "goals", 1.39), perna(2, "btts", 1.11)])
+    assert combo is not None
+    assert len(combo[0]) == 2
+
+
 def test_mercados_diferentes_no_mesmo_jogo_continuam_permitidos():
     """Formato "dois mercados no mesmo jogo" e' valido por decisao de produto."""
     combo = _combinar([perna(7, "goals", 1.39), perna(7, "corners", 1.11)])
