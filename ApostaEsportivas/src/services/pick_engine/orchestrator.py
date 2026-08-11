@@ -266,6 +266,40 @@ def analyze_fixture_markets(
         # stats_model.resolve_side -- metade da amostra vinha do time errado).
         side_team_id = stats_model.scope_team_id(scope, home_team_id, away_team_id)
 
+        # Lambdas da familia -- nao dependem da LINHA, so' do jogo, entao saem
+        # uma vez so' aqui fora e cada linha candidata pergunta a sua
+        # probabilidade a eles logo abaixo.
+        is_poisson_fam = probability_model.is_poisson_family(family)
+        lambda_familia = (convergence["expected_value"]
+                          if is_poisson_fam and convergence else None)
+        # BTTS tem Poisson proprio: P(ambas marcam) = P(casa marca)xP(fora
+        # marca), com um lambda por LADO (nao um lambda combinado do jogo
+        # inteiro como goals/corners/cards usam) -- por isso fica fora de
+        # is_poisson_family, tratado a parte, mas conta igual pra decidir se K
+        # cede lugar a M.
+        btts_sim = None
+        if family == "btts":
+            home_conv = stats_model.expected_value_convergence(
+                last10_home, last10_away, "goals", "home",
+                home_team_id=home_team_id, away_team_id=away_team_id,
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            away_conv = stats_model.expected_value_convergence(
+                last10_home, last10_away, "goals", "away",
+                home_team_id=home_team_id, away_team_id=away_team_id,
+                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
+                league_baseline=league_baseline,
+            )
+            if home_conv and away_conv:
+                btts_sim = probability_model.btts_probability(
+                    home_conv["expected_value"], away_conv["expected_value"])
+        has_poisson_signal = is_poisson_fam or family == "btts"
+        # Lambda do arbitro: so' cartoes, e so' quando ha sinal proprio dele
+        # (ver referee_model.cards_lambda).
+        referee_lambda = (referee_model.cards_lambda(referee_sig)
+                          if family in _CARDS_FAMILIES else None)
+
         line_candidates = []
         for m in entries:
             best_odd = float(m.get("best_odd") or 0)
@@ -343,13 +377,52 @@ def analyze_fixture_markets(
             taxa_ajustada = bayesian_model.shrink_taxa(
                 taxa_bruta_raw, taxa["amostra"], prob_baseline["prob"]
             )
-            ev_edge = market_model.edge_and_ev(
-                taxa_ajustada, best_odd, prob_baseline["prob"]
-            )
             try:
                 line_val = float(m.get("line")) if family != "btts" else None
             except (TypeError, ValueError):
                 line_val = None
+
+            # As outras leituras da MESMA linha, e o desacordo entre elas,
+            # resolvidos AQUI -- linha por linha, antes de escolher qual delas
+            # vira o pick (2026-08-10).
+            #
+            # Antes isso rodava so' sobre a linha JA escolhida, e a escolha saia
+            # da taxa empirica sozinha. Consequencia: num jogo em que o arbitro
+            # e' permissivo, o motor escolhia o "Over 4.5" (que os times
+            # sustentam), levava o corte do arbitro em cima dele e ficava sem
+            # pick -- sem nunca olhar o "Under 4.5" do mesmo mercado, que e'
+            # exatamente o lado que o arbitro estava apontando. Pergunta do
+            # usuario em 2026-08-10, e ele estava certo: o outro lado existia.
+            direcao = (m.get("value") or "").strip().lower()
+            poisson_linha = None
+            if lambda_familia is not None and line_val is not None:
+                poisson_linha = probability_model.poisson_prob_for_line(
+                    lambda_familia, line_val, direcao)
+            elif btts_sim is not None:
+                poisson_linha = (btts_sim if direcao in ("yes", "sim")
+                                 else round(1 - btts_sim, 4))
+            referee_linha = None
+            if referee_lambda is not None and line_val is not None:
+                referee_linha = probability_model.poisson_prob_for_line(
+                    referee_lambda, line_val, direcao)
+
+            fit_poisson = probability_model.model_fit(taxa_ajustada, poisson_linha)
+            fit_referee = probability_model.model_fit(taxa_ajustada, referee_linha)
+            taxa_pre_desacordo = None
+            menores = [
+                p for p, d in ((poisson_linha, fit_poisson), (referee_linha, fit_referee))
+                if p is not None and d is not None
+                and config.model_disagreement_threshold is not None
+                and d > config.model_disagreement_threshold
+                and p < taxa_ajustada
+            ]
+            if menores:
+                taxa_pre_desacordo = taxa_ajustada
+                taxa_ajustada = min(menores)
+
+            ev_edge = market_model.edge_and_ev(
+                taxa_ajustada, best_odd, prob_baseline["prob"]
+            )
             # Estabilidade da linha especifica ao longo do tempo (nao so a
             # media agregada) -- entra no line_score via ranking._stability_bonus.
             # So cobre mercados classicos (over/under/btts); None pros
@@ -381,7 +454,17 @@ def analyze_fixture_markets(
                 # recalcular edge depois quanto ancorar contra o mercado.
                 "prob_baseline_value": prob_baseline["prob"],
                 "stability":        stability,
-                "_direction":       (m.get("value") or "").strip().lower(),
+                # As tres leituras da linha, sempre gravadas -- inclusive quando
+                # nenhuma rebaixou nada. Sem o numero no rastro nao da' pra
+                # medir depois se o sinal esta ajudando.
+                "poisson_probability": poisson_linha,
+                "model_fit_diff":      fit_poisson,
+                "referee_probability": referee_linha,
+                "referee_fit_diff":    fit_referee,
+                "referee_lambda":      referee_lambda,
+                **({"taxa_real_pre_desacordo": taxa_pre_desacordo}
+                   if taxa_pre_desacordo is not None else {}),
+                "_direction":       direcao,
                 "_line_val":        line_val,
                 **ev_edge,
             })
@@ -395,14 +478,6 @@ def analyze_fixture_markets(
                     "all_lines": ranking.evaluate_all_lines(line_candidates, config, data_quality_score),
                 })
             continue
-
-        is_poisson_fam = probability_model.is_poisson_family(family)
-        # BTTS tem Poisson proprio (Prioridade 5): P(ambas marcam) =
-        # P(casa marca)xP(fora marca), com um lambda por LADO (nao um
-        # lambda combinado do jogo inteiro como goals/corners/cards usam)
-        # -- por isso fica fora de is_poisson_family, tratado a parte
-        # abaixo, mas conta igual pra decidir se K cede lugar a M.
-        has_poisson_signal = is_poisson_fam or family == "btts"
 
         # K: para familias SEM Poisson (shots/outcome/handicap/etc),
         # convergence_adjustment continua sendo o unico sinal de "o
@@ -440,57 +515,19 @@ def analyze_fixture_markets(
         market_sample = data_validation.validate_market_sample(
             family, scope, last10_home, last10_away, team_id=side_team_id)
 
-        # M (model-fit): concordancia entre a taxa empirica (contagem direta)
-        # e a probabilidade do modelo Poisson pra MESMA linha -- substitui
-        # convergence_adjustment (K) pra familias com sinal Poisson, ver
-        # comentario acima.
-        poisson_prob = None
-        model_fit_diff = None
-        if is_poisson_fam and convergence and best_line["_line_val"] is not None:
-            poisson_prob = probability_model.poisson_prob_for_line(
-                convergence["expected_value"], best_line["_line_val"], best_line["_direction"]
-            )
-            model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
-        elif family == "btts":
-            # Lambda por lado (nao o convergence combinado do loop, que e'
-            # scope='total') -- feitos do time x cedido pelo adversario,
-            # em cada lado separadamente.
-            home_conv = stats_model.expected_value_convergence(
-                last10_home, last10_away, "goals", "home",
-                home_team_id=home_team_id, away_team_id=away_team_id,
-                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
-                league_baseline=league_baseline,
-            )
-            away_conv = stats_model.expected_value_convergence(
-                last10_home, last10_away, "goals", "away",
-                home_team_id=home_team_id, away_team_id=away_team_id,
-                team_stats_home=team_stats_home, team_stats_away=team_stats_away,
-                league_baseline=league_baseline,
-            )
-            if home_conv and away_conv:
-                btts_prob = probability_model.btts_probability(
-                    home_conv["expected_value"], away_conv["expected_value"]
-                )
-                want_yes = best_line["_direction"] in ("yes", "sim")
-                poisson_prob = btts_prob if want_yes else round(1 - btts_prob, 4) if btts_prob is not None else None
-                model_fit_diff = probability_model.model_fit(best_line["taxa_real"], poisson_prob)
-
-        # TERCEIRA ESTIMATIVA, SO' EM CARTOES: O ARBITRO (2026-08-10).
+        # M (model-fit): concordancia entre a taxa empirica (contagem direta) e
+        # as outras leituras da MESMA linha -- substitui convergence_adjustment
+        # (K) pra familias com sinal Poisson, ver comentario acima.
         #
-        # As duas estimativas acima olham os TIMES -- a taxa conta o que eles
-        # fizeram, o Poisson cruza feitos-x-cedidos deles. Nenhuma das duas sabe
-        # quem vai apitar, e em cartao quem apita e' metade da resposta.
-        #
-        # Ate' aqui o arbitro so' existia como porteira (cards_market_eligible)
-        # e como -0.15..+0.15 num score de intensidade que nao chega na
-        # probabilidade. Ver referee_model.cards_probability pro caso de
-        # producao (#1579) e pela medicao que sustenta isto.
-        referee_prob = None
-        referee_fit_diff = None
-        if family in _CARDS_FAMILIES:
-            referee_prob = referee_model.cards_probability(
-                referee_sig, best_line["_line_val"], best_line["_direction"])
-            referee_fit_diff = probability_model.model_fit(best_line["taxa_real"], referee_prob)
+        # Os numeros ja vieram resolvidos do loop de linhas, linha por linha
+        # (2026-08-10). Antes eram calculados aqui, so' pra linha ja escolhida,
+        # e a escolha saia da taxa empirica sozinha -- ver o comentario grande
+        # la em cima pro que isso custava. `conf` acima ja parte da taxa
+        # corrigida pelo mesmo motivo.
+        poisson_prob = best_line.get("poisson_probability")
+        model_fit_diff = best_line.get("model_fit_diff")
+        referee_prob = best_line.get("referee_probability")
+        referee_fit_diff = best_line.get("referee_fit_diff")
 
         # A penalidade de confidence olha o PIOR desacordo entre as estimativas
         # disponiveis: duas leituras discordando ja e' motivo de desconfiar, e
@@ -499,67 +536,6 @@ def analyze_fixture_markets(
         pior_fit = max((d for d in (model_fit_diff, referee_fit_diff) if d is not None), default=None)
         m_adjustment = (confidence.model_fit_adjustment(pior_fit)
                         if (has_poisson_signal or referee_prob is not None) else 0.0)
-
-        # DESACORDO ENTRE OS DOIS MODELOS -> FICA COM A ESTIMATIVA MENOR
-        # (2026-08-08). Duas leituras independentes da mesma pergunta: a taxa
-        # empirica (contagem jogo a jogo) e o Poisson (media esperada de
-        # feitos-x-cedidos). Quando divergem muito, uma das duas esta' errada
-        # e nao ha como saber qual -- entao o motor passa a trabalhar com a
-        # mais conservadora em vez de escolher a que mais convem.
-        #
-        # Antes disso, o desacordo so' mexia em confidence (m_adjustment, e
-        # nem isso: o corte era 30pp). O pick VIP #1573 saiu com 78% de taxa
-        # empirica contra 53.5% do Poisson -- 24.5pp de desacordo, ajuste
-        # aplicado 0.0 -- e o numero publicado foi o maior dos dois.
-        #
-        # Nao e' um veto novo: rebaixada a probabilidade, os filtros que ja
-        # existem (min_taxa em ranking, min_edge/EV em select_smart_safe_line)
-        # decidem sozinhos se ainda ha pick. Isso mantem UM lugar so' definindo
-        # o que e' aposta aprovada.
-        #
-        # Limiar escolhido medindo, nao por gosto -- contra os 43 picks
-        # resolvidos com rastro (2026-08-08), junto com o prior de mercado:
-        #
-        #   L=0.10  sobreviventes 85.0% (n=20)  cortados 56.5% (n=23)
-        #   L=0.15  sobreviventes 81.8% (n=22)  cortados 57.1% (n=21)  <- adotado
-        #   L=0.20  sobreviventes 78.3% (n=23)  cortados 60.0% (n=20)
-        #   (linha de base publicada: 69.8%, n=43)
-        #
-        # L=0.10 separa melhor, mas faz o Poisson mandar em quase todo pick e
-        # foi ajustado contra a MESMA amostra de 43 -- 0.15 fica no meio do
-        # caminho, entre o "concordam" que ja existia (0.10) e o antigo
-        # "discordam" (0.30). Se a amostra crescer e 0.10 continuar melhor,
-        # e' so' baixar aqui.
-        #
-        # Em cartoes sao TRES leituras desde 2026-08-10 (a do arbitro entrou), e
-        # a regra e' a mesma pras tres: vale a menor entre as que discordam
-        # alem do limiar. Nao e' um veto novo -- e' a mesma estimativa
-        # rebaixada, e quem decide se ainda ha pick continua sendo min_taxa/
-        # min_edge, num lugar so'.
-        candidatas_menores = [
-            p for p, d in ((poisson_prob, model_fit_diff), (referee_prob, referee_fit_diff))
-            if p is not None and d is not None
-            and config.model_disagreement_threshold is not None
-            and d > config.model_disagreement_threshold
-            and p < best_line["taxa_real"]
-        ]
-        if candidatas_menores:
-            menor = min(candidatas_menores)
-            best_line = dict(best_line)
-            best_line["taxa_real_pre_desacordo"] = best_line["taxa_real"]
-            best_line["taxa_real"] = menor
-            baseline = best_line.get("prob_baseline_value")
-            if baseline is not None:
-                best_line["edge"] = round(menor - baseline, 4)
-            best_line["ev"] = round(menor * best_line["odd"] - 1, 4)
-            # confidence tambem sai da probabilidade nova: C e' a propria
-            # taxa_real, e deixar o score antigo em pe' daria um candidato
-            # anunciando 56% de chance com a confianca dos 83% de antes --
-            # justamente a dessincronia que esta regra existe pra fechar.
-            # Os deltas (calibracao/variancia/model-fit) entram logo abaixo,
-            # sobre esta base ja corrigida.
-            conf = confidence.confidence_score(
-                C=best_line["taxa_real"], Q=best_line["Q"], K=K, config=config)
 
         total_delta = (cal_delta or 0) - v_penalty + m_adjustment
         if total_delta:
@@ -577,17 +553,10 @@ def analyze_fixture_markets(
             "variance": var_stats,
             "variance_penalty": v_penalty,
             "market_sample": market_sample,
-            "poisson_probability": poisson_prob,
-            "model_fit_diff": model_fit_diff,
+            # poisson_probability / model_fit_diff / referee_* ja vem em
+            # best_line (calculados por linha) -- so' o ajuste de confidence
+            # nasce aqui.
             "model_fit_adjustment": m_adjustment,
-            # A leitura do arbitro, sempre gravada -- inclusive quando nao
-            # rebaixou nada. Sem o numero no rastro nao da' pra medir depois se
-            # ele esta ajudando, que foi exatamente o que faltou pra descobrir
-            # o #1579 antes de ele acontecer.
-            "referee_probability": referee_prob,
-            "referee_fit_diff": referee_fit_diff,
-            "referee_lambda": (referee_model.cards_lambda(referee_sig)
-                               if family in _CARDS_FAMILIES else None),
             "context_score": ctx_score,
             "context_raw": context_data,
             "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
