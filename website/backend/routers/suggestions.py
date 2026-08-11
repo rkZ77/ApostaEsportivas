@@ -2546,6 +2546,14 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
             # Mando NESTE jogo, que e' tambem o mando de todos os jogos da
             # serie -- o card usa pra dizer "ultimos N em casa"/"fora".
             "side": lado,
+            # Menos jogos do que a serie pediu. Filtrar por mando (2026-08-10)
+            # tornou isso comum no comeco de temporada: um time tem ~7 jogos em
+            # casa numa fase inteira, e no comeco tem 2. A barra existe, mas
+            # dizer "ultimos 5" quando sao 2 e' o tipo de silencio que faz o
+            # numero parecer mais solido do que e'. Regra no servidor pra a tela
+            # nao precisar saber quantos jogos foram pedidos.
+            "amostra_curta": len(jogos) < limit,
+            "amostra_pedida": limit,
             **serie,
         })
 
@@ -2599,7 +2607,12 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
     )
     if not serie["resolved"]:
         return None
-    return {"name": referee, **serie}
+    return {
+        "name": referee,
+        "amostra_curta": len(jogos) < limit,
+        "amostra_pedida": limit,
+        **serie,
+    }
 
 
 @router.get("/{suggestion_id}/market-form")
