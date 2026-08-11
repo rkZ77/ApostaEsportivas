@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
 import { Plus, Play, AlertTriangle } from 'lucide-react'
 import PageShell from '../components/PageShell'
-import { Button, Spinner, SpinnerBlock } from '../components/ui'
+import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import { fmtBRL } from '../utils/format'
@@ -151,8 +152,10 @@ export default function Admin() {
   const [acaoResultado, setAcaoResultado] = useState<'resolve' | 'reverify' | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [ligas, setLigas] = useState<Liga[] | null>(null)
-  /** league_id com a coleta sendo disparada · trava o botão contra clique duplo. */
-  const [coletando, setColetando] = useState<number | null>(null)
+  /** Liga no card de confirmação da coleta. null = card fechado. */
+  const [confirmarColeta, setConfirmarColeta] = useState<Liga | null>(null)
+  /** true entre o clique em "Coletar agora" e a resposta do POST. */
+  const [disparando, setDisparando] = useState(false)
   const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
   const [salvandoLiga, setSalvandoLiga] = useState(false)
   // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
@@ -240,6 +243,22 @@ export default function Admin() {
   const carregarLigas = () => {
     api.get('/admin/leagues').then(r => setLigas(r.data)).catch(() => setLigas([]))
   }
+
+  /*
+   * Recarrega a lista quando a coleta termina.
+   *
+   * Sem isto a linha continua mostrando "0 times · 0 jogos" depois de uma
+   * coleta bem-sucedida, que é justamente a leitura que a pessoa abriu a tela
+   * pra conferir · e o sintoma pareceria "a coleta não fez nada".
+   */
+  const statusColetaAnterior = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    const atual = pipelineStatus['coletar_liga']?.status
+    if (statusColetaAnterior.current === 'running' && atual && atual !== 'running') {
+      carregarLigas()
+    }
+    statusColetaAnterior.current = atual
+  }, [pipelineStatus])
 
   useEffect(() => {
     if (!isAdmin) { navigate('/picks'); return }
@@ -600,7 +619,7 @@ export default function Admin() {
             )}
             {overview.coleta.estatisticas_jogador === 0 && (
               <p className="text-[11px] text-orange-400 mt-1">
-                Sem estatística por jogador · o pipeline de defesas de goleiro não gera pick até rodar a coleta.
+                Sem estatística por jogador, o pipeline de defesas de goleiro não gera pick até rodar a coleta.
               </p>
             )}
           </div>
@@ -653,7 +672,7 @@ export default function Admin() {
               </>
             ) : (
               <p className="text-sm text-ink-4">
-                Nada rodou nesta instância ainda. Nada é agendado · dispare pela aba Pipeline.
+                Nada rodou nesta instância ainda. Nada é agendado, dispare pela aba Pipeline.
               </p>
             )}
           </div>
@@ -816,7 +835,7 @@ export default function Admin() {
                     const ativados = r.data?.ativados ?? []
                     showToast(ativados.length > 0
                       ? `${ativados.length} assinatura(s) ativada(s): ${ativados.map((a: any) => a.email ?? a.user_id).join(', ')}`
-                      : `Nada pendente · ${r.data?.ja_registrados ?? 0} já registrada(s) nos últimos 30 dias.`)
+                      : `Nada pendente, ${r.data?.ja_registrados ?? 0} já registrada(s) nos últimos 30 dias.`)
                     api.get('/admin/payments').then(r2 => setPayments(r2.data)).catch(() => {})
                     api.get('/admin/payment-events').then(r2 => setPaymentEvents(r2.data)).catch(() => {})
                     api.get('/admin/revenue').then(r2 => setRevenue(r2.data)).catch(() => {})
@@ -1359,7 +1378,7 @@ export default function Admin() {
             <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar liga</h2>
             <p className="text-xs text-ink-3 mb-3 leading-relaxed">
               O ID é o da API-Football (ex.: 71 = Brasileirão Série A). O nome é
-              buscado automaticamente · só preencha se a validação estiver fora.
+              buscado automaticamente, só preencha se a validação estiver fora.
             </p>
             <div className="grid gap-2 sm:grid-cols-4">
               <input className="input" placeholder="ID da liga" inputMode="numeric"
@@ -1403,10 +1422,18 @@ export default function Admin() {
             {!ligas ? (
               <p className="text-sm text-ink-4">Carregando...</p>
             ) : ligas.length === 0 ? (
-              <p className="text-sm text-ink-4">Nenhuma liga cadastrada · o motor não tem o que coletar.</p>
+              <p className="text-sm text-ink-4">Nenhuma liga cadastrada, o motor não tem o que coletar.</p>
             ) : (
               <div className="space-y-2">
-                {ligas.map(l => (
+                {ligas.map(l => {
+                  // Estado da coleta que esta rodando AGORA (uma por vez, o
+                  // backend recusa a segunda com 409). `league_id` vem junto no
+                  // status justamente pra saber de qual linha ele fala.
+                  const coletaAtual = pipelineStatus['coletar_liga'] as
+                    (typeof pipelineStatus[string] & { league_id?: number }) | undefined
+                  const ehEstaLiga = coletaAtual?.league_id === l.league_id
+                  const coletaRodando = coletaAtual?.status === 'running'
+                  return (
                   <div key={l.league_id}
                     className="flex items-center gap-3 bg-surface-1 border border-line rounded-md px-3 py-2.5">
                     <div className="min-w-0 flex-1">
@@ -1424,35 +1451,44 @@ export default function Admin() {
                         foi assim que a Sul-Americana ficou dias cadastrada,
                         com as oitavas rolando, e zero jogo no banco.
                       */}
-                      {l.times === 0 && (
+                      {l.times === 0 && !ehEstaLiga && (
                         <div className="flex items-start gap-1.5 mt-1 text-[11px] text-yellow-500/90 leading-snug">
                           <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
-                          <span>Sem times cadastrados · nenhum jogo desta liga será coletado até você clicar em Coletar.</span>
+                          <span>Sem times cadastrados, nenhum jogo desta liga será coletado até você clicar em Coletar.</span>
+                        </div>
+                      )}
+
+                      {/*
+                        Andamento na PRÓPRIA linha, não só na aba Pipeline. O
+                        backfill leva minutos e é fácil achar que não fez nada
+                        e clicar de novo · daí o estado morar aqui, junto do
+                        botão que o disparou.
+                      */}
+                      {ehEstaLiga && coletaAtual?.status === 'running' && (
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-accent">
+                          <Spinner className="w-3 h-3" />
+                          <span>Coletando desde {coletaAtual.started_at}, pode levar alguns minutos.</span>
+                        </div>
+                      )}
+                      {ehEstaLiga && coletaAtual?.status === 'ok' && (
+                        <div className="text-[11px] text-accent mt-1">
+                          Coleta concluída às {coletaAtual.finished_at}.
+                        </div>
+                      )}
+                      {ehEstaLiga && coletaAtual?.status === 'error' && (
+                        <div className="flex items-start gap-1.5 mt-1 text-[11px] text-red-400 leading-snug">
+                          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>Coleta falhou. Veja o log na aba Pipeline.</span>
                         </div>
                       )}
                     </div>
                     <button
                       className="text-xs text-ink-1 border border-line hover:border-accent/40 rounded px-3 py-2 shrink-0 transition-colors disabled:opacity-50"
-                      disabled={coletando === l.league_id}
-                      onClick={async () => {
-                        if (!window.confirm(
-                          `Coletar "${l.name}" agora?\n\n` +
-                          `Busca os times, os jogos da janela e a estatística de TODOS os jogos ` +
-                          `já finalizados da temporada. Gasta uma requisição da API por jogo, ` +
-                          `então pode levar alguns minutos e consumir bastante cota.\n\n` +
-                          `Nada é apagado · é tudo atualização.`
-                        )) return
-                        setColetando(l.league_id)
-                        try {
-                          const r = await api.post(`/admin/leagues/${l.league_id}/coletar`)
-                          showToast(`Coleta de ${r.data.liga} iniciada · acompanhe na aba Pipeline.`)
-                        } catch (err: any) {
-                          showToast(err.response?.data?.detail || 'Erro ao iniciar coleta', false)
-                        } finally {
-                          setColetando(null)
-                        }
-                      }}>
-                      {coletando === l.league_id ? 'Iniciando...' : 'Coletar'}
+                      disabled={coletaRodando}
+                      title={coletaRodando && !ehEstaLiga
+                        ? 'Já há uma coleta em andamento' : undefined}
+                      onClick={() => setConfirmarColeta(l)}>
+                      {ehEstaLiga && coletaAtual?.status === 'running' ? 'Coletando...' : 'Coletar'}
                     </button>
                     <button
                       className="text-xs text-red-400 hover:text-red-300 border border-line hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
@@ -1461,8 +1497,8 @@ export default function Admin() {
                         // pelo botao: para de COLETAR, mas o historico fica.
                         if (!window.confirm(
                           `Tirar "${l.name}" da coleta?\n\n` +
-                          `Os ${l.jogos_coletados} jogos já coletados, os times e os picks são PRESERVADOS ` +
-                          `· eles alimentam a calibração do motor. A liga apenas para de receber dados novos.`
+                          `Os ${l.jogos_coletados} jogos já coletados, os times e os picks são PRESERVADOS, ` +
+                          `eles alimentam a calibração do motor. A liga apenas para de receber dados novos.`
                         )) return
                         try {
                           const r = await api.delete(`/admin/leagues/${l.league_id}`)
@@ -1475,15 +1511,91 @@ export default function Admin() {
                       Remover
                     </button>
                   </div>
-                ))}
+                  )
+                })}
               </div>
             )}
             <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
-              Cadastrar só coloca a liga na fila · <span className="text-ink-2">Coletar</span> é
+              Cadastrar só coloca a liga na fila, <span className="text-ink-2">Coletar</span> é
               o que traz os times, os jogos e a estatística da temporada. Roda em segundo plano,
-              com o andamento na aba Pipeline.
+              com o andamento na própria linha da liga.
             </p>
           </div>
+
+          {/*
+            Card de confirmação no lugar do window.confirm: a ação gasta cota
+            de API de verdade e leva minutos, então merece ver o que vai
+            acontecer antes de disparar.
+          */}
+          <AnimatePresence>
+            {confirmarColeta && (
+              <Modal
+                onClose={() => setConfirmarColeta(null)}
+                width="sm"
+                title="Coletar liga"
+                description={confirmarColeta.name}
+              >
+                <div className="p-5 space-y-4">
+                  <div>
+                    <p className="text-xs text-ink-2 leading-relaxed mb-2.5">O que vai acontecer:</p>
+                    <ol className="space-y-1.5">
+                      {[
+                        'Times da liga',
+                        'Jogos da janela de coleta',
+                        'Estatística de todos os jogos já finalizados da temporada',
+                        'Médias agregadas por time',
+                      ].map((passo, i) => (
+                        <li key={passo} className="flex gap-2 text-xs text-ink-1">
+                          <span className="font-mono text-[10px] text-ink-4 pt-0.5">{i + 1}</span>
+                          <span>{passo}</span>
+                        </li>
+                      ))}
+                    </ol>
+                  </div>
+
+                  <div className="bg-yellow-500/5 border border-yellow-500/25 rounded-lg p-3">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="w-3.5 h-3.5 text-yellow-500 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-ink-2 leading-relaxed">
+                        O passo 3 gasta uma requisição da API por jogo. Numa liga de pontos
+                        corridos são centenas, então pode levar minutos e consumir bastante cota.
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-[11px] text-ink-4 leading-relaxed">
+                    Nada é apagado, é tudo atualização. Roda em segundo plano e o andamento
+                    aparece na linha da liga.
+                  </p>
+
+                  <div className="flex gap-2 pt-1">
+                    <button
+                      className="flex-1 text-xs text-ink-3 border border-line rounded px-3 py-2.5 hover:text-ink-1 transition-colors"
+                      onClick={() => setConfirmarColeta(null)}>
+                      Cancelar
+                    </button>
+                    <Button
+                      className="flex-1"
+                      disabled={disparando}
+                      onClick={async () => {
+                        setDisparando(true)
+                        try {
+                          const r = await api.post(`/admin/leagues/${confirmarColeta.league_id}/coletar`)
+                          showToast(`Coleta de ${r.data.liga} iniciada.`)
+                          setConfirmarColeta(null)
+                        } catch (err: any) {
+                          showToast(err.response?.data?.detail || 'Erro ao iniciar coleta', false)
+                        } finally {
+                          setDisparando(false)
+                        }
+                      }}>
+                      {disparando ? 'Iniciando...' : 'Coletar agora'}
+                    </Button>
+                  </div>
+                </div>
+              </Modal>
+            )}
+          </AnimatePresence>
         </>)}
 
     </PageShell>

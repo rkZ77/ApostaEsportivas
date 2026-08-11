@@ -87,7 +87,7 @@ export default function ResetMonthModal({
         </div>
 
         <p className="text-[11px] text-ink-4 leading-relaxed mb-5">
-          As apostas somem só da sua banca · os picks em si continuam publicados e você
+          As apostas somem só da sua banca, os picks em si continuam publicados e você
           pode registrar de novo os que quiser. Sua banca volta a ser o que era no
           começo de {mes}.
         </p>

@@ -676,7 +676,7 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                 400,
                 f"Unidade muito alta para sua banca. "
                 f"Com R${body.bankroll_start:.2f} de banca e R${body.unit_value:.2f} por unidade "
-                f"você teria apenas {total_units:.0f} unidades · alto risco de ruína. "
+                f"você teria apenas {total_units:.0f} unidades, alto risco de ruína. "
                 f"Reduza a unidade para no máximo R${max_unit:.2f} (20 unidades mínimas)."
             )
     user_id = current_user["id"]
@@ -696,7 +696,7 @@ def setup_banca(body: BancaSetup, current_user: dict = Depends(get_current_user)
                     400,
                     "Você já configurou sua banca este mês. Isso evita mudar os números no "
                     "meio do mês e distorcer o histórico de risco. Pra tirar dinheiro agora, "
-                    "use o botão \"Sacar\" · pra reconfigurar de novo, espera o fechamento "
+                    "use o botão \"Sacar\", pra reconfigurar de novo, espera o fechamento "
                     "mensal automático."
                 )
 
@@ -1174,7 +1174,7 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
         cur, user_id, TYPE_MONTHLY_CLOSE,
         title=f"Fechamento de {label}",
         dedupe_key=dedupe_key,
-        body=f"{sign}{fmt_brl(pnl)} no mês · {stats['greens']}G/{stats['reds']}R. "
+        body=f"{sign}{fmt_brl(pnl)} no mês, {stats['greens']}G/{stats['reds']}R. "
              f"Confirme sua banca pra começar o mês novo.",
         url="/banca",
         payload={"month_key": month_key, "month_label": label, "total_pnl": pnl},
