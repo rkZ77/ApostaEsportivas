@@ -80,6 +80,8 @@ interface Overview {
 interface Liga {
   league_id: number; name: string; season: number
   times: number; jogos_coletados: number; jogos_agendados: number
+  /** null = ninguém marcou. Nesse estado a coleta roda completa. */
+  temporada_iniciada: boolean | null
 }
 
 const PICK_LABEL: Record<string, string> = {
@@ -156,7 +158,10 @@ export default function Admin() {
   const [confirmarColeta, setConfirmarColeta] = useState<Liga | null>(null)
   /** true entre o clique em "Coletar agora" e a resposta do POST. */
   const [disparando, setDisparando] = useState(false)
-  const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
+  const [novaLiga, setNovaLiga] = useState<{
+    league_id: string; season: string; name: string
+    temporada_iniciada: boolean | null
+  }>({ league_id: '', season: String(new Date().getFullYear()), name: '', temporada_iniciada: null })
   const [salvandoLiga, setSalvandoLiga] = useState(false)
   const [verificando, setVerificando] = useState(false)
   /** Prévia da API antes de cadastrar: a temporada já começou, tem jogo? */
@@ -1408,6 +1413,11 @@ export default function Admin() {
                       `/admin/leagues/${novaLiga.league_id}/verificar`,
                       { params: { season: Number(novaLiga.season) } })
                     setPreviaLiga(r.data)
+                    // Marca sozinho com o que a API respondeu · a caixa fica
+                    // pra corrigir, não pra adivinhar.
+                    if (r.data?.existe) {
+                      setNovaLiga(v => ({ ...v, temporada_iniciada: !!r.data.iniciada }))
+                    }
                   } catch (err: any) {
                     showToast(err.response?.data?.detail || 'Erro ao verificar liga', false)
                   } finally {
@@ -1423,12 +1433,15 @@ export default function Admin() {
                   setSalvandoLiga(true)
                   try {
                     const r = await api.post('/admin/leagues', {
+                      temporada_iniciada: novaLiga.temporada_iniciada,
                       league_id: Number(novaLiga.league_id),
                       season: Number(novaLiga.season),
                       name: novaLiga.name || undefined,
                     })
                     showToast(`${r.data.name} ${r.data.acao}. ${r.data.aviso}`)
-                    setNovaLiga({ league_id: '', season: String(new Date().getFullYear()), name: '' })
+                    setNovaLiga({ league_id: '', season: String(new Date().getFullYear()),
+                                  name: '', temporada_iniciada: null })
+                    setPreviaLiga(null)
                     carregarLigas()
                   } catch (err: any) {
                     showToast(err.response?.data?.detail || 'Erro ao cadastrar liga', false)
@@ -1438,6 +1451,39 @@ export default function Admin() {
                 }}>
                 {salvandoLiga ? 'Salvando...' : 'Cadastrar'}
               </button>
+            </div>
+
+            {/*
+              Caixa de seleção da temporada.
+
+              Três estados, não dois: marcada (já começou), desmarcada (não
+              começou) e SEM MARCAR. O terceiro existe porque quem cadastra
+              pode não saber, e assumir "já começou" faria o Coletar disparar
+              o backfill · uma requisição por jogo · numa liga que pode não ter
+              jogo finalizado nenhum. Sem marcar, roda completo, que é o seguro.
+            */}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              <span className="text-[11px] text-ink-4">Temporada:</span>
+              {([
+                [true,  'Já começou'],
+                [false, 'Ainda não começou'],
+                [null,  'Não sei'],
+              ] as const).map(([valor, rotulo]) => (
+                <button
+                  key={String(valor)}
+                  onClick={() => setNovaLiga(v => ({ ...v, temporada_iniciada: valor }))}
+                  className={`text-[11px] px-2.5 py-1.5 rounded border transition-colors ${
+                    novaLiga.temporada_iniciada === valor
+                      ? 'border-accent/50 bg-accent/10 text-accent font-semibold'
+                      : 'border-line text-ink-3 hover:text-ink-1'}`}>
+                  {rotulo}
+                </button>
+              ))}
+              {novaLiga.temporada_iniciada === false && (
+                <span className="text-[11px] text-ink-4">
+                  Coletar vai pular a estatística do histórico.
+                </span>
+              )}
             </div>
 
             {/*
@@ -1516,6 +1562,11 @@ export default function Admin() {
                       <div className="text-[11px] text-ink-3 mt-0.5 font-mono">
                         {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
                       </div>
+                      {l.temporada_iniciada === false && (
+                        <div className="text-[11px] text-ink-4 mt-0.5">
+                          Marcada como temporada não iniciada, a coleta pula o histórico.
+                        </div>
+                      )}
                       {/*
                         Liga sem time nunca coleta jogo: o coletor filtra pelos
                         times conhecidos. O aviso fica aqui porque a linha já

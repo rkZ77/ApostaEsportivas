@@ -17,6 +17,13 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
 
     cur = conn.cursor()
     try:
+        # Temporada da liga ja comecou? NULL = ninguem marcou ainda.
+        #
+        # Tres estados de proposito: quem cadastra pode nao saber, e assumir
+        # "sim" faria o botao Coletar disparar o backfill de temporada (uma
+        # requisicao por jogo) numa liga que pode nao ter jogo nenhum
+        # finalizado. NULL cai no comportamento completo, que e' o seguro.
+        cur.execute("ALTER TABLE leagues ADD COLUMN IF NOT EXISTS temporada_iniciada BOOLEAN;")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS away_team_id INTEGER;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
