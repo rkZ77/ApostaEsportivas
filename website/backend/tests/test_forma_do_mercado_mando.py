@@ -23,7 +23,7 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import market_form  # noqa: E402
-from tests.test_home_2026_08 import _codigo, _fonte  # noqa: E402
+from tests.test_home_2026_08 import _codigo, _fonte, _front, _front_codigo  # noqa: E402
 
 
 # ─────────────────────────── escopo ───────────────────────────
@@ -223,3 +223,20 @@ def test_nome_do_time_sai_por_subconsulta_nao_por_join():
     corpo = _codigo("routers/suggestions.py", "_nome_do_time")
     assert "SELECT t.name FROM teams t WHERE t.team_id" in corpo
     assert "LIMIT 1" in corpo
+
+
+def test_amostra_curta_e_avisada_na_tela():
+    """Filtrar por mando deixou amostra curta comum: um time tem ~7 jogos em
+    casa numa fase inteira, e no comeco de temporada tem 2. Tres barras verdes
+    lidas como "100%" sao muito menos do que parecem, e a regua e as cores sao
+    identicas as de uma serie cheia -- quem le nao tem como saber sozinho.
+
+    A regra fica no servidor: a tela nao precisa saber quantos jogos foram
+    pedidos pra decidir se avisa."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
+    assert '"amostra_curta": len(jogos) < limit' in corpo
+    arb = _codigo("routers/suggestions.py", "_serie_do_arbitro")
+    assert '"amostra_curta": len(jogos) < limit' in arb
+    tela = _front_codigo("components/MarketForm.tsx")
+    assert "serie.amostra_curta" in tela
+    assert "Histórico curto" in _front("components/MarketForm.tsx")

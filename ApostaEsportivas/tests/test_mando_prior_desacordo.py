@@ -231,10 +231,24 @@ def test_confidence_acompanha_a_probabilidade_rebaixada():
 
 def test_desacordo_nunca_sobe_a_probabilidade():
     """A regra e' conservadora nos dois sentidos: se o Poisson for MAIOR que a
-    taxa empirica, o motor nao aproveita pra inflar o pick."""
-    import inspect
-    src = inspect.getsource(orchestrator.analyze_fixture_markets)
-    assert 'poisson_prob < best_line["taxa_real"]' in src
+    taxa empirica, o motor nao aproveita pra inflar o pick.
+
+    6 jogos de 8 escanteios e 4 de 4, contra Over 4.5: a contagem direta da'
+    60% (56.7% depois do encolhimento) e o Poisson, com lambda 6.4, da' 76.5%.
+    Discordam 19.8pp, acima do limiar -- mas pro lado de cima, e ai nada pode
+    acontecer."""
+    hist = _historico_total([8] * 6 + [4] * 4)
+    candidatos = orchestrator.analyze_fixture_markets(
+        _odds_over_under(linha="4.5"), hist, hist,
+        calibration_data={"by_market": {}, "by_market_league": {}},
+        home_team_id=1, away_team_id=2,
+    )
+    over = next(c for c in candidatos if c["value"] == "Over")
+    assert over["poisson_probability"] > over["taxa_real"]
+    assert over["model_fit_diff"] > DEFAULT_CONFIG.model_disagreement_threshold
+    assert "taxa_real_pre_desacordo" not in over, "rebaixou pra cima"
+    assert over["taxa_real"] == pytest.approx(
+        bayesian_model.shrink_taxa(0.6, over["amostra"], over["prob_baseline_value"]), abs=1e-4)
 
 
 # ─────────── 4. o caso Goias x Londrina (2026-08-10) ───────────

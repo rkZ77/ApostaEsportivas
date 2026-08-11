@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Activity, Gavel } from 'lucide-react'
+import { Activity, AlertTriangle, Gavel } from 'lucide-react'
 import api from '../services/api'
 import { Skeleton } from './ui'
 import { TeamLogo } from './TeamLogo'
@@ -63,6 +63,9 @@ interface Serie {
   greens: number
   hit_rate: number | null
   average: number | null
+  /** Vieram menos jogos do que a série pediu · ver o aviso no rodapé dela. */
+  amostra_curta: boolean
+  amostra_pedida: number
 }
 
 interface TeamSerie extends Serie {
@@ -179,6 +182,25 @@ function Grafico({
           )
         })}
       </div>
+
+      {/*
+        Amostra curta, dita com todas as letras.
+
+        Filtrar por mando deixou isso comum: um time tem ~7 jogos em casa numa
+        fase inteira, e no começo de temporada tem 2. Três barras verdes lidas
+        como "100%" são muito menos do que parecem, e quem lê o card não tem
+        como saber disso sozinho · a régua e as cores são idênticas.
+      */}
+      {serie.amostra_curta && (
+        <p className="flex items-start gap-1.5 mt-2 text-[10px] text-yellow-500/90 leading-snug">
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-px" />
+          <span>
+            Histórico curto: {jogos.length} {jogos.length === 1 ? 'jogo' : 'jogos'} nesta
+            temporada, não {serie.amostra_pedida}. Com poucos jogos, essa porcentagem
+            varia muito.
+          </span>
+        </p>
+      )}
     </div>
   )
 }

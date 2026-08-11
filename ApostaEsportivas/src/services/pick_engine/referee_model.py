@@ -6,6 +6,7 @@ deterministico e usada por TODOS os pipelines (VIP/Free/Multipla/Alavancagem,
 ja que sao todos orquestrados por analyze_fixture_markets), reforcada
 com o contexto de jogo (pressao de tabela + intensidade tatica dos times),
 nao so o historico do arbitro isolado."""
+from services.pick_engine import probability_model, stats_model
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
 
 # Baseline de "pontos de cartao" tipicos por jogo de um arbitro (amarelo=1,
@@ -121,6 +122,52 @@ def game_intensity(context_data: dict | None, matchup_data: dict | None, referee
         label = "morno"
 
     return {"score": score, "label": label, "components": components}
+
+
+def cards_lambda(referee: dict) -> float | None:
+    """Pontos de cartao por jogo que ESTE arbitro costuma dar (amarelo=1,
+    vermelho=2), encolhido pro baseline conforme a amostra dele.
+
+    None quando nao ha sinal proprio do arbitro. Inclui o caso do fallback de
+    liga: ali o numero e' a media da COMPETICAO, e usar isso como estimativa
+    independente seria comparar o pick com um baseline que ja esta' embutido em
+    todo o resto da conta -- diria "a linha esta acima da media da liga", que
+    nao e' a pergunta.
+
+    O encolhimento e' o mesmo shrink_to_baseline usado nas medias de time: com
+    3-5 jogos apitados a media crua e' ruidosa demais pra entrar inteira, mas
+    tambem nao e' zero -- puxar pro 4.1 e' o meio termo que o resto do motor ja
+    usa pra amostra curta."""
+    if not referee.get("reliable") or referee.get("is_league_fallback"):
+        return None
+    if referee.get("avg_yellow") is None:
+        return None
+    pontos = referee["avg_yellow"] + 2 * (referee.get("avg_red") or 0.0)
+    return stats_model.shrink_to_baseline(
+        pontos, referee.get("games"), _REFEREE_CARD_POINTS_BASELINE)
+
+
+def cards_probability(referee: dict, line: float | None, direction: str | None) -> float | None:
+    """P(a linha do pick bater) SO' pelo arbitro, via Poisson sobre cards_lambda.
+
+    Terceira estimativa do mercado de cartoes, independente das outras duas: a
+    taxa empirica conta o que os dois TIMES fizeram, o Poisson de convergencia
+    cruza feitos-x-cedidos dos TIMES, e nenhuma das duas sabe quem vai apitar.
+
+    O caso que motivou (2026-08-09, pick VIP #1579, RB Bragantino x Corinthians,
+    "Cartoes Over 4.5" a 71.8%, RED com 4 cartoes): Raphael Claus estava em 3.60
+    pontos por jogo, ABAIXO da linha. O motor tinha esse numero e o usava so' pra
+    somar -0.025 num score de intensidade que serve de porteira liga/desliga --
+    a media do arbitro nunca chegava na probabilidade. Sobre lambda 3.6, Over 4.5
+    da' ~29%, nao 72%. O mesmo arbitro na mesma linha ja' tinha dado o RED #1500.
+
+    Medido nos 31 picks de cartao resolvidos com media de arbitro disponivel
+    (2026-08-10): quando a media dele CONTRADIZ a linha o acerto e' 54.5% (n=11,
+    -0.64u); quando concorda, 75.0% (n=20, +5.40u)."""
+    lam = cards_lambda(referee)
+    if lam is None or line is None:
+        return None
+    return probability_model.poisson_prob_for_line(lam, line, direction)
 
 
 def cards_market_eligible(
