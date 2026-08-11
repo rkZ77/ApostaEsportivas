@@ -164,3 +164,59 @@ def test_fora_de_cartoes_o_arbitro_nao_entra():
     c = next(x for x in candidatos if x["market_type"] == "corners")
     assert c["referee_probability"] is None
     assert c["referee_lambda"] is None
+
+
+# ────── a escolha da LINHA passa a ver as tres leituras (2026-08-10) ──────
+
+
+def _odds_duas_linhas():
+    return [
+        {"market_id": 9, "market_name": "Cards Over/Under", "line": linha,
+         "bookmakers_count": 3, "value": v, "best_odd": 2.00}
+        for linha in ("3.5", "5.5") for v in ("Over", "Under")
+    ]
+
+
+def _rodar_duas_linhas(referee_stats):
+    """Times de 5 cartoes por jogo: Over 3.5 e Under 5.5 batem os dois em 100%
+    do historico, entao a taxa empirica sozinha nao sabe escolher entre eles."""
+    hist = [_jogo(i, 3, 2) for i in range(10)]
+    return orchestrator.analyze_fixture_markets(
+        _odds_duas_linhas(), hist, hist,
+        calibration_data={"by_market": {}, "by_market_league": {}},
+        home_team_id=1, away_team_id=2,
+        referee_stats=referee_stats,
+        league_stats={"games": 200, "avg_yellow": 4.0, "avg_red": 0.1},
+    )
+
+
+def test_arbitro_permissivo_faz_o_motor_escolher_o_outro_lado():
+    """A pergunta do usuario (2026-08-10): "ele corta, mas pode pegar um under?"
+
+    Podia nao. A linha era escolhida pela taxa empirica sozinha e SO' DEPOIS
+    levava o corte -- o motor fechava em Over 3.5, tomava o corte do arbitro em
+    cima dela e ficava sem pick, sem nunca ter olhado o outro lado do mesmo
+    mercado. Agora as tres leituras sao resolvidas linha por linha, ANTES da
+    escolha, e a comparacao acontece entre numeros ja corrigidos."""
+    sem_arbitro = next(x for x in _rodar_duas_linhas(None) if x["market_type"] == "cards")
+    assert (sem_arbitro["value"], sem_arbitro["line"]) == ("Over", "3.5")
+
+    permissivo = next(x for x in _rodar_duas_linhas({"games": 8, "avg_yellow": 3.0, "avg_red": 0.0})
+                      if x["market_type"] == "cards")
+    assert permissivo["value"] == "Under", "ficou no lado que o arbitro contradiz"
+    assert permissivo["line"] == "5.5"
+    # e o que o arbitro diz do lado escolhido nao derruba nada: ele CONCORDA
+    assert permissivo["referee_probability"] > permissivo["taxa_real"]
+
+
+def test_a_correcao_acontece_antes_da_escolha_nao_depois():
+    """Trava a ordem, que e' o coracao da mudanca: toda linha candidata carrega
+    a probabilidade ja corrigida, nao so' a vencedora."""
+    cs = _rodar_duas_linhas({"games": 8, "avg_yellow": 3.0, "avg_red": 0.0})
+    c = next(x for x in cs if x["market_type"] == "cards")
+    linhas = c.get("_all_lines")
+    assert linhas is None, "_all_lines so' existe em debug"
+    # a vencedora traz o rastro das tres leituras
+    for chave in ("poisson_probability", "model_fit_diff",
+                  "referee_probability", "referee_fit_diff", "referee_lambda"):
+        assert chave in c, chave
