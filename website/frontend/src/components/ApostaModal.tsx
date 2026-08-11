@@ -123,7 +123,7 @@ export default function ApostaModal({
               />
               {oddChanged && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
-                  Odd diferente do pick · será registrada como apostada
+                  Odd diferente do pick, será registrada como apostada
                 </p>
               )}
             </div>
@@ -156,7 +156,7 @@ export default function ApostaModal({
                 </div>
                 {exceedsSuggested && !exceedsMax && (
                   <p className="text-yellow-400 text-[11px] mt-1.5">
-                    Acima da sugestão · você será solicitado a confirmar
+                    Acima da sugestão, você será solicitado a confirmar
                   </p>
                 )}
                 {exceedsMax && (

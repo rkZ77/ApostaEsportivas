@@ -364,7 +364,7 @@ export default function Profile() {
             <input className="input w-full" value={username}
               onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ''))}
               placeholder="seu_usuario" maxLength={20} />
-            <p className="text-xs text-ink-4 mt-1">3–20 caracteres · letras minúsculas, números e _</p>
+            <p className="text-xs text-ink-4 mt-1">3–20 caracteres, letras minúsculas, números e _</p>
           </div>
 
           <div>

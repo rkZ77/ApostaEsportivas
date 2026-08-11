@@ -257,7 +257,7 @@ export default function Planos() {
             <div className="w-10 h-10 bg-surface-2 rounded-full flex items-center justify-center shrink-0 text-ink-3 font-black text-sm">F</div>
             <div className="flex-1">
               <p className="text-ink-1 font-bold text-sm">Plano Free</p>
-              <p className="text-ink-3 text-xs mt-0.5">1 pick gratuito por dia · sem expiração</p>
+              <p className="text-ink-3 text-xs mt-0.5">1 pick gratuito por dia, sem expiração</p>
               {memberSince && <p className="text-ink-4 text-xs mt-0.5">Membro desde {memberSince}</p>}
             </div>
             <button onClick={() => navigate('/checkout')}
