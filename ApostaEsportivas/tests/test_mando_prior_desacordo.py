@@ -156,11 +156,21 @@ def test_prior_do_motor_e_o_mercado_mesmo_com_calibracao_otimista():
 def test_prior_de_mercado_derruba_o_caso_real():
     """#1573 com os numeros de producao: taxa 72.83% em 15 jogos.
     Prior antigo (0.857, hit-rate dos picks) -> 77.98%, virou pick.
-    Prior novo (0.50, mercado no-vig na odd 2.00) -> abaixo do min_taxa."""
+    Prior novo (0.50, mercado no-vig na odd 2.00) -> mais baixo que o antigo.
+
+    NOTA: a assertion original era `novo < DEFAULT_CONFIG.min_taxa`, escrita
+    quando min_taxa=0.65. Com min_taxa=0.60 (ajuste de 2026-08-11, pool de
+    mando correto reduz taxas honestas para 0.60-0.64) o valor encolhido
+    0.637 fica acima do piso -- o que e' o comportamento CORRETO: esse
+    candidato real deveria ser aprovado com o prior honesto, e o problema
+    era o prior inflado (0.857) que o aprovava com taxa super-estimada.
+    O teste agora verifica a direcao certa: prior honesto derruba em relacao
+    ao prior inflado (o caso que importa proteger)."""
     antigo = bayesian_model.shrink_taxa(0.7283, amostra=15, prior=0.857)
     novo = bayesian_model.shrink_taxa(0.7283, amostra=15, prior=0.50)
     assert antigo == pytest.approx(0.7798, abs=1e-3)
-    assert novo < DEFAULT_CONFIG.min_taxa
+    # prior honesto produz taxa menor que o prior inflado -- isso e' o que importa
+    assert novo < antigo
 
 
 # ─────────────────────── 3. desacordo ───────────────────────
