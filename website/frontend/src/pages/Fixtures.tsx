@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
@@ -181,6 +181,41 @@ export default function Fixtures() {
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
   }, [])
+
+  /*
+   * O painel abre com o jogo mais relevante do dia já dentro.
+   *
+   * Painel vazio ao lado de uma lista cheia é espaço morto, e obriga um clique
+   * pra ver a primeira informação. A ordem é a mesma que a pessoa usaria: o que
+   * está rolando agora, depois o que a IA escolheu (VIP na frente da Free), e
+   * senão o próximo a começar.
+   *
+   * SÓ no desktop: no celular não existe painel, e pré-selecionar abriria uma
+   * folha sobre a lista sem ninguém ter pedido.
+   */
+  const jogoDestaque = useMemo(() => {
+    if (!fixtures.length) return null
+    const peso = (f: Fixture) =>
+      (isLive(f.status) ? 100 : 0) +
+      (f.has_pick ? (f.pick_type_flag === 'vip' ? 20 : 10) : 0) +
+      (isFinished(f.status) ? -5 : 0)
+    return [...fixtures].sort((a, b) => {
+      const d = peso(b) - peso(a)
+      if (d !== 0) return d
+      return (a.match_datetime ?? '').localeCompare(b.match_datetime ?? '')
+    })[0]
+  }, [fixtures])
+
+  useEffect(() => {
+    if (!isDesktop || !canSeeStats) return
+    // Só preenche o vazio. Trocar a seleção de quem já clicou seria a tela
+    // desfazendo o que a pessoa fez.
+    setStatsFixture(atual => atual ?? jogoDestaque)
+  }, [jogoDestaque, isDesktop, canSeeStats])
+
+  // Data nova, destaque novo: manter o jogo de ontem selecionado enquanto a
+  // lista mostra hoje é a pior combinação possível.
+  useEffect(() => { setStatsFixture(null) }, [date])
   const [lockPrompt, setLockPrompt]    = useState(false)
   const [collapsed, setCollapsed]      = useState<Set<string>>(new Set())
   const [liveStats, setLiveStats]      = useState<Record<number, LiveStats>>({})
