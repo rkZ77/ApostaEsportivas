@@ -7,7 +7,12 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class PickEngineConfig:
     # Criterios minimos de elegibilidade (secao 5 / selecao final)
-    min_taxa: float = 0.65
+    # 0.60 desde 2026-08-11: o pool de mando correto (pool_and_field com filtro
+    # de mando por partida, achado 2026-08-08) reduz a amostra de ~30 para ~14
+    # jogos e produz taxas menores que o pool inflado anterior. O piso de 0.65
+    # foi calibrado para o pool antigo -- com o pool honesto, candidatos legitimos
+    # de 0.60-0.64 ficavam fora mesmo com ev>0, edge>=0.05 e conf>=0.55.
+    min_taxa: float = 0.60
     min_amostra: int = 5
     min_confidence: float = 0.55
     min_ev: float = 0.0  # EV deve ser estritamente positivo para aprovar a aposta

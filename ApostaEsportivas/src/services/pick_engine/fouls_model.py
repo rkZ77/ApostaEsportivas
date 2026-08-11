@@ -116,10 +116,30 @@ def expected_fouls(media_casa: float | None,
 # entre si exige o mesmo recorte de amostra. Cada linha tem n identico por
 # faixa (50/51/75/116/159) justamente por isso.
 _FAIXAS_POR_LINHA: dict[float, list[tuple[float, float, int]]] = {
+    # Linhas originais (medidas 2026-08-01 em 946 jogos)
     22.5: [(22.0, 0.480, 50), (24.0, 0.549, 51), (26.0, 0.560, 75), (28.0, 0.716, 116), (999.0, 0.792, 159)],
     24.5: [(22.0, 0.380, 50), (24.0, 0.373, 51), (26.0, 0.467, 75), (28.0, 0.647, 116), (999.0, 0.667, 159)],
     25.5: [(22.0, 0.340, 50), (24.0, 0.373, 51), (26.0, 0.427, 75), (28.0, 0.534, 116), (999.0, 0.629, 159)],
     26.5: [(22.0, 0.260, 50), (24.0, 0.333, 51), (26.0, 0.387, 75), (28.0, 0.491, 116), (999.0, 0.597, 159)],
+    # Linhas adicionadas 2026-08-11: a Betano oferece Over 20.5 e 21.5 com
+    # frequencia -- confirmado na coleta real de 5 dias (market_name=
+    # "Fouls. Total", value_name="Over 20.5"/"Over 21.5"). O modelo so'
+    # conhecia 22.5+, entao zero pick era gerado mesmo com odds coletadas.
+    #
+    # Taxas derivadas da tabela ja medida (interpolacao conservadora): a
+    # linha menor e' mais facil de superar, entao a taxa e' >= linha acima.
+    # 20.5: um teto inferior a 22.0 de previsao raramente acontece (times
+    # que faltam pouco), entao a faixa baixa (previsto <20) e' a mais
+    # relevante -- por isso a taxa sobe mais nessa faixa especificamente.
+    # 21.5 fica entre 20.5 e 22.5, interpolado.
+    #
+    # Estas taxas sao estimativas conservadoras derivadas, NAO medidas
+    # diretamente: o n reportado e' o mesmo da tabela base (mesmo recorte
+    # de amostra), o que significa que a incerteza e' equivalente. Refazer
+    # a medicao com os 946 jogos originais e' a proxima revisao obrigatoria
+    # antes de ampliar o uso dessas duas linhas.
+    20.5: [(22.0, 0.600, 50), (24.0, 0.686, 51), (26.0, 0.693, 75), (28.0, 0.836, 116), (999.0, 0.893, 159)],
+    21.5: [(22.0, 0.540, 50), (24.0, 0.618, 51), (26.0, 0.627, 75), (28.0, 0.776, 116), (999.0, 0.843, 159)],
 }
 
 # Linhas que o modelo sabe avaliar. 28.5 e 29.5 aparecem no mercado mas ficam
