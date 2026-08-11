@@ -108,12 +108,19 @@ const LOCAL_LEAGUE_LOGOS: Record<number, string> = {
 const leagueLogo = (league_id: number) =>
   LOCAL_LEAGUE_LOGOS[league_id] ?? `/api/proxy/league/${league_id}.png`
 
-function TeamLogo({ id, name, side }: { id?: number; name: string; side: 'left' | 'right' }) {
+function TeamLogo({ id, name, side, size = 32 }: {
+  id?: number; name: string
+  /** Inverte a ordem no flex. Omitido, o escudo fica onde estiver no markup. */
+  side?: 'left' | 'right'
+  size?: number
+}) {
   const src = TEAM_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name} width={32} height={32}
-      className={`w-8 h-8 object-contain shrink-0 ${side === 'left' ? 'order-last' : 'order-first'}`}
+    <img src={src} alt={name} width={size} height={size} loading="lazy"
+      className={`object-contain shrink-0 ${
+        side === 'left' ? 'order-last' : side === 'right' ? 'order-first' : ''}`}
+      style={{ width: size, height: size }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
@@ -386,57 +393,63 @@ export default function Fixtures() {
                         onClick={() => canSeeStats ? setStatsFixture(f) : setLockPrompt(true)}
                       >
 
-                        {/* Hora / status */}
-                        <div className="w-20 shrink-0 text-center">
+                        {/*
+                          Um time por linha, placar na coluna da direita.
+
+                          O formato antigo era "Nome [escudo] × [escudo] Nome"
+                          numa linha só: no celular os dois nomes disputavam a
+                          mesma largura e "Independiente del Valle" virava
+                          "Independiente d...". Empilhado, cada time tem a linha
+                          inteira · é o mesmo motivo pelo qual placar ao vivo em
+                          geral usa esse formato.
+                        */}
+                        <div className="w-12 sm:w-14 shrink-0 flex flex-col justify-center">
                           {live ? (
-                            <div className="flex flex-col items-center">
-                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse mb-1" />
-                              <span className="text-xs font-bold text-green-400 leading-tight">
+                            <>
+                              <span className="text-[11px] font-bold text-green-400 tabular-nums leading-tight">
                                 {f.elapsed ? `${f.elapsed}'` : st.label}
                               </span>
-                            </div>
+                              <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse mt-1" />
+                            </>
                           ) : finished ? (
-                            <span className={`text-xs ${st.color}`}>{st.label}</span>
+                            <span className="text-[11px] text-ink-4 leading-tight">{st.label}</span>
                           ) : (
-                            <span className="font-mono text-sm font-bold text-ink-2">{time}</span>
+                            <span className="font-mono text-[13px] font-bold text-ink-2 tabular-nums">{time}</span>
                           )}
                         </div>
 
-                        {/* Times + placar */}
-                        <div className="flex-1 flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
-                            <span className={`text-sm font-semibold truncate ${live ? 'text-ink-1' : 'text-ink-2'}`}>
-                              {f.home_team}
-                            </span>
-                            <TeamLogo id={f.home_team_id} name={f.home_team} side="left" />
-                          </div>
+                        <div className="w-px self-stretch bg-line/60 shrink-0" />
 
-                          <div className="shrink-0 flex items-center gap-1.5">
-                            {finished || live ? (
-                              <>
-                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-surface-2 text-ink-1'}`}>
-                                  {f.home_goals ?? 0}
+                        <div className="flex-1 min-w-0 space-y-1">
+                          {([
+                            ['home', f.home_team, f.home_team_id, f.home_goals, f.away_goals] as const,
+                            ['away', f.away_team, f.away_team_id, f.away_goals, f.home_goals] as const,
+                          ]).map(([lado, nome, id, gols, golsAdv]) => {
+                            // Placar decidido escurece o perdedor, como em
+                            // qualquer placar ao vivo · a leitura de quem ganhou
+                            // fica instantânea, sem comparar os dois números.
+                            const perdeu = finished && (gols ?? 0) < (golsAdv ?? 0)
+                            return (
+                              <div key={lado} className="flex items-center gap-2">
+                                <TeamLogo id={id} name={nome} size={20} />
+                                <span className={`text-[13px] flex-1 min-w-0 truncate ${
+                                  perdeu ? 'text-ink-4 font-medium'
+                                         : live ? 'text-ink-1 font-bold' : 'text-ink-1 font-semibold'}`}>
+                                  {nome}
                                 </span>
-                                <span className="text-ink-4 text-xs">×</span>
-                                <span className={`font-mono w-7 h-7 flex items-center justify-center rounded-lg text-sm font-black ${live ? 'bg-green-500/10 text-green-400' : 'bg-surface-2 text-ink-1'}`}>
-                                  {f.away_goals ?? 0}
-                                </span>
-                              </>
-                            ) : (
-                              <span className="text-ink-4 text-sm font-bold px-2">vs</span>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2 flex-1 justify-start min-w-0">
-                            <TeamLogo id={f.away_team_id} name={f.away_team} side="right" />
-                            <span className={`text-sm font-semibold truncate ${live ? 'text-ink-1' : 'text-ink-2'}`}>
-                              {f.away_team}
-                            </span>
-                          </div>
+                                {(finished || live) && (
+                                  <span className={`font-mono text-sm font-black tabular-nums shrink-0 w-5 text-right ${
+                                    live ? 'text-green-400' : perdeu ? 'text-ink-4' : 'text-ink-1'}`}>
+                                    {gols ?? 0}
+                                  </span>
+                                )}
+                              </div>
+                            )
+                          })}
                         </div>
 
                         {/* Badge de pick IA + lock hint */}
-                        <div className="shrink-0 flex flex-col items-end gap-0.5 w-[72px]">
+                        <div className="shrink-0 flex flex-col items-end justify-center gap-0.5 w-auto sm:w-[72px]">
                           {f.has_pick && (
                             <>
                               <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border ${
@@ -447,7 +460,7 @@ export default function Fixtures() {
                                 Pick IA
                               </span>
                               {f.pick_market && (
-                                <span className="text-[10px] text-ink-3 max-w-[72px] truncate text-right">
+                                <span className="hidden sm:block text-[10px] text-ink-3 max-w-[72px] truncate text-right">
                                   {f.pick_market}
                                 </span>
                               )}
