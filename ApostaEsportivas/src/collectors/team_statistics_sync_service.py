@@ -119,12 +119,26 @@ class LeagueTeamsSyncService:
     # ---------------------------------------------------------
     # Processo principal
     # ---------------------------------------------------------
-    def sync_league_teams(self):
+    def sync_league_teams(self, apenas_liga=None):
+        """Sincroniza os times das ligas cadastradas.
+
+        `apenas_liga` limita a UMA liga -- e' o que a coleta de liga nova usa
+        (1 requisicao em vez de uma por liga cadastrada). Sem times cadastrados
+        nenhum jogo da liga e' salvo: FixtureCollectorService filtra por
+        `SELECT team_id FROM teams`, e foi assim que a Sul-Americana ficou
+        cadastrada e sem coletar nada ate' 2026-08-11.
+        """
         print("[TEAMS] Iniciando sincronização...")
 
         self._open()
 
         leagues = load_leagues_from_db()
+        if apenas_liga is not None:
+            leagues = [l for l in leagues if l["league_id"] == apenas_liga]
+            if not leagues:
+                print(f"[WARN] Liga {apenas_liga} nao esta cadastrada em `leagues`.")
+                self._close()
+                return
 
         if not leagues:
             print("[WARN] Nenhuma liga encontrada na tabela leagues.")

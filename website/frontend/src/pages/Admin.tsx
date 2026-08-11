@@ -151,6 +151,8 @@ export default function Admin() {
   const [acaoResultado, setAcaoResultado] = useState<'resolve' | 'reverify' | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [ligas, setLigas] = useState<Liga[] | null>(null)
+  /** league_id com a coleta sendo disparada · trava o botão contra clique duplo. */
+  const [coletando, setColetando] = useState<number | null>(null)
   const [novaLiga, setNovaLiga] = useState({ league_id: '', season: String(new Date().getFullYear()), name: '' })
   const [salvandoLiga, setSalvandoLiga] = useState(false)
   // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
@@ -1415,7 +1417,43 @@ export default function Admin() {
                       <div className="text-[11px] text-ink-3 mt-0.5 font-mono">
                         {l.times} times · {l.jogos_coletados} jogos coletados · {l.jogos_agendados} agendados
                       </div>
+                      {/*
+                        Liga sem time nunca coleta jogo: o coletor filtra pelos
+                        times conhecidos. O aviso fica aqui porque a linha já
+                        mostra "0 times" e ninguém liga os dois fatos sozinho ·
+                        foi assim que a Sul-Americana ficou dias cadastrada,
+                        com as oitavas rolando, e zero jogo no banco.
+                      */}
+                      {l.times === 0 && (
+                        <div className="flex items-start gap-1.5 mt-1 text-[11px] text-yellow-500/90 leading-snug">
+                          <AlertTriangle className="w-3 h-3 shrink-0 mt-0.5" />
+                          <span>Sem times cadastrados · nenhum jogo desta liga será coletado até você clicar em Coletar.</span>
+                        </div>
+                      )}
                     </div>
+                    <button
+                      className="text-xs text-ink-1 border border-line hover:border-accent/40 rounded px-3 py-2 shrink-0 transition-colors disabled:opacity-50"
+                      disabled={coletando === l.league_id}
+                      onClick={async () => {
+                        if (!window.confirm(
+                          `Coletar "${l.name}" agora?\n\n` +
+                          `Busca os times, os jogos da janela e a estatística de TODOS os jogos ` +
+                          `já finalizados da temporada. Gasta uma requisição da API por jogo, ` +
+                          `então pode levar alguns minutos e consumir bastante cota.\n\n` +
+                          `Nada é apagado · é tudo atualização.`
+                        )) return
+                        setColetando(l.league_id)
+                        try {
+                          const r = await api.post(`/admin/leagues/${l.league_id}/coletar`)
+                          showToast(`Coleta de ${r.data.liga} iniciada · acompanhe na aba Pipeline.`)
+                        } catch (err: any) {
+                          showToast(err.response?.data?.detail || 'Erro ao iniciar coleta', false)
+                        } finally {
+                          setColetando(null)
+                        }
+                      }}>
+                      {coletando === l.league_id ? 'Iniciando...' : 'Coletar'}
+                    </button>
                     <button
                       className="text-xs text-red-400 hover:text-red-300 border border-line hover:border-red-500/40 rounded px-3 py-2 shrink-0 transition-colors"
                       onClick={async () => {
@@ -1441,8 +1479,9 @@ export default function Admin() {
               </div>
             )}
             <p className="text-[11px] text-ink-4 mt-3 leading-relaxed">
-              Depois de cadastrar, rode <span className="text-ink-2">Atualizar Jogos</span> na aba
-              Pipeline pra coletar times e jogos da liga nova.
+              Cadastrar só coloca a liga na fila · <span className="text-ink-2">Coletar</span> é
+              o que traz os times, os jogos e a estatística da temporada. Roda em segundo plano,
+              com o andamento na aba Pipeline.
             </p>
           </div>
         </>)}
