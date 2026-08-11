@@ -273,10 +273,19 @@ def _dev_env(base_env: dict) -> dict:
     return env
 
 
-async def _run_and_track(command: str, script: str, args: list | None = None):
+async def _run_and_track(command: str, script: str, args: list | None = None,
+                         extra: dict | None = None):
+    """Roda o script e mantem _pipeline_status[command] atualizado.
+
+    `extra` vai junto em TODA escrita do status (inicio, fim e erro) -- e' como
+    a coleta de liga carrega qual liga esta rodando, pra tela saber em qual
+    linha mostrar "Coletando...". Guardar so' no inicio nao serviria: o dict e'
+    substituido inteiro no fim.
+    """
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
-    _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None}
+    extra = extra or {}
+    _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, **extra}
     timeout = _PIPELINE_TIMEOUTS.get(command, _PIPELINE_TIMEOUTS["default"])
     try:
         env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
@@ -306,9 +315,10 @@ async def _run_and_track(command: str, script: str, args: list | None = None):
             "returncode": returncode,
             "log": out,
             "error": err if returncode != 0 else (err or None),
+            **extra,
         }
     except Exception as e:
-        _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e)}
+        _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e), **extra}
 
 
 async def _run_tudo():
@@ -1345,7 +1355,12 @@ async def coletar_liga(league_id: int, current_user: dict = Depends(require_admi
     if not os.path.exists(script):
         raise HTTPException(500, detail=f"Script nao encontrado: {script}")
 
-    asyncio.create_task(_run_and_track("coletar_liga", script, ["liga", str(league_id)]))
+    # `extra` viaja junto no status: e' como a tela sabe EM QUAL linha mostrar
+    # "Coletando..." enquanto roda.
+    asyncio.create_task(_run_and_track(
+        "coletar_liga", script, ["liga", str(league_id)],
+        extra={"league_id": league_id, "liga": nome},
+    ))
     return {"ok": True, "status": "iniciado", "liga": nome, "league_id": league_id}
 
 

@@ -56,7 +56,7 @@ export default function MonthlyCloseSection() {
           <div className="flex-1 min-w-0">
             <p className="text-sm font-black text-ink-1">Fechamento de {pending.month_label} disponível</p>
             <p className="text-xs text-ink-2 leading-snug">
-              {fmtSigned(pending.total_pnl)} no mês · confirme sua banca para começar o mês novo
+              {fmtSigned(pending.total_pnl)} no mês, confirme sua banca para começar o mês novo
             </p>
           </div>
           <ChevronRight className="w-4 h-4 shrink-0 text-ink-3" />

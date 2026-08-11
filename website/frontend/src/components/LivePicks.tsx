@@ -552,7 +552,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                     <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-700 ${liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${liveProb}%` }} />
                     </div>
-                    <p className="text-[9px] text-ink-4">Estimativa via Poisson · atualiza a cada 5s</p>
+                    <p className="text-[9px] text-ink-4">Estimativa via Poisson, atualiza a cada 5s</p>
                   </div>
                 )}
               </div>

@@ -125,7 +125,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
               <button
                 onClick={() => setProfileOpen(v => !v)}
                 className="flex items-center gap-2 hover:opacity-80 transition-opacity"
-                title={emailPendente ? 'E-mail ainda não confirmado · veja no Perfil' : undefined}
+                title={emailPendente ? 'E-mail ainda não confirmado, veja no Perfil' : undefined}
               >
                 {user?.name && (
                   <span className="relative inline-flex">

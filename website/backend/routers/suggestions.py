@@ -1954,11 +1954,12 @@ def get_liga_tendencias(
         # reais da Serie B 2026 (medido em prod, 2026-08-10): jogo repetido na
         # lista, e a media do resumo pesava mais o jogo que duplicou mais.
         rows = _safe_query(cur, f"""
-            SELECT ms.fixture_id, ms.match_date,
+            SELECT ms.fixture_id, ms.match_date, ms.referee,
                    ms.home_goals, ms.away_goals, ms.total_goals,
                    ms.total_corners, ms.total_yellow_cards, ms.total_red_cards,
                    ms.home_shots_on, ms.away_shots_on,
                    ms.home_fouls, ms.away_fouls,
+                   ms.home_goalkeeper_saves, ms.away_goalkeeper_saves,
                    ms.home_team_id, ms.away_team_id,
                    {_nome_do_time("home")} AS home_team,
                    {_nome_do_time("away")} AS away_team
@@ -1974,6 +1975,12 @@ def get_liga_tendencias(
             g = dict(r)
             g["total_fouls"]    = (g.get("home_fouls") or 0) + (g.get("away_fouls") or 0)
             g["total_shots_on"] = (g.get("home_shots_on") or 0) + (g.get("away_shots_on") or 0)
+            # Defesas do goleiro: soma dos dois lados. None nos dois vira None,
+            # nao zero -- "sem dado" e "ninguem defendeu" sao coisas diferentes,
+            # e a media abaixo pula o jogo em vez de puxa-la pra baixo.
+            defesas = [g.get("home_goalkeeper_saves"), g.get("away_goalkeeper_saves")]
+            g["total_saves"] = (sum(v for v in defesas if v is not None)
+                                if any(v is not None for v in defesas) else None)
             games.append(g)
 
         if not games:
@@ -1982,7 +1989,14 @@ def get_liga_tendencias(
         n = len(games)
         btts   = sum(1 for g in games if (g["home_goals"] or 0) > 0 and (g["away_goals"] or 0) > 0)
         over25 = sum(1 for g in games if (g["total_goals"] or 0) >= 3)
+        com_defesa = [g["total_saves"] for g in games if g["total_saves"] is not None]
         summary = {
+            # Media so' sobre os jogos que TEM o contador. Defesa e' o dado com
+            # mais buraco na API (aparece em 0.86% dos jogos segundo a medicao
+            # do pipeline de goleiros), entao dividir pelo total de jogos daria
+            # uma media perto de zero que nao descreve nada.
+            "avg_saves": round(sum(com_defesa) / len(com_defesa), 2) if com_defesa else None,
+            "jogos_com_defesa": len(com_defesa),
             "total_games":      n,
             "avg_goals":        round(sum(float(g["total_goals"] or 0)        for g in games) / n, 2),
             "avg_corners":      round(sum(float(g["total_corners"] or 0)      for g in games) / n, 2),
@@ -1994,6 +2008,59 @@ def get_liga_tendencias(
             "over25_pct":       round(over25 / n * 100, 1),
         }
         return {"games": games, "summary": summary}
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/liga/arbitros")
+def get_liga_arbitros(
+    league_id: int = Query(1, ge=1),
+    min_jogos: int = Query(2, ge=1, le=20),
+    current_user: dict = Depends(require_vip),
+):
+    """Media de cartao por arbitro NESTA liga, amarelo e vermelho separados.
+
+    Separados de proposito: o motor pontua vermelho como 2 (ver _cards_points),
+    entao um arbitro de 3.0 amarelos e 0.6 vermelhos produz o mesmo "peso" de um
+    de 4.2 amarelos sem vermelho nenhum -- e os dois dao jogos bem diferentes. A
+    coluna de pontos aparece junto porque e' a que o motor usa; as duas cruas
+    ficam do lado pra a leitura nao depender da formula.
+
+    Agrega de match_statistics por (referee, league_id) e nao de referee_stats,
+    que e' por temporada e mistura competicoes: o mesmo arbitro apita Serie A e
+    estadual com media diferente, e quem escolhe pick de cartao numa liga quer
+    o numero DELE NAQUELA liga. VIP only, igual ao resto da tela."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        rows = _safe_query(cur, """
+            SELECT ms.referee,
+                   COUNT(*)                                          AS jogos,
+                   ROUND(AVG(COALESCE(ms.total_yellow_cards, 0)), 2)  AS avg_yellow,
+                   ROUND(AVG(COALESCE(ms.total_red_cards, 0)), 2)     AS avg_red,
+                   ROUND(AVG(COALESCE(ms.total_fouls,
+                        COALESCE(ms.home_fouls,0) + COALESCE(ms.away_fouls,0))), 1) AS avg_fouls
+              FROM match_statistics ms
+             WHERE ms.league_id = %s
+               AND ms.status IN ('FT','AET','PEN')
+               AND ms.referee IS NOT NULL AND ms.referee <> ''
+               AND ms.total_yellow_cards IS NOT NULL
+          GROUP BY ms.referee
+            HAVING COUNT(*) >= %s
+          ORDER BY (AVG(COALESCE(ms.total_yellow_cards,0))
+                    + 2 * AVG(COALESCE(ms.total_red_cards,0))) DESC
+        """, (league_id, min_jogos))
+
+        arbitros = []
+        for r in rows:
+            d = dict(r)
+            amarelo = float(d["avg_yellow"] or 0)
+            vermelho = float(d["avg_red"] or 0)
+            # Mesma convencao de stats_model._cards_points: vermelho vale 2.
+            d["avg_card_points"] = round(amarelo + 2 * vermelho, 2)
+            arbitros.append(d)
+        return {"arbitros": arbitros, "min_jogos": min_jogos}
     finally:
         cur.close()
         conn.close()
