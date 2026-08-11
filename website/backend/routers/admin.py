@@ -1317,6 +1317,73 @@ def adicionar_liga(body: LigaBody, current_user: dict = Depends(require_admin)):
         conn.close()
 
 
+@router.get("/leagues/{league_id}/verificar")
+def verificar_liga(league_id: int, season: int, current_user: dict = Depends(require_admin)):
+    """A temporada dessa liga ja comecou? Tem jogo pra coletar?
+
+    Pergunta que a tela nao sabia responder antes de gastar cota: cadastrar uma
+    liga cuja temporada ainda nao abriu, ou cujo `season` esta errado, resulta
+    numa coleta que roda inteira e traz zero jogo -- e o unico sintoma e' a
+    linha continuar com "0 times, 0 jogos", que se confunde com falha.
+
+    UMA requisicao (`/fixtures?league&season`) responde tudo: total de jogos da
+    temporada, quantos ja terminaram (o que o backfill vai buscar), quantos
+    faltam, o periodo e em que rodada a competicao esta.
+    """
+    import requests
+    from collections import Counter
+
+    key = os.getenv("API_FOOTBALL_KEY", "")
+    if not key:
+        raise HTTPException(503, "API_FOOTBALL_KEY nao configurada nesta instancia.")
+
+    try:
+        r = requests.get("https://v3.football.api-sports.io/fixtures",
+                         headers={"x-apisports-key": key},
+                         params={"league": league_id, "season": season}, timeout=15)
+        r.raise_for_status()
+        corpo = r.json()
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(502, f"API-Football nao respondeu: {e}")
+
+    if corpo.get("errors"):
+        raise HTTPException(400, f"API-Football recusou a consulta: {corpo['errors']}")
+
+    jogos = corpo.get("response") or []
+    if not jogos:
+        return {
+            "existe": False, "iniciada": False, "total": 0, "finalizados": 0, "agendados": 0,
+            "aviso": f"A API nao tem jogo nenhum para a liga {league_id} na temporada {season}. "
+                     f"Confira o id e o ano da temporada antes de cadastrar.",
+        }
+
+    _FINAL = {"FT", "AET", "PEN"}
+    status = Counter((j.get("fixture", {}).get("status") or {}).get("short") for j in jogos)
+    finalizados = sum(n for s, n in status.items() if s in _FINAL)
+    agendados = status.get("NS", 0)
+
+    datas = sorted(j["fixture"]["date"][:10] for j in jogos if j.get("fixture", {}).get("date"))
+    # Rodada do proximo jogo que ainda nao aconteceu -- e' o "onde a competicao
+    # esta" que interessa pra quem vai cadastrar.
+    proximos = [j for j in jogos
+                if (j.get("fixture", {}).get("status") or {}).get("short") == "NS"]
+    rodada_atual = ((proximos[0].get("league") or {}).get("round") if proximos else None)
+
+    return {
+        "existe": True,
+        "iniciada": finalizados > 0,
+        "total": len(jogos),
+        "finalizados": finalizados,
+        "agendados": agendados,
+        "inicio": datas[0] if datas else None,
+        "fim": datas[-1] if datas else None,
+        "rodada_atual": rodada_atual,
+        "nome": (jogos[0].get("league") or {}).get("name"),
+    }
+
+
 @router.post("/leagues/{league_id}/coletar")
 async def coletar_liga(league_id: int, current_user: dict = Depends(require_admin)):
     """Coleta completa DESTA liga: times, jogos da janela e estatistica da
