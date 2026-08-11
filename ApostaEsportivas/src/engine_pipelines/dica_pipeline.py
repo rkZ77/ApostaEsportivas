@@ -100,10 +100,19 @@ def _nivel_repeticao(pick: dict, fixture_id: int, vip_por_fixture: dict,
 
     Regra do usuario (2026-08-05), em ordem:
       1. jogo que o VIP nao usou vence sempre;
-      2. sem jogo livre, pode reaproveitar um jogo do VIP com OUTRO mercado;
-      3. o mesmo pick do VIP (mesmo mercado E mesma linha, no mesmo jogo)
-         nunca sai -- "so nao repete o mesmo pick". Sem jogo livre e sem outro
-         mercado, a Free do dia nao publica.
+      2. sem jogo livre, pode reaproveitar um jogo do VIP com OUTRO mercado
+         ou com outra linha do MESMO mercado (ex: VIP foi goals/No, Free pode
+         ser goals/Over 1.5 no mesmo jogo);
+      3. o mesmo pick IDENTICO do VIP (mesmo market_type E mesma linha, no
+         mesmo jogo) nunca sai -- "so nao repete o mesmo pick". Sem jogo livre
+         e sem outra opcao, a Free do dia nao publica.
+
+    CORRECAO 2026-08-11: a versao anterior bloqueava toda a familia de
+    correlacao no jogo do VIP (ex: qualquer pick de 'goals' num jogo onde VIP
+    escolheu 'goals/No'). Isso contraria a intencao declarada de "so nao repete
+    o mesmo pick" -- num dia com poucos jogos e o VIP ocupando todos, a DICA
+    ficava sem candidato por um veto mais amplo do que o necessario. O unico
+    veto correto e' o pick IDENTICO (mesmo market_type + mesma linha).
     """
     grupo = ranking.correlation_group(pick["market_type"])
     usado = vip_por_fixture.get(fixture_id)
@@ -114,9 +123,9 @@ def _nivel_repeticao(pick: dict, fixture_id: int, vip_por_fixture: dict,
 
     linha = (pick.get("value_label") or "").strip().lower()
     if (pick["market_type"], linha) in usado["picks"]:
-        return None  # pick identico ao do VIP
-    if grupo in usado["grupos"]:
-        return None  # mesmo jogo E mesma familia de mercado: e o mesmo pick com outra roupa
+        return None  # pick identico ao do VIP: mesmo market_type E mesma linha
+    # Mesmo jogo do VIP, mas outro pick (outro mercado ou outra linha):
+    # nivel 2 (ultimo recurso), nao bloqueio.
     return NIVEL_JOGO_DO_VIP_MERCADO_NOVO
 
 

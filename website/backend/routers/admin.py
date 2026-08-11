@@ -253,9 +253,10 @@ _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
                "atualizar_resultados"]
 
 _STEP_LABELS = {
-<<<<<<< ours
     "atualizar_jogos":      "Atualizando jogos",
     "capturar_odds":        "Capturando odds",
+    "dev_atualizar_jogos":  "Atualizando jogos DEV",
+    "dev_capturar_odds":    "Capturando odds DEV",
     "gerar_vip":            "Gerando picks VIP",
     "gerar_free":           "Gerando pick gratuito",
     "gerar_multipla":       "Gerando múltipla",
@@ -263,18 +264,6 @@ _STEP_LABELS = {
     "gerar_faltas":         "Gerando picks de faltas",
     "gerar_goleiros":       "Gerando defesas de goleiro",
     "atualizar_resultados": "Atualizando resultados",
-=======
-    "atualizar_jogos":   "Atualizando jogos",
-    "capturar_odds":     "Capturando odds",
-    "dev_atualizar_jogos": "Atualizando jogos DEV",
-    "dev_capturar_odds":   "Capturando odds DEV",
-    "gerar_vip":         "Gerando picks VIP",
-    "gerar_free":        "Gerando pick gratuito",
-    "gerar_multipla":    "Gerando múltipla",
-    "gerar_alavancagem": "Gerando alavancagem",
-    "gerar_faltas":      "Gerando picks de faltas",
-    "gerar_goleiros":    "Gerando defesas de goleiro",
->>>>>>> theirs
 }
 
 
@@ -1531,6 +1520,112 @@ def remover_liga(league_id: int, current_user: dict = Depends(require_admin)):
             "ok": True, "removida": row["name"],
             "aviso": "Parou de coletar. Jogos, times, picks e o NOME da liga "
                      "continuam, entao o historico segue legivel no site.",
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─── Casas de aposta ─────────────────────────────────────────────────────────
+
+
+class BookmakerBody(BaseModel):
+    bookmaker_id: int
+    bookmaker_name: str
+    ativo: bool = True
+
+
+@router.get("/bookmakers")
+def listar_bookmakers(current_user: dict = Depends(require_admin)):
+    """Casas de aposta cadastradas e seus volumes de coleta."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT b.bookmaker_id,
+                   b.bookmaker_name,
+                   b.ativo,
+                   b.created_at,
+                   COUNT(ov.id)              AS n_odds,
+                   COUNT(DISTINCT ov.fixture_id) AS n_fixtures
+            FROM bookmakers b
+            LEFT JOIN odds_values ov ON ov.bookmaker_id = b.bookmaker_id
+            GROUP BY b.bookmaker_id, b.bookmaker_name, b.ativo, b.created_at
+            ORDER BY b.bookmaker_id
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    except Exception:
+        # Tabela bookmakers pode nao existir ainda (pre-migracao).
+        conn.rollback()
+        # Fallback: lê direto das odds coletadas
+        cur.execute("""
+            SELECT bookmaker_id,
+                   bookmaker_name,
+                   TRUE           AS ativo,
+                   NULL           AS created_at,
+                   COUNT(*)       AS n_odds,
+                   COUNT(DISTINCT fixture_id) AS n_fixtures
+            FROM odds_values
+            WHERE bookmaker_id IS NOT NULL
+            GROUP BY bookmaker_id, bookmaker_name
+            ORDER BY bookmaker_id
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.put("/bookmakers/{bookmaker_id}")
+def atualizar_bookmaker(
+    bookmaker_id: int,
+    body: BookmakerBody,
+    current_user: dict = Depends(require_admin),
+):
+    """Cria ou atualiza uma casa de aposta na tabela bookmakers.
+
+    Criar: permite cadastrar uma casa nova com o ID que a API-Football usa,
+    antes que a primeira odd seja coletada (útil pra pré-autorizar).
+    Atualizar: renomeia ou ativa/desativa sem apagar o histórico de odds.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO bookmakers (bookmaker_id, bookmaker_name, ativo)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (bookmaker_id) DO UPDATE
+                SET bookmaker_name = EXCLUDED.bookmaker_name,
+                    ativo          = EXCLUDED.ativo
+            RETURNING bookmaker_id, bookmaker_name, ativo
+        """, (bookmaker_id, body.bookmaker_name.strip(), body.ativo))
+        row = cur.fetchone()
+        conn.commit()
+        return dict(row)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.delete("/bookmakers/{bookmaker_id}")
+def desativar_bookmaker(bookmaker_id: int, current_user: dict = Depends(require_admin)):
+    """Marca a casa como inativa (não apaga — o histórico de odds fica intacto)."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE bookmakers SET ativo = FALSE WHERE bookmaker_id = %s "
+            "RETURNING bookmaker_id, bookmaker_name",
+            (bookmaker_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Casa de aposta não encontrada.")
+        conn.commit()
+        return {
+            "ok": True,
+            "desativada": row["bookmaker_name"],
+            "aviso": "Odds já coletadas não são afetadas. Só a coleta futura ignora esta casa.",
         }
     finally:
         cur.close()

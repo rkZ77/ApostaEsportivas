@@ -344,6 +344,30 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             WHERE status IN ('NS', 'TBD')
         """)
 
+        # ── Casas de aposta ──────────────────────────────────────────────────
+        # Tabela de bookmakers gerenciavel pelo admin. Antes o ID e o nome
+        # viviam so' em odds_values (repetidos em cada linha de odd) e nao
+        # havia como ativar/desativar uma casa sem mexer no codigo do coletor.
+        # Com esta tabela o admin consegue cadastrar, renomear e desativar
+        # casas pela tela, sem deploy.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS bookmakers (
+                bookmaker_id   INTEGER PRIMARY KEY,
+                bookmaker_name VARCHAR(100) NOT NULL,
+                ativo          BOOLEAN NOT NULL DEFAULT TRUE,
+                created_at     TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # Popula com as casas que ja estao sendo coletadas, sem sobrescrever
+        # nenhuma que o admin ja tenha editado (ON CONFLICT DO NOTHING).
+        cur.execute("""
+            INSERT INTO bookmakers (bookmaker_id, bookmaker_name)
+            SELECT DISTINCT bookmaker_id, bookmaker_name
+            FROM odds_values
+            WHERE bookmaker_id IS NOT NULL
+            ON CONFLICT (bookmaker_id) DO NOTHING
+        """)
+
         conn.commit()
         return True
     except Exception as e:
