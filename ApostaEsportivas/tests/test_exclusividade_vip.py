@@ -1,14 +1,20 @@
 """Exclusividade de jogo do VIP sobre a Dica gratuita.
 
-Regra do usuário (2026-08-05), em escada:
+Regra do usuário (2026-08-05, corrigida 2026-08-11), em escada:
   0. jogo que o VIP não usou, mercado que não saiu no VIP hoje
   1. jogo que o VIP não usou, mercado repetido de outro jogo
-  2. jogo do VIP, mercado de outra família
-  -- e o pick IDÊNTICO ao do VIP nunca sai, em nenhum degrau.
+  2. jogo do VIP, pick diferente (outro mercado OU outra linha)
+  -- o pick IDÊNTICO ao do VIP (mesmo market_type + mesma linha, no mesmo
+     jogo) nunca sai, em nenhum degrau.
+
+Correção 2026-08-11: a versão anterior bloqueava toda a família de correlação
+no jogo do VIP (ex: goals/Under 3.5 num jogo onde VIP usou goals/Over 2.5).
+Isso era uma sobre-restrição: "Over 2.5" e "Under 3.5" são apostas distintas
+em mercados distintos. O único bloqueio correto é o pick idêntico.
 
 O que estes testes protegem: que a Free não deixe de publicar num dia em que o
-VIP consumiu todos os jogos (foi o que aconteceu em 05/08, com 4 jogos e 4
-picks VIP), e que a saída desse aperto não seja republicar o pick VIP.
+VIP consumiu todos os jogos (foi o que aconteceu em 05/08 e em 11/08), e que
+a saída desse aperto não seja republicar o pick VIP.
 """
 import pytest
 
@@ -65,17 +71,29 @@ def test_pick_identico_ao_do_vip_e_proibido():
     assert _nivel_repeticao(_pick("goals", "Over 2.5"), JOGO_DO_VIP, _vip_usou(), set()) is None
 
 
-def test_mesma_familia_no_mesmo_jogo_tambem_e_proibida():
-    """Over 2.5 e Under 3.5 no mesmo jogo são a mesma aposta com outra roupa:
-    trocar a linha não deveria driblar a regra."""
-    assert _nivel_repeticao(_pick("goals", "Under 3.5"), JOGO_DO_VIP, _vip_usou("goals"), set()) is None
+def test_mesma_familia_linha_diferente_no_mesmo_jogo_e_permitida():
+    """Over 2.5 e Under 3.5 são apostas distintas: trocar a linha não é
+    o mesmo pick, então é permitido como último recurso (nível 2).
+
+    Corrigido em 2026-08-11: o veto de família inteira bloqueava a Dica mesmo
+    quando havia uma opção legítima diferente do VIP no mesmo jogo."""
+    nivel = _nivel_repeticao(_pick("goals", "Under 3.5"), JOGO_DO_VIP, _vip_usou("goals"), set())
+    assert nivel == NIVEL_JOGO_DO_VIP_MERCADO_NOVO
 
 
-def test_familia_agrupa_variantes_do_mesmo_dado_bruto():
-    """cards e handicap_cards são o mesmo grupo de correlação: se o VIP usou um
-    no jogo, o outro não escapa pela troca de estrutura."""
-    assert _nivel_repeticao(
+def test_familia_agrupa_variantes_do_mesmo_dado_bruto_linha_diferente_e_permitida():
+    """handicap_cards e cards são o mesmo grupo de correlação, mas picks em
+    linhas diferentes não são idênticos — permitido como último recurso."""
+    nivel = _nivel_repeticao(
         _pick("handicap_cards", "Home -1"), JOGO_DO_VIP, _vip_usou("cards", "Over 4.5"), set()
+    )
+    assert nivel == NIVEL_JOGO_DO_VIP_MERCADO_NOVO
+
+
+def test_pick_identico_cards_e_proibido():
+    """O pick idêntico (mesmo market_type + mesma linha) continua vetado."""
+    assert _nivel_repeticao(
+        _pick("cards", "Over 4.5"), JOGO_DO_VIP, _vip_usou("cards", "Over 4.5"), set()
     ) is None
 
 
