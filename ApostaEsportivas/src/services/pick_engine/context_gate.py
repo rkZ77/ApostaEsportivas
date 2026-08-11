@@ -71,15 +71,32 @@ def _direcao(candidate: dict) -> str:
 
 def build_context(round_str: str | None, home_team_id: int, away_team_id: int,
                   h2h_matches: list | None, league_id, season,
-                  baseline_cartoes: float | None, before_date=None) -> dict:
+                  baseline_cartoes: float | None, before_date=None,
+                  match_date=None) -> dict:
     """Monta o contexto completo da partida a partir do dado ja' disponivel.
 
     Nenhuma chamada de API nova: `round_str` vem de `fixtures.round` (ja'
     coletado) e `h2h_matches` de MatchStatsService.get_h2h_matches(), que le
     `match_statistics`.
+
+    `match_date` (data DESTA partida) sustenta a inferencia de perna quando a
+    API nao manda o rotulo -- ver match_context_model.inferir_leg. Sem ela a
+    busca da ida perde a janela de dias e a inferencia nao acontece, que e' o
+    comportamento anterior.
     """
-    jogo_ida = match_context_model.encontrar_jogo_de_ida(
-        h2h_matches or [], league_id, season, before_date=before_date)
+    # Com rotulo, a API ja disse qual e' a perna e a busca da ida e' a de
+    # sempre. Sem rotulo, a busca precisa ser ESTRITA -- e' ela que serve de
+    # prova de que este e' o jogo de volta, entao nao pode aceitar qualquer
+    # encontro anterior. Ver match_context_model.inferir_leg.
+    if match_context_model.parse_leg(round_str) is None:
+        jogo_ida = match_context_model.encontrar_jogo_de_ida(
+            h2h_matches or [], league_id, season, before_date=before_date,
+            # Quem visita hoje foi o mandante da ida -- o mando inverte entre
+            # as duas pernas, e e' essa inversao que identifica o confronto.
+            mandante_da_ida=away_team_id, referencia=match_date)
+    else:
+        jogo_ida = match_context_model.encontrar_jogo_de_ida(
+            h2h_matches or [], league_id, season, before_date=before_date)
     tie = match_context_model.tie_context(round_str, home_team_id, away_team_id, jogo_ida)
     rivalidade = rivalry_model.rivalry_signal(h2h_matches or [], baseline_cartoes)
 
@@ -117,6 +134,7 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
             h2h_matches=h2h, league_id=fixture.get("league_id"),
             season=fixture.get("season"), baseline_cartoes=baseline,
             before_date=before_date,
+            match_date=fixture.get("match_datetime") or before_date,
         )
     except Exception as e:
         print(f"[CONTEXT_GATE] Contexto indisponivel para fixture "
