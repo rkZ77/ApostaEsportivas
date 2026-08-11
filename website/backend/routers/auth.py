@@ -241,6 +241,42 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 # ── helpers ─────────────────────────────────────────────────────────────────
 
+# Header que o app nativo (Android/iOS) manda em todas as chamadas. Navegador
+# nenhum manda isso sozinho, então serve de opt-in explícito.
+_HEADER_CLIENTE = "x-client-platform"
+_CLIENTES_NATIVOS = {"android", "ios"}
+
+
+def _e_cliente_nativo(request: Request) -> bool:
+    """True quando quem chama é o app, não o site."""
+    return request.headers.get(_HEADER_CLIENTE, "").strip().lower() in _CLIENTES_NATIVOS
+
+
+def _tokens_no_corpo(request: Request, access_token: str, refresh_token: str | None) -> dict:
+    """Tokens no corpo da resposta -- só para o app nativo.
+
+    O site continua exatamente como está: sessão em cookie httpOnly, nada a
+    mais no corpo. Este bloco existe porque Android e iOS não têm cookie jar
+    confiável entre reinícios do app, então lá a sessão persistente mora no
+    keystore do sistema (expo-secure-store) e o cliente precisa receber o
+    token para poder guardá-lo. `auth_utils.get_current_user` já aceitava
+    Bearer como fallback justamente para esse caso -- o que faltava era o
+    caminho de entrega do token.
+
+    Segurança: o custo real é o refresh token virar credencial de 30 dias na
+    mão do cliente. Isso é aceitável aqui porque ele nasce amarrado ao
+    `session_id`, e a sessão única já invalida o token antigo no próximo
+    login do usuário. Para o navegador nada muda: sem o header, nada disso
+    aparece no corpo.
+    """
+    if not _e_cliente_nativo(request):
+        return {}
+    saida = {"access_token": access_token, "token_type": "bearer"}
+    if refresh_token:
+        saida["refresh_token"] = refresh_token
+    return saida
+
+
 def _send_email(to: str, subject: str, body: str, html: str | None = None):
     api_key  = os.getenv("RESEND_API_KEY", "")
     from_addr = os.getenv("RESEND_FROM", "Pick IA <contato@pickia.com.br>")
@@ -571,7 +607,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         if email_token:
             background_tasks.add_task(_send_verification_email, body.email, body.name, email_token, site_url)
 
-        return {"user": user}
+        return {"user": user, **_tokens_no_corpo(request, access_token, refresh_token)}
     finally:
         cur.close(); conn.close()
 
@@ -700,7 +736,7 @@ def login(body: LoginBody, response: Response, request: Request):
         set_auth_cookies(response, access_token, refresh_token)
         user.pop("password_hash")
         user["expires_at"] = plan_expires_at
-        return {"user": user}
+        return {"user": user, **_tokens_no_corpo(request, access_token, refresh_token)}
     finally:
         cur.close(); conn.close()
 
@@ -803,6 +839,14 @@ def resend_verification(background_tasks: BackgroundTasks, current_user: dict = 
 @router.post("/refresh")
 def refresh_token(request: Request, response: Response):
     token = request.cookies.get(REFRESH_COOKIE_NAME)
+    if not token and _e_cliente_nativo(request):
+        # App nativo guarda o refresh no keystore e o manda como Bearer, já
+        # que não tem o cookie de path /api/auth/refresh. Só é lido aqui,
+        # onde o token de refresh é esperado -- nas rotas normais continua
+        # valendo a regra de `get_current_user`, que recusa type != access.
+        cabecalho = request.headers.get("authorization", "")
+        if cabecalho.lower().startswith("bearer "):
+            token = cabecalho[7:].strip()
     if not token:
         raise HTTPException(status_code=401, detail="Refresh token ausente")
     try:
@@ -850,7 +894,7 @@ def refresh_token(request: Request, response: Response):
         token_data["session_id"] = payload["session_id"]
     new_access = create_access_token(token_data)
     set_access_cookie(response, new_access)  # não renova o refresh → sessão expira em 30 dias
-    return {"status": "ok"}
+    return {"status": "ok", **_tokens_no_corpo(request, new_access, None)}
 
 
 @router.post("/avatar")
