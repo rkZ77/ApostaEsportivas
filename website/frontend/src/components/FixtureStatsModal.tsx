@@ -265,6 +265,8 @@ export interface FixtureStatsModalProps {
     elapsed?: number | null
   }
   onClose: () => void
+  /** true = painel ao lado da lista (desktop), sem casca de sobreposição. */
+  inline?: boolean
 }
 
 // --- Threshold definitions ---
@@ -305,7 +307,7 @@ const TOTAL_CARD_CIRCLES: TotalCircleDef[] = [
   { label: '+4.5 JI', field: 'total_yellow_cards', threshold: 4.5 },
 ]
 
-export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModalProps) {
+export default function FixtureStatsModal({ fixture, onClose, inline = false }: FixtureStatsModalProps) {
   const [data, setData]     = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [tab, setTab]       = useState<Tab>('geral')
@@ -353,17 +355,19 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
     { key: 'cartoes',    label: 'Cartões' },
   ]
 
-  return (
-    <motion.div
-      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
-      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}
-    >
-      <div className="absolute inset-0 bg-black/70" />
-      <motion.div
-        variants={sheetUp}
-        className="relative z-10 w-full sm:max-w-md bg-surface-1 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[92vh] flex flex-col"
-        onClick={e => e.stopPropagation()}
-      >
+  /*
+   * O MESMO conteúdo em dois lugares.
+   *
+   * No celular é folha sobreposta, como sempre foi. Em tela larga a página de
+   * Jogos passou a mostrar o detalhe ao lado da lista (`inline`), e aí a casca
+   * de sobreposição atrapalha: o painel não pode escurecer o fundo, nem fechar
+   * ao clicar fora, nem se limitar a 92vh dentro de uma coluna que já rola.
+   *
+   * Duplicar o componente pra isso deixaria duas telas de estatística pra
+   * manter em sincronia, que é como uma delas fica velha.
+   */
+  const corpo = (
+    <>
         {/* Fixed header */}
         <div className="bg-surface-2 px-4 pt-4 pb-0 shrink-0">
           {/* League + close */}
@@ -526,6 +530,29 @@ export default function FixtureStatsModal({ fixture, onClose }: FixtureStatsModa
             </div>
           )}
         </div>
+    </>
+  )
+
+  if (inline) {
+    return (
+      <div className="card overflow-hidden flex flex-col max-h-[calc(100dvh-9rem)] sticky top-4">
+        {corpo}
+      </div>
+    )
+  }
+
+  return (
+    <motion.div
+      variants={backdropFade} initial="hidden" animate="visible" exit="exit"
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center" onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/70" />
+      <motion.div
+        variants={sheetUp}
+        className="relative z-10 w-full sm:max-w-md bg-surface-1 rounded-t-lg sm:rounded-lg overflow-hidden max-h-[92vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {corpo}
       </motion.div>
     </motion.div>
   )

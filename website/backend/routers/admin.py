@@ -1221,6 +1221,9 @@ class LigaBody(BaseModel):
     league_id: int
     season: int
     name: Optional[str] = None
+    # None = nao marcado. Ver a migration de `temporada_iniciada`: e' o estado
+    # que faz a coleta rodar completa, que e' o seguro.
+    temporada_iniciada: Optional[bool] = None
 
 
 @router.get("/leagues")
@@ -1235,7 +1238,7 @@ def listar_ligas(current_user: dict = Depends(require_admin)):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT l.league_id, l.name, l.season,
+            SELECT l.league_id, l.name, l.season, l.temporada_iniciada,
                    (SELECT COUNT(*) FROM teams t
                      WHERE t.league_id = l.league_id)                AS times,
                    (SELECT COUNT(*) FROM match_statistics ms
@@ -1299,12 +1302,16 @@ def adicionar_liga(body: LigaBody, current_user: dict = Depends(require_admin)):
     try:
         cur.execute("SELECT league_id FROM leagues WHERE league_id = %s", (body.league_id,))
         if cur.fetchone():
-            cur.execute("UPDATE leagues SET name = %s, season = %s WHERE league_id = %s",
-                        (nome, body.season, body.league_id))
+            cur.execute(
+                "UPDATE leagues SET name = %s, season = %s, temporada_iniciada = %s "
+                "WHERE league_id = %s",
+                (nome, body.season, body.temporada_iniciada, body.league_id))
             acao = "atualizada"
         else:
-            cur.execute("INSERT INTO leagues (league_id, name, season) VALUES (%s, %s, %s)",
-                        (body.league_id, nome, body.season))
+            cur.execute(
+                "INSERT INTO leagues (league_id, name, season, temporada_iniciada) "
+                "VALUES (%s, %s, %s, %s)",
+                (body.league_id, nome, body.season, body.temporada_iniciada))
             acao = "cadastrada"
         conn.commit()
         return {
@@ -1400,17 +1407,29 @@ async def coletar_liga(league_id: int, current_user: dict = Depends(require_admi
     temporada faz uma requisicao por jogo finalizado e nao cabe num request
     HTTP. O andamento sai em /admin/pipeline-status como "coletar_liga".
 
+    Liga marcada como "temporada nao comecou" (leagues.temporada_iniciada =
+    false) pula o backfill de estatistica: nao ha jogo finalizado pra buscar, e
+    a varredura so' gastaria a listagem pra voltar de maos vazias. NULL roda
+    completo -- pular por engano deixaria o motor sem base, e o unico sintoma
+    seria "essa liga nunca gera pick".
+
     NAO e' o `new_league` do script: aquele faz TRUNCATE em match_statistics/
     teams/fixtures/standings e recoleta tudo do zero.
     """
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT name FROM leagues WHERE league_id = %s", (league_id,))
+        cur.execute("SELECT name, temporada_iniciada FROM leagues WHERE league_id = %s",
+                    (league_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Liga nao cadastrada. Cadastre antes de coletar.")
         nome = row["name"]
+        # So' pula o historico quando alguem marcou EXPLICITAMENTE que a
+        # temporada nao comecou. NULL (ninguem marcou) roda completo, que e' o
+        # seguro: pular por engano deixa o motor sem base pra analisar a liga,
+        # e o unico sintoma seria "essa liga nunca gera pick".
+        com_historico = row["temporada_iniciada"] is not False
     finally:
         cur.close()
         conn.close()
@@ -1424,11 +1443,15 @@ async def coletar_liga(league_id: int, current_user: dict = Depends(require_admi
 
     # `extra` viaja junto no status: e' como a tela sabe EM QUAL linha mostrar
     # "Coletando..." enquanto roda.
+    args = ["liga", str(league_id)] + ([] if com_historico else ["leve"])
     asyncio.create_task(_run_and_track(
-        "coletar_liga", script, ["liga", str(league_id)],
+        "coletar_liga", script, args,
         extra={"league_id": league_id, "liga": nome},
     ))
-    return {"ok": True, "status": "iniciado", "liga": nome, "league_id": league_id}
+    return {
+        "ok": True, "status": "iniciado", "liga": nome, "league_id": league_id,
+        "com_historico": com_historico,
+    }
 
 
 @router.delete("/leagues/{league_id}")

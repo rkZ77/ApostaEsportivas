@@ -169,7 +169,7 @@ class DataCollectorMain:
     # PIPELINE
     # ---------------------------------------------------------
 
-    def run_league(self, league_id: int):
+    def run_league(self, league_id: int, com_historico: bool = True):
         """Coleta COMPLETA de UMA liga, sem tocar no resto do banco.
 
         E' o que `new_league` deveria ter sido. Aquele comando faz TRUNCATE em
@@ -187,6 +187,11 @@ class DataCollectorMain:
         Custo em requisicao: 1 (times) + 1 por data da janela (jogos) + 1 por
         jogo ja finalizado da temporada (estatistica). O ultimo termo e' o que
         pesa, e e' o que da' base pro motor analisar a liga.
+
+        `com_historico=False` pula exatamente esse termo. Serve pra liga cuja
+        temporada ainda nao comecou: nao ha jogo finalizado pra buscar, entao a
+        varredura so' gastaria a listagem e voltaria de maos vazias. Quem marca
+        isso e' o admin no cadastro (leagues.temporada_iniciada).
         """
         print(f"\n========== COLETA DA LIGA {league_id} ==========\n")
         print("[1/4] Times da liga...")
@@ -195,12 +200,16 @@ class DataCollectorMain:
         print("[2/4] Jogos da janela...")
         self.run_stage_2()
 
-        print("[3/4] Estatistica dos jogos ja finalizados (temporada inteira)...")
-        self._get_match_stats().sync_all_finished_fixtures(
-            use_date_filter=False, apenas_liga=league_id)
+        if com_historico:
+            print("[3/4] Estatistica dos jogos ja finalizados (temporada inteira)...")
+            self._get_match_stats().sync_all_finished_fixtures(
+                use_date_filter=False, apenas_liga=league_id)
 
-        print("[4/4] Medias agregadas por time...")
-        self.run_stage_5(mode="full")
+            print("[4/4] Medias agregadas por time...")
+            self.run_stage_5(mode="full")
+        else:
+            print("[3/4] Temporada marcada como NAO INICIADA, pulando o historico.")
+            print("[4/4] Nada pra agregar sem jogo finalizado.")
 
         print(f"\n========== LIGA {league_id} COLETADA ==========\n")
 
@@ -288,10 +297,13 @@ if __name__ == "__main__":
             # Ex: python atualizar_jogos.py liga 11
             # Coleta completa de UMA liga, sem TRUNCATE. E' o que o botao
             # "Coletar" do /admin dispara.
+            # Ex: python atualizar_jogos.py liga 11
+            #     python atualizar_jogos.py liga 11 leve   (sem o historico)
             if len(sys.argv) < 3:
-                print("Uso: python atualizar_jogos.py liga <league_id>")
+                print("Uso: python atualizar_jogos.py liga <league_id> [leve]")
                 sys.exit(2)
-            collector.run_league(int(sys.argv[2]))
+            leve = len(sys.argv) > 3 and sys.argv[3] == "leve"
+            collector.run_league(int(sys.argv[2]), com_historico=not leve)
 
         elif stage == "reset":
             collector.run_reset()
