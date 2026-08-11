@@ -88,7 +88,12 @@ def test_todo_passo_tem_rotulo(passos, rotulos):
 
 
 def test_nao_ha_rotulo_orfao(passos, rotulos):
-    assert set(rotulos) == set(passos)
+    """Rotulo tem que corresponder a um passo que existe de verdade -- os de
+    _TUDO_STEPS ou os de _DEV_PIPELINE_STEPS (tela de homologacao). Um rotulo
+    solto e' passo que foi renomeado ou removido sem limpar aqui."""
+    conhecidos = set(passos) | set(_literal("_DEV_PIPELINE_STEPS"))
+    orfaos = set(rotulos) - conhecidos
+    assert not orfaos, f"rotulos sem passo correspondente: {sorted(orfaos)}"
 
 
 def test_todo_passo_tem_script(passos):
