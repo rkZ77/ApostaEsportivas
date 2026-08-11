@@ -847,3 +847,41 @@ def test_timeout_de_script_e_de_30_minutos():
     src = _fonte("routers/admin.py")
     assert '"default":         1800.0' in src
     assert '"coletar_liga":    2700.0' in src
+
+
+# ───────── Liga sai da coleta sem sair da tabela (2026-08-11) ─────────
+
+
+def test_tirar_liga_da_coleta_nao_apaga_a_linha():
+    """DELETE quebrava o NOME em todo lugar que resolve liga por JOIN.
+
+    A Copa do Mundo 2026 saiu da tabela (competicao encerrada, so' volta em
+    2030) e os picks dela viraram "LIGA 1" nos Resultados da IA -- os 104 jogos
+    seguiam em match_statistics sustentando 77% do ledger de calibracao, o que
+    sumiu foi so' o nome, e nao ha de onde recupera-lo depois do DELETE."""
+    corpo = _codigo("routers/admin.py", "remover_liga")
+    assert "DELETE FROM leagues" not in corpo
+    assert "UPDATE leagues SET ativa = FALSE" in corpo
+
+
+def test_coletores_param_na_liga_inativa():
+    """Marcar so' resolve se quem coleta respeitar a marca -- senao a liga
+    continuaria gastando cota."""
+    import os as _os
+    # _BACKEND = .../website/backend, entao dois niveis acima e' a raiz do repo
+    raiz = _os.path.join(_os.path.dirname(_os.path.dirname(_BACKEND)),
+                         "ApostaEsportivas", "src")
+    for arquivo in ("collectors/fixture_collector_service.py",
+                    "collectors/match_statistics_sync_service.py",
+                    "collectors/team_statistics_sync_service.py",
+                    "collectors/standings_collector_service.py"):
+        with open(_os.path.join(raiz, arquivo), encoding="utf-8") as f:
+            assert "COALESCE(ativa, TRUE)" in f.read(), arquivo
+
+
+def test_copa_do_mundo_volta_como_historico():
+    """Restaura o nome pra quem ja tinha deletado a linha."""
+    src = _fonte("migrations.py")
+    assert "ADD COLUMN IF NOT EXISTS ativa BOOLEAN" in src
+    assert "'Copa do Mundo', 2026, FALSE" in src
+    assert "ON CONFLICT (league_id) DO NOTHING" in src
