@@ -44,7 +44,7 @@ def convert_utc_to_br_naive(dt_str: str) -> datetime:
 def load_leagues_from_db() -> dict:
     conn = get_connection()
     cur  = conn.cursor()
-    cur.execute("SELECT league_id, season FROM leagues;")
+    cur.execute("SELECT league_id, season FROM leagues WHERE COALESCE(ativa, TRUE);")
     rows = cur.fetchall()
     cur.close()
     conn.close()

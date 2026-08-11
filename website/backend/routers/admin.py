@@ -1238,7 +1238,7 @@ def listar_ligas(current_user: dict = Depends(require_admin)):
     cur = conn.cursor()
     try:
         cur.execute("""
-            SELECT l.league_id, l.name, l.season, l.temporada_iniciada,
+            SELECT l.league_id, l.name, l.season, l.temporada_iniciada, l.ativa,
                    (SELECT COUNT(*) FROM teams t
                      WHERE t.league_id = l.league_id)                AS times,
                    (SELECT COUNT(*) FROM match_statistics ms
@@ -1454,28 +1454,53 @@ async def coletar_liga(league_id: int, current_user: dict = Depends(require_admi
     }
 
 
+@router.post("/leagues/{league_id}/reativar")
+def reativar_liga(league_id: int, current_user: dict = Depends(require_admin)):
+    """Volta a coletar uma liga que estava so' como historico."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("UPDATE leagues SET ativa = TRUE WHERE league_id = %s RETURNING name",
+                    (league_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Liga nao encontrada.")
+        conn.commit()
+        return {"ok": True, "liga": row["name"]}
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.delete("/leagues/{league_id}")
 def remover_liga(league_id: int, current_user: dict = Depends(require_admin)):
-    """Tira a liga da coleta. NAO apaga jogo, time nem pick.
+    """Tira a liga da coleta MARCANDO ativa=false. Nao apaga a linha.
 
-    Regra do usuario (2026-08-01): historico nao se apaga. Quem a coleta le'
-    e' a tabela leagues, entao remover a linha ja basta pra parar de coletar;
-    jogo antigo continua em match_statistics alimentando a calibracao do
-    motor. Foi assim que a Copa do Mundo saiu do pipeline sem perder os 104
-    jogos que 77% do ledger de picks usa.
+    Regra do usuario (2026-08-01): historico nao se apaga. Ate' 2026-08-11 isto
+    fazia DELETE, e o efeito colateral so' apareceu quando a Copa do Mundo 2026
+    saiu (competicao encerrada, so' volta em 2030): TODO lugar que resolve o
+    nome da liga por JOIN em `leagues` passou a cair no fallback, e os picks
+    dela viraram "LIGA 1" nos Resultados da IA. Os 104 jogos continuavam em
+    match_statistics sustentando 77% do ledger de calibracao -- o que sumiu foi
+    so' o nome, e nao ha de onde recupera-lo depois do DELETE.
+
+    Marcar em vez de apagar resolve os dois lados: os coletores leem
+    `WHERE COALESCE(ativa, TRUE)` e param na hora, e a linha continua ali pra
+    quem so' quer escrever o nome na tela.
     """
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT name FROM leagues WHERE league_id = %s", (league_id,))
+        cur.execute("UPDATE leagues SET ativa = FALSE WHERE league_id = %s RETURNING name",
+                    (league_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Liga nao encontrada.")
-        cur.execute("DELETE FROM leagues WHERE league_id = %s", (league_id,))
         conn.commit()
         return {
             "ok": True, "removida": row["name"],
-            "aviso": "Parou de coletar. Jogos, times e picks ja existentes foram preservados.",
+            "aviso": "Parou de coletar. Jogos, times, picks e o NOME da liga "
+                     "continuam, entao o historico segue legivel no site.",
         }
     finally:
         cur.close()

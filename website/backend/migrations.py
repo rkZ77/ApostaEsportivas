@@ -17,6 +17,23 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
 
     cur = conn.cursor()
     try:
+        # A liga ainda e' coletada? FALSE = so' historico.
+        #
+        # Existe porque REMOVER a linha quebra o nome em todo lugar que faz
+        # JOIN em `leagues`: a Copa do Mundo 2026 saiu da tabela em 2026-08-11
+        # (competicao encerrada, so' volta em 2030) e os picks dela passaram a
+        # aparecer como "LIGA 1" nos Resultados da IA. Os 104 jogos continuam em
+        # match_statistics sustentando 77% do ledger de calibracao -- o que
+        # sumiu foi so' o nome.
+        cur.execute("ALTER TABLE leagues ADD COLUMN IF NOT EXISTS ativa BOOLEAN NOT NULL DEFAULT TRUE;")
+        # Restaura a Copa do Mundo como historico. ON CONFLICT protege quem
+        # nunca deletou, e o nome vem fixo porque a API nao e' consultada aqui.
+        cur.execute("""
+            INSERT INTO leagues (league_id, name, season, ativa)
+            VALUES (1, 'Copa do Mundo', 2026, FALSE)
+            ON CONFLICT (league_id) DO NOTHING
+        """)
+
         # Temporada da liga ja comecou? NULL = ninguem marcou ainda.
         #
         # Tres estados de proposito: quem cadastra pode nao saber, e assumir
