@@ -120,6 +120,20 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         if total_weight > 0 else taxa_bruta
     )
 
+    # Composicao da amostra que ESTA taxa usou -- medida sobre `counted`, os
+    # jogos que de fato entraram, nao sobre a lista bruta.
+    #
+    # Existe porque a explicacao do pick dizia "taxa ponderada em 32 jogos" sem
+    # dizer de ONDE vinham. Depois de 2026-08-13 esses 32 podem misturar tres
+    # competicoes (copa le historico de todas), e o assinante nao tinha como
+    # saber. Numero medido, nunca estimado: e' a mesma regra do modulo de
+    # explicacao, que nao inventa valor.
+    competicoes = {}
+    for m, _ in counted:
+        lid = m.get("league_id")
+        if lid is not None:
+            competicoes[lid] = competicoes.get(lid, 0) + 1
+
     return {
         "taxa_bruta": round(taxa_bruta, 4),
         "taxa_ponderada": round(taxa_ponderada, 4),
@@ -127,6 +141,12 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
         "amostra_label": quality["label"],
         "Q": quality["Q"],
         "wilson": wilson_interval(round(sum(values)), n),
+        "composicao": {
+            "competicoes": competicoes,
+            "com_adversario_conhecido": sum(
+                1 for m, _ in counted if m.get("opponent_rank") is not None),
+            "total": n,
+        },
     }
 
 

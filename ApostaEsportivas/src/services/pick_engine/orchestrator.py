@@ -447,6 +447,11 @@ def analyze_fixture_markets(
                 "amostra_label":    taxa["amostra_label"],
                 "Q":                taxa["Q"],
                 "wilson":           taxa.get("wilson"),
+                # De onde vieram os jogos desta taxa. Alimenta a "Entenda esta
+                # analise": ate 2026-08-13 o texto dizia "em N jogos" sem dizer
+                # a origem, e desde a abertura do historico de copa esses N
+                # podem misturar competicoes.
+                "composicao":       taxa.get("composicao"),
                 "prob_baseline_source": prob_baseline["source"],
                 # O VALOR da probabilidade de mercado, nao so' a origem. Antes
                 # so' `source` era guardado, entao o edge era calculado e o
