@@ -532,6 +532,18 @@ async def _run_dev_pipeline():
     _pipeline_status["dev_tudo"] = {"status": "ok", "started_at": started, "finished_at": now(), "returncode": 0, "log": "Pipeline DEV completo!", "error": None}
 
 
+@router.get("/db-pool")
+def db_pool(current_user: dict = Depends(require_admin)):
+    """Estado do pool de conexao.
+
+    Serve pra responder duas perguntas sem adivinhar: o pool subiu mesmo, e
+    esta havendo `fallback` (pool cheio, abrindo conexao direta). Fallback
+    subindo e' o sinal de que DB_POOL_MAX ficou pequeno pro trafego.
+    """
+    from database import pool_stats
+    return pool_stats()
+
+
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
