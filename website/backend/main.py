@@ -300,6 +300,19 @@ def run_startup_migrations_hook():
     run_startup_migrations(logger)
 
 
+@app.on_event("shutdown")
+def fechar_pool_hook():
+    """Devolve as conexoes ao Postgres no encerramento.
+
+    Sem isto, cada redeploy do Railway deixa ate DB_POOL_MAX conexoes penduradas
+    no servidor ate o timeout dele -- e o Supabase limita conexoes por projeto.
+    Alguns deploys seguidos e o proximo processo sobe sem conseguir conectar.
+    """
+    from database import fechar_pool
+    fechar_pool()
+    logger.info("[SHUTDOWN] pool de conexao fechado")
+
+
 @app.get("/api/health")
 def health():
     return {"status": "ok"}

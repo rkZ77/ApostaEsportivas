@@ -213,18 +213,83 @@ def _build_union(date_cond: str, source: Optional[str]) -> str:
     return " UNION ALL ".join(fn(date_cond) for fn in _SUB_BUILDERS.values())
 
 
+def _pagina_de_resultados(cur, date_cond: str, date_params: tuple, source: Optional[str],
+                          limit: int = 30, offset: int = 0) -> tuple:
+    """(linhas da pagina, total) numa consulta so'.
+
+    ANTES ERAM DOZE IDAS AO BANCO. `_collect_results` rodava uma consulta por
+    fonte de pick (6) e `_count_recent` outra por fonte (6), e as duas coisas
+    juntas respondiam por mais da metade do tempo de /public/results -- medido
+    em 2026-08-13: a rota levava 1893ms enquanto as consultas em si somavam
+    menos de 5ms de trabalho no banco. O custo era ida e volta, nao SQL.
+
+    `_build_union` ja normalizava as colunas das 6 fontes e ja era usado pelo
+    sumario, entao a peca existia; faltava usa-la aqui. `COUNT(*) OVER ()`
+    traz o total junto da pagina, dispensando a segunda varredura.
+
+    O CAMINHO LENTO CONTINUA EXISTINDO, de proposito. A versao por fonte
+    isolada nasceu pra uma falha numa tabela nao apagar as outras (coluna que
+    faltou numa migracao derruba aquela fonte, nao o historico inteiro). Um
+    UNION nao tem essa propriedade: se uma perna quebra, quebra tudo. Entao o
+    UNION e' tentado primeiro e, se levantar, cai no laco antigo -- rapido no
+    caso normal, resiliente no caso ruim.
+    """
+    union = _build_union(date_cond, source if source in _SUB_BUILDERS else None)
+    p = date_params if source in _SUB_BUILDERS else date_params * len(_SUB_BUILDERS)
+    # ORDEM TOTAL, e nao so' "bonita". Paginar sem criterio de desempate deixa
+    # o Postgres livre pra devolver empates em ordem diferente a cada consulta,
+    # e ai a pagina 2 repete linha da 1 e pula outra. Foi o que a comparacao
+    # com o caminho antigo mostrou: mesmo total, mesmas colunas, CONTEUDO
+    # diferente na pagina 2.
+    #
+    # O desempate por fonte reproduz o que o caminho antigo fazia sem querer:
+    # ele concatenava as sub-queries na ordem de _SUB_BUILDERS e ordenava com
+    # sort estavel, entao empate de data+resultado caia nessa ordem. Deriva da
+    # constante, nunca de lista escrita a mao -- registrar um mercado novo nao
+    # pode exigir lembrar deste lugar.
+    ordem_fontes = list(_SUB_BUILDERS.keys())
+    try:
+        linhas = _q(cur, f"""
+            SELECT *, COUNT(*) OVER () AS _total
+            FROM ({union}) t
+            ORDER BY match_date DESC, result DESC,
+                     array_position(%s::text[], source),
+                     market NULLS LAST, line NULLS LAST, home_team_name NULLS LAST
+            LIMIT %s OFFSET %s
+        """, p + (ordem_fontes, limit, offset))
+        total = int(linhas[0]["_total"]) if linhas else 0
+        for r in linhas:
+            r.pop("_total", None)
+        return linhas, total
+    except Exception:
+        logger.warning("[RESULTS] union falhou, caindo pro caminho por fonte", exc_info=True)
+        cur.connection.rollback()
+        return (_collect_results(cur, date_cond, date_params, source, limit, offset),
+                _count_recent(cur, date_cond, date_params, source))
+
+
 def _collect_results(cur, date_cond: str, date_params: tuple, source: Optional[str],
                      limit: int = 30, offset: int = 0) -> list:
     """Corre cada sub-query separada, assim uma falha não apaga as outras.
     Paginação: cada sub-query busca até offset+limit linhas (pior caso, se a
     janela [offset, offset+limit) inteira vier de uma unica fonte) -- depois
-    do merge+sort global, so' entao aplica o slice [offset:offset+limit]."""
+    do merge+sort global, so' entao aplica o slice [offset:offset+limit].
+
+    Caminho de FALLBACK desde 2026-08-13 (ver _pagina_de_resultados): custa 6
+    idas ao banco, entao so' roda quando o UNION falha."""
     builders = [_SUB_BUILDERS[source]] if (source and source in _SUB_BUILDERS) else list(_SUB_BUILDERS.values())
     fetch_n = offset + limit
     rows: list = []
     for fn in builders:
         sub = fn(date_cond)
-        batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (fetch_n,))
+        try:
+            batch = _q(cur, f"SELECT * FROM ({sub}) t ORDER BY match_date DESC, result LIMIT %s", date_params + (fetch_n,))
+        except Exception:
+            # A propriedade que este caminho existe pra ter: uma fonte quebrada
+            # sai do resultado, nao derruba as outras cinco.
+            logger.warning("[RESULTS] fonte falhou no fallback", exc_info=True)
+            cur.connection.rollback()
+            continue
         rows.extend(batch)
     rows.sort(key=lambda r: (str(r["match_date"]), str(r.get("result",""))), reverse=True)
     return rows[offset:offset + limit]
@@ -237,7 +302,12 @@ def _count_recent(cur, date_cond: str, date_params: tuple, source: Optional[str]
     total = 0
     for fn in builders:
         sub = fn(date_cond)
-        row = _q1(cur, f"SELECT COUNT(*) AS c FROM ({sub}) t", date_params)
+        try:
+            row = _q1(cur, f"SELECT COUNT(*) AS c FROM ({sub}) t", date_params)
+        except Exception:
+            logger.warning("[RESULTS] contagem de fonte falhou no fallback", exc_info=True)
+            cur.connection.rollback()
+            continue
         total += row["c"] if row else 0
     return total
 
@@ -366,9 +436,9 @@ def public_results(
 
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
         single_source = source if source in _SUB_BUILDERS else None
-        recent_total = _count_recent(cur, date_cond, date_params, single_source)
-        recent = _collect_results(cur, date_cond, date_params, single_source,
-                                   limit=recent_limit, offset=recent_offset)
+        recent, recent_total = _pagina_de_resultados(
+            cur, date_cond, date_params, single_source,
+            limit=recent_limit, offset=recent_offset)
 
         # ── Contagem por tipo ─────────────────────────────────────────────────
         counts_row = _q1(cur, f"""
