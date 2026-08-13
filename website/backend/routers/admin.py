@@ -227,7 +227,9 @@ _DEV_PIPELINE_STEPS = [
     "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
 ]
 
-# Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
+# Timeouts por comando (segundos). atualizar_jogos roda 7 stages (0 a 6) + API
+# externa → precisa de mais tempo. O Stage 6 (histórico por time, 2026-08-13)
+# tem teto próprio de 60 requisições, então não muda a ordem de grandeza daqui.
 # Teto por script. O padrao era 5 min e matava coleta no meio -- capturar_odds
 # em dia cheio passa disso com facilidade (uma requisicao por fixture), e o
 # sintoma nao era "demorou": era o script morto na metade, com odd de parte dos

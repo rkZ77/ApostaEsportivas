@@ -335,6 +335,21 @@ def cmd_player_stats(limite: str = "50"):
     PlayerStatsCollectorService().coletar_pendentes(limite=int(limite))
 
 
+def cmd_historico(*args):
+    """Backfill de historico por time (Stage 6), sob demanda.
+
+    Ja roda dentro de `dados`; este comando existe pra ajustar os dois numeros
+    sem editar codigo -- tipicamente num dia de mata-mata de Conmebol, em que
+    vale gastar mais cota pra nao analisar meio jogo.
+    """
+    from collectors.team_history_backfill_service import (
+        TeamHistoryBackfillService, MIN_JOGOS_PADRAO, TETO_REQUISICOES_PADRAO,
+    )
+    min_jogos = int(args[0]) if len(args) > 0 and args[0] else MIN_JOGOS_PADRAO
+    teto = int(args[1]) if len(args) > 1 and args[1] else TETO_REQUISICOES_PADRAO
+    TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
+
+
 def cmd_vip():
     # Motor deterministico (pick_engine) -- decisao explicita do usuario
     # (2026-07-17) de cortar a geracao de picks pra IA em produção tambem,
@@ -562,6 +577,14 @@ COMANDOS: tuple = (
             "Coleta estatística por jogador dos jogos encerrados (limite: 50)",
             lambda *a: cmd_player_stats(a[0] if a else "50"),
             uso="player_stats [limite]"),
+    # Roda sozinho dentro do `dados` (Stage 6). Aqui é a versão sob demanda,
+    # para forçar um limiar maior ou liberar mais cota num dia de mata-mata.
+    Comando("historico", "Historico por time (API)",
+            "Busca os últimos jogos de quem está abaixo do mínimo no banco",
+            lambda *a: cmd_historico(*a),
+            uso="historico [min_jogos] [teto]",
+            detalhe="historico               padrão: abaixo de 10 jogos, teto de 60 requisições\n"
+                    "historico 15 200        exige 15 jogos e libera 200 requisições"),
     # Só dev: cmd_live recusa rodar sem DB_ENV=dev (pick_engine_live/config).
     # Estar no menu do run_prod seria oferecer um botão que só sabe recusar.
     Comando("live", "Motor Ao Vivo · uma rodada (dry run)",
