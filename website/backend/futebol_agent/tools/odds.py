@@ -1,6 +1,59 @@
+import logging
+import time
+
 from futebol_agent.api_football import get_fixture_odds, get_live_odds as _get_live_odds
 
-BR_BOOKMAKERS = {8, 32, 34}
+logger = logging.getLogger(__name__)
+
+# Padrao quando a tabela `bookmakers` nao responde. NAO e' a lista final --
+# quem manda e a tela "Casas de aposta" do /admin, igual ao coletor de odds
+# (ApostaEsportivas/src/collectors/odds_collector_service.py::casas_ativas).
+#
+# Antes daqui existirem tres listas: {8, 32} no coletor, {8, 32} implicito na
+# tabela e {8, 32, 34} cravado neste arquivo. O agente do chat podia cotar uma
+# casa que o site nao coleta e da qual nunca publica pick -- o assinante
+# perguntava do jogo, recebia uma odd da casa 34, e o card do pick mostrava
+# outra casa e outro numero.
+BR_BOOKMAKERS = {8, 32}
+
+_CACHE_TTL_S = 300
+_cache: tuple[float, set] | None = None
+
+
+def casas_ativas() -> set:
+    """Casas ativas, lidas da mesma tabela que o coletor de odds le.
+
+    Cache de 5 minutos porque este caminho roda por mensagem de chat: consultar
+    o banco a cada pergunta e' latencia na frente do usuario pra ler uma linha
+    que muda uma vez por mes. O TTL e' o que faz uma edicao no /admin valer sem
+    reiniciar o servico.
+
+    Falha -> padrao. O chat nunca pode ficar sem cotar por causa disto.
+    """
+    global _cache
+    agora = time.monotonic()
+    if _cache and agora - _cache[0] < _CACHE_TTL_S:
+        return _cache[1]
+
+    ids = set(BR_BOOKMAKERS)
+    try:
+        from database import get_connection
+        conn = get_connection()
+        try:
+            cur = conn.cursor()
+            cur.execute("SELECT bookmaker_id FROM bookmakers WHERE ativo")
+            lidos = {r[0] if not isinstance(r, dict) else r["bookmaker_id"]
+                     for r in cur.fetchall()}
+            cur.close()
+            if lidos:
+                ids = lidos
+        finally:
+            conn.close()
+    except Exception as e:
+        logger.warning("[AGENT-ODDS] tabela bookmakers indisponivel (%s); usando o padrao", e)
+
+    _cache = (agora, ids)
+    return ids
 
 VALID_PREMATCH_IDS = {
     1, 2, 12, 13, 5, 8, 16, 17, 6, 34, 105, 106, 26, 35,
@@ -48,8 +101,11 @@ async def get_prematch_odds(fixture_id: int) -> dict:
     if not bookmakers:
         return {"error": "sem_cobertura"}
 
-    all_markets = _collect_prematch_markets(bookmakers, BR_BOOKMAKERS)
+    all_markets = _collect_prematch_markets(bookmakers, casas_ativas())
     if not all_markets:
+        # Nenhuma casa nossa cotou este jogo. Cotar as outras e' melhor que
+        # responder "sem cobertura" numa conversa, mas o numero deixa de ser
+        # o mesmo que o card do pick mostra.
         all_markets = _collect_prematch_markets(bookmakers)
     if not all_markets:
         return {"error": "sem_cobertura"}

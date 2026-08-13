@@ -11,6 +11,20 @@ from services.pick_engine.competition_profile import national_team_league_ids
 # plano de refatoração · antes essa lista era mantida em paralelo aqui).
 NATIONAL_TEAM_LEAGUE_IDS: frozenset = national_team_league_ids()
 
+# Jogo encerrado, em SQL. AET/PEN entram desde 2026-08-13 · são exatamente os
+# jogos de mata-mata, que é onde a amostra é curta. Quem decide se o jogo serve
+# para a família de mercado em questão é stats_model.pool_and_field, porque a
+# folha de um AET cobre 120 minutos e só gols têm placar de 90 separado.
+FIM_DE_JOGO = "('FT', 'AET', 'PEN')"
+
+# Quantos jogos ler no histórico multi-competição.
+#
+# 30 e não 15: pool_and_field fica só com os jogos do mando que o mercado
+# descreve, cortando o pool a aproximadamente metade. Com 15, o time chegava a
+# ~7 e não alcançava sample_rich_n=8 quase nunca. É leitura de banco, não de
+# API · não custa requisição.
+DEFAULT_LIMIT_MULTI = 30
+
 
 ###############################################################################
 # Sanitização universal (garante compatibilidade com JSON)
@@ -143,8 +157,11 @@ class MatchStatsService:
         return self._query(f"""
             SELECT
                 ms.match_date,
+                ms.league_id,
+                ms.status,
                 ms.home_team_id, ms.away_team_id,
                 ms.home_goals, ms.away_goals, ms.total_goals,
+                ms.home_goals_90, ms.away_goals_90,
                 ms.home_corners, ms.away_corners, ms.total_corners,
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
@@ -196,16 +213,43 @@ class MatchStatsService:
     # Usado para Copa América, Copa do Mundo, Eliminatórias e Amistosos:
     # a seleção pode ter só 3-4 jogos na Copa mas 15 contando eliminatórias.
     ##########################################################################
-    def get_last_n_all_competitions(self, team_id, limit=15, before_date=None, since_date=None):
+    def get_last_n_all_competitions(self, team_id, limit=DEFAULT_LIMIT_MULTI, before_date=None, since_date=None):
         """before_date (opcional): só jogos com match_date < before_date --
         usado por backtests pra evitar vazar resultado futuro no histórico
         de um fixture já encerrado. since_date (opcional, Fase 1.6): só
         jogos com match_date >= since_date, ver get_all_matches_full().
-        None (padrão) preserva o comportamento atual."""
+        None (padrão) preserva o comportamento atual.
+
+        FORÇA DO ADVERSÁRIO (2026-08-13). Até esta data as duas colunas de
+        oponente saíam `NULL` cravado, e stats_model.weighted_rate pondera cada
+        jogo por `opponent_weight(m["opponent_rank"])` · sem rank todo jogo caía
+        em `opponent_unknown_weight`. Ou seja: justamente na copa, onde o
+        histórico mistura adversário de Brasileirão com mata-mata continental, o
+        ajuste por qualidade do adversário ficava DESLIGADO. O JOIN é o mesmo de
+        get_all_matches_full, só que casado com `ms.league_id` de cada jogo (que
+        varia aqui) em vez da liga da fixture.
+
+        Liga sem classificação coletada (campeonato estrangeiro não cadastrado)
+        continua devolvendo NULL, e isso é correto: peso desconhecido é melhor
+        que peso inventado.
+
+        LIMITE 30, não 15. O pool passa por stats_model.pool_and_field, que fica
+        só com os jogos do mando que o mercado descreve · o corte é de
+        aproximadamente metade. Com 15 o time chegava a ~7 no pool e não
+        alcançava `sample_rich_n=8` quase nunca. O 15 antigo foi calibrado antes
+        do filtro de mando existir (2026-08-08) e ninguém subiu depois.
+
+        PRORROGAÇÃO ENTRA, mas só onde é comparável · ver
+        stats_model.pool_and_field. A folha de estatística de um AET descreve
+        120 minutos, então escanteios/cartões/faltas vêm inflados; só gols têm
+        coluna de 90 minutos separada. Por isso a coluna `status` vai junto: a
+        decisão de usar ou não o jogo é POR FAMÍLIA, e quem sabe a família é o
+        modelo, não esta consulta.
+        """
         date_filter = "AND ms.match_date < %s" if before_date else ""
         since_filter = "AND ms.match_date >= %s" if since_date else ""
         params = (
-            (team_id, team_id)
+            (team_id, team_id, team_id)
             + ((before_date,) if before_date else ())
             + ((since_date,) if since_date else ())
             + (limit,)
@@ -214,8 +258,10 @@ class MatchStatsService:
             SELECT
                 ms.match_date,
                 ms.league_id,
+                ms.status,
                 ms.home_team_id, ms.away_team_id,
                 ms.home_goals, ms.away_goals, ms.total_goals,
+                ms.home_goals_90, ms.away_goals_90,
                 ms.home_corners, ms.away_corners, ms.total_corners,
                 ms.home_yellow_cards, ms.away_yellow_cards, ms.total_yellow_cards,
                 ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
@@ -227,11 +273,18 @@ class MatchStatsService:
                 ms.home_possession, ms.away_possession,
                 ms.home_passes, ms.away_passes,
                 ms.home_passes_accuracy, ms.away_passes_accuracy,
-                NULL::text    AS opponent_name,
-                NULL::integer AS opponent_rank
+                ls.team_name AS opponent_name,
+                ls.rank      AS opponent_rank
             FROM match_statistics ms
+            LEFT JOIN league_standings ls
+                ON ls.team_id = CASE
+                    WHEN ms.home_team_id = %s THEN ms.away_team_id
+                    ELSE ms.home_team_id
+                END
+               AND ls.league_id = ms.league_id
+               AND ls.season = ms.season
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
-              AND ms.status = 'FT'
+              AND ms.status IN {FIM_DE_JOGO}
               {date_filter}
               {since_filter}
             ORDER BY ms.match_date DESC

@@ -6,6 +6,7 @@ import math
 from datetime import datetime, date
 
 from services.pick_engine.config import PickEngineConfig, DEFAULT_CONFIG
+from services.pick_engine.competition_profile import cross_competition_weight
 
 _WILSON_Z = 1.96  # 95% de confianca
 
@@ -94,9 +95,23 @@ def weighted_rate(matches: list, hit_fn, reference_date=None, config: PickEngine
     values = [v for _, v in counted]
     taxa_bruta = sum(values) / n
 
+    # Terceiro fator (2026-08-13): a competicao de ORIGEM do jogo. Um 4x0 na
+    # Copa do Brasil contra time de divisao inferior nao descreve o mesmo time
+    # que um 4x0 no Brasileirao, e o historico de copa MISTURA os dois -- sem
+    # este peso, abrir o historico pra todas as competicoes trocava "amostra
+    # pequena" por "amostra enviesada". O peso ja estava definido em
+    # competition_profile._CROSS_COMPETITION_WEIGHT desde 2026-08-01, com o
+    # comentario dizendo que faltava conectar; era isto.
+    #
+    # Historico de UMA liga so (fixture de pontos corridos) fica intacto de
+    # proposito: todos os jogos vem da mesma competicao, entao o fator e
+    # constante e some na divisao de taxa_ponderada (media ponderada normaliza
+    # pelo total). Nao e' um caso especial escrito a mao -- e' consequencia
+    # aritmetica, e ha teste travando isso.
     weights = [
         opponent_weight(m.get("opponent_rank"), config)
         * temporal_decay_weight(m["match_date"], reference_date, config)
+        * cross_competition_weight(m.get("league_id"))
         for m, _ in counted
     ]
     total_weight = sum(weights)
@@ -446,6 +461,66 @@ def _cards_points(m: dict, scope: str, team_id: int | None = None) -> float:
     )
 
 
+#: Status de jogo decidido fora dos 90 minutos.
+PRORROGACAO = ("AET", "PEN")
+
+
+def gols_90(m: dict, lado: str) -> int:
+    """Gols do lado no tempo REGULAMENTAR.
+
+    `home_goals`/`away_goals` da API-Football sao o placar do JOGO INTEIRO: num
+    jogo decidido na prorrogacao eles ja incluem o tempo extra (caso real no
+    repositorio: Belgium x Senegal, goals 3x2 com score.fulltime 2x2). Casa de
+    aposta liquida Over/Under e BTTS pelos 90 minutos, entao ler a coluna cheia
+    contaria gol que nao existe pro mercado.
+
+    Jogo normal nao tem `_90` preenchido (a coluna nasceu depois), e ai o
+    placar cheio E' o de 90 minutos -- por isso o fallback, e nao um erro.
+
+    O fallback NAO vale pra jogo decidido fora dos 90: ali o placar cheio
+    inclui o tempo extra e nao ha como recuperar o de 90. Esses jogos sao
+    retirados do pool por comparavel_em_90() antes de chegar aqui; o `or 0`
+    abaixo so' cobre coluna nula de jogo normal.
+    """
+    valor = m.get(f"{lado}_goals_90")
+    if valor is None:
+        valor = m.get(f"{lado}_goals")
+    return int(valor or 0)
+
+
+def _tem_placar_de_90(m: dict) -> bool:
+    return m.get("home_goals_90") is not None and m.get("away_goals_90") is not None
+
+
+def comparavel_em_90(pool: list, family: str) -> list:
+    """Tira do pool o jogo cujo contador desta familia nao cabe em 90 minutos.
+
+    A folha de estatistica de um AET cobre os 120 minutos jogados: escanteios,
+    cartoes, faltas e chutes vem inflados em cerca de um terco de tempo extra, e
+    NAO ha coluna de 90 minutos pra eles. Manter esses jogos empurraria a taxa
+    de Over pra cima usando jogo que a casa liquidou noutro placar.
+
+    Gols e BTTS ficam SE o jogo tiver o placar de 90 gravado -- e sao as
+    familias que mais precisam do jogo de mata-mata, que e' onde a prorrogacao
+    acontece.
+
+    A CONDICAO NAO E' FORMALIDADE. Medido no banco de DEV em 2026-08-13: dos 54
+    jogos de prorrogacao, 40 estao SEM `home_goals_90` (todos os 14 AET e 26 dos
+    40 PEN). A coluna nasceu depois da tabela e so' foi preenchida daquele
+    ponto em diante. Sem esta checagem, gols_90 cairia no placar cheio -- que
+    num AET inclui o tempo extra -- e o motor contaria gol de prorrogacao como
+    gol dos 90 em 40 jogos. E' exatamente o erro que a coluna `_90` foi criada
+    pra evitar.
+
+    Jogo sem `status` (chamador antigo, fixture de teste) e' tratado como FT e
+    permanece: a ausencia do campo nunca pode ENCOLHER o pool.
+    """
+    if family in ("goals", "btts"):
+        return [m for m in pool
+                if (m.get("status") or "FT") not in PRORROGACAO or _tem_placar_de_90(m)]
+    return [m for m in pool if (m.get("status") or "FT") not in PRORROGACAO]
+
+
 def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
     """Le o valor real de uma familia/escopo num jogo historico, somando
     home+away quando a familia nao tem coluna 'total_X' pronta
@@ -456,6 +531,13 @@ def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
     adversario. Ver resolve_side()."""
     if family == "cards":
         return _cards_points(m, scope, team_id)
+    if family == "goals":
+        # Sempre pelos 90 minutos -- ver gols_90. `total_goals` do banco e' a
+        # soma do placar CHEIO e nao serve num jogo de prorrogacao.
+        lado_gols = resolve_side(m, scope, team_id)
+        if lado_gols in ("home", "away"):
+            return gols_90(m, lado_gols)
+        return gols_90(m, "home") + gols_90(m, "away")
     fields = _FAMILY_STAT_FIELDS[family]
     side = resolve_side(m, scope, team_id)
     if side in ("home", "away"):
@@ -534,14 +616,15 @@ def pool_and_field(family: str, scope: str, last10_home: list, last10_away: list
     BTTS entra pelo mesmo argumento: "as duas marcam" e' propriedade da partida,
     e a partida que interessa e' esta, com estes mandos."""
     if scope == "home":
-        return _somente_no_mando(last10_home, team_id, "home"), None
+        return comparavel_em_90(_somente_no_mando(last10_home, team_id, "home"), family), None
     if scope == "away":
-        return _somente_no_mando(last10_away, team_id, "away"), None
+        return comparavel_em_90(_somente_no_mando(last10_away, team_id, "away"), family), None
     # total e btts: o mandante nos jogos EM CASA dele, o visitante nos de FORA.
     # Sem os ids o filtro nao acontece (mesma regra de _somente_no_mando) e o
     # pool volta ao comportamento antigo, em vez de sair vazio.
-    return (_somente_no_mando(last10_home, home_team_id, "home")
-            + _somente_no_mando(last10_away, away_team_id, "away")), None
+    return comparavel_em_90(
+        _somente_no_mando(last10_home, home_team_id, "home")
+        + _somente_no_mando(last10_away, away_team_id, "away"), family), None
 
 
 def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
@@ -559,7 +642,9 @@ def _build_market_hit_fn(family: str, scope: str, value: str, line_str: str,
         want_btts = direction in ("yes", "sim")
 
         def hit_fn(m):
-            occurred = (m.get("home_goals") or 0) > 0 and (m.get("away_goals") or 0) > 0
+            # 90 minutos, igual a familia goals: gol de prorrogacao nao faz
+            # BTTS pra casa de aposta.
+            occurred = gols_90(m, "home") > 0 and gols_90(m, "away") > 0
             return 1 if occurred == want_btts else 0
 
         return hit_fn
@@ -1034,6 +1119,15 @@ def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str,
     ate' aqui."""
     if not matches or family not in _SCORED_CONCEDED_FIELDS:
         return None, None
+    # Mesma regra do pool de taxa (ver comparavel_em_90): a folha de um AET
+    # cobre 120 minutos, entao escanteios/cartoes/faltas/defesas daquele jogo
+    # nao descrevem a mesma partida de 90 que o mercado precifica. Gols ficam,
+    # porque abaixo sao lidos por gols_90. Sem isto o caminho de historico cru
+    # -- que e' o caminho da COPA -- ficaria com a media inflada exatamente nos
+    # jogos de mata-mata.
+    matches = comparavel_em_90(matches, family)
+    if not matches:
+        return None, None
     n = len(matches)
 
     def _lado(m):
@@ -1051,6 +1145,16 @@ def scored_conceded_avg(matches: list, is_home_ctx: bool, family: str,
             s_side, c_side = _lado(m)
             scored += _cards_points(m, s_side)
             conceded += _cards_points(m, c_side)
+        return round(scored / n, 3), round(conceded / n, 3)
+
+    if family == "goals":
+        # Pelos 90 minutos, igual a taxa (ver gols_90): num jogo de
+        # prorrogacao, `home_goals` ja inclui o tempo extra.
+        scored = conceded = 0.0
+        for m in matches:
+            s_side, c_side = _lado(m)
+            scored += gols_90(m, s_side)
+            conceded += gols_90(m, c_side)
         return round(scored / n, 3), round(conceded / n, 3)
 
     home_f, away_f = _SCORED_CONCEDED_FIELDS[family]
@@ -1188,29 +1292,44 @@ def expected_value_convergence(last10_home: list, last10_away: list, family: str
     h_scored, h_conceded, n_home = scored_conceded_from_team_stats(team_stats_home, family)
     a_scored, a_conceded, n_away = scored_conceded_from_team_stats(team_stats_away, family)
     source = "team_statistics"
-    amostra = None
     if None in (h_scored, h_conceded, a_scored, a_conceded):
         h_scored, h_conceded = scored_conceded_avg(last10_home, True, family, team_id=home_team_id)
         a_scored, a_conceded = scored_conceded_avg(last10_away, False, family, team_id=away_team_id)
+        # A AMOSTRA VEM DO POOL, e nao mais zero (2026-08-13).
+        #
+        # Ate' aqui o caminho de historico cru pulava o encolhimento inteiro,
+        # porque n_home/n_away chegavam 0 de scored_conceded_from_team_stats e
+        # shrink_to_baseline devolve o valor cru com amostra 0. Isso deixava
+        # justamente a fixture de COPA sem o ajuste medido como ganho
+        # (+2.0%/+3.5%/+2.3% contra 506 jogos), ja' que copa e' o caso em que
+        # team_statistics vem vazio ou fino -- ela caia aqui sempre.
+        #
+        # A contagem espelha pool_and_field (mando + comparavel em 90 minutos)
+        # pra o peso do encolhimento refletir os jogos que de fato sustentam a
+        # media, nao o tamanho da lista bruta.
+        n_home = len(comparavel_em_90(
+            _somente_no_mando(last10_home, home_team_id, "home"), family))
+        n_away = len(comparavel_em_90(
+            _somente_no_mando(last10_away, away_team_id, "away"), family))
         source = "historico_cru"
-    else:
-        # Encolhimento pra media da liga: SEM ele o cruzamento feitos-x-cedidos
-        # mede PIOR que a media dos 15 jogos crus (ver _TEAM_STATS_SHRINK_K).
-        # Os feitos do mandante e os cedidos do visitante miram a mesma
-        # quantidade (o que acontece do lado de CASA), entao ambos sao puxados
-        # pro mesmo baseline -- e vice-versa pro lado de fora.
-        base_casa = base_fora = None
-        if league_baseline:
-            k_casa, k_fora = _BASELINE_KEYS.get(family, (None, None))
-            base_casa = league_baseline.get(k_casa) if k_casa else None
-            base_fora = league_baseline.get(k_fora) if k_fora else None
-            base_casa = float(base_casa) if base_casa is not None else None
-            base_fora = float(base_fora) if base_fora is not None else None
-        h_scored = shrink_to_baseline(h_scored, n_home, base_casa)
-        a_conceded = shrink_to_baseline(a_conceded, n_away, base_casa)
-        a_scored = shrink_to_baseline(a_scored, n_away, base_fora)
-        h_conceded = shrink_to_baseline(h_conceded, n_home, base_fora)
-        amostra = min(n_home, n_away)
+
+    # Encolhimento pra media da competicao, nos DOIS caminhos: SEM ele o
+    # cruzamento feitos-x-cedidos mede PIOR que a media dos 15 jogos crus (ver
+    # _TEAM_STATS_SHRINK_K). Os feitos do mandante e os cedidos do visitante
+    # miram a mesma quantidade (o que acontece do lado de CASA), entao ambos
+    # sao puxados pro mesmo baseline -- e vice-versa pro lado de fora.
+    base_casa = base_fora = None
+    if league_baseline:
+        k_casa, k_fora = _BASELINE_KEYS.get(family, (None, None))
+        base_casa = league_baseline.get(k_casa) if k_casa else None
+        base_fora = league_baseline.get(k_fora) if k_fora else None
+        base_casa = float(base_casa) if base_casa is not None else None
+        base_fora = float(base_fora) if base_fora is not None else None
+    h_scored = shrink_to_baseline(h_scored, n_home, base_casa)
+    a_conceded = shrink_to_baseline(a_conceded, n_away, base_casa)
+    a_scored = shrink_to_baseline(a_scored, n_away, base_fora)
+    h_conceded = shrink_to_baseline(h_conceded, n_home, base_fora)
+    amostra = min(n_home, n_away) if (n_home and n_away) else None
     if None in (h_scored, h_conceded, a_scored, a_conceded):
         return None
 

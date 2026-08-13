@@ -347,16 +347,25 @@ def test_gatilho_da_coleta_e_o_mesmo_predicado_da_leitura(monkeypatch):
     assert entraram == esperado
 
 
-def test_limite_pedido_a_api_acompanha_o_que_o_motor_le():
-    """ULTIMOS_PADRAO casa com o LIMIT de get_last_n_all_competitions. Pedir
-    mais e' requisicao gasta em linha que ninguem consulta; pedir menos deixa
-    o motor com fome."""
-    import inspect
-    from services.match_stats_service import MatchStatsService
+def test_limite_pedido_a_api_e_o_mesmo_que_o_motor_le():
+    """Pedir mais que o motor le e' requisicao gasta em linha que ninguem
+    consulta; pedir menos deixa o motor com fome.
 
-    fonte = inspect.getsource(MatchStatsService.get_last_n_all_competitions)
-    assert f"limit={backfill.ULTIMOS_PADRAO}" in fonte, \
-        "o LIMIT do motor mudou: ULTIMOS_PADRAO precisa acompanhar"
+    A versao anterior deste teste comparava a fonte contra a string "limit=15",
+    e cumpriu o papel: acusou no dia em que o LIMIT do motor subiu pra 30. A
+    correcao boa nao era atualizar o numero nos dois lugares, era APAGAR um dos
+    dois -- o coletor agora importa a constante do motor, e este teste so'
+    garante que ninguem volte a copiar.
+    """
+    from services import match_stats_service
+
+    assert backfill.ULTIMOS_PADRAO is match_stats_service.DEFAULT_LIMIT_MULTI
+
+
+def test_teto_de_requisicoes_cobre_pelo_menos_um_time_inteiro():
+    """Teto menor que (1 listagem + ULTIMOS_PADRAO folhas) faria toda rodada
+    parar no meio do primeiro time, sem nunca completar ninguem."""
+    assert backfill.TETO_REQUISICOES_PADRAO >= backfill.ULTIMOS_PADRAO + 1
 
 
 def test_minimo_do_backfill_fica_acima_do_minimo_duro_do_motor():

@@ -13,10 +13,36 @@ from services.pick_engine import stats_model, variance_model
 # ============================================================
 # 1. HISTORICO
 # ============================================================
+#: Quanto da qualidade da amostra depende de saber CONTRA QUEM o time jogou.
+#: Com 0.15, historico inteiro sem classificacao do adversario vale 85% do Q --
+#: penalidade real e pequena. Nao pode ser grande: adversario desconhecido nao
+#: torna o jogo invalido, so' cega o unico ajuste que corrigiria a forca dele
+#: (stats_model.opponent_weight, que sem rank cai no peso neutro).
+PESO_ADVERSARIO_CONHECIDO = 0.15
+
+
 def validate_history(matches: list, min_games: int = 5) -> dict:
     """Amostra minima pra uma analise ter algum valor -- reaproveita
     stats_model.sample_quality() (mesmos tiers RICO/MODERADO/ESCASSO/VAZIO
-    ja usados no resto do motor, nao um limite novo e desalinhado)."""
+    ja usados no resto do motor, nao um limite novo e desalinhado).
+
+    QUANTIDADE NAO E' QUALIDADE (2026-08-13). Ate' aqui este validador so'
+    CONTAVA jogos: 15 partidas de quatro competicoes diferentes, contra
+    adversario que o banco nem sabe quem e', pontuavam igual a 15 partidas de
+    Brasileirao com classificacao conhecida. Como o Data Quality Score escala o
+    `min_edge` exigido (config.dqs_baseline / dqs_min_edge_scale), a lacuna
+    fazia o motor cobrar a MESMA margem de seguranca nos dois casos.
+
+    O sinal medido e' a fracao do historico com `opponent_rank` conhecido,
+    porque e' ele que diz se a ponderacao por forca do adversario esta
+    funcionando ou rodando cega. Amostra de copa costuma trazer adversario de
+    campeonato estrangeiro nao coletado, e e' exatamente onde a cautela extra
+    faz falta.
+
+    `competicoes` vai junto no retorno como informacao de rastro (aparece no
+    decision_log), NAO como penalidade: historico multi-competicao e' o
+    comportamento desejado em copa, nao um defeito a punir.
+    """
     n = len(matches)
     quality = stats_model.sample_quality(n)
     reasons = []
@@ -25,11 +51,24 @@ def validate_history(matches: list, min_games: int = 5) -> dict:
     elif n < min_games:
         reasons.append(f"Amostra abaixo do minimo ({n} de {min_games} jogos)")
 
+    com_rank = sum(1 for m in matches if m.get("opponent_rank") is not None)
+    fracao_conhecida = (com_rank / n) if n else 0.0
+    competicoes = len({m.get("league_id") for m in matches if m.get("league_id") is not None})
+    if n and com_rank < n:
+        reasons.append(
+            f"{n - com_rank} de {n} jogos sem classificacao do adversario "
+            f"(ponderacao por forca fica neutra neles)"
+        )
+
+    fator = (1 - PESO_ADVERSARIO_CONHECIDO) + PESO_ADVERSARIO_CONHECIDO * fracao_conhecida
     return {
         "passed": n >= min_games,
         "amostra": n,
         "label": quality["label"],
-        "Q": quality["Q"],
+        "Q": round(quality["Q"] * fator, 4),
+        "Q_bruto": quality["Q"],
+        "adversario_conhecido": round(fracao_conhecida, 3),
+        "competicoes": competicoes,
         "reasons": reasons,
     }
 

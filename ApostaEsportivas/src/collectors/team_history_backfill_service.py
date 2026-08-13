@@ -69,6 +69,7 @@ load_dotenv(find_dotenv())
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db_utils import get_connection
 from utils.data_br import HOJE_BR
+from services.match_stats_service import DEFAULT_LIMIT_MULTI
 from services.pick_engine import competition_profile as cp
 from collectors.match_statistics_sync_service import (
     MatchStatisticsSyncService,
@@ -92,16 +93,23 @@ STATUS_ENCERRADO = ("FT", "AET", "PEN")
 # raspando em nenhum.
 MIN_JOGOS_PADRAO = 10
 
-# Quantos jogos pedir por time. Igual ao LIMIT de
-# MatchStatsService.get_last_n_all_competitions de proposito: guardar mais do
-# que o motor le seria requisicao gasta em linha que ninguem consulta. Se
-# aquele LIMIT subir, este numero sobe junto.
-ULTIMOS_PADRAO = 15
+# Quantos jogos pedir por time. IMPORTADO do motor, nao copiado: guardar mais
+# do que ele le seria requisicao gasta em linha que ninguem consulta, e guardar
+# menos deixaria o motor com fome. Os dois numeros ja nasceram desalinhados uma
+# vez (o LIMIT do motor subiu de 15 pra 30 em 2026-08-13 e este ficou pra tras
+# ate o teste acusar) -- com o import, nao ha o que alinhar.
+ULTIMOS_PADRAO = DEFAULT_LIMIT_MULTI
 
-# Teto de requisicoes por rodada. 60 cobre ~4 times vindos do zero (1 da
-# listagem + 15 das folhas), que e' o volume tipico de um dia com mata-mata de
-# Conmebol. A cota diaria e' disputada com a coleta de odds.
-TETO_REQUISICOES_PADRAO = 60
+# Teto de requisicoes por rodada, e a conta que sustenta o numero:
+#
+#   pior caso por time = 1 listagem + ULTIMOS_PADRAO folhas = 31 requisicoes
+#   120 => ~4 times vindos do zero, que e' um dia cheio de mata-mata de Conmebol
+#
+# "Pior caso" e' so' a PRIMEIRA rodada de cada time: na seguinte, o filtro de
+# jogo ja gravado derruba o custo pra quase zero. A cota diaria e' disputada
+# com a coleta de odds, entao o teto e' o que garante que este coletor nunca
+# seja o motivo de faltar cota pra ela.
+TETO_REQUISICOES_PADRAO = 120
 
 
 class TeamHistoryBackfillService:
