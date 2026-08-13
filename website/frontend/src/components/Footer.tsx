@@ -3,6 +3,23 @@ import { Link } from 'react-router-dom'
    trademark, então o do Instagram continua vindo do asset em /public. */
 import { MessageCircle } from 'lucide-react'
 
+/* Ícone do Instagram como SVG inline.
+   Era um PNG de 164KB desenhado a 16x16 · sozinho pesava quase o mesmo que
+   todo o JavaScript da página, e no celular isso se sente.
+   Não vem do lucide-react porque a biblioteca removeu ícones de marca na v1.
+   Desenhado no mesmo padrão do MessageCircle ao lado (viewBox 24, traço 2,
+   currentColor) pra os dois ficarem idênticos em peso visual. */
+function InstagramIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="2" width="20" height="20" rx="5" />
+      <circle cx="12" cy="12" r="4" />
+      <circle cx="17.5" cy="6.5" r="185e-3" />
+    </svg>
+  )
+}
+
 /*
  * Rodapé do site.
  *
@@ -81,7 +98,7 @@ export default function Footer() {
                 aria-label="Instagram do Pick IA"
                 className="w-9 h-9 rounded-md border border-line flex items-center justify-center text-ink-3 hover:text-ink-1 hover:border-line-strong transition-colors duration-1 ease-smooth"
               >
-                <img src="/instagram.png" alt="" width={16} height={16} className="w-4 h-4 rounded-sm object-cover opacity-70" />
+                <InstagramIcon className="w-4 h-4" />
               </a>
               <a
                 href={WA_SUPPORT}

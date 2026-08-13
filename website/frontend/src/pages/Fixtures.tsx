@@ -102,11 +102,7 @@ function isFinished(status: string) { return ['FT', 'AET', 'PEN'].includes(statu
 
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
 
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = {
-  1: '/logo-copa-mundo.png',
-}
-const leagueLogo = (league_id: number) =>
-  LOCAL_LEAGUE_LOGOS[league_id] ?? `/api/proxy/league/${league_id}.png`
+const leagueLogo = (league_id: number) => `/api/proxy/league/${league_id}.png`
 
 function TeamLogo({ id, name, side, size = 32 }: {
   id?: number; name: string

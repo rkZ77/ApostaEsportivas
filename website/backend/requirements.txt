@@ -15,3 +15,8 @@ email-validator==2.3.0
 pydantic==2.13.4
 resend==2.10.0
 rapidfuzz==3.14.5
+# Reduz o escudo servido por /api/proxy ao tamanho que a tela usa. A origem
+# manda 150x150 com 20 a 45KB pra desenhar a 16-32px · a Home baixava 370KB so'
+# de escudo. Uso restrito a main.py::_reduzir_logo, que devolve o original se
+# a biblioteca falhar.
+Pillow==11.4.0

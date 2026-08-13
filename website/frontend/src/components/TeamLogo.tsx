@@ -1,7 +1,10 @@
 const TEAM_LOGO = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
-const LEAGUE_LOGO = (id?: number) =>
-  id ? (LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`) : null
+/* Sem exceção local para a liga 1 (Copa do Mundo). Ela existia porque o escudo
+   do torneio era servido de `public/logo-copa-mundo.png` · um PNG de 90KB para
+   aparecer a 16px. A Copa acabou em 2026-08-11 e só volta em 2030; o que resta
+   dela são picks históricos, e para esses o proxy serve o escudo igual a
+   qualquer outra liga. Uma exceção a menos para lembrar. */
+const LEAGUE_LOGO = (id?: number) => id ? `/api/proxy/league/${id}.png` : null
 
 export function TeamLogo({ id, name, size = 22 }: { id?: number; name: string; size?: number }) {
   const src = TEAM_LOGO(id)

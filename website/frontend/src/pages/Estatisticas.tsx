@@ -10,8 +10,7 @@ import PageShell from '../components/PageShell'
 import { SpinnerBlock } from '../components/ui'
 import FilterPanel from '../components/FilterPanel'
 
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
-const LEAGUE_LOGO = (id: number) => LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`
+const LEAGUE_LOGO = (id: number) => `/api/proxy/league/${id}.png`
 
 interface League { league_id: number; name: string; season: number; logo_url: string }
 interface Game {
