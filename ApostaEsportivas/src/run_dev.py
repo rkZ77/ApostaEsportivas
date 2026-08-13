@@ -31,72 +31,45 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import main as main_module  # noqa: E402  (import após setar DB_ENV)
 
-OPCOES = {
-    "1":  ("Atualizar jogos (completo)",       "dados"),
-    "2":  ("Capturar odds",                    "odds"),
-    "3":  ("Gerar picks VIP (motor)",          "vip"),
-    "4":  ("Gerar pick Free (motor)",          "dica"),
-    "5":  ("Gerar múltipla (motor)",           "multiplas"),
-    "6":  ("Gerar alavancagem (motor)",        "alavancagem"),
-    # Paridade com run_prod.py: faltas/goleiros rodavam so' dentro de "tudo".
-    "7":  ("Gerar picks de faltas (motor)",    "faltas"),
-    "8":  ("Gerar defesas de goleiro (motor)", "goleiros"),
-    "9":  ("Atualizar resultados",             "resultados"),
-    "10": ("Tudo: jogos + odds + picks",       "tudo"),
-    "11": ("Modo sombra (log IA vs motor)",    "shadow"),
-    "12": ("Estatistica de jogador (API)",     "player_stats"),
-}
+# Menu e dispatch saem do registro COMANDOS de main.py -- ver o comentario
+# grande la. Este wrapper so' escolhe o ambiente ("dev") e cuida das
+# migracoes; a lista de comandos nao e' mais mantida aqui.
+COMANDOS = [c for c in main_module.COMANDOS if "dev" in c.ambientes]
+OPCOES = {str(i): c for i, c in enumerate(COMANDOS, start=1)}
 
 
 def menu():
     print("\n========================================")
     print("         APOSTA ESPORTIVAS · DEV        ")
     print("========================================")
-    for k, (label, _) in OPCOES.items():
-        print(f"  [{k}] {label}")
+    for k, comando in OPCOES.items():
+        print(f"  [{k}] {comando.label}")
     print("  [0] Sair")
     print("----------------------------------------")
     return input("Escolha: ").strip()
 
 
-def run(cmd: str):
+def run(cmd: str, *extra_args):
+    comando = main_module.COMANDOS_POR_NOME.get(cmd)
+    if comando is None or "dev" not in comando.ambientes:
+        print(f"Comando desconhecido em dev: '{cmd}'")
+        return
+
     # Mesma correcao de run_prod.py: main.py so' migra dentro do __main__ dele,
     # e aqui ele entra como modulo importado. Idempotente (IF NOT EXISTS).
-    main_module.run_migrations()
+    # `live` declara migrar=False e provisiona o proprio esquema.
+    if comando.migrar:
+        main_module.run_migrations()
 
-    if cmd == "dados":
-        main_module.cmd_dados()
-    elif cmd == "odds":
-        main_module.cmd_odds()
-    elif cmd == "vip":
-        main_module.cmd_vip()
-    elif cmd == "dica":
-        main_module.cmd_dica()
-    elif cmd == "multiplas":
-        main_module.cmd_multiplas()
-    elif cmd == "alavancagem":
-        main_module.cmd_alavancagem()
-    elif cmd == "faltas":
-        main_module.cmd_faltas()
-    elif cmd == "goleiros":
-        main_module.cmd_goleiros()
-    elif cmd == "resultados":
-        main_module.cmd_resultados()
-    elif cmd == "shadow":
-        main_module.cmd_shadow()
-    elif cmd == "tudo":
-        main_module.cmd_tudo()
-    elif cmd == "player_stats":
-        main_module.cmd_player_stats()
-    else:
-        print(f"Comando desconhecido: '{cmd}'")
+    comando.executar(*extra_args)
 
 
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
 
     if arg:
-        run(arg)
+        # Extras crus: "dados full", "live fixture 123456", "player_stats 80".
+        run(arg, *sys.argv[2:])
     else:
         while True:
             escolha = menu()
@@ -104,9 +77,9 @@ if __name__ == "__main__":
                 print("Saindo...")
                 break
             elif escolha in OPCOES:
-                _, cmd_name = OPCOES[escolha]
-                print(f"\n>>> Rodando: {OPCOES[escolha][0]}...\n")
-                run(cmd_name)
+                comando = OPCOES[escolha]
+                print(f"\n>>> Rodando: {comando.label}...\n")
+                run(comando.nome)
                 input("\nPressione Enter para voltar ao menu...")
             else:
                 print("Opção inválida.")

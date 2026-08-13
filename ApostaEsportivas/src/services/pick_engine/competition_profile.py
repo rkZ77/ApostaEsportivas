@@ -67,7 +67,6 @@ _PROFILES: dict[int, CompetitionProfile] = {
     14: CompetitionProfile(14, "INTERNATIONAL_TOURNAMENT", neutral_venue=False, is_national_team=True, competition_weight_group="Amistoso/Outra"),
     23: CompetitionProfile(23, "INTERNATIONAL_TOURNAMENT", neutral_venue=False, is_national_team=True, competition_weight_group="Amistoso/Outra"),
     10: CompetitionProfile(10, "FRIENDLY",                 neutral_venue=False, is_national_team=True, competition_weight_group="Amistoso/Outra"),
-    11: CompetitionProfile(11, "QUALIFIERS",               neutral_venue=False, is_national_team=True, competition_weight_group="Amistoso/Outra"),
     71: CompetitionProfile(71, "LEAGUE", neutral_venue=False, is_national_team=False),
     72: CompetitionProfile(72, "LEAGUE", neutral_venue=False, is_national_team=False),
     # Ligas europeias cobertas (ver tabela `leagues`). Estavam caindo no
@@ -90,6 +89,26 @@ _PROFILES: dict[int, CompetitionProfile] = {
     # selecao. O peso de copa de clube e' cross_competition_weight, abaixo.
     73: CompetitionProfile(73, "CLUB_CUP", neutral_venue=False, is_national_team=False),
     13: CompetitionProfile(13, "CLUB_CUP", neutral_venue=False, is_national_team=False),
+    # AS OUTRAS CINCO COPAS DE CLUBE QUE O MOTOR JA' AVALIA (2026-08-13).
+    #
+    # 2/3/848 estavam caindo no _DEFAULT (LEAGUE) e a 11 estava cadastrada como
+    # QUALIFIERS de selecao. Nenhuma das duas coisas era decisao: as tres da
+    # UEFA nunca foram cadastradas, e o 11 e' o mesmo erro do 39 corrigido em
+    # 2026-08-01 -- id herdado de uma lista antiga sem conferir item a item.
+    # Na API-Football 11 e' a CONMEBOL Sul-Americana, competicao de CLUBE. O
+    # proprio _LEAGUE_PRIORITY dos pipelines lista "13: 12, 11: 13", Libertadores
+    # e Sul-Americana lado a lado.
+    #
+    # O efeito de estar fora era o mesmo que motivou o CLUB_CUP em 2026-08-01:
+    # fase de grupos da' 6 jogos no teto e o mata-mata da' 1 a 4, entao o
+    # historico travado na propria competicao nao alcanca o minimo de 5 de
+    # data_validation.validate_history e a fixture inteira e' descartada em
+    # silencio. Com a 11 havia ainda o efeito torto de tratar clube como
+    # selecao em classify_competition_weight_group e no perfil de selecao.
+    11:  CompetitionProfile(11,  "CLUB_CUP", neutral_venue=False, is_national_team=False),
+    2:   CompetitionProfile(2,   "CLUB_CUP", neutral_venue=False, is_national_team=False),
+    3:   CompetitionProfile(3,   "CLUB_CUP", neutral_venue=False, is_national_team=False),
+    848: CompetitionProfile(848, "CLUB_CUP", neutral_venue=False, is_national_team=False),
 }
 
 # Peso do jogo conforme a competicao de ORIGEM, usado ao montar historico
@@ -105,6 +124,10 @@ _CROSS_COMPETITION_WEIGHT: dict[int, float] = {
     72: 0.85,   # Brasileirao B
     13: 1.00,   # Libertadores -- nivel comparavel a Serie A
     73: 0.75,   # Copa do Brasil -- entra time de divisao inferior
+    11: 0.80,   # Sul-Americana -- nivel abaixo da Libertadores
+    2:  1.00,   # Champions
+    3:  0.85,   # Europa League
+    848: 0.75,  # Conference -- entra clube de liga menor
 }
 _DEFAULT_CROSS_WEIGHT = 0.80
 for _qid in _QUALIFIERS_IDS:

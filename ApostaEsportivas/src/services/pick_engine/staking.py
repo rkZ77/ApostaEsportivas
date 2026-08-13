@@ -64,6 +64,19 @@ def calculate_stake(confidence: float, odd: float, ev: float = 0.0,
         cap, kelly_frac, max_units = {
             "free":     (0.02, 0.50, 6),
             "multipla": (0.025, 0.25, 3),
+            # Ao vivo (2026-08-11). Entrada NOVA, puramente aditiva: nenhum
+            # pick_type existente muda de caminho por causa dela. Teto e
+            # fracao de Kelly menores que os de qualquer produto pre-jogo por
+            # dois motivos, e nenhum deles e' pessimismo generico:
+            #  1. o motor Live ainda nao tem historico proprio, entao a
+            #     probabilidade que alimenta o Kelly nao foi calibrada contra
+            #     resultado nenhum -- Kelly sobre estimativa nao calibrada
+            #     aposta demais por construcao;
+            #  2. a odd ao vivo pode sumir entre a publicacao e a aposta, e
+            #     stake grande num pick que o usuario as vezes nao consegue
+            #     pegar produz divergencia entre o ROI publicado e o real.
+            # Revisar quando houver amostra medida em picks_ledger.
+            "live":     (0.015, 0.25, 4),
         }.get(pick_type, (0.03, 0.50, 5))
         stake_pct = round(max(0.005, min(cap, kelly * kelly_frac)), 4)
 

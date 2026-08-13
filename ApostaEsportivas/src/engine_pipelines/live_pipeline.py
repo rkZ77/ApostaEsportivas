@@ -1,0 +1,988 @@
+"""Pipeline do Motor Live V1 -- UMA rodada por execucao, DEV apenas.
+
+DESENHO
+-------
+Uma execucao faz uma passada e termina. Nao ha laco, nao ha sleep, nao ha
+agendamento. A decisao e' explicita: o scheduler do projeto foi deletado em
+2026-08-01 por consumo de API, e um motor ao vivo e' justamente o candidato
+mais provavel a repetir esse acidente. Enquanto o consumo real nao for medido
+rodando na mao, nao existe laco.
+
+ORDEM DAS CHAMADAS, QUE E' A ECONOMIA
+-------------------------------------
+    1 x /fixtures?live=all           o mundo inteiro, uma vez
+    N x /fixtures/statistics         so' dos jogos elegiveis (N <= max_partidas)
+    N x /fixtures/events             so' dos mesmos jogos (opcional, ver config)
+    M x /odds/live                   so' de quem passou na TRIAGEM (M <= N)
+
+Partida que roda na media da liga nunca tem a odd consultada. E' o freio que
+faz a rodada tipica custar menos que o teto.
+
+O QUE CADA RODADA DEIXA PRA A PROXIMA
+-------------------------------------
+Toda passada grava uma linha em `live_match_observations`, mesmo quando nao
+gera pick. E' de graca (o dado ja foi pago) e e' o que constroi janela recente
+e tendencia: /fixtures/statistics so' devolve acumulado, entao "escanteios nos
+ultimos 10 minutos" nao existe no feed -- existe na diferenca entre duas
+leituras nossas.
+"""
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import sys
+import textwrap
+import traceback
+from datetime import datetime, timedelta, timezone
+from zoneinfo import ZoneInfo
+
+# Permite rodar direto (`python engine_pipelines/live_pipeline.py --fixture N`)
+# alem de pelo main.py e pelo /admin, que ja exportam PYTHONPATH. Os pipelines
+# do pre-jogo dependem do PYTHONPATH e por isso quebram quando chamados na mao
+# de dentro de src/ -- aqui isso e' resolvido, porque testar uma fixture
+# especifica na linha de comando e' justamente o caminho previsto pra V1.
+_SRC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _SRC not in sys.path:
+    sys.path.insert(0, _SRC)
+
+from utils.db_utils import get_connection  # noqa: E402
+from services.pick_engine.staking import calculate_stake
+from services.pick_engine_live import live_odds, live_state, orchestrator
+from services.pick_engine_live.config import (
+    ENGINE_VERSION, AmbienteInvalido, LiveEngineConfig, exigir_ambiente_dev,
+)
+from services.pick_engine_live.live_feed import (
+    LiveFeed, OrcamentoEsgotado, ler_estatisticas,
+)
+
+TZ_BR = ZoneInfo("America/Sao_Paulo")
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# ESQUEMA
+# ─────────────────────────────────────────────────────────────────────────
+def criar_tabelas(cur) -> None:
+    """Auto-provisiona o esquema do Live.
+
+    Mesmo padrao de engine_pipelines/multipla_pipeline.py e dos pipelines de
+    faltas/goleiros: a tabela nasce quando o pipeline roda. Isso e' o que
+    mantem PRODUCAO INTACTA -- `run_migrations()` do main.py nao roda sozinha
+    no deploy (gap conhecido) e nao inclui nada disto, e o backend do site nao
+    cria nada disto no startup. O banco de producao so' ganha estas tabelas se
+    alguem rodar o motor Live apontando pra la', de proposito.
+    """
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS picks_live (
+            id                      SERIAL PRIMARY KEY,
+            fixture_id              INTEGER NOT NULL,
+            match_date              DATE,
+            league_id               INTEGER,
+            league_name             TEXT,
+            home_team_id            INTEGER,
+            away_team_id            INTEGER,
+            home_team_name          TEXT,
+            away_team_name          TEXT,
+
+            market                  TEXT,
+            market_type             VARCHAR(40),
+            line                    TEXT,
+            line_value              NUMERIC,
+            odd                     NUMERIC,
+            bet_house               TEXT,
+
+            -- Snapshot do instante da criacao. NUNCA e' sobrescrito: e' o que
+            -- responde "o que o motor sabia quando decidiu".
+            minute_at_creation      INTEGER,
+            home_goals_at_creation  INTEGER,
+            away_goals_at_creation  INTEGER,
+            corners_at_creation     INTEGER,
+            shots_at_creation       INTEGER,
+            shots_on_target_at_creation INTEGER,
+            dangerous_attacks_at_creation INTEGER,
+            possession_home_at_creation INTEGER,
+            yellow_cards_at_creation INTEGER,
+            red_cards_at_creation   INTEGER,
+            observed_at_creation    INTEGER,
+            remaining_minutes       INTEGER,
+
+            -- Leituras derivadas, no instante da criacao.
+            pressure_home           NUMERIC,
+            pressure_away           NUMERIC,
+            pressure_total          NUMERIC,
+            rhythm_score            NUMERIC,
+            rhythm_level            VARCHAR(20),
+            rhythm_trend            VARCHAR(20),
+            live_signal_score       NUMERIC,
+            data_freshness          VARCHAR(10),
+            projected_total         NUMERIC,
+
+            probability             NUMERIC,
+            ev                      NUMERIC,
+            edge                    NUMERIC,
+            confidence              NUMERIC,
+            stake_pct               NUMERIC,
+            stake_units             INTEGER,
+            reasoning               TEXT,
+
+            odd_at_creation         NUMERIC,
+            odd_timestamp           TIMESTAMP,
+            odd_valid_until         TIMESTAMP,
+            status                  VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+            expiration_reason       TEXT,
+
+            engine_version          TEXT,
+            engine_debug            JSONB,
+
+            result                  TEXT,
+            profit                  NUMERIC,
+            created_at              TIMESTAMP DEFAULT NOW(),
+            settled_at              TIMESTAMP
+        );
+    """)
+    # ALTER aditivo: instancia que rodou uma versao anterior do motor ja tem a
+    # tabela, e CREATE TABLE IF NOT EXISTS nao acrescenta coluna nenhuma
+    # (mesmo gap ja documentado no main.py do pre-jogo).
+    for coluna, tipo in (
+        ("dangerous_attacks_at_creation", "INTEGER"),
+        ("possession_home_at_creation", "INTEGER"),
+        ("yellow_cards_at_creation", "INTEGER"),
+        ("red_cards_at_creation", "INTEGER"),
+        ("pressure_home", "NUMERIC"), ("pressure_away", "NUMERIC"),
+        ("pressure_total", "NUMERIC"),
+        ("rhythm_score", "NUMERIC"), ("rhythm_level", "VARCHAR(20)"),
+        ("rhythm_trend", "VARCHAR(20)"), ("live_signal_score", "NUMERIC"),
+        ("data_freshness", "VARCHAR(10)"), ("projected_total", "NUMERIC"),
+        ("odd_timestamp", "TIMESTAMP"),
+    ):
+        cur.execute(f"ALTER TABLE picks_live ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
+
+    # Trava de duplicata no BANCO, nao em Python. O check "ja existe pick deste
+    # jogo?" em Python e' select-then-insert e nao pega duas execucoes
+    # concorrentes -- foi exatamente assim que a multipla duplicou em
+    # 2026-07-25. Duas rodadas no mesmo minuto de jogo produzem a mesma chave e
+    # a segunda e' absorvida pelo ON CONFLICT.
+    cur.execute("""
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_live_unico
+        ON picks_live (fixture_id, market_type, line, minute_at_creation);
+    """)
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_fixture ON picks_live (fixture_id);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_data ON picks_live (match_date DESC);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_criacao ON picks_live (created_at DESC);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_status ON picks_live (status);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_mercado ON picks_live (market_type);")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_live_pendentes "
+                "ON picks_live (match_date) WHERE result IS NULL;")
+
+    # Leitura anterior de cada partida. E' o que da' JANELA e TENDENCIA: sem
+    # duas leituras nao existe "escanteios nos ultimos 10 minutos", porque
+    # /fixtures/statistics devolve so' o acumulado. Custo zero de API -- e'
+    # subproduto de uma chamada que ja aconteceu.
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS live_match_observations (
+            id                        BIGSERIAL PRIMARY KEY,
+            fixture_id                INTEGER NOT NULL,
+            minuto                    INTEGER,
+            status                    VARCHAR(10),
+            corners_observado         INTEGER,
+            goals_observado           INTEGER,
+            shots_observado           INTEGER,
+            shots_on_target_observado INTEGER,
+            dangerous_attacks_observado INTEGER,
+            blocked_shots_observado   INTEGER,
+            possession_home           INTEGER,
+            red_cards_observado       INTEGER,
+            epoch                     DOUBLE PRECISION,
+            observed_at               TIMESTAMP DEFAULT NOW()
+        );
+    """)
+    for coluna, tipo in (
+        ("dangerous_attacks_observado", "INTEGER"),
+        ("blocked_shots_observado", "INTEGER"),
+        ("possession_home", "INTEGER"),
+        ("red_cards_observado", "INTEGER"),
+        ("epoch", "DOUBLE PRECISION"),
+    ):
+        cur.execute(f"ALTER TABLE live_match_observations "
+                    f"ADD COLUMN IF NOT EXISTS {coluna} {tipo};")
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_live_obs_fixture
+        ON live_match_observations (fixture_id, observed_at DESC);
+    """)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# LEITURA DE APOIO (banco, custo zero de API)
+# ─────────────────────────────────────────────────────────────────────────
+def ligas_cadastradas(cur) -> set:
+    cur.execute("SELECT league_id FROM leagues")
+    return {r[0] for r in cur.fetchall()}
+
+
+def baselines_por_liga(cur, league_id: int | None) -> dict:
+    """Media real de escanteios e gols da liga, de `match_statistics`.
+
+    Sem isso o modelo usa a constante global (10.2 escanteios, 2.72 gols), que
+    descreve "futebol de clubes em geral" e nao a liga do jogo. Uma consulta,
+    zero API. Liga sem amostra minima devolve vazio e o modelo cai na
+    constante -- explicitamente, e o rastro registra qual das duas foi usada.
+    """
+    if not league_id:
+        return {}
+    try:
+        cur.execute("""
+            SELECT AVG(NULLIF(total_corners, 0))::float AS corners,
+                   AVG(total_goals)::float             AS goals,
+                   COUNT(*)                            AS n
+            FROM match_statistics
+            WHERE league_id = %s
+              AND total_corners IS NOT NULL
+              AND match_date >= NOW() - INTERVAL '400 days'
+        """, (league_id,))
+        linha = cur.fetchone()
+    except Exception:
+        return {}
+    if not linha or not linha[2] or int(linha[2]) < 20:
+        return {}
+    saida = {}
+    if linha[0]:
+        saida["corners"] = float(linha[0])
+    if linha[1]:
+        saida["goals"] = float(linha[1])
+    return saida
+
+
+def baseline_do_confronto(cur, estado: dict) -> dict:
+    """Expectativa PRE-JOGO deste confronto especifico, das medias dos dois
+    times em `team_statistics`.
+
+    E' o baseline mais informativo que existe sem gastar API: a media da liga
+    descreve a liga, esta descreve os dois times que estao em campo. Cai pra
+    media da liga sozinha quando os times nao tem amostra.
+    """
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    league_id = estado.get("league_id")
+    if not (home_id and away_id and league_id):
+        return {}
+    try:
+        cur.execute("""
+            SELECT team_id,
+                   AVG(NULLIF(total_corners, 0))::float AS corners,
+                   AVG(total_goals)::float              AS goals,
+                   COUNT(*)                             AS n
+            FROM (
+                SELECT home_team_id AS team_id, total_corners, total_goals
+                FROM match_statistics
+                WHERE league_id = %s AND home_team_id IN (%s, %s)
+                  AND match_date >= NOW() - INTERVAL '400 days'
+                UNION ALL
+                SELECT away_team_id AS team_id, total_corners, total_goals
+                FROM match_statistics
+                WHERE league_id = %s AND away_team_id IN (%s, %s)
+                  AND match_date >= NOW() - INTERVAL '400 days'
+            ) t
+            WHERE total_corners IS NOT NULL
+            GROUP BY team_id
+        """, (league_id, home_id, away_id, league_id, home_id, away_id))
+        linhas = cur.fetchall()
+    except Exception:
+        return {}
+
+    uteis = [l for l in linhas if l[3] and int(l[3]) >= 6]
+    if len(uteis) < 2:
+        return {}
+    corners = [l[1] for l in uteis if l[1]]
+    goals = [l[2] for l in uteis if l[2]]
+    saida = {}
+    if len(corners) == 2:
+        saida["corners"] = sum(corners) / 2
+    if len(goals) == 2:
+        saida["goals"] = sum(goals) / 2
+    return saida
+
+
+def observacoes_anteriores(cur, fixture_id: int, limite: int = 12) -> list[dict]:
+    """Leituras anteriores desta partida, MAIS RECENTE PRIMEIRO."""
+    try:
+        cur.execute("""
+            SELECT minuto, corners_observado, goals_observado, shots_observado,
+                   shots_on_target_observado, dangerous_attacks_observado,
+                   blocked_shots_observado, red_cards_observado, epoch
+            FROM live_match_observations
+            WHERE fixture_id = %s
+            ORDER BY observed_at DESC
+            LIMIT %s
+        """, (fixture_id, limite))
+        linhas = cur.fetchall()
+    except Exception:
+        return []
+    return [{
+        "minuto": r[0], "corners_observado": r[1], "goals_observado": r[2],
+        "shots_observado": r[3], "shots_on_target_observado": r[4],
+        "dangerous_attacks_observado": r[5], "blocked_shots_observado": r[6],
+        "red_cards_observado": r[7], "epoch": r[8],
+    } for r in linhas]
+
+
+def gravar_observacao(cur, estado: dict) -> None:
+    cur.execute("""
+        INSERT INTO live_match_observations
+            (fixture_id, minuto, status, corners_observado, goals_observado,
+             shots_observado, shots_on_target_observado,
+             dangerous_attacks_observado, blocked_shots_observado,
+             possession_home, red_cards_observado, epoch)
+        VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)
+    """, (
+        estado["fixture_id"], estado.get("minuto"), estado.get("status"),
+        estado.get("corners_total"), estado.get("goals_total"),
+        estado.get("shots_total"), estado.get("shots_on_target_total"),
+        estado.get("dangerous_attacks_total"), estado.get("blocked_shots_total"),
+        estado.get("possession_home"), estado.get("red_cards_total"),
+        datetime.now(timezone.utc).timestamp(),
+    ))
+
+
+def picks_da_partida(cur, fixture_id: int) -> list[dict]:
+    try:
+        cur.execute("""
+            SELECT market_type, line, minute_at_creation, status
+            FROM picks_live
+            WHERE fixture_id = %s
+            ORDER BY minute_at_creation
+        """, (fixture_id,))
+    except Exception:
+        return []
+    return [{"market_type": r[0], "line": r[1], "minuto": r[2], "status": r[3]}
+            for r in cur.fetchall()]
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# SELECAO DE PARTIDAS
+# ─────────────────────────────────────────────────────────────────────────
+def _minuto_de(bruto: dict) -> int | None:
+    return ((bruto.get("fixture") or {}).get("status") or {}).get("elapsed")
+
+
+def _data_br_do_jogo(bruto: dict):
+    """Data do jogo em Brasilia. Sai do proprio fixture, nao do relogio da
+    maquina: um jogo que comeca 23:30 BR e gera pick 00:10 tem que continuar
+    com a data de ONTEM, igual `fixtures.match_datetime` guarda (ver
+    collectors/fixture_collector_service.convert_utc_to_br_naive)."""
+    iso = (bruto.get("fixture") or {}).get("date")
+    if not iso:
+        return datetime.now(TZ_BR).date()
+    try:
+        dt = datetime.fromisoformat(str(iso).replace("Z", "+00:00"))
+    except ValueError:
+        return datetime.now(TZ_BR).date()
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(TZ_BR).date()
+
+
+def selecionar_partidas(brutos: list, cur, config: LiveEngineConfig) -> tuple[list, list]:
+    """(elegiveis, descartadas com motivo). Custo zero de API.
+
+    O corte por liga cadastrada e' o que impede a rodada de olhar os ~200 jogos
+    que /fixtures?live=all devolve do mundo inteiro. Sem ele, o teto de
+    partidas seria alcancado por jogos de ligas que o projeto nem acompanha.
+    """
+    permitidas = ligas_cadastradas(cur)
+    if config.ligas_permitidas:
+        permitidas &= set(config.ligas_permitidas)
+
+    elegiveis, descartadas = [], []
+    for bruto in brutos or []:
+        fixture = bruto.get("fixture") or {}
+        fid = fixture.get("id")
+        liga = (bruto.get("league") or {}).get("id")
+        nome = (f"{(bruto.get('teams') or {}).get('home', {}).get('name')} x "
+                f"{(bruto.get('teams') or {}).get('away', {}).get('name')}")
+        status = (fixture.get("status") or {}).get("short")
+        minuto = _minuto_de(bruto)
+
+        # `categoria` separa "nao e' um jogo nosso" de "e' nosso, mas agora
+        # nao da'". Sao respostas diferentes pra quem acompanha: a primeira
+        # significa que nao ha o que fazer, a segunda que o jogo esta' no radar
+        # e a proxima passada pode render. Ver `fixtures_no_radar` no
+        # relatorio, que e' o numero que o live_watch usa pra decidir se espera
+        # o intervalo curto ou o longo.
+        if liga not in permitidas:
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "liga",
+                                "motivo": f"liga {liga} nao cadastrada"})
+            continue
+        if status not in ("1H", "2H", "HT"):
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
+                                "motivo": f"status {status}"})
+            continue
+        if minuto is None:
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
+                                "motivo": "sem minuto publicado"})
+            continue
+        if not (config.minuto_inicial <= int(minuto) <= config.minuto_final):
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "janela",
+                                "motivo": f"minuto {minuto}' fora da janela "
+                                          f"{config.minuto_inicial}'-{config.minuto_final}'"})
+            continue
+
+        anteriores = picks_da_partida(cur, fid)
+        if len(anteriores) >= config.max_picks_por_partida:
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
+                                "motivo": f"ja tem {len(anteriores)} pick(s), teto e' "
+                                          f"{config.max_picks_por_partida}"})
+            continue
+        if anteriores:
+            ultimo = max(p["minuto"] or 0 for p in anteriores)
+            if int(minuto) - ultimo < config.minutos_entre_picks:
+                descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
+                                    "motivo": f"pick recente no minuto {ultimo}' "
+                                              f"(intervalo minimo {config.minutos_entre_picks}')"})
+                continue
+
+        elegiveis.append(bruto)
+
+    # Mais perto do fim primeiro: quanto mais jogo observado, menos a
+    # estimativa depende do baseline e mais ela descreve ESTA partida.
+    elegiveis.sort(key=lambda b: -(_minuto_de(b) or 0))
+    return elegiveis[:config.max_partidas], descartadas
+
+
+def ja_existe_pick_equivalente(anteriores: list, candidato: dict,
+                               config: LiveEngineConfig) -> str | None:
+    """Este candidato e' repeticao de um pick que a partida ja tem?
+
+    Duas formas de repeticao, e as duas sao spam:
+
+    1. MESMA linha, mesmo mercado -- e' o mesmo pick de novo, com outro minuto.
+    2. MESMO mercado, linha vizinha (Over 9.5 depois de Over 10.5 no mesmo
+       jogo) -- e' a mesma tese com outra roupa, e publicar as duas faz o
+       usuario apostar duas vezes na mesma coisa achando que diversificou.
+
+    A regra de intervalo minimo entre picks (aplicada na selecao) ja corta a
+    maioria; isto pega o resto.
+    """
+    for a in anteriores:
+        if a.get("market_type") != candidato["market_type"]:
+            continue
+        if (a.get("line") or "").strip().lower() == candidato["line"].strip().lower():
+            return f"linha identica ja publicada no minuto {a.get('minuto')}'"
+        try:
+            linha_anterior = float(str(a.get("line", "")).split()[-1])
+        except (ValueError, IndexError):
+            continue
+        if abs(linha_anterior - candidato["linha"]) <= 1.0:
+            return (f"linha vizinha de um pick ja publicado "
+                    f"({a.get('line')} no minuto {a.get('minuto')}')")
+    return None
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# EXPLICACAO
+# ─────────────────────────────────────────────────────────────────────────
+#: Rotulo interno -> portugues de exibicao. O motor guarda o nivel em caixa
+#: alta e sem acento porque e' chave de dado; o texto que chega no card do site
+#: e' PROSA, e prosa em portugues leva acento. Sem este mapa o usuario lia
+#: "pressao media" e "ritmo muito alto" numa tela onde todo o resto do produto
+#: e' escrito corretamente.
+_PT_NIVEL = {
+    "BAIXA": "baixa", "MEDIA": "média", "ALTA": "alta", "MUITO_ALTA": "muito alta",
+    "BAIXO": "baixo", "MEDIO": "médio", "ALTO": "alto", "MUITO_ALTO": "muito alto",
+}
+
+
+def _nivel_pt(bruto: str | None) -> str:
+    if not bruto:
+        return ""
+    return _PT_NIVEL.get(bruto.upper(), bruto.replace("_", " ").lower())
+
+
+def montar_explicacao(analise: dict, candidato: dict) -> str:
+    """Por que ESTE pick, NESTE minuto.
+
+    Descreve o que o motor observou, com numero verificavel -- nao adjetivo. E'
+    o texto que separa um pick Live de um pick pre-jogo: um fala de historico,
+    o outro fala do jogo que esta na tela do usuario agora.
+
+    ESTE E' O UNICO BLOCO ACENTUADO DO ARQUIVO, e de proposito: o resto sao
+    comentarios e log de terminal, mas isto aqui e' texto de PRODUTO. Vai pro
+    card, na frente do assinante, num site 100% em portugues.
+    """
+    estado = analise["estado"]
+    familia = candidato["familia"]
+    info = analise["familias"][familia]
+    lam = candidato["debug"]["lambda"]
+    rotulo = "escanteios" if familia == "corners" else "gols"
+    partes = []
+
+    partes.append(
+        f"Aos {estado['minuto']}' o jogo está {estado.get('home_goals')}x{estado.get('away_goals')} "
+        f"com {candidato['observado_na_criacao']} {rotulo}."
+    )
+
+    pressao = analise.get("pressao") or {}
+    if pressao.get("total") is not None:
+        casa = estado.get("home_team") or "casa"
+        fora = estado.get("away_team") or "visitante"
+        partes.append(
+            f"Pressão ofensiva: {casa} {pressao['home']['score']:.2f} "
+            f"({_nivel_pt(pressao['home']['nivel'])}), {fora} {pressao['away']['score']:.2f} "
+            f"({_nivel_pt(pressao['away']['nivel'])})."
+        )
+
+    janela = ((info.get("janelas") or {}).get("principal"))
+    if janela:
+        partes.append(
+            f"Nos últimos {janela['largura_real']} minutos foram {janela['eventos']} {rotulo}."
+        )
+
+    tendencia = (info.get("tendencia") or {}).get("rotulo")
+    ritmo = analise.get("ritmo") or {}
+    if ritmo.get("nivel"):
+        texto_tendencia = {
+            "ACELERANDO": ", e o ritmo está acelerando",
+            "DESACELERANDO": ", mas o ritmo está desacelerando",
+        }.get(tendencia, "")
+        partes.append(f"Ritmo da partida: {_nivel_pt(ritmo['nivel'])}{texto_tendencia}.")
+
+    eventos = analise.get("eventos") or {}
+    if eventos.get("vermelho_minuto") is not None:
+        partes.append(f"Há um expulso desde os {eventos['vermelho_minuto']}'.")
+
+    partes.append(
+        f"A projeção para os {lam['minutos_restantes']} minutos restantes é de "
+        f"{lam['lambda_residual']:.1f} {rotulo}, fechando em {info['projecao_total']:.1f} no total "
+        f"contra a linha {candidato['linha']}."
+    )
+
+    mercado = candidato.get("prob_mercado")
+    partes.append(
+        f"A {candidato['line']} sai a {candidato['odd']:.2f}, com probabilidade estimada de "
+        f"{candidato['probability']*100:.0f}%"
+        + (f" contra {mercado*100:.0f}% do mercado." if mercado else ".")
+    )
+
+    conv = candidato["debug"].get("convergencia") or {}
+    if conv.get("a_favor"):
+        partes.append(
+            f"{conv['a_favor']} dos sinais ao vivo sustentam essa direção"
+            + (f" e {conv['contra']} apontam contra." if conv.get("contra") else ".")
+        )
+    return " ".join(partes)
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# GRAVACAO
+# ─────────────────────────────────────────────────────────────────────────
+def montar_engine_debug(analise: dict, candidato: dict, config: LiveEngineConfig) -> dict:
+    """Rastro estruturado. Tem que responder sozinho "por que o motor criou
+    isto" meses depois, sem acesso a nenhuma API."""
+    estado = analise["estado"]
+    familia = candidato["familia"]
+    info = analise["familias"][familia]
+    return {
+        "engine_version": ENGINE_VERSION,
+        "config": config.resumo(),
+        "baseline": {
+            "valor": info.get("baseline"),
+            "origem": info.get("baseline_origem"),
+            "taxa": info.get("taxa"),
+        },
+        "current_state": {k: v for k, v in estado.items() if not k.startswith("_")},
+        "folha_bruta": {"home": estado.get("_folha_home"), "away": estado.get("_folha_away")},
+        "freshness": analise.get("freshness"),
+        "pressure": analise.get("pressao"),
+        "rhythm": analise.get("ritmo"),
+        "recent_windows": info.get("janelas"),
+        "trend": info.get("tendencia"),
+        "events": analise.get("eventos"),
+        "projection": {
+            "lambda": candidato["debug"]["lambda"],
+            "fator_ritmo": info.get("fator_ritmo"),
+            "ajuste_estado": info.get("ajuste_estado"),
+            "projecao_total": info.get("projecao_total"),
+        },
+        "market": {
+            "line": candidato["line"],
+            "line_value": candidato["linha"],
+            "odd": candidato["odd"],
+            "prob_mercado": candidato.get("prob_mercado"),
+            "origem_prob_mercado": candidato.get("origem_prob_mercado"),
+            "tem_par": candidato.get("tem_par"),
+        },
+        "convergence": candidato["debug"].get("convergencia"),
+        "probability": candidato["probability"],
+        "probability_pre_shrink": candidato.get("prob_modelo_puro"),
+        "ev": candidato["ev"],
+        "edge": candidato["edge"],
+        "confidence": candidato["confidence"],
+        "confidence_breakdown": candidato["debug"].get("confianca"),
+        "decision": "PICK" if candidato["aprovado"] else "NO_PICK",
+        "motivos_reprovacao": candidato.get("motivos_reprovacao"),
+    }
+
+
+def salvar_pick(cur, analise: dict, candidato: dict, config: LiveEngineConfig,
+                match_date, casa: str | None = None) -> int | None:
+    """Grava o pick com o snapshot do instante. Devolve o id, ou None quando a
+    trava de duplicata absorveu a insercao."""
+    estado = analise["estado"]
+    familia = candidato["familia"]
+    info = analise["familias"][familia]
+    pressao = analise.get("pressao") or {}
+    ritmo = analise.get("ritmo") or {}
+
+    stake_pct, stake_units = calculate_stake(
+        confidence=candidato["confidence"], odd=candidato["odd"],
+        ev=candidato["ev"], pick_type="live",
+    )
+    agora = datetime.now(timezone.utc).replace(tzinfo=None)
+    valido_ate = agora + timedelta(seconds=config.validade_odd_segundos)
+    debug = json.dumps(montar_engine_debug(analise, candidato, config),
+                       default=str, ensure_ascii=False)
+
+    def _amarelos():
+        casa_a, fora_a = estado.get("yellow_home"), estado.get("yellow_away")
+        return None if casa_a is None or fora_a is None else casa_a + fora_a
+
+    cur.execute("""
+        INSERT INTO picks_live (
+            fixture_id, match_date, league_id, league_name,
+            home_team_id, away_team_id, home_team_name, away_team_name,
+            market, market_type, line, line_value, odd, bet_house,
+            minute_at_creation, home_goals_at_creation, away_goals_at_creation,
+            corners_at_creation, shots_at_creation, shots_on_target_at_creation,
+            dangerous_attacks_at_creation, possession_home_at_creation,
+            yellow_cards_at_creation, red_cards_at_creation,
+            observed_at_creation, remaining_minutes,
+            pressure_home, pressure_away, pressure_total,
+            rhythm_score, rhythm_level, rhythm_trend,
+            live_signal_score, data_freshness, projected_total,
+            probability, ev, edge, confidence, stake_pct, stake_units, reasoning,
+            odd_at_creation, odd_timestamp, odd_valid_until, status,
+            engine_version, engine_debug, created_at
+        ) VALUES (
+            %s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s,%s,
+            %s,%s,%s, %s,%s,%s, %s,%s, %s,%s, %s,%s,
+            %s,%s,%s, %s,%s,%s, %s,%s,%s,
+            %s,%s,%s,%s,%s,%s,%s,
+            %s,%s,%s,'ACTIVE', %s,%s, NOW()
+        )
+        ON CONFLICT (fixture_id, market_type, line, minute_at_creation) DO NOTHING
+        RETURNING id
+    """, (
+        estado["fixture_id"], match_date, estado.get("league_id"), estado.get("league_name"),
+        estado.get("home_team_id"), estado.get("away_team_id"),
+        estado.get("home_team"), estado.get("away_team"),
+        candidato["market"], candidato["market_type"], candidato["line"],
+        candidato["linha"], candidato["odd"], casa,
+        estado.get("minuto"), estado.get("home_goals"), estado.get("away_goals"),
+        estado.get("corners_total"), estado.get("shots_total"),
+        estado.get("shots_on_target_total"), estado.get("dangerous_attacks_total"),
+        estado.get("possession_home"), _amarelos(), estado.get("red_cards_total"),
+        candidato["observado_na_criacao"], candidato["debug"]["lambda"]["minutos_restantes"],
+        (pressao.get("home") or {}).get("score"), (pressao.get("away") or {}).get("score"),
+        pressao.get("total"),
+        ritmo.get("score"), ritmo.get("nivel"),
+        (info.get("tendencia") or {}).get("rotulo"),
+        candidato.get("live_signal_score"),
+        (analise.get("freshness") or {}).get("nivel"),
+        info.get("projecao_total"),
+        candidato["probability"], candidato["ev"], candidato["edge"],
+        candidato["confidence"], stake_pct, stake_units,
+        montar_explicacao(analise, candidato),
+        candidato["odd"], agora, valido_ate,
+        ENGINE_VERSION, debug,
+    ))
+    linha = cur.fetchone()
+    return linha[0] if linha else None
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# RODADA
+# ─────────────────────────────────────────────────────────────────────────
+def run_live_engine(fixture_id: int | None = None,
+                    dry_run: bool | None = None,
+                    max_partidas: int | None = None,
+                    config: LiveEngineConfig | None = None) -> dict:
+    """Uma passada. Devolve o relatorio da rodada (tambem impresso no stdout).
+
+    `fixture_id`, `dry_run` e `max_partidas` sobrescrevem a config de ambiente
+    -- e' o que permite `--fixture 123456 --dry-run` testar uma partida
+    especifica sem varrer o mundo nem sujar o banco.
+    """
+    config = config or LiveEngineConfig.do_ambiente()
+    if dry_run is not None:
+        config = LiveEngineConfig(**{**config.__dict__, "dry_run": dry_run})
+    if max_partidas is not None:
+        config = LiveEngineConfig(**{**config.__dict__, "max_partidas": max_partidas})
+
+    relatorio: dict = {
+        "ok": False, "dry_run": config.dry_run, "engine_version": ENGINE_VERSION,
+        "requisicoes": 0, "limite_requisicoes": config.max_requisicoes,
+        "fixtures_encontradas": 0, "fixtures_elegiveis": 0,
+        "partidas": [], "picks_criados": [], "erros": [], "orcamento_esgotado": False,
+    }
+
+    print("\n" + "=" * 62)
+    print(f"LIVE ENGINE RUN · {ENGINE_VERSION}")
+    print(f"  {config.resumo()}")
+    if config.dry_run:
+        print("  DRY RUN: calcula e loga, nao grava pick.")
+    print("=" * 62)
+
+    if not config.habilitado:
+        print("[LIVE] LIVE_ENGINE_ENABLED nao esta ligado. Nada a fazer.")
+        relatorio["motivo"] = "LIVE_ENGINE_ENABLED=false"
+        return relatorio
+
+    try:
+        exigir_ambiente_dev()
+    except AmbienteInvalido as e:
+        print(f"[LIVE] {e}")
+        relatorio["motivo"] = str(e)
+        relatorio["erros"].append(str(e))
+        return relatorio
+
+    feed = LiveFeed(limite_requisicoes=config.max_requisicoes)
+    conn = get_connection()
+    cur = conn.cursor()
+
+    try:
+        criar_tabelas(cur)
+        conn.commit()
+
+        if fixture_id:
+            bruto = feed.partida(int(fixture_id))
+            brutos = [bruto] if bruto else []
+            print(f"\nModo dirigido: fixture {fixture_id}")
+        else:
+            brutos = feed.partidas_ao_vivo()
+        relatorio["fixtures_encontradas"] = len(brutos)
+
+        elegiveis, descartadas = selecionar_partidas(brutos, cur, config)
+        relatorio["fixtures_elegiveis"] = len(elegiveis)
+        print(f"\nFixtures encontradas: {len(brutos)}")
+        print(f"Fixtures elegiveis:   {len(elegiveis)}   (limite {config.max_partidas})")
+        if descartadas and len(descartadas) <= 12:
+            for d in descartadas:
+                print(f"  descartada · {d['jogo']}: {d['motivo']}")
+        elif descartadas:
+            print(f"  ({len(descartadas)} descartadas por liga, status, janela ou pick recente)")
+
+        for indice, bruto in enumerate(elegiveis, start=1):
+            relatorio["partidas"].append(
+                _processar_partida(indice, bruto, cur, conn, feed, config, relatorio))
+
+    except OrcamentoEsgotado as e:
+        relatorio["orcamento_esgotado"] = True
+        print(f"\n[LIVE] ORCAMENTO ESGOTADO · {e}")
+        print("[LIVE] Rodada encerrada sem novas chamadas.")
+    except Exception as e:
+        relatorio["erros"].append(str(e))
+        print(f"\n[LIVE] Erro na rodada: {e}")
+        print(textwrap.indent(traceback.format_exc(), "    "))
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+    finally:
+        relatorio["requisicoes"] = feed.usadas
+        relatorio["trilha_api"] = feed.trilha()
+        relatorio["ok"] = not relatorio["erros"]
+        cur.close()
+        conn.close()
+
+    print("\n" + "-" * 62)
+    print(f"Requisicoes usadas: {feed.usadas}/{config.max_requisicoes}")
+    print(f"Picks criados:      {len(relatorio['picks_criados'])}"
+          + (" (dry run, nada gravado)" if config.dry_run else ""))
+    if relatorio["erros"]:
+        print(f"Erros:              {len(relatorio['erros'])}")
+    print("-" * 62 + "\n")
+    return relatorio
+
+
+def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
+                       config: LiveEngineConfig, relatorio: dict) -> dict:
+    """Uma partida: estatistica, eventos, analise, triagem, odd (se valer),
+    decisao."""
+    fixture = bruto.get("fixture") or {}
+    fid = fixture.get("id")
+    times = bruto.get("teams") or {}
+    nome = f"{(times.get('home') or {}).get('name')} x {(times.get('away') or {}).get('name')}"
+
+    print(f"\n[{indice}] {nome}")
+
+    resumo = {"fixture_id": fid, "jogo": nome, "decisao": "SKIP",
+              "mercados_avaliados": 0, "oportunidades": 0, "odd_consultada": False}
+
+    stats_brutas = feed.estatisticas(fid)
+    home_stats, away_stats = ler_estatisticas(
+        stats_brutas, (times.get("home") or {}).get("id"), (times.get("away") or {}).get("id"))
+
+    eventos_brutos = []
+    if config.buscar_eventos and feed.tem_orcamento(2):
+        eventos_brutos = feed.eventos(fid)
+    minuto_bruto = _minuto_de(bruto)
+    eventos_lidos = live_state.ler_eventos(eventos_brutos, minuto_bruto)
+    eventos = live_state.resumo_de_eventos(eventos_lidos, minuto_bruto)
+
+    estado = live_state.montar_estado(bruto, home_stats, away_stats, eventos_lidos)
+    print(f"Minuto: {estado.get('minuto')}   Placar: "
+          f"{estado.get('home_goals')}x{estado.get('away_goals')}")
+
+    faltando = [f for f in config.familias
+                if orchestrator.observado_da_familia(estado, f) is None]
+    if faltando:
+        print(f"Dados insuficientes ({', '.join(faltando)} nao publicado)")
+        print("DECISAO: SKIP")
+        resumo["motivo"] = f"estatistica ausente: {', '.join(faltando)}"
+        _observar(cur, conn, estado)
+        return resumo
+
+    observacoes = observacoes_anteriores(cur, fid)
+    fresh = live_state.freshness(estado, observacoes, config)
+    print(f"Dados: {fresh['nivel']}"
+          + (f" ({'; '.join(fresh['motivos'])})" if fresh.get("motivos") else ""))
+
+    baselines = {**baselines_por_liga(cur, estado.get("league_id")),
+                 **baseline_do_confronto(cur, estado)}
+    analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh)
+    _observar(cur, conn, estado)
+
+    pressao = analise.get("pressao") or {}
+    if pressao.get("total") is not None:
+        print(f"Pressao: casa {pressao['home']['score']:.2f} ({pressao['home']['nivel']}) · "
+              f"fora {pressao['away']['score']:.2f} ({pressao['away']['nivel']})")
+    ritmo = analise.get("ritmo") or {}
+    if ritmo.get("score") is not None:
+        print(f"Ritmo: {ritmo['nivel']} ({ritmo['score']:.2f}x o esperado)")
+    if eventos.get("disponivel"):
+        print(f"Eventos: {eventos['gols']} gol(s), {eventos['vermelhos']} vermelho(s)"
+              + (f", expulsao aos {eventos['vermelho_minuto']}'"
+                 if eventos.get("vermelho_minuto") is not None else ""))
+
+    for familia, info in analise["familias"].items():
+        if not info.get("disponivel"):
+            print(f"  {familia}: {info.get('motivo')}")
+            continue
+        tend = (info.get("tendencia") or {}).get("rotulo")
+        janela = (info.get("janelas") or {}).get("principal")
+        extra = ""
+        if janela:
+            extra = f" · ultimos {janela['largura_real']}': {janela['eventos']}"
+        print(f"  {familia}: {info['observado']} agora · projecao {info['projecao_total']} "
+              f"vs baseline {info['baseline']} ({info['baseline_origem']}) · "
+              f"tendencia {tend}{extra}")
+
+    tri = orchestrator.triagem(analise, config)
+    if not tri["vale"]:
+        print(f"Odd consultada: NAO ({tri['motivo']})")
+        print("DECISAO: NO PICK")
+        resumo.update({"decisao": "NO PICK", "motivo": tri["motivo"]})
+        return resumo
+
+    if not feed.tem_orcamento():
+        print("Odd consultada: NAO (orcamento esgotado)")
+        print("DECISAO: NO PICK")
+        resumo.update({"decisao": "NO PICK", "motivo": "orcamento esgotado antes da odd"})
+        return resumo
+
+    odds_brutas = feed.odds_ao_vivo(fid)
+    resumo["odd_consultada"] = True
+    cotacoes = live_odds.extrair_linhas(odds_brutas, tuple(tri["familias"]))
+    print(f"Odd consultada: SIM ({len(cotacoes)} linha(s) ativa(s))")
+    if not cotacoes:
+        print("DECISAO: NO PICK (mercado suspenso ou nao cotado)")
+        resumo.update({"decisao": "NO PICK", "motivo": "sem linha ativa nas familias triadas"})
+        return resumo
+
+    avaliados = orchestrator.avaliar(analise, cotacoes, config)
+    aprovados = [c for c in avaliados if c["aprovado"]]
+    resumo["mercados_avaliados"] = len(avaliados)
+    resumo["oportunidades"] = len(aprovados)
+    print(f"Mercados avaliados: {len(avaliados)}   Oportunidades: {len(aprovados)}")
+
+    for c in avaliados[:6]:
+        marca = "OK " if c["aprovado"] else "-- "
+        motivo = "" if c["aprovado"] else f" | {c['motivos_reprovacao'][0]}"
+        print(f"  {marca}{c['market']} {c['line']} @ {c['odd']:.2f} "
+              f"p={c['probability']*100:.0f}% ev={c['ev']:+.1%} "
+              f"conf={c['confidence']*100:.0f}% sinal={(c['live_signal_score'] or 0)*100:.0f}%{motivo}")
+
+    melhor = orchestrator.melhor_candidato(avaliados)
+    if not melhor:
+        print("DECISAO: NO PICK")
+        resumo["decisao"] = "NO PICK"
+        return resumo
+
+    repetido = ja_existe_pick_equivalente(picks_da_partida(cur, fid), melhor, config)
+    if repetido:
+        print(f"DECISAO: NO PICK ({repetido})")
+        resumo.update({"decisao": "NO PICK", "motivo": repetido})
+        return resumo
+
+    print(f"EV: {melhor['ev']:+.1%}   Confianca: {melhor['confidence']*100:.0f}%")
+    if config.dry_run:
+        print("DECISAO: PICK LIVE (dry run · nao gravado)")
+        resumo.update({"decisao": "PICK LIVE (dry run)", "pick": _resumo_pick(melhor)})
+        relatorio["picks_criados"].append({"fixture_id": fid, "dry_run": True,
+                                           **_resumo_pick(melhor)})
+        return resumo
+
+    try:
+        pick_id = salvar_pick(cur, analise, melhor, config, _data_br_do_jogo(bruto))
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        print(f"DECISAO: ERRO ao gravar ({e})")
+        resumo["decisao"] = "ERRO"
+        relatorio["erros"].append(f"fixture {fid}: {e}")
+        return resumo
+
+    if pick_id is None:
+        print("DECISAO: NO PICK (duplicata absorvida pela trava do banco)")
+        resumo.update({"decisao": "NO PICK", "motivo": "duplicata"})
+        return resumo
+
+    print(f"DECISAO: PICK LIVE #{pick_id}")
+    resumo.update({"decisao": "PICK LIVE", "pick_id": pick_id, "pick": _resumo_pick(melhor)})
+    relatorio["picks_criados"].append({"pick_id": pick_id, "fixture_id": fid,
+                                       "dry_run": False, **_resumo_pick(melhor)})
+    return resumo
+
+
+def _resumo_pick(c: dict) -> dict:
+    return {
+        "market": c["market"], "line": c["line"], "odd": c["odd"],
+        "probability": c["probability"], "ev": c["ev"],
+        "confidence": c["confidence"], "live_signal_score": c.get("live_signal_score"),
+    }
+
+
+def _observar(cur, conn, estado: dict) -> None:
+    """Grava a leitura pra a proxima rodada ter janela e tendencia.
+    Best-effort: falhar aqui nao pode derrubar a analise -- perde-se o ritmo,
+    nao a rodada."""
+    try:
+        gravar_observacao(cur, estado)
+        conn.commit()
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"  (aviso: observacao nao gravada, ritmo indisponivel na proxima: {e})")
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Motor de Picks Ao Vivo · uma rodada")
+    parser.add_argument("--fixture", type=int, default=None,
+                        help="analisa somente esta partida")
+    parser.add_argument("--dry-run", dest="dry_run", action="store_true", default=None,
+                        help="calcula e loga, nao grava")
+    parser.add_argument("--gravar", dest="dry_run", action="store_false",
+                        help="grava de verdade (sobrescreve LIVE_ENGINE_DRY_RUN)")
+    parser.add_argument("--max", type=int, default=None, help="teto de partidas nesta rodada")
+    args = parser.parse_args()
+    run_live_engine(fixture_id=args.fixture, dry_run=args.dry_run, max_partidas=args.max)

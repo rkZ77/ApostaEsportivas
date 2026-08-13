@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
@@ -102,6 +102,7 @@ const ABAS = [
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
   { key: 'ligas',      label: 'Ligas'       },
+  { key: 'casas',      label: 'Casas'       },
 ] as const
 type AdminAba = typeof ABAS[number]['key']
 
@@ -156,6 +157,13 @@ export default function Admin() {
   const [acaoResultado, setAcaoResultado] = useState<'resolve' | 'reverify' | null>(null)
   const [overview, setOverview] = useState<Overview | null>(null)
   const [ligas, setLigas] = useState<Liga[] | null>(null)
+  const [bookmakers, setBookmakers] = useState<{
+    bookmaker_id: number; bookmaker_name: string; ativo: boolean
+    created_at: string | null; n_odds: number; n_fixtures: number
+  }[] | null>(null)
+  const [bkLoading, setBkLoading] = useState(false)
+  const [novoBookmaker, setNovoBookmaker] = useState({ bookmaker_id: '', bookmaker_name: '' })
+  const [salvandoBk, setSalvandoBk] = useState(false)
   /** Liga no card de confirmação da coleta. null = card fechado. */
   const [confirmarColeta, setConfirmarColeta] = useState<Liga | null>(null)
   /** true entre o clique em "Coletar agora" e a resposta do POST. */
@@ -199,15 +207,52 @@ export default function Admin() {
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
+  /* ── Motor Ao Vivo · painel próprio ────────────────────────────────────
+     Fora do grid de PIPELINE_ACTIONS de propósito: o Live não é etapa do
+     pipeline diário, roda só durante os jogos, é DEV apenas e tem controles
+     que nenhum outro step tem (dry run e fixture dirigida). Misturar no grid
+     daria a entender que ele entra no "Rodar Tudo", que é justamente o que
+     não pode acontecer enquanto o consumo de API não estiver medido. */
+  const [liveDiag, setLiveDiag] = useState<{
+    pronto: boolean
+    checagens: Array<{ item: string; ok: boolean; detalhe: string }>
+  } | null>(null)
+  const [liveRun, setLiveRun] = useState<{
+    status: string; started_at: string | null; finished_at: string | null
+    returncode: number | null; log: string | null; error: string | null
+  } | null>(null)
+  const [liveDryRun, setLiveDryRun] = useState(true)
+  const [liveFixture, setLiveFixture] = useState('')
+  const [liveLogAberto, setLiveLogAberto] = useState(false)
+
+  const carregarLive = useCallback(() => {
+    api.get('/live-picks/diagnostico').then(r => setLiveDiag(r.data)).catch(() => setLiveDiag(null))
+    api.get('/live-picks/run-status').then(r => setLiveRun(r.data)).catch(() => {})
+  }, [])
+
   useEffect(() => {
     const poll = () => {
       api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
       api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
+      carregarLive()
     }
     poll()
     const id = setInterval(poll, 3000)
     return () => clearInterval(id)
-  }, [])
+  }, [carregarLive])
+
+  const rodarLive = async () => {
+    try {
+      await api.post('/live-picks/run', {
+        dry_run: liveDryRun,
+        fixture_id: liveFixture.trim() ? Number(liveFixture.trim()) : null,
+      })
+      setLiveLogAberto(true)
+      carregarLive()
+    } catch (err: any) {
+      showToast(err.response?.data?.detail || 'Erro ao iniciar o motor Ao Vivo', false)
+    }
+  }
 
   const runPipeline = async (command: string) => {
     setRunningCmd(command)
@@ -258,6 +303,10 @@ export default function Admin() {
   const carregarLigas = () => {
     api.get('/admin/leagues').then(r => setLigas(r.data)).catch(() => setLigas([]))
   }
+  const carregarBookmakers = () => {
+    setBkLoading(true)
+    api.get('/admin/bookmakers').then(r => setBookmakers(r.data)).catch(() => setBookmakers([])).finally(() => setBkLoading(false))
+  }
 
   /*
    * Recarrega a lista quando a coleta termina.
@@ -279,6 +328,7 @@ export default function Admin() {
     if (!isAdmin) { navigate('/picks'); return }
     carregarOverview()
     carregarLigas()
+    carregarBookmakers()
     reload()
     setPaymentsLoading(true)
     api.get('/admin/payments').then(r => setPayments(r.data)).catch(() => {}).finally(() => setPaymentsLoading(false))
@@ -527,6 +577,93 @@ export default function Admin() {
               )
             })}
           </div>
+        </div>
+
+        {/* ── Motor Ao Vivo · DEV apenas ─────────────────────────────────── */}
+        <div className="bg-surface-1 border border-line rounded-lg p-4 mt-4">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-sm font-bold text-ink-1 flex items-center gap-2">
+                Motor Ao Vivo
+                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-red-400/25 bg-red-500/10 text-red-300">
+                  DEV
+                </span>
+              </h2>
+              <p className="text-[11px] text-ink-4 mt-1 leading-relaxed">
+                Uma rodada por clique, sem agendamento. Analisa no máximo 3 partidas ao vivo
+                de ligas cadastradas entre 15&#39; e 80&#39;, e só consulta odd de quem passa na triagem.
+              </p>
+            </div>
+            {liveDiag && (
+              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border ${
+                liveDiag.pronto
+                  ? 'text-green-400 border-green-500/30 bg-green-500/10'
+                  : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}`}>
+                {liveDiag.pronto ? 'pronto' : 'falta configurar'}
+              </span>
+            )}
+          </div>
+
+          {/* Diagnóstico: seis pré-condições independentes. Sem isto, descobrir
+              qual falhou exigiria ler log de subprocesso num ambiente remoto. */}
+          {liveDiag && !liveDiag.pronto && (
+            <ul className="mb-3 space-y-1">
+              {liveDiag.checagens.map(c => (
+                <li key={c.item} className="flex items-start gap-2 text-[11px]">
+                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
+                    c.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
+                  <span className={c.ok ? 'text-ink-4' : 'text-ink-2'}>
+                    {c.item}
+                    <span className="text-ink-4"> · {c.detalhe}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2">
+            <label className="flex items-center gap-1.5 text-[11px] text-ink-2 cursor-pointer">
+              <input type="checkbox" checked={liveDryRun}
+                onChange={e => setLiveDryRun(e.target.checked)}
+                className="accent-accent" />
+              dry run (calcula e mostra, não grava)
+            </label>
+            <input
+              value={liveFixture}
+              onChange={e => setLiveFixture(e.target.value.replace(/\D/g, ''))}
+              placeholder="fixture (opcional)"
+              inputMode="numeric"
+              className="w-40 bg-surface-2 border border-line rounded-md px-2 py-1 text-[11px] text-ink-1 placeholder:text-ink-4"
+            />
+            <button
+              onClick={rodarLive}
+              disabled={liveRun?.status === 'running'}
+              className="text-[11px] px-3 py-1.5 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
+            >
+              {liveRun?.status === 'running'
+                ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
+                : <><Play className="w-3 h-3" /> Executar análise Live</>}
+            </button>
+            {liveRun && liveRun.status !== 'idle' && (
+              <button onClick={() => setLiveLogAberto(!liveLogAberto)}
+                className="text-[11px] text-ink-4 hover:text-ink-2 underline">
+                {liveLogAberto ? 'esconder log' : 'ver log'}
+              </button>
+            )}
+            {liveRun?.finished_at && (
+              <span className={`text-[11px] ${
+                liveRun.returncode === 0 ? 'text-ink-4' : 'text-red-400'}`}>
+                última: {liveRun.finished_at}
+              </span>
+            )}
+          </div>
+
+          {liveLogAberto && (liveRun?.log || liveRun?.error) && (
+            <pre className={`mt-3 text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-96 ${
+              liveRun.returncode === 0 ? 'text-ink-2' : 'text-red-400'}`}>
+              {liveRun.error || liveRun.log}
+            </pre>
+          )}
         </div>
 
         {/* Revisão IA · contadores ao vivo enquanto o pipeline roda. A leitura
@@ -1743,6 +1880,156 @@ export default function Admin() {
               </Modal>
             )}
           </AnimatePresence>
+        </>)}
+
+        {aba === 'casas' && (<>
+          {/* Cadastrar casa */}
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-ink-3 mb-1">Cadastrar / editar casa de aposta</h2>
+            <p className="text-xs text-ink-3 mb-3 leading-relaxed">
+              O ID é o que a API-Football usa (ex.: 8 = Bet365, 32 = Betano).
+              Casas já coletadas aparecem na lista abaixo; aqui você pode cadastrar
+              uma nova antes da primeira coleta ou corrigir o nome.
+            </p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <input
+                className="input"
+                placeholder="ID da casa (ex.: 8)"
+                inputMode="numeric"
+                value={novoBookmaker.bookmaker_id}
+                onChange={e => setNovoBookmaker(v => ({ ...v, bookmaker_id: e.target.value.replace(/\D/g, '') }))}
+              />
+              <input
+                className="input"
+                placeholder="Nome (ex.: Bet365)"
+                value={novoBookmaker.bookmaker_name}
+                onChange={e => setNovoBookmaker(v => ({ ...v, bookmaker_name: e.target.value }))}
+              />
+              <button
+                className="btn-primary disabled:opacity-40"
+                disabled={salvandoBk || !novoBookmaker.bookmaker_id || !novoBookmaker.bookmaker_name.trim()}
+                onClick={async () => {
+                  setSalvandoBk(true)
+                  try {
+                    await api.put(`/admin/bookmakers/${novoBookmaker.bookmaker_id}`, {
+                      bookmaker_id: Number(novoBookmaker.bookmaker_id),
+                      bookmaker_name: novoBookmaker.bookmaker_name.trim(),
+                      ativo: true,
+                    })
+                    showToast(`Casa ${novoBookmaker.bookmaker_name} salva.`)
+                    setNovoBookmaker({ bookmaker_id: '', bookmaker_name: '' })
+                    carregarBookmakers()
+                  } catch (err: any) {
+                    showToast(err.response?.data?.detail || 'Erro ao salvar', false)
+                  } finally { setSalvandoBk(false) }
+                }}>
+                {salvandoBk ? 'Salvando...' : 'Salvar'}
+              </button>
+            </div>
+          </div>
+
+          {/* Lista de casas */}
+          <div className="card overflow-hidden">
+            <div className="px-4 py-3 border-b border-line flex items-center justify-between gap-3">
+              <h2 className="text-xs font-semibold text-ink-3">
+                Casas coletadas {bookmakers ? `(${bookmakers.length})` : ''}
+              </h2>
+              <button
+                className="text-xs text-ink-3 hover:text-ink-1 border border-line-strong rounded px-2 py-1 transition-colors"
+                onClick={carregarBookmakers}>
+                Recarregar
+              </button>
+            </div>
+            {bkLoading ? (
+              <div className="p-6 flex justify-center"><Spinner size="sm" /></div>
+            ) : !bookmakers || bookmakers.length === 0 ? (
+              <p className="text-center text-ink-4 text-sm py-6">
+                Nenhuma casa encontrada. Rode a coleta de odds primeiro.
+              </p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-line">
+                      {['ID', 'Nome', 'Status', 'Odds coletadas', 'Fixtures', 'Ações'].map(h => (
+                        <th key={h} className="text-left text-ink-3 font-medium px-4 py-2.5 whitespace-nowrap">{h}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {bookmakers.map(bk => (
+                      <tr key={bk.bookmaker_id} className="border-b border-line/40 hover:bg-surface-1/40">
+                        <td className="px-4 py-2.5 font-mono text-ink-3">{bk.bookmaker_id}</td>
+                        <td className="px-4 py-2.5 text-ink-1 font-medium">{bk.bookmaker_name}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={bk.ativo ? 'badge-green' : 'text-xs text-ink-4'}>
+                            {bk.ativo ? 'Ativo' : 'Inativo'}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 font-mono text-ink-2">{bk.n_odds.toLocaleString('pt-BR')}</td>
+                        <td className="px-4 py-2.5 font-mono text-ink-2">{bk.n_fixtures.toLocaleString('pt-BR')}</td>
+                        <td className="px-4 py-2.5">
+                          <div className="flex gap-2">
+                            <button
+                              className="text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 hover:border-accent/40 transition-colors"
+                              onClick={() => setNovoBookmaker({
+                                bookmaker_id: String(bk.bookmaker_id),
+                                bookmaker_name: bk.bookmaker_name,
+                              })}>
+                              Editar
+                            </button>
+                            {bk.ativo && (
+                              <button
+                                className="text-[11px] text-red-400 border border-line-strong rounded px-2 py-1 hover:border-red-500/40 transition-colors"
+                                onClick={async () => {
+                                  if (!window.confirm(
+                                    `Desativar "${bk.bookmaker_name}"?\n\n` +
+                                    `As ${bk.n_odds.toLocaleString('pt-BR')} odds já coletadas ficam intactas, ` +
+                                    `só a coleta futura ignora esta casa.`
+                                  )) return
+                                  try {
+                                    const r = await api.delete(`/admin/bookmakers/${bk.bookmaker_id}`)
+                                    showToast(r.data.aviso)
+                                    carregarBookmakers()
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.detail || 'Erro ao desativar', false)
+                                  }
+                                }}>
+                                Desativar
+                              </button>
+                            )}
+                            {!bk.ativo && (
+                              <button
+                                className="text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 hover:border-accent/40 transition-colors"
+                                onClick={async () => {
+                                  try {
+                                    await api.put(`/admin/bookmakers/${bk.bookmaker_id}`, {
+                                      bookmaker_id: bk.bookmaker_id,
+                                      bookmaker_name: bk.bookmaker_name,
+                                      ativo: true,
+                                    })
+                                    showToast(`${bk.bookmaker_name} reativada.`)
+                                    carregarBookmakers()
+                                  } catch (err: any) {
+                                    showToast(err.response?.data?.detail || 'Erro ao reativar', false)
+                                  }
+                                }}>
+                                Reativar
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+            <p className="text-[11px] text-ink-4 px-4 py-3 border-t border-line leading-relaxed">
+              Desativar para de coletar odds desta casa — o histórico existente fica intacto.
+              O ID é o mesmo que a API-Football usa internamente.
+            </p>
+          </div>
         </>)}
 
     </PageShell>

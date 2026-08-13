@@ -758,6 +758,31 @@ def _save_market_pick_result(tabela: str, pick_id: int, pick_type: str,
     logger.info("[AUTO-RESULT] %s #%s → %s (%+.4fu)", pick_type, pick_id, result, profit)
 
 
+def _save_live_pick_result(pick_id: int, result: str, odd: float, conn) -> None:
+    """Grava resultado de pick Ao Vivo.
+
+    Nao usa _save_market_pick_result porque picks_live tem duas colunas de
+    estado, nao uma: `result` fala a lingua do settlement (GREEN/RED/PUSH/
+    HALF-*) e `status` fala do ciclo de vida (ACTIVE/EXPIRED/SETTLED). Gravar
+    so' `result` deixaria um pick liquidado marcado como ACTIVE, e a aba
+    mostraria "ao vivo" um pick que ja acabou.
+
+    A matematica do resultado nao muda em nada: vem de _calc_result, igual a
+    de todos os outros produtos.
+    """
+    profit = _profit_for_result(result, odd)
+    c = conn.cursor()
+    c.execute("""
+        UPDATE picks_live
+        SET result = %s, profit = %s, status = 'SETTLED', settled_at = NOW()
+        WHERE id = %s AND result IS NULL
+    """, (result, profit, pick_id))
+    _sync_followed_result(pick_id, "live", result, c)
+    conn.commit()
+    c.close()
+    logger.info("[AUTO-RESULT] live #%s -> %s (%+.4fu)", pick_id, result, profit)
+
+
 def _multipla_combined_result(legs_results: list[str | None],
                               legs_odds: list | None = None,
                               ticket_odd=None) -> str | None:
@@ -1031,6 +1056,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     free_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "free"]
     multipla_ids    = [r["pick_id"] for r in followed if r["pick_type"] == "multipla"]
     alavancagem_ids = [r["pick_id"] for r in followed if r["pick_type"] == "alavancagem"]
+    # Picks Ao Vivo seguidos (2026-08-11). Antes deste bloco eles caiam fora de
+    # todos os `if/elif` do laco la embaixo e sumiam de "Minhas Apostas" em
+    # silencio -- a aposta existia em user_followed_picks e nao aparecia em
+    # lugar nenhum. Lista vazia em qualquer ambiente sem motor Live, entao
+    # nada muda pro pre-jogo.
+    live_ids        = [r["pick_id"] for r in followed if r["pick_type"] == "live"]
 
     # ── Batch fetch all pick data ────────────────────────────────────────────
     vip_map: dict = {}
@@ -1051,6 +1082,24 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             FROM picks_free WHERE id = ANY(%s)
         """, (free_ids,))
         free_map = {r["id"]: r for r in cur.fetchall()}
+
+    live_map: dict = {}
+    if live_ids:
+        # try/except porque picks_live so' existe onde o motor Live ja rodou.
+        # Sem ele, uma linha orfa de user_followed_picks (tabela apagada,
+        # ambiente sem o motor) derrubaria "Minhas Apostas" inteiro.
+        try:
+            cur.execute("""
+                SELECT id, fixture_id, market, market_type, line, odd, result,
+                       home_team_name AS home_team, away_team_name AS away_team,
+                       home_team_id, away_team_id, match_date, league_id
+                FROM picks_live WHERE id = ANY(%s)
+            """, (live_ids,))
+            live_map = {r["id"]: r for r in cur.fetchall()}
+        except Exception as e:
+            conn.rollback()
+            logger.error("[LIVE] picks_live indisponivel em my-picks: %s", e)
+            live_map = {}
 
     multipla_map: dict = {}
     if multipla_ids:
@@ -1136,6 +1185,9 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     for p in free_map.values():
         if p["fixture_id"]:
             all_fixture_ids.add(p["fixture_id"])
+    for p in live_map.values():
+        if p["fixture_id"]:
+            all_fixture_ids.add(p["fixture_id"])
     for p in multipla_map.values():
         legs_raw = p["games"]
         if isinstance(legs_raw, str):
@@ -1202,6 +1254,66 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
             result.append({
                 "pick_id":        pick_id,
                 "pick_type":      pick_type,
+                "match_date":     str(p["match_date"]),
+                "odd":            odd,
+                "actual_odd":     actual_odd,
+                "bet_house":      bet_house,
+                "stake_units":    stake_u,
+                "cashout_amount": cashout_amt,
+                "is_live":        leg["is_live"],
+                "league_id":      p.get("league_id"),
+                "result":         final_result,
+                **{k: leg[k] for k in (
+                    "fixture_id", "home_team", "away_team",
+                    "home_team_id", "away_team_id",
+                    "market", "line", "status", "elapsed",
+                    "home_goals", "away_goals",
+                    "stat_label", "current_val", "line_val",
+                    "pick_status", "is_locked",
+                )},
+            })
+
+        # ── AO VIVO ─────────────────────────────────────────────────────────
+        # Mesma forma do bloco vip/free acima, com dois desvios obrigatorios:
+        # a tabela de gravacao e' picks_live (passar 'live' pro
+        # _save_single_result gravaria em picks_free, porque la' qualquer tipo
+        # diferente de 'vip' cai no else) e o resultado tambem fecha o
+        # `status` do ciclo de vida.
+        elif pick_type == "live":
+            p = live_map.get(pick_id)
+            if not p:
+                continue
+            is_today = (p["match_date"] == today_br)
+            if p["result"] is not None and not is_today:
+                continue
+
+            odd = float(p["odd"] or 1)
+            leg = _enrich_leg(
+                p["fixture_id"], p["market"], p["line"],
+                p["home_team"], p["away_team"],
+                p["home_team_id"], p["away_team_id"], odd,
+                market_type=p.get("market_type"),
+            )
+
+            final_result = p["result"]
+            if final_result is None and (leg["is_ft"] or leg["is_locked"]):
+                auto_res = _calc_result(
+                    p["market"], p["line"],
+                    leg["current_val"], leg["home_goals"], leg["away_goals"],
+                    market_type=p.get("market_type"),
+                    home_team=p["home_team"], away_team=p["away_team"],
+                    home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
+                    went_to_extra_time=leg.get("went_to_extra_time", False),
+                )
+                if auto_res:
+                    _save_live_pick_result(pick_id, auto_res, odd, conn)
+                    final_result = auto_res
+                    if not is_today:
+                        continue
+
+            result.append({
+                "pick_id":        pick_id,
+                "pick_type":      "live",
                 "match_date":     str(p["match_date"]),
                 "odd":            odd,
                 "actual_odd":     actual_odd,

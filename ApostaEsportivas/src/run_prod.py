@@ -38,77 +38,52 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import main as main_module  # noqa: E402  (import após setar DB_ENV)
 
-OPCOES = {
-    "1":  ("Atualizar jogos (completo)",       "dados"),
-    "2":  ("Capturar odds",                    "odds"),
-    "3":  ("Gerar picks VIP (motor)",          "vip"),
-    "4":  ("Gerar pick Free (motor)",          "dica"),
-    "5":  ("Gerar múltipla (motor)",           "multiplas"),
-    "6":  ("Gerar alavancagem (motor)",        "alavancagem"),
-    # Faltas e defesas de goleiro ja' rodavam dentro de "tudo" e ja' tinham
-    # botao no admin, mas nao tinham opcao avulsa aqui -- em prod nao dava pra
-    # rodar so' um dos dois sem passar o pipeline inteiro.
-    "7":  ("Gerar picks de faltas (motor)",    "faltas"),
-    "8":  ("Gerar defesas de goleiro (motor)", "goleiros"),
-    "9":  ("Atualizar resultados (VIP+Free+Mult+Alav)", "resultados"),
-    "10": ("Tudo: jogos + odds + picks",       "tudo"),
-    "11": ("Estatistica de jogador (API)",     "player_stats"),
-}
+# Menu e dispatch saem do registro COMANDOS de main.py -- ver o comentario
+# grande la, que lista o que cada copia dessa lista tinha esquecido enquanto
+# elas eram mantidas a mao. Aqui sobra escolher o ambiente ("prod") e cuidar
+# das migracoes. Ficam de fora os comandos que nao declaram "prod": `live`
+# (recusa rodar sem DB_ENV=dev) e `shadow` (compara motor vs IA numa base de
+# homologacao) -- oferecer no menu de prod seria um botao que so sabe recusar.
+COMANDOS = [c for c in main_module.COMANDOS if "prod" in c.ambientes]
+OPCOES = {str(i): c for i, c in enumerate(COMANDOS, start=1)}
 
 
 def menu():
     print("\n========================================")
     print("         APOSTA ESPORTIVAS · PROD       ")
     print("========================================")
-    for k, (label, _) in OPCOES.items():
-        print(f"  [{k}] {label}")
+    for k, comando in OPCOES.items():
+        print(f"  [{k}] {comando.label}")
     print("  [0] Sair")
     print("----------------------------------------")
     return input("Escolha: ").strip()
 
 
-def run(cmd: str, mode: str = "fast"):
+def run(cmd: str, *extra_args):
+    comando = main_module.COMANDOS_POR_NOME.get(cmd)
+    if comando is None or "prod" not in comando.ambientes:
+        print(f"Comando desconhecido em prod: '{cmd}'")
+        return
+
     # main.py so' roda as migracoes dentro do proprio __main__, e este wrapper
     # importa main como modulo -- ou seja, rodar por aqui nunca as aplicava.
     # Ja' quebrou o motor em prod em silencio depois de um merge que adicionou
     # coluna nova (engine_debug, 2026-07-23): a coluna nao existia e todo
     # INSERT de pick falhava. Sao ALTER/CREATE ... IF NOT EXISTS, idempotentes
     # e baratos, entao rodar sempre e' seguro.
-    main_module.run_migrations()
+    if comando.migrar:
+        main_module.run_migrations()
 
-    if cmd == "dados":
-        main_module.cmd_dados(mode=mode)
-    elif cmd == "odds":
-        main_module.cmd_odds()
-    elif cmd == "vip":
-        main_module.cmd_vip()
-    elif cmd == "dica":
-        main_module.cmd_dica()
-    elif cmd == "multiplas":
-        main_module.cmd_multiplas()
-    elif cmd == "alavancagem":
-        main_module.cmd_alavancagem()
-    elif cmd == "faltas":
-        main_module.cmd_faltas()
-    elif cmd == "goleiros":
-        main_module.cmd_goleiros()
-    elif cmd == "resultados":
-        main_module.cmd_resultados()
-    elif cmd == "tudo":
-        main_module.cmd_tudo(mode=mode)
-    elif cmd == "player_stats":
-        main_module.cmd_player_stats()
-    else:
-        print(f"Comando desconhecido: '{cmd}'")
+    comando.executar(*extra_args)
 
 
 if __name__ == "__main__":
     arg = sys.argv[1] if len(sys.argv) > 1 else None
-    # "dados full" / "tudo full" -- mesmo extra que main.py aceita
-    extra = sys.argv[2].lower() if len(sys.argv) > 2 else ""
 
     if arg:
-        run(arg, mode="full" if extra == "full" else "fast")
+        # "dados full" / "tudo full" / "player_stats 80" -- os mesmos extras que
+        # main.py aceita, repassados crus pro adaptador do comando.
+        run(arg, *sys.argv[2:])
     else:
         while True:
             escolha = menu()
@@ -116,9 +91,9 @@ if __name__ == "__main__":
                 print("Saindo...")
                 break
             elif escolha in OPCOES:
-                _, cmd_name = OPCOES[escolha]
-                print(f"\n>>> Rodando: {OPCOES[escolha][0]}...\n")
-                run(cmd_name)
+                comando = OPCOES[escolha]
+                print(f"\n>>> Rodando: {comando.label}...\n")
+                run(comando.nome)
                 input("\nPressione Enter para voltar ao menu...")
             else:
                 print("Opção inválida.")

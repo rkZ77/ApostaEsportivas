@@ -22,7 +22,7 @@ load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
 load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
 from migrations import run_startup_migrations
-from routers import admin, auth, banca, chat, fixtures, leaderboard, live, notifications, payments, personal, public, social, suggestions
+from routers import admin, auth, banca, chat, fixtures, leaderboard, live, live_picks, notifications, payments, personal, public, social, suggestions
 from runtime_env import side_effects_note
 
 _log_level = logging.DEBUG if os.getenv("APP_ENV") != "production" else logging.INFO
@@ -263,6 +263,11 @@ app.include_router(social.router)
 app.include_router(banca.router)
 app.include_router(leaderboard.router)
 app.include_router(live.router)
+# Picks Ao Vivo (2026-08-11). Produto novo, DEV apenas nesta versao: os
+# endpoints respondem "indisponivel" onde a tabela picks_live nao existe, e o
+# disparo do motor recusa em producao (routers/live_picks.rodar_motor). Montar
+# aqui nao muda nada pro pre-jogo -- nenhuma rota existente e' tocada.
+app.include_router(live_picks.router)
 app.include_router(notifications.router)
 app.include_router(personal.router)
 

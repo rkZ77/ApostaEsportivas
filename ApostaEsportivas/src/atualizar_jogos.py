@@ -20,6 +20,7 @@ class DataCollectorMain:
         self.standings_collector = None
         self.match_stats = None
         self.team_aggregator = None
+        self.history_backfill = None
         # (self.wc_teams removido junto com a coleta de amistosos da Copa)
 
     def _get_status_sync(self):
@@ -57,6 +58,12 @@ class DataCollectorMain:
             from services.team_stats_aggregator_service import TeamStatsAggregatorService
             self.team_aggregator = TeamStatsAggregatorService()
         return self.team_aggregator
+
+    def _get_history_backfill(self):
+        if self.history_backfill is None:
+            from collectors.team_history_backfill_service import TeamHistoryBackfillService
+            self.history_backfill = TeamHistoryBackfillService()
+        return self.history_backfill
 
     # ---------------------------------------------------------
     # RESET · apaga todos os dados de temporada (mantém leagues)
@@ -164,6 +171,22 @@ class DataCollectorMain:
         else:
             aggregator.update_recent_teams_statistics(days=days)
 
+    # POR QUE ISTO NAO E' A COLETA DE AMISTOSOS DA COPA DE NOVO
+    # ---------------------------------------------------------
+    # A semelhanca e' real: os dois pedem "ultimos 15 jogos deste time" e uma
+    # folha de estatistica por jogo. O que estourou a cota naquela vez foi o
+    # gatilho, nao o formato -- ela rodava para as 48 selecoes TODO DIA, tivesse
+    # ou nao dado faltando, ~768 requisicoes diarias.
+    #
+    # Aqui o gatilho e' a carencia medida: so' entra o time que joga HOJE e tem
+    # menos de MIN_JOGOS_PADRAO jogos no banco, e o jogo ja gravado e' pulado
+    # pelo mesmo filtro do Stage 4. Dia sem time carente custa ZERO requisicao
+    # (nem a listagem e' pedida), e o teto corta a rodada antes de a coleta de
+    # odds ficar sem cota.
+    def run_stage_6(self):
+        print("[STAGE 6] Historico por time (quem esta abaixo do minimo)...")
+        self._get_history_backfill().run()
+
 
     # ---------------------------------------------------------
     # PIPELINE
@@ -241,6 +264,11 @@ class DataCollectorMain:
         days = days if days is not None else int(os.getenv("ATUALIZAR_JOGOS_DAYS", "7"))
 
         self.run_stage_4(mode=mode, days=days)
+        # ANTES do 5 de proposito: o agregador le match_statistics, entao o
+        # jogo que o backfill acabou de gravar so' entra em team_statistics
+        # (e no modelo Poisson que le dali) se ja estiver no banco quando ele
+        # rodar. Invertendo a ordem, o dado ficaria um dia atrasado.
+        self.run_stage_6()
         self.run_stage_5(mode="full" if mode == "full" else "recent", days=days)
 
         print("\n========== DATA COLLECTOR FINALIZADO ==========\n")
@@ -293,6 +321,16 @@ if __name__ == "__main__":
             days      = int(sys.argv[3]) if len(sys.argv) > 3 else 3
             collector.run_stage_5(mode=mode, days=days)
 
+        elif stage == "6":
+            # Ex: python atualizar_jogos.py 6
+            #     python atualizar_jogos.py 6 10 60   (min_jogos, teto de requisicoes)
+            from collectors.team_history_backfill_service import (
+                TeamHistoryBackfillService, MIN_JOGOS_PADRAO, TETO_REQUISICOES_PADRAO,
+            )
+            min_jogos = int(sys.argv[2]) if len(sys.argv) > 2 else MIN_JOGOS_PADRAO
+            teto = int(sys.argv[3]) if len(sys.argv) > 3 else TETO_REQUISICOES_PADRAO
+            TeamHistoryBackfillService(min_jogos=min_jogos, teto_requisicoes=teto).run()
+
         elif stage == "liga":
             # Ex: python atualizar_jogos.py liga 11
             # Coleta completa de UMA liga, sem TRUNCATE. E' o que o botao
@@ -312,4 +350,4 @@ if __name__ == "__main__":
             collector.run_new_league()
 
         else:
-            print("Stage inválido. Use 0,1,2,3,4,5,liga <id>,reset,new_league")
+            print("Stage inválido. Use 0,1,2,3,4,5,6,liga <id>,reset,new_league")

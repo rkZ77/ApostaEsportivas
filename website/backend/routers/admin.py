@@ -174,6 +174,14 @@ def delete_user(user_id: int, current_user: dict = Depends(require_admin)):
 _PIPELINE_SCRIPTS = {
     "atualizar_jogos":      "atualizar_jogos.py",
     "capturar_odds":        "capturar_odds.py",
+    # Variantes DEV dos coletores: no pipeline de homologacao/no-prod, dados e
+    # odds tambem precisam cair no DB_ENV=dev. Antes so os passos `dev_gerar_*`
+    # tinham prefixo dev_; `atualizar_jogos` e `capturar_odds` rodavam sem
+    # prefixo, entao _run_and_track() mantinha o ambiente de producao. Resultado:
+    # o banco DEV ficava sem fixtures/odds frescos e o motor DEV nao tinha de
+    # onde gerar picks, apesar de PROD/no-prod mostrar jogos no dia.
+    "dev_atualizar_jogos":  "atualizar_jogos.py",
+    "dev_capturar_odds":    "capturar_odds.py",
     # Motor deterministico (services/pick_engine), mesmos modulos que
     # main.py::cmd_vip/cmd_dica/cmd_multiplas/cmd_alavancagem chamam desde o
     # corte de IA em producao (2026-07-17) -- os scripts de IA antigos
@@ -214,12 +222,14 @@ _PIPELINE_SCRIPTS = {
 }
 
 _DEV_PIPELINE_STEPS = [
-    "atualizar_jogos", "capturar_odds",
+    "dev_atualizar_jogos", "dev_capturar_odds",
     "dev_gerar_vip", "dev_gerar_dica", "dev_gerar_multipla", "dev_gerar_alavancagem",
     "dev_homolog_vip", "dev_homolog_dica", "dev_homolog_multipla", "dev_homolog_alavancagem",
 ]
 
-# Timeouts por comando (segundos). atualizar_jogos roda 6 stages + API externa → precisa de mais tempo.
+# Timeouts por comando (segundos). atualizar_jogos roda 7 stages (0 a 6) + API
+# externa → precisa de mais tempo. O Stage 6 (histórico por time, 2026-08-13)
+# tem teto próprio de 60 requisições, então não muda a ordem de grandeza daqui.
 # Teto por script. O padrao era 5 min e matava coleta no meio -- capturar_odds
 # em dia cheio passa disso com facilidade (uma requisicao por fixture), e o
 # sintoma nao era "demorou": era o script morto na metade, com odd de parte dos
@@ -233,18 +243,29 @@ _PIPELINE_TIMEOUTS = {
     "default":         1800.0,  # 30 min
 }
 
+# Mesma sequencia do `main.py tudo` (ver o registro COMANDOS la: as etapas do
+# pipeline sao as que declaram `etapa`). `atualizar_resultados` estava faltando
+# aqui desde que estes passos nasceram junto com o scheduler das 00:10
+# (9cdeb70e) -- o "Rodar Tudo" do site nunca liquidou pick nenhum, so' o CLI e
+# o botao avulso faziam isso. Hoje a varredura por visita (routers/live.py::
+# maybe_resolve_pending) cobre o caso comum, entao a etapa aqui e' rede: quem
+# clica "Rodar Tudo" espera o dia inteiro resolvido, e ela e' idempotente.
 _TUDO_STEPS = ["atualizar_jogos", "capturar_odds", "gerar_vip", "gerar_free",
-               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros"]
+               "gerar_multipla", "gerar_alavancagem", "gerar_faltas", "gerar_goleiros",
+               "atualizar_resultados"]
 
 _STEP_LABELS = {
-    "atualizar_jogos":   "Atualizando jogos",
-    "capturar_odds":     "Capturando odds",
-    "gerar_vip":         "Gerando picks VIP",
-    "gerar_free":        "Gerando pick gratuito",
-    "gerar_multipla":    "Gerando múltipla",
-    "gerar_alavancagem": "Gerando alavancagem",
-    "gerar_faltas":      "Gerando picks de faltas",
-    "gerar_goleiros":    "Gerando defesas de goleiro",
+    "atualizar_jogos":      "Atualizando jogos",
+    "capturar_odds":        "Capturando odds",
+    "dev_atualizar_jogos":  "Atualizando jogos DEV",
+    "dev_capturar_odds":    "Capturando odds DEV",
+    "gerar_vip":            "Gerando picks VIP",
+    "gerar_free":           "Gerando pick gratuito",
+    "gerar_multipla":       "Gerando múltipla",
+    "gerar_alavancagem":    "Gerando alavancagem",
+    "gerar_faltas":         "Gerando picks de faltas",
+    "gerar_goleiros":       "Gerando defesas de goleiro",
+    "atualizar_resultados": "Atualizando resultados",
 }
 
 
@@ -1501,6 +1522,112 @@ def remover_liga(league_id: int, current_user: dict = Depends(require_admin)):
             "ok": True, "removida": row["name"],
             "aviso": "Parou de coletar. Jogos, times, picks e o NOME da liga "
                      "continuam, entao o historico segue legivel no site.",
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ─── Casas de aposta ─────────────────────────────────────────────────────────
+
+
+class BookmakerBody(BaseModel):
+    bookmaker_id: int
+    bookmaker_name: str
+    ativo: bool = True
+
+
+@router.get("/bookmakers")
+def listar_bookmakers(current_user: dict = Depends(require_admin)):
+    """Casas de aposta cadastradas e seus volumes de coleta."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT b.bookmaker_id,
+                   b.bookmaker_name,
+                   b.ativo,
+                   b.created_at,
+                   COUNT(ov.id)              AS n_odds,
+                   COUNT(DISTINCT ov.fixture_id) AS n_fixtures
+            FROM bookmakers b
+            LEFT JOIN odds_values ov ON ov.bookmaker_id = b.bookmaker_id
+            GROUP BY b.bookmaker_id, b.bookmaker_name, b.ativo, b.created_at
+            ORDER BY b.bookmaker_id
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    except Exception:
+        # Tabela bookmakers pode nao existir ainda (pre-migracao).
+        conn.rollback()
+        # Fallback: lê direto das odds coletadas
+        cur.execute("""
+            SELECT bookmaker_id,
+                   bookmaker_name,
+                   TRUE           AS ativo,
+                   NULL           AS created_at,
+                   COUNT(*)       AS n_odds,
+                   COUNT(DISTINCT fixture_id) AS n_fixtures
+            FROM odds_values
+            WHERE bookmaker_id IS NOT NULL
+            GROUP BY bookmaker_id, bookmaker_name
+            ORDER BY bookmaker_id
+        """)
+        return [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.put("/bookmakers/{bookmaker_id}")
+def atualizar_bookmaker(
+    bookmaker_id: int,
+    body: BookmakerBody,
+    current_user: dict = Depends(require_admin),
+):
+    """Cria ou atualiza uma casa de aposta na tabela bookmakers.
+
+    Criar: permite cadastrar uma casa nova com o ID que a API-Football usa,
+    antes que a primeira odd seja coletada (útil pra pré-autorizar).
+    Atualizar: renomeia ou ativa/desativa sem apagar o histórico de odds.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            INSERT INTO bookmakers (bookmaker_id, bookmaker_name, ativo)
+            VALUES (%s, %s, %s)
+            ON CONFLICT (bookmaker_id) DO UPDATE
+                SET bookmaker_name = EXCLUDED.bookmaker_name,
+                    ativo          = EXCLUDED.ativo
+            RETURNING bookmaker_id, bookmaker_name, ativo
+        """, (bookmaker_id, body.bookmaker_name.strip(), body.ativo))
+        row = cur.fetchone()
+        conn.commit()
+        return dict(row)
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.delete("/bookmakers/{bookmaker_id}")
+def desativar_bookmaker(bookmaker_id: int, current_user: dict = Depends(require_admin)):
+    """Marca a casa como inativa (não apaga — o histórico de odds fica intacto)."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "UPDATE bookmakers SET ativo = FALSE WHERE bookmaker_id = %s "
+            "RETURNING bookmaker_id, bookmaker_name",
+            (bookmaker_id,),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Casa de aposta não encontrada.")
+        conn.commit()
+        return {
+            "ok": True,
+            "desativada": row["bookmaker_name"],
+            "aviso": "Odds já coletadas não são afetadas. Só a coleta futura ignora esta casa.",
         }
     finally:
         cur.close()
