@@ -19,6 +19,7 @@ import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
 import LivePicks from '../components/LivePicks'
 import LivePicksFeed from '../components/LivePicksFeed'
 import PicksPendingCard from '../components/PicksPendingCard'
+import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
@@ -98,7 +99,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
   /** Aquece os dados da aba antes do clique · ver `prefetchAba` no Picks. */
   onPrefetch?: (t: Tab) => void
 }) {
-  const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean }[] = [
+  const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; oculta?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
     { key: 'vip',          label: 'Picks VIP',       premiumOnly: true },
@@ -107,11 +108,21 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
     { key: 'mercados',     label: 'Mercados',         premiumOnly: true },
     {
       /* O produto novo: oportunidades que o motor achou durante o jogo.
+         "Picks Ao Vivo" e não "Ao Vivo" porque a barra já tem Picks Free e
+         Picks VIP · o rótulo curto sugeria uma tela de jogos acontecendo, não
+         um produto de pick, que é justamente a confusão que a renomeação de
+         `aovivo` pra `minhas_apostas` veio desfazer.
+
          Sem badge próprio · o rótulo já diz o que é, e o selo VIP de
          `premiumOnly` já ocupa esse espaço. Dois selos na mesma aba viram
          ruído numa barra que rola no celular. */
-      key: 'ao_vivo' as Tab, label: 'Ao Vivo',
+      key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
       premiumOnly: true,
+      /* Fora da barra enquanto o Motor Live não roda em produção · ver
+         LIVE_PICKS_ENABLED em config.ts. Filtrada logo abaixo em vez de
+         removida daqui pra a aba voltar virando uma variável de ambiente, sem
+         mexer no código. */
+      oculta: !LIVE_PICKS_ENABLED,
     },
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
@@ -130,7 +141,7 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
           escura na ponta da barra em vez de sumir. */}
       <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
       <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
-        {tabs.map(t => {
+        {tabs.filter(t => !t.oculta).map(t => {
           const count = counts?.[t.key]
           return (
             <motion.button
@@ -1701,7 +1712,12 @@ export default function Picks() {
   useEffect(() => {
     const bruto = location.hash.replace('#', '')
     const hash = (ALIAS_ABA[bruto] ?? bruto) as Tab
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','ao_vivo','minhas_apostas','chat']
+    // 'ao_vivo' só é destino válido quando a aba existe · sem isso um link
+    // antigo com #ao_vivo (ou o hash guardado no histórico do navegador)
+    // abriria numa aba que não está na barra, e o usuário ficaria numa tela
+    // sem como voltar clicando.
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','minhas_apostas','chat',
+                          ...(LIVE_PICKS_ENABLED ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
 
@@ -2798,9 +2814,14 @@ export default function Picks() {
             Fora do AnimatePresence acima pelo mesmo motivo de Minhas Apostas:
             as duas abas mantêm polling próprio e não podem ser desmontadas e
             remontadas a cada troca de aba. */}
-        <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
-          <LivePicksFeed isActive={tab === 'ao_vivo'} />
-        </div>
+        {/* Não montado quando a aba está desligada · o feed faz polling
+            próprio, e um componente escondido com `hidden` continuaria
+            batendo em /live-picks/feed de graça pra todo VIP. */}
+        {LIVE_PICKS_ENABLED && (
+          <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
+            <LivePicksFeed isActive={tab === 'ao_vivo'} />
+          </div>
+        )}
 
         {/* Minhas Apostas · o que o usuário decidiu seguir, pré-jogo e ao vivo. */}
         <div className={tab !== 'minhas_apostas' ? 'hidden' : ''}>
