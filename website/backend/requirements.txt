@@ -19,4 +19,11 @@ rapidfuzz==3.14.5
 # manda 150x150 com 20 a 45KB pra desenhar a 16-32px · a Home baixava 370KB so'
 # de escudo. Uso restrito a main.py::_reduzir_logo, que devolve o original se
 # a biblioteca falhar.
-Pillow==11.4.0
+#
+# 12.3.0 e' a versao em que a reducao foi testada, e tem wheel
+# cp312-manylinux_2_28_x86_64 -- mesma plataforma dos outros pacotes do build,
+# entao instala binario e nao compila nada.
+#
+# O pin anterior (11.4.0) QUEBROU O BUILD: aquela versao nunca existiu. Pinar
+# sem conferir o indice custou um deploy.
+Pillow==12.3.0
