@@ -1,4 +1,5 @@
 import asyncio
+import io
 import logging
 import os
 import pathlib
@@ -217,12 +218,54 @@ app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
 
 _LOGO_BASE = "https://media.api-sports.io/football"
 _LOGO_CACHE_HEADERS = {"Cache-Control": "public, max-age=604800, stale-while-revalidate=86400"}
+
+# LADO MAXIMO DO ESCUDO SERVIDO.
+#
+# A origem manda 150x150 pesando 20 a 45KB, e a tela desenha a 16px
+# (LeagueLogo), 18 a 24px (TeamLogo) ou 32px (Fixtures). 64 cobre o maior uso em
+# retina (32 x2) e nada mais. Medido em escudos reais: 45KB -> 3.1KB.
+_LOGO_LADO = 64
+
+# Versao no nome do arquivo em cache. O cache em disco de antes guarda a imagem
+# ORIGINAL; sem trocar a chave, servidor que ja rodou continuaria devolvendo os
+# 45KB pra sempre, e a mudanca so' valeria em maquina nova.
+_LOGO_CACHE_V = "v2-64"
 _logo_disk_cache = pathlib.Path("/tmp/pickia_logos")
 _logo_disk_cache.mkdir(parents=True, exist_ok=True)
 
 
+def _reduzir_logo(bruto: bytes) -> bytes:
+    """Escudo no tamanho que a tela usa. Devolve o original se nao der.
+
+    Paletiza em 256 cores porque escudo e' arte chapada: quase nao ha perda
+    visivel e o arquivo cai muito mais do que so' redimensionando (45KB ->
+    21.6KB so' com resize, 3.1KB com resize + paleta).
+
+    Nunca levanta. Falha aqui nao pode virar escudo faltando na tela -- serve o
+    original, que e' pesado porem correto.
+    """
+    try:
+        from PIL import Image
+
+        with Image.open(io.BytesIO(bruto)) as im:
+            im = im.convert("RGBA")
+            if max(im.size) <= _LOGO_LADO:
+                return bruto
+            im.thumbnail((_LOGO_LADO, _LOGO_LADO), Image.LANCZOS)
+            # FASTOCTREE preserva o canal alfa; o metodo padrao (mediancut) nao,
+            # e escudo sem transparencia ganha um quadrado branco atras.
+            paleta = im.quantize(colors=256, method=Image.FASTOCTREE)
+            saida = io.BytesIO()
+            paleta.save(saida, "PNG", optimize=True)
+            reduzido = saida.getvalue()
+        return reduzido if len(reduzido) < len(bruto) else bruto
+    except Exception:
+        logger.warning("[LOGO] reducao falhou, servindo original", exc_info=True)
+        return bruto
+
+
 async def _serve_logo(kind: str, item_id: int) -> Response:
-    cache_path = _logo_disk_cache / f"{kind}_{item_id}.png"
+    cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
     if cache_path.exists():
         return Response(cache_path.read_bytes(), media_type="image/png", headers=_LOGO_CACHE_HEADERS)
 
@@ -231,8 +274,9 @@ async def _serve_logo(kind: str, item_id: int) -> Response:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(url)
             if r.status_code == 200 and r.content:
-                cache_path.write_bytes(r.content)
-                return Response(r.content, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+                conteudo = _reduzir_logo(r.content)
+                cache_path.write_bytes(conteudo)
+                return Response(conteudo, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
     except Exception:
         pass
     return Response(status_code=404)

@@ -47,9 +47,8 @@ function wcPhase(dateStr?: string): string | null {
 
 // Helpers de logo
 const TEAM_LOGO   = (id?: number) => id ? `/api/proxy/team/${id}.png` : null
-const LOCAL_LEAGUE_LOGOS: Record<number, string> = { 1: '/logo-copa-mundo.png' }
-const LEAGUE_LOGO = (id?: number) =>
-  id ? (LOCAL_LEAGUE_LOGOS[id] ?? `/api/proxy/league/${id}.png`) : null
+
+const LEAGUE_LOGO = (id?: number) => id ? `/api/proxy/league/${id}.png` : null
 
 function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: number }) {
   const src = TEAM_LOGO(id)
