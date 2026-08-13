@@ -476,11 +476,20 @@ def gols_90(m: dict, lado: str) -> int:
 
     Jogo normal nao tem `_90` preenchido (a coluna nasceu depois), e ai o
     placar cheio E' o de 90 minutos -- por isso o fallback, e nao um erro.
+
+    O fallback NAO vale pra jogo decidido fora dos 90: ali o placar cheio
+    inclui o tempo extra e nao ha como recuperar o de 90. Esses jogos sao
+    retirados do pool por comparavel_em_90() antes de chegar aqui; o `or 0`
+    abaixo so' cobre coluna nula de jogo normal.
     """
     valor = m.get(f"{lado}_goals_90")
     if valor is None:
         valor = m.get(f"{lado}_goals")
     return int(valor or 0)
+
+
+def _tem_placar_de_90(m: dict) -> bool:
+    return m.get("home_goals_90") is not None and m.get("away_goals_90") is not None
 
 
 def comparavel_em_90(pool: list, family: str) -> list:
@@ -491,15 +500,24 @@ def comparavel_em_90(pool: list, family: str) -> list:
     NAO ha coluna de 90 minutos pra eles. Manter esses jogos empurraria a taxa
     de Over pra cima usando jogo que a casa liquidou noutro placar.
 
-    Gols e BTTS ficam, porque tem `home_goals_90`/`away_goals_90` (ver
-    gols_90) -- e sao justamente as familias que mais precisam do jogo de
-    mata-mata, que e' onde a prorrogacao acontece.
+    Gols e BTTS ficam SE o jogo tiver o placar de 90 gravado -- e sao as
+    familias que mais precisam do jogo de mata-mata, que e' onde a prorrogacao
+    acontece.
+
+    A CONDICAO NAO E' FORMALIDADE. Medido no banco de DEV em 2026-08-13: dos 54
+    jogos de prorrogacao, 40 estao SEM `home_goals_90` (todos os 14 AET e 26 dos
+    40 PEN). A coluna nasceu depois da tabela e so' foi preenchida daquele
+    ponto em diante. Sem esta checagem, gols_90 cairia no placar cheio -- que
+    num AET inclui o tempo extra -- e o motor contaria gol de prorrogacao como
+    gol dos 90 em 40 jogos. E' exatamente o erro que a coluna `_90` foi criada
+    pra evitar.
 
     Jogo sem `status` (chamador antigo, fixture de teste) e' tratado como FT e
     permanece: a ausencia do campo nunca pode ENCOLHER o pool.
     """
     if family in ("goals", "btts"):
-        return pool
+        return [m for m in pool
+                if (m.get("status") or "FT") not in PRORROGACAO or _tem_placar_de_90(m)]
     return [m for m in pool if (m.get("status") or "FT") not in PRORROGACAO]
 
 

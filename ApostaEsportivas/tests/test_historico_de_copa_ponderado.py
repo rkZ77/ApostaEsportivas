@@ -77,14 +77,29 @@ def test_prorrogacao_sai_do_pool_de_escanteios():
 
 
 @pytest.mark.parametrize("familia", ["goals", "btts"])
-def test_prorrogacao_fica_no_pool_de_gols(familia):
-    """Gols e BTTS tem placar de 90 minutos separado, entao o jogo serve -- e
-    e' o jogo de mata-mata, exatamente onde a amostra e' curta."""
-    pool = [jogo(status="FT"), jogo(status="AET")]
+def test_prorrogacao_com_placar_de_90_fica_no_pool_de_gols(familia):
+    """Gols e BTTS tem placar de 90 separado, entao o jogo serve -- e e' o jogo
+    de mata-mata, exatamente onde a amostra e' curta."""
+    pool = [jogo(status="FT"),
+            jogo(status="AET", home_goals=3, away_goals=2,
+                 home_goals_90=1, away_goals_90=1)]
 
     resultado, _ = stats_model.pool_and_field(familia, "total", pool, [],
                                               home_team_id=1, away_team_id=2)
     assert len(resultado) == 2
+
+
+@pytest.mark.parametrize("familia", ["goals", "btts"])
+def test_prorrogacao_sem_placar_de_90_sai_ate_de_gols(familia):
+    """Medido no banco de DEV em 2026-08-13: 40 dos 54 jogos de prorrogacao
+    estao SEM `home_goals_90` -- a coluna nasceu depois da tabela. Sem esta
+    checagem, gols_90 cairia no placar cheio, que num AET inclui o tempo extra,
+    e o motor contaria gol de prorrogacao como gol dos 90 em 40 jogos."""
+    pool = [jogo(status="FT"), jogo(status="AET", home_goals=3, away_goals=2)]
+
+    resultado, _ = stats_model.pool_and_field(familia, "total", pool, [],
+                                              home_team_id=1, away_team_id=2)
+    assert [m["status"] for m in resultado] == ["FT"]
 
 
 def test_jogo_sem_status_permanece_no_pool():
