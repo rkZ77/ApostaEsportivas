@@ -1,5 +1,5 @@
 /*
- * Aba "Ao Vivo" · as oportunidades que o Motor Live encontrou.
+ * Aba "Picks Ao Vivo" · as oportunidades que o Motor Live encontrou.
  *
  * NÃO CONFUNDIR COM LivePicks.tsx
  * -------------------------------
@@ -15,20 +15,35 @@
  *   - o SNAPSHOT da criação, que é o que o motor viu quando decidiu;
  *   - o ESTADO ATUAL, que é onde o jogo está agora.
  * Mostrar só o segundo esconde a análise; mostrar só o primeiro mente sobre o
- * jogo. O card mostra os dois lado a lado, e é essa distância que diz se a
- * aposta ainda faz sentido.
+ * jogo. O card mostra os dois, e é essa distância que diz se a aposta ainda
+ * faz sentido.
+ *
+ * DUAS COISAS QUE ESTA TELA APRENDEU RODANDO COM JOGO DE VERDADE (11/08)
+ * ---------------------------------------------------------------------
+ * 1. ODD VENCIDA NÃO É PICK ENCERRADO. A odd ao vivo vale 3 minutos, então
+ *    três minutos depois de nascer todo card caía na seção "Encerrados" com
+ *    um "Expirado antes de ser seguido" e o tratamento visual de coisa morta ·
+ *    enquanto a partida seguia no 38'. O que venceu foi o PREÇO. O pick
+ *    continua de pé, continua sendo acompanhado e continua entrando na
+ *    assertividade do motor (routers/live_picks.py: EXPIRED também é
+ *    liquidado). Encerrado é só o que tem `result`.
+ * 2. O CARD NÃO REPETE A PROSA. O `reasoning` do motor descreve exatamente os
+ *    mesmos números que os ladrilhos e as barras já mostram. Aberto por
+ *    padrão, ele dobrava a altura do card e virava parede de texto no celular.
+ *    Fica atrás de um "Por que este pick", que é onde quem quer conferir vai
+ *    procurar.
  *
  * A validade da odd fica visível o tempo todo, em contagem regressiva. Odd ao
  * vivo evapora, e um pick sem prazo à vista convida o usuário a registrar uma
  * aposta que já não existe.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { forwardRef, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, TrendingUp, Timer, CheckCircle2, Ban } from 'lucide-react'
+import { Radio, Timer, CheckCircle2, ChevronDown } from 'lucide-react'
 import api from '../services/api'
 import ApostaModal from './ApostaModal'
-import { Button, EmptyState, ErrorState, SkeletonPickGrid } from './ui'
-import { getResultStyle, PICK_TYPE_BORDER } from '../utils/resultStyle'
+import { Badge, Button, EmptyState, ErrorState, LiveDot, ResultBadge, SkeletonPickGrid, StatTile } from './ui'
+import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 
 const TEAM_LOGO = (id?: number) => (id ? `/api/proxy/team/${id}.png` : null)
 
@@ -99,40 +114,61 @@ interface LivePick {
   user_stake_units?: number | null
 }
 
+/* Cabeçalho de seção na mesma marcação de Picks.tsx (barra colorida + título).
+   Duplicado aqui, e não importado, porque lá ele é interno da página · são dez
+   linhas de marcação, e transformar em primitivo compartilhado mexeria nas 14
+   chamadas daquele arquivo por um ganho que não é deste trabalho. */
+function TituloDeSecao({ cor, texto }: { cor: string; texto: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4 mt-6 first:mt-0">
+      <span className={`w-0.5 h-5 ${cor} rounded-full block`} />
+      <h2 className="text-sm font-bold text-ink-2">{texto}</h2>
+    </div>
+  )
+}
+
 function TeamLogo({ id, name }: { id?: number; name: string }) {
   const src = TEAM_LOGO(id)
   if (!src) return null
   return (
-    <img src={src} alt={name} width={20} height={20}
-      className="object-contain shrink-0" style={{ width: 20, height: 20 }}
+    <img src={src} alt={name} width={18} height={18}
+      className="object-contain shrink-0" style={{ width: 18, height: 18 }}
       onError={e => (e.currentTarget.style.display = 'none')} />
   )
 }
 
-/* Barra do progresso da linha. Mesma leitura visual da barra de Minhas
-   Apostas, reduzida ao essencial: onde a linha está, onde o jogo está e de
-   que lado o pick precisa ficar. */
-function BarraDaLinha({ atual, linha, direcao }: {
-  atual: number; linha: number; direcao: 'over' | 'under'
+/* Barra do progresso da linha: onde a linha está, onde o jogo está e de que
+   lado o pick precisa ficar.
+
+   Os dois rótulos ficam ACIMA da barra, um em cada ponta, em vez de flutuarem
+   colados nas posições exatas: com linha 10 e valor 5 eles se sobrepunham, e
+   um número em cima do outro não informa nada. A posição continua sendo dada
+   pelo desenho · o texto só nomeia. */
+function BarraDaLinha({ atual, linha, direcao, rotulo }: {
+  atual: number; linha: number; direcao: 'over' | 'under'; rotulo?: string
 }) {
-  const maximo = Math.max(linha * 1.7, atual * 1.1 + 1)
-  const posLinha = Math.min((linha / maximo) * 100, 98)
+  const maximo = Math.max(linha * 1.6, atual * 1.15 + 1)
+  const posLinha = Math.min((linha / maximo) * 100, 97)
   const posAtual = Math.min((atual / maximo) * 100, 100)
-  const ganhando = direcao === 'over' ? atual > linha : atual < linha
-  const cor = ganhando ? '#22c55e' : '#ef4444'
+  const favoravel = direcao === 'over' ? atual > linha : atual < linha
+  const cor = favoravel ? 'bg-green-500' : 'bg-red-400'
+
   return (
-    <div className="relative h-1.5 bg-surface-3/60 rounded-full mt-5 mb-6">
-      <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
-        style={{ width: `${posAtual}%`, backgroundColor: cor }} />
-      <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-white/50 rounded"
-        style={{ left: `${posLinha}%` }} />
-      <div className="absolute -top-5 text-[10px] font-black text-ink-3"
-        style={{ left: `${posLinha}%`, transform: 'translateX(-50%)' }}>
-        linha {linha}
+    <div className="mt-3">
+      <div className="flex items-baseline justify-between text-[10px] text-ink-4 mb-1.5">
+        <span>
+          {rotulo ?? 'agora'}{' '}
+          <span className={`font-bold tabular-nums ${favoravel ? 'text-green-400' : 'text-red-400'}`}>
+            {atual}
+          </span>
+        </span>
+        <span>linha <span className="font-bold text-ink-2 tabular-nums">{linha}</span></span>
       </div>
-      <div className="absolute -bottom-5 text-[10px] font-black"
-        style={{ left: `${Math.min(posAtual, 92)}%`, transform: 'translateX(-50%)', color: cor }}>
-        {atual}
+      <div className="relative h-1.5 bg-surface-3/60 rounded-full">
+        <div className={`absolute left-0 top-0 h-full rounded-full transition-all duration-700 ${cor}`}
+          style={{ width: `${posAtual}%` }} />
+        <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-ink-2/70 rounded"
+          style={{ left: `${posLinha}%` }} />
       </div>
     </div>
   )
@@ -170,9 +206,9 @@ function BarraPressao({ casa, fora, nomeCasa, nomeFora }: {
   const fatiaCasa = soma > 0 ? (casa / soma) * 100 : 50
   return (
     <div className="mt-3">
-      <div className="flex items-center justify-between text-[10px] font-bold text-ink-4 uppercase tracking-wide mb-1">
+      <div className="flex items-baseline justify-between text-[10px] text-ink-4 mb-1.5">
         <span>Pressão ofensiva</span>
-        <span className="tabular-nums text-ink-3 normal-case">
+        <span className="tabular-nums">
           {casa.toFixed(2)} {PRESSAO_LABEL[nivelPressao(casa) ?? ''] ?? ''}
           {' · '}
           {fora.toFixed(2)} {PRESSAO_LABEL[nivelPressao(fora) ?? ''] ?? ''}
@@ -180,7 +216,7 @@ function BarraPressao({ casa, fora, nomeCasa, nomeFora }: {
       </div>
       <div className="flex h-1.5 rounded-full overflow-hidden bg-surface-3/60">
         <div className="bg-accent/70 transition-all duration-700" style={{ width: `${fatiaCasa}%` }} />
-        <div className="bg-ink-4/50 transition-all duration-700" style={{ width: `${100 - fatiaCasa}%` }} />
+        <div className="bg-ink-4/40 transition-all duration-700" style={{ width: `${100 - fatiaCasa}%` }} />
       </div>
       <div className="flex items-center justify-between text-[10px] text-ink-4 mt-1">
         <span className="truncate max-w-[45%]">{nomeCasa}</span>
@@ -206,93 +242,90 @@ function Contagem({ segundos }: { segundos: number | null }) {
     <span className={`inline-flex items-center gap-1 text-[11px] font-bold tabular-nums ${
       expirou ? 'text-ink-4' : apertado ? 'text-amber-400' : 'text-ink-3'}`}>
       <Timer size={11} />
-      {expirou ? 'odd vencida' : `odd válida por ${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`}
+      {expirou
+        ? 'preço da criação · confira na casa'
+        : `odd válida por ${Math.floor(restante / 60)}:${String(restante % 60).padStart(2, '0')}`}
     </span>
   )
 }
 
-function CardLive({ pick, onSeguir }: {
+const CardLive = forwardRef<HTMLDivElement, {
   pick: LivePick
   onSeguir: (p: LivePick) => void
-}) {
-  const resultado = getResultStyle(pick.result)
-  const expirado = pick.status === 'EXPIRED' && !pick.result
+}>(function CardLive({ pick, onSeguir }, ref) {
+  /* Encerrado é só o que tem resultado. `EXPIRED` sem resultado quer dizer que
+     a JANELA DA ODD fechou sem ninguém seguir · o jogo continua e o pick
+     continua sendo acompanhado (ver o cabeçalho deste arquivo). */
+  const encerrado = !!pick.result
+  const oddVencida = pick.status === 'EXPIRED' && !pick.result
   const direcao: 'over' | 'under' = pick.line.toLowerCase().startsWith('under') ? 'under' : 'over'
   const linhaNum = parseFloat(pick.line.replace(/[^\d.]/g, ''))
   const temBarra = pick.current_val != null && !isNaN(linhaNum)
-  const podeSeguir = !pick.is_followed && !pick.result && !expirado
-  const evoluiu = pick.current_val != null && pick.current_val !== pick.observed_at_creation
+  const podeSeguir = !pick.is_followed && !encerrado && !oddVencida
 
   return (
     <motion.div
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className={`pick-card ${PICK_TYPE_BORDER.live} ${expirado ? 'opacity-60' : ''}`}
+      className={`pick-card p-3.5 ${PICK_TYPE_BORDER.live} ${encerrado ? 'opacity-75' : ''}`}
     >
-      {/* cabeçalho: jogo e minuto */}
-      <div className="flex items-start justify-between gap-3 mb-3">
+      {/* cabeçalho: liga, jogo e minuto */}
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="flex items-center gap-1.5 text-[11px] text-ink-4 mb-1.5">
-            {pick.league_name && <span className="truncate">{pick.league_name}</span>}
-          </div>
+          {pick.league_name && (
+            <p className="text-[11px] text-ink-4 truncate mb-1">{pick.league_name}</p>
+          )}
           <div className="flex items-center gap-2 text-sm font-bold text-ink-1">
             <TeamLogo id={pick.home_team_id} name={pick.home_team_name} />
             <span className="truncate">{pick.home_team_name}</span>
-            <span className="text-ink-4 font-black tabular-nums px-1">
-              {pick.home_goals ?? '-'} x {pick.away_goals ?? '-'}
+            <span className="text-ink-3 font-black tabular-nums px-0.5">
+              {pick.home_goals ?? '-'}<span className="text-ink-4">x</span>{pick.away_goals ?? '-'}
             </span>
             <span className="truncate">{pick.away_team_name}</span>
             <TeamLogo id={pick.away_team_id} name={pick.away_team_name} />
           </div>
         </div>
-        <div className="shrink-0 text-right">
+        <div className="shrink-0">
           {pick.is_live ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] font-black text-red-300 bg-red-500/10 border border-red-400/25 rounded px-2 py-0.5">
-              <span className="relative inline-flex w-1.5 h-1.5">
-                <span className="absolute inset-0 rounded-full bg-red-400 opacity-60 animate-ping" />
-                <span className="relative inline-flex w-1.5 h-1.5 rounded-full bg-red-400" />
-              </span>
+            <Badge tone="red" className="gap-1.5">
+              <LiveDot tone="red" className="w-1.5 h-1.5" />
               {pick.elapsed != null ? `${pick.elapsed}'` : STATUS_LABEL[pick.live_status] ?? pick.live_status}
-            </span>
+            </Badge>
           ) : (
-            <span className="text-[11px] font-bold text-ink-4">
-              {STATUS_LABEL[pick.live_status] ?? pick.live_status}
-            </span>
+            <Badge tone="neutral">{STATUS_LABEL[pick.live_status] ?? pick.live_status}</Badge>
           )}
         </div>
       </div>
 
       {/* a aposta */}
-      <div className="flex items-center justify-between gap-3 py-2.5 border-y border-line">
+      <div className="flex items-end justify-between gap-3 mt-3 pt-3 border-t border-line">
         <div className="min-w-0">
-          <p className="text-[11px] text-ink-4 uppercase tracking-wide font-bold">{pick.market}</p>
-          <p className="text-base font-black text-ink-1 truncate">{pick.line}</p>
+          <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">{pick.market}</p>
+          <p className="text-base font-black text-ink-1 truncate leading-tight">{pick.line}</p>
         </div>
         <div className="text-right shrink-0">
           <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">Odd</p>
-          <p className="text-lg font-black text-accent tabular-nums">{Number(pick.odd).toFixed(2)}</p>
+          <p className="text-xl font-black text-accent tabular-nums leading-tight">
+            {Number(pick.odd).toFixed(2)}
+          </p>
         </div>
       </div>
 
-      {temBarra && <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao} />}
+      {temBarra && (
+        <BarraDaLinha atual={Number(pick.current_val)} linha={linhaNum} direcao={direcao}
+          rotulo={pick.stat_label?.toLowerCase()} />
+      )}
 
-      {/* números do motor */}
+      {/* números do motor · ladrilhos do sistema, não caixas próprias */}
       <div className="grid grid-cols-3 gap-2 mt-3">
-        <div className="bg-surface-2/60 rounded-md px-2 py-1.5 text-center">
-          <p className="text-[9px] text-ink-4 uppercase tracking-wide font-bold">Probabilidade</p>
-          <p className="text-sm font-black text-ink-1 tabular-nums">{(pick.probability * 100).toFixed(0)}%</p>
-        </div>
-        <div className="bg-surface-2/60 rounded-md px-2 py-1.5 text-center">
-          <p className="text-[9px] text-ink-4 uppercase tracking-wide font-bold">EV</p>
-          <p className={`text-sm font-black tabular-nums ${pick.ev >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-            {pick.ev >= 0 ? '+' : ''}{(pick.ev * 100).toFixed(1)}%
-          </p>
-        </div>
-        <div className="bg-surface-2/60 rounded-md px-2 py-1.5 text-center">
-          <p className="text-[9px] text-ink-4 uppercase tracking-wide font-bold">Confiança</p>
-          <p className="text-sm font-black text-ink-1 tabular-nums">{(pick.confidence * 100).toFixed(0)}%</p>
-        </div>
+        <StatTile className="p-2" label="Probabilidade"
+          value={<span className="text-lg">{(pick.probability * 100).toFixed(0)}%</span>} />
+        <StatTile className="p-2" label="EV" tone={pick.ev >= 0 ? 'green' : 'red'}
+          value={<span className="text-lg">{pick.ev >= 0 ? '+' : ''}{(pick.ev * 100).toFixed(1)}%</span>} />
+        <StatTile className="p-2" label="Confiança"
+          value={<span className="text-lg">{(pick.confidence * 100).toFixed(0)}%</span>} />
       </div>
 
       {/* Pressão e ritmo · é o que separa este card de um card pré-jogo.
@@ -305,20 +338,25 @@ function CardLive({ pick, onSeguir }: {
         />
       )}
 
-      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-3">
+      <div className="flex flex-wrap gap-x-3 gap-y-1 mt-3 text-[11px] text-ink-4">
+        <span>
+          Criado aos <span className="font-bold text-ink-2 tabular-nums">{pick.minute_at_creation}&#39;</span>
+          {' · '}{pick.home_goals_at_creation}x{pick.away_goals_at_creation}
+          {' · '}<span className="tabular-nums">{pick.observed_at_creation}</span>{' '}
+          {pick.stat_label?.toLowerCase() ?? 'no mercado'}
+        </span>
         {pick.rhythm_level && (
           <span>
-            Ritmo <span className="font-bold text-ink-2">{RITMO_LABEL[pick.rhythm_level] ?? pick.rhythm_level.toLowerCase()}</span>
-          </span>
-        )}
-        {pick.rhythm_trend && pick.rhythm_trend !== 'INDEFINIDA' && (
-          <span>
-            Tendência{' '}
-            <span className={`font-bold ${
-              pick.rhythm_trend === 'ACELERANDO' ? 'text-green-400'
-                : pick.rhythm_trend === 'DESACELERANDO' ? 'text-amber-400' : 'text-ink-2'}`}>
-              {TENDENCIA_LABEL[pick.rhythm_trend] ?? pick.rhythm_trend.toLowerCase()}
+            Ritmo <span className="font-bold text-ink-2">
+              {RITMO_LABEL[pick.rhythm_level] ?? pick.rhythm_level.toLowerCase()}
             </span>
+            {pick.rhythm_trend && pick.rhythm_trend !== 'INDEFINIDA' && (
+              <span className={
+                pick.rhythm_trend === 'ACELERANDO' ? ' text-green-400'
+                  : pick.rhythm_trend === 'DESACELERANDO' ? ' text-amber-400' : ''}>
+                {' '}{TENDENCIA_LABEL[pick.rhythm_trend] ?? pick.rhythm_trend.toLowerCase()}
+              </span>
+            )}
           </span>
         )}
         {pick.live_signal_score != null && (
@@ -335,46 +373,35 @@ function CardLive({ pick, onSeguir }: {
             </span>
           </span>
         )}
-      </div>
-
-      {/* O que o motor viu quando decidiu. O snapshot da criação nunca muda;
-          "agora" ao lado mostra o quanto o jogo andou desde então. */}
-      <div className="mt-3 text-[11px] text-ink-3 bg-surface-2/40 border border-line rounded-md px-2.5 py-2 leading-relaxed">
-        <span className="font-bold text-ink-2">Criado aos {pick.minute_at_creation}&#39;</span>
-        {' · '}placar {pick.home_goals_at_creation}x{pick.away_goals_at_creation}
-        {' · '}{pick.observed_at_creation} {pick.stat_label?.toLowerCase() ?? 'no mercado'}
-        {evoluiu && (
-          <span className="text-ink-2"> · agora {pick.current_val}</span>
-        )}
-        {pick.shots_at_creation != null && (
-          <>
-            {' · '}{pick.shots_at_creation} finalizações
-            {pick.shots_on_target_at_creation != null && ` (${pick.shots_on_target_at_creation} no alvo)`}
-          </>
-        )}
         {pick.data_freshness && pick.data_freshness !== 'FRESH' && (
-          <span className="text-amber-400"> · dado {pick.data_freshness.toLowerCase()}</span>
+          <span className="text-amber-400">dado {pick.data_freshness.toLowerCase()}</span>
         )}
       </div>
 
+      {/* A prosa do motor repete os números acima · fica atrás de um toque, em
+          vez de dobrar a altura do card com o que já está na tela. */}
       {pick.reasoning && (
-        <p className="mt-2 text-[11px] text-ink-3 leading-relaxed">{pick.reasoning}</p>
+        <details className="group mt-3">
+          <summary className="flex items-center gap-1 text-[11px] font-bold text-ink-3 cursor-pointer
+                              list-none hover:text-ink-2 transition-colors">
+            <ChevronDown size={12} className="transition-transform group-open:rotate-180" />
+            Por que este pick
+          </summary>
+          <p className="mt-2 text-[11px] text-ink-3 leading-relaxed">{pick.reasoning}</p>
+        </details>
       )}
 
       {/* rodapé: validade e ação */}
       <div className="flex items-center justify-between gap-3 mt-3 pt-3 border-t border-line">
-        {resultado ? (
-          <span className={`text-[11px] font-black px-2 py-0.5 rounded border ${resultado.bg} ${resultado.border} ${resultado.text}`}>
-            {resultado.label}
+        {encerrado ? (
+          <span className="inline-flex items-center gap-2">
+            <ResultBadge result={pick.result} />
             {pick.profit != null && (
-              <span className="ml-1.5 tabular-nums">
+              <span className={`text-[11px] font-bold tabular-nums ${
+                Number(pick.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {Number(pick.profit) >= 0 ? '+' : ''}{Number(pick.profit).toFixed(2)}u
               </span>
             )}
-          </span>
-        ) : expirado ? (
-          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-ink-4">
-            <Ban size={11} /> Expirado antes de ser seguido
           </span>
         ) : (
           <Contagem segundos={pick.segundos_de_validade} />
@@ -392,7 +419,7 @@ function CardLive({ pick, onSeguir }: {
       </div>
     </motion.div>
   )
-}
+})
 
 export default function LivePicksFeed({ isActive }: {
   isActive: boolean
@@ -449,8 +476,12 @@ export default function LivePicksFeed({ isActive }: {
     }
   }
 
-  const ativos = useMemo(() => (picks ?? []).filter(p => !p.result && p.status !== 'EXPIRED'), [picks])
-  const encerrados = useMemo(() => (picks ?? []).filter(p => p.result || p.status === 'EXPIRED'), [picks])
+  /* O corte é pelo RESULTADO, não pelo status. Odd vencida não encerra pick:
+     ele segue sendo acompanhado e liquidado como qualquer outro (ver o
+     cabeçalho deste arquivo). Cortar por status mandava pra "Encerrados" um
+     pick de um jogo que ainda estava no 38'. */
+  const emAndamento = useMemo(() => (picks ?? []).filter(p => !p.result), [picks])
+  const encerrados = useMemo(() => (picks ?? []).filter(p => !!p.result), [picks])
 
   if (!isActive) return null
 
@@ -469,19 +500,27 @@ export default function LivePicksFeed({ isActive }: {
   }
 
   return (
-    <div className="space-y-4">
-      <div className="flex items-start gap-2.5 bg-surface-1 border border-line rounded-lg px-3.5 py-3">
-        <TrendingUp size={16} className="text-red-300 shrink-0 mt-0.5" />
-        <div className="text-[12px] text-ink-3 leading-relaxed">
-          <p className="font-bold text-ink-2 mb-0.5">Oportunidades encontradas durante o jogo</p>
-          <p>
-            O motor lê o placar, o ritmo e as estatísticas da partida em andamento e compara com a
-            odd do momento. A odd ao vivo muda rápido: confira o valor na casa antes de apostar.
-          </p>
-        </div>
+    <div>
+      {/* Painel de abertura na cor do produto, como o das outras abas · o Live
+          é vermelho no site inteiro (PICK_TYPE_HEX.live). */}
+      <div className="bg-red-500/5 border border-red-400/25 rounded-lg p-4 mb-6">
+        <h3 className="text-sm font-bold text-red-300 mb-2 flex items-center gap-2">
+          <LiveDot tone="red" />
+          O que são os Picks Ao Vivo?
+        </h3>
+        <p className="text-[13px] text-ink-3 leading-relaxed">
+          O motor lê o placar, o ritmo e as estatísticas da partida{' '}
+          <span className="font-bold text-ink-2">em andamento</span> e compara com a odd do momento.
+          Ele só publica quando o jogo se afasta do esperado e o preço paga por isso · varredura sem
+          oportunidade não vira pick.
+        </p>
+        <p className="text-[13px] text-ink-3 leading-relaxed mt-2">
+          A odd ao vivo muda rápido: o preço mostrado é o do instante da análise.{' '}
+          <span className="font-bold text-ink-2">Confira o valor na casa antes de apostar.</span>
+        </p>
       </div>
 
-      {ativos.length === 0 && encerrados.length === 0 && (
+      {emAndamento.length === 0 && encerrados.length === 0 && (
         <EmptyState
           Icon={Radio}
           title="Nenhuma oportunidade ao vivo agora"
@@ -489,22 +528,29 @@ export default function LivePicksFeed({ isActive }: {
         />
       )}
 
-      <AnimatePresence mode="popLayout">
-        {ativos.map(p => (
-          <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
-        ))}
-      </AnimatePresence>
+      {emAndamento.length > 0 && (
+        <>
+          <TituloDeSecao cor="bg-red-400" texto={`Em andamento · ${emAndamento.length}`} />
+          <div className="space-y-4">
+            <AnimatePresence mode="popLayout">
+              {emAndamento.map(p => (
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
+              ))}
+            </AnimatePresence>
+          </div>
+        </>
+      )}
 
       {encerrados.length > 0 && (
         <>
-          <p className="text-[11px] uppercase tracking-wide font-bold text-ink-4 pt-2">
-            Encerrados
-          </p>
-          <AnimatePresence mode="popLayout">
-            {encerrados.map(p => (
-              <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
-            ))}
-          </AnimatePresence>
+          <TituloDeSecao cor="bg-line-strong" texto={`Encerrados · ${encerrados.length}`} />
+          <div className="space-y-4">
+            <AnimatePresence mode="popLayout">
+              {encerrados.map(p => (
+                <CardLive key={p.id} pick={p} onSeguir={setAlvo} />
+              ))}
+            </AnimatePresence>
+          </div>
         </>
       )}
 

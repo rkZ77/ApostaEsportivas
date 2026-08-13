@@ -1124,8 +1124,15 @@ def test_engine_debug_responde_por_que_o_motor_criou_o_pick():
 
     texto = lp.montar_explicacao(analise, candidato)
     assert "Aos 60'" in texto
-    assert "Pressao ofensiva" in texto
-    assert "projecao" in texto.lower()
+    # ACENTUADO: este texto vai pro card, na frente do assinante, num produto
+    # 100% em portugues -- e o unico bloco acentuado de live_pipeline.py, que
+    # no resto e' comentario e log de terminal. Escrever "Pressao" aqui seria
+    # erro de ortografia publicado, nao economia de caractere.
+    assert "Pressão ofensiva" in texto
+    assert "projeção" in texto.lower()
+    # E o nivel vem traduzido, nao a chave crua do motor: "MUITO_ALTA" e' dado,
+    # "muito alta" e' prosa (live_pipeline._nivel_pt).
+    assert "_" not in texto.split("Pressão ofensiva")[1].split(".")[0]
 
 
 # ═════════════════════════════════════════════════════════════════════════
@@ -1194,15 +1201,58 @@ def test_expiracao_nunca_toca_pick_que_alguem_seguiu():
     assert "result IS NULL" in fonte
 
 
-def test_expirado_fica_fora_do_denominador_de_acerto():
-    """EXPIRED nao e' RED. Contar como derrota inventaria um historico de erro
-    que nunca existiu."""
+def test_expirado_entra_no_denominador_de_acerto():
+    """DECISAO REVISADA EM 2026-08-13, e o motivo importa.
+
+    A versao anterior deste teste travava o contrario ("EXPIRED fica FORA do
+    denominador"), com o argumento de que EXPIRED nao e' RED e conta-lo como
+    derrota inventaria erro que nunca existiu. O argumento partia de uma
+    premissa que o codigo nao sustenta: pick expirado NAO fica sem resultado.
+    `liquidar_pendentes` busca ACTIVE **e** EXPIRED (STATUS_ATIVO,
+    STATUS_EXPIRADO na consulta), entao ele e' liquidado pelo jogo como
+    qualquer outro e ganha um GREEN ou RED de verdade.
+
+    O que expirou foi o PRECO, nao o pick. Deixar de fora o que ninguem seguiu
+    mediria a taxa de acerto so' no que o usuario teve tempo de pegar, que e'
+    outra coisa -- e sempre mais bonita que a do motor.
+
+    Ver o comentario longo em routers/live_picks.py::estatisticas.
+    """
     import inspect
     import routers.live_picks as lp
 
     fonte = inspect.getsource(lp.estatisticas)
     assert "FILTER (WHERE result IS NOT NULL) AS resolvidos" in fonte
-    assert "FILTER (WHERE status = 'EXPIRED')" in fonte
+    assert "FILTER (WHERE status = 'EXPIRED')" not in fonte, \
+        "voltou a filtrar acerto por status: pick nao seguido sumiria da conta"
+
+
+def test_expirados_conta_por_motivo_e_nao_por_status():
+    """`expirados` e' metrica de OPERACAO (quantas janelas de odd fecharam
+    antes de alguem pegar), e por isso conta `expiration_reason`.
+
+    Contar por `status` fazia o numero DIMINUIR sozinho ao longo da noite: a
+    liquidacao troca o status pra SETTLED, entao um pick que de fato expirou
+    parava de ser contado assim que o jogo acabava. O motivo da expiracao fica
+    gravado pra sempre; o status, nao.
+    """
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.estatisticas)
+    assert "expiration_reason IS NOT NULL" in fonte
+
+
+def test_liquidacao_alcanca_o_pick_expirado():
+    """A premissa do teste acima, verificada na fonte em vez de assumida: se
+    a liquidacao parar de buscar EXPIRED, o pick nao seguido volta a ficar sem
+    `result` e some do denominador pela porta dos fundos, sem ninguem mexer em
+    estatisticas()."""
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.liquidar_pendentes)
+    assert "STATUS_ATIVO, STATUS_EXPIRADO" in fonte
 
 
 def test_vocabulario_de_resultado_e_o_do_settlement():

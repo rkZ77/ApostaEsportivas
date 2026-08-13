@@ -401,31 +401,40 @@ def selecionar_partidas(brutos: list, cur, config: LiveEngineConfig) -> tuple[li
         status = (fixture.get("status") or {}).get("short")
         minuto = _minuto_de(bruto)
 
+        # `categoria` separa "nao e' um jogo nosso" de "e' nosso, mas agora
+        # nao da'". Sao respostas diferentes pra quem acompanha: a primeira
+        # significa que nao ha o que fazer, a segunda que o jogo esta' no radar
+        # e a proxima passada pode render. Ver `fixtures_no_radar` no
+        # relatorio, que e' o numero que o live_watch usa pra decidir se espera
+        # o intervalo curto ou o longo.
         if liga not in permitidas:
-            descartadas.append({"fixture_id": fid, "jogo": nome, "motivo": f"liga {liga} nao cadastrada"})
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "liga",
+                                "motivo": f"liga {liga} nao cadastrada"})
             continue
         if status not in ("1H", "2H", "HT"):
-            descartadas.append({"fixture_id": fid, "jogo": nome, "motivo": f"status {status}"})
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
+                                "motivo": f"status {status}"})
             continue
         if minuto is None:
-            descartadas.append({"fixture_id": fid, "jogo": nome, "motivo": "sem minuto publicado"})
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
+                                "motivo": "sem minuto publicado"})
             continue
         if not (config.minuto_inicial <= int(minuto) <= config.minuto_final):
-            descartadas.append({"fixture_id": fid, "jogo": nome,
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "janela",
                                 "motivo": f"minuto {minuto}' fora da janela "
                                           f"{config.minuto_inicial}'-{config.minuto_final}'"})
             continue
 
         anteriores = picks_da_partida(cur, fid)
         if len(anteriores) >= config.max_picks_por_partida:
-            descartadas.append({"fixture_id": fid, "jogo": nome,
+            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
                                 "motivo": f"ja tem {len(anteriores)} pick(s), teto e' "
                                           f"{config.max_picks_por_partida}"})
             continue
         if anteriores:
             ultimo = max(p["minuto"] or 0 for p in anteriores)
             if int(minuto) - ultimo < config.minutos_entre_picks:
-                descartadas.append({"fixture_id": fid, "jogo": nome,
+                descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
                                     "motivo": f"pick recente no minuto {ultimo}' "
                                               f"(intervalo minimo {config.minutos_entre_picks}')"})
                 continue
@@ -470,12 +479,33 @@ def ja_existe_pick_equivalente(anteriores: list, candidato: dict,
 # ─────────────────────────────────────────────────────────────────────────
 # EXPLICACAO
 # ─────────────────────────────────────────────────────────────────────────
+#: Rotulo interno -> portugues de exibicao. O motor guarda o nivel em caixa
+#: alta e sem acento porque e' chave de dado; o texto que chega no card do site
+#: e' PROSA, e prosa em portugues leva acento. Sem este mapa o usuario lia
+#: "pressao media" e "ritmo muito alto" numa tela onde todo o resto do produto
+#: e' escrito corretamente.
+_PT_NIVEL = {
+    "BAIXA": "baixa", "MEDIA": "média", "ALTA": "alta", "MUITO_ALTA": "muito alta",
+    "BAIXO": "baixo", "MEDIO": "médio", "ALTO": "alto", "MUITO_ALTO": "muito alto",
+}
+
+
+def _nivel_pt(bruto: str | None) -> str:
+    if not bruto:
+        return ""
+    return _PT_NIVEL.get(bruto.upper(), bruto.replace("_", " ").lower())
+
+
 def montar_explicacao(analise: dict, candidato: dict) -> str:
     """Por que ESTE pick, NESTE minuto.
 
     Descreve o que o motor observou, com numero verificavel -- nao adjetivo. E'
     o texto que separa um pick Live de um pick pre-jogo: um fala de historico,
     o outro fala do jogo que esta na tela do usuario agora.
+
+    ESTE E' O UNICO BLOCO ACENTUADO DO ARQUIVO, e de proposito: o resto sao
+    comentarios e log de terminal, mas isto aqui e' texto de PRODUTO. Vai pro
+    card, na frente do assinante, num site 100% em portugues.
     """
     estado = analise["estado"]
     familia = candidato["familia"]
@@ -485,7 +515,7 @@ def montar_explicacao(analise: dict, candidato: dict) -> str:
     partes = []
 
     partes.append(
-        f"Aos {estado['minuto']}' o jogo esta {estado.get('home_goals')}x{estado.get('away_goals')} "
+        f"Aos {estado['minuto']}' o jogo está {estado.get('home_goals')}x{estado.get('away_goals')} "
         f"com {candidato['observado_na_criacao']} {rotulo}."
     )
 
@@ -494,32 +524,32 @@ def montar_explicacao(analise: dict, candidato: dict) -> str:
         casa = estado.get("home_team") or "casa"
         fora = estado.get("away_team") or "visitante"
         partes.append(
-            f"Pressao ofensiva: {casa} {pressao['home']['score']:.2f} "
-            f"({pressao['home']['nivel'].lower()}), {fora} {pressao['away']['score']:.2f} "
-            f"({pressao['away']['nivel'].lower()})."
+            f"Pressão ofensiva: {casa} {pressao['home']['score']:.2f} "
+            f"({_nivel_pt(pressao['home']['nivel'])}), {fora} {pressao['away']['score']:.2f} "
+            f"({_nivel_pt(pressao['away']['nivel'])})."
         )
 
     janela = ((info.get("janelas") or {}).get("principal"))
     if janela:
         partes.append(
-            f"Nos ultimos {janela['largura_real']} minutos foram {janela['eventos']} {rotulo}."
+            f"Nos últimos {janela['largura_real']} minutos foram {janela['eventos']} {rotulo}."
         )
 
     tendencia = (info.get("tendencia") or {}).get("rotulo")
     ritmo = analise.get("ritmo") or {}
     if ritmo.get("nivel"):
         texto_tendencia = {
-            "ACELERANDO": ", e o ritmo esta acelerando",
-            "DESACELERANDO": ", mas o ritmo esta desacelerando",
+            "ACELERANDO": ", e o ritmo está acelerando",
+            "DESACELERANDO": ", mas o ritmo está desacelerando",
         }.get(tendencia, "")
-        partes.append(f"Ritmo da partida: {ritmo['nivel'].replace('_', ' ').lower()}{texto_tendencia}.")
+        partes.append(f"Ritmo da partida: {_nivel_pt(ritmo['nivel'])}{texto_tendencia}.")
 
     eventos = analise.get("eventos") or {}
     if eventos.get("vermelho_minuto") is not None:
-        partes.append(f"Ha um expulso desde os {eventos['vermelho_minuto']}'.")
+        partes.append(f"Há um expulso desde os {eventos['vermelho_minuto']}'.")
 
     partes.append(
-        f"A projecao para os {lam['minutos_restantes']} minutos restantes e de "
+        f"A projeção para os {lam['minutos_restantes']} minutos restantes é de "
         f"{lam['lambda_residual']:.1f} {rotulo}, fechando em {info['projecao_total']:.1f} no total "
         f"contra a linha {candidato['linha']}."
     )
@@ -534,7 +564,7 @@ def montar_explicacao(analise: dict, candidato: dict) -> str:
     conv = candidato["debug"].get("convergencia") or {}
     if conv.get("a_favor"):
         partes.append(
-            f"{conv['a_favor']} dos sinais ao vivo sustentam essa direcao"
+            f"{conv['a_favor']} dos sinais ao vivo sustentam essa direção"
             + (f" e {conv['contra']} apontam contra." if conv.get("contra") else ".")
         )
     return " ".join(partes)

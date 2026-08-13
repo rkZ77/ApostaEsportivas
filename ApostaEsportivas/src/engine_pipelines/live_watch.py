@@ -149,10 +149,21 @@ def _dormir(segundos: int, ate: datetime | None) -> bool:
     return True
 
 
-def acompanhar(intervalo: int, intervalo_ocioso: int, orcamento: int,
-               ate: datetime | None, max_rodadas: int, ocioso_para: int,
-               dry_run: bool, max_partidas: int | None) -> dict:
-    """O laco. Devolve o resumo da sessao."""
+def acompanhar(intervalo: int = 10, intervalo_ocioso: int = 15, orcamento: int = 120,
+               ate: datetime | None = None, max_rodadas: int = 40, ocioso_para: int = 4,
+               dry_run: bool = False, max_partidas: int | None = None) -> dict:
+    """O laco. Devolve o resumo da sessao.
+
+    O intervalo padrao acompanha a JANELA DO MODELO, nao o relogio: 10 minutos
+    e' a primeira das `config.janelas_minutos`, entao duas leituras seguidas
+    fecham exatamente a janela que o ritmo usa. Varrer mais rapido que isso nao
+    traz leitura nova -- traz a mesma leitura de novo, com um decimo do
+    orcamento a menos.
+
+    RODADA NAO PRECISA GERAR PICK. A varredura le' todas as partidas elegiveis
+    e pode terminar com zero picks, e isso e' o comportamento correto: o motor
+    so' publica quando o jogo se afasta do esperado E a odd paga por isso.
+    """
     config = LiveEngineConfig.do_ambiente()
     if not config.habilitado:
         raise SystemExit(
@@ -250,9 +261,10 @@ def _resumo(sessao: dict, dry_run: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
         description="Acompanha os jogos ao vivo disparando rodadas do Motor Live (DEV)")
-    parser.add_argument("--intervalo", type=int, default=8,
-                        help="minutos entre rodadas quando ha jogo elegivel (padrao 8, "
-                             "que e' o que alimenta a janela de 10 min do modelo de ritmo)")
+    parser.add_argument("--intervalo", type=int, default=10,
+                        help="minutos entre rodadas quando ha jogo elegivel (padrao 10, "
+                             "que e' a largura da janela principal do modelo de ritmo "
+                             "-- ver config.janelas_minutos)")
     parser.add_argument("--intervalo-ocioso", type=int, default=15,
                         help="minutos entre rodadas quando nao ha jogo (padrao 15)")
     parser.add_argument("--orcamento", type=int, default=120,

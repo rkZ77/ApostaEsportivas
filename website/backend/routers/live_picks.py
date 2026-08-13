@@ -361,8 +361,21 @@ def estatisticas(current_user: dict = Depends(require_vip)):
     conjunto de sempre; este e' um segundo numero, ao lado, com rotulo
     proprio. Juntar os dois e' decisao de produto que ainda nao foi tomada.
 
-    EXPIRED fica fora do denominador: pick que expirou sem ser seguido nao
-    acertou nem errou.
+    TODO PICK GERADO ENTRA NA CONTA, SEGUIDO OU NAO
+    -----------------------------------------------
+    A assertividade do motor tem que descrever o motor, e o motor decidiu
+    igual nos dois casos. Um pick que ninguem seguiu nao vira "pick que nao
+    conta": ele e' gravado na criacao, e' liquidado pelo jogo como qualquer
+    outro (`liquidar_pendentes` busca ACTIVE **e** EXPIRED) e entra aqui pelo
+    mesmo `result`. Deixar de fora o que nao foi seguido produziria uma taxa
+    de acerto medida so' no que o usuario teve tempo de pegar, que e' outra
+    coisa -- e sempre mais bonita.
+
+    Por isso `expirados` conta por `expiration_reason`, e nao por `status`: a
+    liquidacao troca o status pra SETTLED, entao contar por status fazia o
+    numero cair pra zero sozinho ao longo da noite, ao passo que o motivo da
+    expiracao fica gravado pra sempre. E' informacao de OPERACAO (quantas
+    janelas de odd fecharam antes de alguem pegar), nao de acerto.
     """
     conn = get_connection()
     cur = conn.cursor()
@@ -372,7 +385,7 @@ def estatisticas(current_user: dict = Depends(require_vip)):
         cur.execute("""
             SELECT
                 COUNT(*)                                          AS total_gerados,
-                COUNT(*) FILTER (WHERE status = 'EXPIRED')        AS expirados,
+                COUNT(*) FILTER (WHERE expiration_reason IS NOT NULL) AS expirados,
                 COUNT(*) FILTER (WHERE result IS NOT NULL)        AS resolvidos,
                 COUNT(*) FILTER (WHERE result = 'GREEN')          AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')            AS reds,
@@ -407,8 +420,13 @@ def estatisticas(current_user: dict = Depends(require_vip)):
     return {
         "disponivel": True,
         "escopo": "somente picks_live · nao inclui pre-jogo",
+        "base": "todo pick gerado pelo motor, seguido ou nao",
         "total_gerados": int(linha.get("total_gerados") or 0),
+        # Quantos tiveram a janela da odd fechada antes de alguem seguir. E'
+        # metrica de OPERACAO: eles continuam liquidados e continuam contando
+        # no acerto abaixo.
         "expirados": int(linha.get("expirados") or 0),
+        "pendentes": max(0, int(linha.get("total_gerados") or 0) - resolvidos),
         "resolvidos": resolvidos,
         "greens": greens,
         "reds": int(linha.get("reds") or 0),
