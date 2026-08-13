@@ -19,8 +19,57 @@ HEADERS = {"x-apisports-key": API_KEY}
 # CASAS DE APOSTAS PERMITIDAS
 # 8  = Bet365
 # 32 = Betano
+#
+# PADRAO, nao a lista final: desde 2026-08-13 quem manda e a tabela
+# `bookmakers` (coluna `ativo`), editavel pela tela Casas de aposta do /admin.
+# Este conjunto continua sendo a resposta quando a tabela nao existe ou esta
+# vazia -- ver casas_ativas().
 # ============================================================
 BR_BOOKMAKERS = {8, 32}
+
+
+def casas_ativas() -> set:
+    """IDs das casas que devem ser coletadas.
+
+    A tabela `bookmakers` nasceu em migracao com o proposito declarado de
+    "desativar uma casa pela tela, sem deploy", e o /admin escreve nela desde
+    entao -- inclusive respondendo ao usuario que "so' a coleta futura ignora
+    esta casa". O consumidor nunca foi escrito: a coleta seguia lendo a
+    constante fixa, entao ativar, desativar ou cadastrar casa no admin nao
+    mudava absolutamente nada. A tela prometia uma coisa e o coletor fazia
+    outra.
+
+    O fallback pra BR_BOOKMAKERS nao e' zelo excessivo, e o que impede dois
+    modos de falha reais:
+
+      tabela ausente  -> banco anterior a migracao (ou DEV recem-criado) pararia
+                         de coletar odd nenhuma, e o motor do dia inteiro fica
+                         sem insumo sem nenhum erro obvio.
+      tabela vazia    -> mesmo efeito. "Nenhuma casa cadastrada" quase sempre
+                         significa "ninguem cadastrou ainda", nao "o usuario
+                         quis desligar tudo".
+
+    Desativar uma casa DE VERDADE (linha existindo com ativo=false) e' respeitado,
+    porque ai ha decisao registrada.
+    """
+    conn = None
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT bookmaker_id FROM bookmakers WHERE ativo")
+        ids = {r[0] for r in cur.fetchall()}
+        cur.close()
+    except Exception as e:
+        print(f"[ODDS] Tabela `bookmakers` indisponivel ({e}); usando o padrao {sorted(BR_BOOKMAKERS)}.")
+        return set(BR_BOOKMAKERS)
+    finally:
+        if conn is not None:
+            conn.close()
+
+    if not ids:
+        print(f"[ODDS] Nenhuma casa ativa cadastrada; usando o padrao {sorted(BR_BOOKMAKERS)}.")
+        return set(BR_BOOKMAKERS)
+    return ids
 
 
 
@@ -302,6 +351,20 @@ class OddsCollectorService:
 
     def __init__(self):
         self.api_url = "https://v3.football.api-sports.io/odds"
+        self._casas = None
+
+    @property
+    def casas(self) -> set:
+        """Casas ativas, resolvidas UMA vez por execucao.
+
+        Uma consulta por fixture seria centenas de idas ao banco por rodada
+        para ler a mesma linha; e trocar a lista no meio da coleta faria o
+        mesmo dia ter jogo coletado com um conjunto e jogo com outro.
+        """
+        if self._casas is None:
+            self._casas = casas_ativas()
+            print(f"[ODDS] Casas ativas nesta rodada: {sorted(self._casas)}")
+        return self._casas
 
     # --------------------------------------------------------
     # BUSCA ODDS NA API · uma chamada por bookmaker BR
@@ -310,7 +373,7 @@ class OddsCollectorService:
         merged: list[dict] = []
         seen: set[int] = set()
 
-        for bm_id in sorted(BR_BOOKMAKERS):
+        for bm_id in sorted(self.casas):
             try:
                 response = requests.get(
                     self.api_url,
@@ -376,7 +439,7 @@ class OddsCollectorService:
             # 1. UPSERT BOOKMAKERS
             # --------------------------------------------------
             for bk in bookmakers:
-                if bk["id"] not in BR_BOOKMAKERS:
+                if bk["id"] not in self.casas:
                     continue
 
                 cur.execute("""
@@ -590,16 +653,22 @@ class OddsCollectorService:
             print(f"[ODDS] Fixture {fixture_id} sem bookmakers disponíveis.")
             return
 
-        # Filtra só as casas permitidas antes de processar
-        br_bookmakers = [bk for bk in bookmakers if bk["id"] in BR_BOOKMAKERS]
-        if not br_bookmakers:
-            print(f"[ODDS] Fixture {fixture_id} · nenhuma casa BR disponível (Bet365/Sportingbet/Betano).")
+        # Filtra só as casas permitidas antes de processar. O que segue pro
+        # save_odds é a lista FILTRADA: até 2026-08-13 o filtro era calculado,
+        # usado só no aviso e na contagem, e o `bookmakers` cru é que era
+        # gravado. Não chegou a gravar casa proibida porque a busca já é feita
+        # uma casa por vez, mas bastava alguém trocar por uma chamada única
+        # pra o filtro deixar de existir sem nenhum sinal.
+        permitidas = [bk for bk in bookmakers if bk["id"] in self.casas]
+        if not permitidas:
+            print(f"[ODDS] Fixture {fixture_id} · nenhuma casa ativa disponível "
+                  f"(ativas: {sorted(self.casas)}).")
             return
 
-        print(f"[ODDS] Processando fixture {fixture_id} · {len(br_bookmakers)} casa(s) encontrada(s).")
+        print(f"[ODDS] Processando fixture {fixture_id} · {len(permitidas)} casa(s) encontrada(s).")
         for attempt in range(1, _retry + 1):
             try:
-                self.save_odds(fixture_id, bookmakers)
+                self.save_odds(fixture_id, permitidas)
                 break
             except Exception as e:
                 if "deadlock" in str(e).lower() and attempt < _retry:
