@@ -2,6 +2,7 @@ import os
 import sys
 import asyncio
 import logging
+from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -12,6 +13,50 @@ from data_br import HOJE_BR, data_br
 from auth_utils import require_admin, hash_password, get_current_user
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
+
+
+# ─── Log ao vivo do pipeline ─────────────────────────────────────────────────
+# Ate 2026-08-13 o log so' existia DEPOIS: proc.communicate() espera o processo
+# inteiro, e o que sobrava era o rabo de 1500 caracteres. Numa etapa de 30
+# minutos (coleta de odds em dia cheio, ou o Stage 6 de historico) a tela ficava
+# com uma bolinha amarela e nada mais -- nao dava pra saber se estava
+# progredindo, travado ou esperando a API.
+#
+# Agora cada linha e' drenada assim que sai do processo. Buffer limitado porque
+# isto vive na MEMORIA do processo web: log de pipeline nao pode competir por
+# RAM com o site.
+_LOG_MAX_LINHAS = 500
+
+
+class _LogBuffer:
+    """Fila de linhas com leitura incremental.
+
+    `desde(indice)` devolve so' o que chegou depois da ultima consulta, pra a
+    tela poder pesquisar de segundo em segundo sem rebaixar o log inteiro toda
+    vez. `descartadas` mantem o indice global correto mesmo depois de o buffer
+    girar -- sem isso, a tela repetiria linhas antigas ao passar do limite.
+    """
+
+    def __init__(self, maximo: int = _LOG_MAX_LINHAS):
+        self.maximo = maximo
+        self.linhas = deque(maxlen=maximo)
+        self.descartadas = 0
+
+    def append(self, linha: str) -> None:
+        if len(self.linhas) == self.maximo:
+            self.descartadas += 1
+        self.linhas.append(linha)
+
+    def desde(self, indice: int) -> tuple[list, int]:
+        inicio = max(0, indice - self.descartadas)
+        atuais = list(self.linhas)
+        return atuais[inicio:], self.descartadas + len(atuais)
+
+    def texto(self) -> str:
+        return "\n".join(self.linhas)
+
+
+_pipeline_logs: dict = {}  # command -> _LogBuffer
 
 def _find_pipeline_dir() -> str:
     if env := os.getenv("PIPELINE_SRC_PATH"):
@@ -294,25 +339,58 @@ def _dev_env(base_env: dict) -> dict:
     return env
 
 
+async def _drenar(stream, buffers: list, prefixo: str = "") -> list:
+    """Le o processo linha a linha e joga em todos os buffers de uma vez.
+
+    E' o que troca "log no fim" por "log agora". `buffers` e' lista porque uma
+    etapa dentro do `tudo` escreve no proprio log E no log corrido do pipeline
+    -- quem clica em "Rodar tudo" quer uma fita so, nao nove separadas.
+
+    Devolve as linhas pra o rabo continuar disponivel em `log` como antes.
+    """
+    coletadas = []
+    async for cru in stream:
+        linha = cru.decode(errors="replace").rstrip()
+        if not linha:
+            continue
+        coletadas.append(linha)
+        for b in buffers:
+            b.append(prefixo + linha)
+    return coletadas
+
+
 async def _run_and_track(command: str, script: str, args: list | None = None,
-                         extra: dict | None = None):
+                         extra: dict | None = None, espelhar_em: str | None = None):
     """Roda o script e mantem _pipeline_status[command] atualizado.
 
     `extra` vai junto em TODA escrita do status (inicio, fim e erro) -- e' como
     a coleta de liga carrega qual liga esta rodando, pra tela saber em qual
     linha mostrar "Coletando...". Guardar so' no inicio nao serviria: o dict e'
     substituido inteiro no fim.
+
+    `espelhar_em`: nome de outro buffer que recebe as mesmas linhas. E' o que o
+    `tudo` usa pra ter um log continuo das nove etapas.
     """
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     extra = extra or {}
     _pipeline_status[command] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, **extra}
+    buffer = _LogBuffer()
+    _pipeline_logs[command] = buffer
+    destinos = [buffer]
+    if espelhar_em:
+        destinos.append(_pipeline_logs.setdefault(espelhar_em, _LogBuffer()))
     timeout = _PIPELINE_TIMEOUTS.get(command, _PIPELINE_TIMEOUTS["default"])
     try:
         env = {**os.environ, "PYTHONPATH": _PIPELINE_DIR}
         env["AI_REVIEW_ENV"] = "dev" if command.startswith("dev_") else "prod"
         if command.startswith("dev_"):
             env = _dev_env(env)
+        # PYTHONUNBUFFERED: sem isto o Python do subprocesso segura a saida num
+        # buffer de 4KB quando nao ha terminal, e o log "ao vivo" chegaria em
+        # blocos de minutos em minutos -- que e' quase o problema que ele veio
+        # resolver.
+        env["PYTHONUNBUFFERED"] = "1"
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script, *(args or []),
             stdout=asyncio.subprocess.PIPE,
@@ -320,15 +398,26 @@ async def _run_and_track(command: str, script: str, args: list | None = None,
             cwd=_PIPELINE_DIR,
             env=env,
         )
+        tarefas = [
+            asyncio.ensure_future(_drenar(proc.stdout, destinos)),
+            asyncio.ensure_future(_drenar(proc.stderr, destinos, prefixo="! ")),
+        ]
         try:
-            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+            await asyncio.wait_for(
+                asyncio.gather(*tarefas, asyncio.ensure_future(proc.wait())),
+                timeout=timeout,
+            )
         except asyncio.TimeoutError:
+            for t in tarefas:
+                t.cancel()
             proc.kill()
-            await proc.communicate()
+            await proc.wait()
             raise RuntimeError(f"Script excedeu o limite de {int(timeout // 60)} minutos e foi encerrado")
         returncode = proc.returncode
-        out = stdout.decode(errors="replace")[-1500:]
-        err = stderr.decode(errors="replace")[-1500:]
+        linhas_out = tarefas[0].result() if tarefas[0].done() and not tarefas[0].cancelled() else []
+        linhas_err = tarefas[1].result() if tarefas[1].done() and not tarefas[1].cancelled() else []
+        out = "\n".join(linhas_out)[-1500:]
+        err = "\n".join(linhas_err)[-1500:]
         _pipeline_status[command] = {
             "status": "ok" if returncode == 0 else "error",
             "started_at": started,
@@ -339,6 +428,8 @@ async def _run_and_track(command: str, script: str, args: list | None = None,
             **extra,
         }
     except Exception as e:
+        for destino in destinos:
+            destino.append(f"! {e}")
         _pipeline_status[command] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": str(e), **extra}
 
 
@@ -346,10 +437,16 @@ async def _run_tudo():
     now = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
     started = now()
     _pipeline_status["tudo"] = {"status": "running", "started_at": started, "finished_at": None, "returncode": None, "error": None, "log": "Iniciando..."}
-    for cmd in _TUDO_STEPS:
+    # Buffer NOVO a cada rodada: log da rodada passada misturado com a de agora
+    # e' pior que log nenhum, porque parece progresso.
+    _pipeline_logs["tudo"] = _LogBuffer()
+    total = len(_TUDO_STEPS)
+    for i, cmd in enumerate(_TUDO_STEPS, start=1):
         script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
         _pipeline_status["tudo"]["log"] = f"Rodando {cmd}..."
-        await _run_and_track(cmd, script)
+        _pipeline_logs["tudo"].append(
+            f"─── [{i}/{total}] {_STEP_LABELS.get(cmd, cmd)} " + "─" * 20)
+        await _run_and_track(cmd, script, espelhar_em="tudo")
         if _pipeline_status[cmd]["status"] == "error":
             err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
             _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
@@ -438,6 +535,33 @@ async def _run_dev_pipeline():
 @router.get("/pipeline-status")
 def pipeline_status(current_user: dict = Depends(require_admin)):
     return _pipeline_status
+
+
+@router.get("/pipeline-log")
+def pipeline_log(command: str = "tudo", desde: int = 0,
+                 current_user: dict = Depends(require_admin)):
+    """Log ao vivo de uma etapa (ou do `tudo`, que junta as nove).
+
+    SO' ADMIN, e nao e' formalidade: a saida crua dos scripts carrega host de
+    banco, nome de liga em coleta, contagem de requisicao de API e traceback
+    completo quando algo quebra. Nada disso pode vazar pra tela de espera do
+    assinante -- essa continua em /pipeline-status-public, que expoe so' o
+    rotulo da etapa.
+
+    `desde` e' o indice devolvido na chamada anterior: a tela pesquisa de
+    segundo em segundo e recebe so' o que chegou no intervalo, em vez de
+    rebaixar o log inteiro toda vez. Reiniciar com desde=0 devolve tudo que o
+    buffer ainda tem.
+    """
+    buffer = _pipeline_logs.get(command)
+    if buffer is None:
+        return {"linhas": [], "proximo": 0, "status": (_pipeline_status.get(command) or {}).get("status")}
+    linhas, proximo = buffer.desde(desde)
+    return {
+        "linhas": linhas,
+        "proximo": proximo,
+        "status": (_pipeline_status.get(command) or {}).get("status"),
+    }
 
 
 @router.get("/ai-review-status")
