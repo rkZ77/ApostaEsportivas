@@ -20,6 +20,36 @@ def build_explanation(candidate: dict) -> dict:
         f"Taxa real ponderada de {candidate['taxa_real']*100:.1f}% "
         f"em {candidate['amostra']} jogos ({candidate.get('amostra_label', '?')})"
     )
+
+    # DE ONDE VIERAM ESSES JOGOS (2026-08-13).
+    #
+    # A linha acima sempre disse "em N jogos" e nunca disse a origem. Enquanto
+    # todo pick vinha de pontos corridos, "N jogos" queria dizer "N jogos
+    # daquela liga" e a omissao nao mentia. Depois que copa passou a ler o
+    # historico de TODAS as competicoes do time, o mesmo "32 jogos" pode
+    # misturar Brasileirao, Libertadores e Copa do Brasil -- e o assinante lia
+    # a taxa achando que era da competicao do jogo.
+    #
+    # Duas frases, as duas com numero medido sobre a amostra que gerou a taxa
+    # (stats_model.weighted_rate.composicao), nenhuma estimada.
+    composicao = candidate.get("composicao") or {}
+    n_competicoes = len(composicao.get("competicoes") or {})
+    total_amostra = composicao.get("total") or 0
+    if n_competicoes > 1:
+        maior = max((composicao["competicoes"]).values())
+        positive_factors.append(
+            f"Amostra reúne {n_competicoes} competições do time "
+            f"({maior} jogos da mais frequente) · em copa o motor lê o histórico "
+            f"de todas, porque a própria competição não acumula jogo suficiente"
+        )
+
+    conhecidos = composicao.get("com_adversario_conhecido")
+    if total_amostra and conhecidos is not None and conhecidos < total_amostra:
+        risks.append(
+            f"Em {total_amostra - conhecidos} dos {total_amostra} jogos o banco não tem a "
+            f"classificação do adversário · nesses, o ajuste por força do adversário "
+            f"fica neutro"
+        )
     if candidate["edge"] > 0:
         positive_factors.append(f"Edge positivo de {candidate['edge']*100:+.1f}% sobre a odd de mercado")
 
