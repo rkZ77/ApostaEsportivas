@@ -40,24 +40,55 @@ class PickEngineConfig:
     # precifica). Aplica tanto no filtro principal quanto no fallback.
     max_odd: float = 15.0
 
-    # Fase 5: escolha de linha -- faixa conservadora de odd (preferencia
-    # suave, nao filtro: uma linha fora da faixa ainda vence se o edge for
-    # claramente maior) + pesos do line_score. Prioridade 2 do plano de
-    # refatoracao adicionou bookmakers (consenso de preco) e stability
-    # (a linha bate de forma consistente ao longo do tempo, nao so na
-    # media agregada) -- pesos renormalizados pra somar 1.0. Variancia e
-    # Data Quality Score NAO entram aqui de proposito: sao constantes pra
-    # todos os candidatos do mesmo mercado/fixture, entao nao ajudam a
-    # escolher ENTRE linhas -- variancia already penaliza confidence (V,
-    # orchestrator.py) e Data Quality Score ajusta o limiar de edge abaixo
+    # Qual preco o motor usa pra JULGAR uma linha (edge, EV, faixa de odd).
+    # "consensus" = mediana das casas que cotam a linha; "best" = a casa mais
+    # generosa (comportamento ate 2026-08-14). O site continua publicando a
+    # melhor odd nos dois modos -- isto muda o que conta como VALOR, nao o que
+    # o usuario aposta. Ver odds_service.load_odds_structured pra o numero
+    # medido que motivou a troca.
+    odd_evaluation: str = "consensus"
+
+    # Fase 5: escolha de linha -- faixa conservadora de odd + pesos do
+    # line_score. Prioridade 2 do plano de refatoracao adicionou bookmakers
+    # (consenso de preco) e stability (a linha bate de forma consistente ao
+    # longo do tempo, nao so na media agregada) -- pesos renormalizados pra
+    # somar 1.0. Variancia e Data Quality Score NAO entram aqui de proposito:
+    # sao constantes pra todos os candidatos do mesmo mercado/fixture, entao
+    # nao ajudam a escolher ENTRE linhas -- variancia ja penaliza confidence
+    # (V, orchestrator.py) e Data Quality Score ajusta o limiar de edge abaixo
     # (dqs_min_edge_scale), nao o line_score.
     conservative_odd_low: float = 1.50
     conservative_odd_high: float = 1.90
-    line_weight_taxa: float = 0.35
-    line_weight_edge: float = 0.25
-    line_weight_conservative: float = 0.15
+    # Faixa como FILTRO, nao so preferencia. False mantem o comportamento
+    # antigo (preferencia suave: linha fora da faixa ainda vence com edge
+    # maior). VIP e Dica ligam -- ver VIP_CONFIG/DICA_CONFIG e os numeros
+    # medidos la.
+    enforce_odd_band: bool = False
+    # Pesos rebalanceados em 2026-08-14. O que mudou e por que:
+    #
+    #   edge   0.25 -> 0.10   O edge e' a porta por onde a odd desalinhada
+    #     entrava na escolha da LINHA, e ele nao estava pagando: nos 65 picks
+    #     resolvidos do motor deterministico, edge de 10-20% acertou 57,1% e
+    #     edge abaixo de 10% acertou 71,4%. Edge maior anunciava linha pior,
+    #     nao melhor -- o que faz sentido, porque um edge grande contra um
+    #     mercado liquido quase sempre significa que a taxa esta otimista, nao
+    #     que a casa errou. Nao vai a zero: EV>0 continua sendo gate, e o edge
+    #     ainda desempata entre linhas estatisticamente parecidas.
+    #   taxa   0.35 -> 0.40   e' o sinal estatistico direto.
+    #   safety 0.15 -> 0.25   (era line_weight_conservative) dentro da faixa,
+    #     prefere a linha mais barata/segura -- ver _safety_bonus.
+    line_weight_taxa: float = 0.40
+    line_weight_edge: float = 0.10
+    line_weight_safety: float = 0.25
     line_weight_bookmakers: float = 0.10
     line_weight_stability: float = 0.15
+    # Dentro da faixa, quanto o piso vale a mais que o teto no termo de
+    # seguranca (1.0 no piso -> 1.0-safety_band_tilt no teto). E' o "compensa
+    # dar uma baixa pra ser seguro" virado em numero: com 0.40, sair de
+    # Over 9.5 @1.90 pra Over 8.5 @1.55 ganha 0.10 de line_score, o que
+    # equivale a ~25 pontos percentuais de taxa -- a linha mais alta so vence
+    # se for MUITO melhor estatisticamente.
+    safety_band_tilt: float = 0.40
     # Linha redonda (sem .5) pode empatar exato com o resultado e virar
     # PUSH -- nunca acontece numa linha .5. Penalidade leve no line_score
     # (nao um filtro/gate) pra desempatar a favor da .5 quando as duas
@@ -170,12 +201,34 @@ class PickEngineConfig:
 
 DEFAULT_CONFIG = PickEngineConfig()
 
+# VIP e Dica passam a tratar a faixa 1.50-1.90 como FILTRO (2026-08-14).
+#
+# Ate' aqui o VIP aceitava de 1.39 a 15.0, com a faixa entrando so' como um
+# peso de 0.15 no line_score. Medido sobre os 82 picks resolvidos de VIP+Free
+# desde a virada pro motor deterministico (18/07):
+#
+#   odd < 1.50     8/15 = 53,3%   ROI -24,0%   <- unica faixa que perde
+#   odd 1.50-1.70 16/21 = 76,2%   ROI +24,1%
+#   odd 1.71-1.90 24/37 = 64,9%   ROI +16,9%
+#   odd > 1.90     6/9  = 66,7%   ROI +32,3%   <- amostra pequena demais
+#
+# Abrindo pro historico inteiro (223 picks) o desenho se repete e a cauda de
+# cima para de brilhar: <1.50 da' 60,0% com ROI -14,4%, e >1.90 da' 56,2%.
+# As duas pontas sao ruins por motivos opostos -- embaixo o retorno nao cobre
+# o erro do modelo, em cima o evento simplesmente e' menos provavel do que a
+# taxa historica sugere. O miolo e' onde o motor ganha.
+#
+# Custo aceito: ~29% dos picks deixam de existir. Como sao exatamente os das
+# duas pontas, o volume cai sem levar lucro junto.
+VIP_CONFIG = PickEngineConfig(enforce_odd_band=True)
+
 # Dica do Dia exige consistencia maior (regra ja existia como constante fixa
-# CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py) e faixa de odd propria --
-# piso igual ao VIP (min_odd=1.39) mas com teto mais conservador (1.90 em vez
-# de 15.0): pick gratuita precisa ser mais "segura" que VIP, odd muito alta
-# tipicamente reflete evento menos provavel (decisao explicita do usuario).
-DICA_CONFIG = PickEngineConfig(min_confidence=0.72, min_odd=1.39, max_odd=1.90)
+# CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py). O teto de 1.90 ja era o da
+# faixa; o piso subiu de 1.39 pra 1.50 pelo mesmo dado do VIP acima -- pick
+# gratuita precisa ser mais "segura" que VIP, e odd baixa nao e' seguranca,
+# e' retorno que nao cobre o erro do modelo.
+DICA_CONFIG = PickEngineConfig(
+    min_confidence=0.72, min_odd=1.50, max_odd=1.90, enforce_odd_band=True)
 
 # Alavancagem precisa do EXATO oposto do resto do motor: perna barata.
 #
@@ -196,4 +249,14 @@ DICA_CONFIG = PickEngineConfig(min_confidence=0.72, min_odd=1.39, max_odd=1.90)
 # de 0.05 que continua valendo: numa odd de 1.20 ele exige taxa real de 87.5%,
 # e numa de 1.28 exige 82%. Odd baixa so' passa quando a probabilidade e'
 # realmente alta -- que e' exatamente a premissa da alavancagem.
-ALAVANCAGEM_CONFIG = PickEngineConfig(min_odd=1.10, max_odd=1.55)
+#
+# A faixa conservadora tambem acompanha o produto (2026-08-14). Ela ficava em
+# 1.50-1.90 aqui, herdada do default -- inteiramente ACIMA do teto de 1.55, o
+# que fazia o termo de faixa do line_score empurrar a alavancagem pro lado
+# CARO do proprio range (uma perna de 1.50 pontuava 1.0; uma de 1.20 pontuava
+# 0.85), exatamente o contrario da premissa do produto. Com a faixa igual ao
+# range, o termo volta a preferir a perna barata, que aqui e' a segura.
+ALAVANCAGEM_CONFIG = PickEngineConfig(
+    min_odd=1.10, max_odd=1.55,
+    conservative_odd_low=1.10, conservative_odd_high=1.55,
+)

@@ -40,7 +40,7 @@ de dado nunca vira evidencia de calma.
 """
 from __future__ import annotations
 
-from services.pick_engine import match_context_model, rivalry_model
+from services.pick_engine import competitive_pressure, match_context_model, rivalry_model
 
 # Familias cujo volume sobe quando a partida abre. Todas compartilham o mesmo
 # mecanismo (mais ataque, mais desespero, mais falta tatica), entao todas
@@ -69,10 +69,17 @@ def _direcao(candidate: dict) -> str:
     return (candidate.get("_direction") or candidate.get("value") or "").strip().lower()
 
 
+#: Acima desta intensidade de necessidade competitiva (competitive_pressure,
+#: 0 = ninguem precisa de nada) a partida entra na conta do gate. 0.45 exige
+#: mais que "ha alguma pressao": um time a 6 pontos do Z4 com 12 rodadas pela
+#: frente fica abaixo disso; um a 2 pontos com 4 rodadas passa com folga.
+NECESSIDADE_DECISIVA = 0.45
+
+
 def build_context(round_str: str | None, home_team_id: int, away_team_id: int,
                   h2h_matches: list | None, league_id, season,
                   baseline_cartoes: float | None, before_date=None,
-                  match_date=None) -> dict:
+                  match_date=None, league_table: list | None = None) -> dict:
     """Monta o contexto completo da partida a partir do dado ja' disponivel.
 
     Nenhuma chamada de API nova: `round_str` vem de `fixtures.round` (ja'
@@ -99,17 +106,25 @@ def build_context(round_str: str | None, home_team_id: int, away_team_id: int,
             h2h_matches or [], league_id, season, before_date=before_date)
     tie = match_context_model.tie_context(round_str, home_team_id, away_team_id, jogo_ida)
     rivalidade = rivalry_model.rivalry_signal(h2h_matches or [], baseline_cartoes)
+    # Necessidade competitiva de pontos corridos. E' o irmao de liga do `tie`:
+    # o mata-mata diz quem precisa do resultado por causa do agregado, a tabela
+    # diz quem precisa por causa da temporada. Os dois abrem a partida pelo
+    # mesmo mecanismo, e por isso entram no mesmo gate.
+    pressao_liga = (competitive_pressure.pressao_da_partida(
+        league_table, home_team_id, away_team_id, league_id) if league_table else None)
 
     return {
         "tie": tie,
         "rivalidade": rivalidade,
         "stakes": match_context_model.stakes_score(tie),
-        "descricao": match_context_model.descrever(tie),
+        "pressao_competitiva": pressao_liga,
+        "descricao": (match_context_model.descrever(tie)
+                      + competitive_pressure.descrever(pressao_liga)),
     }
 
 
 def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | None = None,
-                      before_date=None) -> dict | None:
+                      before_date=None, league_table: list | None = None) -> dict | None:
     """Contexto da partida a partir do servico de estatisticas e do fixture.
 
     Ponto de entrada unico dos pipelines -- os seis chamam daqui em vez de
@@ -135,6 +150,7 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
             season=fixture.get("season"), baseline_cartoes=baseline,
             before_date=before_date,
             match_date=fixture.get("match_datetime") or before_date,
+            league_table=league_table,
         )
     except Exception as e:
         print(f"[CONTEXT_GATE] Contexto indisponivel para fixture "
@@ -191,6 +207,26 @@ def pressao_contraria(candidate: dict, contexto: dict | None) -> dict:
             "sinal": "necessidade_de_resultado",
             "peso": round(peso, 4),
             "detalhe": f"{alvo} precisa do resultado e tende a se abrir",
+        })
+
+    # Necessidade de tabela: mesmo mecanismo do agregado, outra competicao.
+    # Time que precisa vencer pra nao cair se lanca igual a quem precisa
+    # reverter um 1x0 -- e o Under sofre igual nos dois casos.
+    #
+    # A ASSIMETRIA PESA MAIS QUE A INTENSIDADE, e nao e' detalhe: dois times
+    # desesperados costumam TRAVAR o jogo (nenhum quer perder), enquanto um
+    # desesperado contra um acomodado abre. Por isso a parcela cresce com a
+    # diferenca entre as duas necessidades, nao so' com a soma delas.
+    pressao_liga = contexto.get("pressao_competitiva") or {}
+    if pressao_liga.get("disponivel") and pressao_liga["intensidade"] >= NECESSIDADE_DECISIVA:
+        acima = (pressao_liga["intensidade"] - NECESSIDADE_DECISIVA) / (1.0 - NECESSIDADE_DECISIVA)
+        peso = min(acima, 1.0) * 0.035 + min(pressao_liga["assimetria"], 1.0) * 0.025
+        total += peso
+        detalhe = "; ".join(competitive_pressure.descrever(pressao_liga)) or "tabela apertada"
+        parcelas.append({
+            "sinal": "necessidade_de_tabela",
+            "peso": round(peso, 4),
+            "detalhe": detalhe,
         })
 
     rivalidade = contexto.get("rivalidade") or {}

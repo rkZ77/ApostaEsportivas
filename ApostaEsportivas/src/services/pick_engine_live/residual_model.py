@@ -118,8 +118,10 @@ def taxa_por_minuto(observado: int | None, minuto: int | None,
 
 
 def ajuste_estado(familia: str, estado: dict, pressao: dict | None = None,
-                  eventos: dict | None = None) -> dict:
-    """Multiplicador pelo ESTADO do jogo: placar, expulsao e pressao.
+                  eventos: dict | None = None, necessidade: dict | None = None,
+                  confirmacao: dict | None = None) -> dict:
+    """Multiplicador pelo ESTADO do jogo: placar, expulsao, pressao e
+    necessidade do resultado.
 
     Cada termo e' pequeno, multiplicativo e explicado. Bem maior que 1 ou bem
     menor que 1 aqui seria chute com cara de modelo.
@@ -161,6 +163,22 @@ def ajuste_estado(familia: str, estado: dict, pressao: dict | None = None,
         fatores.append((f"expulsao aos {int(vermelho_min)}'", round(efeito, 4)))
     elif estado.get("red_cards_total"):
         fatores.append(("expulsao sem minuto conhecido", 1.04))
+
+    # NECESSIDADE DO RESULTADO, ja' cruzada com o placar de agora e pesada
+    # pelo cronometro (need_model). E' o que o `diferenca_gols` acima nao
+    # conseguia dizer: ele so' sabe se o jogo esta' apertado, nao se alguem
+    # PRECISA muda-lo. Um 0x0 aos 80' com o mandante precisando reverter um
+    # agregado e um 0x0 aos 80' entre dois times ja' classificados sao a mesma
+    # coisa pro termo de placar e opostos aqui.
+    #
+    # O fator de confirmacao entra junto: se quem precisa nao esta' criando
+    # nada em campo, a necessidade e' DESCONTADA em vez de aplicada -- o
+    # contexto e' referencia, o campo e' o veredito.
+    if necessidade and necessidade.get("intensidade"):
+        efeito = 1 + (0.14 if familia == "goals" else 0.10) * necessidade["intensidade"]
+        efeito *= (confirmacao or {}).get("fator", 1.0)
+        fatores.append((f"necessidade do resultado ({necessidade.get('quem_precisa')})",
+                        round(efeito, 4)))
 
     if pressao and pressao.get("total") is not None:
         # 0.50 e' a pressao de dois times medios (a escala de pressure_model

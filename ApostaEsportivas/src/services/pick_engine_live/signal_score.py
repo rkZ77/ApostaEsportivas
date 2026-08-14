@@ -40,12 +40,18 @@ from services.pick_engine_live.live_state import DELAYED, FRESH, STALE, UNKNOWN
 #: Peso de cada sinal na convergencia. Como os pesos de pressao, sao um ponto
 #: de partida declarado -- ficam aqui pra serem calibrados contra resultado.
 PESOS = {
-    "pressao_total": 0.22,
-    "ritmo": 0.22,
-    "tendencia": 0.20,
-    "janela_recente": 0.18,
-    "contexto_placar": 0.10,
-    "qualidade_da_chance": 0.08,
+    "pressao_total": 0.20,
+    "ritmo": 0.20,
+    "tendencia": 0.18,
+    "janela_recente": 0.16,
+    "contexto_placar": 0.09,
+    "qualidade_da_chance": 0.07,
+    # Necessidade do resultado (2026-08-14). Entra com peso proximo ao do
+    # contexto de placar porque mede a mesma familia de coisa -- mas com a
+    # informacao que faltava: quem precisa, quanto, e se o cronometro ja'
+    # transformou isso em comportamento. Os outros pesos foram reduzidos
+    # proporcionalmente pra a soma continuar em 1.0.
+    "necessidade_resultado": 0.10,
 }
 
 #: Abaixo disso o sinal e' fraco demais pra contar como "convergente" na
@@ -173,10 +179,28 @@ def _sinal_qualidade_da_chance(estado: dict, familia: str) -> float | None:
     return None
 
 
+def _sinal_necessidade(nec: dict | None) -> float | None:
+    """Necessidade do resultado, ja' pesada pelo cronometro (need_model).
+
+    Aponta sempre PRA CIMA quando existe: time que precisa mudar o placar e
+    nao tem mais tempo produz mais volume ofensivo, e o adversario que segura
+    produz falta e escanteio defensivo. Nunca aponta pra baixo -- "ninguem
+    precisa de nada" e' ausencia de sinal, nao evidencia de jogo travado, e
+    devolver -1 ali seria inventar informacao que o modulo nao tem.
+    """
+    if not nec or not nec.get("disponivel"):
+        return None
+    intensidade = nec.get("intensidade") or 0.0
+    if intensidade <= 0:
+        return None
+    return _clamp(intensidade)
+
+
 def convergencia(direcao: str, familia: str, estado: dict, pressao: dict,
                  ritmo: dict, tendencia: dict, janelas: dict,
                  taxa_estimada_min: float | None, eventos: dict | None = None,
-                 config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> dict:
+                 config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
+                 necessidade: dict | None = None) -> dict:
     """Quantos sinais sustentam a direcao do pick, e com que forca.
 
     `direcao` e' "over" ou "under". Um sinal positivo (mais eventos vindo)
@@ -190,6 +214,7 @@ def convergencia(direcao: str, familia: str, estado: dict, pressao: dict,
         "janela_recente": _sinal_janela(janelas, taxa_estimada_min),
         "contexto_placar": _sinal_contexto(estado, eventos),
         "qualidade_da_chance": _sinal_qualidade_da_chance(estado, familia),
+        "necessidade_resultado": _sinal_necessidade(necessidade),
     }
     orientacao = 1.0 if (direcao or "").lower() == "over" else -1.0
 

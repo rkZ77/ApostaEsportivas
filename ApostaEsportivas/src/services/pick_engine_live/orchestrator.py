@@ -22,8 +22,8 @@ from __future__ import annotations
 
 from services.pick_engine import market_model
 from services.pick_engine_live import (
-    live_state, pressure_model, residual_model as rm, rhythm_model as rit,
-    signal_score,
+    live_state, need_model, pressure_model, residual_model as rm,
+    rhythm_model as rit, signal_score,
 )
 from services.pick_engine_live.config import (
     DEFAULT_LIVE_CONFIG, ENGINE_VERSION, LiveEngineConfig,
@@ -56,14 +56,20 @@ def _dados_completos(estado: dict, familia: str) -> bool:
 # ─────────────────────────────────────────────────────────────────────────
 def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT_LIVE_CONFIG,
              baselines: dict | None = None, eventos: dict | None = None,
-             fresh: dict | None = None) -> dict:
-    """Le a partida inteira: pressao, ritmo, tendencia, janelas e projecao por
-    familia. Nenhuma chamada de API acontece aqui.
+             fresh: dict | None = None, contexto_pre_jogo: dict | None = None) -> dict:
+    """Le a partida inteira: pressao, ritmo, tendencia, janelas, necessidade do
+    resultado e projecao por familia. Nenhuma chamada de API acontece aqui.
 
     `observacoes` sao as leituras anteriores desta mesma partida, mais recente
     primeiro (tabela live_match_observations). Sao elas que produzem janela e
     tendencia -- /fixtures/statistics so' devolve acumulado, entao sem duas
     leituras nao existe "ultimos 10 minutos".
+
+    `contexto_pre_jogo` e' a saida de context_gate.build_for_fixture (agregado
+    do mata-mata e necessidade de tabela). Ele nao entra como resposta: entra
+    como a REGRA -- quem se classifica com o que, quem precisa de quantos
+    pontos -- e a necessidade e' recalculada a cada passada contra o placar de
+    agora. Ausente, o motor roda como antes, so' sem esse sinal.
     """
     baselines = baselines or {}
     minuto = estado.get("minuto")
@@ -73,6 +79,9 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         estado.get("_folha_home") or {}, estado.get("_folha_away") or {},
         int(minuto or 0), config)
     ritmo = rit.ritmo(estado, int(minuto or 0))
+    necessidade = need_model.necessidade(estado, contexto_pre_jogo)
+    # O campo confirma o contexto, ou o desmente. Desmentir vale mais.
+    confirmacao = need_model.confirma_o_contexto(necessidade, pressao)
 
     familias: dict = {}
     for familia in config.familias:
@@ -90,7 +99,8 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         tendencia = rit.tendencia(observacoes, familia, int(minuto), observado, config)
         fator_ritmo = rit.fator_de_ritmo(
             janelas, tendencia, taxa["taxa_estimada_min"] if taxa else None, config)
-        ajuste = rm.ajuste_estado(familia, estado, pressao, eventos)
+        ajuste = rm.ajuste_estado(familia, estado, pressao, eventos,
+                                  necessidade=necessidade, confirmacao=confirmacao)
         lam = rm.lambda_residual(
             familia=familia, observado=observado, minuto=int(minuto),
             status=estado.get("status") or "", baseline_por_partida=baseline,
@@ -116,6 +126,8 @@ def analisar(estado: dict, observacoes: list, config: LiveEngineConfig = DEFAULT
         "freshness": fresh,
         "pressao": pressao,
         "ritmo": ritmo,
+        "necessidade": necessidade,
+        "confirmacao_do_contexto": confirmacao,
         "eventos": eventos or {},
         "familias": familias,
         "engine_version": ENGINE_VERSION,
@@ -224,7 +236,8 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
             pressao=analise.get("pressao"), ritmo=analise.get("ritmo"),
             tendencia=info.get("tendencia"), janelas=info.get("janelas"),
             taxa_estimada_min=(info.get("taxa") or {}).get("taxa_estimada_min"),
-            eventos=analise.get("eventos"), config=config)
+            eventos=analise.get("eventos"), config=config,
+            necessidade=analise.get("necessidade"))
 
         # Folga entre a projecao e a linha, no sentido do pick. Projecao colada
         # na linha e' moeda ao ar mesmo com EV positivo: meio evento decide.
@@ -261,6 +274,8 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
                 "ajuste_estado": info.get("ajuste_estado"),
                 "convergencia": conv,
                 "confianca": conf,
+                "necessidade": analise.get("necessidade"),
+                "confirmacao_do_contexto": analise.get("confirmacao_do_contexto"),
                 "encolhimento": encolhido,
                 "faltam_para_a_linha": round(linha - observado, 2),
                 "intervalo_restante_80": rm.intervalo_poisson(lam_info["lambda_residual"]),

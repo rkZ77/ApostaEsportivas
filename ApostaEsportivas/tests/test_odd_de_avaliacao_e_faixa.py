@@ -1,0 +1,160 @@
+"""Valor estatistico dentro da faixa, em vez de casa desalinhada (2026-08-14).
+
+Tres mudancas, medidas contra producao antes de entrar (ver os numeros nos
+comentarios de config.py e odds_service.py):
+
+  1. o motor julga a linha pela MEDIANA das casas, nao pela mais generosa --
+     a odd da casa mais alta era usada em 18 dos 24 ultimos picks e o premio
+     dela ia inteiro pro edge;
+  2. a faixa de odd de cada pipeline virou FILTRO em VIP/Dica, nao mais um
+     peso de 0.15 que a odd alta atropelava;
+  3. dentro da faixa, descer um degrau de linha passa a valer pontos.
+"""
+import pytest
+
+from services.pick_engine import ranking, market_model
+from services.pick_engine.config import (
+    PickEngineConfig, DEFAULT_CONFIG, VIP_CONFIG, DICA_CONFIG, ALAVANCAGEM_CONFIG,
+)
+
+
+def _linha(odd, taxa=0.70, edge=0.10, ev=0.15, **extra):
+    return {"odd": odd, "taxa_real": taxa, "edge": edge, "ev": ev,
+            "amostra": 10, "confidence": 0.80, "bookmakers_count": 3,
+            "market_type": "corners", **extra}
+
+
+# ─────────────────── 1. odd de avaliacao (mediana, nao maxima) ───────────────
+
+
+def test_avaliacao_usa_a_mediana_das_casas_e_nao_a_mais_generosa():
+    entry = {"best_odd": 2.00, "consensus_odd": 1.79, "bookmakers_count": 3}
+    assert market_model.evaluation_odd(entry, DEFAULT_CONFIG) == 1.79
+    assert market_model.evaluation_odd(entry, PickEngineConfig(odd_evaluation="best")) == 2.00
+
+
+def test_sem_consenso_no_dict_cai_pra_melhor_odd():
+    """Chamadores antigos (e odds gravadas antes de 14/08) nao trazem
+    consensus_odd -- o motor nao pode parar por causa disso."""
+    assert market_model.evaluation_odd({"best_odd": 1.80}, DEFAULT_CONFIG) == 1.80
+
+
+def test_edge_encolhe_quando_a_odd_alta_e_de_uma_casa_so():
+    """Caso real: Bolivar x Sao Paulo, Escanteios Over 9.5 -- 2.00 na Bet365
+    contra 1.57 na outra casa. Com a odd maxima o mercado parecia valer 50%;
+    com a mediana ele vale 56%, e 6 pontos de edge somem."""
+    caro = {"best_odd": 2.00, "consensus_odd": 1.79, "bookmakers_count": 2}
+    taxa = 0.6115
+    edge_antigo = market_model.edge_and_ev(
+        taxa, 2.00, market_model.implied_prob(2.00))["edge"]
+    edge_novo = market_model.edge_and_ev(
+        taxa, market_model.evaluation_odd(caro, DEFAULT_CONFIG),
+        market_model.resolve_prob_baseline(caro, None, DEFAULT_CONFIG)["prob"])["edge"]
+    assert edge_antigo > edge_novo
+    assert edge_novo == pytest.approx(0.6115 - 1 / 1.79, abs=1e-3)
+
+
+def test_no_vig_le_os_dois_lados_pela_mesma_regra_de_preco():
+    """Com a melhor odd dos dois lados, cada um podia vir de uma casa
+    diferente e a soma das implicitas caia abaixo de 1 -- os DOIS lados
+    pareciam baratos ao mesmo tempo. Pela mediana isso nao acontece."""
+    over = {"best_odd": 2.10, "consensus_odd": 1.95, "bookmakers_count": 3}
+    under = {"best_odd": 2.10, "consensus_odd": 1.95, "bookmakers_count": 3}
+    baseline = market_model.resolve_prob_baseline(over, under, DEFAULT_CONFIG)
+    assert baseline["source"] == "no_vig"
+    assert baseline["prob"] == pytest.approx(0.50, abs=1e-4)
+
+
+# ─────────────────────── 2. faixa de odd como filtro ────────────────────────
+
+
+def test_vip_rejeita_linha_acima_do_teto_da_faixa():
+    fora = ranking.evaluate_all_lines([_linha(2.00)], VIP_CONFIG)[0]
+    assert "fora da faixa" in fora["reject_reason"]
+
+
+def test_vip_rejeita_linha_abaixo_do_piso_da_faixa():
+    """1.42 passava no min_odd de 1.39 e virava pick. Faixa <1.50 e' a unica
+    com ROI negativo medido em producao (-24% em 15 picks)."""
+    fora = ranking.evaluate_all_lines([_linha(1.42)], VIP_CONFIG)[0]
+    assert "fora da faixa" in fora["reject_reason"]
+
+
+def test_linha_dentro_da_faixa_passa():
+    assert ranking.evaluate_all_lines([_linha(1.70)], VIP_CONFIG)[0]["reject_reason"] is None
+
+
+def test_faixa_tambem_barra_no_gate_de_aprovacao():
+    """select_smart_safe_line tem fallback que ressuscita linha reprovada --
+    rank_all_candidates precisa reconferir, senao a linha fora da faixa vira
+    pick por esse caminho (o mesmo motivo que ja obrigava reconferir min_odd)."""
+    assert ranking.rank_all_candidates([_linha(2.40)], VIP_CONFIG) == []
+    assert len(ranking.rank_all_candidates([_linha(1.70)], VIP_CONFIG)) == 1
+
+
+def test_faixa_desligada_mantem_o_comportamento_antigo():
+    """DEFAULT_CONFIG (multipla, faltas, goleiros) nao muda: a faixa segue
+    sendo preferencia, nao filtro."""
+    assert not DEFAULT_CONFIG.enforce_odd_band
+    assert ranking.evaluate_all_lines([_linha(2.00)], DEFAULT_CONFIG)[0]["reject_reason"] is None
+
+
+def test_cada_pipeline_tem_a_propria_faixa():
+    assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.50, 1.90)
+    assert (DICA_CONFIG.min_odd, DICA_CONFIG.max_odd) == (1.50, 1.90)
+    assert DICA_CONFIG.enforce_odd_band
+    # Alavancagem e' o produto de perna barata: a faixa dela e' a dela.
+    assert (ALAVANCAGEM_CONFIG.conservative_odd_low,
+            ALAVANCAGEM_CONFIG.conservative_odd_high) == (1.10, 1.55)
+
+
+# ──────────────────── 3. degrau seguro dentro da faixa ──────────────────────
+
+
+def test_dentro_da_faixa_a_linha_mais_barata_e_a_mais_segura():
+    assert ranking._safety_bonus(1.50, VIP_CONFIG) == 1.0
+    assert ranking._safety_bonus(1.90, VIP_CONFIG) == pytest.approx(0.60, abs=1e-4)
+    assert ranking._safety_bonus(1.70, VIP_CONFIG) == pytest.approx(0.80, abs=1e-4)
+
+
+def test_a_seguranca_nao_salta_ao_sair_da_faixa():
+    """A funcao tem que ser continua nas duas bordas -- se ela pulasse pra
+    cima logo acima do teto, a linha cara ganharia pontos justamente por
+    estar fora."""
+    assert ranking._safety_bonus(1.91, VIP_CONFIG) < ranking._safety_bonus(1.90, VIP_CONFIG)
+    assert ranking._safety_bonus(1.49, VIP_CONFIG) < ranking._safety_bonus(1.50, VIP_CONFIG)
+
+
+def test_pedido_do_usuario_desce_a_linha_quando_a_estatistica_empata():
+    """'compensa dar uma baixa pra ser seguro e pegar linha 8.5 por 1.60'.
+
+    Over 8.5 @1.60 com taxa 78% contra Over 9.5 @1.88 com taxa 68% -- antes o
+    edge maior da linha 9.5 competia de igual pra igual; agora a mais segura
+    vence com folga."""
+    linha_85 = _linha(1.60, taxa=0.786, edge=0.16, ev=0.26)
+    linha_95 = _linha(1.88, taxa=0.680, edge=0.15, ev=0.28)
+    escolhida = ranking.select_smart_safe_line([linha_95, linha_85], VIP_CONFIG)
+    assert escolhida["odd"] == 1.60
+
+
+def test_linha_alta_ainda_vence_se_for_muito_melhor_estatisticamente():
+    """A inclinacao e' preferencia, nao proibicao: dentro da faixa, uma taxa
+    claramente superior continua ganhando."""
+    fraca_barata = _linha(1.55, taxa=0.61, edge=0.05, ev=0.02)
+    forte_cara = _linha(1.88, taxa=0.92, edge=0.28, ev=0.40)
+    escolhida = ranking.select_smart_safe_line([fraca_barata, forte_cara], VIP_CONFIG)
+    assert escolhida["odd"] == 1.88
+
+
+def test_alavancagem_prefere_a_perna_barata_da_propria_faixa():
+    """Com a faixa herdada de 1.50-1.90 (toda acima do teto de 1.55 do
+    produto), o termo empurrava a alavancagem pro lado CARO do range."""
+    assert (ranking._safety_bonus(1.15, ALAVANCAGEM_CONFIG)
+            > ranking._safety_bonus(1.50, ALAVANCAGEM_CONFIG))
+
+
+def test_pesos_do_line_score_somam_um():
+    c = VIP_CONFIG
+    total = (c.line_weight_taxa + c.line_weight_edge + c.line_weight_safety
+             + c.line_weight_bookmakers + c.line_weight_stability)
+    assert total == pytest.approx(1.0, abs=1e-9)

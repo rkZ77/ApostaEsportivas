@@ -22,10 +22,21 @@ OS MODULOS
     live_state       estado completo, eventos e freshness (FRESH/DELAYED/STALE)
     pressure_model   pressao ofensiva por equipe
     rhythm_model     ritmo, janelas recentes e tendencia
+    need_model       quem precisa do resultado AGORA (agregado ao vivo, tabela)
     residual_model   lambda do que ainda falta acontecer
     signal_score     convergencia de sinais e confianca Live
     live_odds        leitura de /odds/live e pares sem vig
     orchestrator     analisar -> triagem -> avaliar
+
+O CONTEXTO PRE-JOGO E' REGRA, NAO RESPOSTA (2026-08-14)
+------------------------------------------------------
+`analisar` aceita `contexto_pre_jogo` (saida de context_gate.build_for_fixture)
+e o usa apenas pra saber o REGULAMENTO da partida: qual o agregado da ida,
+quem se classifica com o que, quanto cada lado precisava de pontos na tabela.
+Quem responde "e o que esta' acontecendo" continua sendo o campo -- need_model
+recalcula a necessidade contra o placar de agora a cada passada, e
+`confirma_o_contexto` DESCONTA a leitura quando quem deveria estar pressionando
+nao esta'. Contexto que o jogo desmente vale menos que contexto nenhum.
 
 O que e' COMPARTILHADO com o pre-jogo, e por que:
   - services/settlement.py         a matematica de resultado do projeto e' uma
