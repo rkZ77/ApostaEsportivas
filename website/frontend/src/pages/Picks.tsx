@@ -8,10 +8,11 @@ import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import SuggestionCard from '../components/SuggestionCard'
 import ApostaModal from '../components/ApostaModal'
-import SuggestionDetail from '../components/SuggestionDetail'
 import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
-import { LiveDot, Spinner, EmptyState, SkeletonPickGrid } from '../components/ui'
+import {
+  LiveDot, Spinner, EmptyState, SkeletonPickGrid, Badge, PickTypeBadge, ResultBadge,
+} from '../components/ui'
 import { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
@@ -449,7 +450,9 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
   }
 
   const isCopa = dica.league_id === 1
-  const resultStyle = getResultStyle(dica.result)
+  // Hora do jogo por slice de string: match_datetime e' horario de Brasilia
+  // SEM fuso, e `new Date` sobre ele desloca o horario. Mesma leitura do VIP.
+  const kickoff = dica.match_datetime ? String(dica.match_datetime).slice(11, 16) : null
 
   return (
   <>
@@ -461,30 +464,34 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       className={`pick-card group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
-      <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
-
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-line/60">
-        <div className="flex items-center gap-2 flex-wrap">
-          <span className={`text-xs font-black ${isCopa ? 'text-yellow-500' : 'text-green-400'}`}>Pick do Dia</span>
-          <span className="badge-free">FREE</span>
-          {dica.league_name && (
-            <div className="flex items-center gap-1">
+      {/* Header · MESMA anatomia do card VIP (SuggestionCard).
+          Aqui era tudo desenhado a mao: "Pick do Dia" + badge-free em vez do
+          PickTypeBadge, spans proprios no lugar de ResultBadge/Badge, sem o
+          horario do jogo, e ainda uma barrinha de gradiente no topo que o VIP
+          nao tem. Cada diferenca dessas era invisivel isolada e obvia com os
+          dois cards lado a lado. */}
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type="free" />
+          {(dica.league_id || dica.league_name) && (
+            <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={dica.league_id} name={dica.league_name} />
-              <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{dica.league_name}</span>
+              {dica.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{dica.league_name}</span>}
             </div>
           )}
+          {kickoff && (
+            <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
+              <Clock className="w-3 h-3" />
+              {kickoff}
+            </span>
+          )}
         </div>
-        {resultStyle ? (
-          <span className={`text-xs font-black px-2.5 py-1 rounded-lg border ${resultStyle.bg} ${resultStyle.border} ${resultStyle.text}`}>
-            {resultStyle.label}
-          </span>
+        {dica.result ? (
+          <ResultBadge result={dica.result} />
         ) : isLive ? (
-          <span className="flex items-center gap-1 text-[10px] font-black text-red-300 bg-red-500/20 border border-red-400/40 px-2 py-1 rounded-lg animate-pulse">
-            <span className="w-1.5 h-1.5 rounded-full bg-red-400" /> AO VIVO
-          </span>
+          <Badge tone="red" className="animate-pulse">Ao vivo</Badge>
         ) : (
-          <span className="text-[10px] text-ink-3 border border-line px-2 py-1 rounded-lg">Pendente</span>
+          <Badge tone="neutral">Pendente</Badge>
         )}
       </div>
 
@@ -1306,12 +1313,11 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
   }
 }
 
-function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca, onDetalhes }: {
+function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
   tipo: 'faltas' | 'goleiros'
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
-  onDetalhes?: (p: MercadoPick, tipo: 'faltas' | 'goleiros') => void
 }) {
   return (
     <div>
@@ -1336,7 +1342,6 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca,
               key={p.id}
               s={mercadoParaSuggestion(p, tipo)}
               banca={banca}
-              onClick={onDetalhes ? () => onDetalhes(p, tipo) : undefined}
             />
           ))}
         </div>
@@ -1681,13 +1686,21 @@ export default function Picks() {
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
 
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const [selectedPickType, setSelectedPickType] = useState<string>('vip')
-
-  const openDetail = (id: number, pickType = 'vip') => {
-    setSelectedId(id)
-    setSelectedPickType(pickType)
-  }
+  /*
+   * O painel lateral de detalhe saiu daqui em 2026-08-14, a pedido do usuário.
+   *
+   * O card inteiro era um botão que o abria, e só o VIP e os mercados tinham
+   * esse comportamento -- free, múltipla e alavancagem nunca abriram nada. Ou
+   * seja: além de disparar sem querer (dentro do card já moram "Apostar",
+   * "Compartilhar", "Entenda esta análise" e o ícone de informação), a mesma
+   * batida de dedo fazia coisas diferentes dependendo do tipo do pick.
+   *
+   * A leitura aprofundada continua existindo em "Entenda esta análise", que é
+   * um botão explícito e igual nos cinco cards. SuggestionDetail segue vivo
+   * para Banca, Meus Picks e Resultados, onde é aberto a partir de uma LINHA
+   * de lista -- ali o clique no item é a única ação possível, então não há
+   * ambiguidade.
+   */
 
   // Dados de hoje (free + VIP rápido)
   const [today, setToday]         = useState<any>(null)
@@ -1951,7 +1964,6 @@ export default function Picks() {
       }}
     >
       <AnimatePresence>
-      {selectedId && <SuggestionDetail id={selectedId} pickType={selectedPickType} onClose={() => setSelectedId(null)} banca={bancaSummary?.has_banca ? bancaSummary : null} />}
       </AnimatePresence>
 
       {/* Modal de boas-vindas · configura banca */}
@@ -2125,7 +2137,7 @@ export default function Picks() {
                       <>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
-                            <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                            <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                           ))}
                         </motion.div>
                         {vips.length > 4 && (
@@ -2335,7 +2347,7 @@ export default function Picks() {
                     {filteredVips.length > 0 ? (
                       <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                         {filteredVips.map((s: any) => (
-                          <SuggestionCard key={s.id} s={s} onClick={() => openDetail(s.id, 'vip')} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
+                          <SuggestionCard key={s.id} s={s} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isFixtureLive(s.fixture_id)} />
                         ))}
                       </motion.div>
                     ) : (
@@ -2748,7 +2760,6 @@ export default function Picks() {
                         picks={faltas === null ? null : faltasFiltradas}
                         carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onDetalhes={(mp, t) => openDetail(mp.id, t)}
                       />
                     )}
                     {mercadoFiltro.categoria !== 'faltas' && (
@@ -2760,7 +2771,6 @@ export default function Picks() {
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
-                        onDetalhes={(mp, t) => openDetail(mp.id, t)}
                       />
                     )}
                   </>
