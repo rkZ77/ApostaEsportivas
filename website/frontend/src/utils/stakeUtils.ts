@@ -134,34 +134,3 @@ export function calcMultiplaStake(
   const units = Math.max(1, Math.min(3, Math.round(stakePct * bankroll / unitValue)))
   return { units, amountR: units * unitValue, kellyPct: Math.round(stakePct * 1000) / 10 }
 }
-
-/**
- * Calculadora Kelly genérica (usada para exibição/comparação manual).
- * Para picks do site, prefira as funções específicas por tipo.
- */
-export function suggestStake(
-  probReal: number,
-  odd: number,
-  bankroll: number,
-  unitValue: number,
-  maxUnits: number = 10,
-  kellyFraction: number = 0.5,
-): StakeSuggestion | null {
-  if (!bankroll || !unitValue || unitValue <= 0) return null
-  const b = odd - 1
-  const p = probReal
-  const q = 1 - p
-  if (b <= 0 || p <= 0 || p >= 1) return null
-  const kelly = (b * p - q) / b
-  if (kelly <= 0) return null
-  const fracKelly = kelly * kellyFraction
-  const stakeR    = bankroll * fracKelly
-  let units = stakeR / unitValue
-  units = Math.max(1, Math.min(maxUnits, units))
-  units = Math.round(units)
-  return {
-    units,
-    amountR:  Math.round(units * unitValue * 100) / 100,
-    kellyPct: Math.round(fracKelly * 100 * 10) / 10,
-  }
-}

@@ -308,10 +308,21 @@ def get_today_suggestions(
             """, _d)
             result["vip"] = [{**dict(r), "market": _tr(r["market"])} if r.get("market") else dict(r) for r in rows]
 
+            # `confidence` continua sendo o COALESCE (compatibilidade: varios
+            # consumidores ja leem esse nome). `probability` e' o campo LIMPO,
+            # so' preenchido quando ha prob_combinada de verdade.
+            #
+            # A distincao importa no card: score_combo e' a media dos
+            # final_score das pernas, nao uma probabilidade. Com um campo so',
+            # o front nao tinha como saber se o numero que recebeu era chance
+            # calculada ou score -- e acabava rotulando os dois igual. Com os
+            # dois campos, PickProbability marca "estimada" so' na multipla
+            # antiga que nao tem prob_combinada.
             rows_m = _safe_query(cur, f"""
                 SELECT id, match_date,
                        games AS legs,
                        total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
+                       prob_combinada AS probability,
                        reasoning, result, profit, created_at
                 FROM picks_multiplas
                 WHERE {_m_where}
@@ -693,6 +704,7 @@ def get_suggestion_detail(
             cur.execute("""
                 SELECT id, match_date, games AS legs,
                        total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
+                       prob_combinada AS probability,
                        reasoning, result, profit, created_at
                 FROM picks_multiplas WHERE id = %s
             """, (suggestion_id,))
@@ -765,7 +777,7 @@ def get_suggestion_detail(
                     suggestion["suggested_stake_units"] = _compute_suggested_stake_units(
                         'multipla', None, d.get("confidence"), d.get("total_odd"), None, bl, uv,
                     )
-            return {"suggestion": suggestion, "home_stats": {}, "away_stats": {},
+            return {"suggestion": suggestion,
                     "home_recent": [], "away_recent": [], "odds": []}
 
         # ── ALAVANCAGEM ──────────────────────────────────────────────────────
@@ -833,27 +845,6 @@ def get_suggestion_detail(
             alav_league_id = alav_suggestion.get("fix_league_id")
             alav_season    = alav_suggestion.get("fix_season") or 2026
 
-            STATS_COLS_ALV = """
-                context_type,
-                avg_goals_for, avg_goals_against, avg_total_goals,
-                avg_corners_for, avg_corners_against, avg_total_corners,
-                avg_yellow_for, avg_yellow_against, avg_total_yellow,
-                avg_shots_on_for, avg_shots_on_against,
-                avg_possession_for, avg_passes_accuracy_for,
-                games_count
-            """
-
-            def get_alav_stats(team_id):
-                res = {}
-                if team_id and alav_league_id:
-                    for r in _safe_query(cur, f"SELECT {STATS_COLS_ALV} FROM team_statistics WHERE team_id=%s AND league_id=%s AND season=%s ORDER BY context_type", (team_id, alav_league_id, alav_season)):
-                        res[r["context_type"]] = dict(r)
-                if not res and team_id:
-                    for r in _safe_query(cur, f"SELECT {STATS_COLS_ALV} FROM team_statistics WHERE team_id=%s ORDER BY season DESC, context_type LIMIT 4", (team_id,)):
-                        k = r["context_type"]
-                        if k not in res:
-                            res[k] = dict(r)
-                return res
 
             def get_alav_recent(team_id, limit=5):
                 if not team_id:
@@ -888,8 +879,6 @@ def get_suggestion_detail(
             alav_suggestion["user_actual_odd"]  = float(ufp_a["actual_odd"]) if ufp_a and ufp_a["actual_odd"] else None
             return {
                 "suggestion":  alav_suggestion,
-                "home_stats":  get_alav_stats(alav_home_id),
-                "away_stats":  get_alav_stats(alav_away_id),
                 "home_recent": get_alav_recent(alav_home_id),
                 "away_recent": get_alav_recent(alav_away_id),
                 "odds":        [],
@@ -999,34 +988,6 @@ def get_suggestion_detail(
                 league_id = ms_row["league_id"]
                 season    = ms_row["season"]
 
-        # ── Médias dos times (busca no league certo, fallback em qualquer) ──
-        STATS_COLS = """
-            context_type,
-            avg_goals_for, avg_goals_against, avg_total_goals,
-            avg_corners_for, avg_corners_against, avg_total_corners,
-            avg_yellow_for, avg_yellow_against, avg_total_yellow,
-            avg_shots_on_for, avg_shots_on_against,
-            avg_possession_for, avg_passes_accuracy_for,
-            games_count
-        """
-
-        def get_team_stats(team_id):
-            result = {}
-            # 1. Liga exata + season
-            if league_id:
-                for r in _safe_query(cur, f"SELECT {STATS_COLS} FROM team_statistics WHERE team_id=%s AND league_id=%s AND season=%s ORDER BY context_type", (team_id, league_id, season)):
-                    result[r["context_type"]] = dict(r)
-            # 2. Qualquer liga, season mais recente
-            if not result:
-                for r in _safe_query(cur, f"SELECT {STATS_COLS} FROM team_statistics WHERE team_id=%s ORDER BY season DESC, context_type LIMIT 4", (team_id,)):
-                    k = r["context_type"]
-                    if k not in result:
-                        result[k] = dict(r)
-            return result
-
-        home_stats = get_team_stats(home_id)
-        away_stats = get_team_stats(away_id)
-
         # ── Últimas 5 partidas de cada time ─────────────────────────────────
         def get_recent(team_id, limit=5):
             rows = _safe_query(cur, """
@@ -1091,8 +1052,6 @@ def get_suggestion_detail(
 
         return {
             "suggestion":  suggestion,
-            "home_stats":  home_stats,
-            "away_stats":  away_stats,
             "home_recent": home_recent,
             "away_recent": away_recent,
             "odds":        [dict(r) for r in odds_rows],
@@ -1259,6 +1218,7 @@ def get_recent_results(
             SELECT pm.id, pm.match_date,
                    pm.total_odd AS odd,
                    COALESCE(pm.prob_combinada, pm.score_combo) AS confidence,
+                   pm.prob_combinada AS probability,
                    pm.result, pm.profit,
                    pm.games AS legs,
                    COALESCE(ufp.stake_units, 1) AS stake
@@ -1426,6 +1386,7 @@ def get_multiplas(
             SELECT id, match_date,
                    games AS legs,
                    total_odd, COALESCE(prob_combinada, score_combo) AS confidence,
+                       prob_combinada AS probability,
                    reasoning, result, profit, created_at
             FROM picks_multiplas
             {where}

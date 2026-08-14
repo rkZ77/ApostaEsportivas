@@ -10,7 +10,9 @@ import { PICK_TYPE_BORDER } from '../utils/resultStyle'
 import InfoTip from './InfoTip'
 import AnalysisModal from './AnalysisModal'
 import { Badge, PickTypeBadge, ResultBadge } from './ui'
-import { PickCardFooter, PickExplainButton, PickProbability } from './PickCardParts'
+import {
+  PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
+} from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Clock } from 'lucide-react'
@@ -368,13 +370,7 @@ export default function SuggestionCard({
 
       <PickProbability confidence={s.confidence} probability={s.probability} />
 
-      {/* Reasoning snippet */}
-      {fato && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="label-micro">Fato · </span>
-          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{fato}</span>
-        </div>
-      )}
+      <PickReasoning text={fato} />
 
 
       {/* Footer */}

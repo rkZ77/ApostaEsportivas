@@ -15,7 +15,9 @@ import { LiveDot, Spinner, EmptyState, SkeletonPickGrid } from '../components/ui
 import { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
 import AnalysisModal from '../components/AnalysisModal'
-import { PickCardFooter, PickExplainButton } from '../components/PickCardParts'
+import {
+  PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
+} from '../components/PickCardParts'
 import LivePicks from '../components/LivePicks'
 import LivePicksFeed from '../components/LivePicksFeed'
 import PicksPendingCard from '../components/PicksPendingCard'
@@ -456,7 +458,7 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
       whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group ${isCopa ? 'border-yellow-500/20' : 'border-green-500/20'} ${onClick ? (isCopa ? 'hover:border-yellow-500/40 cursor-pointer' : 'hover:border-green-500/40 cursor-pointer') : ''}`}
+      className={`pick-card group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
     >
       <div className={`absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent to-transparent ${isCopa ? 'via-yellow-500' : 'via-green-500'}`} />
@@ -569,27 +571,9 @@ function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false 
         </div>
       </div>
 
-      {/* Barra de probabilidade */}
-      <div className="px-5 pb-3">
-        <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Probabilidade</span>
-          <span className={pct >= 75 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
-        </div>
-        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
-          <div
-            className={`h-1 rounded-full ${pct >= 75 ? 'bg-green-500' : pct >= 60 ? 'bg-yellow-500' : 'bg-ink-4'}`}
-            style={{ width: `${pct}%` }}
-          />
-        </div>
-      </div>
+      <PickProbability confidence={dica.confidence} probability={dica.probability} />
 
-      {/* Reasoning snippet */}
-      {fato && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
-          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{fato}</span>
-        </div>
-      )}
+      <PickReasoning text={fato} />
 
       {/* Footer */}
       {dica.reasoning && (
@@ -892,24 +876,13 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
         })}
       </div>
 
-      {/* Barra de probabilidade */}
-      <div className="px-5 pb-3">
-        <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Probabilidade combinada</span>
-          <span className={pct >= 70 ? 'text-green-400 font-bold' : 'text-ink-3'}>{pct}%</span>
-        </div>
-        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
-          <div className={`h-1 rounded-full ${pct >= 70 ? 'bg-blue-500' : 'bg-surface-3'}`} style={{ width: `${pct}%` }} />
-        </div>
-      </div>
+      <PickProbability
+        confidence={m.confidence}
+        probability={m.probability}
+        label="Probabilidade combinada"
+      />
 
-      {/* Fato da IA */}
-      {shortReasoning(m.reasoning) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
-          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(m.reasoning)}</span>
-        </div>
-      )}
+      <PickReasoning text={shortReasoning(m.reasoning)} />
 
       {/* Footer */}
       {m.reasoning && (
@@ -983,7 +956,6 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
   // stake monetário: bankroll do usuário > bankroll_before salvo > fallback 50
   const stake       = userBankroll != null ? userBankroll : Number(pick.bankroll_before ?? pick.stake ?? 50)
   const potReturn   = oddCombined > 0 ? stake * oddCombined : Number(pick.potential_return ?? 0)
-  const confPct     = Math.round((pick.confidence_media ?? 0) * 100)
   // profit calculado do bankroll real × odd (não usa o campo profit do DB que pode estar em unidades)
   const profit = pick.result === 'GREEN'
     ? stake * (oddCombined - 1)
@@ -1159,24 +1131,13 @@ function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive
         })}
       </div>
 
-      {/* Confiança */}
-      <div className="px-5 pb-3">
-        <div className="flex justify-between text-[10px] mb-1">
-          <span className="text-ink-4">Probabilidade</span>
-          <span className={confPct >= 70 ? 'text-orange-400 font-bold' : 'text-ink-3'}>{confPct}%</span>
-        </div>
-        <div className="bg-surface-2 rounded-full h-1 overflow-hidden">
-          <div className={`h-1 rounded-full ${confPct >= 70 ? 'bg-orange-500' : 'bg-surface-3'}`} style={{ width: `${confPct}%` }} />
-        </div>
-      </div>
+      {/* A alavancagem nao tem coluna de probabilidade: o que existe e' a
+          media das confiancas das pernas. Passa como `confidence` pra
+          PickProbability marcar o numero como "estimada", igual ela ja faz
+          nos picks VIP antigos sem probabilidade. */}
+      <PickProbability confidence={pick.confidence_media} />
 
-      {/* Fato da IA */}
-      {shortReasoning(pick.reasoning_1) && (
-        <div className="mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md">
-          <span className="text-[10px] text-ink-4 font-black">Fato · </span>
-          <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-2">{shortReasoning(pick.reasoning_1)}</span>
-        </div>
-      )}
+      <PickReasoning text={shortReasoning(pick.reasoning_1)} />
 
       {/* Footer */}
       {pick.reasoning_1 && (
