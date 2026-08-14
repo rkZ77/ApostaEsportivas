@@ -239,7 +239,12 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
 
   useEffect(() => { inputRef.current?.focus() }, [])
 
-  const stakeR = unitValue ? Number(pick.stake_units) * unitValue : null
+  // Mesma regra do card: valor pronto do servidor vence a conta por unidades,
+  // senao o cashout de uma alavancagem calcularia o lucro contra R$10 quando a
+  // aposta foi de R$30.
+  const stakeR = pick.stake_amount != null
+    ? Number(pick.stake_amount)
+    : unitValue ? Number(pick.stake_units) * unitValue : null
   const received = parseFloat(amount)
   const pnlR = stakeR != null && !isNaN(received) ? received - stakeR : null
   const pnlColor = pnlR == null ? 'text-ink-2' : pnlR >= 0 ? 'text-green-400' : 'text-red-400'
@@ -391,7 +396,17 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
 
   // Odds e valores financeiros
   const effOdd   = pick.actual_odd ?? Number(pick.odd)
-  const stakeR   = unitValue != null ? pick.stake_units * unitValue : null
+  /*
+   * `stake_amount` vem pronto do servidor e SEMPRE vence quando existe.
+   *
+   * Hoje só a alavancagem manda esse campo, porque ela é o único produto que
+   * não aposta em unidades: ela aposta a banca inteira e a compõe. O
+   * stake_units dela é 1.00 fixo -- um placeholder --, então a conta genérica
+   * `stake_units × unit_value` anunciava R$10 numa aposta de R$30.
+   */
+  const stakeR   = pick.stake_amount != null
+    ? Number(pick.stake_amount)
+    : unitValue != null ? pick.stake_units * unitValue : null
   const potRetR  = stakeR != null ? stakeR * effOdd : null
   const premioR  = potRetR != null
     ? (effectiveResult === 'GREEN' ? potRetR : effectiveResult === 'RED' ? 0 : null)

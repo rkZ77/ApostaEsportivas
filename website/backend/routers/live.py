@@ -1032,6 +1032,42 @@ def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
     return {"odd": odd, "is_live": True, "status": status}
 
 
+def _alavancagem_stakes(cur, user_id: int) -> dict:
+    """{pick_id: quanto o usuario apostou naquele pick de alavancagem}.
+
+    Reconstroi a serie: comeca na semente configurada (`alav_bankroll_init`),
+    multiplica pela odd a cada GREEN e volta pra semente a cada RED. O valor
+    apostado num pick e' o saldo ANTES dele, entao o saldo so' avanca depois
+    de registrar o pick corrente.
+
+    Dicionario vazio quando o usuario nao configurou a banca de alavancagem --
+    nesse caso a tela nao tem o que anunciar e cai no comportamento antigo.
+    """
+    cur.execute("SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+    row = cur.fetchone()
+    if not row or row["alav_bankroll_init"] is None:
+        return {}
+
+    inicial = float(row["alav_bankroll_init"])
+    cur.execute("""
+        SELECT pa.id, pa.result, pa.odd_combined
+        FROM user_followed_picks uf
+        JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+        WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem'
+        ORDER BY pa.match_date ASC, pa.id ASC
+    """, (user_id,))
+
+    saldo = inicial
+    stakes: dict = {}
+    for pick in cur.fetchall():
+        stakes[pick["id"]] = round(saldo, 2)
+        if pick["result"] == "GREEN":
+            saldo = round(saldo * float(pick["odd_combined"] or 1), 2)
+        elif pick["result"] == "RED":
+            saldo = inicial
+    return stakes
+
+
 @router.get("/my-picks")
 def get_live_my_picks(current_user: dict = Depends(get_current_user)):
     user_id  = current_user["id"]
@@ -1050,6 +1086,21 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
         cur.close()
         conn.close()
         return []
+
+    # Alavancagem nao aposta UNIDADES, aposta a BANCA INTEIRA e a compoe.
+    #
+    # Todo o resto do site dimensiona por Kelly (stake_units x unit_value), e
+    # por isso `user_followed_picks.stake_units` grava 1.00 pra alavancagem --
+    # um placeholder, nao uma quantidade. "Minhas Apostas" multiplicava esse 1
+    # pelo unit_value da banca geral e anunciava R$10 numa aposta de R$30.
+    # Reportado em 2026-08-14 pelo usuario, com a banca de alavancagem em R$30.
+    #
+    # O valor certo e' a banca de alavancagem NO MOMENTO daquele pick: a semente
+    # composta pelos GREENs anteriores e reiniciada a cada RED -- a mesma regra
+    # de /banca/alavancagem-serie, que e' quem o card ja consulta pra dizer
+    # quanto apostar. Aqui ela e' repetida sobre os picks JA RESOLVIDOS pra
+    # reconstruir o saldo que valia em cada aposta.
+    alav_stake_por_pick = _alavancagem_stakes(cur, user_id)
 
     # Group pick_ids by type for batch queries
     vip_ids         = [r["pick_id"] for r in followed if r["pick_type"] == "vip"]
@@ -1458,6 +1509,10 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                     "actual_odd":     actual_odd,
                     "bet_house":      bet_house,
                     "stake_units":    stake_u,
+                    # Valor em REAIS, ja resolvido no servidor. A tela nao tem
+                    # como derivar isso de stake_units: alavancagem nao usa
+                    # unidade nenhuma (ver _alavancagem_stakes).
+                    "stake_amount":   alav_stake_por_pick.get(pick_id),
                     "cashout_amount": cashout_amt,
                     "is_live":        any(l["is_live"] for l in legs_out),
                     "status":         "FT" if final_result else None,
