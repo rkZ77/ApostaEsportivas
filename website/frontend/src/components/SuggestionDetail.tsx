@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { X, TrendingUp, BarChart2, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
+import { X, TrendingUp, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
@@ -10,15 +10,6 @@ import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUt
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { backdropFade, drawerRight } from '../lib/motion'
 
-interface StatBlock {
-  context_type: string
-  avg_goals_for: number; avg_goals_against: number; avg_total_goals: number
-  avg_corners_for: number; avg_corners_against: number; avg_total_corners: number
-  avg_yellow_for: number; avg_yellow_against: number
-  avg_shots_on_for: number; avg_shots_on_against: number
-  avg_possession_for: number; avg_passes_accuracy_for: number
-  games_count: number
-}
 interface RecentMatch {
   match_date: string; is_home: boolean; gf: number; ga: number
   corners_f: number; corners_a: number; resultado: string
@@ -42,29 +33,6 @@ function FormBadge({ r }: { r: string }) {
     <span className={`w-7 h-7 flex items-center justify-center rounded-full text-xs font-black shrink-0 ${resultColor[r] ?? 'bg-surface-3 text-ink-1'}`}>
       {r}
     </span>
-  )
-}
-
-function StatBar({ label, home, away, higherIsBetter = true }: {
-  label: string; home: number; away: number; higherIsBetter?: boolean
-}) {
-  const h = Number(home || 0)
-  const a = Number(away || 0)
-  const total = h + a || 1
-  const homePct = Math.round((h / total) * 100)
-  const homeWins = higherIsBetter ? h >= a : h <= a
-  return (
-    <div className="mb-3">
-      <div className="flex justify-between text-xs mb-1">
-        <span className={`font-bold ${homeWins ? 'text-green-400' : 'text-ink-2'}`}>{h.toFixed(2)}</span>
-        <span className="text-ink-4 text-[11px]">{label}</span>
-        <span className={`font-bold ${!homeWins ? 'text-blue-400' : 'text-ink-2'}`}>{a.toFixed(2)}</span>
-      </div>
-      <div className="flex h-1.5 rounded-full overflow-hidden bg-surface-2">
-        <div className="bg-green-500/70 transition-all duration-500" style={{ width: `${homePct}%` }} />
-        <div className="bg-blue-500/70 flex-1" />
-      </div>
-    </div>
   )
 }
 
@@ -114,10 +82,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
 
   const isAlav = pickType === 'alavancagem'
   const hasStats = pickType === 'vip' || pickType === 'free' || isAlav
+  // "Médias" saiu em 2026-08-14: as médias por time ja' vivem na aba Jogos,
+  // com mais contexto e sem competir com a leitura do pick. Aqui elas
+  // duplicavam a mesma informacao dentro do painel de decisao.
   const tabs = [
     { key: 'ia',         label: 'Pick',          Icon: TrendingUp    },
     ...(hasStats ? [
-      { key: 'stats',    label: 'Médias',        Icon: BarChart2     },
       { key: 'form',     label: 'Forma',         Icon: Activity      },
       ...(isAlav
         ? [{ key: 'caminho', label: 'Caminho', Icon: Route }]
@@ -436,50 +406,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     </div>
                   )}
 
-                </div>
-              )}
-
-              {tab === 'stats' && (
-                <div className="space-y-6">
-                  {(['HOME', 'AWAY'] as const).map(ctx => {
-                    const hStats: StatBlock = data.home_stats?.[ctx]
-                    const aStats: StatBlock = data.away_stats?.[ctx === 'HOME' ? 'AWAY' : 'HOME'] ?? data.away_stats?.[ctx]
-                    return (
-                      <div key={ctx}>
-                        <div className="flex items-center justify-between mb-3">
-                          <p className="text-[10px] text-ink-3 font-semibold">
-                            {ctx === 'HOME' ? 'Contexto Casa' : 'Contexto Fora'}
-                          </p>
-                          <span className="text-[10px] text-ink-4">{hStats?.games_count ?? 0}j / {aStats?.games_count ?? 0}j</span>
-                        </div>
-
-                        {/* Legenda */}
-                        <div className="flex justify-between text-[10px] mb-2">
-                          <span className="text-green-400 font-bold truncate max-w-[120px]">{s.home_team_name}</span>
-                          <span className="text-blue-400 font-bold truncate max-w-[120px] text-right">{s.away_team_name}</span>
-                        </div>
-
-                        <div className="bg-surface-1 rounded-lg border border-line p-4">
-                          {hStats || aStats ? (
-                            <>
-                              <StatBar label="Gols feitos"      home={hStats?.avg_goals_for ?? 0}       away={aStats?.avg_goals_for ?? 0} />
-                              <StatBar label="Gols cedidos"     home={hStats?.avg_goals_against ?? 0}   away={aStats?.avg_goals_against ?? 0} higherIsBetter={false} />
-                              <StatBar label="Total de gols"    home={hStats?.avg_total_goals ?? 0}     away={aStats?.avg_total_goals ?? 0} />
-                              <StatBar label="Escanteios feitos"  home={hStats?.avg_corners_for ?? 0}   away={aStats?.avg_corners_for ?? 0} />
-                              <StatBar label="Escanteios cedidos" home={hStats?.avg_corners_against ?? 0} away={aStats?.avg_corners_against ?? 0} higherIsBetter={false} />
-                              <StatBar label="Escanteios tot"   home={hStats?.avg_total_corners ?? 0}   away={aStats?.avg_total_corners ?? 0} />
-                              <StatBar label="Amarelos feitos"  home={hStats?.avg_yellow_for ?? 0}      away={aStats?.avg_yellow_for ?? 0} higherIsBetter={false} />
-                              <StatBar label="Amarelos cedidos" home={hStats?.avg_yellow_against ?? 0}  away={aStats?.avg_yellow_against ?? 0} higherIsBetter={false} />
-                              <StatBar label="Chutes a gol"     home={hStats?.avg_shots_on_for ?? 0}    away={aStats?.avg_shots_on_for ?? 0} />
-                              <StatBar label="Posse de bola"    home={hStats?.avg_possession_for ?? 0}  away={aStats?.avg_possession_for ?? 0} />
-                            </>
-                          ) : (
-                            <p className="text-xs text-ink-4 text-center py-4">Sem médias para este contexto</p>
-                          )}
-                        </div>
-                      </div>
-                    )
-                  })}
                 </div>
               )}
 

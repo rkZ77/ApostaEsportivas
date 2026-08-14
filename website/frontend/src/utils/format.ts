@@ -13,7 +13,6 @@ export function winRate(greens: number, total: number): number | null {
 
 // Final da Copa 2026: 19/07. Depois disso, mensagens da Copa (home + banners
 // dentro do app) trocam pra algo evergreen (Brasileirão/Premier League seguem).
-export const COPA_ENDED = Date.now() >= new Date('2026-07-20T00:00:00-03:00').getTime()
 
 export function maskPhone(value: string): string {
   const d = value.replace(/\D/g, '').slice(0, 11)

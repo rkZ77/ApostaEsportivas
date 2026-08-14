@@ -30,10 +30,23 @@ export default function PickPublico() {
       .finally(() => setLoading(false))
   }, [pick_type, pick_id])
 
+  /*
+   * Detalhe do pick pro assinante VIP que abriu um link compartilhado.
+   *
+   * Chamava `/suggestions/{pick_type}/{pick_id}`, rota que NUNCA existiu no
+   * backend -- o 404 caia no .catch vazio e `fullPick` ficava null pra
+   * sempre. Efeito: o proprio assinante VIP via o bloco borrado de "Disponivel
+   * apenas para assinantes VIP" na pagina que ele mesmo compartilhou.
+   * Encontrado em 2026-08-14 cruzando as chamadas do front com as rotas
+   * registradas.
+   *
+   * A rota certa e' a mesma que o painel de detalhe ja usa, com o tipo indo
+   * por query em vez de caminho.
+   */
   useEffect(() => {
     if (!isVip || !pick_type || !pick_id) return
-    api.get(`/suggestions/${pick_type}/${pick_id}`)
-      .then(r => setFullPick(r.data))
+    api.get(`/suggestions/${pick_id}/detail`, { params: { pick_type } })
+      .then(r => setFullPick(r.data?.suggestion ?? null))
       .catch(() => {})
   }, [isVip, pick_type, pick_id])
 

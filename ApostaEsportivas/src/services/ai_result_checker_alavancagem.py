@@ -46,14 +46,22 @@ class AIResultCheckerAlavancagem:
         # paga com odd_combined -- GREEN indevido e profit inflado sempre que
         # a perna 2 perdesse. Havia 3 duplas assim em producao (ids 21, 25 e
         # 31). A perna 3 nunca foi lida por ninguem.
+        # market_type_N tambem e' lido (2026-08-14). A tabela sempre teve as
+        # tres colunas e o checker nunca as consultava: `_check_pick` aceita o
+        # parametro, mas ninguem passava, entao toda perna era classificada
+        # pelo TEXTO do mercado em detect_market_type(). Funciona pra
+        # "Cartoes Mais/Menos", e falha calado em qualquer nome que o parser
+        # nao reconheca -- a perna vira "mercado desconhecido" e o bilhete
+        # inteiro fica pendente pra sempre. O motor ja' sabe o market_type na
+        # hora de gravar; nao ha motivo pra readivinhar na hora de liquidar.
         cur.execute("""
             SELECT id, tipo,
                    fixture_id_1, market_1, line_1, odd_1,
-                   home_team_1, away_team_1,
+                   home_team_1, away_team_1, market_type_1,
                    fixture_id_2, market_2, line_2, odd_2,
-                   home_team_2, away_team_2,
+                   home_team_2, away_team_2, market_type_2,
                    fixture_id_3, market_3, line_3, odd_3,
-                   home_team_3, away_team_3,
+                   home_team_3, away_team_3, market_type_3,
                    odd_combined
             FROM picks_alavancagem
             WHERE result IS NULL
@@ -70,9 +78,9 @@ class AIResultCheckerAlavancagem:
 
         for row in rows:
             (pk_id, tipo,
-             fid1, mkt1, ln1, odd1, home1, away1,
-             fid2, mkt2, ln2, odd2, home2, away2,
-             fid3, mkt3, ln3, odd3, home3, away3,
+             fid1, mkt1, ln1, odd1, home1, away1, mt1,
+             fid2, mkt2, ln2, odd2, home2, away2, mt2,
+             fid3, mkt3, ln3, odd3, home3, away3, mt3,
              odd_combined) = row
 
             # Quem manda e' a presenca da perna no banco, nao o texto de
@@ -81,11 +89,11 @@ class AIResultCheckerAlavancagem:
             # valor especifico de `tipo` foi exatamente o que deixou as
             # duplas passarem sem checar a perna 2.
             pernas = [
-                (i, fid, mkt, ln, odd, home, away)
-                for i, (fid, mkt, ln, odd, home, away) in enumerate(
-                    ((fid1, mkt1, ln1, odd1, home1, away1),
-                     (fid2, mkt2, ln2, odd2, home2, away2),
-                     (fid3, mkt3, ln3, odd3, home3, away3)), start=1)
+                (i, fid, mkt, ln, odd, home, away, mt)
+                for i, (fid, mkt, ln, odd, home, away, mt) in enumerate(
+                    ((fid1, mkt1, ln1, odd1, home1, away1, mt1),
+                     (fid2, mkt2, ln2, odd2, home2, away2, mt2),
+                     (fid3, mkt3, ln3, odd3, home3, away3, mt3)), start=1)
                 if fid is not None
             ]
             if not pernas:
@@ -95,10 +103,19 @@ class AIResultCheckerAlavancagem:
             resultados = {}
             odds_pernas = {}
             aguardando = False
-            for i, fid, mkt, ln, odd, home, away in pernas:
-                r = self._check_pick(fid, mkt, ln, float(odd or 1), cur, home, away)
+            for i, fid, mkt, ln, odd, home, away, mt in pernas:
+                r = self._check_pick(fid, mkt, ln, float(odd or 1), cur, home, away,
+                                     market_type=mt)
                 if r is None:
-                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: sem stats para fixture_id_{i}={fid} · aguardando.")
+                    # Dois motivos possiveis, e distingui-los importa: sem
+                    # linha em match_statistics o jogo ainda nao foi coletado
+                    # (some sozinho); COM a linha, o mercado e' que nao foi
+                    # liquidavel, e ai o bilhete fica preso ate alguem olhar.
+                    tem_stats = self._checker.get_fixture_result(fid, cur) is not None
+                    causa = ("mercado nao liquidavel" if tem_stats
+                             else "fixture ainda sem estatistica coletada")
+                    print(f"[CHECKER-ALAVANCAGEM] id={pk_id}: perna {i} pendente "
+                          f"(fixture={fid}, {mkt} {ln}, market_type={mt}) · {causa}.")
                     aguardando = True
                     break
                 resultados[i] = r

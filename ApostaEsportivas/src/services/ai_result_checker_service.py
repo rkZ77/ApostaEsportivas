@@ -87,6 +87,21 @@ class AIResultCheckerService:
             "status":        g("status"),
             "total_cards":   (None if None in (hy, hr, ay, ar)
                               else hy + 2 * hr + ay + 2 * ar),
+            # PISO de cartoes: o total contando ZERO vermelho.
+            #
+            # A folha da API omite "Red Cards" quando ninguem foi expulso, e o
+            # coletor grava NULL -- certo, porque ausencia nunca vira zero.
+            # So' que isso deixava 21,3% das partidas encerradas (40 de 66 em
+            # agosto/2026) com todo mercado de cartao impossivel de liquidar,
+            # inclusive uma alavancagem presa desde 13/08.
+            #
+            # O piso nao afirma que houve zero vermelho: afirma que o total e'
+            # PELO MENOS os amarelos, o que e' verdade sempre. Quem decide se
+            # isso basta e' settlement.settle_over_under_com_piso -- e ele so'
+            # liquida quando o numero que falta nao pode mais mudar a resposta.
+            "home_cards_min":  None if hy is None else hy,
+            "away_cards_min":  None if ay is None else ay,
+            "total_cards_min": _sum(hy, ay),
             "total_yellow":  _sum(hy, ay),
             "total_red":     _sum(hr, ar),
             "home_goals_ht": hg_ht,
@@ -368,12 +383,32 @@ class AIResultCheckerService:
             return "yellow"
         return mt
 
+    #: Familias cujo total tem um PISO conhecido quando a parcela que falta so'
+    #: pode SOMAR. Hoje so' cartoes (amarelos conhecidos, vermelhos omitidos
+    #: pela API) -- ver get_fixture_result e settlement.settle_over_under_com_piso.
+    _STAT_KEYS_MIN = {
+        "cards": ("home_cards_min", "away_cards_min", "total_cards_min"),
+    }
+
     def _resolve_overunder(self, stats, mt, side, is_ht=False, market="", prorrogacao=False):
         """Valor observado do mercado, ou None se o provedor nao publicou.
 
         None aqui NUNCA vira 0: quem chama e' obrigado a devolver
         "nao liquidado" (ver services/settlement.py, invariante 1)."""
         keys = self._STAT_KEYS.get(self._stat_family(mt, market, is_ht, prorrogacao))
+        if not keys:
+            return None
+        home_key, away_key, total_key = keys
+        key = home_key if side == "home" else away_key if side == "away" else total_key
+        return stats.get(key)
+
+    def _resolve_overunder_min(self, stats, mt, side, is_ht=False, market="", prorrogacao=False):
+        """Piso do valor observado, ou None quando a familia nao tem piso.
+
+        Piso NAO e' estimativa do valor: e' um limite inferior garantido. Ele
+        so' liquida quando ja' decide sozinho -- ver settle_over_under_com_piso.
+        """
+        keys = self._STAT_KEYS_MIN.get(self._stat_family(mt, market, is_ht, prorrogacao))
         if not keys:
             return None
         home_key, away_key, total_key = keys
@@ -455,7 +490,8 @@ class AIResultCheckerService:
 
         if mt in self._STAT_MARKETS:
             stat_val = self._resolve_overunder(stats, mt, side, is_ht, market, prorrogacao)
-            return settlement.settle_over_under(stat_val, val, op)
+            stat_min = self._resolve_overunder_min(stats, mt, side, is_ht, market, prorrogacao)
+            return settlement.settle_over_under_com_piso(stat_val, val, op, stat_min)
 
         if mt == "btts":
             return settlement.settle_btts(hg, ag, op)

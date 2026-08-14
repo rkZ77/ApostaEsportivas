@@ -47,26 +47,40 @@ class _FakeConn:
         pass
 
 
-def _row(tipo, pernas, odd_combined):
-    """Monta a tupla no formato exato do SELECT do checker (21 colunas)."""
+def _row(tipo, pernas, odd_combined, market_types=None):
+    """Monta a tupla no formato exato do SELECT do checker (24 colunas).
+
+    Cada perna carrega 7 campos desde 2026-08-14 -- market_type_N entrou
+    porque o checker classificava a perna readivinhando pelo TEXTO do
+    mercado, quando o motor ja' gravou o tipo na hora de criar o pick.
+    """
+    market_types = market_types or {}
     campos = []
     for i in range(3):
         if i < len(pernas):
             fid, mkt, ln, odd = pernas[i]
-            campos += [fid, mkt, ln, Decimal(str(odd)), f"Casa{i+1}", f"Fora{i+1}"]
+            campos += [fid, mkt, ln, Decimal(str(odd)),
+                       f"Casa{i+1}", f"Fora{i+1}", market_types.get(i + 1)]
         else:
-            campos += [None, None, None, None, None, None]
+            campos += [None, None, None, None, None, None, None]
     return (1, tipo, *campos, Decimal(str(odd_combined)))
 
 
-def _run(monkeypatch, row, resultados_por_fixture):
+def _run(monkeypatch, row, resultados_por_fixture, capturar=None):
     cur = _FakeCursor([row])
     monkeypatch.setattr(mod, "get_connection", lambda: _FakeConn(cur))
     checker = mod.AIResultCheckerAlavancagem()
-    monkeypatch.setattr(
-        checker, "_check_pick",
-        lambda fid, mkt, ln, odd, c, home=None, away=None: resultados_por_fixture[fid],
-    )
+
+    def _fake_check(fid, mkt, ln, odd, c, home=None, away=None, market_type=None):
+        if capturar is not None:
+            capturar.append({"fixture": fid, "market": mkt, "market_type": market_type})
+        return resultados_por_fixture[fid]
+
+    monkeypatch.setattr(checker, "_check_pick", _fake_check)
+    # A perna pendente agora consulta get_fixture_result pra distinguir
+    # "fixture nao coletada" de "mercado nao liquidavel" no log.
+    monkeypatch.setattr(checker._checker, "get_fixture_result",
+                        lambda fid, cur=None: None)
     checker.check_all_results()
     return cur.updates
 
@@ -124,3 +138,19 @@ def test_perna_sem_stats_deixa_o_pick_pendente(monkeypatch):
     updates = _run(monkeypatch, row, {101: "GREEN", 202: None})
 
     assert updates == []
+
+
+def test_market_type_gravado_e_usado_em_vez_de_readivinhado(monkeypatch):
+    """O motor grava market_type_N ao criar o pick, e o checker nunca lia.
+    Toda perna era reclassificada pelo TEXTO do mercado -- que funciona pros
+    nomes conhecidos e falha calado em qualquer outro, deixando o bilhete
+    pendente pra sempre."""
+    row = _row("dupla",
+               [(101, "Gols Mais/Menos", "Over 1.5", 1.20),
+                (202, "Cartões Mais/Menos", "Under 5.5", 1.25)],
+               1.50, market_types={1: "goals", 2: "cards"})
+    vistos = []
+
+    _run(monkeypatch, row, {101: "GREEN", 202: "GREEN"}, capturar=vistos)
+
+    assert [v["market_type"] for v in vistos] == ["goals", "cards"]

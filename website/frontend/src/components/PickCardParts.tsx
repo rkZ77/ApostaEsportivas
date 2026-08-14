@@ -131,12 +131,19 @@ export function PickExplainButton({
 export function PickProbability({
   confidence,
   probability,
+  label = 'Probabilidade',
   className,
 }: {
   /** Fração 0..1. Só é usada quando não há probabilidade. */
   confidence?: number | null
   /** Fração 0..1. É esta que o rótulo promete. */
   probability?: number | null
+  /**
+   * Rótulo à esquerda. Só a múltipla muda ("Probabilidade combinada"), porque
+   * ali o número é de fato outra quantidade -- o produto das pernas, não a
+   * chance de um mercado só. Cor, escala e cortes seguem iguais aos do VIP.
+   */
+  label?: string
   className?: string
 }) {
   const bruto = probability ?? confidence
@@ -149,7 +156,7 @@ export function PickProbability({
     <div className={cn('px-5 pb-3', className)}>
       <div className="flex justify-between items-baseline text-[10px] mb-1">
         <span className="text-ink-4">
-          Probabilidade{aproximado && <span className="text-ink-4"> estimada</span>}
+          {label}{aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
         <span className={cn('font-mono', pct >= 75 ? 'text-accent font-bold' : 'text-ink-3')}>
           {pct}%
@@ -168,36 +175,19 @@ export function PickProbability({
   )
 }
 
-/* ── Faixa de números ───────────────────────────────────────────────────── */
-
-export interface PickStat {
-  label: string
-  value: React.ReactNode
-  sub?: React.ReactNode
-  tone?: 'default' | 'accent' | 'red'
-}
-
-/**
- * Tira de indicadores no topo do card (odd, stake, lucro, EV).
+/*
+ * A tira de números do topo (odd/stake/lucro/EV) NÃO mora aqui.
  *
- * Divisores entre colunas em vez de cards separados: é uma leitura só, e
- * caixinhas independentes faziam o olho tratar cada número como um bloco.
+ * Existiu um `PickStats` genérico e nenhum dos cinco cards conseguiu usá-lo:
+ * o VIP mostra três colunas que mudam conforme o pick foi seguido, resolvido
+ * ou está pendente; a múltipla mostra a odd do bilhete; a alavancagem mostra
+ * progressão de banca. Espremer isso num componente de lista de itens exigia
+ * mais props condicionais do que o markup que ele substituía, e o componente
+ * ficou um ano sem chamador. Removido em 2026-08-14.
+ *
+ * O que se unifica é a ANATOMIA (ordem das seções, respiro, tipografia) — e
+ * essa parte é garantida pelas peças abaixo e pela classe `.pick-card`.
  */
-export function PickStats({ items, className }: { items: PickStat[]; className?: string }) {
-  const color = { default: 'text-ink-1', accent: 'text-accent', red: 'text-red-400' }
-
-  return (
-    <div className={cn('font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60', className)}>
-      {items.map(({ label, value, sub, tone = 'default' }) => (
-        <div key={label} className="flex-1 px-3 py-3 text-center min-w-0">
-          <div className="text-[10px] text-ink-3 mb-0.5 truncate">{label}</div>
-          <div className={cn('text-xl font-bold tabular-nums', color[tone])}>{value}</div>
-          {sub != null && <div className="text-[10px] text-ink-4 mt-0.5 truncate">{sub}</div>}
-        </div>
-      ))}
-    </div>
-  )
-}
 
 /* ── Trecho do raciocínio ───────────────────────────────────────────────── */
 

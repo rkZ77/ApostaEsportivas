@@ -256,6 +256,58 @@ def settle_over_under(value, line, op) -> tuple[str | None, Decimal]:
     return _FACTOR_TO_RESULT[factor], factor
 
 
+def settle_over_under_com_piso(value, line, op, piso=None) -> tuple[str | None, Decimal]:
+    """Como settle_over_under, mas aceita um PISO quando o total exato e'
+    desconhecido -- e liquida so' quando o piso ja' decide sozinho.
+
+    ## O problema que isto resolve
+
+    A folha da API-Football omite a linha "Red Cards" quando nenhum time levou
+    vermelho. O coletor grava NULL (correto: ausencia nunca vira zero,
+    invariante 1 acima), e `total_cards = amarelos + 2*vermelhos` fica None.
+    Resultado medido em 2026-08-14: 21,3% das partidas encerradas -- 40 de 66
+    so' em agosto -- ficavam com QUALQUER mercado de cartao impossivel de
+    liquidar, e uma alavancagem de 13/08 estava presa por isso.
+
+    ## Por que o piso e' seguro, e nao um chute
+
+    Vermelho nunca e' negativo. Entao, sem saber quantos foram:
+
+        total_de_cartoes >= total_de_amarelos
+
+    Com 3 amarelos, um "Over 2.5" ja' esta' ganho -- descobrir depois que
+    houve 1 vermelho leva o total pra 5 e nao muda nada. A conclusao NAO
+    depende do numero que falta, e por isso nao e' inferencia: e' o mesmo
+    raciocinio que o motor Live ja' usa pra recusar "linha ja batida pelo
+    placar atual".
+
+    O piso decide em exatamente dois casos, os dois pelo mesmo motivo
+    (o desconhecido so' pode SOMAR ao total):
+
+        over  com piso > linha  -> GREEN   (ja passou; o resto so' aumenta)
+        under com piso > linha  -> RED     (ja estourou; o resto so' aumenta)
+
+    Em qualquer outro caso o desconhecido ainda muda o veredito, e a funcao
+    devolve UNRESOLVED -- que e' o comportamento de sempre. Nenhum caso que
+    hoje liquida passa a liquidar diferente: com `value` conhecido, o piso
+    nem e' olhado.
+    """
+    resultado = settle_over_under(value, line, op)
+    if resultado[0] is not None or piso is None:
+        return resultado
+
+    if op not in ("over", "under"):
+        return UNRESOLVED
+    p = to_decimal(piso)
+    ln = to_decimal(line)
+    if p is None or ln is None or line_grid(ln) is None:
+        return UNRESOLVED
+    if p <= ln:
+        # O que falta ainda pode virar o resultado -- nao ha o que afirmar.
+        return UNRESOLVED
+    return (GREEN, _ONE) if op == "over" else (RED, -_ONE)
+
+
 ###############################################################################
 # Handicap asiatico (gols, escanteios, cartoes)
 ###############################################################################
