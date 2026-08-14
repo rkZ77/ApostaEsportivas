@@ -101,8 +101,17 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         "home_goals": home_goals,
         "away_goals": away_goals,
         "goals_total": gols_total,
+        # Modulo: "o jogo esta' apertado?". E' o que ritmo e ajuste de estado
+        # perguntam, e por isso continua existindo com este nome.
         "diferenca_gols": (None if gols_total is None
                            else abs(int(home_goals) - int(away_goals))),
+        # COM SINAL (>0 = mandante na frente): "quem precisa do resultado?".
+        # Pergunta diferente, e ate 2026-08-14 impossivel de fazer -- o abs()
+        # acima era o unico placar que o motor guardava, entao um 2x0 e um 0x2
+        # eram indistinguiveis pra ele. Sem o sinal nao ha como cruzar o placar
+        # com o agregado do mata-mata nem com a necessidade de tabela.
+        "saldo_mandante": (None if gols_total is None
+                           else int(home_goals) - int(away_goals)),
 
         "corners_home": c_casa, "corners_away": c_fora, "corners_total": c_total,
         "shots_home": s_casa, "shots_away": s_fora, "shots_total": s_total,

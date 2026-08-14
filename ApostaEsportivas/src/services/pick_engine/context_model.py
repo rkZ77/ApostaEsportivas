@@ -6,6 +6,7 @@ nao e possivel hoje (ver plano Fase 2). Nunca declarar "must_win" ou
 "mata-mata" a partir daqui -- so um sinal de pressao, sempre com os
 numeros brutos (rank/saldo/pontos) expostos junto."""
 from datetime import datetime, date
+from services.pick_engine import competitive_pressure
 from services.pick_engine.competition_profile import is_neutral_venue, classify_round_phase
 
 _PRESSURE_LABELS = {
@@ -91,8 +92,16 @@ def home_advantage_context(league_id) -> dict:
 
 def build_context(home_matches: list, away_matches: list, home_team_id: int, away_team_id: int,
                    home_standing: dict | None, away_standing: dict | None,
-                   league_id, reference_date=None, round_str: str | None = None) -> dict:
+                   league_id, reference_date=None, round_str: str | None = None,
+                   league_table: list | None = None) -> dict:
+    """`league_table` e' a tabela INTEIRA da competicao
+    (StandingsService.get_league_table). Com ela o contexto ganha a camada de
+    necessidade competitiva (competitive_pressure); sem ela, tudo segue como
+    antes -- os pipelines que ainda nao passam a tabela continuam validos, so'
+    sem o sinal novo."""
     reference_date = reference_date or date.today()
+    pressao = (competitive_pressure.pressao_da_partida(
+        league_table, home_team_id, away_team_id, league_id) if league_table else None)
     return {
         "rest_days_home": rest_days(home_matches, home_team_id, reference_date),
         "rest_days_away": rest_days(away_matches, away_team_id, reference_date),
@@ -100,6 +109,11 @@ def build_context(home_matches: list, away_matches: list, home_team_id: int, awa
         "table_pressure_away": table_pressure(away_standing),
         "venue": home_advantage_context(league_id),
         "round_phase": classify_round_phase(round_str),
+        # Camada nova (2026-08-14). Convive com table_pressure em vez de
+        # substitui-la: aquela ainda alimenta o game_intensity do gate de
+        # cartoes (referee_model), e trocar as duas coisas de uma vez sem
+        # medicao separada misturaria dois efeitos num numero so'.
+        "pressao_competitiva": pressao,
     }
 
 
@@ -124,8 +138,22 @@ def context_score(context: dict) -> float:
     round_phase = context.get("round_phase")
     is_knockout = round_phase in ("KNOCKOUT_SINGLE", "KNOCKOUT_TWO_LEGS")
     if not is_knockout:
-        for side in ("table_pressure_home", "table_pressure_away"):
-            if context.get(side, {}).get("label") == "pressao_alta":
-                score += 0.03
+        # Camada medida primeiro (2026-08-14). O +0.03 chapado de
+        # "pressao_alta" tratava o 10o da rodada 5 igual ao 10o da rodada 35 --
+        # mesma posicao, mesmo saldo, mesmo bonus, partidas diferentes. Com a
+        # tabela inteira na mao a parcela passa a ser proporcional a quanto a
+        # partida realmente decide (ver competitive_pressure).
+        #
+        # Teto de 0.06 = o dobro do bonus antigo, e so' num jogo em que os dois
+        # lados estao no limite. O bonus antigo podia somar 0.06 tambem (0.03
+        # por lado), entao o topo da escala nao subiu: o que mudou e' que agora
+        # ele exige uma partida que valha isso.
+        pressao = context.get("pressao_competitiva")
+        if pressao and pressao.get("disponivel"):
+            score += round(pressao["intensidade"] * 0.06, 4)
+        else:
+            for side in ("table_pressure_home", "table_pressure_away"):
+                if context.get(side, {}).get("label") == "pressao_alta":
+                    score += 0.03
 
     return round(max(min(score, 1.0), 0.0), 4)

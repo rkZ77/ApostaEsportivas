@@ -16,6 +16,7 @@ from services.standings_service import StandingsService
 from services.referee_stats_service import RefereeStatsService
 from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain, homologation
 from services.pick_engine.ai_review import review_gate
+from services.pick_engine.config import VIP_CONFIG
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine import team_profile_model as tpm
 from services.pick_engine import context_model as ctx
@@ -45,7 +46,8 @@ def _load_history(match_stats: MatchStatsService, team_id: int, season: int, lea
 
 
 def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_id,
-                    round_str=None, standing_home=None, standing_away=None):
+                    round_str=None, standing_home=None, standing_away=None,
+                    league_table=None):
     """Contexto + perfil/matchup/team_strength (sem noticias -- exigiria
     chamada HTTP por fixture, fora de escopo nesta primeira versao).
 
@@ -66,6 +68,7 @@ def _build_signals(last10_home, last10_away, home_team_id, away_team_id, league_
     context_data = ctx.build_context(
         last10_home, last10_away, home_team_id, away_team_id,
         standing_home, standing_away, league_id, round_str=round_str,
+        league_table=league_table,
     )
     team_strength_data = ts.compare_team_strength(profile_home, profile_away)
     return context_data, matchup, team_strength_data
@@ -157,10 +160,15 @@ def run_vip_engine():
             standing_home, standing_away = standings_service.get_for_fixture(
                 fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], fixture["season"])
+            # A tabela INTEIRA, nao so' as duas linhas: e' o que permite medir
+            # distancia ate a fronteira que importa (ver competitive_pressure).
+            league_table = standings_service.get_league_table(
+                fixture["league_id"], fixture["season"])
             context_data, matchup, team_strength_data = _build_signals(
                 last10_home, last10_away, fixture["home_team_id"], fixture["away_team_id"],
                 fixture["league_id"], round_str=fixture.get("round"),
                 standing_home=standing_home, standing_away=standing_away,
+                league_table=league_table,
             )
             referee_stats = referee_service.get_stats(fixture.get("referee"), fixture["season"])
             league_stats = referee_service.get_league_stats(fixture["league_id"], fixture["season"])
@@ -193,7 +201,8 @@ def run_vip_engine():
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
                 league_baseline=league_baseline,
             )
-            match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
+            match_context = context_gate.build_for_fixture(
+                match_stats, fixture, conv_cartoes, league_table=league_table)
 
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
@@ -204,8 +213,9 @@ def run_vip_engine():
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
+            config=VIP_CONFIG,
             )
-            picks = rank_market_candidates(candidates)
+            picks = rank_market_candidates(candidates, config=VIP_CONFIG)
             log_decision("VIP_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
             if not picks:
                 continue

@@ -302,8 +302,18 @@ def analyze_fixture_markets(
 
         line_candidates = []
         for m in entries:
+            # DUAS odds, papeis diferentes (2026-08-14):
+            #   best_odd -- melhor casa. E' o que o site publica e o que o
+            #     usuario aposta de fato.
+            #   eval_odd -- mediana das casas. E' o que decide se ha valor:
+            #     edge, EV, faixa de odd e line_score rodam todos em cima
+            #     dela, pra o motor nao confundir "casa desalinhada" com
+            #     "valor estatistico". Ver market_model.evaluation_odd.
+            # Quando so ha uma casa (ou o chamador nao trouxe consenso) as
+            # duas coincidem e nada muda em relacao ao comportamento antigo.
             best_odd = float(m.get("best_odd") or 0)
-            if best_odd <= 1.0:
+            eval_odd = market_model.evaluation_odd(m, config)
+            if best_odd <= 1.0 or eval_odd <= 1.0:
                 if debug:
                     entries_dropped.append({
                         "market_name": m.get("market_pt") or m.get("market_name"),
@@ -338,7 +348,7 @@ def analyze_fixture_markets(
             # e nunca era chamada). Cai pra implied_prob automaticamente
             # via resolve_prob_baseline quando nao ha par ou nao ha consenso.
             sibling = _find_sibling(m, entries)
-            prob_baseline = market_model.resolve_prob_baseline(m, sibling)
+            prob_baseline = market_model.resolve_prob_baseline(m, sibling, config)
             # Encolhimento Bayesiano: puxa a taxa em direcao ao prior
             # proporcional a quao pequena e' a amostra (n<<10 -> quase todo
             # peso vai pro prior; n>>10 -> quase nao muda). taxa_bruta_raw
@@ -421,7 +431,7 @@ def analyze_fixture_markets(
                 taxa_ajustada = min(menores)
 
             ev_edge = market_model.edge_and_ev(
-                taxa_ajustada, best_odd, prob_baseline["prob"]
+                taxa_ajustada, eval_odd, prob_baseline["prob"]
             )
             # Estabilidade da linha especifica ao longo do tempo (nao so a
             # media agregada) -- entra no line_score via ranking._stability_bonus.
@@ -438,7 +448,19 @@ def analyze_fixture_markets(
                 "value":            m.get("value"),
                 "line":             m.get("line"),
                 "value_label":      m.get("value_label"),
-                "odd":              best_odd,
+                # A odd de AVALIACAO e' a que vira `odd` do pick -- e' ela que
+                # passa nos gates, no line_score e na faixa, e e' ela que o
+                # site publica. Publicar a melhor casa aqui criaria uma pick
+                # anunciada a 2.00 cuja faixa foi conferida a 1.79: o usuario
+                # veria a odd fora da faixa que ele mesmo pediu.
+                #
+                # O usuario nunca perde com isso: best_bookmaker e' a casa de
+                # maior odd, e o maximo e' sempre >= a mediana. Ele vai a casa
+                # indicada e encontra um preco igual ou melhor que o anunciado
+                # -- nunca pior. O ROI publicado fica conservador pelo mesmo
+                # motivo, o que e' o lado certo pra errar.
+                "odd":              eval_odd,
+                "melhor_odd":       best_odd,
                 "best_bookmaker":   m.get("best_bookmaker"),
                 "bookmakers_count": m.get("bookmakers_count", 1),
                 "taxa_real":        taxa_ajustada,

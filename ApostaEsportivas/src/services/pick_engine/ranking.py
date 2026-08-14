@@ -54,16 +54,42 @@ def correlation_group(market_type: str) -> str:
     return _CORRELATION_GROUP_OVERRIDES.get(market_type, market_type)
 
 
-def _conservative_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
-    """1.0 dentro de [conservative_odd_low, conservative_odd_high]; cai
-    linearmente pra fora, nunca zera de vez -- uma linha fora da faixa
-    ainda pode vencer se taxa/edge forem bem superiores (preferencia
-    suave, nao filtro rigido -- decisao explicita do usuario)."""
+def _safety_bonus(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
+    """Quao SEGURA e' a linha, na escala de preco -- 1.0 no piso da faixa,
+    1.0-safety_band_tilt no teto, caindo pra fora dos dois lados.
+
+    Ate' 2026-08-14 isto era _conservative_bonus e devolvia 1.0 chapado pra
+    qualquer odd dentro da faixa, ou seja: entre Over 8.5 @1.55 e Over 9.5
+    @1.88 do mesmo mercado, o termo era indiferente e quem decidia era o edge
+    -- que cresce com a odd. Na pratica o motor subia a linha por construcao.
+    Com a inclinacao dentro da faixa, descer um degrau passa a valer pontos, e
+    a linha mais alta so vence se a estatistica dela for de fato melhor.
+
+    Abaixo do piso NAO e' seguro, e' barato: cai igual a antes (retorno que
+    nao cobre o erro do modelo -- odd <1.50 e' a unica faixa com ROI negativo
+    em producao, ver VIP_CONFIG). Acima do teto cai a partir do valor do teto,
+    pra a funcao nao dar um salto pra cima justo ao sair da faixa."""
     low, high = config.conservative_odd_low, config.conservative_odd_high
-    if low <= odd <= high:
+    teto = 1.0 - config.safety_band_tilt
+    if odd < low:
+        return round(max(0.0, 1.0 - (low - odd) * 0.5), 4)
+    if odd > high:
+        return round(max(0.0, teto - (odd - high) * 0.5), 4)
+    span = high - low
+    if span <= 0:
         return 1.0
-    dist = (low - odd) if odd < low else (odd - high)
-    return round(max(0.0, 1.0 - dist * 0.5), 4)
+    return round(1.0 - config.safety_band_tilt * ((odd - low) / span), 4)
+
+
+def _dentro_da_faixa(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> bool:
+    """True quando a faixa nao e' filtro (enforce_odd_band=False, comportamento
+    historico) ou quando a odd cabe nela. Unico ponto que decide isso -- os
+    dois gates de aprovacao (evaluate_all_lines e rank_all_candidates) chamam
+    daqui, porque o fallback de select_smart_safe_line pode ressuscitar uma
+    linha reprovada e ela nao pode virar pick por esse caminho."""
+    if not config.enforce_odd_band:
+        return True
+    return config.conservative_odd_low <= odd <= config.conservative_odd_high
 
 
 def _bookmakers_bonus(bookmakers_count: int, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
@@ -105,23 +131,28 @@ def _round_line_penalty(candidate: dict, config: PickEngineConfig = DEFAULT_CONF
 
 def _line_score(candidate: dict, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """Pontuacao de linha (dentro de um mercado ja escolhido por
-    estatistica): taxa real + edge + faixa conservadora de odd + consenso
+    estatistica): taxa real + edge + seguranca na faixa de odd + consenso
     de bookmakers + estabilidade historica da linha, menos uma pequena
     penalidade se a linha for redonda (risco de PUSH -- ver
     _round_line_penalty). E aqui, e so aqui, que a odd participa da
     decisao -- final_score() (escolha do MERCADO) nao usa EV/odd.
 
+    A odd que entra aqui e' a de AVALIACAO (mediana das casas), nao a que o
+    site publica -- ver market_model.evaluation_odd. Sem isso, a linha que uma
+    casa desalinhada cotava alto ganhava pontos de edge que nenhum dado
+    sustentava.
+
     Variancia e Data Quality Score deliberadamente NAO entram aqui --
     sao constantes pra todos os candidatos do mesmo mercado/fixture
     (nao ajudam a escolher ENTRE linhas), ver config.py."""
     edge_norm = min(max(candidate.get("edge", 0.0), 0.0), 0.5) / 0.5
-    conservative = _conservative_bonus(candidate["odd"], config)
+    safety = _safety_bonus(candidate["odd"], config)
     bookmakers = _bookmakers_bonus(candidate.get("bookmakers_count", 1), config)
     stability = _stability_bonus(candidate)
     score = (
         candidate["taxa_real"] * config.line_weight_taxa
         + edge_norm * config.line_weight_edge
-        + conservative * config.line_weight_conservative
+        + safety * config.line_weight_safety
         + bookmakers * config.line_weight_bookmakers
         + stability * config.line_weight_stability
     )
@@ -157,6 +188,9 @@ def evaluate_all_lines(
             reason = "odd abaixo do minimo"
         elif c["odd"] > config.max_odd:
             reason = "odd acima do teto de sanidade"
+        elif not _dentro_da_faixa(c["odd"], config):
+            reason = (f"odd fora da faixa do pipeline "
+                      f"({config.conservative_odd_low}-{config.conservative_odd_high})")
         elif c["edge"] < effective_min_edge:
             reason = "edge abaixo do minimo efetivo"
         elif c["ev"] <= 0:
@@ -176,8 +210,9 @@ def select_smart_safe_line(
     line_candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, data_quality_score: float | None = None,
 ) -> dict | None:
     """Descarta odd<min_odd, odd>max_odd (mercado iliquido/raramente
-    cotado, nao valor real), edge<min_edge_efetivo, EV<=0; entre as que
-    sobram escolhe a de maior line_score (taxa+edge+odd conservadora+
+    cotado, nao valor real), odd fora da faixa do pipeline quando
+    enforce_odd_band, edge<min_edge_efetivo, EV<=0; entre as que
+    sobram escolhe a de maior line_score (taxa+edge+seguranca na faixa+
     bookmakers+estabilidade). Sem candidato aprovado, cai pra qualquer
     linha com odd entre 1.01 e max_odd (fallback conservador, nunca forca
     uma linha ruim ou um outlier de mercado ilíquido silenciosamente) --
@@ -271,6 +306,7 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
         and c["confidence"] >= config.min_confidence
         and c["ev"] > config.min_ev
         and c["odd"] >= config.min_odd
+        and _dentro_da_faixa(c["odd"], config)
     ]
     for c in eligible:
         c["final_score"] = final_score(c)
@@ -299,6 +335,9 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
             reasons.append(f"EV nao positivo ({c['ev']*100:+.1f}%)")
         if c["odd"] < config.min_odd:
             reasons.append(f"odd abaixo do minimo ({c['odd']} < {config.min_odd})")
+        if not _dentro_da_faixa(c["odd"], config):
+            reasons.append(f"odd fora da faixa do pipeline ({c['odd']} nao esta em "
+                           f"{config.conservative_odd_low}-{config.conservative_odd_high})")
 
         scored = {**c, "final_score": final_score(c)}
         if reasons:

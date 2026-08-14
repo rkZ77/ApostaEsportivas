@@ -47,6 +47,9 @@ if _SRC not in sys.path:
     sys.path.insert(0, _SRC)
 
 from utils.db_utils import get_connection  # noqa: E402
+from services.match_stats_service import MatchStatsService
+from services.standings_service import StandingsService
+from services.pick_engine import context_gate
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine_live import live_odds, live_state, orchestrator
 from services.pick_engine_live.config import (
@@ -299,6 +302,54 @@ def baseline_do_confronto(cur, estado: dict) -> dict:
     if len(goals) == 2:
         saida["goals"] = sum(goals) / 2
     return saida
+
+
+def contexto_pre_jogo(cur, estado: dict) -> dict | None:
+    """Regulamento da partida pro motor Live: agregado do mata-mata e
+    necessidade de tabela.
+
+    NAO e' a previsao pre-jogo, e a distincao e' o ponto inteiro: daqui saem as
+    REGRAS (o placar da ida, quem se classifica com o que, quantos pontos cada
+    lado precisa na tabela). Quem responde "e o que esta' acontecendo agora" e'
+    need_model, contra o placar em campo, a cada passada.
+
+    So' banco, nenhuma requisicao de API -- o orcamento do Live nao muda por
+    causa disto. `round` sai de `fixtures` quando a linha ainda existe (a
+    tabela e' efemera e guarda so' jogos NS) e de `match_statistics` como
+    segunda fonte, que e' onde ele sobrevive depois do apito inicial.
+
+    None em qualquer falha: contexto e' sinal auxiliar e nunca pode derrubar a
+    analise ao vivo de uma partida em andamento.
+    """
+    fid = estado.get("fixture_id")
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    league_id = estado.get("league_id")
+    if not (fid and home_id and away_id):
+        return None
+    try:
+        cur.execute("SELECT round, season FROM fixtures WHERE fixture_id = %s", (fid,))
+        linha = cur.fetchone()
+        if not linha:
+            cur.execute(
+                "SELECT round, season FROM match_statistics WHERE fixture_id = %s", (fid,))
+            linha = cur.fetchone()
+        round_str, season = (linha or (None, None))
+
+        match_stats = MatchStatsService()
+        h2h = match_stats.get_h2h_matches(home_id, away_id)
+        tabela = (StandingsService().get_league_table(league_id, season)
+                  if league_id and season else [])
+        return context_gate.build_context(
+            round_str=round_str, home_team_id=home_id, away_team_id=away_id,
+            h2h_matches=h2h, league_id=league_id, season=season,
+            # O baseline de cartoes alimenta so' o sinal de rivalidade, que o
+            # Live nao consome (nao ha mercado de cartao na V1) -- passar None
+            # deixa a rivalidade marcada como nao confiavel, que e' o correto.
+            baseline_cartoes=None, league_table=tabela,
+        )
+    except Exception as e:
+        print(f"[LIVE] Contexto pre-jogo indisponivel para {fid}: {e}")
+        return None
 
 
 def observacoes_anteriores(cur, fixture_id: int, limite: int = 12) -> list[dict]:
@@ -847,7 +898,9 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
 
     baselines = {**baselines_por_liga(cur, estado.get("league_id")),
                  **baseline_do_confronto(cur, estado)}
-    analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh)
+    pre_jogo = contexto_pre_jogo(cur, estado)
+    analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
+                                    contexto_pre_jogo=pre_jogo)
     _observar(cur, conn, estado)
 
     pressao = analise.get("pressao") or {}
@@ -861,6 +914,15 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         print(f"Eventos: {eventos['gols']} gol(s), {eventos['vermelhos']} vermelho(s)"
               + (f", expulsao aos {eventos['vermelho_minuto']}'"
                  if eventos.get("vermelho_minuto") is not None else ""))
+    nec = analise.get("necessidade") or {}
+    if nec.get("intensidade"):
+        print(f"Necessidade: {nec['quem_precisa']} ({nec['origem']}), "
+              f"intensidade {nec['intensidade']:.2f} · "
+              + "; ".join(nec.get("descricao") or []))
+        confirmacao = analise.get("confirmacao_do_contexto") or {}
+        if confirmacao.get("aplicavel") and not confirmacao.get("alinhado"):
+            print(f"  ATENCAO: {confirmacao['motivo']} "
+                  f"(projecao descontada em {(1 - confirmacao['fator']) * 100:.0f}%)")
 
     for familia, info in analise["familias"].items():
         if not info.get("disponivel"):

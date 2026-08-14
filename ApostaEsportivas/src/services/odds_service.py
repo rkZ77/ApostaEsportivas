@@ -1,3 +1,5 @@
+from statistics import median
+
 from utils.db_utils import get_connection
 import psycopg2.extras
 
@@ -58,8 +60,24 @@ class OddsService:
     # Agrega odds por mercado+linha+side · retorna melhor odd entre bookmakers
     ##########################################################################
     def load_odds_structured(self, fixture_id) -> list[dict]:
-        """Agrupa odds por (market_id, line_value, value_name) e retorna a melhor
-        odd disponível entre os bookmakers coletados.
+        """Agrupa odds por (market_id, line_value, value_name) e devolve DOIS
+        preços por linha, com papéis diferentes:
+
+        · `best_odd`      -- a melhor odd entre as casas. É o preço que o
+          usuário vai efetivamente pegar, então é ele que o site publica.
+        · `consensus_odd` -- a MEDIANA das casas que cotam a linha. É o preço
+          que o motor usa pra decidir se existe valor (edge/EV/faixa de odd).
+
+        A separação existe porque usar a melhor odd nos dois papéis fazia o
+        motor caçar casa desalinhada em vez de valor estatístico: medido em
+        produção em 2026-08-14, a odd escolhida era a da casa mais generosa em
+        18 dos 24 últimos picks, com prêmio médio de +2,8% sobre a média das
+        casas e picos de +12% (Bolívar x São Paulo, Escanteios Over 9.5: 2.00
+        na Bet365 contra 1.57 na outra casa). Esse prêmio entrava inteiro no
+        edge, que entra no line_score -- ou seja, uma linha ganhava a disputa
+        por causa do desalinho de UMA casa, não por ser estatisticamente
+        melhor. Avaliar na mediana e apostar na melhor casa mantém o bônus de
+        preço pro usuário sem deixá-lo virar argumento de seleção.
 
         Valida pares Over/Under por bookmaker: a soma das probabilidades implícitas
         deve estar entre 85% e 130%. Pares fora desse range indicam line_value errado
@@ -164,6 +182,11 @@ class OddsService:
                 "value_label":      value_name,   # label completo ex: "Over 1.5"
                 "best_odd":         round(best_odd, 2),
                 "best_bookmaker":   best_bk,
+                # Mediana (não média): com 2-3 casas, uma delas fora da linha
+                # move a média inteira, e é justamente essa casa que o motor
+                # não deve seguir. Com 2 casas a mediana é a média das duas --
+                # já metade do desalinho a menos que pegar a maior.
+                "consensus_odd":    round(median(all_odds), 2),
                 "bookmakers_count": len(bk_odds),
                 "odds_range": {
                     "min": round(min(all_odds), 2),
