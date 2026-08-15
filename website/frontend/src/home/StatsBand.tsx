@@ -14,20 +14,15 @@ import { fadeInUp, staggerContainer } from '../lib/motion'
  * backend, e inventar um contador seria a prova social fabricada que já foi
  * removida da home em julho.
  *
- * A FAIXA FALA EM UNIDADE, NÃO EM PORCENTAGEM. Quem acompanha tipster lê lucro
- * em unidade; ROI em % é a mesma informação num idioma que o público não usa.
- * Literalmente a mesma: como toda stake do histórico vale 1u, `roi` é
- * `média_de_unidades × 100`. Por isso o tile de ROI saiu daqui em vez de somar
- * aos novos: seriam dois tiles vizinhos com o mesmo dado em roupa diferente,
- * que é pior do que não ter o segundo. O ROI continua em /resultados e
- * /performance, onde o leitor já está comparando com outras fontes.
+ * OS QUATRO TILES SÃO OS DE SEMPRE, com uma troca só: "Ligas cobertas" saiu e
+ * o lucro em unidades entrou no lugar. Quem acompanha tipster lê resultado em
+ * unidade, e a contagem de ligas já é dita logo abaixo pela seção Leagues, com
+ * nome e escudo, em vez de um número solto.
  *
- * A quebra VIP/free NÃO é redundante com o ROI: aquele é do bolo inteiro (seis
- * pipelines), estes são por produto, que é a pergunta de quem está decidindo
- * entre o plano free e o VIP na mesma tela.
- *
- * "Ligas cobertas" também saiu: a seção Leagues fica logo abaixo, mostrando as
- * ligas com nome e escudo em vez de um número solto.
+ * Lucro TOTAL e ROI não são o mesmo número, então convivem: um é quanto rendeu,
+ * o outro é quanto rendeu por unidade arriscada. O que seria redundante é ROI
+ * ao lado de uma MÉDIA por pick (`roi` é a média × 100) · por isso a quebra de
+ * VIP e free fica na linha de apoio, não em tiles próprios.
  */
 
 export interface PublicSummary {
@@ -85,40 +80,55 @@ export default function StatsBand({
   const tom = (v: number) => (v >= 0 ? 'text-accent' : 'text-red-400')
   const plano = stakeLabel ?? STAKE_LABEL_PADRAO
 
+  const roi = Number(summary.roi ?? 0)
+
   const TILES = [
     {
-      label: 'Lucro da IA',
-      value: <NumberTicker value={lucro} formatter={v => fmtUnits(v, 1)} />,
-      tone: tom(lucro),
-      hint: `em ${summary.total} picks · ${plano}`,
+      label: 'Picks publicadas',
+      value: <NumberTicker value={summary.total} />,
+      tone: 'text-ink-1',
+      hint: 'no histórico auditável',
     },
     {
       label: 'Assertividade',
       value: <NumberTicker value={wr} suffix="%" />,
       tone: wr >= 55 ? 'text-accent' : 'text-ink-1',
-      // A cobertura de ligas perdeu o tile próprio para o lucro em unidades,
-      // mas não o lugar: ela qualifica a assertividade (57% em 12 ligas diz
-      // mais do que 57% sozinho) e continua saindo de `summary.leagues_count`,
-      // nunca do tamanho de `by_league` · esse era o número que obrigava a rota
-      // a montar a quebra por liga inteira só para ser contado.
+      // A cobertura de ligas perdeu o tile próprio para o lucro, mas não o
+      // lugar: ela qualifica a assertividade (67% em 6 ligas diz mais do que
+      // 67% sozinho) e continua saindo de `summary.leagues_count`, nunca do
+      // tamanho de `by_league` · esse era o número que obrigava a rota a montar
+      // a quebra por liga inteira só para ser contado.
       hint: leaguesCount > 0
         ? `${summary.greens} greens · ${leaguesCount} ligas`
         : `${summary.greens} greens`,
     },
-    // Pipeline sem pick resolvido não vira tile de "+0,00u": some.
-    ...(mediaVip !== null ? [{
-      label: 'Média por pick VIP',
-      value: <NumberTicker value={mediaVip} formatter={v => fmtUnits(v, 2)} />,
-      tone: tom(mediaVip),
-      hint: `${summary.vip_total} picks VIP`,
-    }] : []),
-    ...(mediaFree !== null ? [{
-      label: 'Média por pick free',
-      value: <NumberTicker value={mediaFree} formatter={v => fmtUnits(v, 2)} />,
-      tone: tom(mediaFree),
-      hint: `${summary.free_total} picks free`,
-    }] : []),
+    {
+      label: 'ROI acumulado',
+      value: (
+        <NumberTicker
+          value={roi}
+          decimals={1}
+          formatter={v => `${v >= 0 ? '+' : ''}${v.toFixed(1)}%`}
+        />
+      ),
+      tone: tom(roi),
+      hint: 'sobre o total apostado',
+    },
+    {
+      label: 'Lucro da IA',
+      value: <NumberTicker value={lucro} formatter={v => fmtUnits(v, 1)} />,
+      tone: tom(lucro),
+      hint: plano,
+    },
   ]
+
+  // Quebra por produto na linha de apoio: é a pergunta de quem está decidindo
+  // entre o free e o VIP, mas não vale um tile · média por pick é o ROI em
+  // outra escala, e ficaria ao lado dele.
+  const medias = [
+    mediaVip !== null ? `VIP ${fmtUnits(mediaVip, 2)}` : null,
+    mediaFree !== null ? `free ${fmtUnits(mediaFree, 2)}` : null,
+  ].filter(Boolean).join(' · ')
 
   return (
     <div className="space-y-3">
@@ -137,13 +147,13 @@ export default function StatsBand({
           </motion.div>
         ))}
       </motion.div>
-      {/* A premissa fica embaixo dos números, não escondida num tooltip: a Banca
-          sugere stake variável (1u a 10u), e sem esta linha o visitante compara
-          o lucro daqui com o dele e conclui que a conta do site não fecha.
-          O texto vem do backend (stake_plan.py) para não envelhecer sozinho. */}
-      <p className="text-[10px] text-ink-4">
-        Plano fixo de stake: {plano}. Sem stake variável, sem martingale.
-      </p>
+      {/* Linha de apoio: média por produto. Some inteira quando nenhum dos dois
+          pipelines tem pick resolvido. */}
+      {medias && (
+        <p className="text-[10px] text-ink-4">
+          Média por pick · {medias}
+        </p>
+      )}
     </div>
   )
 }

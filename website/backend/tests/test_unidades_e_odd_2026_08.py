@@ -58,24 +58,33 @@ def test_unidade_tem_um_formatador_so():
         assert "fmtUnits" in _front_codigo(tela), f"{tela} escreve unidade na mao"
 
 
-def test_home_mostra_lucro_e_media_por_produto():
-    """O pedido: lucro acumulado em unidades e media por pick de VIP e de free."""
-    banda = _front_codigo("home/StatsBand.tsx")
-    assert "Lucro da IA" in banda
-    assert "Média por pick VIP" in banda
-    assert "Média por pick free" in banda
+def test_home_troca_ligas_cobertas_pelo_lucro():
+    """A faixa e' a de sempre com UMA troca: sai "Ligas cobertas", entra o
+    lucro em unidades. Os outros tres tiles ficam onde estavam.
 
-
-def test_home_nao_mostra_roi_junto_da_media_em_unidades():
-    """ROI e media de unidades sao o MESMO numero.
-
-    Toda stake do historico vale 1u, entao `roi` e' `media_de_unidades × 100`.
-    Os dois lado a lado seriam o mesmo dado em roupa diferente, e quem entende
-    de aposta percebe. O ROI segue vivo em /resultados e /performance, onde o
-    leitor esta' comparando com fonte que publica em %.
+    A contagem de ligas nao se perde -- vira apoio da assertividade, e continua
+    saindo de `summary.leagues_count`, nunca do tamanho de `by_league`.
     """
     banda = _front_codigo("home/StatsBand.tsx")
-    assert "ROI" not in banda, "ROI voltou pra faixa da Home ao lado da media"
+    for tile in ("Picks publicadas", "Assertividade", "ROI acumulado", "Lucro da IA"):
+        assert f"label: '{tile}'" in banda, f"{tile} sumiu da faixa"
+    assert "label: 'Ligas cobertas'" not in banda, "o lucro devia ter tomado esse lugar"
+    assert "leaguesCount" in banda and "by_league" not in banda
+
+
+def test_media_por_produto_nao_vira_tile_ao_lado_do_roi():
+    """Media por pick e ROI sao o MESMO numero em escalas diferentes.
+
+    Como toda stake vale 1u na base, `roi` e' `media × 100`. Lado a lado como
+    tiles seriam o mesmo dado em duas roupas, e quem entende de aposta percebe
+    -- entao a quebra de VIP e free vai pra linha de apoio, onde informa sem
+    competir com o ROI. Lucro TOTAL e ROI podem conviver: um e' quanto rendeu,
+    o outro e' quanto rendeu por unidade arriscada.
+    """
+    banda = _front_codigo("home/StatsBand.tsx")
+    assert "label: 'Média por pick" not in banda, "media voltou a ser tile"
+    assert "Média por pick ·" in banda, "a quebra por produto sumiu da faixa"
+    assert "mediaVip" in banda and "mediaFree" in banda
 
 
 def test_plano_de_stake_vive_num_lugar_so():
