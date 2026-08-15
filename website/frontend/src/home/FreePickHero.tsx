@@ -49,7 +49,22 @@ interface FreePick {
 /** Texto de enfeite sob o borrão. Nunca é o mercado real. */
 const ISCA = 'Mercado escondido'
 
-export default function FreePickHero() {
+/*
+ * `revelar` e `onCarregou` sincronizam este bloco com os vizinhos do topo.
+ *
+ * Cada bloco da Home tinha o seu próprio request e o seu próprio `loading`,
+ * então a tela se montava sozinha na ordem em que o servidor respondesse: a
+ * dica aparecia, depois a fila de jogos empurrava tudo para baixo, depois os
+ * números. Quem está no celular via a página se reorganizando embaixo do dedo.
+ *
+ * Agora o request continua saindo na hora (ninguém espera ninguém para pedir),
+ * mas a REVELAÇÃO é coletiva: o bloco avisa a Home que terminou e só troca o
+ * esqueleto pelo conteúdo quando os três vizinhos do topo terminaram.
+ */
+export default function FreePickHero({ revelar = true, onCarregou }: {
+  revelar?: boolean
+  onCarregou?: () => void
+}) {
   const { user } = useAuth()
   const [pick, setPick] = useState<FreePick | null>(null)
   const [loading, setLoading] = useState(true)
@@ -58,10 +73,10 @@ export default function FreePickHero() {
     api.get('/public/free-pick-today')
       .then(r => setPick(r.data ?? null))
       .catch(() => setPick(null))
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); onCarregou?.() })
   }, [user?.id])
 
-  if (loading) {
+  if (loading || !revelar) {
     return (
       <div className="panel p-6 space-y-4">
         <Skeleton className="h-4 w-40" />
