@@ -1,4 +1,6 @@
 import os
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from jose import JWTError, jwt
 from passlib.context import CryptContext
@@ -108,6 +110,78 @@ def _hash_session(token: str) -> str:
     return hashlib.sha256(token.encode()).hexdigest()
 
 
+# ─── Cache da linha de `users` usada na checagem de sessão ───────────────────
+#
+# POR QUE ISTO EXISTE, com o numero medido em 13/08 (ver database.py:71-82):
+# cada ida ao banco custa 154ms, e este SELECT rodava em TODA requisicao
+# autenticada, antes do handler comecar. A tela de Picks dispara 10 chamadas
+# quase ao mesmo tempo -- eram 10 x 154ms so' pra conferir a sessao, e 10 slots
+# do pool (que tem 10 no total) gastos antes de qualquer trabalho util.
+#
+# A JANELA E' CURTA DE PROPOSITO. Ela e' o atraso maximo pra tres coisas que o
+# usuario percebe: pagamento aprovado virar VIP na tela, sessao derrubada por
+# login em outro aparelho, e conta desativada pelo admin parar de responder.
+# 30s e' o teto que se aceita nesses tres casos; nao suba isto sem pensar neles.
+#
+# Admin NUNCA entra no cache: e' quem muda plano dos outros e precisa ver o
+# efeito na hora, e sao poucas contas, entao o ganho aqui seria irrelevante.
+_SESSAO_TTL = 30.0
+_sessao_cache: dict[int, tuple[float, dict]] = {}
+_sessao_lock = threading.Lock()
+
+
+def invalidar_cache_usuario(user_id) -> None:
+    """Derruba a linha em cache de um usuario.
+
+    Chamada de todo lugar que mexe em plano, sessao ou `active` -- ver a lista
+    em routers/auth.py, routers/payments.py e routers/admin.py. Esquecer uma
+    chamada dessas nao vira bug permanente: o pior caso e' o TTL acima.
+    """
+    if user_id is None:
+        return
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return
+    with _sessao_lock:
+        _sessao_cache.pop(uid, None)
+
+
+def _linha_de_sessao(user_id) -> dict | None:
+    """A linha de `users` que a checagem precisa, do cache ou do banco."""
+    try:
+        uid = int(user_id)
+    except (TypeError, ValueError):
+        return None
+
+    agora = time.time()
+    with _sessao_lock:
+        entrada = _sessao_cache.get(uid)
+        if entrada and agora - entrada[0] < _SESSAO_TTL:
+            return entrada[1]
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT id, active, session_token, last_login_device, last_login_at, plan, expires_at FROM users WHERE id = %s",
+            (uid,),
+        )
+        row = cur.fetchone()
+    finally:
+        cur.close(); conn.close()
+
+    if row is None:
+        return None
+
+    # dict comum: RealDictRow e' ligado ao cursor, que ja fechou.
+    linha = dict(row)
+    if linha.get("plan") != "admin":
+        with _sessao_lock:
+            _sessao_cache[uid] = (agora, linha)
+    return linha
+
+
 def get_current_user(request: Request, bearer: str | None = Depends(oauth2_scheme)) -> dict:
     # Cookie httpOnly tem prioridade; cai para Bearer como fallback (mobile/API)
     token = request.cookies.get(COOKIE_NAME) or bearer
@@ -121,16 +195,7 @@ def get_current_user(request: Request, bearer: str | None = Depends(oauth2_schem
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token inválido")
 
     # Verifica usuário ativo e sessão única
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute(
-            "SELECT id, active, session_token, last_login_device, last_login_at, plan, expires_at FROM users WHERE id = %s",
-            (payload.get("sub"),),
-        )
-        row = cur.fetchone()
-    finally:
-        cur.close(); conn.close()
+    row = _linha_de_sessao(payload.get("sub"))
 
     if not row or not row["active"]:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Usuário não encontrado ou desativado")
@@ -236,17 +301,14 @@ def get_current_user_optional(request: Request) -> dict | None:
         if payload.get("type") != "access":
             return None
 
-        conn = get_connection()
-        cur = conn.cursor()
-        try:
-            cur.execute("SELECT id, active, plan FROM users WHERE id = %s", (payload.get("sub"),))
-            row = cur.fetchone()
-        finally:
-            cur.close(); conn.close()
+        # Mesmo cache do caminho autenticado: a Home anonima e a Home logada
+        # batem no mesmo endpoint (/public/free-pick-today), entao sem isto o
+        # visitante logado pagaria uma ida ao banco a mais que o anonimo.
+        row = _linha_de_sessao(payload.get("sub"))
 
         if not row or not row["active"]:
             return None
-        return dict(row)
+        return {"id": row["id"], "active": row["active"], "plan": row["plan"]}
     except Exception:
         # Token expirado, malformado ou banco fora: pro publico anonimo isso
         # nao e erro, e so "sem sessao".

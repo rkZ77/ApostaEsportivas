@@ -10,7 +10,7 @@ from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
 from data_br import HOJE_BR, data_br
-from auth_utils import require_admin, hash_password, get_current_user
+from auth_utils import require_admin, hash_password, get_current_user, invalidar_cache_usuario
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
 
@@ -192,6 +192,9 @@ def update_user(user_id: int, body: UpdateUserBody, current_user: dict = Depends
         if not row:
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         conn.commit()
+        # Mudanca de plano feita pelo admin tem que valer na proxima requisicao
+        # do usuario, nao no fim do TTL do cache de sessao (auth_utils).
+        invalidar_cache_usuario(user_id)
         return dict(row)
     finally:
         cur.close()
@@ -210,6 +213,7 @@ def delete_user(user_id: int, current_user: dict = Depends(require_admin)):
         if not cur.fetchone():
             raise HTTPException(status_code=404, detail="Usuário não encontrado")
         conn.commit()
+        invalidar_cache_usuario(user_id)
         return {"ok": True}
     finally:
         cur.close()

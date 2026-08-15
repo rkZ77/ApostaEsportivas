@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo, useRef } from 'react'
+﻿import { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
@@ -364,7 +364,7 @@ function shortReasoning(text?: string): string {
   return text.slice(0, 130)
 }
 
-function PickSeguroCard({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
+function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = false }: { dica: any; compact?: boolean; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
   // probability quando existir; confidence e' o fallback dos picks antigos
@@ -662,7 +662,7 @@ function PickSeguroEmpty() {
 }
 
 // Múltipla card
-function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
+function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onClick?: () => void; banca?: { bankroll_current: number; unit_value: number } | null; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate = useNavigate()
   let legs: any[] = []
@@ -954,7 +954,7 @@ function MultiplaCard({ m, onClick, banca, isLive = false }: { m: any; onClick?:
 }
 
 // Alavancagem card
-function AlavancagemCard({ pick, onClick, userBankroll, onConfigureBanca, isLive = false }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean }) {
+function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, isLive = false }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean }) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate    = useNavigate()
   const isCombo     = pick.tipo === 'dupla' || pick.tipo === 'tripla' || pick.tipo === 'combinacao'
@@ -1319,6 +1319,15 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
 }) {
+  // `mercadoParaSuggestion` monta um objeto novo a cada chamada. Chamando-a
+  // direto no JSX, a prop `s` mudava de identidade em todo render e o memo do
+  // SuggestionCard nunca acertava · o card era remontado por inteiro sempre que
+  // qualquer estado da tela de Picks mudasse.
+  const cards = useMemo(
+    () => (picks ?? []).map(p => ({ id: p.id, s: mercadoParaSuggestion(p, tipo) })),
+    [picks, tipo],
+  )
+
   return (
     <div>
       <SectionHeader color={cor} label={titulo} badge="VIP" />
@@ -1337,12 +1346,8 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-          {picks.map(p => (
-            <SuggestionCard
-              key={p.id}
-              s={mercadoParaSuggestion(p, tipo)}
-              banca={banca}
-            />
+          {cards.map(c => (
+            <SuggestionCard key={c.id} s={c.s} banca={banca} />
           ))}
         </div>
       )}
@@ -1384,14 +1389,57 @@ interface PipelineStep { key: string; label: string; status: 'pending' | 'runnin
 function PipelineStatusCard() {
   const [status, setStatus] = useState<{ running: boolean; finished: boolean; steps: PipelineStep[] } | null>(null)
 
+  /*
+   * Ritmo depende de estar rodando ou não, e a aba escondida não pesquisa.
+   *
+   * Antes era um intervalo fixo de 6s que subia junto com o card e não parava
+   * nunca. Quem abrisse a aba num dia sem picks e deixasse aberta ficava
+   * pedindo o status dez vezes por minuto, para sempre, mesmo com o navegador
+   * em segundo plano · e cada pedido passa pela checagem de sessão, que é uma
+   * ida ao banco.
+   *
+   * O intervalo parado continua existindo de propósito: o pipeline roda na mão,
+   * então ele pode começar com o usuário já na tela, e sem pesquisa nenhuma ele
+   * só descobriria recarregando. 60s parado é o suficiente para isso; 10s
+   * rodando é o suficiente para a barra de etapas andar sem parecer travada.
+   */
   useEffect(() => {
     let active = true
-    const poll = () => {
-      api.get('/admin/pipeline-status-public').then(r => { if (active) setStatus(r.data) }).catch(() => {})
+    let timer: ReturnType<typeof setTimeout> | null = null
+
+    const agendar = (rodando: boolean) => {
+      if (!active) return
+      timer = setTimeout(poll, rodando ? 10_000 : 60_000)
     }
+
+    const poll = () => {
+      if (!active) return
+      // Aba em segundo plano não gasta requisição: volta a pesquisar no
+      // visibilitychange abaixo.
+      if (document.hidden) { agendar(false); return }
+      api.get('/admin/pipeline-status-public')
+        .then(r => {
+          if (!active) return
+          setStatus(r.data)
+          agendar(!!r.data?.running)
+        })
+        .catch(() => agendar(false))
+    }
+
+    const aoVoltar = () => {
+      if (!document.hidden && active) {
+        if (timer) clearTimeout(timer)
+        poll()
+      }
+    }
+
     poll()
-    const t = setInterval(poll, 6000)
-    return () => { active = false; clearInterval(t) }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => {
+      active = false
+      if (timer) clearTimeout(timer)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
   }, [])
 
   if (!status?.running) {
@@ -1653,6 +1701,24 @@ function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'ora
 
 
 
+/*
+ * Cards memoizados.
+ *
+ * Esta tela guarda todo o estado num componente só · `today`, `quickStats`,
+ * `liveFixtures`, `recentResults`, `bancaSummary`, `userAlavSerie`, a aba, os
+ * filtros e os modais. Cada resposta que chega repintava TODOS os cards, e no
+ * iPhone isso aparece como travada no scroll enquanto a tela carrega.
+ *
+ * Os três recebem props estáveis: o objeto do pick vem direto de `today`, o
+ * `banca` é o mesmo `bancaSummary`, `isLive` é booleano e `onConfigureBanca` já
+ * era um useCallback. Então a comparação rasa do memo resolve · não precisa de
+ * comparador próprio, e colocar um aqui só criaria uma segunda fonte de verdade
+ * sobre quais props importam.
+ */
+const PickSeguroCard  = memo(PickSeguroCardBase)
+const MultiplaCard    = memo(MultiplaCardBase)
+const AlavancagemCard = memo(AlavancagemCardBase)
+
 // Dashboard
 export default function Picks() {
   const navigate = useNavigate()
@@ -1810,6 +1876,18 @@ export default function Picks() {
   const isFixtureLive  = (fixtureId?: number) => !!fixtureId && liveFixtures.has(fixtureId)
   const isMultiplaLive = (m: any) => (m.legs ?? []).some((leg: any) => isFixtureLive(leg.fixture_id))
   const isAlavLive     = (pick: any) => isFixtureLive(pick.fixture_id_1) || isFixtureLive(pick.fixture_id_2)
+
+  // Mesma razão do useMemo em MercadoSecao: `mercadoParaSuggestion` devolve um
+  // objeto novo toda vez, e sem prender a identidade aqui o memo do
+  // SuggestionCard não pega nada nesta aba.
+  const faltasCards = useMemo<Array<{ id: number; s: any }>>(
+    () => (today?.faltas ?? []).map((p: MercadoPick) => ({ id: p.id, s: mercadoParaSuggestion(p, 'faltas') })),
+    [today?.faltas],
+  )
+  const goleirosCards = useMemo<Array<{ id: number; s: any }>>(
+    () => (today?.goleiros ?? []).map((p: MercadoPick) => ({ id: p.id, s: mercadoParaSuggestion(p, 'goleiros') })),
+    [today?.goleiros],
+  )
 
   useEffect(() => {
     api.get('/suggestions/recent-results', { params: { limit: 40 } })
@@ -2213,17 +2291,17 @@ export default function Picks() {
                         primeiro) ele era montado sem nenhuma prop além do pick.
                         Com SuggestionCard o card é o mesmo do VIP em qualquer
                         lugar que apareça. */}
-                    {(today?.faltas ?? []).map((p: MercadoPick) => (
+                    {faltasCards.map(c => (
                       <SuggestionCard
-                        key={`f-${p.id}`}
-                        s={mercadoParaSuggestion(p, 'faltas')}
+                        key={`f-${c.id}`}
+                        s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
                     ))}
-                    {(today?.goleiros ?? []).map((p: MercadoPick) => (
+                    {goleirosCards.map(c => (
                       <SuggestionCard
-                        key={`g-${p.id}`}
-                        s={mercadoParaSuggestion(p, 'goleiros')}
+                        key={`g-${c.id}`}
+                        s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
                     ))}

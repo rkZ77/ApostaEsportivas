@@ -318,8 +318,20 @@ def public_results(
     source: Optional[str] = Query(None, description="all | vip | free | multiplas | alavancagem | faltas | goleiros"),
     recent_limit:  int = Query(10, ge=1, le=50, description="Itens por página em 'recent'"),
     recent_offset: int = Query(0, ge=0, description="Offset de paginação em 'recent'"),
+    slim: bool = Query(False, description="Pula os blocos que só a página de Resultados usa"),
 ):
-    """Resultados públicos consolidados para a Landing page."""
+    """Resultados públicos consolidados para a Landing page.
+
+    `slim=1` existe pra Home. Ela le tres coisas -- `summary`, `recent` e o
+    TAMANHO de `by_league` -- e recebia sete blocos. Os outros quatro
+    (`available_months`, `by_day`, `counts`, `recent_total`) so' a pagina de
+    Resultados usa, e cada um custa uma ida ao banco de 154ms (ver
+    database.py:71-82) mais o peso no JSON. O `by_day` e' o pior: uma linha por
+    dia desde o lancamento, e cresce todo dia.
+
+    Com slim a rota cai de sete consultas pra tres. Sem ele, nada muda: a
+    pagina de Resultados continua recebendo a resposta inteira.
+    """
     # Mesma varredura em segundo plano de /suggestions/today. Entra aqui
     # também porque esta é a tela que o visitante DESLOGADO abre: sem isso,
     # num dia em que nenhum assinante entrasse no site, o placar público
@@ -334,7 +346,7 @@ def public_results(
     cur  = conn.cursor()
     try:
         # ── Meses disponíveis (todas as tabelas) ─────────────────────────────
-        months_rows = _q(cur, """
+        months_rows = [] if slim else _q(cur, """
             SELECT month, SUM(cnt) AS total FROM (
                 SELECT TO_CHAR(match_date, 'YYYY-MM') AS month, COUNT(*) AS cnt
                 FROM picks_vip WHERE result IS NOT NULL GROUP BY 1
@@ -387,12 +399,18 @@ def public_results(
                 ROUND(
                     COALESCE(SUM(profit), 0) /
                     NULLIF(COALESCE(SUM(stake), 0), 0) * 100, 1
-                )                                                 AS roi
+                )                                                 AS roi,
+                -- A Home so' precisa do NUMERO de ligas cobertas, e lia isso do
+                -- tamanho de `by_league`, o que obrigava a montar a quebra por
+                -- liga inteira (mais uma varredura do UNION, mais uma consulta
+                -- pros nomes). Aqui sai de graca: mesma varredura, mesma linha.
+                COUNT(DISTINCT league_id) FILTER (WHERE league_id IS NOT NULL)
+                                                                  AS leagues_count
             FROM ({union_sql}) AS t
         """, p)
 
         # ── Por dia (gráfico) ─────────────────────────────────────────────────
-        by_day = _q(cur, f"""
+        by_day = [] if slim else _q(cur, f"""
             SELECT
                 match_date,
                 COUNT(*) AS total,
@@ -414,25 +432,24 @@ def public_results(
         # picks_free pode estar desatualizado em relacao a leagues.name atual,
         # ex: "Copa do Mundo" vs "Copa do Mundo FIFA" pro mesmo league_id, o
         # que duplicaria a liga em duas linhas).
-        by_league_raw = _q(cur, f"""
+        #
+        # O nome da liga vem por LEFT JOIN, nao por uma segunda consulta a
+        # `leagues` montando dicionario em Python. Mesma saida, uma ida a menos.
+        by_league = [] if slim else [dict(r) for r in _q(cur, f"""
             SELECT
-                league_id,
+                t.league_id,
                 COUNT(*)                                  AS total,
-                COUNT(*) FILTER (WHERE result = 'GREEN')  AS greens,
-                COUNT(*) FILTER (WHERE result = 'RED')    AS reds,
-                COALESCE(SUM(profit), 0)                  AS profit,
-                COALESCE(SUM(stake), 0)                   AS stake_total
+                COUNT(*) FILTER (WHERE t.result = 'GREEN') AS greens,
+                COUNT(*) FILTER (WHERE t.result = 'RED')   AS reds,
+                COALESCE(SUM(t.profit), 0)                AS profit,
+                COALESCE(SUM(t.stake), 0)                 AS stake_total,
+                COALESCE(l.name, 'Liga ' || t.league_id)  AS league_name
             FROM ({union_sql}) AS t
-            WHERE league_id IS NOT NULL
-            GROUP BY league_id
+            LEFT JOIN leagues l ON l.league_id = t.league_id
+            WHERE t.league_id IS NOT NULL
+            GROUP BY t.league_id, l.name
             ORDER BY total DESC
-        """, p)
-        _league_names = {r["league_id"]: r["name"] for r in _q(cur, "SELECT league_id, name FROM leagues")}
-        by_league = []
-        for r in by_league_raw:
-            d = dict(r)
-            d["league_name"] = _league_names.get(d["league_id"], f"Liga {d['league_id']}")
-            by_league.append(d)
+        """, p)]
 
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
         single_source = source if source in _SUB_BUILDERS else None
@@ -441,7 +458,7 @@ def public_results(
             limit=recent_limit, offset=recent_offset)
 
         # ── Contagem por tipo ─────────────────────────────────────────────────
-        counts_row = _q1(cur, f"""
+        counts_row = None if slim else _q1(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE source = 'vip')        AS vip_total,
                 COUNT(*) FILTER (WHERE source = 'free')       AS free_total,
@@ -468,7 +485,7 @@ def public_results(
             "available_months": available_months,
             "summary": dict(summary) if summary else {},
             "by_day":  [dict(r) for r in by_day],
-            "by_league": [dict(r) for r in by_league],
+            "by_league": by_league,
             "recent":  [dict(r) for r in recent],
             "recent_total": recent_total,
             "counts":  dict(counts_row) if counts_row else {},

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, memo } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
@@ -89,7 +89,10 @@ const MAX_UNITS_POR_TIPO: Record<string, number> = {
   free: 6, multipla: 3, faltas: 6, goleiros: 6,
 }
 
-export default function SuggestionCard({
+/* Memoizado no fim do arquivo · este é o card mais repetido do site (lista VIP,
+   aba Mercados, histórico), e a tela de Picks repinta a árvore inteira a cada
+   resposta que chega. Ver o bloco de memo em pages/Picks.tsx. */
+function SuggestionCard({
   s, onClick, banca, isLive = false,
 }: { s: Suggestion; onClick?: () => void; banca?: BancaSummary | null; isLive?: boolean }) {
   const navigate = useNavigate()
@@ -437,3 +440,5 @@ export default function SuggestionCard({
   )
 }
 
+
+export default memo(SuggestionCard)

@@ -241,20 +241,43 @@ export default function Fixtures() {
 
   useEffect(() => { fetchFixtures(TODAY) }, [])
 
-  // Atualiza estatísticas ao vivo a cada 30s para jogos em andamento
+  /*
+   * Atualiza estatísticas ao vivo a cada 30s para jogos em andamento.
+   *
+   * UMA requisição para todos os jogos, não uma por jogo. Numa rodada de
+   * Brasileirão com oito partidas simultâneas eram oito requisições a cada meio
+   * minuto, cada uma passando pela checagem de sessão no servidor e pegando um
+   * slot do pool de conexões. O endpoint em lote busca as partidas de uma vez
+   * só na API-Football (ver live.py::get_live_stats_bulk) e devolve o mesmo
+   * formato, chaveado por fixture_id em texto.
+   *
+   * A aba escondida também não pesquisa: placar ao vivo que ninguém está
+   * olhando não vale requisição.
+   */
   useEffect(() => {
-    const liveGames = fixtures.filter(f => isLive(f.status))
-    if (liveGames.length === 0) return
+    const ids = fixtures.filter(f => isLive(f.status)).map(f => f.fixture_id)
+    if (ids.length === 0) return
+
     const fetchAll = () => {
-      liveGames.forEach(f => {
-        api.get(`/live/fixture/${f.fixture_id}/live-stats`)
-          .then(r => setLiveStats(prev => ({ ...prev, [f.fixture_id]: r.data })))
-          .catch(() => {})
-      })
+      if (document.hidden) return
+      api.get('/live/live-stats', { params: { fixture_ids: ids.join(',') } })
+        .then(r => setLiveStats(prev => {
+          const next = { ...prev }
+          for (const [fid, stats] of Object.entries((r.data ?? {}) as Record<string, LiveStats>)) {
+            next[Number(fid)] = stats
+          }
+          return next
+        }))
+        .catch(() => {})
     }
+
     fetchAll()
     const timer = setInterval(fetchAll, 30_000)
-    return () => clearInterval(timer)
+    document.addEventListener('visibilitychange', fetchAll)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', fetchAll)
+    }
   }, [fixtures])
 
   // Agrupa por liga (preserva ordem de aparição)

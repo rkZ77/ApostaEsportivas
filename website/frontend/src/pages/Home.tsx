@@ -382,8 +382,13 @@ export default function Home() {
   // recent_limit=10 porque a lista mostra 10. Estava em 50: o backend roda uma
   // sub-query por tipo de pick (seis) buscando 50 linhas cada, ordenava as 300
   // e devolvia todas · para a Home jogar 40 fora no `.slice(0, 10)`.
+  //
+  // slim=1 pelo mesmo motivo, um nível acima: a resposta trazia sete blocos e
+  // esta tela lê três. `by_day` era o pior · uma linha por dia desde o
+  // lançamento, baixada inteira para não ser usada em lugar nenhum. Com slim a
+  // rota faz duas consultas em vez de sete (ver public.py:/results).
   useEffect(() => {
-    api.get('/public/results', { params: { recent_limit: 10 } })
+    api.get('/public/results', { params: { recent_limit: 10, slim: 1 } })
       .then(r => setData(r.data))
       .catch(() => setData(null))
       .finally(() => setLoaded(true))
@@ -436,9 +441,15 @@ export default function Home() {
           aria-hidden="true"
           className="absolute inset-0 bg-data-grid bg-[length:32px_32px] [mask-image:radial-gradient(ellipse_65%_55%_at_50%_0%,black,transparent)]"
         />
+        {/* Brilho do hero em radial-gradient, não em `blur-[120px]`.
+            Desfoque de 120px sobre uma área de 560x320 obriga o navegador a
+            criar uma camada e refiltrá-la; no Safari do iPhone é o efeito mais
+            caro desta tela, e ele fica exatamente atrás do conteúdo que rola.
+            O gradiente pinta o mesmo halo direto, sem camada e sem filtro. */}
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[560px] h-[320px] bg-accent/10 blur-[120px] rounded-full"
+          className="pointer-events-none absolute top-0 left-1/2 -translate-x-1/2 w-[820px] h-[520px]"
+          style={{ background: 'radial-gradient(50% 50% at 50% 40%, rgb(var(--accent) / 0.10), transparent 70%)' }}
         />
 
         <div className="relative max-w-6xl mx-auto px-4 pt-14 pb-16 md:pt-20 md:pb-24">
@@ -512,9 +523,13 @@ export default function Home() {
           </div>
 
           <div className="mt-8 md:mt-10">
+            {/* leagues_count vem do próprio summary. Antes era
+                `by_league.length`, e só por causa desse número a rota tinha que
+                montar a quebra por liga inteira: mais uma varredura do histórico
+                e mais uma consulta pros nomes das ligas. */}
             <StatsBand
               summary={data?.summary ?? null}
-              leaguesCount={data?.by_league?.length ?? 0}
+              leaguesCount={data?.summary?.leagues_count ?? 0}
               loaded={loaded}
             />
           </div>
