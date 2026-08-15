@@ -8,6 +8,12 @@
 scripts/
 logs/
 
+# ...menos o build do frontend: `scripts/` acima casa com QUALQUER pasta de
+# qualquer nivel, entao engolia website/frontend/scripts/ tambem. O Dockerfile
+# roda `npm run build:comprimir` dela; sem isto o deploy quebra com
+# MODULE_NOT_FOUND, porque o arquivo existe so' na maquina local.
+!website/frontend/scripts/
+
 # Venv do ApostaEsportivas
 ApostaEsportivas/venv/
 *.key
