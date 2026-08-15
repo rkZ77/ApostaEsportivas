@@ -50,6 +50,8 @@ interface RecentTip {
 }
 
 interface PublicData {
+  /** Legenda do plano de stake · montada em backend/stake_plan.py. */
+  stake_label?: string
   summary: PublicSummary
   recent: RecentTip[]
   by_league?: Array<{ league_id: number | null; league_name: string }>
@@ -562,6 +564,7 @@ export default function Home() {
             <StatsBand
               summary={data?.summary ?? null}
               leaguesCount={data?.summary?.leagues_count ?? 0}
+              stakeLabel={data?.stake_label}
               loaded={topoPronto}
             />
           </div>

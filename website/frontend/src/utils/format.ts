@@ -12,20 +12,28 @@ export function winRate(greens: number, total: number): number | null {
 }
 
 /**
+ * Legenda do plano de stake, usada enquanto `/public/results` não respondeu.
+ * A resposta traz `stake_label` montado em backend/stake_plan.py, que é a
+ * fonte da verdade · isto aqui é só o texto de partida.
+ */
+export const STAKE_LABEL_PADRAO = '4u em picks simples · 1u em múltiplas'
+
+/**
  * Lucro em unidades, sempre com sinal. `+42,7u` · `−1,00u`.
  *
- * TODO numero publico de unidade sai daqui, e a premissa e' sempre a mesma:
- * STAKE FIXA DE 1u POR PICK. E' o que a coluna `profit` das seis tabelas de
- * picks guarda (settlement.py: GREEN -> odd-1, HALF-WIN -> (odd-1)/2, PUSH -> 0,
- * HALF-LOSS -> -0.5, RED -> -1), entao somar `profit` ja da' o resultado em
- * unidades sem recalcular nada no cliente.
+ * Todo número público de unidade sai daqui. A base de cálculo é a coluna
+ * `profit` das seis tabelas de picks, que guarda o lucro de UMA unidade
+ * (settlement.py: GREEN -> odd-1, HALF-WIN -> (odd-1)/2, PUSH -> 0, HALF-LOSS
+ * -> -0.5, RED -> -1); o peso do plano de stake (4u em pick simples, 1u em
+ * bilhete) já vem multiplicado do backend, então aqui é só formatar.
  *
- * Isso NAO e' a stake sugerida da Banca, que varia de 1u a 10u por confianca
- * (stakeUtils.ts). Quem mostra este numero tem que dizer "stake fixa de 1u" na
- * tela, senao o usuario compara com a banca dele e o site parece estar mentindo.
+ * Isso NÃO é a stake sugerida da Banca, que varia por confiança
+ * (stakeUtils.ts). Quem mostra este número tem que exibir STAKE_LABEL_PADRAO
+ * junto, senão o usuário compara com a banca dele, os números não batem e o
+ * site parece estar mentindo.
  *
- * Total com 1 casa; media por pick com 2, porque media e' numero pequeno e 1
- * casa achata tudo em `+0,2u`. Sufixo `u` minusculo colado, igual a Banca ja usa.
+ * Total com 1 casa; média por pick com 2, porque média é número pequeno e 1
+ * casa achata tudo em `+0,2u`. Sufixo `u` minúsculo colado, igual à Banca.
  */
 export function fmtUnits(value: number, decimals = 1): string {
   const abs = Math.abs(value).toLocaleString('pt-BR', {

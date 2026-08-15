@@ -8,7 +8,7 @@ import {
 } from '../components/ui'
 import DailyGreensChart from '../components/DailyGreensChart'
 import ActivityHeatmap from '../components/ActivityHeatmap'
-import { winRate as calcWinRate, fmtUnits } from '../utils/format'
+import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
  * Performance da IA.
@@ -35,6 +35,8 @@ interface LeagueResult {
   total: number; greens: number; reds: number
 }
 interface ResultsData {
+  /** Legenda do plano de stake · vem pronta do backend (stake_plan.py). */
+  stake_label?: string
   summary: Summary
   by_day: DayResult[]
   by_league: LeagueResult[]
@@ -184,12 +186,7 @@ export default function PerformanceIA() {
   const wr = calcWinRate(s?.greens ?? 0, s?.total ?? 0) ?? 0
   const roi = Number(s?.roi ?? 0)
   const lucro = Number(s?.profit ?? 0)
-  // Média de unidades por pick, por produto. null quando o pipeline ainda não
-  // tem pick resolvido: tile some em vez de estampar "+0,00u".
-  const media = (profit?: number, total?: number) =>
-    (total && total > 0 ? Number(profit ?? 0) / total : null)
-  const mediaVip  = media(s?.vip_profit, s?.vip_total)
-  const mediaFree = media(s?.free_profit, s?.free_total)
+  const stakeLabel = results?.stake_label ?? STAKE_LABEL_PADRAO
 
   return (
     <PageShell
@@ -216,50 +213,28 @@ export default function PerformanceIA() {
         />
       ) : (
         <>
-          {/* Lucro em unidades na frente do ROI de propósito: é a mesma
-              performance nos dois idiomas, e quem acompanha tipster lê o
-              primeiro. Os dois convivem aqui (e só aqui, mais /resultados)
-              porque esta é a página de quem está comparando com outra fonte,
-              que pode estar publicando em % · na Home só a unidade aparece.
-              Lucro TOTAL e ROI não são o mesmo número; média por pick e ROI
-              seriam, então a média entra quebrada por produto, nunca geral. */}
-          <section className="space-y-3">
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              <StatTile
-                label="Lucro da IA"
-                value={fmtUnits(lucro, 1)}
-                tone={lucro >= 0 ? 'green' : 'red'}
-                hint="unidades · stake fixa de 1u"
-              />
+          <section>
+            {/* Os quatro indicadores originais seguem na ordem em que sempre
+                estiveram · o lucro em unidades entra como quinto, no fim, sem
+                reorganizar o resto. */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <StatTile label="Assertividade" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'} hint={`${s.greens} greens`} />
+              <StatTile label="Picks resolvidos" value={String(s.total)} hint="no histórico" />
               <StatTile
                 label="ROI acumulado"
                 value={`${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`}
                 tone={roi >= 0 ? 'green' : 'red'}
                 hint="sobre o total apostado"
               />
-              <StatTile label="Picks resolvidos" value={String(s.total)} hint={`${byLeague.length} ligas cobertas`} />
+              <StatTile label="Ligas cobertas" value={String(byLeague.length)} hint="com pick publicado" />
+              <StatTile
+                label="Lucro da IA"
+                value={fmtUnits(lucro, 1)}
+                tone={lucro >= 0 ? 'green' : 'red'}
+                hint={stakeLabel}
+                className="col-span-2 sm:col-span-1"
+              />
             </div>
-            {(mediaVip !== null || mediaFree !== null) && (
-              <div className="grid grid-cols-2 gap-3">
-                {mediaVip !== null && (
-                  <StatTile
-                    label="Média por pick VIP"
-                    value={fmtUnits(mediaVip, 2)}
-                    tone={mediaVip >= 0 ? 'green' : 'red'}
-                    hint={`${s.vip_total} picks VIP`}
-                  />
-                )}
-                {mediaFree !== null && (
-                  <StatTile
-                    label="Média por pick free"
-                    value={fmtUnits(mediaFree, 2)}
-                    tone={mediaFree >= 0 ? 'green' : 'red'}
-                    hint={`${s.free_total} picks free`}
-                  />
-                )}
-              </div>
-            )}
           </section>
 
           <section>

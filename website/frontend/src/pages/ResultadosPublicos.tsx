@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
-import { winRate as calcWinRate, fmtUnits } from '../utils/format'
+import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
@@ -39,6 +39,8 @@ interface RecentTip {
   league_id?: number | null; league_name?: string
 }
 interface PublicData {
+  /** Legenda do plano de stake · montada em backend/stake_plan.py. */
+  stake_label?: string
   available_months: string[]
   summary: Summary
   by_day: DayResult[]
@@ -58,6 +60,35 @@ const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas', 'go
 const SOURCE_LABELS: Record<string, string> = {
   all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+}
+
+/*
+ * Faixa de indicadores no topo de cada aba.
+ *
+ * Antes só a aba Resumo tinha números: "Por Liga" abria direto numa lista de 20
+ * linhas, "Por Jogo" numa lista de picks e "Por Mês" numa tabela, todas sem
+ * nenhuma leitura de conjunto. Quem entrava numa dessas abas tinha que somar de
+ * cabeça para responder "e aí, foi bom?".
+ *
+ * Cada aba calcula a sua a partir dos dados que já baixou · nenhuma consulta
+ * nova, nenhum número que não venha do backend.
+ */
+function AbaStats({ tiles }: {
+  tiles: { label: string; value: string; hint?: string; tone?: 'green' | 'red' | 'default' }[]
+}) {
+  if (tiles.length === 0) return null
+  const cor = { green: 'text-green-400', red: 'text-red-400', default: 'text-ink-1' }
+  return (
+    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+      {tiles.map(t => (
+        <div key={t.label} className="stat-tile">
+          <div className={`stat-value tabular-nums ${cor[t.tone ?? 'default']}`}>{t.value}</div>
+          <div className="stat-label">{t.label}</div>
+          {t.hint && <div className="text-[10px] text-ink-4 mt-0.5 truncate">{t.hint}</div>}
+        </div>
+      ))}
+    </div>
+  )
 }
 
 export default function ResultadosPublicos() {
@@ -153,12 +184,76 @@ export default function ResultadosPublicos() {
   // UNIDADE ENTRA, DINHEIRO NAO. A regra antiga aqui era "nada vira dinheiro ou
   // unidade"; a parte da unidade caiu em 15/08 porque o publico desta pagina le
   // resultado em unidade, nao em porcentagem, e o numero ja existe no banco
-  // (coluna `profit`, stake fixa de 1u por pick). Real continua fora: R$ depende
-  // da banca e da stake de cada um, e isso e' a Banca que responde, por usuario.
-  // Toda tela que mostrar o lucro em unidade tem que dizer que a stake e' fixa
-  // de 1u, senao o numero nao bate com o que o usuario ve na banca dele.
+  // (coluna `profit`, base de 1u, pesada pelo plano de backend/stake_plan.py).
+  // Real continua fora: R$ depende da banca e da stake de cada um, e isso e' a
+  // Banca que responde, por usuario. Toda tela que mostrar lucro em unidade tem
+  // que exibir o plano de stake junto (`stake_label`), senao o numero nao bate
+  // com o que o usuario ve na banca dele.
   const lucroUnidades  = Number(s?.profit ?? 0)
   const leaguesCovered = byLeague.length
+
+  /* ── Indicadores por aba ────────────────────────────────────────────────
+     Tudo derivado do que a aba já baixou. Nenhuma consulta nova. */
+
+  const statsPorLiga = (() => {
+    if (byLeague.length === 0) return []
+    const comWr = byLeague.map(l => ({ ...l, wr: calcWinRate(l.greens, l.total) ?? 0 }))
+    // Piso de 5 picks pra uma liga com 1 green em 1 pick nao virar "melhor".
+    const elegiveis = comWr.filter(l => l.total >= 5)
+    const melhor = [...elegiveis].sort((a, b) => b.wr - a.wr)[0]
+    const pior   = [...elegiveis].sort((a, b) => a.wr - b.wr)[0]
+    const maisAtiva = [...comWr].sort((a, b) => b.total - a.total)[0]
+    const lucrativas = comWr.filter(l => Number(l.profit ?? 0) > 0).length
+    return [
+      { label: 'Ligas', value: String(byLeague.length), hint: `${lucrativas} no positivo` },
+      ...(melhor ? [{ label: 'Melhor liga', value: `${melhor.wr}%`, hint: melhor.league_name, tone: 'green' as const }] : []),
+      ...(pior && pior.league_name !== melhor?.league_name
+        ? [{ label: 'Pior liga', value: `${pior.wr}%`, hint: pior.league_name, tone: 'red' as const }] : []),
+      ...(maisAtiva ? [{ label: 'Mais coberta', value: String(maisAtiva.total), hint: maisAtiva.league_name }] : []),
+    ]
+  })()
+
+  const statsPorJogo = (() => {
+    if (games.length === 0) return []
+    const conta = (r: string) => games.filter((g: any) => g.result === r).length
+    const g = conta('GREEN'), r = conta('RED')
+    const wr = calcWinRate(g, g + r) ?? 0
+    const lucro = games.reduce((acc: number, x: any) => acc + Number(x.profit ?? 0), 0)
+    const melhor = [...games].sort((a: any, b: any) => Number(b.profit ?? 0) - Number(a.profit ?? 0))[0]
+    return [
+      { label: 'Nesta página', value: String(games.length), hint: `de ${gamesTotal} no filtro` },
+      { label: 'Green · Red', value: `${g} · ${r}`, hint: `${wr}% de acerto`, tone: (wr >= 55 ? 'green' : 'default') as 'green' | 'default' },
+      { label: 'Lucro da página', value: fmtUnits(lucro, 2), tone: (lucro >= 0 ? 'green' : 'red') as 'green' | 'red', hint: 'stake de cada linha' },
+      ...(melhor ? [{
+        label: 'Melhor pick',
+        value: fmtUnits(Number(melhor.profit ?? 0), 2),
+        hint: melhor.home_team_name ?? '',
+        tone: 'green' as const,
+      }] : []),
+    ]
+  })()
+
+  const statsPorMes = (() => {
+    if (monthly.length === 0) return []
+    const nomeMes = (m: string) => {
+      const [y, mo] = (m ?? '').split('-')
+      return new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' })
+    }
+    const comWr = monthly.map((m: any) => ({
+      ...m, wr: m.win_rate ?? calcWinRate(m.greens, m.total) ?? 0,
+    }))
+    const positivos = comWr.filter((m: any) => Number(m.profit ?? 0) > 0).length
+    const melhor = [...comWr].sort((a: any, b: any) => b.wr - a.wr)[0]
+    const totalPicks = comWr.reduce((acc: number, m: any) => acc + (m.total ?? 0), 0)
+    const mediaMes = comWr.length ? totalPicks / comWr.length : 0
+    return [
+      { label: 'Meses', value: String(monthly.length), hint: `${positivos} no positivo` },
+      ...(melhor ? [{ label: 'Melhor mês', value: `${melhor.wr}%`, hint: nomeMes(melhor.month), tone: 'green' as const }] : []),
+      { label: 'Picks no total', value: String(totalPicks) },
+      { label: 'Média por mês', value: mediaMes.toFixed(1), hint: 'picks publicados' },
+    ]
+  })()
+
   const daysWithPicks  = byDay.length
   const avgPerDay = daysWithPicks > 0 && s ? s.total / daysWithPicks : null
   // Liga com melhor aproveitamento. Piso de 5 picks pra uma liga com 1 green
@@ -262,7 +357,7 @@ export default function ResultadosPublicos() {
                     {fmtUnits(lucroUnidades, 1)}
                   </div>
                   <div className="stat-label">Lucro</div>
-                  <div className="text-[10px] text-ink-4 mt-0.5">unidades · stake 1u</div>
+                  <div className="text-[10px] text-ink-4 mt-0.5">{data?.stake_label ?? STAKE_LABEL_PADRAO}</div>
                 </div>
                 {[
                   { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
@@ -444,6 +539,8 @@ export default function ResultadosPublicos() {
           ) : byLeague.length === 0 ? (
             <div className="text-center py-16 text-ink-3">Nenhum resultado de liga encontrado para os filtros selecionados.</div>
           ) : (
+            <>
+            <AbaStats tiles={statsPorLiga} />
             <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
                 <span className="text-xs font-bold text-ink-2">Resultados por liga</span>
@@ -469,6 +566,7 @@ export default function ResultadosPublicos() {
                 })}
               </div>
             </div>
+            </>
           ))}
 
           {(tab === 'por_jogo' || tab === 'por_mes') && !user && (
@@ -497,7 +595,10 @@ export default function ResultadosPublicos() {
                   }]}
                 />
               </div>
-              <p className="text-ink-4 text-xs mb-4">{gamesTotal} picks</p>
+              <AbaStats tiles={statsPorJogo} />
+              <p className="text-ink-4 text-xs mb-4">
+                {gamesTotal} picks no filtro · indicadores calculados sobre a página atual
+              </p>
               {gamesLoading ? (
                 <div className="flex justify-center py-16">
                   <Spinner size="lg" />
@@ -578,6 +679,8 @@ export default function ResultadosPublicos() {
             ) : monthly.length === 0 ? (
               <div className="text-center py-16 text-ink-3 text-sm">Nenhum resultado mensal encontrado.</div>
             ) : (
+              <>
+              <AbaStats tiles={statsPorMes} />
               <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[460px]">
@@ -615,6 +718,7 @@ export default function ResultadosPublicos() {
                   </table>
                 </div>
               </div>
+              </>
             )
           )}
 

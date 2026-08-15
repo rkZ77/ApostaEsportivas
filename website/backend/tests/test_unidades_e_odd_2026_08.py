@@ -78,15 +78,64 @@ def test_home_nao_mostra_roi_junto_da_media_em_unidades():
     assert "ROI" not in banda, "ROI voltou pra faixa da Home ao lado da media"
 
 
-def test_premissa_de_stake_fixa_aparece_junto_do_numero():
-    """O lucro publico e' flat 1u por pick, e a Banca sugere de 1u a 10u.
+def test_plano_de_stake_vive_num_lugar_so():
+    """4u em pick simples, 1u em bilhete · escrito uma vez, lido por todos.
 
-    Sem a premissa escrita na tela, o usuario compara com a banca dele, os
-    numeros nao batem e o site parece estar mentindo.
+    Com a tabela repetida, /public/results (Home, Resultados, Performance) e
+    /suggestions/stats/quick (tela de Picks) passariam a anunciar lucros
+    diferentes pra mesma IA, e nada acusaria a divergencia.
     """
-    assert "1 unidade por pick" in _front("home/StatsBand.tsx")
-    for tela in ("pages/Picks.tsx", "pages/ResultadosPublicos.tsx"):
-        assert "stake 1u" in _front(tela), f"{tela} mostra unidade sem dizer a stake"
+    from stake_plan import STAKE_PADRAO
+
+    assert STAKE_PADRAO["vip"] == STAKE_PADRAO["free"] == 4
+    assert STAKE_PADRAO["multiplas"] == STAKE_PADRAO["alavancagem"] == 1
+    # Faltas e defesas sao pick simples (um jogo, um mercado): seguem o simples.
+    assert STAKE_PADRAO["faltas"] == STAKE_PADRAO["goleiros"] == 4
+
+    for arquivo in ("routers/public.py", "routers/suggestions.py"):
+        assert "stake_plan import" in _fonte(arquivo), f"{arquivo} nao le o plano central"
+
+
+def test_peso_multiplica_lucro_e_stake_juntos():
+    """Se so' o lucro fosse pesado, o ROI (lucro/stake) saltaria pelo mesmo
+    fator e o site anunciaria um retorno que nunca existiu."""
+    from routers.public import _build_union
+    import re
+
+    sql = _build_union("", None)
+    for bloco in sql.split("UNION ALL"):
+        fonte = re.search(r"'(\w+)' AS source", bloco)
+        lucro = re.search(r"profit \* (\d+) AS profit", bloco)
+        stake = re.search(r"(\d+)(?:::numeric)? AS stake", bloco)
+        assert fonte and lucro and stake, bloco[:120]
+        assert lucro.group(1) == stake.group(1),             f"{fonte.group(1)}: lucro x{lucro.group(1)} mas stake {stake.group(1)}u"
+
+
+def test_premissa_de_stake_aparece_junto_do_numero():
+    """A Banca sugere stake variavel; sem o plano escrito na tela o usuario
+    compara com a banca dele, os numeros nao batem e o site parece mentir.
+
+    A legenda vem do backend (`stake_label`) pra nao envelhecer sozinha quando
+    o plano mudar.
+    """
+    from stake_plan import rotulo_curto
+
+    assert "4u" in rotulo_curto() and "1u" in rotulo_curto()
+    assert '"stake_label": rotulo_curto()' in _codigo("routers/public.py", "public_results")
+    for tela in ("home/StatsBand.tsx", "pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
+        assert "stake_label" in _front(tela) or "STAKE_LABEL_PADRAO" in _front(tela),             f"{tela} mostra unidade sem dizer a stake"
+
+
+def test_lucro_fecha_a_fila_na_tela_de_picks():
+    """Ordem pedida: volume (Picks, Green, Red), taxa (Win %) e o resultado por
+    ultimo."""
+    tela = _front_codigo("pages/Picks.tsx")
+    inicio = tela.index("Performance da IA · Geral")
+    bloco = tela[inicio:inicio + 1500]
+    rotulos = ["'Picks'", "'Green'", "'Red'", "'Win %'", "'Lucro'"]
+    posicoes = [bloco.find(r) for r in rotulos]
+    assert all(p >= 0 for p in posicoes), dict(zip(rotulos, posicoes))
+    assert posicoes == sorted(posicoes), dict(zip(rotulos, posicoes))
 
 
 def test_picks_mostra_lucro_que_o_endpoint_ja_devolvia():
@@ -98,6 +147,15 @@ def test_picks_mostra_lucro_que_o_endpoint_ja_devolvia():
 
 
 # ─────────────────────── 2. Faixa de plano ───────────────────────
+
+
+def test_performance_da_ia_so_ganhou_o_tile():
+    """A tela nao foi reorganizada: os quatro indicadores originais seguem, na
+    ordem original, e o lucro entra como quinto."""
+    tela = _front_codigo("pages/PerformanceIA.tsx")
+    for original in ("Assertividade", "Picks resolvidos", "ROI acumulado", "Ligas cobertas"):
+        assert original in tela, f"{original} sumiu da Performance da IA"
+    assert tela.index("Assertividade") < tela.index("Lucro da IA")
 
 
 def test_faixa_de_plano_so_aparece_logada():
@@ -212,3 +270,98 @@ def test_modal_nao_chama_a_odd_nova_de_odd_do_pick():
     assert "originalOdd" in modal
     assert "(pick: {oddPick})" in modal
     assert "subiu" in modal and "caiu" in modal, "o modal tem que dizer os dois sentidos"
+
+
+# ────────────── 4. Correcoes de 15/08 (Por Jogo, cashout, fila de jogos) ──────────────
+
+
+def test_por_jogo_conta_as_pernas_do_proprio_union():
+    """A ABA ESTAVA VAZIA POR ERRO DE CONTAGEM, nao por falta de dado.
+
+    `get_results_games` fazia `n_legs = 1 if source != "all" else 5` enquanto o
+    UNION tinha quatro pernas. Com o filtro em "all" -- o estado inicial da aba
+    -- o numero de parametros nao batia com o de placeholders, psycopg2
+    levantava, `_safe_query` engolia e a tela dizia "Nenhum pick encontrado"
+    para um historico de centenas de picks.
+    """
+    from routers.suggestions import _build_combined_sql, FONTES_POR_JOGO
+
+    date_cond = " AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')"
+    sql, n = _build_combined_sql("all", date_cond)
+    assert n == sql.count("%s") == len(FONTES_POR_JOGO)
+
+    for fonte in FONTES_POR_JOGO:
+        sql_1, n_1 = _build_combined_sql(fonte, date_cond)
+        assert n_1 == sql_1.count("%s") == 1, fonte
+
+    corpo = _codigo("routers/suggestions.py", "get_results_games")
+    assert "n_legs = 1 if source" not in corpo, "contagem escrita a mao voltou"
+
+
+def test_por_jogo_cobre_os_seis_pipelines():
+    """Faltas e defesas contavam no ROI publico desde 01/08 e nesta aba nao
+    existiam: um pick de faltas resolvido nao aparecia em lugar nenhum dela."""
+    from routers.suggestions import FONTES_POR_JOGO
+
+    assert set(FONTES_POR_JOGO) == {
+        "vip", "free", "multipla", "alavancagem", "faltas", "goleiros",
+    }
+
+
+def test_abas_de_resultados_tem_indicadores():
+    """Por Liga, Por Jogo e Por Mes abriam direto numa lista, sem nenhuma
+    leitura de conjunto."""
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    for painel in ("statsPorLiga", "statsPorJogo", "statsPorMes"):
+        assert painel in tela, f"{painel} nao esta montado"
+    assert tela.count("<AbaStats") == 3
+
+
+def test_cashout_conta_como_green_red_ou_push():
+    """Cashout devolvia a etiqueta "CASHOUT", que nao existe em nenhum outro
+    lugar do sistema -- nem no `getResultStyle` do front, nem nos
+    `COUNT(*) FILTER (WHERE result = 'GREEN')`. O pick encerrado por cashout
+    entrava no saldo em reais e sumia do placar: numa banca de dois picks (um
+    green e um cashout positivo) a tela mostrava "1G / 0R de 2".
+    """
+    from routers.banca import _compute_follow_pnl
+
+    pick = {"result": "GREEN", "odd": 1.72}
+    base = {"stake_units": 5.0, "actual_odd": 1.72}
+    unidade = 10.0  # stake de R$ 50,00
+
+    for valor, esperado in [(81.29, "GREEN"), (30.00, "RED"), (50.00, "PUSH")]:
+        label, _u, pnl = _compute_follow_pnl(pick, {**base, "cashout_amount": valor}, unidade)
+        assert label == esperado, f"cashout de R${valor} virou {label}"
+
+    # O sinal do P&L e o que manda, nao o resultado oficial do pick: cashout
+    # feito no prejuizo continua RED mesmo que o jogo termine GREEN depois.
+    label, _u, _p = _compute_follow_pnl(pick, {**base, "cashout_amount": 10.0}, unidade)
+    assert label == "RED"
+
+    # Le codigo, nao prosa: a docstring da funcao explica a etiqueta antiga.
+    assert 'return "CASHOUT"' not in _fonte("routers/banca.py"), "etiqueta orfa voltou"
+
+
+def test_fila_de_jogos_sai_da_tabela_local():
+    """A lista "jogos sendo analisados hoje" varria a API-Football liga por
+    liga, duas datas cada: 20 requisicoes em rajada com 10 ligas cadastradas.
+    As que estouravam o teto do plano voltavam vazias em silencio, entao so' as
+    primeiras ligas do ORDER BY league_id apareciam -- em 15/08/2026 o banco
+    tinha 12 jogos em 4 ligas e a tela mostrava 3, todos da Serie A.
+    """
+    tela = _front_codigo("components/PicksPendingCard.tsx")
+    assert "/public/next-fixtures" in tela
+    assert "/fixtures/today" not in tela, "voltou a varrer a API liga por liga"
+
+    corpo = _codigo("routers/public.py", "public_next_fixtures")
+    assert "match_datetime::date = %s::date" in corpo, "filtro de dia inteiro sumiu"
+
+
+def test_hora_do_jogo_sai_por_fatia_de_string():
+    """`match_datetime` e' horario de Brasilia SEM fuso: `new Date` sobre ele
+    reinterpreta no fuso do navegador e desloca a hora pra quem esta fora do
+    Brasil."""
+    tela = _front_codigo("components/PicksPendingCard.tsx")
+    assert "horaBR" in tela
+    assert "toLocaleTimeString" not in tela

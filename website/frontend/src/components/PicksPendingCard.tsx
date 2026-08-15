@@ -24,34 +24,20 @@ interface Fixture {
   match_datetime: string
 }
 
-function isoDate(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+/** Hoje em Brasília, "YYYY-MM-DD". en-CA é o locale que devolve nessa ordem. */
+function hojeBR(): string {
+  return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 }
 
-// Mesmo endpoint que a aba "Jogos" usa (busca ao vivo na API-Football pelas
-// ligas cadastradas, não só a tabela local) -- tenta os próximos dias até
-// achar algum com jogo, em vez de só checar hoje. Busca os 7 dias em
-// paralelo (não um de cada vez) pra não somar a latência de cada chamada
-// quando os primeiros dias vêm vazios.
-async function findNextGames(): Promise<Fixture[]> {
-  const today = new Date()
-  const dates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(today)
-    d.setDate(d.getDate() + i + 1)
-    return isoDate(d)
-  })
-  const perDay = await Promise.all(
-    dates.map(date =>
-      api.get('/fixtures/today', { params: { date } })
-        .then(r => (r.data ?? []) as Fixture[])
-        .catch(() => [] as Fixture[])
-    )
-  )
-  for (const games of perDay) {
-    if (games.length > 0) return games
-  }
-  return []
-}
+/**
+ * "21:30" · fatiado da string, nunca por `new Date`.
+ *
+ * `match_datetime` chega em horário de Brasília SEM fuso ("2026-08-15T16:30:00").
+ * Passar isso por `new Date` faz o navegador interpretar no fuso DELE e depois
+ * reconverter, então um jogo das 16:30 virava outro horário para quem não
+ * estivesse no Brasil. Mesma leitura de home/NextGames.
+ */
+const horaBR = (iso: string) => (iso ?? '').slice(11, 16)
 
 function groupByDate(games: Fixture[]): { dateLabel: string; games: Fixture[] }[] {
   const groups = new Map<string, Fixture[]>()
@@ -77,8 +63,22 @@ export default function PicksPendingCard() {
   const [nextGames, setNextGames] = useState<Fixture[] | null>(null)
   const [leagueNames, setLeagueNames] = useState<string | null>(null)
 
+  /*
+   * A LISTA SAI DA TABELA LOCAL, não de uma varredura na API-Football.
+   *
+   * Antes vinha de GET /api/fixtures/today, que consulta a API liga por liga,
+   * duas datas cada. Com as 10 ligas cadastradas são 20 requisições numa
+   * rajada só, e as que passam do teto do plano voltam vazias em silêncio: na
+   * tela apareciam apenas as primeiras ligas da ordem por league_id. Em
+   * 15/08/2026 o banco tinha 12 jogos em 4 ligas e o card mostrava 3, todos da
+   * Série A -- as outras três ligas tinham sido comidas pelo limite.
+   *
+   * `fixtures` é a resposta certa para esta pergunta de qualquer forma: o motor
+   * analisa o que está nessa tabela, então "o que vai ser analisado hoje" é
+   * exatamente uma consulta nela. Uma ida ao banco, zero chamada externa.
+   */
   useEffect(() => {
-    api.get('/fixtures/today')
+    api.get('/public/next-fixtures', { params: { date: hojeBR(), limit: 30 } })
       .then(r => {
         const games = (r.data ?? []) as Fixture[]
         setTodayGames(games)
@@ -92,7 +92,12 @@ export default function PicksPendingCard() {
     api.get('/public/leagues')
       .then(r => setLeagueNames((r.data ?? []).map((l: any) => l.name).join(', ')))
       .catch(() => setLeagueNames(''))
-    findNextGames().then(setNextGames).catch(() => setNextGames([]))
+    // Sem `date`, a rota já é "daqui pra frente" e atravessa a virada do dia
+    // sozinha · dispensa as sete chamadas em paralelo que procuravam, dia a
+    // dia, o próximo com jogo.
+    api.get('/public/next-fixtures', { params: { limit: 12 } })
+      .then(r => setNextGames((r.data ?? []) as Fixture[]))
+      .catch(() => setNextGames([]))
   }, [todayCount])
 
   // Ainda checando se há jogo hoje (e não falhou) -- mostra nada por um instante,
@@ -128,7 +133,7 @@ export default function PicksPendingCard() {
                     <div key={g.fixture_id}
                       className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5 hover:border-line-strong transition-colors">
                       <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
-                        {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                        {horaBR(g.match_datetime)}
                       </span>
                       <div className="flex items-center gap-1.5 flex-1 min-w-0">
                         <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
@@ -166,7 +171,7 @@ export default function PicksPendingCard() {
               <div key={g.fixture_id}
                 className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5">
                 <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
-                  {new Date(g.match_datetime).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' })}
+                  {horaBR(g.match_datetime)}
                 </span>
                 <div className="flex items-center gap-1.5 flex-1 min-w-0">
                   <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />

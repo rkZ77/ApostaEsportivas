@@ -1967,31 +1967,24 @@ export default function Picks() {
             <div className="space-y-8">
 
               {/* Stats da IA este mês.
-                  O LUCRO EM UNIDADES VEM PRIMEIRO e ocupa a linha inteira no
-                  mobile. É o número que o público de tipster procura, e ele já
-                  vinha em `/suggestions/stats/quick` (campo `profit`) desde
-                  sempre: a tela só mostrava contagem e porcentagem, escondendo
-                  justo o resultado. Premissa de stake fixa de 1u escrita no
-                  próprio tile, igual à faixa da Home. */}
+                  O lucro em unidades fecha a fila, depois do Win %: a leitura
+                  vai de volume (Picks, Green, Red) para taxa (Win %) e termina
+                  no resultado. Ele já vinha em `/suggestions/stats/quick`
+                  (campo `profit`) desde sempre; a tela só mostrava contagem e
+                  porcentagem, escondendo justo o resultado. */}
               {quickStats && (
                 <div>
                   <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-                    <div className="col-span-2 sm:col-span-1 bg-surface-1 border border-line rounded-md p-3 text-center">
-                      <div className={`font-mono text-2xl font-black tabular-nums ${lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                        {fmtUnits(lucroUnidades, 1)}
-                      </div>
-                      <div className="text-[10px] text-ink-3 mt-1">Lucro</div>
-                      <div className="text-[10px] text-ink-4">unidades · stake 1u</div>
-                    </div>
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
                       { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
-                        <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
+                        <div className={`font-mono text-xl font-black tabular-nums ${color}`}>{value}</div>
                         <div className="text-[10px] text-ink-3 mt-1">{label}</div>
                       </div>
                     ))}

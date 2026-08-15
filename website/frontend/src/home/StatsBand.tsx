@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
 import { NumberTicker, Skeleton } from '../components/ui'
-import { winRate as calcWinRate, fmtUnits } from '../utils/format'
+import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
 /*
@@ -56,10 +56,13 @@ export default function StatsBand({
   summary,
   /** summary.leagues_count da mesma resposta · nunca by_league.length. */
   leaguesCount,
+  /** `stake_label` da resposta · plano de stake montado em stake_plan.py. */
+  stakeLabel,
   loaded,
 }: {
   summary: PublicSummary | null
   leaguesCount: number
+  stakeLabel?: string
   loaded: boolean
 }) {
   if (!loaded) {
@@ -80,13 +83,14 @@ export default function StatsBand({
   const mediaFree = media(summary.free_profit, summary.free_total)
 
   const tom = (v: number) => (v >= 0 ? 'text-accent' : 'text-red-400')
+  const plano = stakeLabel ?? STAKE_LABEL_PADRAO
 
   const TILES = [
     {
       label: 'Lucro da IA',
       value: <NumberTicker value={lucro} formatter={v => fmtUnits(v, 1)} />,
       tone: tom(lucro),
-      hint: `em ${summary.total} picks · stake fixa de 1u`,
+      hint: `em ${summary.total} picks · ${plano}`,
     },
     {
       label: 'Assertividade',
@@ -135,9 +139,10 @@ export default function StatsBand({
       </motion.div>
       {/* A premissa fica embaixo dos números, não escondida num tooltip: a Banca
           sugere stake variável (1u a 10u), e sem esta linha o visitante compara
-          o lucro daqui com o dele e conclui que a conta do site não fecha. */}
+          o lucro daqui com o dele e conclui que a conta do site não fecha.
+          O texto vem do backend (stake_plan.py) para não envelhecer sozinho. */}
       <p className="text-[10px] text-ink-4">
-        1 unidade por pick, sempre. Sem stake variável, sem martingale.
+        Plano fixo de stake: {plano}. Sem stake variável, sem martingale.
       </p>
     </div>
   )

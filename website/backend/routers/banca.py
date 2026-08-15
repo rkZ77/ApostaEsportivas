@@ -252,6 +252,17 @@ def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
     informado, senão cai pra odd oficial do pick.
     Retorna (result_label, profit_units, pnl_reais) ou (None, None, None)
     se ainda não resolvido e sem cashout.
+
+    CASHOUT É CLASSIFICADO PELO DINHEIRO, não como categoria própria: saiu
+    ganhando é GREEN, saiu perdendo é RED, saiu no zero é PUSH.
+
+    Antes esta função devolvia a etiqueta "CASHOUT", que não existe em lugar
+    nenhum do resto do sistema -- nem em getResultStyle/ResultBadge no front,
+    nem nos `COUNT(*) FILTER (WHERE result = 'GREEN')` das estatísticas. O pick
+    encerrado por cashout então sumia do placar: entrava no total apostado e no
+    saldo em reais, mas não contava como acerto nem como erro. Numa banca com
+    dois picks, um green e um cashout positivo, a tela mostrava "1G / 0R de 2" e
+    a distribuição de resultados vinha com uma barra só.
     """
     cashout_amount = float(follow["cashout_amount"]) if follow.get("cashout_amount") is not None else None
     stake_units = float(follow["stake_units"])
@@ -260,7 +271,16 @@ def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
         stake_r = stake_units * unit_value
         pnl_r = cashout_amount - stake_r
         profit_u = pnl_r / unit_value if unit_value else 0.0
-        return "CASHOUT", profit_u, pnl_r
+        # Meio centavo de tolerância: cashout é dinheiro arredondado pela casa,
+        # e comparar float com zero exato transformaria um empate real num
+        # GREEN ou RED de R$ 0,001.
+        if pnl_r > 0.005:
+            label = "GREEN"
+        elif pnl_r < -0.005:
+            label = "RED"
+        else:
+            label = "PUSH"
+        return label, profit_u, pnl_r
 
     result = pick.get("result")
     if result not in ("GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS"):
