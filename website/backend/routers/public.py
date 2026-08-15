@@ -476,6 +476,48 @@ def public_results(
             ORDER BY total DESC
         """, p)]
 
+        # ── Quebra por pipeline, dia a dia ────────────────────────────────────
+        #
+        # UMA consulta serve as duas coisas que a aba "Por Jogo" mostra: os
+        # cards de lucro por produto (VIP, free, múltipla, alavancagem, faltas,
+        # defesas) e a curva de cada um no tempo. O agregado por fonte sai da
+        # série somando em Python -- não vale uma segunda ida ao banco (154ms,
+        # ver database.py:71-82) pra refazer uma soma que já está na mão.
+        #
+        # Fora do caminho slim: a Home não usa nada disto.
+        by_source_day = [] if slim else _q(cur, f"""
+            SELECT match_date, source,
+                   COUNT(*)                                 AS total,
+                   COUNT(*) FILTER (WHERE result = 'GREEN') AS greens,
+                   COUNT(*) FILTER (WHERE result = 'RED')   AS reds,
+                   COALESCE(SUM(profit), 0)                 AS profit,
+                   COALESCE(SUM(stake),  0)                 AS stake_total
+            FROM ({union_sql}) AS t
+            GROUP BY match_date, source
+            ORDER BY match_date
+        """, p)
+
+        por_fonte: dict = {}
+        for linha in by_source_day:
+            acc = por_fonte.setdefault(linha["source"], {
+                "source": linha["source"], "total": 0, "greens": 0,
+                "reds": 0, "profit": 0.0, "stake_total": 0.0,
+            })
+            acc["total"]  += int(linha["total"] or 0)
+            acc["greens"] += int(linha["greens"] or 0)
+            acc["reds"]   += int(linha["reds"] or 0)
+            acc["profit"] += float(linha["profit"] or 0)
+            acc["stake_total"] += float(linha["stake_total"] or 0)
+
+        by_source = []
+        for acc in por_fonte.values():
+            acc["profit"] = round(acc["profit"], 2)
+            acc["stake_total"] = round(acc["stake_total"], 2)
+            acc["win_rate"] = round(acc["greens"] / acc["total"] * 100, 1) if acc["total"] else 0.0
+            acc["roi"] = round(acc["profit"] / acc["stake_total"] * 100, 1) if acc["stake_total"] else 0.0
+            by_source.append(acc)
+        by_source.sort(key=lambda a: a["profit"], reverse=True)
+
         # ── Recentes (por sub-query para não quebrar tudo se uma coluna faltar) ──
         single_source = source if source in _SUB_BUILDERS else None
         recent, recent_total = _pagina_de_resultados(
@@ -511,6 +553,8 @@ def public_results(
             "summary": dict(summary) if summary else {},
             "by_day":  [dict(r) for r in by_day],
             "by_league": by_league,
+            "by_source": by_source,
+            "by_source_day": [dict(r) for r in by_source_day],
             "recent":  [dict(r) for r in recent],
             "recent_total": recent_total,
             "counts":  dict(counts_row) if counts_row else {},

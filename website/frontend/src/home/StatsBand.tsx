@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { NumberTicker, Skeleton } from '../components/ui'
+import InfoTip from '../components/InfoTip'
 import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
@@ -82,12 +83,16 @@ export default function StatsBand({
 
   const roi = Number(summary.roi ?? 0)
 
+  /* A explicação vive num ícone, não numa linha miúda embaixo de cada número.
+     Empilhada, ela roubava a atenção do valor · que é o que o ladrilho existe
+     pra mostrar · e quase ninguém lia. Quem quer saber o que a métrica
+     significa clica. */
   const TILES = [
     {
       label: 'Picks publicadas',
       value: <NumberTicker value={summary.total} />,
       tone: 'text-ink-1',
-      hint: 'no histórico auditável',
+      info: 'Todo pick que a IA publicou e já teve o resultado conferido. O histórico é público: dá para abrir a página de Resultados e conferir pick por pick, com data, mercado e odd.',
     },
     {
       label: 'Assertividade',
@@ -98,9 +103,8 @@ export default function StatsBand({
       // 67% sozinho) e continua saindo de `summary.leagues_count`, nunca do
       // tamanho de `by_league` · esse era o número que obrigava a rota a montar
       // a quebra por liga inteira só para ser contado.
-      hint: leaguesCount > 0
-        ? `${summary.greens} greens · ${leaguesCount} ligas`
-        : `${summary.greens} greens`,
+      info: `Quantos picks deram GREEN sobre o total já resolvido: ${summary.greens} de ${summary.total}`
+        + `${leaguesCount > 0 ? `, em ${leaguesCount} ligas` : ''}. Acerto alto com odd baixa não paga, então leia junto com o lucro.`,
     },
     {
       label: 'ROI acumulado',
@@ -112,13 +116,13 @@ export default function StatsBand({
         />
       ),
       tone: tom(roi),
-      hint: 'sobre o total apostado',
+      info: 'Retorno sobre tudo que foi arriscado. Enquanto o lucro diz quanto rendeu, o ROI diz quanto rendeu por unidade apostada · é o que permite comparar períodos de volume diferente.',
     },
     {
       label: 'Lucro da IA',
       value: <NumberTicker value={lucro} formatter={v => fmtUnits(v, 1)} />,
       tone: tom(lucro),
-      hint: plano,
+      info: `Resultado acumulado em unidades, com plano fixo de stake: ${plano}. Sem stake variável, sem martingale. Quanto vale 1u em reais depende da banca de cada um, por isso o placar público não fala em dinheiro.`,
     },
   ]
 
@@ -139,11 +143,13 @@ export default function StatsBand({
         viewport={{ once: true, margin: '0px 0px -60px 0px' }}
         className="grid grid-cols-2 md:grid-cols-4 gap-3"
       >
-        {TILES.map(({ label, value, tone, hint }) => (
+        {TILES.map(({ label, value, tone, info }) => (
           <motion.div key={label} variants={fadeInUp} className="stat-tile text-left">
             <div className={`font-mono text-2xl font-bold tabular-nums ${tone}`}>{value}</div>
-            <div className="stat-label !mt-1.5">{label}</div>
-            <div className="text-[10px] text-ink-4 mt-0.5">{hint}</div>
+            <div className="stat-label !mt-1.5 flex items-center gap-1">
+              <span className="min-w-0 truncate">{label}</span>
+              <InfoTip text={info} />
+            </div>
           </motion.div>
         ))}
       </motion.div>

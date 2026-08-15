@@ -12,7 +12,9 @@ import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
+import InfoTip from '../components/InfoTip'
 import DailyGreensChart from '../components/DailyGreensChart'
+import PipelineProfitChart from '../components/PipelineProfitChart'
 
 const RESULTADO_OPTIONS = [
   { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
@@ -38,9 +40,20 @@ interface RecentTip {
   result: string; profit: number; source: string
   league_id?: number | null; league_name?: string
 }
+interface SourceResult {
+  source: string
+  total: number; greens: number; reds: number
+  profit: number; stake_total: number
+  win_rate: number; roi: number
+}
+interface SourceDay { match_date: string; source: string; profit: number }
+
 interface PublicData {
   /** Legenda do plano de stake · montada em backend/stake_plan.py. */
   stake_label?: string
+  /** Quebra por pipeline · uma consulta só, fora do caminho slim. */
+  by_source?: SourceResult[]
+  by_source_day?: SourceDay[]
   available_months: string[]
   summary: Summary
   by_day: DayResult[]
@@ -74,7 +87,7 @@ const SOURCE_LABELS: Record<string, string> = {
  * nova, nenhum número que não venha do backend.
  */
 function AbaStats({ tiles }: {
-  tiles: { label: string; value: string; hint?: string; tone?: 'green' | 'red' | 'default' }[]
+  tiles: { label: string; value: string; info?: string; tone?: 'green' | 'red' | 'default' }[]
 }) {
   if (tiles.length === 0) return null
   const cor = { green: 'text-green-400', red: 'text-red-400', default: 'text-ink-1' }
@@ -83,8 +96,10 @@ function AbaStats({ tiles }: {
       {tiles.map(t => (
         <div key={t.label} className="stat-tile">
           <div className={`stat-value tabular-nums ${cor[t.tone ?? 'default']}`}>{t.value}</div>
-          <div className="stat-label">{t.label}</div>
-          {t.hint && <div className="text-[10px] text-ink-4 mt-0.5 truncate">{t.hint}</div>}
+          <div className="stat-label flex items-center gap-1">
+            <span className="min-w-0 truncate">{t.label}</span>
+            {t.info && <InfoTip text={t.info} />}
+          </div>
         </div>
       ))}
     </div>
@@ -205,31 +220,46 @@ export default function ResultadosPublicos() {
     const maisAtiva = [...comWr].sort((a, b) => b.total - a.total)[0]
     const lucrativas = comWr.filter(l => Number(l.profit ?? 0) > 0).length
     return [
-      { label: 'Ligas', value: String(byLeague.length), hint: `${lucrativas} no positivo` },
-      ...(melhor ? [{ label: 'Melhor liga', value: `${melhor.wr}%`, hint: melhor.league_name, tone: 'green' as const }] : []),
+      { label: 'Ligas', value: String(byLeague.length), info: `Campeonatos com pelo menos um pick resolvido no filtro atual. ${lucrativas} deles estão no positivo em unidades.` },
+      ...(melhor ? [{ label: 'Melhor liga', value: `${melhor.wr}%`, info: `${melhor.league_name} · maior taxa de acerto entre as ligas com 5 picks ou mais. O piso existe pra uma liga com 1 green em 1 pick não aparecer como a melhor.`, tone: 'green' as const }] : []),
       ...(pior && pior.league_name !== melhor?.league_name
-        ? [{ label: 'Pior liga', value: `${pior.wr}%`, hint: pior.league_name, tone: 'red' as const }] : []),
-      ...(maisAtiva ? [{ label: 'Mais coberta', value: String(maisAtiva.total), hint: maisAtiva.league_name }] : []),
+        ? [{ label: 'Pior liga', value: `${pior.wr}%`, info: `${pior.league_name} · menor taxa de acerto entre as ligas com 5 picks ou mais. Serve pra ver onde o modelo ainda erra mais.`, tone: 'red' as const }] : []),
+      ...(maisAtiva ? [{ label: 'Mais coberta', value: String(maisAtiva.total), info: `${maisAtiva.league_name} · liga com mais picks publicados no filtro. Volume alto costuma vir de campeonato com mais jogos e mais dado estatístico.` }] : []),
     ]
   })()
 
+  /* Aba "Por Jogo": os numeros sao do HISTORICO INTEIRO no filtro, nao da
+     pagina aberta. Lucro de dez linhas nao diz nada sobre a IA -- diz sobre
+     quais dez linhas calharam de estar na pagina 1. */
+  const bySource = data?.by_source ?? []
+  const bySourceDay = data?.by_source_day ?? []
+
   const statsPorJogo = (() => {
-    if (games.length === 0) return []
-    const conta = (r: string) => games.filter((g: any) => g.result === r).length
-    const g = conta('GREEN'), r = conta('RED')
-    const wr = calcWinRate(g, g + r) ?? 0
-    const lucro = games.reduce((acc: number, x: any) => acc + Number(x.profit ?? 0), 0)
-    const melhor = [...games].sort((a: any, b: any) => Number(b.profit ?? 0) - Number(a.profit ?? 0))[0]
+    if (bySource.length === 0) return []
+    const lucroGeral = bySource.reduce((acc, f) => acc + Number(f.profit ?? 0), 0)
+    const maisLucro = [...bySource].sort((a, b) => Number(b.profit) - Number(a.profit))[0]
+    // Piso de 5 picks: um pipeline com 1 green em 1 pick nao e' "o mais certeiro".
+    const maisCerteiro = [...bySource].filter(f => f.total >= 5)
+      .sort((a, b) => b.win_rate - a.win_rate)[0]
     return [
-      { label: 'Nesta página', value: String(games.length), hint: `de ${gamesTotal} no filtro` },
-      { label: 'Green · Red', value: `${g} · ${r}`, hint: `${wr}% de acerto`, tone: (wr >= 55 ? 'green' : 'default') as 'green' | 'default' },
-      { label: 'Lucro da página', value: fmtUnits(lucro, 2), tone: (lucro >= 0 ? 'green' : 'red') as 'green' | 'red', hint: 'stake de cada linha' },
-      ...(melhor ? [{
-        label: 'Melhor pick',
-        value: fmtUnits(Number(melhor.profit ?? 0), 2),
-        hint: melhor.home_team_name ?? '',
-        tone: 'green' as const,
+      {
+        label: 'Lucro geral', value: fmtUnits(lucroGeral, 1),
+        tone: (lucroGeral >= 0 ? 'green' : 'red') as 'green' | 'red',
+        info: `Soma de todos os produtos no filtro atual, em unidades: ${gamesTotal} picks resolvidos. Não é o lucro da página aberta.`,
+      },
+      ...(maisLucro ? [{
+        label: 'Mais lucro', value: fmtUnits(Number(maisLucro.profit), 1),
+        tone: 'green' as const, info: `${SOURCE_LABELS[maisLucro.source] ?? maisLucro.source} é o produto que mais rendeu em unidades no filtro. Lucro alto pode vir de volume, não só de acerto · compare com o comparativo abaixo.`,
       }] : []),
+      ...(maisCerteiro ? [{
+        label: 'Mais certeiro', value: `${maisCerteiro.win_rate}%`,
+        tone: 'green' as const,
+        info: `${SOURCE_LABELS[maisCerteiro.source] ?? maisCerteiro.source} tem a maior taxa de acerto (${maisCerteiro.greens} greens em ${maisCerteiro.total} picks). Só entram produtos com 5 picks ou mais.`,
+      }] : []),
+      {
+        label: 'Produtos', value: String(bySource.length),
+        info: `Tipos de pick com histórico resolvido: VIP, free, múltiplas, alavancagem, faltas e defesas. ${bySource.filter(f => Number(f.profit) > 0).length} estão no positivo em unidades.`,
+      },
     ]
   })()
 
@@ -247,10 +277,10 @@ export default function ResultadosPublicos() {
     const totalPicks = comWr.reduce((acc: number, m: any) => acc + (m.total ?? 0), 0)
     const mediaMes = comWr.length ? totalPicks / comWr.length : 0
     return [
-      { label: 'Meses', value: String(monthly.length), hint: `${positivos} no positivo` },
-      ...(melhor ? [{ label: 'Melhor mês', value: `${melhor.wr}%`, hint: nomeMes(melhor.month), tone: 'green' as const }] : []),
-      { label: 'Picks no total', value: String(totalPicks) },
-      { label: 'Média por mês', value: mediaMes.toFixed(1), hint: 'picks publicados' },
+      { label: 'Meses', value: String(monthly.length), info: `Meses com pick publicado e resolvido. ${positivos} fecharam no positivo · consistência mês a mês diz mais que um mês isolado muito bom.` },
+      ...(melhor ? [{ label: 'Melhor mês', value: `${melhor.wr}%`, info: `${nomeMes(melhor.month)} teve a maior taxa de acerto do histórico.`, tone: 'green' as const }] : []),
+      { label: 'Picks no total', value: String(totalPicks), info: 'Todos os picks resolvidos somando os meses da tabela abaixo.' },
+      { label: 'Média por mês', value: mediaMes.toFixed(1), info: 'Picks publicados por mês, em média. Não existe cota: a IA só publica o que passa nos filtros de valor, então mês com menos jogo tem menos pick.' },
     ]
   })()
 
@@ -596,9 +626,58 @@ export default function ResultadosPublicos() {
                 />
               </div>
               <AbaStats tiles={statsPorJogo} />
-              <p className="text-ink-4 text-xs mb-4">
-                {gamesTotal} picks no filtro · indicadores calculados sobre a página atual
-              </p>
+
+              {/* Curva por produto · responde "quem está puxando o resultado",
+                  que nenhuma tela do site respondia: os números existiam
+                  somados ou espalhados por pick, nunca por produto no tempo. */}
+              {bySourceDay.length > 0 && (
+                <div className="panel p-5 mb-5">
+                  <div className="flex items-baseline justify-between gap-3 mb-4">
+                    <p className="panel-label">Lucro acumulado por produto</p>
+                    <span className="text-[10px] text-ink-4">
+                      {data?.stake_label ?? STAKE_LABEL_PADRAO}
+                    </span>
+                  </div>
+                  <PipelineProfitChart data={bySourceDay} />
+                </div>
+              )}
+
+              {/* Placar por produto · o "quem dá mais green" em tabela, para
+                  quem quer o número exato que a curva mostra de relance. */}
+              {bySource.length > 0 && (
+                <div className="bg-surface-0 border border-line rounded-lg overflow-hidden mb-5">
+                  <div className="px-5 py-3 border-b border-line">
+                    <span className="text-xs font-bold text-ink-2">Comparativo por produto</span>
+                  </div>
+                  <div className="divide-y divide-line/50">
+                    {bySource.map(f => (
+                      <div key={f.source} className="flex items-center gap-3 px-5 py-3">
+                        <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded shrink-0 ${PICK_TYPE_CLS[f.source] ?? 'bg-surface-2 text-ink-3'}`}>
+                          {SOURCE_LABELS[f.source] ?? f.source}
+                        </span>
+                        <span className="text-[11px] text-ink-4 shrink-0 hidden sm:block">{f.total} picks</span>
+                        <span className="font-mono text-[11px] text-ink-4 w-16 text-right shrink-0 hidden sm:block">
+                          {f.greens}G · {f.reds}R
+                        </span>
+                        <div className="flex-1 h-1.5 bg-surface-2 rounded-full overflow-hidden min-w-[40px]">
+                          <div
+                            className={`h-full rounded-full ${f.win_rate >= 55 ? 'bg-accent' : 'bg-ink-4'}`}
+                            style={{ width: `${Math.max(2, Math.min(100, f.win_rate))}%` }}
+                          />
+                        </div>
+                        <span className="font-mono text-[11px] font-bold text-ink-2 w-10 text-right shrink-0 tabular-nums">
+                          {f.win_rate}%
+                        </span>
+                        <span className={`font-mono text-xs font-black w-16 text-right shrink-0 tabular-nums ${Number(f.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {fmtUnits(Number(f.profit), 1)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <p className="text-ink-4 text-xs mb-4">{gamesTotal} picks no filtro</p>
               {gamesLoading ? (
                 <div className="flex justify-center py-16">
                   <Spinner size="lg" />
