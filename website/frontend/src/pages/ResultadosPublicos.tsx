@@ -12,6 +12,7 @@ import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
+import PublicNav from '../components/PublicNav'
 import DailyGreensChart from '../components/DailyGreensChart'
 import PipelineProfitChart from '../components/PipelineProfitChart'
 import LucroBarChart from '../components/LucroBarChart'
@@ -160,8 +161,11 @@ export default function ResultadosPublicos() {
       .finally(() => setMonthLoad(false))
   }, [])
 
+  /* Sem `if (!user) return`: as duas abas sao o HISTORICO da IA, e pick
+     encerrado nao e' produto. O que continua fechado e' o pendente -- o
+     backend ignora `resultado=pending` sem sessao (ver get_results_games),
+     senao a URL entregaria os picks de hoje com mercado, linha e odd. */
   useEffect(() => {
-    if (!user) return
     if (tab === 'por_jogo') fetchGames(0, gamesFilter, source, month)
     if (tab === 'por_mes')  fetchMonthly(source)
     setGamesPage(0)
@@ -329,16 +333,7 @@ export default function ResultadosPublicos() {
       description="Histórico completo dos picks da IA com win rate auditável por liga, por jogo e por mês. Todos os picks registrados, qualquer pessoa pode conferir."
       canonical="https://pickia.com.br/resultados"
       width="full"
-      nav={user ? true : (
-        <nav className="border-b border-line/60 bg-surface-0/80 backdrop-blur-sm sticky top-0 z-40">
-          <div className={`mx-auto h-14 flex items-center justify-between ${PAGE_WIDTH.full}`}>
-            <Link to="/" className="font-display text-ink-1 font-semibold text-lg tracking-tight">
-              Pick<span className="text-accent">IA</span>
-            </Link>
-            <Button to="/login" variant="ghost" size="sm">Entrar</Button>
-          </div>
-        </nav>
-      )}
+      nav={user ? true : <PublicNav width="full" />}
       bar={{
         back: true,
         title: 'Resultados da IA',
@@ -627,28 +622,16 @@ export default function ResultadosPublicos() {
             </>
           ))}
 
-          {(tab === 'por_jogo' || tab === 'por_mes') && !user && (
-            <div className="panel px-5 py-14 text-center">
-              <p className="text-sm text-ink-2 font-semibold mb-1">
-                {tab === 'por_jogo' ? 'Resultado pick a pick' : 'Fechamento mês a mês'}
-              </p>
-              <p className="text-xs text-ink-3 mb-5 max-w-sm mx-auto leading-relaxed">
-                Essa visão detalhada é para quem tem conta. Criar é de graça e leva menos de um minuto.
-              </p>
-              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
-                Criar conta grátis
-              </Link>
-            </div>
-          )}
-
-          {tab === 'por_jogo' && user && (
+          {tab === 'por_jogo' && (
             <div>
               <div className="mb-4">
                 <FilterPanel
                   accent="green"
                   groups={[{
                     key: 'resultado', label: 'Resultado',
-                    options: RESULTADO_OPTIONS,
+                    /* Sem sessao o backend ignora `pending`, entao oferecer a
+                       opcao seria um filtro que nao filtra nada. */
+                    options: user ? RESULTADO_OPTIONS : RESULTADO_OPTIONS.filter(o => o.value !== 'pending'),
                     value: gamesFilter, onChange: (v: string) => { setGamesFilter(v); setGamesPage(0); fetchGames(0, v, source, month) },
                   }]}
                 />
@@ -778,7 +761,7 @@ export default function ResultadosPublicos() {
             </div>
           )}
 
-          {tab === 'por_mes' && user && (
+          {tab === 'por_mes' && (
             monthLoad ? (
               <div className="flex justify-center py-16">
                 <Spinner size="lg" />

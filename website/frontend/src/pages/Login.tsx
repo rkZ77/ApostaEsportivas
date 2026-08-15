@@ -1,7 +1,7 @@
 import { useState, useRef, FormEvent, useEffect } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { AnimatePresence, motion } from 'framer-motion'
-import { PartyPopper, Eye, EyeOff } from 'lucide-react'
+import { PartyPopper, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { maskPhone } from '../utils/format'
@@ -38,10 +38,14 @@ function validateEmail(email: string): boolean {
 
 // Win rate real (mesma fonte publica de /resultados) -- reforca credibilidade
 // bem no ponto de decisao de cadastro, em vez de so listar promessas em texto.
-function RealWinRate() {
+//
+// `slim=1` porque aqui so' se le o resumo: sem ele a rota monta os sete blocos
+// (meses disponiveis, quebra por dia, por liga, contagens...) e a tela de login
+// pagava seis consultas ao banco pra estampar uma porcentagem.
+function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   const [pct, setPct] = useState<number | null>(null)
   useEffect(() => {
-    api.get('/public/results')
+    api.get('/public/results', { params: { slim: 1, recent_limit: 1 } })
       .then(r => {
         const s = r.data?.summary
         if (s && s.total > 0) setPct(Math.round((s.greens / s.total) * 100))
@@ -50,7 +54,7 @@ function RealWinRate() {
   }, [])
   if (pct == null) return null
   return (
-    <p className="text-xs text-ink-4 mt-5">
+    <p className={`text-xs text-ink-4 ${className}`}>
       Win rate real auditável:{' '}
       <Link to="/resultados" className="text-green-500 font-bold hover:text-green-400 transition-colors">
         {pct}% <span className="text-ink-4 font-normal">· ver histórico</span>
@@ -223,45 +227,75 @@ export default function Login() {
       </Helmet>
 
 
-      {/* Left panel · branding */}
+      {/* Left panel · branding.
+          O CONTEÚDO SEGUE O MODO. A lista do trial ficava aqui sempre, inclusive
+          para quem só ia entrar na conta: quem já é cliente não está decidindo
+          se testa, está tentando ver os picks de hoje. Em `login` o painel diz o
+          que a marca é e mostra o número auditável; a oferta aparece em
+          `register`, que é onde ela decide alguma coisa. */}
       <div className="hidden lg:flex lg:w-1/2 flex-col items-center justify-center relative overflow-hidden bg-surface-0 border-r border-line">
         <div className="absolute inset-0 bg-gradient-radial from-green-500/10 via-transparent to-transparent" />
         <div className="absolute top-0 left-0 w-full h-1 bg-green-500" />
 
         <div className="relative z-10 text-center px-12">
-          <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
+          <Link to="/" aria-label="Voltar para a página inicial">
+            <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
+          </Link>
           <p className="font-display text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-accent">IA</span></p>
           <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
-          <div className="mt-8 text-left max-w-xs mx-auto">
-            <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
-            <div className="space-y-3">
-              {[
-                { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
-                { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
-                { dot: 'bg-orange-400', text: 'Alavancagem de risco calculado' },
-                { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
-              ].map(({ dot, text }) => (
-                <div key={text} className="flex items-center gap-3">
-                  <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
-                  <span className="text-sm text-ink-2">{text}</span>
-                </div>
-              ))}
+
+          {mode === 'register' ? (
+            <div className="mt-8 text-left max-w-xs mx-auto">
+              <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
+              <div className="space-y-3">
+                {[
+                  { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },
+                  { dot: 'bg-blue-400',   text: 'Múltiplas geradas pela IA' },
+                  { dot: 'bg-orange-400', text: 'Alavancagem de risco calculado' },
+                  { dot: 'bg-purple-400', text: 'Agente IA de futebol 24/7' },
+                ].map(({ dot, text }) => (
+                  <div key={text} className="flex items-center gap-3">
+                    <div className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />
+                    <span className="text-sm text-ink-2">{text}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-ink-4 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
+              <RealWinRate />
             </div>
-            <p className="text-xs text-ink-4 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
-            <RealWinRate />
-          </div>
+          ) : (
+            <div className="max-w-xs mx-auto">
+              <RealWinRate className="mt-0" />
+            </div>
+          )}
         </div>
       </div>
 
       {/* Right panel · form */}
-      <div className="flex-1 flex items-center justify-center px-6 py-12 overflow-y-auto">
+      <div className="flex-1 flex items-center justify-center px-5 sm:px-6 py-8 sm:py-12 overflow-y-auto">
         <div className="w-full max-w-sm">
 
-          {/* Mobile logo */}
-          <div className="flex lg:hidden flex-col items-center mb-10">
-            <img src="/logo.png" alt="Pick IA" width={96} height={96} className="w-24 h-24 mb-3" />
-            <p className="font-display text-3xl font-bold text-ink-1">Pick<span className="text-accent">IA</span></p>
-          </div>
+          {/* VOLTAR PRO SITE.
+              A tela de login não tem navegação nenhuma: quem cai aqui sem
+              querer (ou só foi olhar o preço) ficava sem saída a não ser o botão
+              do navegador. Fica acima de tudo, nos dois tamanhos. */}
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors mb-5"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" />
+            Voltar para o site
+          </Link>
+
+          {/* Marca no mobile · DEITADA E MIÚDA.
+              Era logo de 96px, empilhada com o nome em 30px e 40px de respiro:
+              só a marca comia quase metade da tela de 844px antes do primeiro
+              campo, e esta é a tela em que a pessoa quer digitar e entrar. De
+              lado e menor, o formulário começa acima da dobra. */}
+          <Link to="/" className="flex lg:hidden items-center gap-2.5 mb-5">
+            <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 shrink-0" />
+            <p className="font-display text-xl font-bold text-ink-1">Pick<span className="text-accent">IA</span></p>
+          </Link>
 
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
               duas vezes como h1 (uma no painel de desktop, outra no bloco

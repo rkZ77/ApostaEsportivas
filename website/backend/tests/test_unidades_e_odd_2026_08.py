@@ -593,3 +593,70 @@ def test_barra_de_mes_e_vertical_e_a_de_liga_e_horizontal():
     assert 'orientation="vertical"' in mes[:400]
     liga = tela[tela.index("Lucro por liga"):]
     assert 'orientation="horizontal"' in liga[:400]
+
+
+# ────────────── 8. Historico aberto sem login (15/08) ──────────────
+
+
+def test_por_jogo_e_por_mes_abertos_sem_login():
+    """Sao o HISTORICO da IA, e pick encerrado nao e' produto: mercado, linha e
+    odd dele ja' valeram. Exigir conta so' escondia a prova de quem ainda
+    estava decidindo criar conta."""
+    for rota in ("get_results_games", "get_results_monthly"):
+        assinatura = _fonte("routers/suggestions.py")
+        assinatura = assinatura[assinatura.index(f"def {rota}("):]
+        assinatura = assinatura[:assinatura.index(")")]
+        assert "get_current_user_optional" in assinatura, f"{rota} ainda exige sessao"
+
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    assert "{tab === 'por_jogo' && (" in tela, "a aba ainda checa user"
+    assert "{tab === 'por_mes' && (" in tela, "a aba ainda checa user"
+
+
+def test_pendente_continua_exigindo_sessao():
+    """`resultado=pending` inverte o filtro pra `result IS NULL` e devolveria os
+    picks de HOJE com mercado, linha e odd -- o produto inteiro, de graca,
+    trocando um parametro na URL."""
+    corpo = _codigo("routers/suggestions.py", "get_results_games")
+    assert "pode_ver_pendente = current_user is not None" in corpo
+    assert 'resultado == "pending" and pode_ver_pendente' in corpo
+
+    # E a tela nem oferece a opcao pra quem nao tem sessao.
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    assert "RESULTADO_OPTIONS.filter(o => o.value !== 'pending')" in tela
+
+
+def test_stake_pessoal_nao_vaza_sem_sessao():
+    corpo = _codigo("routers/suggestions.py", "get_results_games")
+    assert "if current_user is None:" in corpo
+
+
+def test_pagina_publica_tem_barra_com_logo_e_duas_saidas():
+    """A barra do deslogado tinha o nome em texto, sem logotipo, e um unico
+    "Entrar" fantasma: quem chegava por busca nao tinha como voltar pra home
+    nem um caminho obvio pra criar conta."""
+    barra = _front_codigo("components/PublicNav.tsx")
+    assert "logo.png" in barra
+    assert '/login?mode=register' in barra
+    for tela in ("pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
+        assert "PublicNav" in _front_codigo(tela), tela
+
+
+def test_login_tem_volta_pro_site_e_topo_enxuto_no_mobile():
+    """A tela de login nao tinha navegacao nenhuma, e a marca no mobile era
+    logo de 96px empilhada com o nome em 30px: so' o cabecalho comia quase
+    metade da tela antes do primeiro campo."""
+    tela = _front_codigo("pages/Login.tsx")
+    assert "Voltar para o site" in tela
+    assert "w-24 h-24" not in tela, "logo gigante voltou pro mobile"
+    # O painel de oferta so' aparece em cadastro · quem vai entrar ja' e cliente.
+    assert "mode === 'register' ? (" in tela
+
+
+def test_win_rate_do_login_nao_puxa_a_rota_inteira():
+    """Sem slim a rota monta os sete blocos e a tela de login pagava seis
+    consultas ao banco pra estampar uma porcentagem."""
+    tela = _front_codigo("pages/Login.tsx")
+    trecho = tela[tela.index("function RealWinRate"):]
+    trecho = trecho[:trecho.index("export ")] if "export " in trecho else trecho[:1200]
+    assert "slim: 1" in trecho
