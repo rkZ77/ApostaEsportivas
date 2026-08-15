@@ -9,6 +9,7 @@ from auth_utils import get_current_user, require_vip, is_vip_active
 from routers.banca import _compute_bankroll_current
 from routers.live import _stat_for_market, maybe_resolve_pending
 import market_form
+from stake_plan import STAKE_PADRAO
 
 logger = logging.getLogger(__name__)
 
@@ -1418,24 +1419,29 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
         # Cada tabela numa sub-query com _safe_query_one por fora ja' cobre o
         # caso de ambiente sem a migracao; aqui bastou completar o UNION porque
         # as duas tabelas nascem no mesmo setup das outras.
-        month_row = _safe_query_one(cur, """
+        # O `profit` de cada tabela e' lucro com stake de 1u; o placar publico
+        # anuncia o plano de stake_plan.py (4u em pick simples, 1u em bilhete).
+        # O peso entra aqui pelo MESMO dicionario que /public/results usa -- com
+        # a tabela escrita duas vezes, a tela de Picks e a Home passariam a
+        # discordar sobre o lucro da IA sem ninguem perceber.
+        month_row = _safe_query_one(cur, f"""
             SELECT
                 COUNT(*) FILTER (WHERE result IS NOT NULL)   AS total,
                 COUNT(*) FILTER (WHERE result = 'GREEN')     AS greens,
                 COUNT(*) FILTER (WHERE result = 'RED')       AS reds,
                 COALESCE(SUM(profit) FILTER (WHERE result IS NOT NULL), 0) AS profit
             FROM (
-                SELECT result, profit FROM picks_vip
+                SELECT result, profit * {STAKE_PADRAO['vip']} AS profit FROM picks_vip
                 UNION ALL
-                SELECT result, profit FROM picks_free
+                SELECT result, profit * {STAKE_PADRAO['free']} AS profit FROM picks_free
                 UNION ALL
-                SELECT result, profit FROM picks_multiplas
+                SELECT result, profit * {STAKE_PADRAO['multiplas']} AS profit FROM picks_multiplas
                 UNION ALL
-                SELECT result, profit FROM picks_alavancagem
+                SELECT result, profit * {STAKE_PADRAO['alavancagem']} AS profit FROM picks_alavancagem
                 UNION ALL
-                SELECT result, profit FROM picks_faltas
+                SELECT result, profit * {STAKE_PADRAO['faltas']} AS profit FROM picks_faltas
                 UNION ALL
-                SELECT result, profit FROM picks_goleiros
+                SELECT result, profit * {STAKE_PADRAO['goleiros']} AS profit FROM picks_goleiros
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1538,6 +1544,30 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.result {result_null_cond} {date_cond}
         """
+    if source in ("faltas", "goleiros"):
+        # Mesma forma de picks_free (um jogo, um mercado, uma odd), então o
+        # SELECT é o mesmo com a tabela trocada. Os dois mercados já contavam
+        # no ROI público e no histórico de /public/results desde 01/08; só esta
+        # aba não os enxergava, e um pick de faltas resolvido simplesmente não
+        # existia aqui.
+        tabela = "picks_faltas" if source == "faltas" else "picks_goleiros"
+        rotulo = "Faltas" if source == "faltas" else "Defesas"
+        return f"""
+            SELECT p.id, '{source}' AS pick_type, p.match_date,
+                   p.home_team AS home_team_name, p.away_team AS away_team_name,
+                   COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
+                   p.market, p.line, p.odd, p.bet_house,
+                   p.result, p.profit, 1::numeric AS stake,
+                   p.league_id,
+                   COALESCE(
+                       (SELECT l.name FROM leagues l WHERE l.league_id = p.league_id),
+                       '{rotulo}'
+                   ) AS league_name
+            FROM {tabela} p
+            LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+            WHERE p.result {result_null_cond} {date_cond}
+        """
     if source == "multipla":
         return f"""
             SELECT id, 'multipla' AS pick_type, match_date,
@@ -1591,12 +1621,33 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
     """
 
 
-def _build_combined_sql(source: str, date_cond: str, result_null_cond: str = "IS NOT NULL") -> str:
-    if source in ("vip", "free", "multipla", "alavancagem"):
-        return _source_games_sql(source, date_cond, result_null_cond)
-    # all
-    return " UNION ALL ".join(
-        _source_games_sql(s, date_cond, result_null_cond) for s in ("vip", "free", "multipla", "alavancagem")
+# As fontes que a aba "Por Jogo" cobre, numa lista só.
+#
+# ESTA CONSTANTE EXISTE PORQUE A ABA ESTAVA VAZIA. `get_results_games` contava
+# as pernas do UNION numa linha escrita à mão (`n_legs = 1 if source != "all"
+# else 5`) enquanto o UNION tinha quatro. Com o filtro em "all", que é o estado
+# inicial da aba, o número de parâmetros não batia com o de placeholders,
+# psycopg2 levantava, `_safe_query` engolia a exceção e a tela dizia "nenhum
+# pick encontrado" -- para um histórico com centenas de picks, sem erro nenhum
+# em lugar nenhum.
+#
+# Derivar a contagem daqui é o que impede o erro de voltar: registrar um
+# mercado novo passa a mexer numa lista só, e não em dois lugares que precisam
+# concordar. Foi exatamente esta a lição que routers/public.py já tinha
+# aprendido com faltas e goleiros (ver _SUB_BUILDERS).
+FONTES_POR_JOGO = ("vip", "free", "multipla", "alavancagem", "faltas", "goleiros")
+
+
+def _build_combined_sql(source: str, date_cond: str,
+                        result_null_cond: str = "IS NOT NULL") -> tuple[str, int]:
+    """(SQL, número de pernas). O segundo item manda no `date_params * n`."""
+    if source in FONTES_POR_JOGO:
+        return _source_games_sql(source, date_cond, result_null_cond), 1
+    return (
+        " UNION ALL ".join(
+            _source_games_sql(s, date_cond, result_null_cond) for s in FONTES_POR_JOGO
+        ),
+        len(FONTES_POR_JOGO),
     )
 
 
@@ -1633,8 +1684,7 @@ def get_results_games(
         if resultado and resultado not in ("all", "pending"):
             result_cond = " AND result = %s"; result_params.append(resultado)
 
-        inner_sql = _build_combined_sql(source, date_cond, result_null_cond)
-        n_legs = 1 if source != "all" else 5
+        inner_sql, n_legs = _build_combined_sql(source, date_cond, result_null_cond)
         combined_date_params = date_params * n_legs
 
         count_sql = f"SELECT COUNT(*) AS n FROM ({inner_sql}) AS c WHERE TRUE {result_cond}"
@@ -1686,7 +1736,7 @@ def get_results_monthly(
     source: str = Query("all"),
 ):
     """Resumo mensal."""
-    inner_sql = _build_combined_sql(source, "")
+    inner_sql, _ = _build_combined_sql(source, "")
 
     conn = get_connection()
     cur = conn.cursor()
@@ -2124,8 +2174,9 @@ def get_results(
         if not date_from:
             date_cond += " AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')"; params_q.append(days)
 
-        inner_sql = _build_combined_sql(source, date_cond)
-        n_legs = 1 if source != "all" else 4
+        # Contagem de pernas derivada do builder · aqui a lista dizia 4 e o
+        # UNION tinha o mesmo problema de get_results_games.
+        inner_sql, n_legs = _build_combined_sql(source, date_cond)
         combined_params = params_q * n_legs
 
         row = _safe_query_one(cur, f"""

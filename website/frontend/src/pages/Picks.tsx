@@ -38,8 +38,10 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
+import { fmtUnits } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import InfoTip from '../components/InfoTip'
@@ -313,6 +315,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcFreeStake fallback (max 2%)
   const stakeSuggestion = (() => {
     if (!banca) return null
@@ -352,20 +355,11 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
-    let odd = Number(dica.odd)
-    if (dica.fixture_id) {
-      setFollowing(true)
-      try {
-        const { data } = await api.get('/live/pick-odd', {
-          params: { fixture_id: dica.fixture_id, market_type: dica.market_type ?? '', line: dica.line ?? '' },
-        })
-        if (data?.odd) odd = Number(data.odd)
-      } catch {
-        // sem odd atualizada · segue com a odd ja salva no pick
-      } finally {
-        setFollowing(false)
-      }
-    }
+    const { odd } = await buscarOdd(Number(dica.odd), {
+      fixture_id: dica.fixture_id,
+      market_type: dica.market_type,
+      line: dica.line,
+    })
     setModalOdd(odd)
     setShowModal(true)
   }
@@ -526,7 +520,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
       <PickCardFooter
         onBet={!dica.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoOdd ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -558,6 +552,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
+        originalOdd={Number(dica.odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         suggestedHouse={dica.bet_house}
         maxUnits={Math.max(6, stakeSuggestion?.units ?? 6)}
@@ -610,9 +605,11 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
   const [followed, setFollowed] = useState<boolean>(!!m.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [modalOdd, setModalOdd] = useState<number | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcMultiplaStake fallback (max 2.5%)
   const stakeSuggestion = (() => {
     if (!banca) return null
@@ -648,9 +645,13 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
     })
   }
 
-  const handleFollow = (e: React.MouseEvent) => {
+  const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (following || followed) return
+    // Bilhete não tem odd numa casa: o backend reconsulta cada perna e refaz o
+    // produto. Perna que não puder ser atualizada entra com a odd salva.
+    const { odd } = await oddBilhete(Number(m.total_odd), m.id, 'multipla')
+    setModalOdd(odd)
     setShowModal(true)
   }
 
@@ -835,7 +836,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
 
       <PickCardFooter
         onBet={!m.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoBilhete ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -866,7 +867,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
     <AnimatePresence>
     {showModal && (
       <ApostaModal
-        pickOdd={Number(m.total_odd)}
+        pickOdd={modalOdd ?? Number(m.total_odd)}
+        originalOdd={Number(m.total_odd)}
         suggestedUnits={stakeSuggestion?.units ?? 1}
         maxUnits={Math.max(10, stakeSuggestion?.units ?? 10)}
         onConfirm={handleConfirm}
@@ -909,13 +911,18 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   const [followed, setFollowed] = useState<boolean>(!!pick.is_followed)
   const [following, setFollowing] = useState(false)
   const [showModal, setShowModal] = useState(false)
+  const [modalOdd, setModalOdd] = useState<number | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
 
-  const handleFollow = (e: React.MouseEvent) => {
+  const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (following || followed) return
+    // Mesma reconsulta perna a perna da múltipla · alavancagem também é bilhete.
+    const { odd } = await oddBilhete(Number(pick.odd_combined), pick.id, 'alavancagem')
+    setModalOdd(odd)
     setShowModal(true)
   }
 
@@ -1108,7 +1115,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
           }
           else handleFollow(e as any)
         }) : undefined}
-        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoBilhete ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={userBankroll != null}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -1142,7 +1149,8 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     <AnimatePresence>
     {showModal && (
       <ApostaModal
-        pickOdd={Number(pick.odd_combined)}
+        pickOdd={modalOdd ?? Number(pick.odd_combined)}
+        originalOdd={Number(pick.odd_combined)}
         suggestedHouse={pick.bet_house_1}
         hideUnits
         onConfirm={handleConfirm}
@@ -1639,6 +1647,11 @@ export default function Picks() {
    */
   const topoPronto = !todayLoading && quickStatsPronto
 
+  // Lucro acumulado em unidades. `profit` já vem somado dos seis pipelines em
+  // /suggestions/stats/quick e já está em unidades (stake fixa de 1u por pick),
+  // então aqui é só ler: nada de recalcular odd por odd no cliente.
+  const lucroUnidades = Number(quickStats?.profit ?? 0)
+
   // Marca picks pendentes como "Ao Vivo" quando o jogo já começou (status real
   // da API-Football via /live/is-live), em vez de continuar mostrando
   // "Pendente" como se o jogo nem tivesse começado.
@@ -1821,7 +1834,11 @@ export default function Picks() {
           <>
             {topoPronto && quickStats && (
               <span className="hidden sm:flex items-center gap-2 text-xs">
-                <span className="text-ink-4">Win rate geral</span>
+                <span className="text-ink-4">Lucro geral</span>
+                <span className={`font-mono font-bold text-sm tabular-nums ${lucroUnidades >= 0 ? 'text-accent' : 'text-red-400'}`}>
+                  {fmtUnits(lucroUnidades, 1)}
+                </span>
+                <span className="text-ink-4">· Win rate</span>
                 <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent' : 'text-ink-2'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>
@@ -1949,19 +1966,25 @@ export default function Picks() {
           ) : (
             <div className="space-y-8">
 
-              {/* Stats da IA este mês */}
+              {/* Stats da IA este mês.
+                  O lucro em unidades fecha a fila, depois do Win %: a leitura
+                  vai de volume (Picks, Green, Red) para taxa (Win %) e termina
+                  no resultado. Ele já vinha em `/suggestions/stats/quick`
+                  (campo `profit`) desde sempre; a tela só mostrava contagem e
+                  porcentagem, escondendo justo o resultado. */}
               {quickStats && (
                 <div>
                   <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance da IA · Geral</p>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
                       { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
                       { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
-                        <div className={`font-mono text-xl font-black ${color}`}>{value}</div>
+                        <div className={`font-mono text-xl font-black tabular-nums ${color}`}>{value}</div>
                         <div className="text-[10px] text-ink-3 mt-1">{label}</div>
                       </div>
                     ))}

@@ -5,6 +5,14 @@ from typing import Optional
 from auth_utils import get_current_user_optional
 from database import get_connection
 from data_br import HOJE_BR, TZ_BR, data_br
+from stake_plan import STAKE_PADRAO, stake_de, rotulo_curto
+
+# Peso de cada pipeline em unidades, lido uma vez · os SELECTs sao f-strings
+# e interpolar `STAKE_PADRAO['vip']` la dentro exigiria aspas aninhadas.
+_P_VIP  = STAKE_PADRAO['vip']
+_P_FREE = STAKE_PADRAO['free']
+_P_MULT = STAKE_PADRAO['multiplas']
+_P_ALAV = STAKE_PADRAO['alavancagem']
 
 logger = logging.getLogger(__name__)
 
@@ -90,8 +98,8 @@ def _sub_vip(date_cond: str) -> str:
                pv.home_team_name, pv.away_team_name,
                pv.home_team_id,   pv.away_team_id,
                pv.market, pv.line, pv.odd,
-               pv.result, pv.profit,
-               1::numeric AS stake,
+               pv.result, pv.profit * {_P_VIP} AS profit,
+               {_P_VIP}::numeric AS stake,
                'vip' AS source,
                ms.league_id AS league_id,
                COALESCE(l.name, 'Liga ' || ms.league_id) AS league_name
@@ -114,8 +122,8 @@ def _sub_free(date_cond: str) -> str:
                     WHERE fx.away_team = pf.away_team AND fx.away_team_id IS NOT NULL LIMIT 1)
                ) AS away_team_id,
                pf.market, pf.line, pf.odd,
-               pf.result, pf.profit,
-               1 AS stake,
+               pf.result, pf.profit * {_P_FREE} AS profit,
+               {_P_FREE} AS stake,
                'free' AS source,
                COALESCE(pf.league_id, ms.league_id) AS league_id,
                COALESCE(pf.league_name, l.name, 'Liga ' || COALESCE(pf.league_id, ms.league_id)) AS league_name
@@ -133,8 +141,8 @@ def _sub_mult(date_cond: str) -> str:
                NULL AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                'Múltipla' AS market, NULL AS line, total_odd AS odd,
-               result, profit,
-               1::numeric AS stake,
+               result, profit * {_P_MULT} AS profit,
+               {_P_MULT}::numeric AS stake,
                'multiplas' AS source,
                NULL::INTEGER AS league_id,
                'Múltiplas' AS league_name
@@ -148,8 +156,8 @@ def _sub_alav(date_cond: str) -> str:
                home_team_1 AS home_team_name, away_team_1 AS away_team_name,
                NULL::INTEGER AS home_team_id, NULL::INTEGER AS away_team_id,
                market_1 AS market, line_1 AS line, odd_combined AS odd,
-               result, profit,
-               1::numeric AS stake,
+               result, profit * {_P_ALAV} AS profit,
+               {_P_ALAV}::numeric AS stake,
                'alavancagem' AS source,
                NULL::INTEGER AS league_id,
                'Alavancagem' AS league_name
@@ -169,6 +177,8 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
     historico e nos filtros por tipo -- e' a fonte unica que todas as
     estatisticas do site consomem.
     """
+    peso = stake_de(source)
+
     def builder(date_cond: str) -> str:
         # Sem JOIN em match_statistics de proposito. Os dois pipelines sempre
         # gravam league_id, entao o fallback nao e' necessario -- e a tabela
@@ -183,8 +193,8 @@ def _sub_mercado(tabela: str, source: str, rotulo: str):
                COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
                p.market, p.line, p.odd,
-               p.result, p.profit,
-               1 AS stake,
+               p.result, p.profit * {peso} AS profit,
+               {peso} AS stake,
                '{source}' AS source,
                p.league_id AS league_id,
                COALESCE(l.name, '{rotulo}') AS league_name
@@ -405,7 +415,22 @@ def public_results(
                 -- liga inteira (mais uma varredura do UNION, mais uma consulta
                 -- pros nomes). Aqui sai de graca: mesma varredura, mesma linha.
                 COUNT(DISTINCT league_id) FILTER (WHERE league_id IS NOT NULL)
-                                                                  AS leagues_count
+                                                                  AS leagues_count,
+                -- Quebra de VIP e free pra Home mostrar a MEDIA DE UNIDADES POR
+                -- PICK de cada um. Pelo mesmo motivo do `leagues_count` acima:
+                -- aqui e' de graca (mesma varredura), e num bloco `by_source`
+                -- separado custaria mais uma ida ao banco de 154ms -- que a Home
+                -- pagaria em cheio, porque ela chama com slim=1 e um bloco novo
+                -- teria que rodar tambem no caminho slim pra servir de algo.
+                --
+                -- `profit` ja e' unidade (stake fixa de 1 em todo sub-SELECT do
+                -- UNION), entao a media e' profit/total direto, sem conversao.
+                -- Com `source` filtrado na query, o pipeline de fora vem zerado,
+                -- que e' o certo: o recorte pedido manda.
+                COALESCE(SUM(profit) FILTER (WHERE source = 'vip'), 0)  AS vip_profit,
+                COUNT(*) FILTER (WHERE source = 'vip')                  AS vip_total,
+                COALESCE(SUM(profit) FILTER (WHERE source = 'free'), 0) AS free_profit,
+                COUNT(*) FILTER (WHERE source = 'free')                 AS free_total
             FROM ({union_sql}) AS t
         """, p)
 
@@ -489,6 +514,11 @@ def public_results(
             "recent":  [dict(r) for r in recent],
             "recent_total": recent_total,
             "counts":  dict(counts_row) if counts_row else {},
+            # Legenda do plano de stake, montada em stake_plan.py junto com os
+            # pesos. Vai na resposta pra que trocar o plano troque o texto da
+            # tela no mesmo commit -- legenda velha grudada em numero novo e'
+            # pior do que legenda nenhuma.
+            "stake_label": rotulo_curto(),
         }
     finally:
         cur.close()
@@ -664,7 +694,8 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
 
 
 @router.get("/next-fixtures")
-def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
+def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
+                         date: Optional[str] = Query(None, description="YYYY-MM-DD · dia inteiro em vez de 'daqui pra frente'")):
     """Proximos jogos que a IA ainda vai analisar · sem login.
 
     Substitui, na Home, a chamada a GET /api/fixtures/today, que era o caminho
@@ -691,7 +722,26 @@ def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
     converte antes de salvar, ver convert_utc_to_br_naive), entao o corte tem
     que ser contra o relogio de Brasilia, nao contra NOW() -- o banco roda em
     UTC e o filtro adiantaria 3 horas, escondendo os jogos da tarde.
+
+    `date` (YYYY-MM-DD) troca a janela por UM DIA INTEIRO. Existe pro card
+    "jogos sendo analisados hoje" da tela de Picks, que antes montava a lista
+    varrendo a API-Football liga por liga (GET /api/fixtures/today) e perdia a
+    maior parte dos jogos pro teto de requisicoes: com 10 ligas cadastradas sao
+    20 chamadas em rajada, e as que estouram o limite voltam vazias em silencio
+    -- na pratica so' as primeiras ligas do `ORDER BY league_id` apareciam na
+    tela, mesmo com as outras tendo jogo no mesmo dia.
+
+    A tabela local e' a resposta certa pra essa pergunta de qualquer forma: o
+    motor analisa o que esta em `fixtures`, entao "o que vai ser analisado" e'
+    exatamente esta consulta, sem ida a API nenhuma.
     """
+    if date:
+        janela = "AND f.match_datetime::date = %s::date"
+        param_janela: tuple = (date,)
+    else:
+        janela = f"AND f.match_datetime >= (NOW() AT TIME ZONE '{TZ_BR}') - INTERVAL '10 minutes'"
+        param_janela = ()
+
     conn = get_connection()
     cur  = conn.cursor()
     try:
@@ -705,10 +755,10 @@ def public_next_fixtures(limit: int = Query(6, ge=1, le=12)):
             FROM fixtures f
             LEFT JOIN leagues l ON l.league_id = f.league_id
             WHERE f.status IN ('NS', 'TBD')
-              AND f.match_datetime >= (NOW() AT TIME ZONE '{TZ_BR}') - INTERVAL '10 minutes'
+              {janela}
             ORDER BY f.match_datetime
             LIMIT %s
-        """, (limit,))
+        """, param_janela + (limit,))
         result = []
         for r in rows:
             d = dict(r)

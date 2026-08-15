@@ -92,11 +92,24 @@ def test_fila_e_daqui_pra_frente_e_nao_do_dia():
 
     Filtrar por data presa a hoje devolve partida que ja rolou e deixa a faixa
     vazia no fim do dia; o corte tem que ser por horario, sem travar no dia.
+
+    A rota GANHOU um filtro de dia inteiro em 15/08 (`?date=`), para o card
+    "jogos sendo analisados hoje" da tela de Picks, que antes varria a
+    API-Football liga por liga e perdia jogo pro teto de requisicoes. Isso NAO
+    afrouxa a regra: o dia so' entra quando alguem pede explicitamente, e a
+    Home continua chamando sem `date`. E' isso que o teste checa agora --
+    o comportamento PADRAO, e nao a ausencia do texto no arquivo.
     """
     corpo = _codigo("routers/public.py", "public_next_fixtures")
-    assert "match_datetime >=" in corpo
-    assert "::date =" not in corpo
     assert "ORDER BY f.match_datetime" in corpo
+
+    # Sem `date`, a janela e' por horario.
+    padrao = corpo[corpo.index("else:"):corpo.index("conn = get_connection")]
+    assert "match_datetime >=" in padrao
+    assert "::date" not in padrao, "a janela padrao voltou a travar num dia"
+
+    # A Home nao passa `date` (o card da tela de Picks passa).
+    assert "params: { limit: 8 }" in _front("home/NextGames.tsx")
 
 
 def test_fila_tem_indice_pra_nao_varrer_a_tabela():

@@ -8,7 +8,7 @@ import {
 } from '../components/ui'
 import DailyGreensChart from '../components/DailyGreensChart'
 import ActivityHeatmap from '../components/ActivityHeatmap'
-import { winRate as calcWinRate } from '../utils/format'
+import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
 
 /*
  * Performance da IA.
@@ -24,7 +24,10 @@ import { winRate as calcWinRate } from '../utils/format'
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
+  /** Lucro em unidades · stake fixa de 1u por pick (ver fmtUnits). */
   profit: number; stake_total: number; roi: number
+  vip_profit?: number; vip_total?: number
+  free_profit?: number; free_total?: number
 }
 interface DayResult { match_date: string; total: number; greens: number; reds: number; profit: number }
 interface LeagueResult {
@@ -32,6 +35,8 @@ interface LeagueResult {
   total: number; greens: number; reds: number
 }
 interface ResultsData {
+  /** Legenda do plano de stake · vem pronta do backend (stake_plan.py). */
+  stake_label?: string
   summary: Summary
   by_day: DayResult[]
   by_league: LeagueResult[]
@@ -180,6 +185,8 @@ export default function PerformanceIA() {
   const byLeague = results?.by_league ?? []
   const wr = calcWinRate(s?.greens ?? 0, s?.total ?? 0) ?? 0
   const roi = Number(s?.roi ?? 0)
+  const lucro = Number(s?.profit ?? 0)
+  const stakeLabel = results?.stake_label ?? STAKE_LABEL_PADRAO
 
   return (
     <PageShell
@@ -207,7 +214,10 @@ export default function PerformanceIA() {
       ) : (
         <>
           <section>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Os quatro indicadores originais seguem na ordem em que sempre
+                estiveram · o lucro em unidades entra como quinto, no fim, sem
+                reorganizar o resto. */}
+            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
               <StatTile label="Assertividade" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'} hint={`${s.greens} greens`} />
               <StatTile label="Picks resolvidos" value={String(s.total)} hint="no histórico" />
               <StatTile
@@ -217,6 +227,13 @@ export default function PerformanceIA() {
                 hint="sobre o total apostado"
               />
               <StatTile label="Ligas cobertas" value={String(byLeague.length)} hint="com pick publicado" />
+              <StatTile
+                label="Lucro da IA"
+                value={fmtUnits(lucro, 1)}
+                tone={lucro >= 0 ? 'green' : 'red'}
+                hint={stakeLabel}
+                className="col-span-2 sm:col-span-1"
+              />
             </div>
           </section>
 

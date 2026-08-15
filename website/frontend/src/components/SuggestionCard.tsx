@@ -14,6 +14,7 @@ import {
   PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
 } from './PickCardParts'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 import { Clock } from 'lucide-react'
 
@@ -105,6 +106,7 @@ function SuggestionCard({
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
   const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
   //             2) função específica por tipo como fallback
   const stakeSuggestion = (() => {
@@ -153,20 +155,15 @@ function SuggestionCard({
   const handleFollow = async (e: React.MouseEvent) => {
     e.stopPropagation()
     if (followed) return
-    let odd = Number(s.odd)
-    if (s.fixture_id && s.pick_type !== 'multipla') {
-      setFollowing(true)
-      try {
-        const { data } = await api.get('/live/pick-odd', {
-          params: { fixture_id: s.fixture_id, market_type: s.market_type ?? '', line: s.line ?? '' },
+    // Múltipla não passa por aqui: bilhete se atualiza perna a perna, no card
+    // dele, via /live/ticket-odd.
+    const { odd } = s.pick_type === 'multipla'
+      ? { odd: Number(s.odd) }
+      : await buscarOdd(Number(s.odd), {
+          fixture_id: s.fixture_id,
+          market_type: s.market_type,
+          line: s.line,
         })
-        if (data?.odd) odd = Number(data.odd)
-      } catch {
-        // sem odd atualizada · segue com a odd ja salva no pick
-      } finally {
-        setFollowing(false)
-      }
-    }
     setModalOdd(odd)
     setShowModal(true)
   }
@@ -383,7 +380,7 @@ function SuggestionCard({
 
       <PickCardFooter
         onBet={!s.result ? (banca ? handleFollow : () => navigate('/banca')) : undefined}
-        betState={following ? 'loading' : followed ? 'done' : 'idle'}
+        betState={following || buscandoOdd ? 'loading' : followed ? 'done' : 'idle'}
         hasBanca={!!banca}
         onShare={handleShare}
         shareState={sharing ? 'loading' : shared ? 'done' : 'idle'}
@@ -416,6 +413,7 @@ function SuggestionCard({
     {showModal && (
       <ApostaModal
         pickOdd={modalOdd}
+        originalOdd={Number(s.odd)}
         suggestedUnits={Math.min(stakeSuggestion?.units ?? 1, maxUnits)}
         suggestedHouse={s.bet_house}
         maxUnits={maxUnits}
