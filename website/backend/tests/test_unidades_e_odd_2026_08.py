@@ -682,7 +682,7 @@ def test_lucro_em_reais_so_pra_quem_apostou():
             f"{tela} ainda cai na stake sugerida pra calcular lucro"
         assert "const seguiu =" in fonte, tela
         assert "seguiu && banca" in fonte, f"{tela} calcula reais sem checar se apostou"
-        assert "não apostou" in _front(tela), f"{tela} nao diz que o usuario ficou de fora"
+        assert "Não registrada" in _front(tela), f"{tela} nao diz que o usuario ficou de fora"
 
 
 def test_suporte_tem_um_link_so():

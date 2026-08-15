@@ -367,8 +367,10 @@ function SuggestionCard({
                     </>
                   ) : (
                     <>
-                      <div className="text-[10px] text-ink-3 mb-0.5">Você</div>
-                      <div className="text-sm font-semibold text-ink-4 pt-1.5">não apostou</div>
+                      {/* Vocabulário do próprio card: o botão vira "Registrado"
+                          quando a aposta é seguida, então o oposto é este. */}
+                      <div className="text-[10px] text-ink-3 mb-0.5">Sua aposta</div>
+                      <div className="text-sm font-semibold text-ink-4 pt-1.5">Não registrada</div>
                     </>
                   )}
                 </div>
