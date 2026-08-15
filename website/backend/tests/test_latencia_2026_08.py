@@ -17,6 +17,7 @@ que nenhum teste de resposta pegaria.
 
 Nada aqui abre conexao: o conftest ja bloqueia get_connection.
 """
+import gzip
 import time
 
 import pytest
@@ -282,3 +283,141 @@ def test_sobreposicoes_saem_do_chunk_de_entrada():
     assert "from 'framer-motion'" not in src
     for comp in ("CookieBanner", "ErrorToast", "GlobalModals", "PushPromptBanner"):
         assert f"lazy(() => import('./components/{comp}'))" in src, comp
+
+
+# ─────────────────── Brotli pre-comprimido ────────────────────
+
+
+def _cliente_spa(tmp_path, monkeypatch):
+    """App com um dist de mentira, so' pra exercitar o catch-all do SPA."""
+    import importlib
+    from fastapi.testclient import TestClient
+
+    dist = tmp_path / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("<html>real</html>", encoding="utf-8")
+    js = dist / "assets" / "app-abc123.js"
+    corpo = "console.log('x')" * 200
+    js.write_text(corpo, encoding="utf-8")
+    # O .gz precisa ser gzip DE VERDADE: o cliente de teste descomprime sozinho
+    # ao ler a resposta, e bytes falsos falhariam no cliente, nao no servidor.
+    js.with_name(js.name + ".gz").write_bytes(gzip.compress(corpo.encode()))
+    # O .br fica com conteudo qualquer de proposito: aqui so' interessa QUAL
+    # arquivo o servidor escolheu e com que cabecalhos, e o httpx deste
+    # ambiente nao decodifica brotli.
+    js.with_name(js.name + ".br").write_bytes(b"CORPO-BROTLI")
+
+    import main
+    monkeypatch.setattr(main, "_dist", dist)
+    monkeypatch.setattr(main, "_resposta_de_arquivo", main._resposta_de_arquivo)
+    return TestClient(main.app), js
+
+
+def test_brotli_servido_quando_o_navegador_aceita(tmp_path, monkeypatch):
+    cliente, _ = _cliente_spa(tmp_path, monkeypatch)
+    r = cliente.get("/assets/app-abc123.js",
+                    headers={"Accept-Encoding": "br, gzip"})
+    assert r.status_code == 200
+    assert r.headers["content-encoding"] == "br"
+    # o tipo vem do nome ORIGINAL; do .br o FileResponse chutaria octet-stream
+    # e o navegador nao executaria o script
+    assert "javascript" in r.headers["content-type"]
+    assert "Accept-Encoding" in r.headers.get("vary", "")
+
+
+def test_gzip_quando_nao_ha_brotli(tmp_path, monkeypatch):
+    cliente, _ = _cliente_spa(tmp_path, monkeypatch)
+    r = cliente.get("/assets/app-abc123.js", headers={"Accept-Encoding": "gzip"})
+    assert r.headers["content-encoding"] == "gzip"
+
+
+def test_sem_accept_encoding_serve_o_arquivo_cru(tmp_path, monkeypatch):
+    """Cliente velho nao pode receber bytes comprimidos sem pedir."""
+    cliente, _ = _cliente_spa(tmp_path, monkeypatch)
+    r = cliente.get("/assets/app-abc123.js", headers={"Accept-Encoding": "identity"})
+    assert r.headers.get("content-encoding") in (None, "")
+    assert "console.log" in r.text
+
+
+def test_br_nao_casa_por_substring(tmp_path, monkeypatch):
+    """`"br" in cabecalho` casaria dentro de outra palavra e mandaria brotli pra
+    quem nao pediu · isso vira pagina em branco, nao erro visivel."""
+    cliente, _ = _cliente_spa(tmp_path, monkeypatch)
+    r = cliente.get("/assets/app-abc123.js", headers={"Accept-Encoding": "brotli-falso"})
+    assert r.headers.get("content-encoding") in (None, "")
+
+
+def test_pedido_direto_ao_br_nao_vaza_bytes_comprimidos(tmp_path, monkeypatch):
+    """O .br existe so' como variante. Servido direto, iria sem o cabecalho que
+    diz que esta comprimido."""
+    cliente, _ = _cliente_spa(tmp_path, monkeypatch)
+    r = cliente.get("/assets/app-abc123.js.br", headers={"Accept-Encoding": "br"})
+    assert b"CORPO-BROTLI" not in r.content
+
+
+def test_script_de_precompressao_nao_traz_dependencia():
+    """zlib do proprio Node · nada novo no package.json."""
+    script = _front("../scripts/precomprimir.mjs")
+    assert "node:zlib" in script
+    for pacote in ("brotli", "compression-webpack", "vite-plugin-compression"):
+        assert pacote not in _front("../package.json")
+
+
+# ─────────────────── Revelacao coletiva do topo ────────────────────
+
+
+def test_topo_da_home_revela_de_uma_vez():
+    """Cada bloco revelava o seu assim que a SUA resposta chegava, e dois deles
+    somem quando nao tem dado: a altura da pagina mudava embaixo do dedo."""
+    src = _front("pages/Home.tsx")
+    assert "topoPronto" in src
+    assert "revelar={topoPronto}" in src
+    assert src.count("onCarregou={marcarPronto}") == 2
+    assert "loaded={topoPronto}" in src
+
+
+def test_pedidos_do_topo_continuam_saindo_juntos():
+    """A revelacao e' que e' coletiva; os requests nao viraram fila. Se algum
+    bloco passasse a so' pedir depois do vizinho, o ganho de latencia iria
+    embora junto."""
+    for arquivo in ("home/FreePickHero.tsx", "home/NextGames.tsx"):
+        src = _front(arquivo)
+        # o useEffect que busca nao depende de `revelar`
+        assert "revelar" not in src.split("useEffect(")[1].split("}, [")[0]
+
+
+def test_topo_de_picks_espera_stats_e_picks():
+    src = _front("pages/Picks.tsx")
+    assert "const topoPronto = !todayLoading && quickStatsPronto" in src
+    assert "{!topoPronto ? <PickLoading />" in src
+
+
+def test_erro_nao_segura_a_tela_para_sempre():
+    """`.finally` e nao `.then`: chamada que falhou tem que contar como pronta."""
+    assert ".finally(() => setQuickStatsPronto(true))" in _front("pages/Picks.tsx")
+
+
+# ─────────────────── Abas pesadas fora do chunk de Picks ────────────────────
+
+
+def test_abas_pesadas_sao_lazy():
+    """Juntas sao 68 KB de fonte, e o usuario cai sempre na aba Hoje. O feed e'
+    pior: so' renderiza com LIVE_PICKS_ENABLED, DESLIGADA em producao."""
+    src = _front("pages/Picks.tsx")
+    for comp in ("LivePicks", "LivePicksFeed"):
+        assert f"lazy(() => import('../components/{comp}'))" in src
+
+
+def test_aba_pesada_continua_montada_depois_da_primeira_visita():
+    """As duas tem polling proprio e estado que nao pode sumir a cada troca de
+    aba · por isso `hidden` em vez de desmontar."""
+    src = _front("pages/Picks.tsx")
+    assert "jaAbriuMinhasApostas.current" in src
+    assert "jaAbriuAoVivo.current" in src
+    assert "tab !== 'minhas_apostas' ? 'hidden' : ''" in src
+
+
+def test_codigo_morto_saiu_de_picks():
+    src = _front("pages/Picks.tsx")
+    for morto in ("function QuickStats(", "function PicksTable(", "function normalizePickRow("):
+        assert morto not in src, morto

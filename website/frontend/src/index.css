@@ -141,6 +141,29 @@
 }
 
 @layer components {
+  /*
+   * Lista longa · o navegador pula o layout e a pintura do que está fora da
+   * tela.
+   *
+   * Para grades paginadas em 50 itens (histórico de alavancagem, resultados
+   * públicos), onde cada card tem escudo, bordas e sombra. Sem isto o celular
+   * calcula layout e pinta os 50 de uma vez no primeiro quadro, mesmo com 3
+   * visíveis, e é isso que aparece como travada ao entrar na aba.
+   *
+   * `contain-intrinsic-size` é obrigatório junto: é a altura que o navegador
+   * assume para o que ainda não pintou. Sem ela a barra de rolagem pularia
+   * enquanto o conteúdo real vai sendo medido. 260px é a altura típica de um
+   * card de pick; errar um pouco não quebra nada, só deixa a barra menos
+   * precisa até o item entrar em tela.
+   *
+   * Aplicar só onde a lista é comprovadamente longa. Em lista curta o ganho é
+   * zero e a altura assumida vira um custo à toa.
+   */
+  .lista-longa > * {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 260px;
+  }
+
   /* --- superficie --- */
   .card {
     @apply bg-surface-1 border border-line rounded-lg;

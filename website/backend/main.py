@@ -1,6 +1,7 @@
 import asyncio
 import io
 import logging
+import mimetypes
 import os
 import pathlib
 import time
@@ -482,15 +483,58 @@ _dist = _base_dir / "dist"
 _ASSET_CACHE = {"Cache-Control": "public, max-age=31536000, immutable"}
 _HTML_CACHE  = {"Cache-Control": "no-cache"}
 
+def _codificacoes_aceitas(request: Request) -> set[str]:
+    """Tokens de Accept-Encoding, sem os parametros de qualidade.
+
+    Por token e nao por `"br" in cabecalho`: substring casaria dentro de
+    qualquer outra palavra e mandaria brotli pra quem nao pediu, o que vira
+    pagina em branco e nao erro visivel.
+    """
+    bruto = request.headers.get("accept-encoding", "")
+    return {p.split(";")[0].strip().lower() for p in bruto.split(",") if p.strip()}
+
+
+def _resposta_de_arquivo(request: Request, arquivo: pathlib.Path, cache: dict) -> FileResponse:
+    """Serve o arquivo, preferindo a versao pre-comprimida quando existir.
+
+    O `.br`/`.gz` sai do build (frontend/scripts/precomprimir.mjs), nao daqui:
+    comprimir por requisicao gasta CPU do mesmo processo que responde a API, e
+    brotli em nivel 11 e' caro demais pra isso. Pre-comprimido, servir e' so'
+    mandar outro arquivo do disco.
+
+    O media_type vem do nome ORIGINAL. Sem isso o FileResponse olharia
+    `index.js.br` e mandaria octet-stream, e o navegador nao executaria o script.
+    """
+    aceitas = _codificacoes_aceitas(request)
+    tipo = mimetypes.guess_type(arquivo.name)[0] or "application/octet-stream"
+
+    for codificacao, sufixo in (("br", ".br"), ("gzip", ".gz")):
+        if codificacao not in aceitas:
+            continue
+        pronto = arquivo.with_name(arquivo.name + sufixo)
+        if not pronto.is_file():
+            continue
+        cabecalhos = {**cache, "Content-Encoding": codificacao, "Vary": "Accept-Encoding"}
+        return FileResponse(str(pronto), media_type=tipo, headers=cabecalhos)
+
+    # GZipMiddleware cuida do caso sem arquivo pronto (ele pula quando ja existe
+    # Content-Encoding, entao os dois caminhos nao se atropelam).
+    return FileResponse(str(arquivo), media_type=tipo, headers=cache or None)
+
+
 if _dist.exists():
 
     @app.get("/{full_path:path}", include_in_schema=False)
-    async def serve_spa(full_path: str):
+    async def serve_spa(request: Request, full_path: str):
         # Resolve e confirma que o resultado fica dentro de _dist -- sem isso,
         # full_path com ".." (ex: /../../../../etc/passwd) escapa do diretorio
         # do build e serve qualquer arquivo legivel pelo processo.
         candidate = (_dist / full_path).resolve()
-        if candidate.is_relative_to(_dist) and candidate.is_file():
+        # Pedido direto a um .br/.gz cai no index.html: eles existem so' como
+        # variante do arquivo real e serviria bytes comprimidos sem o cabecalho
+        # que diz isso.
+        pedido_comprimido = candidate.suffix in (".br", ".gz")
+        if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
             eterno = full_path.startswith("assets/") and candidate.suffix != ".html"
-            return FileResponse(str(candidate), headers=_ASSET_CACHE if eterno else None)
-        return FileResponse(str(_dist / "index.html"), headers=_HTML_CACHE)
+            return _resposta_de_arquivo(request, candidate, _ASSET_CACHE if eterno else {})
+        return _resposta_de_arquivo(request, _dist / "index.html", _HTML_CACHE)

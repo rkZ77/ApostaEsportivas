@@ -12,7 +12,7 @@ ENV VITE_CONTACT_URL=$VITE_CONTACT_URL
 COPY website/frontend/package*.json ./
 RUN npm ci --ignore-scripts
 COPY website/frontend/ .
-RUN npm run build
+RUN npm run build && npm run build:comprimir
 
 # ── Stage 2: Python API + frontend buildado ────────────────────
 FROM python:3.12-slim

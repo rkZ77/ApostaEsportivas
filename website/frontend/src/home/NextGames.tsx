@@ -145,7 +145,11 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
   )
 }
 
-export default function NextGames() {
+/** `revelar`/`onCarregou`: revelação coletiva do topo da Home · ver FreePickHero. */
+export default function NextGames({ revelar = true, onCarregou }: {
+  revelar?: boolean
+  onCarregou?: () => void
+}) {
   const [games, setGames] = useState<UpcomingFixture[] | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -153,10 +157,10 @@ export default function NextGames() {
     api.get('/public/next-fixtures', { params: { limit: 8 } })
       .then(r => setGames(r.data ?? []))
       .catch(() => setGames([]))
-      .finally(() => setLoading(false))
+      .finally(() => { setLoading(false); onCarregou?.() })
   }, [])
 
-  if (loading) {
+  if (loading || !revelar) {
     return (
       <div className="-mx-4 sm:mx-0">
         <div className="flex gap-3 overflow-hidden px-4 sm:px-0">

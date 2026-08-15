@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Helmet } from 'react-helmet-async'
 import { motion } from 'framer-motion'
 import { ArrowRight, Check, X as XIcon } from 'lucide-react'
@@ -8,7 +8,7 @@ import SiteHeader from '../components/SiteHeader'
 import Footer from '../components/Footer'
 import {
   Badge, Button, LiveDot, Panel, PanelHead, PickTypeBadge, ResultBadge,
-  SectionHead, Spinner,
+  SectionHead, Skeleton, Spinner,
 } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
@@ -179,6 +179,12 @@ function Leaderboard() {
 
   const rankCls = ['bg-yellow-400 text-black', 'bg-ink-2 text-black', 'bg-orange-400 text-black']
 
+  // Esqueleto com a MESMA altura das três linhas finais. Antes era um spinner
+  // solto num `py-8`: a seção crescia quando os dados chegavam e empurrava o
+  // rodapé para baixo, mesmo estando abaixo da dobra. Reservar o espaço custa
+  // nada e tira o último pulo da página.
+  const linhaAltura = 'h-[74px]'
+
   return (
     <section className="section-tight">
       <div className="shell-narrow">
@@ -188,7 +194,11 @@ function Leaderboard() {
         />
 
         {loading ? (
-          <div className="flex justify-center py-8"><Spinner /></div>
+          <div className="space-y-2.5">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className={`${linhaAltura} w-full`} />
+            ))}
+          </div>
         ) : (
           <motion.div
             variants={staggerContainer}
@@ -377,6 +387,28 @@ export default function Home() {
   const [ctaDismissed, setCtaDismissed] = useState(false)
   const { plans, monthly } = usePlans()
 
+  /*
+   * REVELAÇÃO COLETIVA DO TOPO.
+   *
+   * São três requests independentes acima da dobra · a dica do dia, a fila de
+   * jogos e os indicadores. Cada bloco revelava o seu assim que a SUA resposta
+   * chegava, então a Home se montava em três tempos, na ordem em que o servidor
+   * respondesse, e dois desses blocos somem quando não têm dado
+   * (FreePickHero, NextGames): não era só piscar em sequência, era a altura da
+   * página mudando embaixo do dedo de quem está no celular.
+   *
+   * Os três pedidos continuam saindo juntos, no mesmo instante · isto NÃO é uma
+   * fila, ninguém espera ninguém para pedir. O que espera é só a troca do
+   * esqueleto pelo conteúdo, que acontece de uma vez para os três.
+   *
+   * Abaixo da dobra fica como estava, preenchendo conforme chega: quem rolou
+   * até lá não vê o rearranjo, e segurar a página inteira significaria esperar
+   * a chamada mais lenta para mostrar qualquer coisa.
+   */
+  const [prontos, setProntos] = useState(0)
+  const marcarPronto = useCallback(() => setProntos(n => n + 1), [])
+  const topoPronto = loaded && prontos >= 2
+
   // Uma chamada só: alimenta a faixa de indicadores e a lista de resultados.
   //
   // recent_limit=10 porque a lista mostra 10. Estava em 50: o backend roda uma
@@ -510,7 +542,7 @@ export default function Home() {
             </div>
 
             <div className="lg:pl-4">
-              <FreePickHero />
+              <FreePickHero revelar={topoPronto} onCarregou={marcarPronto} />
             </div>
           </div>
 
@@ -519,7 +551,7 @@ export default function Home() {
               inteiro; a fila é o presente entre os dois, e antes ela vinha
               depois de tudo, onde ninguém a lia como "está acontecendo". */}
           <div className="mt-12 md:mt-16">
-            <NextGames />
+            <NextGames revelar={topoPronto} onCarregou={marcarPronto} />
           </div>
 
           <div className="mt-8 md:mt-10">
@@ -530,7 +562,7 @@ export default function Home() {
             <StatsBand
               summary={data?.summary ?? null}
               leaguesCount={data?.summary?.leagues_count ?? 0}
-              loaded={loaded}
+              loaded={topoPronto}
             />
           </div>
         </div>

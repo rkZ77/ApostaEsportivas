@@ -1,4 +1,4 @@
-﻿import { useEffect, useState, useCallback, useMemo, useRef, memo } from 'react'
+﻿import { useEffect, useState, useCallback, useMemo, useRef, memo, lazy, Suspense } from 'react'
 import { Link, useNavigate, useLocation } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp, staggerContainer, tabFade } from '../lib/motion'
@@ -19,8 +19,21 @@ import AnalysisModal from '../components/AnalysisModal'
 import {
   PickCardFooter, PickExplainButton, PickProbability, PickReasoning,
 } from '../components/PickCardParts'
-import LivePicks from '../components/LivePicks'
-import LivePicksFeed from '../components/LivePicksFeed'
+/*
+ * As duas abas mais pesadas não entram no chunk desta página.
+ *
+ * Juntas são 68 KB de código-fonte, e o usuário cai sempre na aba "Hoje" ·
+ * nenhuma das duas participa da primeira tela. O caso do feed é pior ainda:
+ * ele só renderiza com LIVE_PICKS_ENABLED, que está DESLIGADA em produção,
+ * então eram 24 KB embarcados em todo carregamento de Picks para código que
+ * ninguém executa.
+ *
+ * `lazy()` aqui é seguro porque as duas já são montadas condicionalmente e
+ * fazem o próprio polling · elas não guardam estado que a página precise antes
+ * de o usuário trocar de aba.
+ */
+const LivePicks     = lazy(() => import('../components/LivePicks'))
+const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
@@ -276,82 +289,6 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
           </Link>
         )}
       </div>
-    </div>
-  )
-}
-
-// Quick stats
-function QuickStats({ stats }: { stats: any }) {
-  if (!stats) return null
-  const streak     = stats.streak ?? 0
-  const streakType = stats.streak_type
-  const profit     = Number(stats.profit ?? 0)
-  const winRate    = stats.win_rate ?? 0
-
-  const items = [
-    {
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-        </svg>
-      ),
-      label: 'Win Rate',
-      value: `${winRate}%`,
-      color: winRate >= 55 ? 'text-green-500' : winRate >= 45 ? 'text-yellow-400' : 'text-red-400',
-      iconColor: 'text-green-500',
-      sub: winRate >= 55 ? 'Acima da média' : 'Este mês',
-    },
-    {
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-        </svg>
-      ),
-      label: 'Lucro/mês',
-      value: `${profit >= 0 ? '+' : ''}${profit.toFixed(1)}u`,
-      color: profit >= 0 ? 'text-green-500' : 'text-red-400',
-      iconColor: profit >= 0 ? 'text-green-500' : 'text-red-400',
-      sub: profit >= 0 ? 'Positivo' : 'Negativo',
-    },
-    {
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-        </svg>
-      ),
-      label: 'Picks/mês',
-      value: String(stats.total ?? 0),
-      color: 'text-ink-2',
-      iconColor: 'text-blue-400',
-      sub: 'Finalizados',
-    },
-    {
-      icon: (
-        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 18.657A8 8 0 016.343 7.343S7 9 9 10c0-2 .5-5 2.986-7C14 5 16.09 5.777 17.656 7.343A7.975 7.975 0 0120 13a7.975 7.975 0 01-2.343 5.657z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 16.121A3 3 0 1012.015 11L11 14H9c0 .768.293 1.536.879 2.121z" />
-        </svg>
-      ),
-      label: 'Sequência',
-      value: streak > 0 ? (streakType === 'green' ? `+${streak}` : `-${streak}`) : '',
-      color: streakType === 'green' ? 'text-green-500' : streakType === 'red' ? 'text-red-400' : 'text-ink-3',
-      iconColor: streakType === 'green' ? 'text-orange-400' : 'text-ink-4',
-      sub: streakType === 'green' ? 'Greens seguidos' : streakType === 'red' ? 'Reds seguidos' : 'Sem sequência',
-    },
-  ]
-
-  return (
-    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-      {items.map(({ icon, label, value, color, iconColor, sub }) => (
-        <div key={label} className="card p-4">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-xs text-ink-4 font-semibold">{label}</span>
-            <span className={iconColor}>{icon}</span>
-          </div>
-          <div className={`font-mono text-2xl font-black ${color}`}>{value}</div>
-          <div className="text-xs text-ink-4 mt-0.5">{sub}</div>
-        </div>
-      ))}
     </div>
   )
 }
@@ -1345,7 +1282,7 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
           />
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+        <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map(c => (
             <SuggestionCard key={c.id} s={c.s} banca={banca} />
           ))}
@@ -1485,173 +1422,6 @@ function PipelineStatusCard() {
   )
 }
 
-// Constantes resultado / fonte
-const SOURCE_LBL: Record<string, string> = {
-  vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
-}
-
-interface NormalizedPick {
-  id: number; pickType: string; matchDate: string
-  homeName: string; awayName?: string; homeId?: number; awayId?: number
-  market?: string; line?: string; odd?: number; betHouse?: string
-  result?: string; profit?: number; isMonetary?: boolean
-}
-
-function normalizePickRow(row: any, pickType: string): NormalizedPick {
-  const base = { id: row.id, pickType, matchDate: row.match_date, result: row.result || undefined }
-  if (pickType === 'vip') return { ...base,
-    homeName: row.home_team_name ?? row.home_team ?? '',
-    awayName: row.away_team_name ?? row.away_team ?? '',
-    homeId: row.home_team_id, awayId: row.away_team_id,
-    market: row.market, line: row.line,
-    odd: row.odd ? Number(row.odd) : undefined, betHouse: row.bet_house,
-    profit: row.profit != null ? Number(row.profit) : undefined,
-  }
-  if (pickType === 'free') return { ...base,
-    homeName: row.home_team ?? row.home_team_name ?? '',
-    awayName: row.away_team ?? row.away_team_name ?? '',
-    homeId: row.home_team_id, awayId: row.away_team_id,
-    market: row.market, line: row.line,
-    odd: row.odd ? Number(row.odd) : undefined, betHouse: row.bet_house,
-    profit: row.profit != null ? Number(row.profit) : undefined,
-  }
-  if (pickType === 'multipla') {
-    let legs: any[] = []
-    try { legs = typeof row.legs === 'string' ? JSON.parse(row.legs) : (row.legs ?? []) } catch { legs = [] }
-    // legs_count vem do endpoint recent-results (backend apaga legs antes de retornar)
-    const legsCount = row.legs_count ?? legs.length
-    const f = legs[0]
-    // usa home_team_name pré-normalizado pelo backend quando legs não está disponível
-    const firstTeam = row.home_team_name || (f && (f.home ?? f.home_team)) || ''
-    const label = firstTeam
-      ? (legsCount > 1 ? `${firstTeam} +${legsCount - 1}` : firstTeam)
-      : 'Múltipla'
-    return { ...base,
-      homeName: label, homeId: f?.home_team_id,
-      market: row.market ?? (legsCount > 0 ? `Múltipla · ${legsCount} seleções` : 'Múltipla'),
-      odd: row.total_odd ? Number(row.total_odd) : row.odd ? Number(row.odd) : undefined,
-      profit: row.profit != null ? Number(row.profit) : undefined,
-    }
-  }
-  if (pickType === 'alavancagem') {
-    const odd   = row.odd_combined ? Number(row.odd_combined) : row.odd ? Number(row.odd) : undefined
-    const bk    = Number(row.bankroll_before ?? row.stake ?? 50)
-    // Calcula profit monetário a partir do bankroll real (não do campo profit que pode estar em unidades)
-    const monetaryProfit = row.result === 'GREEN' && odd ? bk * (odd - 1)
-      : row.result === 'RED' ? -bk
-      : row.profit != null ? Number(row.profit)
-      : undefined
-    return { ...base,
-      homeName: row.home_team_1 ?? row.home_team_name ?? '',
-      awayName: row.away_team_1 ?? row.away_team_name ?? '',
-      homeId: row.home_team_id_1 ?? row.home_team_id,
-      awayId: row.away_team_id_1 ?? row.away_team_id,
-      market: row.market_1 ?? row.market,
-      line: row.line_1 ?? row.line,
-      odd,
-      betHouse: row.bet_house_1 ?? row.bet_house,
-      isMonetary: true, profit: monetaryProfit,
-    }
-  }
-  // já normalizado (recent-results / mixed)
-  return { ...base,
-    homeName: row.home_team_name ?? '',
-    awayName: row.away_team_name ?? '',
-    homeId: row.home_team_id, awayId: row.away_team_id,
-    market: row.market, line: row.line,
-    odd: row.odd ? Number(row.odd) : undefined, betHouse: row.bet_house,
-    isMonetary: (row.pick_type ?? pickType) === 'alavancagem',
-    profit: row.profit != null ? Number(row.profit) : undefined,
-  }
-}
-
-// Tabela padronizada de picks
-function PicksTable({
-  rows, pickType, showSource = false, onOpen, footerAction,
-}: {
-  rows: any[]; pickType: string; showSource?: boolean
-  onOpen: (id: number, type: string) => void
-  footerAction?: { label: string; onClick: () => void }
-}) {
-  if (!rows.length) return null
-  return (
-    <div className="card overflow-hidden p-0">
-      <div className="divide-y divide-line/60">
-        {rows.map(row => {
-          const pt = showSource ? (row.pick_type ?? pickType) : pickType
-          const p  = normalizePickRow(row, pt)
-          return (
-            <button
-              key={`${pt}-${p.id}`}
-              onClick={() => onOpen(p.id, pt)}
-              className="w-full flex items-center gap-3 px-4 py-3 hover:bg-surface-2/40 transition-colors text-left"
-            >
-              <div className="w-12 shrink-0 text-center">
-                <span className="text-xs text-ink-3">
-                  {new Date(p.matchDate).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
-                </span>
-              </div>
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                  {showSource && (
-                    <span className={`text-[10px] font-black px-1.5 py-0.5 rounded border shrink-0 ${PICK_TYPE_CLS[pt] ?? ''}`}>
-                      {SOURCE_LBL[pt] ?? pt}
-                    </span>
-                  )}
-                  <TeamLogo id={p.homeId} name={p.homeName} size={16} />
-                  <span className="text-sm font-semibold text-ink-1 truncate">{p.homeName}</span>
-                  {p.awayName && (
-                    <>
-                      <span className="text-ink-4 text-xs shrink-0">vs</span>
-                      <span className="text-sm font-semibold text-ink-1 truncate">{p.awayName}</span>
-                      <TeamLogo id={p.awayId} name={p.awayName} size={16} />
-                    </>
-                  )}
-                </div>
-                <p className="text-xs text-ink-3 truncate">
-                  {p.market}{p.line ? <> · <span className="text-ink-2">{p.line}</span></> : ''}
-                  {p.odd ? ` · Odd ${p.odd.toFixed(2)}` : ''}
-                  {p.betHouse ? ` · ${p.betHouse}` : ''}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                {p.result ? (() => {
-                  const rs = getResultStyle(p.result)
-                  return (
-                    <span className={`text-xs font-black px-2 py-0.5 rounded-lg border ${rs ? `${rs.bg} ${rs.border} ${rs.text}` : 'text-ink-3'}`}>
-                      {rs ? rs.label : p.result}
-                    </span>
-                  )
-                })() : (
-                  <span className="text-xs font-black px-2 py-0.5 rounded-lg text-yellow-400 bg-yellow-400/10 border border-yellow-400/20">
-                    Pendente
-                  </span>
-                )}
-                {p.profit != null ? (
-                  <span className={`font-mono text-sm font-black w-14 text-right ${p.profit >= 0 ? 'text-green-500' : 'text-red-400'}`}>
-                    {p.profit >= 0 ? '+' : ''}{p.isMonetary ? 'R$' : ''}{Math.abs(p.profit).toFixed(2)}{!p.isMonetary ? 'u' : ''}
-                  </span>
-                ) : (
-                  <span className="text-sm font-black w-14 text-right text-ink-4"></span>
-                )}
-              </div>
-            </button>
-          )
-        })}
-      </div>
-      {footerAction && (
-        <div className="px-4 py-3 border-t border-line">
-          <button onClick={footerAction.onClick}
-            className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
-            {footerAction.label}
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
 
 // VIP Lock Overlay
 function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'orange' | 'purple' }) {
@@ -1728,6 +1498,14 @@ export default function Picks() {
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
 
   const [tab, setTab]               = useState<Tab>('hoje')
+
+  // Trava de "já visitou": uma vez aberta, a aba pesada continua montada (com
+  // `hidden`) para não perder polling nem estado. Antes de visitar, ela nem
+  // existe · é isso que mantém o chunk dela fora do carregamento da página.
+  const jaAbriuMinhasApostas = useRef(false)
+  const jaAbriuAoVivo        = useRef(false)
+  if (tab === 'minhas_apostas') jaAbriuMinhasApostas.current = true
+  if (tab === 'ao_vivo')        jaAbriuAoVivo.current = true
 
   // Estar nesta pagina ja significa ter visto os picks novos, entao o aviso
   // saiu do corpo da pagina e o assunto vive so' no sino. Marcar aqui (e nao
@@ -1807,6 +1585,7 @@ export default function Picks() {
   const [showBancaModal, setShowBancaModal] = useState(false)
 
   const [quickStats, setQuickStats] = useState<any>(null)
+  const [quickStatsPronto, setQuickStatsPronto] = useState(false)
   const [recentResults, setRecentResults] = useState<any[]>([])
   const [selectedOffset, setSelectedOffset] = useState(0)
   const [leagueFilter, setLeagueFilter] = useState<string>('')
@@ -1843,7 +1622,22 @@ export default function Picks() {
     api.get('/suggestions/stats/quick')
       .then(r => setQuickStats(r.data))
       .catch(() => {})
+      .finally(() => setQuickStatsPronto(true))
   }, [])
+
+  /*
+   * REVELAÇÃO COLETIVA DO TOPO · mesmo motivo da Home.
+   *
+   * A faixa "Performance da IA" fica ACIMA de todos os cards e só renderizava
+   * quando `/suggestions/stats/quick` respondia. Como os picks vêm de outra
+   * chamada, ela entrava depois e empurrava a tela inteira de picks para baixo,
+   * às vezes com o usuário já lendo o primeiro card.
+   *
+   * Os dois pedidos continuam saindo juntos; o que espera é só a troca do
+   * esqueleto pelo conteúdo. O erro conta como pronto (o `.finally` acima):
+   * chamada que falhou não pode segurar a tela para sempre.
+   */
+  const topoPronto = !todayLoading && quickStatsPronto
 
   // Marca picks pendentes como "Ao Vivo" quando o jogo já começou (status real
   // da API-Football via /live/is-live), em vez de continuar mostrando
@@ -2025,7 +1819,7 @@ export default function Picks() {
         ),
         actions: (
           <>
-            {quickStats && (
+            {topoPronto && quickStats && (
               <span className="hidden sm:flex items-center gap-2 text-xs">
                 <span className="text-ink-4">Win rate geral</span>
                 <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent' : 'text-ink-2'}`}>
@@ -2141,7 +1935,7 @@ export default function Picks() {
         <AnimatePresence mode="wait">
         {tab === 'hoje' && (
           <motion.div key="hoje" variants={tabFade} initial="hidden" animate="visible" exit="exit">
-            {todayLoading ? <PickLoading /> : todayError ? (
+            {!topoPronto ? <PickLoading /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>
               <p className="text-ink-4 text-sm mb-4">Não foi possível conectar ao servidor. Verifique sua conexão.</p>
@@ -2284,7 +2078,7 @@ export default function Picks() {
               {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0) && (
                 <section>
                   <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
-                  <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                  <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                     {/* Era aqui que o card de mercado aparecia SEM ação nenhuma:
                         o MercadoCard antigo só mostrava o botão Apostar quando
                         recebia `onBet`, e nesta aba (a que o usuário abre
@@ -2865,16 +2659,27 @@ export default function Picks() {
         {/* Não montado quando a aba está desligada · o feed faz polling
             próprio, e um componente escondido com `hidden` continuaria
             batendo em /live-picks/feed de graça pra todo VIP. */}
-        {LIVE_PICKS_ENABLED && (
+        {/* O chunk só é buscado na primeira vez que a aba abre. Depois disso a
+            aba continua montada com `hidden`, como era antes · ela tem polling
+            próprio e estado que não pode ser perdido a cada troca de aba. */}
+        {LIVE_PICKS_ENABLED && jaAbriuAoVivo.current && (
           <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
-            <LivePicksFeed isActive={tab === 'ao_vivo'} />
+            <Suspense fallback={<PickLoading />}>
+              <LivePicksFeed isActive={tab === 'ao_vivo'} />
+            </Suspense>
           </div>
         )}
 
-        {/* Minhas Apostas · o que o usuário decidiu seguir, pré-jogo e ao vivo. */}
-        <div className={tab !== 'minhas_apostas' ? 'hidden' : ''}>
-          <LivePicks isActive={tab === 'minhas_apostas'} unitValue={bancaSummary?.unit_value} />
-        </div>
+        {/* Minhas Apostas · o que o usuário decidiu seguir, pré-jogo e ao vivo.
+            Fica montada depois da primeira visita (o `hidden` preserva o estado
+            e o polling próprio dela), mas só é baixada quando o usuário chega. */}
+        {jaAbriuMinhasApostas.current && (
+          <div className={tab !== 'minhas_apostas' ? 'hidden' : ''}>
+            <Suspense fallback={<PickLoading />}>
+              <LivePicks isActive={tab === 'minhas_apostas'} unitValue={bancaSummary?.unit_value} />
+            </Suspense>
+          </div>
+        )}
 
 
 
