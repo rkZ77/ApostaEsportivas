@@ -5,7 +5,7 @@ import logging
 import re
 import psycopg2.extras
 from database import get_connection
-from auth_utils import get_current_user, require_vip, is_vip_active
+from auth_utils import get_current_user, get_current_user_optional, require_vip, is_vip_active
 from routers.banca import _compute_bankroll_current
 from routers.live import _stat_for_market, maybe_resolve_pending
 import market_form
@@ -1653,7 +1653,7 @@ def _build_combined_sql(source: str, date_cond: str,
 
 @router.get("/results/games")
 def get_results_games(
-    current_user: dict = Depends(get_current_user),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
     date_from: Optional[str] = Query(None),
     date_to:   Optional[str] = Query(None),
     days:      int = Query(30, ge=1, le=3650),
@@ -1662,7 +1662,21 @@ def get_results_games(
     offset:    int = Query(0, ge=0),
     limit:     int = Query(50, ge=1, le=200),
 ):
-    """Picks individuais com resultado, paginados. source: all|vip|free|multipla|alavancagem"""
+    """Picks individuais com resultado, paginados. source: all|vip|free|multipla|alavancagem
+
+    ABERTO SEM LOGIN, mas SÓ O QUE JÁ TEM RESULTADO. Este é o histórico da IA,
+    e pick encerrado não é produto: o mercado, a linha e a odd dele já valeram.
+    Exigir conta pra ver o que já aconteceu só escondia a prova de quem ainda
+    estava decidindo criar conta.
+
+    O QUE CONTINUA FECHADO É O PENDENTE. `resultado=pending` inverte o filtro
+    pra `result IS NULL` e devolveria os picks de HOJE com mercado, linha e odd
+    -- o produto inteiro, de graça, trocando um parâmetro na URL. Sem sessão,
+    esse valor é ignorado e a consulta segue só com resolvidos.
+
+    A stake pessoal (o quanto VOCÊ apostou em cada pick) também depende de
+    sessão, e simplesmente não entra quando não há usuário.
+    """
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -1678,7 +1692,10 @@ def get_results_games(
         # "pending" filtra pelo IS NULL dentro de cada subquery (elas excluem
         # pendentes por padrao); qualquer outro valor filtra por igualdade
         # na query externa, em cima do resultado ja unido das 4 fontes.
-        result_null_cond = "IS NULL" if resultado == "pending" else "IS NOT NULL"
+        # Pendente exige sessão · ver docstring: sem isso a URL entregaria os
+        # picks de hoje pra qualquer visitante.
+        pode_ver_pendente = current_user is not None
+        result_null_cond = "IS NULL" if (resultado == "pending" and pode_ver_pendente) else "IS NOT NULL"
         result_cond = ""
         result_params: list = []
         if resultado and resultado not in ("all", "pending"):
@@ -1701,7 +1718,11 @@ def get_results_games(
 
         items = [dict(r) for r in rows]
 
-        # Substitui stake de VIP/Free/Múltipla pelo stake pessoal do usuário
+        # Substitui stake de VIP/Free/Múltipla pelo stake pessoal do usuário.
+        # Sem sessão não há stake pessoal: a lista sai com a stake do plano.
+        if current_user is None:
+            return {"total": total, "items": items}
+
         personal_types = ("vip", "free", "multipla")
         ids_by_type: dict[str, list] = {t: [] for t in personal_types}
         for x in items:
@@ -1732,10 +1753,14 @@ def get_results_games(
 
 @router.get("/results/monthly")
 def get_results_monthly(
-    current_user: dict = Depends(get_current_user),
+    current_user: Optional[dict] = Depends(get_current_user_optional),
     source: str = Query("all"),
 ):
-    """Resumo mensal."""
+    """Resumo mensal · aberto sem login.
+
+    Só agrega picks JÁ RESOLVIDOS (o SQL nasce com `result IS NOT NULL`), então
+    não há o que esconder aqui: é o placar fechado de cada mês.
+    """
     inner_sql, _ = _build_combined_sql(source, "")
 
     conn = get_connection()

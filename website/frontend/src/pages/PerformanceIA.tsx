@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { Activity, TrendingUp } from 'lucide-react'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
+import PublicNav from '../components/PublicNav'
+import { useAuth } from '../context/AuthContext'
 import {
   Badge, Button, EmptyState, Panel, PanelHead, PickTypeBadge, ResultBadge,
   SpinnerBlock, StatTile, Table, type Column,
@@ -160,6 +162,7 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
 }
 
 export default function PerformanceIA() {
+  const { user } = useAuth()
   const [results, setResults] = useState<ResultsData | null>(null)
   const [clv, setClv] = useState<ClvData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -191,6 +194,7 @@ export default function PerformanceIA() {
       description="Assertividade, ROI e valor de fechamento dos picks gerados pela IA. Histórico público e auditável."
       canonical="https://pickia.com.br/performance"
       width="full"
+      nav={user ? true : <PublicNav width="full" />}
       bar={{
         back: true,
         title: 'Performance da IA',
