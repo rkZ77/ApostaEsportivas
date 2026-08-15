@@ -12,7 +12,6 @@ import { Button } from '../components/ui'
 
 const POINTS = [
   '2 dias de acesso VIP completo',
-  'Sem cartão de crédito',
   'Cancele quando quiser',
 ]
 

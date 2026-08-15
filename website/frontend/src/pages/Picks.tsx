@@ -348,7 +348,10 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       line: translateLine(dica.line),
       odd: Number(dica.odd),
       result: dica.result,
-      profit: dica.result ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? stakeSuggestion?.units ?? 1, dica.user_actual_odd) : null,
+      profit: dica.result
+        ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? 1,
+                          dica.user_stake_units != null ? dica.user_actual_odd : null)
+        : null,
     })
   }
 
@@ -448,27 +451,40 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           </>
         ) : dica.result ? (
           (() => {
-            const u = dica.user_stake_units ?? stakeSuggestion?.units ?? 1
-            const p = calcProfitUnits(dica.result, Number(dica.odd), u, dica.user_actual_odd)
+            /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
+               pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
+               ganho que ele nunca teve, na conta da banca dele. */
+            const seguiu = dica.user_stake_units != null
+            const u = seguiu ? dica.user_stake_units! : 1
+            const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? dica.user_actual_odd : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = banca ? Math.abs(p) * banca.unit_value : null
+            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Lucro</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Lucro do pick'}</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  {u > 1 && <div className="text-[10px] text-ink-4">({u}u)</div>}
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                  {profitR != null ? (
-                    <div className={`text-xl font-black ${color}`}>
-                      {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                    </div>
+                  {seguiu ? (
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                      {profitR != null ? (
+                        <div className={`text-xl font-black ${color}`}>
+                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                        </div>
+                      ) : (
+                        <div className="text-xl font-black text-ink-4">-</div>
+                      )}
+                    </>
                   ) : (
-                    <div className="text-xl font-black text-ink-4">-</div>
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Você</div>
+                      <div className="text-sm font-semibold text-ink-4 pt-1.5">não apostou</div>
+                    </>
                   )}
                 </div>
               </>
@@ -641,7 +657,10 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       market: `Múltipla · ${legs.length} seleções`,
       odd: Number(m.total_odd),
       result: m.result,
-      profit: m.result ? calcProfitUnits(m.result, Number(m.total_odd), m.user_stake_units ?? stakeSuggestion?.units ?? 1, m.user_actual_odd) : null,
+      profit: m.result
+        ? calcProfitUnits(m.result, Number(m.total_odd), m.user_stake_units ?? 1,
+                          m.user_stake_units != null ? m.user_actual_odd : null)
+        : null,
     })
   }
 
@@ -741,27 +760,40 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
           </>
         ) : m.result ? (
           (() => {
-            const u = m.user_stake_units ?? stakeSuggestion?.units ?? 1
-            const p = calcProfitUnits(m.result, Number(m.total_odd), u, m.user_actual_odd)
+            /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
+               pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
+               ganho que ele nunca teve, na conta da banca dele. */
+            const seguiu = m.user_stake_units != null
+            const u = seguiu ? m.user_stake_units! : 1
+            const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? m.user_actual_odd : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = banca ? Math.abs(p) * banca.unit_value : null
+            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Lucro</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">{seguiu ? 'Seu lucro' : 'Lucro do pick'}</div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  {u > 1 && <div className="text-[10px] text-ink-4">({u}u)</div>}
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                  {profitR != null ? (
-                    <div className={`text-xl font-black ${color}`}>
-                      {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                    </div>
+                  {seguiu ? (
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                      {profitR != null ? (
+                        <div className={`text-xl font-black ${color}`}>
+                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                        </div>
+                      ) : (
+                        <div className="text-xl font-black text-ink-4">-</div>
+                      )}
+                    </>
                   ) : (
-                    <div className="text-xl font-black text-ink-4">-</div>
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Você</div>
+                      <div className="text-sm font-semibold text-ink-4 pt-1.5">não apostou</div>
+                    </>
                   )}
                 </div>
               </>

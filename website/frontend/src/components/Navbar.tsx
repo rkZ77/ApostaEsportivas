@@ -1,3 +1,4 @@
+import { WA_SUPPORT } from '../lib/support'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'
@@ -10,9 +11,6 @@ import {
 } from 'lucide-react'
 import Avatar from './Avatar'
 import NotificationBell from './NotificationBell'
-
-const WA_SUPPORT_LINK =
-  'https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA.'
 
 const planBadge: Record<string, string> = {
   free:  'badge-free',
@@ -173,7 +171,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                           </span>
                         )}
                       </Link>
-                      <a href={WA_SUPPORT_LINK} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
+                      <a href={WA_SUPPORT} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <MessageCircle className="w-4 h-4 text-green-400" />
                         Suporte
                       </a>
@@ -300,7 +298,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             Como funciona
           </Link>
           <a
-            href={WA_SUPPORT_LINK}
+            href={WA_SUPPORT}
             target="_blank"
             rel="noopener noreferrer"
             className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"

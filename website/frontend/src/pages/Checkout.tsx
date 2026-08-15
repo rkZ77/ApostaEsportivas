@@ -6,13 +6,11 @@ import PageShell from '../components/PageShell'
 import { useAuth } from '../context/AuthContext'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import api from '../services/api'
+import { WA_SUPPORT } from '../lib/support'
 
 /* O plano em destaque é escolha de venda, não vem do backend: o resto (preço,
    período, desconto) vem de usePlans. */
 const POPULAR_PLAN = 'trimestral'
-
-const WA_SUPORTE =
-  'https://wa.me/5517992323916?text=Ol%C3%A1!%20Paguei%20a%20assinatura%20e%20meu%20acesso%20VIP%20n%C3%A3o%20foi%20liberado.'
 
 function SuccessPage() {
   const navigate = useNavigate()
@@ -83,7 +81,7 @@ function SuccessPage() {
               fale com o suporte que a gente ativa na hora.
             </p>
             <div className="flex flex-col gap-2 pt-1">
-              <a href={WA_SUPORTE} target="_blank" rel="noopener noreferrer"
+              <a href={WA_SUPPORT} target="_blank" rel="noopener noreferrer"
                  className="btn-primary px-8 py-3">Falar com o suporte</a>
               <button onClick={() => navigate('/picks')} className="btn-ghost px-8 py-3">
                 Voltar aos Picks

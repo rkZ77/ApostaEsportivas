@@ -22,7 +22,6 @@ const LINKS = [
   { href: '/resultados',     label: 'Resultados' },
   { href: '/performance',    label: 'Performance' },
   { href: '/planos',         label: 'Planos' },
-  { href: '/blog',           label: 'Blog' },
 ]
 
 export default function SiteHeader() {
