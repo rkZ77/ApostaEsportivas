@@ -1,6 +1,5 @@
 import { motion } from 'framer-motion'
 import { cn } from '../../lib/cn'
-import InfoTip from '../InfoTip'
 import { fadeInUp } from '../../lib/motion'
 
 /*
@@ -58,7 +57,6 @@ export function StatTile({
   value,
   tone = 'default',
   hint,
-  info,
   className,
 }: {
   label: React.ReactNode
@@ -66,16 +64,6 @@ export function StatTile({
   tone?: 'default' | 'green' | 'red' | 'muted'
   /** Linha extra miúda embaixo do rótulo (variação, período). */
   hint?: React.ReactNode
-  /**
-   * Explicação sob demanda, num ícone ao lado do rótulo.
-   *
-   * PREFIRA `info` A `hint`. A linha miúda embaixo de cada tile empilhava
-   * texto que quase ninguém lê e roubava a atenção do número, que é o que o
-   * ladrilho existe pra mostrar; quem quer saber o que a métrica significa
-   * clica. `hint` continua pra caso raro de dado que muda com o filtro (o
-   * período, a contagem) e por isso precisa estar sempre visível.
-   */
-  info?: string
   className?: string
 }) {
   const color = {
@@ -88,10 +76,7 @@ export function StatTile({
   return (
     <div className={cn('stat-tile', className)}>
       <div className={cn('stat-value', color)}>{value}</div>
-      <div className="stat-label flex items-center justify-center gap-1">
-        <span className="min-w-0 truncate">{label}</span>
-        {info && <InfoTip text={info} />}
-      </div>
+      <div className="stat-label">{label}</div>
       {hint != null && <div className="text-[10px] text-ink-4 mt-0.5">{hint}</div>}
     </div>
   )

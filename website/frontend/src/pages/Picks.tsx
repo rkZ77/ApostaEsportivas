@@ -38,13 +38,13 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { fmtUnits } from '../utils/format'
+import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
-import InfoTip from '../components/InfoTip'
 // Copa do Mundo 2026 · fase pelo match_date
 function wcPhase(dateStr?: string): string | null {
   if (!dateStr) return null
@@ -1977,26 +1977,24 @@ export default function Picks() {
                   <p className="text-[10px] text-ink-4 font-semibold mb-2">Performance da IA · Geral</p>
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
-                      { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1',
-                        info: 'Todos os picks já resolvidos, somando os seis produtos: VIP, free, múltiplas, alavancagem, faltas e defesas. Pick pendente não entra.' },
-                      { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500',
-                        info: 'Picks que bateram a linha e pagaram. Meio-green (½ win) conta à parte e não entra aqui.' },
-                      { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400',
-                        info: 'Picks que não bateram. Anulados (push) não contam como red · a aposta volta.' },
-                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2',
-                        info: 'Greens sobre o total resolvido. Sozinho não diz se deu lucro: acerto alto em odd baixa pode render menos que acerto médio em odd alta.' },
-                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400',
-                        info: 'Resultado acumulado em unidades, com plano fixo de stake: 4u em picks simples e 1u em múltiplas. Quanto vale 1u em reais depende da sua banca · configure em Minha Banca.' },
-                    ].map(({ label, value, color, info }) => (
+                      { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
+                      { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
+                      { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
+                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400' },
+                    ].map(({ label, value, color }) => (
                       <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
                         <div className={`font-mono text-xl font-black tabular-nums ${color}`}>{value}</div>
-                        <div className="text-[10px] text-ink-3 mt-1 flex items-center justify-center gap-1">
-                          <span>{label}</span>
-                          <InfoTip text={info} />
-                        </div>
+                        <div className="text-[10px] text-ink-3 mt-1">{label}</div>
                       </div>
                     ))}
                   </div>
+                  {/* Premissa do lucro numa linha só, embaixo · a Banca sugere
+                      stake variável, e sem isto o número não bate com o que o
+                      usuário vê na banca dele. */}
+                  <p className="text-[10px] text-ink-4 mt-2">
+                    Plano fixo de stake: {STAKE_LABEL_PADRAO}.
+                  </p>
                 </div>
               )}
 

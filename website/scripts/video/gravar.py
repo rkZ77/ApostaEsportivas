@@ -25,6 +25,46 @@ from estudio import Estudio
 AQUI = Path(__file__).parent
 
 
+def login_manual(url: str, destino: Path) -> int:
+    """
+    Abre um navegador visível, espera você logar e salva a sessão.
+
+    É a única forma de entrar: `/api/auth/login` exige Turnstile e o Turnstile
+    recusa navegador automatizado (a Cloudflare devolve 401 no challenge, tanto
+    headless quanto com janela). Aqui quem resolve o captcha é você, uma vez.
+    """
+    from playwright.sync_api import sync_playwright
+
+    print(f"abrindo {url}/login")
+    print("faça o login normalmente na janela que abriu.")
+    print("assim que cair numa página logada, a sessão é salva sozinha.\n")
+
+    with sync_playwright() as pw:
+        navegador = pw.chromium.launch(headless=False)
+        ctx = navegador.new_context(locale="pt-BR", timezone_id="America/Sao_Paulo")
+        pagina = ctx.new_page()
+        pagina.goto(f"{url.rstrip('/')}/login")
+
+        try:
+            pagina.wait_for_url(
+                lambda u: "/login" not in u and "/verify-email" not in u,
+                timeout=300000,  # 5 min de folga pra digitar e passar no captcha
+            )
+        except Exception:
+            print("erro: não detectei o login em 5 minutos.", file=sys.stderr)
+            navegador.close()
+            return 1
+
+        pagina.wait_for_timeout(2500)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        ctx.storage_state(path=str(destino))
+        navegador.close()
+
+    print(f"sessão salva em {destino}")
+    print("grave agora: logar de novo em outro lugar derruba esta sessão.")
+    return 0
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description="Gravador de vídeos 9:16 do Pick IA",
@@ -39,9 +79,10 @@ def main() -> int:
     p.add_argument("--saida", default=str(AQUI / "saida"), help="pasta de saída")
     p.add_argument("--voz", default=str(AQUI / "voz"),
                    help="pasta da narração gerada por narracao.py")
-    p.add_argument("--usuario", default=os.getenv("PICKIA_DEMO_USER", ""),
-                   help="email ou usuário da conta demo VIP")
-    p.add_argument("--senha", default=os.getenv("PICKIA_DEMO_SENHA", ""))
+    p.add_argument("--login-manual", action="store_true",
+                   help="abre o navegador pra você logar e salva a sessão")
+    p.add_argument("--sessao", default=str(AQUI / "sessao.json"),
+                   help="arquivo de sessão salvo pelo --login-manual")
     p.add_argument("--ver", action="store_true",
                    help="abre o navegador visível (bom pra depurar cena)")
     p.add_argument("--chat-fake", action="store_true",
@@ -59,6 +100,9 @@ def main() -> int:
         print("erro: informe --url ou defina PICKIA_URL", file=sys.stderr)
         return 2
 
+    if args.login_manual:
+        return login_manual(args.url, Path(args.sessao))
+
     escolhidas = list(CENAS) if args.todas else args.cena
     if not escolhidas:
         print("erro: use --cena <nome>, --todas ou --listar", file=sys.stderr)
@@ -70,12 +114,15 @@ def main() -> int:
         print(f"      disponíveis: {', '.join(CENAS)}", file=sys.stderr)
         return 2
 
+    sessao = Path(args.sessao)
     precisa_login = any(CENAS[c][2] for c in escolhidas)
-    if precisa_login and not (args.usuario and args.senha):
+    if precisa_login and not sessao.exists():
         faltando = [c for c in escolhidas if CENAS[c][2]]
-        print(f"erro: as cenas {', '.join(faltando)} exigem login.", file=sys.stderr)
-        print("      passe --usuario e --senha da conta demo VIP,", file=sys.stderr)
-        print("      ou defina PICKIA_DEMO_USER e PICKIA_DEMO_SENHA.", file=sys.stderr)
+        print(f"erro: as cenas {', '.join(faltando)} exigem estar logado,",
+              file=sys.stderr)
+        print(f"      e não achei a sessão em {sessao}.", file=sys.stderr)
+        print("      rode uma vez:  python gravar.py --url … --login-manual",
+              file=sys.stderr)
         return 2
 
     saida = Path(args.saida)
@@ -98,10 +145,12 @@ def main() -> int:
         desc, funcao, com_login = CENAS[nome]
         print(f"\n[{nome}] {desc}")
         try:
-            with Estudio(args.url, saida, nome,
-                         headless=not args.ver, tempos=tempos) as e:
-                if com_login and not e.logar(args.usuario, args.senha):
-                    print(f"  [erro] login falhou · cena {nome} pulada")
+            with Estudio(args.url, saida, nome, headless=not args.ver,
+                         tempos=tempos,
+                         sessao=sessao if com_login else None) as e:
+                if com_login and not e.sessao_valida():
+                    print(f"  [erro] sessão expirada ou derrubada · {nome} pulada")
+                    print("         rode de novo: gravar.py --url … --login-manual")
                     falhas.append(nome)
                     continue
                 funcao(e, ctx)

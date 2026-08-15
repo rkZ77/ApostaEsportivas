@@ -737,6 +737,39 @@ def public_fixtures_today(days_ahead: int = Query(0, ge=0, le=7)):
         conn.close()
 
 
+@router.get("/profit-curve")
+def public_profit_curve(days: int = Query(180, ge=7, le=1095)):
+    """Lucro em unidades por dia e por produto · série crua, sem agregado.
+
+    Existe para a HOME. A página de Resultados já recebe isto dentro de
+    /public/results, mas a Home chama aquela rota com `slim=1` justamente para
+    cair de sete consultas para três, e pendurar a série lá dentro devolveria o
+    custo que o slim tirou -- na chamada que desenha o topo da página, ainda por
+    cima.
+
+    Aqui é uma consulta só, chamada à parte e depois do topo: se ela demorar ou
+    falhar, o que atrasa é um gráfico abaixo da dobra, não a primeira tela.
+
+    O peso do plano de stake já vem embutido (ver stake_plan.py), então a curva
+    fala a mesma unidade do resto do site.
+    """
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        union_sql = _build_union("AND match_date >= CURRENT_DATE - (%s * INTERVAL '1 day')", None)
+        p = (days,) * len(_SUB_BUILDERS)
+        rows = _q(cur, f"""
+            SELECT match_date, source, COALESCE(SUM(profit), 0) AS profit
+            FROM ({union_sql}) AS t
+            GROUP BY match_date, source
+            ORDER BY match_date
+        """, p)
+        return [dict(r) for r in rows]
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/next-fixtures")
 def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
                          date: Optional[str] = Query(None, description="YYYY-MM-DD · dia inteiro em vez de 'daqui pra frente'")):
