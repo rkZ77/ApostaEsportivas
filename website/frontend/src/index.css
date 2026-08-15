@@ -250,8 +250,15 @@
      ver PICK_TYPE_BORDER em utils/resultStyle.ts, mesma convencao dos badges. */
   /* Sem `group` aqui: e' marcador pro group-hover: dos filhos, nao tem estilo
      proprio, e o Tailwind recusa @apply nele. Vai na classe de quem chama. */
+  /* Coluna de altura cheia: no grid, os cards de uma linha ja' esticavam pra
+     mesma altura, mas o conteudo empilhava a partir do topo e o rodape parava
+     onde o texto acabasse. Com quatro picks lado a lado, "Apostei" e
+     "Compartilhar" ficavam em quatro alturas diferentes -- o alinhamento
+     dependia do tamanho do nome do time e da analise. Com a coluna, o rodape
+     desce sozinho (ver mt-auto em PickCardParts). */
   .pick-card {
     @apply relative overflow-hidden bg-surface-0 border rounded-lg
+           flex flex-col h-full
            transition-colors duration-1 ease-smooth;
   }
 

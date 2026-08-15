@@ -88,7 +88,7 @@ export function StatTile({
   return (
     <div className={cn('stat-tile', className)}>
       <div className={cn('stat-value', color)}>{value}</div>
-      <div className="stat-label flex items-center gap-1">
+      <div className="stat-label flex items-center justify-center gap-1">
         <span className="min-w-0 truncate">{label}</span>
         {info && <InfoTip text={info} />}
       </div>

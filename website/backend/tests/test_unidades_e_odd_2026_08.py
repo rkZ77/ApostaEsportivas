@@ -463,3 +463,78 @@ def test_regra_do_mercado_concorda_em_numero():
     """Saia "sairem 1 gols ou menos"."""
     fonte = _front("utils/marketTranslate.ts")
     assert "Math.abs(n) === 1 ? singular : plural" in fonte
+
+
+# ────────────── 6. Bugs de tela achados com Playwright (15/08) ──────────────
+
+
+def test_dica_nao_e_posicionada_por_transform():
+    """A DICA COBRIA O QUE ESTAVA EXPLICANDO.
+
+    O deslocamento pra cima era `transform: translateY(-100%)` no style do
+    proprio motion.div. Só que framer-motion ESCREVE a propriedade `transform`
+    inteira pra animar a escala do popIn, e apagava o translate ja' no primeiro
+    quadro. Medido no navegador em 15/08: gatilho em y=651, dica renderizada em
+    y=649 com 101px de altura, quando deveria comecar em y=542.
+
+    Agora o deslocamento vai no `top`, com a altura MEDIDA, e o lado vira pra
+    baixo quando nao ha espaco acima.
+    """
+    # Le codigo, nao prosa: o comentario do arquivo cita o transform antigo.
+    codigo = _front_codigo("components/ui/Tooltip.tsx")
+    fonte = _front("components/ui/Tooltip.tsx")
+    assert "translateY(-100%)" not in codigo, "voltou a posicionar por transform"
+    assert "useLayoutEffect" in fonte, "sem medir a altura nao da pra escolher o lado"
+    assert "'abaixo'" in fonte, "faltou o caso de abrir pra baixo"
+
+
+def test_rotulo_do_ladrilho_segue_centralizado():
+    """`.stat-tile` e' text-center; o flex do rotulo (pro icone de info caber ao
+    lado) tirava o texto do centro."""
+    for arquivo in ("components/ui/Card.tsx", "pages/ResultadosPublicos.tsx"):
+        fonte = _front_codigo(arquivo)
+        assert "stat-label flex items-center justify-center" in fonte, arquivo
+
+
+def test_rodape_do_card_de_pick_desce_pro_fim():
+    """Quatro picks lado a lado tinham "Apostei" e "Compartilhar" em quatro
+    alturas diferentes: os cards ja' esticavam pra mesma altura no grid, mas o
+    conteudo empilhava a partir do topo e o rodape parava onde o texto acabasse.
+    """
+    css = _front("index.css")
+    bloco = css[css.index(".pick-card {"):]
+    bloco = bloco[:bloco.index("}")]
+    assert "flex flex-col h-full" in bloco, "a casca do card nao e' coluna de altura cheia"
+
+    partes = _front_codigo("components/PickCardParts.tsx")
+    assert "border-t border-line/60 mt-auto" in partes, "rodape nao desce sozinho"
+    # O bloco de altura variavel precisa absorver a folga, senao o botao
+    # "Entenda esta analise" continua dancando com o tamanho do texto.
+    assert "rounded-md flex-1" in partes, "a analise nao absorve a folga"
+
+
+def test_serie_do_mercado_cobre_chutes_e_impedimentos():
+    """"Como esse mercado vem se comportando" ficava VAZIO nos picks de chutes.
+
+    `folha_do_jogo` so' copia as chaves de `_ADAPTADOR`, e "Total Shots" e
+    "Offsides" nao estavam la' -- mesmo com as colunas existindo em
+    match_statistics desde sempre. A folha saia sem a chave, `_stat_side`
+    devolvia None pra todo jogo, e todo jogo caia fora da serie, enquanto
+    escanteios e cartoes mostravam os ultimos jogos normalmente.
+    """
+    import market_form
+
+    chaves = {c for c, _, _ in market_form._ADAPTADOR}
+    assert "Total Shots" in chaves
+    assert "Offsides" in chaves
+
+    # A folha tem que sair com as duas chaves quando as colunas vem preenchidas.
+    ms = {
+        "home_corners": 5, "away_corners": 4,
+        "home_total_shots": 12, "away_total_shots": 15,
+        "home_offsides": 2, "away_offsides": 0,
+        "home_shots_on": 4, "away_shots_on": 3,
+    }
+    casa, fora = market_form.folha_do_jogo(ms)
+    assert casa["Total Shots"] == 12 and fora["Total Shots"] == 15
+    assert casa["Offsides"] == 2 and fora["Offsides"] == 0

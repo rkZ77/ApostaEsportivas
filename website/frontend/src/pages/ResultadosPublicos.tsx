@@ -96,7 +96,7 @@ function AbaStats({ tiles }: {
       {tiles.map(t => (
         <div key={t.label} className="stat-tile">
           <div className={`stat-value tabular-nums ${cor[t.tone ?? 'default']}`}>{t.value}</div>
-          <div className="stat-label flex items-center gap-1">
+          <div className="stat-label flex items-center justify-center gap-1">
             <span className="min-w-0 truncate">{t.label}</span>
             {t.info && <InfoTip text={t.info} />}
           </div>

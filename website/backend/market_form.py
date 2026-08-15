@@ -57,6 +57,19 @@ from settlement_bridge import settlement
 # diferentes: a tabela guarda coluna por contador (home_corners), a API entrega
 # lista de {type, value} que routers/live.py ja le por nome. Traduzindo aqui, o
 # dispatch de familia continua sendo um so' pros dois caminhos.
+#
+# A LISTA TEM QUE COBRIR TODA FAMILIA QUE `_stat_for_market` SABE LER.
+#
+# "Total Shots" e "Offsides" faltavam aqui, e as colunas existem em
+# match_statistics desde sempre (home_total_shots, home_offsides). O efeito era
+# silencioso e completo: `folha_do_jogo` so' copia as chaves desta tupla, entao
+# a folha saia sem "Total Shots", `_stat_side` devolvia None pra todo jogo, e
+# todo jogo caia fora da serie -- "Como esse mercado vem se comportando" ficava
+# vazio nos picks de chutes e de impedimentos, enquanto escanteios, cartoes,
+# faltas e defesas mostravam os ultimos jogos normalmente.
+#
+# Registrar uma familia nova em routers/live.py e esquecer desta tupla e' o
+# jeito de reintroduzir o mesmo buraco.
 _ADAPTADOR = (
     # (chave da API,        coluna do mandante,   coluna do visitante)
     ("Corner Kicks",        "home_corners",       "away_corners"),
@@ -64,6 +77,8 @@ _ADAPTADOR = (
     ("Red Cards",           "home_red_cards",     "away_red_cards"),
     ("Fouls",               "home_fouls",         "away_fouls"),
     ("Shots on Goal",       "home_shots_on",      "away_shots_on"),
+    ("Total Shots",         "home_total_shots",   "away_total_shots"),
+    ("Offsides",            "home_offsides",      "away_offsides"),
 )
 
 
