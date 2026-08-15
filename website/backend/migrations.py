@@ -120,6 +120,30 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS alav_bankroll_init NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS last_manual_setup_month VARCHAR(7);")
+        # Caminhos de alavancagem. Cada linha e' UM caminho: comeca com
+        # initial_amount, os GREENs vao compondo em cima e ele so' vira dinheiro
+        # de verdade quando fecha -- na mao (o usuario decide sacar) ou no RED
+        # (perde o inicial e nada mais, porque o composto nunca foi sacado).
+        # Enquanto ended_at e' NULL o caminho esta' rodando e NAO entra na banca.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS alavancagem_series (
+                id             SERIAL PRIMARY KEY,
+                user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                initial_amount NUMERIC(12,2) NOT NULL,
+                started_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+                ended_at       TIMESTAMP,
+                end_reason     VARCHAR(10),
+                final_amount   NUMERIC(12,2),
+                realized_pnl   NUMERIC(12,2)
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alav_series_user ON alavancagem_series(user_id, started_at);")
+        # Um caminho aberto por usuario. E' o que impede duas abas (ou dois
+        # cliques) criarem caminhos paralelos e a replay ficar ambigua.
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_alav_series_um_aberto
+            ON alavancagem_series(user_id) WHERE ended_at IS NULL
+        """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_followed_picks (
                 id          SERIAL PRIMARY KEY,

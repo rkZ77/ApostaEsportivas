@@ -106,6 +106,27 @@ const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas' }
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
 interface AlavFilters { date_from: string; date_to: string; resultado: string }
+
+/** Um caminho de alavancagem. `current_bankroll` é o bolo em jogo, não saldo:
+ *  só vira dinheiro (e entra na banca) quando o caminho é encerrado. */
+interface AlavStep {
+  pick_id: number; result: 'GREEN' | 'RED'; odd: number
+  date: string | null; match: string; before: number; after: number
+}
+interface AlavSerie {
+  configured: boolean
+  series_id?: number
+  current_bankroll: number
+  initial_bankroll: number
+  steps?: AlavStep[]
+  open_profit?: number
+  can_close?: boolean
+  realized_total?: number
+  history?: {
+    id: number; initial: number; final: number; realized: number
+    end_reason: 'manual' | 'red'; started_at: string | null; ended_at: string | null
+  }[]
+}
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
@@ -1637,10 +1658,13 @@ export default function Picks() {
   const [alavError,    setAlavError]    = useState(false)
   const [alavHasMore,    setAlavHasMore]    = useState(false)
   const [alavLoadingMore, setAlavLoadingMore] = useState(false)
-  const [userAlavSerie, setUserAlavSerie] = useState<{ configured: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
+  const [userAlavSerie, setUserAlavSerie] = useState<AlavSerie | null>(null)
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
   const [alavInitError, setAlavInitError] = useState('')
+  const [alavEncerrando, setAlavEncerrando] = useState(false)
+  const [alavConfirmClose, setAlavConfirmClose] = useState(false)
+  const [alavCloseMsg, setAlavCloseMsg] = useState('')
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
   const [showBancaModal, setShowBancaModal] = useState(false)
 
@@ -1811,6 +1835,27 @@ export default function Picks() {
       setAlavInitError(e.response?.data?.detail || 'Erro ao salvar. Tente novamente.')
     } finally {
       setAlavInitSaving(false)
+    }
+  }
+
+  const encerrarCaminho = async () => {
+    setAlavEncerrando(true)
+    setAlavInitError('')
+    try {
+      const r = await api.post('/banca/alavancagem-encerrar')
+      const s = await api.get('/banca/alavancagem-serie')
+      setUserAlavSerie(s.data)
+      setAlavConfirmClose(false)
+      setAlavCloseMsg(
+        `Caminho encerrado. R$${Number(r.data.realized_pnl).toFixed(2)} foram pra sua banca. ` +
+        `O próximo começa em R$${Number(r.data.next_initial).toFixed(2)}.`,
+      )
+      // A banca principal mudou · o resumo em cache mostraria o valor velho.
+      api.get('/banca/summary').then(b => setBancaSummary(b.data)).catch(() => {})
+    } catch (e: any) {
+      setAlavInitError(e.response?.data?.detail || 'Erro ao encerrar. Tente novamente.')
+    } finally {
+      setAlavEncerrando(false)
     }
   }
 
@@ -2423,16 +2468,103 @@ export default function Picks() {
                 <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="font-display text-sm font-bold text-orange-400">Banca Alavancagem</p>
-                      <p className="text-xs text-ink-3 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
+                      <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
+                      <p className="text-xs text-ink-3 mt-0.5">Cada GREEN reaposta o bolo inteiro. Encerre pra transformar em dinheiro</p>
                     </div>
                     {userAlavSerie?.configured && (
                       <div className="font-mono text-right">
                         <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
-                        <div className="text-xs text-ink-4">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
+                        <div className="text-xs text-ink-4">entrada: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
                       </div>
                     )}
                   </div>
+
+                  {/* O ponto todo da tela: enquanto o caminho roda, esse número
+                      não é saldo · está inteiro apostado na próxima entrada. */}
+                  {userAlavSerie?.configured && (
+                    <div className="mb-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.06] px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-ink-3">
+                            {(userAlavSerie.open_profit ?? 0) > 0
+                              ? <>Lucro em jogo: <span className="font-mono font-black text-orange-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span></>
+                              : 'Caminho recém-começado'}
+                          </p>
+                          <p className="text-[11px] text-ink-4 mt-0.5 leading-snug">
+                            Não conta na sua banca enquanto o caminho estiver rodando.
+                            {' '}Se der RED você perde só os R${userAlavSerie.initial_bankroll.toFixed(2)} da entrada.
+                          </p>
+                        </div>
+                        {userAlavSerie.can_close && !alavConfirmClose && (
+                          <button
+                            onClick={() => { setAlavConfirmClose(true); setAlavCloseMsg('') }}
+                            className="shrink-0 bg-orange-500 hover:bg-orange-400 text-ink-1 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                          >
+                            Encerrar
+                          </button>
+                        )}
+                      </div>
+
+                      {alavConfirmClose && (
+                        <div className="mt-3 pt-3 border-t border-orange-500/20">
+                          <p className="text-xs text-ink-2 leading-snug">
+                            Encerrar agora leva <span className="font-mono font-black text-green-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span> pra sua banca
+                            {' '}e recomeça um caminho novo em R${userAlavSerie.initial_bankroll.toFixed(2)}.
+                          </p>
+                          <div className="flex gap-2 mt-2.5">
+                            <button
+                              onClick={encerrarCaminho}
+                              disabled={alavEncerrando}
+                              className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-surface-0 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                            >
+                              {alavEncerrando ? 'Encerrando...' : 'Confirmar e sacar'}
+                            </button>
+                            <button
+                              onClick={() => setAlavConfirmClose(false)}
+                              className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 text-xs font-bold transition-colors"
+                            >
+                              Continuar o caminho
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {alavCloseMsg && (
+                        <p className="text-xs text-green-400 font-semibold mt-2 leading-snug">{alavCloseMsg}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Passos do caminho atual · a escada que levou até o bolo de hoje */}
+                  {!!userAlavSerie?.steps?.length && (
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-ink-4 font-mono">R${userAlavSerie.initial_bankroll.toFixed(0)}</span>
+                      {userAlavSerie.steps.map(s => (
+                        <span key={s.pick_id} className="flex items-center gap-1">
+                          <span className="text-ink-4 text-[10px]">&rsaquo;</span>
+                          <span
+                            title={`${s.match} · odd ${s.odd.toFixed(2)}`}
+                            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              s.result === 'GREEN'
+                                ? 'bg-green-500/10 text-green-400'
+                                : 'bg-red-500/10 text-red-400 line-through'
+                            }`}
+                          >
+                            R${s.after.toFixed(0)}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {!!userAlavSerie?.realized_total && (
+                    <p className="text-[11px] text-ink-4 mb-3">
+                      Já realizado em caminhos encerrados:{' '}
+                      <span className={`font-mono font-bold ${userAlavSerie.realized_total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {userAlavSerie.realized_total >= 0 ? '+' : ''}R${userAlavSerie.realized_total.toFixed(2)}
+                      </span>
+                    </p>
+                  )}
                   {(!userAlavSerie?.configured || alavInitInput) ? (
                     <div className="flex gap-2 mt-2">
                       <input

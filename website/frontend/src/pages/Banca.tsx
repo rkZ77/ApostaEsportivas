@@ -382,10 +382,11 @@ export default function Banca() {
               ))}
             </div>
 
-            {/* Aviso alavancagem */}
+            {/* Aviso alavancagem · a regra mudou e a distinção importa: o que
+                entra aqui é caminho encerrado, não green de degrau. */}
             <div className="flex items-center gap-1.5 -mt-2 text-[11px] text-ink-4">
               <Info className="w-3 h-3 shrink-0" />
-              <span>Picks de Alavancagem não são contabilizados nesta banca</span>
+              <span>Alavancagem entra nesta banca só quando você encerra o caminho · o que está rodando fica de fora</span>
             </div>
 
             {/*
