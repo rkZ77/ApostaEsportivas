@@ -810,11 +810,25 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg: any, i: number) => {
-          // Se overall GREEN, todas GREEN. Se overall RED, legs sem GREEN explícito são RED
+          /*
+           * A PERNA MOSTRA O RESULTADO DELA, não o do bilhete.
+           *
+           * Antes, bilhete RED pintava de vermelho toda perna que não tivesse
+           * um GREEN explícito · e como o resultado por perna nunca era gravado
+           * (o caminho de resolução automática só salvava o do bilhete, ver
+           * _gravar_resultado_das_pernas em routers/live.py), "sem GREEN
+           * explícito" era SEMPRE. Numa múltipla de duas em que uma bateu, o
+           * usuário via duas derrotas, uma delas inventada pela tela.
+           *
+           * Bilhete GREEN continua implicando todas as pernas GREEN · aí é
+           * dedução, não palpite: combinada só paga com todas as pernas de pé.
+           *
+           * Sem o dado da perna e bilhete RED, o estado é NEUTRO. Não sabemos
+           * qual delas caiu, e chutar vermelho em todas é pior do que admitir
+           * que não sabemos: o placar do bilhete já está no topo do card.
+           */
           const lr = (
-            m.result === 'GREEN' ? 'GREEN' :
-            m.result === 'RED'   ? (leg.result === 'GREEN' ? 'GREEN' : 'RED') :
-            leg.result ?? undefined
+            leg.result ?? (m.result === 'GREEN' ? 'GREEN' : undefined)
           ) as 'GREEN' | 'RED' | undefined
           const boxClass = lr === 'GREEN'
             ? 'border-green-500/20 bg-green-500/5'
@@ -1076,21 +1090,23 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
       {/* Legs */}
       <div className="px-5 py-3 space-y-2">
         {legs.map((leg, i) => {
-          const boxClass = pick.result === 'GREEN'
+          /* Mesma regra da múltipla: bilhete GREEN implica todas as pernas de
+             pé (dedução), mas bilhete RED NÃO diz qual perna caiu. Alavancagem
+             guarda as pernas em colunas numeradas e não tem coluna de resultado
+             por perna, então aqui o estado só pode ser verde ou neutro · pintar
+             as duas de vermelho seria inventar a que bateu. */
+          const lr: 'GREEN' | undefined = pick.result === 'GREEN' ? 'GREEN' : undefined
+          const boxClass = lr === 'GREEN'
             ? 'border-green-500/20 bg-green-500/5'
-            : pick.result === 'RED'
-            ? 'border-red-500/20 bg-red-500/5'
             : 'border-line bg-surface-1/60'
-          const circleClass = pick.result === 'GREEN'
+          const circleClass = lr === 'GREEN'
             ? 'bg-green-500/20 text-green-400'
-            : pick.result === 'RED'
-            ? 'bg-red-500/20 text-red-400'
             : 'bg-orange-500/10 text-orange-400'
           return (
           <div key={i} className={`rounded-md border px-3 py-2 ${boxClass}`}>
             <div className="flex items-center gap-2">
               <span className={`w-5 h-5 flex items-center justify-center rounded-full ${circleClass} text-[10px] font-black shrink-0`}>
-                {pick.result === 'GREEN' ? '✓' : pick.result === 'RED' ? '✗' : i + 1}
+                {lr === 'GREEN' ? '✓' : i + 1}
               </span>
               <div className="flex items-center gap-1.5 flex-1 min-w-0">
                 <TeamLogo id={leg.homeId} name={leg.home ?? ''} size={20} />
@@ -1099,7 +1115,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
                 <span className="text-xs text-ink-2 font-semibold truncate">{leg.away}</span>
                 <TeamLogo id={leg.awayId} name={leg.away ?? ''} size={20} />
               </div>
-              <span className={`font-mono font-black text-sm shrink-0 ${pick.result === 'GREEN' ? 'text-green-400' : pick.result === 'RED' ? 'text-red-400' : 'text-orange-300'}`}>
+              <span className={`font-mono font-black text-sm shrink-0 ${lr === 'GREEN' ? 'text-green-400' : 'text-orange-300'}`}>
                 {Number(leg.odd).toFixed(2)}
               </span>
             </div>

@@ -736,3 +736,37 @@ def test_rodape_cabe_numa_fita():
     rodape = _front_codigo("components/Footer.tsx")
     assert "GROUPS" not in rodape, "as colunas voltaram"
     assert "const LINKS" in rodape
+
+
+# ────────────── 10. Perna de multipla mostra o resultado dela ──────────────
+
+
+def test_resolucao_automatica_grava_resultado_de_cada_perna():
+    """O caminho que roda de fato (resolucao por visita) gravava so' o
+    resultado do BILHETE, e a lista de pernas ficava com `result: null` pra
+    sempre. O job em lote sempre gravou; este nasceu sem."""
+    corpo = _codigo("routers/live.py", "_save_multipla_result")
+    assert "_gravar_resultado_das_pernas" in corpo
+    assert "games=%s" in corpo, "o UPDATE nao leva o JSONB das pernas"
+
+    grava = _codigo("routers/live.py", "_gravar_resultado_das_pernas")
+    # Anotar pelo indice com tamanhos diferentes poria o resultado de uma perna
+    # em cima de outra.
+    assert "len(pernas) != len(legs_results)" in grava
+
+
+def test_perna_nao_herda_o_vermelho_do_bilhete():
+    """Bilhete RED pintava TODA perna sem GREEN explicito de vermelho · e como
+    o resultado por perna nunca era gravado, "sem GREEN explicito" era SEMPRE.
+    Numa multipla de duas em que uma bateu, o usuario via duas derrotas.
+
+    GREEN no bilhete continua implicando pernas GREEN: combinada so' paga com
+    todas de pe, entao isso e' deducao. RED nao diz qual caiu.
+    """
+    tela = _front_codigo("pages/Picks.tsx")
+    assert "m.result === 'RED'   ? (leg.result === 'GREEN' ? 'GREEN' : 'RED')" not in tela, \
+        "a perna voltou a herdar o vermelho do bilhete"
+    assert "leg.result ?? (m.result === 'GREEN' ? 'GREEN' : undefined)" in tela
+
+    # Alavancagem nao tem coluna de resultado por perna: verde ou neutro.
+    assert "const lr: 'GREEN' | undefined = pick.result === 'GREEN'" in tela
