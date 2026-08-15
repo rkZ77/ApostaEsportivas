@@ -124,18 +124,15 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
           label="CLV médio"
           value={`${positivo ? '+' : ''}${s.avg_clv.toFixed(2)}%`}
           tone={positivo ? 'green' : 'red'}
-          info="Diferença média entre a odd em que o pick saiu e a odd com que o mercado fechou. Positivo significa que a odd caiu depois da publicação · o mercado se moveu na direção da leitura da IA."
         />
         <StatTile
           label="Bateu o fechamento"
           value={`${s.beat_pct}%`}
           tone={s.beat_pct >= 50 ? 'green' : 'muted'}
-          info={`Em ${s.beat_closing} de ${s.total} picks comparados, a odd publicada era melhor que a de fechamento. Acima de 50% indica que a análise chega antes do mercado.`}
         />
         <StatTile
           label="Picks comparados"
           value={String(s.total)}
-          info={`Picks dos últimos ${s.days} dias com odd de fechamento capturada. Só entram os mercados em que dá para comparar a mesma linha nos dois momentos.`}
           className="col-span-2 sm:col-span-1"
         />
       </div>
@@ -218,23 +215,18 @@ export default function PerformanceIA() {
                 estiveram · o lucro em unidades entra como quinto, no fim, sem
                 reorganizar o resto. */}
             <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-              <StatTile label="Assertividade" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'}
-                info={`${s.greens} greens em ${s.total} picks resolvidos. Sozinha não diz se deu lucro: acerto alto em odd baixa rende menos que acerto médio em odd alta.`} />
-              <StatTile label="Picks resolvidos" value={String(s.total)}
-                info="Picks que já tiveram o resultado conferido contra a estatística oficial da partida. Pendentes ficam de fora de todos os indicadores desta página." />
+              <StatTile label="Assertividade" value={`${wr}%`} tone={wr >= 55 ? 'green' : 'default'} />
+              <StatTile label="Picks resolvidos" value={String(s.total)} />
               <StatTile
                 label="ROI acumulado"
                 value={`${roi >= 0 ? '+' : ''}${roi.toFixed(1)}%`}
                 tone={roi >= 0 ? 'green' : 'red'}
-                info="Retorno sobre tudo que foi arriscado. Enquanto o lucro diz quanto rendeu, o ROI diz quanto rendeu por unidade apostada · é o que permite comparar períodos de volume diferente."
               />
-              <StatTile label="Ligas cobertas" value={String(byLeague.length)}
-                info="Campeonatos com pelo menos um pick publicado e resolvido. Cobertura ampla é sinal de que o modelo não depende de um único torneio." />
+              <StatTile label="Ligas cobertas" value={String(byLeague.length)} />
               <StatTile
                 label="Lucro da IA"
                 value={fmtUnits(lucro, 1)}
                 tone={lucro >= 0 ? 'green' : 'red'}
-                info={`Resultado acumulado em unidades, com plano fixo de stake: ${stakeLabel}. Sem stake variável, sem martingale. Quanto vale 1u em reais depende da banca de cada um.`}
                 className="col-span-2 sm:col-span-1"
               />
             </div>

@@ -83,7 +83,7 @@ def test_media_por_produto_nao_vira_tile_ao_lado_do_roi():
     """
     banda = _front_codigo("home/StatsBand.tsx")
     assert "label: 'Média por pick" not in banda, "media voltou a ser tile"
-    assert "Média por pick ·" in banda, "a quebra por produto sumiu da faixa"
+    assert "Média por pick:" in banda, "a quebra por produto sumiu da faixa"
     assert "mediaVip" in banda and "mediaFree" in banda
 
 
@@ -417,20 +417,31 @@ def test_curva_por_produto_e_acumulada_e_na_mesma_grade():
     assert "Array.from(new Set(data.map(p => p.match_date))).sort()" in grafico
 
 
-def test_cards_explicam_no_icone_em_vez_de_subtitulo():
-    """A linha miuda embaixo de cada numero roubava a atencao do valor e quase
-    ninguem lia. Quem quer saber o que a metrica significa clica no info."""
-    # Ou o InfoTip direto (ladrilho escrito na tela), ou o `info` do StatTile,
-    # que monta o mesmo icone por dentro.
+def test_ladrilho_e_numero_e_rotulo_e_mais_nada():
+    """Nem subtitulo (empilhava texto miudo que ninguem le) nem icone de ajuda
+    colado no numero (polui justo o que o ladrilho existe pra mostrar).
+
+    O que precisa ser dito sobre o conjunto vai numa linha de apoio, uma vez,
+    embaixo da faixa -- e o plano de stake TEM que estar la: a Banca sugere
+    stake variavel, e sem a premissa o numero nao bate com o que o usuario ve
+    na banca dele.
+    """
     for tela in ("home/StatsBand.tsx", "pages/Picks.tsx",
                  "pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
         fonte = _front_codigo(tela)
-        assert "InfoTip" in fonte or "info=" in fonte, f"{tela} nao tem explicacao no icone"
-        assert "hint=" not in fonte, f"{tela} ainda tem subtitulo em ladrilho"
+        assert "hint=" not in fonte, f"{tela} tem subtitulo em ladrilho"
+        assert "info=" not in fonte, f"{tela} tem icone de ajuda colado no numero"
 
-    # O primitivo aceita `info`, e a Home nao usa mais `hint` nenhum.
-    assert "info?: string" in _front_codigo("components/ui/Card.tsx")
+    assert "info?: string" not in _front_codigo("components/ui/Card.tsx")
     assert "hint:" not in _front_codigo("home/StatsBand.tsx")
+
+    # A premissa sobrevive na linha de apoio.
+    assert "Plano fixo de stake" in _front("home/StatsBand.tsx")
+    assert "Plano fixo de stake" in _front("pages/Picks.tsx")
+
+    # O InfoTip do MERCADO, dentro do card de pick, continua -- ele explica o
+    # que o mercado e', que foi pedido explicitamente.
+    assert "explainMarket" in _front_codigo("pages/Picks.tsx")
 
 
 def test_mercado_em_portugues_encontra_a_propria_explicacao():
@@ -488,12 +499,12 @@ def test_dica_nao_e_posicionada_por_transform():
     assert "'abaixo'" in fonte, "faltou o caso de abrir pra baixo"
 
 
-def test_rotulo_do_ladrilho_segue_centralizado():
-    """`.stat-tile` e' text-center; o flex do rotulo (pro icone de info caber ao
-    lado) tirava o texto do centro."""
+def test_rotulo_do_ladrilho_nao_tem_flex():
+    """`.stat-tile` e' text-center. O flex que abria espaco pro icone tirava o
+    texto do centro; sem icone, o rotulo volta a ser so' o rotulo."""
     for arquivo in ("components/ui/Card.tsx", "pages/ResultadosPublicos.tsx"):
         fonte = _front_codigo(arquivo)
-        assert "stat-label flex items-center justify-center" in fonte, arquivo
+        assert "stat-label flex" not in fonte, arquivo
 
 
 def test_rodape_do_card_de_pick_desce_pro_fim():
@@ -538,3 +549,47 @@ def test_serie_do_mercado_cobre_chutes_e_impedimentos():
     casa, fora = market_form.folha_do_jogo(ms)
     assert casa["Total Shots"] == 12 and fora["Total Shots"] == 15
     assert casa["Offsides"] == 2 and fora["Offsides"] == 0
+
+
+# ────────────── 7. Graficos de lucro por mes, liga e na Home ──────────────
+
+
+def test_curva_da_home_tem_rota_propria():
+    """A Home chama /public/results com slim=1 justamente pra cair de sete
+    consultas pra tres, e e' essa chamada que desenha o topo da pagina.
+    Pendurar a serie la' devolveria o custo que o slim tirou.
+
+    Rota separada, uma consulta, chamada depois do topo: se demorar, o que
+    atrasa e' um grafico abaixo da dobra.
+    """
+    corpo = _codigo("routers/public.py", "public_profit_curve")
+    assert "GROUP BY match_date, source" in corpo
+    assert corpo.count("_q(cur") == 1, "a rota da curva tem que ser UMA consulta"
+
+    home = _front_codigo("pages/Home.tsx")
+    assert "/public/profit-curve" in home
+    assert "PipelineProfitChart" in home
+
+
+def test_lucro_por_mes_e_por_liga_sai_do_que_a_pagina_ja_tem():
+    """Nenhuma consulta nova pros dois graficos novos.
+
+    E o do mes sai de `by_source_day`, que ja' vem com o peso do plano de
+    stake, e NAO de /results/monthly, que soma na base de 1u -- dois numeros da
+    mesma tela discordando e' pior que um numero a menos.
+    """
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    assert "lucroPorMes" in tela and "lucroPorLiga" in tela
+    assert "bySourceDay" in tela[tela.index("const lucroPorMes"):tela.index("const lucroPorLiga")]
+    assert tela.count("<LucroBarChart") == 2
+
+
+def test_barra_de_mes_e_vertical_e_a_de_liga_e_horizontal():
+    """Sao duas perguntas diferentes: mes e' tempo (balde fechado, barra
+    separada), liga e' comparacao entre categorias de nome comprido (de lado o
+    rotulo cabe inteiro)."""
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    mes = tela[tela.index("Lucro por mês"):]
+    assert 'orientation="vertical"' in mes[:400]
+    liga = tela[tela.index("Lucro por liga"):]
+    assert 'orientation="horizontal"' in liga[:400]

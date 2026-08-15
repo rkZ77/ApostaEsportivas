@@ -12,9 +12,9 @@ import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 import { Button, Spinner } from '../components/ui'
 import SuggestionDetail from '../components/SuggestionDetail'
-import InfoTip from '../components/InfoTip'
 import DailyGreensChart from '../components/DailyGreensChart'
 import PipelineProfitChart from '../components/PipelineProfitChart'
+import LucroBarChart from '../components/LucroBarChart'
 
 const RESULTADO_OPTIONS = [
   { value: 'all', label: 'Todos' }, { value: 'GREEN', label: 'Green' }, { value: 'RED', label: 'Red' },
@@ -87,7 +87,7 @@ const SOURCE_LABELS: Record<string, string> = {
  * nova, nenhum número que não venha do backend.
  */
 function AbaStats({ tiles }: {
-  tiles: { label: string; value: string; info?: string; tone?: 'green' | 'red' | 'default' }[]
+  tiles: { label: string; value: string; tone?: 'green' | 'red' | 'default' }[]
 }) {
   if (tiles.length === 0) return null
   const cor = { green: 'text-green-400', red: 'text-red-400', default: 'text-ink-1' }
@@ -96,10 +96,7 @@ function AbaStats({ tiles }: {
       {tiles.map(t => (
         <div key={t.label} className="stat-tile">
           <div className={`stat-value tabular-nums ${cor[t.tone ?? 'default']}`}>{t.value}</div>
-          <div className="stat-label flex items-center justify-center gap-1">
-            <span className="min-w-0 truncate">{t.label}</span>
-            {t.info && <InfoTip text={t.info} />}
-          </div>
+          <div className="stat-label">{t.label}</div>
         </div>
       ))}
     </div>
@@ -220,11 +217,11 @@ export default function ResultadosPublicos() {
     const maisAtiva = [...comWr].sort((a, b) => b.total - a.total)[0]
     const lucrativas = comWr.filter(l => Number(l.profit ?? 0) > 0).length
     return [
-      { label: 'Ligas', value: String(byLeague.length), info: `Campeonatos com pelo menos um pick resolvido no filtro atual. ${lucrativas} deles estão no positivo em unidades.` },
-      ...(melhor ? [{ label: 'Melhor liga', value: `${melhor.wr}%`, info: `${melhor.league_name} · maior taxa de acerto entre as ligas com 5 picks ou mais. O piso existe pra uma liga com 1 green em 1 pick não aparecer como a melhor.`, tone: 'green' as const }] : []),
+      { label: 'Ligas', value: String(byLeague.length) },
+      ...(melhor ? [{ label: 'Melhor liga', value: `${melhor.wr}%`, tone: 'green' as const }] : []),
       ...(pior && pior.league_name !== melhor?.league_name
-        ? [{ label: 'Pior liga', value: `${pior.wr}%`, info: `${pior.league_name} · menor taxa de acerto entre as ligas com 5 picks ou mais. Serve pra ver onde o modelo ainda erra mais.`, tone: 'red' as const }] : []),
-      ...(maisAtiva ? [{ label: 'Mais coberta', value: String(maisAtiva.total), info: `${maisAtiva.league_name} · liga com mais picks publicados no filtro. Volume alto costuma vir de campeonato com mais jogos e mais dado estatístico.` }] : []),
+        ? [{ label: 'Pior liga', value: `${pior.wr}%`, tone: 'red' as const }] : []),
+      ...(maisAtiva ? [{ label: 'Mais coberta', value: String(maisAtiva.total) }] : []),
     ]
   })()
 
@@ -245,23 +242,48 @@ export default function ResultadosPublicos() {
       {
         label: 'Lucro geral', value: fmtUnits(lucroGeral, 1),
         tone: (lucroGeral >= 0 ? 'green' : 'red') as 'green' | 'red',
-        info: `Soma de todos os produtos no filtro atual, em unidades: ${gamesTotal} picks resolvidos. Não é o lucro da página aberta.`,
       },
       ...(maisLucro ? [{
         label: 'Mais lucro', value: fmtUnits(Number(maisLucro.profit), 1),
-        tone: 'green' as const, info: `${SOURCE_LABELS[maisLucro.source] ?? maisLucro.source} é o produto que mais rendeu em unidades no filtro. Lucro alto pode vir de volume, não só de acerto · compare com o comparativo abaixo.`,
+        tone: 'green' as const,
       }] : []),
       ...(maisCerteiro ? [{
         label: 'Mais certeiro', value: `${maisCerteiro.win_rate}%`,
         tone: 'green' as const,
-        info: `${SOURCE_LABELS[maisCerteiro.source] ?? maisCerteiro.source} tem a maior taxa de acerto (${maisCerteiro.greens} greens em ${maisCerteiro.total} picks). Só entram produtos com 5 picks ou mais.`,
       }] : []),
       {
         label: 'Produtos', value: String(bySource.length),
-        info: `Tipos de pick com histórico resolvido: VIP, free, múltiplas, alavancagem, faltas e defesas. ${bySource.filter(f => Number(f.profit) > 0).length} estão no positivo em unidades.`,
       },
     ]
   })()
+
+  /* Lucro por mês e por liga, em unidades · derivados do que a página já
+     baixou. O do mês sai de `by_source_day` (que já vem com o peso do plano de
+     stake) e NÃO de /results/monthly, que soma na base de 1u: dois números da
+     mesma tela discordando é pior que um número a menos. */
+  const lucroPorMes = (() => {
+    const porMes = new Map<string, number>()
+    for (const d of bySourceDay) {
+      const mes = String(d.match_date).slice(0, 7)
+      porMes.set(mes, (porMes.get(mes) ?? 0) + Number(d.profit ?? 0))
+    }
+    return [...porMes.entries()].sort((a, b) => a[0].localeCompare(b[0])).map(([mes, v]) => {
+      const [y, mo] = mes.split('-')
+      return {
+        label: new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'short' }).replace('.', ''),
+        value: Math.round(v * 100) / 100,
+        meta: new Date(Number(y), Number(mo) - 1).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }),
+      }
+    })
+  })()
+
+  const lucroPorLiga = [...byLeague]
+    .map(l => ({
+      label: l.league_name,
+      value: Math.round(Number(l.profit ?? 0) * 100) / 100,
+      meta: `${l.total} picks · ${l.greens}G ${l.reds}R`,
+    }))
+    .sort((a, b) => b.value - a.value)
 
   const statsPorMes = (() => {
     if (monthly.length === 0) return []
@@ -277,10 +299,10 @@ export default function ResultadosPublicos() {
     const totalPicks = comWr.reduce((acc: number, m: any) => acc + (m.total ?? 0), 0)
     const mediaMes = comWr.length ? totalPicks / comWr.length : 0
     return [
-      { label: 'Meses', value: String(monthly.length), info: `Meses com pick publicado e resolvido. ${positivos} fecharam no positivo · consistência mês a mês diz mais que um mês isolado muito bom.` },
-      ...(melhor ? [{ label: 'Melhor mês', value: `${melhor.wr}%`, info: `${nomeMes(melhor.month)} teve a maior taxa de acerto do histórico.`, tone: 'green' as const }] : []),
-      { label: 'Picks no total', value: String(totalPicks), info: 'Todos os picks resolvidos somando os meses da tabela abaixo.' },
-      { label: 'Média por mês', value: mediaMes.toFixed(1), info: 'Picks publicados por mês, em média. Não existe cota: a IA só publica o que passa nos filtros de valor, então mês com menos jogo tem menos pick.' },
+      { label: 'Meses', value: String(monthly.length) },
+      ...(melhor ? [{ label: 'Melhor mês', value: `${melhor.wr}%`, tone: 'green' as const }] : []),
+      { label: 'Picks no total', value: String(totalPicks) },
+      { label: 'Média por mês', value: mediaMes.toFixed(1) },
     ]
   })()
 
@@ -387,7 +409,7 @@ export default function ResultadosPublicos() {
                     {fmtUnits(lucroUnidades, 1)}
                   </div>
                   <div className="stat-label">Lucro</div>
-                  <div className="text-[10px] text-ink-4 mt-0.5">{data?.stake_label ?? STAKE_LABEL_PADRAO}</div>
+                  <div className="text-[10px] text-ink-4 mt-0.5">unidades</div>
                 </div>
                 {[
                   { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
@@ -571,6 +593,12 @@ export default function ResultadosPublicos() {
           ) : (
             <>
             <AbaStats tiles={statsPorLiga} />
+            {lucroPorLiga.length > 1 && (
+              <div className="panel p-5 mb-5">
+                <p className="panel-label mb-4">Lucro por liga · unidades</p>
+                <LucroBarChart data={lucroPorLiga} orientation="horizontal" />
+              </div>
+            )}
             <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
               <div className="px-5 py-3 border-b border-line">
                 <span className="text-xs font-bold text-ink-2">Resultados por liga</span>
@@ -760,6 +788,12 @@ export default function ResultadosPublicos() {
             ) : (
               <>
               <AbaStats tiles={statsPorMes} />
+              {lucroPorMes.length > 1 && (
+                <div className="panel p-5 mb-5">
+                  <p className="panel-label mb-4">Lucro por mês · unidades</p>
+                  <LucroBarChart data={lucroPorMes} orientation="vertical" />
+                </div>
+              )}
               <div className="bg-surface-0 border border-line rounded-lg overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm min-w-[460px]">
@@ -806,7 +840,7 @@ export default function ResultadosPublicos() {
           <div className="mt-12 text-center">
             <p className="text-ink-3 text-sm mb-4">Quer receber esses picks antes de acontecerem?</p>
             <Button to="/login?mode=register" size="lg">
-              Criar conta · 2 dias VIP grátis
+              Testar o VIP grátis por 2 dias
             </Button>
           </div>
           )}

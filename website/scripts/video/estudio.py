@@ -26,12 +26,16 @@ from pathlib import Path
 
 from playwright.sync_api import Page, sync_playwright
 
-# 450x800 é 9:16 exato. Escolhido pra bater com o canvas de Reels/TikTok/Shorts
-# sem tarja: gravando em 1080x1920 o Playwright só escala 2.4x, não preenche
-# borda. Um viewport de celular real (390x844) daria 9:19.5 e entraria com
-# letterbox.
-VIEWPORT = {"width": 450, "height": 800}
-VIDEO = {"width": 1080, "height": 1920}
+# 540x960 é 9:16 exato e ainda cai no layout mobile do site (o breakpoint `sm`
+# do Tailwind é 640px).
+#
+# O vídeo é gravado NO TAMANHO DO VIEWPORT de propósito. O Playwright captura
+# em pixels CSS e ignora `device_scale_factor`, e só reduz a imagem pra caber
+# em `record_video_size` · nunca amplia. Pedindo 1080x1920 aqui, a página saía
+# desenhada 1:1 no canto superior esquerdo de um quadro cinza. Quem amplia pra
+# 1080x1920 é o `montar.py`, com lanczos, num 2x exato.
+VIEWPORT = {"width": 540, "height": 960}
+VIDEO = dict(VIEWPORT)
 
 _OVERLAY_JS = r"""
 (() => {
@@ -153,11 +157,15 @@ class Estudio:
         nome: str,
         headless: bool = True,
         tempos: dict[str, float] | None = None,
+        sessao: Path | None = None,
     ):
         self.base_url = base_url.rstrip("/")
         self.saida = saida
         self.nome = nome
         self.headless = headless
+        # Sessão salva por `gravar.py --login-manual`. Ver `logar` pra saber
+        # por que o login automatizado não é opção neste site.
+        self.sessao = sessao
         # chave da fala -> duração do mp3 em segundos, de `narracao.py`
         self.tempos = tempos or {}
         # onde cada fala começa, em segundos desde o primeiro frame do vídeo.
@@ -180,7 +188,7 @@ class Estudio:
             headless=self.headless,
             args=["--hide-scrollbars", "--force-color-profile=srgb"],
         )
-        self._ctx = self._browser.new_context(
+        opcoes = dict(
             viewport=VIEWPORT,
             device_scale_factor=2,
             is_mobile=True,
@@ -190,6 +198,9 @@ class Estudio:
             record_video_dir=str(self._tmp),
             record_video_size=VIDEO,
         )
+        if self.sessao and self.sessao.exists():
+            opcoes["storage_state"] = str(self.sessao)
+        self._ctx = self._browser.new_context(**opcoes)
         self._ctx.add_init_script(_OVERLAY_JS)
         self.page = self._ctx.new_page()
         # O Playwright começa a capturar junto com a página, então este é o
@@ -363,24 +374,24 @@ class Estudio:
         for p in padroes:
             self._ctx.route(p, porteiro)
 
-    def logar(self, identificador: str, senha: str) -> bool:
-        """Login real na conta demo. Necessário pras telas VIP."""
-        self.ir("/login", espera=1.4)
-        campo = self.page.locator("#login-identifier")
-        if not campo.count():
-            print("  [aviso] campo de login não encontrado")
+    def sessao_valida(self) -> bool:
+        """
+        Confere se a sessão carregada ainda vale, olhando uma rota privada.
+
+        Não existe login automatizado neste site, e não é limitação do script:
+        `/api/auth/login` e `/api/auth/register` passam por `_verify_captcha`,
+        e o Turnstile detecta navegador instrumentado (a Cloudflare devolve 401
+        no challenge, com e sem interface gráfica). Derrotar isso seria burlar
+        um controle de segurança, então o caminho é outro: a pessoa loga à mão
+        uma vez em `gravar.py --login-manual` e o estado é reaproveitado aqui.
+
+        Atenção: o backend guarda um `session_token` único por usuário, então
+        logar de novo em outro lugar invalida a sessão salva. Grave logo depois
+        de salvar.
+        """
+        self.ir("/meus-picks", espera=2.0)
+        if "/login" in self.page.url:
             return False
-        campo.fill(identificador)
-        self.page.locator("#password").fill(senha)
-        self.page.keyboard.press("Enter")
-        try:
-            self.page.wait_for_url(
-                lambda u: "/login" not in u, timeout=15000
-            )
-        except Exception:
-            print("  [aviso] login não completou")
-            return False
-        self.pausa(1.5)
         return True
 
 

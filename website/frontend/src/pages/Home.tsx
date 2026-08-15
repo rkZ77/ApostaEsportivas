@@ -11,8 +11,10 @@ import {
   SectionHead, Skeleton, Spinner,
 } from '../components/ui'
 import { TeamLogo } from '../components/TeamLogo'
+import PipelineProfitChart from '../components/PipelineProfitChart'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
+import { fmtUnits } from '../utils/format'
 
 import FreePickHero from '../home/FreePickHero'
 import StatsBand, { type PublicSummary } from '../home/StatsBand'
@@ -61,6 +63,26 @@ interface PublicData {
 
 function RecentResults({ data, loading }: { data: PublicData | null; loading: boolean }) {
   const recent = (data?.recent ?? []).slice(0, 10)
+  const resumo = data?.summary ?? null
+
+  /*
+   * Curva de lucro por produto · a prova mais forte que esta seção tem.
+   *
+   * Uma lista de dez resultados prova que os picks existem; a curva prova que
+   * eles somam. É o argumento que o visitante deslogado precisa para criar
+   * conta, e é o mesmo gráfico da página de Resultados, sem número novo.
+   *
+   * Chamada PRÓPRIA e tardia, não pendurada no payload da Home: aquela rota é
+   * chamada com slim=1 justamente para cair de sete consultas para três, e ela
+   * desenha o topo da página. Aqui é abaixo da dobra · se demorar, não atrasa
+   * a primeira tela.
+   */
+  const [curva, setCurva] = useState<Array<{ match_date: string; source: string; profit: number }>>([])
+  useEffect(() => {
+    api.get('/public/profit-curve', { params: { days: 180 } })
+      .then(r => setCurva(r.data ?? []))
+      .catch(() => setCurva([]))
+  }, [])
 
   // Saldo do dia mais recente da janela. Sem isso uma sequência de RED (mercados
   // de escanteio e cartão travam cedo, GREEN só sai no FT) dominava a leitura
@@ -89,6 +111,18 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
             viewport={{ once: true, margin: '0px 0px -80px 0px' }}
             transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
           >
+            {curva.length > 0 && (
+              <Panel className="mb-4">
+                <PanelHead
+                  label="Lucro acumulado por produto"
+                  meta="em unidades · últimos 180 dias"
+                />
+                <div className="p-5">
+                  <PipelineProfitChart data={curva} height={220} />
+                </div>
+              </Panel>
+            )}
+
             <Panel>
               <PanelHead
                 label="Últimas 10 finalizadas"
@@ -148,6 +182,34 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                 </Button>
               </div>
             </Panel>
+
+            {/* Fechamento da seção de prova.
+                O argumento é o número que a pessoa ACABOU de ver, não adjetivo:
+                a frase é montada com o resumo real e some inteira se o resumo
+                não vier. Nada de "melhor do Brasil" ou contador de usuários ·
+                prova social fabricada já saiu desta página em julho, e o que
+                sustenta a conversão aqui é o histórico ser conferível. */}
+            {resumo && resumo.total > 0 && (
+              <div className="mt-8 text-center max-w-xl mx-auto">
+                <p className="text-ink-1 text-sm font-semibold mb-1.5">
+                  São {resumo.total} picks publicados antes da bola rolar, com{' '}
+                  {resumo.greens} greens e {fmtUnits(Number(resumo.profit ?? 0), 1)} de lucro.
+                </p>
+                <p className="text-ink-3 text-xs leading-relaxed mb-4">
+                  Cada um deles fica registrado com data, mercado e odd, e o resultado é
+                  conferido contra a estatística oficial da partida. Você não precisa
+                  acreditar em nós · dá para abrir o histórico e conferir pick por pick,
+                  sem criar conta.
+                </p>
+                <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
+                  Testar o VIP grátis por 2 dias
+                </Button>
+                <p className="text-[11px] text-ink-4 mt-2.5">
+                  Sem cartão de crédito. Depois dos 2 dias você continua no plano
+                  gratuito, com 1 pick por dia.
+                </p>
+              </div>
+            )}
           </motion.div>
         )}
       </div>
@@ -533,13 +595,29 @@ export default function Home() {
                 transition={{ duration: 0.5, delay: 0.38 }}
                 className="flex flex-col sm:flex-row gap-3 mb-4"
               >
+                {/* O rótulo lidera pelo que a pessoa GANHA, não pelo trabalho
+                    que ela tem. "Criar conta · 2 dias VIP grátis" abria com a
+                    tarefa (criar conta) e empurrava a recompensa pro fim, atrás
+                    de um separador · e "2 dias VIP grátis" solto ainda deixava
+                    no ar se o grátis era o VIP ou a conta. Aqui o verbo é
+                    testar, o objeto é o VIP e o preço aparece antes do clique. */}
                 <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
-                  Criar conta · 2 dias VIP grátis
+                  Testar o VIP grátis por 2 dias
                 </Button>
                 <Button to="/resultados" variant="ghost" size="lg">
                   Ver resultados reais
                 </Button>
               </motion.div>
+
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.46 }}
+                className="text-[11px] text-ink-4 mb-4"
+              >
+                Sem cartão de crédito. Depois dos 2 dias você continua no plano
+                gratuito, com 1 pick por dia.
+              </motion.p>
 
             </div>
 
