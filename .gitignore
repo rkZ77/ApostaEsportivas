@@ -14,6 +14,15 @@ logs/
 # MODULE_NOT_FOUND, porque o arquivo existe so' na maquina local.
 !website/frontend/scripts/
 
+# ...e menos o gravador de video, que caiu na mesma armadilha. O codigo entra;
+# o que ele GERA (narracao, cartoes, webm cru e mp4 final) fica de fora, porque
+# e' saida regeravel e pesa dezenas de MB por rodada.
+!website/scripts/
+website/scripts/video/voz/
+website/scripts/video/cartoes/
+website/scripts/video/saida/
+website/scripts/video/pronto/
+
 # Venv do ApostaEsportivas
 ApostaEsportivas/venv/
 *.key

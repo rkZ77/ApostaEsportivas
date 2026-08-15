@@ -41,7 +41,7 @@ export function PickCardFooter({
     : 'Configurar banca'
 
   return (
-    <div className={cn('flex items-center gap-2 px-5 py-3 border-t border-line/60', className)}>
+    <div className={cn('flex items-center gap-2 px-5 py-3 border-t border-line/60 mt-auto', className)}>
       {onBet && (
         <button
           onClick={onBet}
@@ -191,10 +191,19 @@ export function PickProbability({
 
 /* ── Trecho do raciocínio ───────────────────────────────────────────────── */
 
+/*
+ * `flex-1` ABSORVE A FOLGA DO CARD.
+ *
+ * Este é o único bloco de altura variável do card (o texto do fato vai de uma a
+ * três linhas), e sem ele crescendo, tudo que vem depois · "Entenda esta
+ * análise" e o rodapé · parava onde o texto acabasse. Com quatro picks lado a
+ * lado, os botões ficavam em quatro alturas diferentes, e o alinhamento passava
+ * a depender do tamanho do nome do time e da análise.
+ */
 export function PickReasoning({ text, className }: { text?: string | null; className?: string }) {
   if (!text) return null
   return (
-    <div className={cn('mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md', className)}>
+    <div className={cn('mx-5 mb-3 px-3 py-2 bg-surface-1 border border-line rounded-md flex-1', className)}>
       <span className="label-micro">Fato · </span>
       <span className="text-[11px] text-ink-2 leading-relaxed line-clamp-3">{text}</span>
     </div>
