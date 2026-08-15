@@ -1030,6 +1030,43 @@ def _combined_profit(legs_results: list[str], legs_odds: list | None,
     return _profit_for_result(result, ticket_odd)
 
 
+def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
+                                 legs_results: list[str | None]) -> str | None:
+    """Anota o resultado de CADA perna dentro do JSONB `games`.
+
+    POR QUE ISTO EXISTE: este caminho gravava só o resultado do BILHETE, e a
+    lista de pernas ficava com `result: null` pra sempre. Sem esse dado, o card
+    da múltipla não tinha como saber qual perna bateu, e a tela caía num
+    palpite: bilhete RED pintava TODAS as pernas de vermelho. Numa múltipla de
+    duas em que uma deu GREEN, o usuário via duas derrotas · uma delas
+    inventada pela tela.
+
+    O job em lote (ai_result_checker_multiplas) sempre fez isso; foi a
+    resolução automática por visita, que é a que roda de fato hoje, que nasceu
+    sem. Mesma escrita, no mesmo UPDATE do bilhete.
+
+    Devolve o JSON pronto ou None quando não há o que anotar.
+    """
+    cur.execute(f"SELECT games FROM {tabela} WHERE id = %s", (pick_id,))
+    linha = cur.fetchone()
+    if not linha or not linha["games"]:
+        return None
+    pernas = linha["games"]
+    if isinstance(pernas, str):
+        try:
+            pernas = json.loads(pernas)
+        except Exception:
+            return None
+    if not isinstance(pernas, list) or len(pernas) != len(legs_results):
+        # Ordem/tamanho divergentes: anotar pelo índice colocaria o resultado de
+        # uma perna em cima de outra. Melhor não anotar nada.
+        return None
+    for perna, r in zip(pernas, legs_results):
+        if isinstance(perna, dict):
+            perna["result"] = r
+    return json.dumps(pernas, default=str)
+
+
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
                           total_odd: float, conn, legs_odds: list | None = None) -> None:
     result = _multipla_combined_result(legs_results, legs_odds, total_odd)
@@ -1037,8 +1074,14 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
         return
     profit = _combined_profit(legs_results, legs_odds, total_odd, result)
     c = conn.cursor()
-    c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
-              (result, profit, pick_id))
+    games_json = _gravar_resultado_das_pernas(c, "picks_multiplas", pick_id, legs_results)
+    if games_json is not None:
+        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s, games=%s "
+                  "WHERE id=%s AND result IS NULL",
+                  (result, profit, games_json, pick_id))
+    else:
+        c.execute("UPDATE picks_multiplas SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
+                  (result, profit, pick_id))
     _sync_followed_result(pick_id, "multipla", result, c)
     conn.commit()
     c.close()
