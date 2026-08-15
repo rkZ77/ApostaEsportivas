@@ -660,3 +660,79 @@ def test_win_rate_do_login_nao_puxa_a_rota_inteira():
     trecho = tela[tela.index("function RealWinRate"):]
     trecho = trecho[:trecho.index("export ")] if "export " in trecho else trecho[:1200]
     assert "slim: 1" in trecho
+
+
+# ────────────── 9. Lucro pessoal, suporte e paginas publicas ──────────────
+
+
+def test_lucro_em_reais_so_pra_quem_apostou():
+    """O CARD ANUNCIAVA GANHO QUE O USUARIO NUNCA TEVE.
+
+    A stake caia pra `stakeSuggestion?.units ?? 1` quando ele NAO tinha seguido
+    o pick, e o card estampava "Lucro +3,75u · Em reais +R$38" usando o valor
+    da unidade da banca DELE -- numa aposta em que ele nao entrou.
+
+    Seguiu: a conta e' a dele. Nao seguiu: mostra o resultado do PICK em 1u, e
+    nada de reais -- real depende de stake, e stake que nao houve nao vira
+    dinheiro.
+    """
+    for tela in ("components/SuggestionCard.tsx", "pages/Picks.tsx"):
+        fonte = _front_codigo(tela)
+        assert "user_stake_units ?? stakeSuggestion?.units ?? 1" not in fonte, \
+            f"{tela} ainda cai na stake sugerida pra calcular lucro"
+        assert "const seguiu =" in fonte, tela
+        assert "seguiu && banca" in fonte, f"{tela} calcula reais sem checar se apostou"
+        assert "não apostou" in _front(tela), f"{tela} nao diz que o usuario ficou de fora"
+
+
+def test_suporte_tem_um_link_so():
+    """O numero estava copiado em cinco arquivos, cada um com um texto
+    diferente: trocar de numero exigia cacar as cinco copias, e esquecer uma
+    mandaria o cliente pra um telefone que ninguem atende."""
+    assert "wa.me/message/" in _front("lib/support.ts")
+    for tela in ("components/Footer.tsx", "components/Navbar.tsx",
+                 "pages/Checkout.tsx", "pages/Planos.tsx"):
+        fonte = _front(tela)
+        assert "from '../lib/support'" in fonte, f"{tela} nao usa o link central"
+        assert "wa.me/55" not in fonte, f"{tela} ficou com numero cru"
+
+
+def test_promessa_de_sem_cartao_saiu_do_site():
+    """Pedido explicito: essa frase nao volta."""
+    import os
+    raiz = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                        "..", "frontend", "src")
+    achados = []
+    for pasta, _, arquivos in os.walk(raiz):
+        for a in arquivos:
+            if not a.endswith((".tsx", ".ts")):
+                continue
+            caminho = os.path.join(pasta, a)
+            with open(caminho, encoding="utf-8") as f:
+                texto = f.read()
+            if "sem cartão" in texto.lower():
+                achados.append(os.path.relpath(caminho, raiz))
+    assert not achados, f"a frase do cartao voltou em: {achados}"
+
+
+def test_planos_mostra_planos_sem_login():
+    """Todos os blocos exigiam `user`, entao deslogado a pagina ficava com o
+    card de suporte e mais nada -- uma pagina chamada "Planos" que nao mostrava
+    plano nenhum, justo pra quem esta decidindo se assina."""
+    tela = _front_codigo("pages/Planos.tsx")
+    assert "{!user && (" in tela
+    assert "fmtPlanPrice(pl.price)" in tela, "os precos tem que sair de usePlans"
+    assert "PublicNav" in tela, "faltou a barra publica"
+
+
+def test_blog_saiu_da_navegacao():
+    for tela in ("components/SiteHeader.tsx", "components/Footer.tsx"):
+        assert "/blog" not in _front_codigo(tela), f"{tela} ainda linka o blog"
+
+
+def test_rodape_cabe_numa_fita():
+    """Eram quatro colunas com quatorze links mais a coluna da marca: um bloco
+    mais alto que o conteudo de algumas paginas."""
+    rodape = _front_codigo("components/Footer.tsx")
+    assert "GROUPS" not in rodape, "as colunas voltaram"
+    assert "const LINKS" in rodape

@@ -189,7 +189,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
                 Ver o mercado desta dica
               </Button>
               <p className="text-[11px] text-ink-4 text-center mt-2.5">
-                Conta grátis, sem cartão. O jogo e a odd acima são reais.
+                Conta grátis. O jogo e a odd acima são reais.
               </p>
             </>
           ) : (

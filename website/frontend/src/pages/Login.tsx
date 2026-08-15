@@ -260,7 +260,6 @@ export default function Login() {
                   </div>
                 ))}
               </div>
-              <p className="text-xs text-ink-4 mt-5">Sem cartão de crédito. Após 2 dias vira Free.</p>
               <RealWinRate />
             </div>
           ) : (
@@ -305,7 +304,7 @@ export default function Login() {
             {mode === 'login' ? 'Bem-vindo de volta' : '2 dias VIP grátis'}
           </h1>
           <p className="text-ink-3 mb-6 text-sm">
-            {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma. Sem cartão de crédito.'}
+            {mode === 'login' ? 'Entre para acessar seus picks' : 'Acesso completo à plataforma por 2 dias.'}
           </p>
 
           {kickedDevice && (

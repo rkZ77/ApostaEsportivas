@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { WA_SUPPORT } from '../lib/support'
 /* O Lucide tirou os ícones de marca (Instagram, X, etc.) por questão de
    trademark, então o do Instagram continua vindo do asset em /public. */
 import { MessageCircle } from 'lucide-react'
@@ -31,66 +32,49 @@ function InstagramIcon({ className }: { className?: string }) {
  * em todas as telas, que é o que a regra pede.
  */
 
-const WA_SUPPORT =
-  'https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA.'
 
-const GROUPS: Array<{ title: string; links: Array<{ label: string; to?: string; href?: string }> }> = [
-  {
-    title: 'Produto',
-    links: [
-      { label: 'Picks do dia', to: '/picks' },
-      { label: 'Resultados da IA', to: '/resultados' },
-      { label: 'Performance da IA', to: '/performance' },
-      { label: 'Jogos', to: '/fixtures' },
-      { label: 'Como funciona', to: '/como-funciona' },
-    ],
-  },
-  {
-    title: 'Conta',
-    links: [
-      { label: 'Entrar', to: '/login' },
-      { label: 'Criar conta grátis', to: '/login?mode=register' },
-      { label: 'Planos', to: '/planos' },
-      { label: 'Minha banca', to: '/banca' },
-    ],
-  },
-  {
-    title: 'Conteúdo',
-    links: [
-      { label: 'Blog', to: '/blog' },
-      { label: 'Suporte', href: WA_SUPPORT },
-    ],
-  },
-  {
-    title: 'Legal',
-    links: [
-      { label: 'Termos de Uso', to: '/termos' },
-      { label: 'Privacidade', to: '/privacidade' },
-    ],
-  },
+/*
+ * RODAPÉ CURTO, DE PROPÓSITO.
+ *
+ * Eram quatro colunas com quatorze links (Produto, Conta, Conteúdo, Legal) mais
+ * a coluna da marca: um bloco mais alto que o conteúdo de algumas páginas, e no
+ * celular isso vira uma tela inteira de lista antes do fim. Rodapé não é mapa do
+ * site · é onde a pessoa procura o que não achou em cima.
+ *
+ * Ficou o que alguém realmente procura aqui: as duas telas públicas de prova, o
+ * caminho pra assinar, suporte e o legal (que é obrigatório). O resto já está no
+ * cabeçalho de todas as páginas.
+ */
+const LINKS: Array<{ label: string; to?: string; href?: string }> = [
+  { label: 'Picks do dia',      to: '/picks' },
+  { label: 'Resultados da IA',  to: '/resultados' },
+  { label: 'Como funciona',     to: '/como-funciona' },
+  { label: 'Planos',            to: '/planos' },
+  { label: 'Suporte',           href: WA_SUPPORT },
+  { label: 'Termos de Uso',     to: '/termos' },
+  { label: 'Privacidade',       to: '/privacidade' },
 ]
 
 export default function Footer() {
   return (
     <footer className="border-t border-line bg-surface-0 mt-auto">
 
-      <div className="max-w-6xl mx-auto px-4 py-10">
-        <div className="grid grid-cols-2 md:grid-cols-6 gap-8">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-6">
 
           {/* Marca */}
-          <div className="col-span-2">
-            <Link to="/" className="inline-flex items-center gap-2.5 mb-3 py-1" aria-label="Pick IA, início">
-              <img src="/logo.png" alt="" width={30} height={30} className="w-[30px] h-[30px] rounded-full object-cover" />
+          <div className="min-w-0">
+            <Link to="/" className="inline-flex items-center gap-2.5 mb-2 py-1" aria-label="Pick IA, início">
+              <img src="/logo.png" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
               <span className="font-display text-base font-semibold text-ink-1">
                 Pick<span className="text-accent">IA</span>
               </span>
             </Link>
-            <p className="text-xs text-ink-3 leading-relaxed max-w-[34ch]">
+            <p className="text-xs text-ink-3 leading-relaxed max-w-[38ch]">
               Inteligência artificial que analisa estatística real de futebol e publica
               apenas os picks com valor esperado positivo.
             </p>
-
-            <div className="flex items-center gap-2 mt-4">
+            <div className="flex items-center gap-2 mt-3">
               <a
                 href="https://www.instagram.com/pickia.br/"
                 target="_blank"
@@ -112,34 +96,33 @@ export default function Footer() {
             </div>
           </div>
 
-          {GROUPS.map(({ title, links }) => (
-            <div key={title}>
-              <p className="label-micro mb-3">{title}</p>
-              <ul className="space-y-0.5 -ml-1">
-                {links.map(l => (
-                  <li key={l.label}>
-                    {l.to ? (
-                      <Link to={l.to} className="block px-1 py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth">
-                        {l.label}
-                      </Link>
-                    ) : (
-                      <a
-                        href={l.href}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="block px-1 py-2.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
-                      >
-                        {l.label}
-                      </a>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+          {/* Links numa fita só · ver o comentário de LINKS */}
+          <nav className="flex flex-wrap gap-x-5 gap-y-1 md:justify-end md:max-w-md">
+            {LINKS.map(l => (
+              l.to ? (
+                <Link
+                  key={l.label}
+                  to={l.to}
+                  className="py-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
+                >
+                  {l.label}
+                </Link>
+              ) : (
+                <a
+                  key={l.label}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="py-1.5 text-xs text-ink-3 hover:text-ink-1 transition-colors duration-1 ease-smooth"
+                >
+                  {l.label}
+                </a>
+              )
+            ))}
+          </nav>
         </div>
 
-        <div className="mt-10 pt-6 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3">
+        <div className="mt-6 pt-5 border-t border-line flex flex-col sm:flex-row items-center justify-between gap-3">
           <p className="text-[11px] text-ink-4 text-center sm:text-left">
             {new Date().getFullYear()} © Pick IA. Picks gerados por inteligência artificial.
           </p>

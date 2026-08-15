@@ -221,7 +221,7 @@ export default function PickPublico() {
               </Link>
               {!user && (
                 <p className="text-center text-[10px] text-ink-4">
-                  2 dias de trial VIP grátis no cadastro · Sem cartão de crédito
+                  2 dias de VIP grátis no cadastro
                 </p>
               )}
             </div>

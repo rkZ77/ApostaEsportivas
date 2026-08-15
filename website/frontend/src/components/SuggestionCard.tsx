@@ -148,7 +148,12 @@ function SuggestionCard({
       line: translateLine(s.line),
       odd: Number(s.odd),
       result: s.result,
-      profit: s.result ? calcProfitUnits(s.result, Number(s.odd), s.user_stake_units ?? stakeSuggestion?.units ?? 1, s.user_actual_odd) : null,
+      // Mesma regra do card: sem aposta seguida, a imagem mostra o resultado
+      // DO PICK em 1u · nao o ganho que o usuario teria tido se tivesse entrado.
+      profit: s.result
+        ? calcProfitUnits(s.result, Number(s.odd), s.user_stake_units ?? 1,
+                          s.user_stake_units != null ? s.user_actual_odd : null)
+        : null,
     })
   }
 
@@ -315,27 +320,56 @@ function SuggestionCard({
           </>
         ) : s.result ? (
           (() => {
-            const u = s.user_stake_units ?? stakeSuggestion?.units ?? 1
-            const p = calcProfitUnits(s.result, Number(s.odd), u, s.user_actual_odd)
+            /*
+             * DINHEIRO SÓ PRA QUEM APOSTOU DE VERDADE.
+             *
+             * A stake caía pra `stakeSuggestion?.units ?? 1` quando o usuário
+             * NÃO tinha seguido o pick, e o card estampava "Lucro +3,75u · Em
+             * reais +R$38" com o valor da banca dele. Ele não entrou nessa
+             * aposta: o card anunciava um ganho que nunca existiu, na conta de
+             * quem só estava olhando o histórico.
+             *
+             * Seguiu (`user_stake_units`) -> a conta é a dele: stake que ele
+             * declarou, odd que ele pegou, e o valor em reais pela unidade da
+             * banca dele.
+             *
+             * Não seguiu -> mostra o resultado DO PICK, em uma unidade, com o
+             * rótulo dizendo isso. Sem reais: real depende de stake, e stake
+             * que não houve não vira dinheiro.
+             */
+            const seguiu = s.user_stake_units != null
+            const u = seguiu ? s.user_stake_units! : 1
+            const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? s.user_actual_odd : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
-            const profitR = banca ? Math.abs(p) * banca.unit_value : null
+            const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
               <>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Lucro</div>
+                  <div className="text-[10px] text-ink-3 mb-0.5">
+                    {seguiu ? 'Seu lucro' : 'Lucro do pick'}
+                  </div>
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  {u > 1 && <div className="text-[10px] text-ink-4">({u}u)</div>}
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
-                  <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
-                  {profitR != null ? (
-                    <div className={`text-xl font-black ${color}`}>
-                      {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
-                    </div>
+                  {seguiu ? (
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Em reais</div>
+                      {profitR != null ? (
+                        <div className={`text-xl font-black ${color}`}>
+                          {p >= 0 ? '+' : '-'}R${profitR.toFixed(0)}
+                        </div>
+                      ) : (
+                        <div className="text-xl font-black text-ink-4">-</div>
+                      )}
+                    </>
                   ) : (
-                    <div className="text-xl font-black text-ink-4">-</div>
+                    <>
+                      <div className="text-[10px] text-ink-3 mb-0.5">Você</div>
+                      <div className="text-sm font-semibold text-ink-4 pt-1.5">não apostou</div>
+                    </>
                   )}
                 </div>
               </>

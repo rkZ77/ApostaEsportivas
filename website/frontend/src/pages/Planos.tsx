@@ -1,10 +1,12 @@
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Lightbulb, Crown, User } from 'lucide-react'
 import { useState, useEffect } from 'react'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
+import PublicNav from '../components/PublicNav'
 import api from '../services/api'
+import { WA_SUPPORT } from '../lib/support'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import NumberTicker from '../components/ui/NumberTicker'
 
@@ -134,9 +136,72 @@ export default function Planos() {
       description="Escolha seu plano Pick IA. Free com picks diários ou VIP com análise completa, múltiplas, alavancagem e gestão de banca para Brasileirão e as principais ligas europeias."
       canonical="https://pickia.com.br/planos"
       width="wide"
-      bar={{ back: true, title: 'Meu Plano', sub: 'Status e detalhes do seu acesso' }}
+      nav={user ? true : <PublicNav width="wide" />}
+      bar={user
+        ? { back: true, title: 'Meu Plano', sub: 'Status e detalhes do seu acesso' }
+        : { back: true, title: 'Planos', sub: 'Escolha como quer acompanhar os picks da IA' }}
       mainClassName="space-y-6"
     >
+
+        {/*
+          * PLANOS PRA QUEM NÃO TEM CONTA.
+          *
+          * Todos os blocos abaixo exigem `user`, então deslogado a página
+          * ficava com o card de suporte e mais nada -- uma página chamada
+          * "Planos" que não mostrava plano nenhum. Quem chega aqui pelo menu ou
+          * por busca está justamente decidindo se assina.
+          *
+          * Os preços saem de usePlans (mesma fonte da Home e do checkout), não
+          * de texto escrito à mão.
+          */}
+        {!user && (
+          <div className="space-y-4">
+            <div className="bg-surface-1 border border-line rounded-lg p-6">
+              <p className="text-ink-1 font-bold text-base mb-1">Free</p>
+              <p className="text-ink-3 text-sm mb-4">
+                1 pick por dia, sem expiração. O histórico completo da IA fica aberto,
+                com ou sem conta.
+              </p>
+              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
+                Criar conta grátis
+              </Link>
+            </div>
+
+            <div className="bg-surface-1 border border-yellow-400/25 rounded-lg p-6">
+              <div className="flex items-center gap-2 mb-1">
+                <Crown className="w-4 h-4 text-yellow-400" />
+                <p className="text-ink-1 font-bold text-base">VIP</p>
+              </div>
+              <p className="text-ink-3 text-sm mb-4">
+                Todos os picks do dia, múltiplas, alavancagem, mercados de faltas e
+                defesas, gestão de banca e o agente de IA.
+              </p>
+
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 mb-5">
+                {plans.map(pl => (
+                  <div key={pl.id} className="bg-surface-0 border border-line rounded-md p-3 text-center">
+                    <p className="text-[11px] text-ink-3">{pl.label}</p>
+                    <p className="font-mono text-lg font-black text-ink-1 tabular-nums mt-0.5">
+                      {fmtPlanPrice(pl.price)}
+                    </p>
+                    <p className="text-[10px] text-ink-4">
+                      {fmtPlanPrice(pl.price_per_month)}/mês
+                    </p>
+                    {pl.save_pct > 0 && (
+                      <p className="text-[10px] text-accent font-semibold mt-0.5">
+                        economiza {pl.save_pct}%
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <Link to="/login?mode=register" className="btn-primary inline-block text-sm">
+                Testar o VIP grátis por 2 dias
+              </Link>
+            </div>
+          </div>
+        )}
 
         {activated && (
           <div className="bg-green-500/10 border border-green-500/40 rounded-lg p-6 text-center">
@@ -278,7 +343,7 @@ export default function Planos() {
           <div className="relative bg-surface-1 border border-green-500/50 rounded-lg p-6 overflow-hidden">
             <div className="absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent via-green-500 to-transparent" />
             <div className="absolute top-4 right-4">
-              <span className="bg-accent text-black text-[10px] font-bold px-2.5 py-1 rounded-sm">Sem cartão</span>
+              <span className="bg-accent text-black text-[10px] font-bold px-2.5 py-1 rounded-sm">Grátis</span>
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-md flex items-center justify-center shrink-0 mt-0.5">
@@ -289,7 +354,7 @@ export default function Planos() {
               <div className="flex-1">
                 <p className="text-sm text-green-500 font-bold mb-1">Disponível para você</p>
                 <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias de VIP grátis</h2>
-                <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA. Sem cartão, sem compromisso.</p>
+                <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA por 2 dias.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm text-ink-2">
@@ -464,7 +529,7 @@ export default function Planos() {
               </p>
             </div>
             <a
-              href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Gostaria%20de%20solicitar%20o%20cancelamento%2Freembolso%20do%20meu%20plano%20Pick%20IA."
+              href={WA_SUPPORT}
               target="_blank"
               rel="noopener noreferrer"
               className="shrink-0 border border-line-strong hover:border-red-500/50 hover:text-red-400 text-ink-2 font-bold text-xs px-4 py-2.5 rounded-md transition-colors"
@@ -486,7 +551,7 @@ export default function Planos() {
             <p className="text-ink-3 text-xs mt-0.5">Problemas com pagamento, acesso ou dúvidas? Fale direto conosco</p>
           </div>
           <a
-            href="https://wa.me/5517992323916?text=Ol%C3%A1!%20Preciso%20de%20suporte%20no%20Pick%20IA."
+            href={WA_SUPPORT}
             target="_blank"
             rel="noopener noreferrer"
             className="shrink-0 bg-[#25D366] hover:bg-[#20ba58] text-ink-1 font-black text-xs px-4 py-2.5 rounded-md transition-colors"

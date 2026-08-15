@@ -203,12 +203,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                 </p>
                 <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
                   Testar o VIP grátis por 2 dias
-                </Button>
-                <p className="text-[11px] text-ink-4 mt-2.5">
-                  Sem cartão de crédito. Depois dos 2 dias você continua no plano
-                  gratuito, com 1 pick por dia.
-                </p>
-              </div>
+                </Button>              </div>
             )}
           </motion.div>
         )}
@@ -346,7 +341,7 @@ function Plans({ monthly }: { monthly: Plan }) {
       <div className="shell">
         <SectionHead
           title="Comece de graça, evolua quando quiser"
-          sub="Dois dias com acesso VIP completo, sem cartão. Depois você escolhe."
+          sub="Dois dias com acesso VIP completo. Depois você escolhe."
         />
 
         <motion.div
@@ -427,7 +422,7 @@ function StickyMobileCTA({ onDismiss }: { onDismiss: () => void }) {
     <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex-1 min-w-0">
         <p className="text-ink-1 text-xs font-bold leading-none">Testar o VIP por 2 dias</p>
-        <p className="text-accent text-[10px] font-semibold mt-1">Grátis, sem cartão</p>
+        <p className="text-accent text-[10px] font-semibold mt-1">Grátis</p>
       </div>
       <Button to="/login?mode=register" size="sm">Criar conta</Button>
       <button
@@ -608,16 +603,6 @@ export default function Home() {
                   Ver resultados reais
                 </Button>
               </motion.div>
-
-              <motion.p
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ duration: 0.5, delay: 0.46 }}
-                className="text-[11px] text-ink-4 mb-4"
-              >
-                Sem cartão de crédito. Depois dos 2 dias você continua no plano
-                gratuito, com 1 pick por dia.
-              </motion.p>
 
             </div>
 
