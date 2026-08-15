@@ -405,7 +405,22 @@ def public_results(
                 -- liga inteira (mais uma varredura do UNION, mais uma consulta
                 -- pros nomes). Aqui sai de graca: mesma varredura, mesma linha.
                 COUNT(DISTINCT league_id) FILTER (WHERE league_id IS NOT NULL)
-                                                                  AS leagues_count
+                                                                  AS leagues_count,
+                -- Quebra de VIP e free pra Home mostrar a MEDIA DE UNIDADES POR
+                -- PICK de cada um. Pelo mesmo motivo do `leagues_count` acima:
+                -- aqui e' de graca (mesma varredura), e num bloco `by_source`
+                -- separado custaria mais uma ida ao banco de 154ms -- que a Home
+                -- pagaria em cheio, porque ela chama com slim=1 e um bloco novo
+                -- teria que rodar tambem no caminho slim pra servir de algo.
+                --
+                -- `profit` ja e' unidade (stake fixa de 1 em todo sub-SELECT do
+                -- UNION), entao a media e' profit/total direto, sem conversao.
+                -- Com `source` filtrado na query, o pipeline de fora vem zerado,
+                -- que e' o certo: o recorte pedido manda.
+                COALESCE(SUM(profit) FILTER (WHERE source = 'vip'), 0)  AS vip_profit,
+                COUNT(*) FILTER (WHERE source = 'vip')                  AS vip_total,
+                COALESCE(SUM(profit) FILTER (WHERE source = 'free'), 0) AS free_profit,
+                COUNT(*) FILTER (WHERE source = 'free')                 AS free_total
             FROM ({union_sql}) AS t
         """, p)
 

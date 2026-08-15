@@ -5,7 +5,14 @@ import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 const HOUSES = ['Superbet', 'Bet365', 'Betano', 'Outra']
 
 interface Props {
+  /** Odd que abre o campo · já é a atualizada quando a consulta trouxe uma. */
   pickOdd: number
+  /**
+   * Odd publicada no pick, quando ela for diferente da que abre o campo.
+   * Sem isso o rótulo "(pick: X)" passaria a mostrar a odd nova como se fosse
+   * a do pick, e a mudança que acabou de acontecer ficaria invisível.
+   */
+  originalOdd?: number
   suggestedUnits?: number
   suggestedHouse?: string
   maxUnits?: number
@@ -17,7 +24,7 @@ interface Props {
 }
 
 export default function ApostaModal({
-  pickOdd, suggestedUnits = 1, suggestedHouse, maxUnits = 10, hideUnits = false,
+  pickOdd, originalOdd, suggestedUnits = 1, suggestedHouse, maxUnits = 10, hideUnits = false,
   onConfirm, onCancel, loading, error
 }: Props) {
   const [oddStr, setOddStr] = useState(String(pickOdd))
@@ -28,6 +35,9 @@ export default function ApostaModal({
   const parsed   = parseFloat(oddStr)
   const validOdd = !isNaN(parsed) && parsed >= 1.01 && parsed <= 99
   const oddChanged = validOdd && Math.abs(parsed - pickOdd) > 0.001
+  // Movimento entre a odd publicada e a de agora · subiu, caiu ou nada.
+  const oddPick = originalOdd ?? pickOdd
+  const variacao = Math.abs(pickOdd - oddPick) > 0.001 ? pickOdd - oddPick : 0
   const exceedsMax = !hideUnits && units > maxUnits
   const exceedsSuggested = !hideUnits && units > suggestedUnits
   const valid = validOdd && house.length > 0 && (hideUnits || (units >= 1 && !exceedsMax))
@@ -114,13 +124,20 @@ export default function ApostaModal({
             <div className="mb-4">
               <label className="text-ink-2 text-xs font-semibold mb-1.5 block">
                 Odd apostada
-                <span className="text-ink-4 font-normal ml-1">(pick: {pickOdd})</span>
+                <span className="text-ink-4 font-normal ml-1">(pick: {oddPick})</span>
               </label>
               <input
                 type="number" step="0.01" min="1.01" value={oddStr}
                 onChange={e => setOddStr(e.target.value)}
                 className="input font-mono w-full text-center text-xl font-black"
               />
+              {/* Movimento da casa desde a publicação do pick. Aparece nos dois
+                  sentidos: odd que subiu é boa notícia e some se não for dita. */}
+              {variacao !== 0 && (
+                <p className={`text-[11px] mt-1.5 ${variacao > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
+                  Odd atualizada agora · {variacao > 0 ? 'subiu' : 'caiu'} de {oddPick.toFixed(2)} para {pickOdd.toFixed(2)}
+                </p>
+              )}
               {oddChanged && (
                 <p className="text-yellow-400 text-[11px] mt-1.5">
                   Odd diferente do pick, será registrada como apostada

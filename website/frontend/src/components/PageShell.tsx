@@ -3,6 +3,7 @@ import { cn } from '../lib/cn'
 import Navbar from './Navbar'
 import Footer from './Footer'
 import BackButton from './BackButton'
+import PlanUpsellBar from './PlanUpsellBar'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 
 /*
@@ -38,6 +39,8 @@ export default function PageShell({
   nav = true,
   footer = true,
   bar,
+  /** Desliga a faixa de plano numa tela específica. Ver PlanUpsellBar. */
+  upsell = true,
   /** Renderizado entre a barra e o conteúdo, na largura toda (abas, banner). */
   beforeMain,
   className,
@@ -59,6 +62,7 @@ export default function PageShell({
   nav?: boolean | React.ReactNode
   footer?: boolean
   bar?: PageBar
+  upsell?: boolean
   beforeMain?: React.ReactNode
   className?: string
   mainClassName?: string
@@ -114,6 +118,12 @@ export default function PageShell({
           </div>
         </div>
       )}
+
+      {/* Faixa de plano · logada, e só nos estados em que há o que dizer (free,
+          trial, VIP perto de expirar). Vem antes de `beforeMain` para não se
+          meter entre as abas de uma página e o conteúdo delas. A Home não passa
+          por aqui: ela monta a própria casca. */}
+      {upsell && <PlanUpsellBar width={width} />}
 
       {beforeMain}
 

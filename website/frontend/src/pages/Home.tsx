@@ -555,10 +555,10 @@ export default function Home() {
           </div>
 
           <div className="mt-8 md:mt-10">
-            {/* leagues_count vem do próprio summary. Antes era
-                `by_league.length`, e só por causa desse número a rota tinha que
-                montar a quebra por liga inteira: mais uma varredura do histórico
-                e mais uma consulta pros nomes das ligas. */}
+            {/* Tudo que a faixa mostra sai do próprio summary, inclusive a
+                quebra de VIP e free: uma linha do SELECT que já roda, nenhuma
+                consulta a mais. Mesmo princípio que valia pro leagues_count,
+                que antes obrigava a rota a montar a quebra por liga inteira. */}
             <StatsBand
               summary={data?.summary ?? null}
               leaguesCount={data?.summary?.leagues_count ?? 0}

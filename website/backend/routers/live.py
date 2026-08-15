@@ -245,6 +245,218 @@ def _find_live_odd(market_type: str | None, line: str | None, odds_markets: list
     return None
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# ODD PRE-JOGO
+#
+# POR QUE ISTO EXISTE: /pick-odd so' sabia ler odd AO VIVO, e devolvia None pra
+# qualquer jogo que ainda nao tinha comecado -- ou seja, pra quase todo clique
+# em "Apostei", ja' que o normal e' apostar antes da bola rolar. Nesses casos o
+# front caia na odd salva no pick, que foi coletada quando o motor rodou, horas
+# antes. O usuario lia isso como "so' atualiza pra menos": a unica vez que a odd
+# mudava era com o jogo em andamento, e ai ela costuma ter caido.
+#
+# Nao ha travamento de direcao em lugar nenhum, nem aqui nem no caminho ao vivo:
+# o que vier da casa e' o que vale, subindo ou descendo.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_odds_pre_cache: dict[int, tuple[float, list]] = {}
+_TTL_PRE = 60  # segundos · odd pre-jogo nao se mexe tao rapido quanto a ao vivo
+
+# Padrao quando a tabela `bookmakers` nao existe ou esta vazia · mesmos ids do
+# coletor (collectors/odds_collector_service.py): 8 = Bet365, 32 = Betano.
+_CASAS_PADRAO = {8, 32}
+
+
+_casas_cache: tuple[float, set] | None = None
+_TTL_CASAS = 300  # segundos · lista de casas muda por acao manual no /admin
+
+
+def _casas_ativas() -> set:
+    """Casas que valem pra buscar odd, da tabela `bookmakers` (coluna `ativo`).
+
+    Mesma regra do coletor, inclusive o fallback: tabela ausente ou vazia quase
+    sempre significa "ninguem cadastrou ainda", nao "desliguem tudo" -- e sem
+    fallback o clique em Apostei simplesmente nunca acharia odd.
+
+    Em cache de 5 minutos porque um bilhete de tres pernas chamaria isto tres
+    vezes, e cada conexao nova ao banco custa ~154ms (ver database.py:71-82) --
+    seria mais tempo de banco do que de API so' pra reler uma lista que muda
+    quando alguem mexe no /admin.
+    """
+    global _casas_cache
+    agora = time.time()
+    if _casas_cache and agora - _casas_cache[0] < _TTL_CASAS:
+        return _casas_cache[1]
+    conn = None
+    casas = _CASAS_PADRAO
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        cur.execute("SELECT bookmaker_id FROM bookmakers WHERE ativo")
+        ids = {r["bookmaker_id"] for r in cur.fetchall()}
+        cur.close()
+        casas = ids or _CASAS_PADRAO
+    except Exception:
+        casas = _CASAS_PADRAO
+    finally:
+        if conn:
+            try:
+                conn.close()
+            except Exception:
+                pass
+    _casas_cache = (agora, casas)
+    return casas
+
+
+def _fetch_prematch_odds(fid: int) -> list:
+    """Odds pre-jogo (/odds) da fixture · lista de bookmakers da API-Football.
+
+    Uma chamada so', sem filtrar por casa na querystring: /odds aceita uma casa
+    por requisicao, entao filtrar la' custaria uma chamada por casa. Vem tudo e
+    o filtro acontece aqui, que e' de graca.
+    """
+    now = time.time()
+    if fid in _odds_pre_cache:
+        ts, cached = _odds_pre_cache[fid]
+        if now - ts < _TTL_PRE:
+            return cached
+    try:
+        r = requests.get(f"{API_BASE}/odds", headers=_headers(),
+                         params={"fixture": fid}, timeout=10)
+        items = r.json().get("response", [])
+        data = items[0].get("bookmakers", []) if items else []
+    except Exception as e:
+        logger.error("[PRE ODDS] fixture %s: %s", fid, e)
+        data = _odds_pre_cache.get(fid, (0, []))[1]  # mantem cache antigo no erro
+    _odds_pre_cache[fid] = (now, data)
+    return data
+
+
+# Nomes de aposta pre-jogo na API-Football, por market_type salvo no pick.
+# Mesma politica do mapa ao vivo: familia sem equivalente claro fica de fora e
+# _find_prematch_odd devolve None, o que faz o front usar a odd ja' salva.
+_PRE_OVERUNDER_NAMES = {
+    "goals":   {"goals over/under", "over/under", "total goals"},
+    "corners": {"corners over under", "total corners", "corners over/under"},
+    "cards":   {"cards over/under", "total cards", "cards over under"},
+}
+
+
+def _valor_over_under(texto: str) -> tuple[str | None, float | None]:
+    """'Over 2.5' -> ('over', 2.5). Na odd pre-jogo a linha vem grudada no
+    rotulo do valor, diferente da odd ao vivo, que traz `handicap` em campo
+    proprio."""
+    m = re.match(r"^\s*(over|under|mais de|menos de)\s+([0-9]+(?:[.,][0-9]+)?)\s*$",
+                 texto or "", re.IGNORECASE)
+    if not m:
+        return None, None
+    direcao = m.group(1).lower()
+    direcao = "over" if direcao in ("over", "mais de") else "under"
+    try:
+        return direcao, float(m.group(2).replace(",", "."))
+    except ValueError:
+        return None, None
+
+
+def _find_prematch_odd(market_type: str | None, line: str | None,
+                       bookmakers: list, casas: set) -> tuple[float | None, str | None]:
+    """(melhor odd pre-jogo, nome da casa) pro mercado/linha do pick.
+
+    Melhor = maior odd entre as casas ativas, que e' o mesmo criterio que o
+    coletor usa pra escolher a odd publicada no pick. Best-effort e silencioso
+    igual ao caminho ao vivo: sem correspondencia clara devolve (None, None).
+    """
+    mtype = (market_type or "").lower()
+    direction, line_val = _extract_line(line)
+
+    def _alvo() -> set:
+        """Rotulos de valor aceitos pra este mercado, ja' em minuscula."""
+        if mtype == "btts":
+            return {"yes"} if direction in ("yes", "sim") else {"no", "nao", "não"}
+        if mtype == "double_chance":
+            l = (line or "").lower().replace(" ", "")
+            if "home/draw" in l or "draw/home" in l or "casaempate" in l:
+                return {"home/draw"}
+            if "draw/away" in l or "away/draw" in l or "empatevisitante" in l:
+                return {"draw/away"}
+            if "home/away" in l or "away/home" in l or "casavisitante" in l:
+                return {"home/away"}
+            return set()
+        if mtype in ("result_1x2", "outcome"):
+            l = (line or "").lower().strip()
+            return {{"1": "home", "casa": "home", "home": "home", "mandante": "home",
+                     "x": "draw", "empate": "draw", "draw": "draw",
+                     "2": "away", "visitante": "away", "away": "away", "fora": "away",
+                     }.get(l, "")} - {""}
+        return set()
+
+    nomes_ou: set = _PRE_OVERUNDER_NAMES.get(mtype, set())
+    nomes_diretos = {
+        "btts":          {"both teams score", "both teams to score"},
+        "double_chance": {"double chance"},
+        "result_1x2":    {"match winner", "fulltime result", "1x2"},
+        "outcome":       {"match winner", "fulltime result", "1x2"},
+    }.get(mtype, set())
+
+    if not nomes_ou and not nomes_diretos:
+        return None, None
+    if nomes_ou and (direction not in ("over", "under") or line_val is None):
+        return None, None
+
+    melhor: float | None = None
+    casa_melhor: str | None = None
+
+    for bk in bookmakers:
+        if bk.get("id") not in casas:
+            continue
+        for bet in bk.get("bets", []):
+            nome = (bet.get("name") or "").lower().strip()
+            if nome not in nomes_ou and nome not in nomes_diretos:
+                continue
+            alvos = _alvo()
+            for v in bet.get("values", []):
+                rotulo = (v.get("value") or "").strip()
+                try:
+                    odd = float(v["odd"])
+                except (TypeError, ValueError, KeyError):
+                    continue
+                if nome in nomes_ou:
+                    d, val = _valor_over_under(rotulo)
+                    if d != direction or val is None or abs(val - line_val) >= 0.01:
+                        continue
+                elif rotulo.lower() not in alvos:
+                    continue
+                if melhor is None or odd > melhor:
+                    melhor, casa_melhor = odd, bk.get("name")
+
+    return melhor, casa_melhor
+
+
+def odd_atual(fixture_id: int, market_type: str | None,
+              line: str | None) -> tuple[float | None, str | None, str | None]:
+    """(odd, origem, status) pro mercado/linha de uma fixture. Origem e'
+    'live', 'prematch' ou None.
+
+    Ponto unico de "qual e' a odd agora" pra qualquer tipo de pick: o pick
+    simples chama uma vez, o bilhete chama uma vez por perna. Jogo encerrado
+    devolve None -- odd de jogo que ja' acabou nao existe, e insistir so'
+    gastaria quota de API.
+    """
+    fix_data = _fetch_fixture(fixture_id)
+    status = fix_data.get("fixture", {}).get("status", {}).get("short", "NS")
+
+    if status in FT_STATUSES:
+        return None, None, status
+
+    if status in LIVE_STATUSES:
+        odd = _find_live_odd(market_type, line, _fetch_live_odds(fixture_id))
+        return odd, ("live" if odd is not None else None), status
+
+    odd, _casa = _find_prematch_odd(market_type, line,
+                                    _fetch_prematch_odds(fixture_id), _casas_ativas())
+    return odd, ("prematch" if odd is not None else None), status
+
+
 def _parse_stats(raw: list, home_id: int | None = None,
                  away_id: int | None = None) -> tuple[dict, dict]:
     """(stats casa, stats fora) da resposta de /fixtures/statistics.
@@ -1045,19 +1257,128 @@ def get_is_live(fixture_ids: str, current_user: dict = Depends(get_current_user)
 @router.get("/pick-odd")
 def get_current_pick_odd(fixture_id: int, market_type: str = "", line: str = "",
                          current_user: dict = Depends(get_current_user)):
-    """Odd atual do mercado, buscada na API-Football no momento da consulta
-    -- chamado quando o usuário abre o modal de aposta. Jogo ainda não
-    começado (NS/TBD): devolve odd=None (sem mudança, front usa a odd já
-    salva no pick, igual sempre funcionou). Jogo ao vivo: busca /odds/live
-    e tenta achar a linha equivalente (best-effort, ver _find_live_odd) --
-    se não achar correspondência, também devolve None, nunca erro."""
-    fix_data = _fetch_fixture(fixture_id)
-    status = fix_data.get("fixture", {}).get("status", {}).get("short", "NS")
-    if status not in LIVE_STATUSES:
-        return {"odd": None, "is_live": False, "status": status}
-    odds_markets = _fetch_live_odds(fixture_id)
-    odd = _find_live_odd(market_type, line, odds_markets)
-    return {"odd": odd, "is_live": True, "status": status}
+    """Odd atual do mercado, buscada na API-Football no momento da consulta --
+    chamado quando o usuário clica em "Apostei", antes de abrir o modal.
+
+    Jogo ao vivo lê /odds/live; jogo ainda não começado lê /odds (pré-jogo).
+    Antes, o segundo caso devolvia odd=None e o front caía na odd salva no
+    pick, coletada quando o motor rodou: na prática a odd só era atualizada
+    para quem apostava com o jogo em andamento.
+
+    Best-effort e silencioso em todos os caminhos: mercado sem correspondência
+    clara, jogo encerrado ou API fora devolvem odd=None, nunca erro. Não existe
+    limite de direção -- a odd volta como está na casa, maior ou menor que a
+    do pick."""
+    odd, origem, status = odd_atual(fixture_id, market_type, line)
+    return {
+        "odd": odd,
+        "source": origem,
+        "is_live": status in LIVE_STATUSES,
+        "status": status,
+    }
+
+
+def _pernas_do_bilhete(cur, pick_id: int, pick_type: str) -> list[dict]:
+    """Pernas de uma múltipla ou de uma alavancagem, no mesmo formato.
+
+    Múltipla guarda as pernas num JSONB (`games`); alavancagem guarda em
+    colunas numeradas (`fixture_id_1`, `market_type_1`, ...). Os dois viram a
+    mesma lista aqui pra que a atualização de odd seja uma função só.
+    """
+    if pick_type == "multipla":
+        cur.execute("SELECT games FROM picks_multiplas WHERE id = %s", (pick_id,))
+        row = cur.fetchone()
+        if not row:
+            return []
+        legs = row["games"]
+        if isinstance(legs, str):
+            try:
+                legs = json.loads(legs)
+            except Exception:
+                legs = []
+        return [
+            {"fixture_id": l.get("fixture_id"), "market_type": l.get("market_type"),
+             "line": l.get("line"), "odd": float(l.get("odd") or 0)}
+            for l in (legs or []) if isinstance(l, dict)
+        ]
+
+    cur.execute("""
+        SELECT fixture_id_1, market_type_1, line_1, odd_1,
+               fixture_id_2, market_type_2, line_2, odd_2,
+               fixture_id_3, market_type_3, line_3, odd_3
+        FROM picks_alavancagem WHERE id = %s
+    """, (pick_id,))
+    row = cur.fetchone()
+    if not row:
+        return []
+    pernas = []
+    for i in (1, 2, 3):
+        if not row[f"fixture_id_{i}"] or row[f"odd_{i}"] is None:
+            continue
+        pernas.append({
+            "fixture_id":  row[f"fixture_id_{i}"],
+            "market_type": row[f"market_type_{i}"],
+            "line":        row[f"line_{i}"],
+            "odd":         float(row[f"odd_{i}"]),
+        })
+    return pernas
+
+
+@router.get("/ticket-odd")
+def get_current_ticket_odd(pick_id: int, pick_type: str,
+                           current_user: dict = Depends(get_current_user)):
+    """Odd combinada atual de múltipla ou alavancagem.
+
+    Bilhete não tem odd própria numa casa: ele é o produto das pernas. Então
+    cada perna é reconsultada (mesmo caminho do pick simples, ao vivo ou
+    pré-jogo) e o produto é recalculado. Perna que não puder ser atualizada
+    entra com a odd salva e o bilhete volta marcado como `partial`, para a tela
+    dizer que a atualização foi parcial em vez de fingir precisão.
+
+    Sem isso, múltipla e alavancagem eram os únicos tipos em que "Apostei"
+    nunca conferia a odd: o modal abria direto com o número da geração.
+    """
+    if pick_type not in ("multipla", "alavancagem"):
+        return {"odd": None, "original_odd": None, "partial": True, "legs": []}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        pernas = _pernas_do_bilhete(cur, pick_id, pick_type)
+    finally:
+        cur.close()
+        conn.close()
+
+    if not pernas:
+        return {"odd": None, "original_odd": None, "partial": True, "legs": []}
+
+    combinada = 1.0
+    original  = 1.0
+    parcial   = False
+    detalhe   = []
+    for perna in pernas:
+        salva = perna["odd"] or 0
+        original *= salva or 1
+        atual, origem, _status = (None, None, None)
+        if perna["fixture_id"]:
+            atual, origem, _status = odd_atual(perna["fixture_id"], perna["market_type"], perna["line"])
+        usada = atual if atual else salva
+        if not atual:
+            parcial = True
+        combinada *= usada or 1
+        detalhe.append({
+            "fixture_id": perna["fixture_id"],
+            "odd": round(usada, 2) if usada else None,
+            "original_odd": round(salva, 2) if salva else None,
+            "source": origem,
+        })
+
+    return {
+        "odd": round(combinada, 2),
+        "original_odd": round(original, 2),
+        "partial": parcial,
+        "legs": detalhe,
+    }
 
 
 def _alavancagem_stakes(cur, user_id: int) -> dict:

@@ -4,7 +4,7 @@ import { AnimatePresence } from 'framer-motion'
 import api from '../services/api'
 import { Helmet } from 'react-helmet-async'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
-import { winRate as calcWinRate } from '../utils/format'
+import { winRate as calcWinRate, fmtUnits } from '../utils/format'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
 import { useAuth } from '../context/AuthContext'
@@ -148,9 +148,16 @@ export default function ResultadosPublicos() {
   const byDay    = data?.by_day ?? []
   const byLeague = data?.by_league ?? []
 
-  // Metricas derivadas de acerto e cobertura. Esta pagina fala de acuracia da
-  // IA, entao nada aqui pode virar dinheiro ou unidade: quem quer ver retorno
-  // tem a Banca, que e' por usuario e depende da stake de cada um.
+  // Metricas derivadas de acerto e cobertura.
+  //
+  // UNIDADE ENTRA, DINHEIRO NAO. A regra antiga aqui era "nada vira dinheiro ou
+  // unidade"; a parte da unidade caiu em 15/08 porque o publico desta pagina le
+  // resultado em unidade, nao em porcentagem, e o numero ja existe no banco
+  // (coluna `profit`, stake fixa de 1u por pick). Real continua fora: R$ depende
+  // da banca e da stake de cada um, e isso e' a Banca que responde, por usuario.
+  // Toda tela que mostrar o lucro em unidade tem que dizer que a stake e' fixa
+  // de 1u, senao o numero nao bate com o que o usuario ve na banca dele.
+  const lucroUnidades  = Number(s?.profit ?? 0)
   const leaguesCovered = byLeague.length
   const daysWithPicks  = byDay.length
   const avgPerDay = daysWithPicks > 0 && s ? s.total / daysWithPicks : null
@@ -245,8 +252,18 @@ export default function ResultadosPublicos() {
             <div className="text-center py-16 text-ink-3">Nenhum resultado encontrado para os filtros selecionados.</div>
           ) : (
             <>
-              {/* Stats */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+              {/* Stats · lucro em unidades na frente, mesmo tratamento da faixa
+                  da Home e do topo de /picks: primeiro tile, linha inteira no
+                  mobile. O filtro de fonte/mes vale pra ele igual aos outros,
+                  porque sai do mesmo `summary`. */}
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-8">
+                <div className="stat-tile col-span-2 sm:col-span-1">
+                  <div className={`stat-value tabular-nums ${lucroUnidades >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {fmtUnits(lucroUnidades, 1)}
+                  </div>
+                  <div className="stat-label">Lucro</div>
+                  <div className="text-[10px] text-ink-4 mt-0.5">unidades · stake 1u</div>
+                </div>
                 {[
                   { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
                   { label: 'Picks',    value: String(s.total),    color: 'text-ink-1' },
@@ -261,7 +278,8 @@ export default function ResultadosPublicos() {
               </div>
 
               {/* Cobertura e consistencia · segunda leva de numeros, todos de
-                  volume/acerto. Nenhum deles vira dinheiro. */}
+                  volume/acerto. Nenhum deles vira dinheiro (ver comentario das
+                  metricas derivadas: unidade sim, real nao). */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
                 {[
                   { label: 'Ligas',        value: String(leaguesCovered), color: 'text-ink-1' },
