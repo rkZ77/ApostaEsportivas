@@ -66,14 +66,68 @@ const MARKET_PT: Record<string, string> = {
   'goalkeeper saves': 'Defesas do goleiro',
   'player saves': 'Defesas do goleiro',
   'saves': 'Defesas do goleiro',
+  // Chutes e impedimentos · vinham CRUS pra tela ("Total Shots Over 23.5" na
+  // Dica do Dia da Home, "Total ShotOnGoal" no histórico).
+  'total shots': 'Finalizações Mais/Menos',
+  'total shotongoal': 'Finalizações no Gol Mais/Menos',
+  'total shots on goal': 'Finalizações no Gol Mais/Menos',
+  'shots on goal': 'Finalizações no Gol Mais/Menos',
+  'offsides home total': 'Impedimentos Casa Mais/Menos',
+  'offsides away total': 'Impedimentos Visitante Mais/Menos',
+  'offsides total': 'Impedimentos Mais/Menos',
+  'total - home goals over/under': 'Total de Gols Casa',
+  'total - away goals over/under': 'Total de Gols Visitante',
   'to qualify': 'Classificação',
   'to qualify - extra time': 'Classificação (Prorrogação)',
+}
+
+/*
+ * Índice reverso: nome em português -> chave canônica (a inglesa do MARKET_PT).
+ *
+ * O motor grava em `picks.market` o nome JÁ TRADUZIDO, então a maioria dos
+ * picks chega aqui como "Escanteios Mais/Menos", e não como "Corners Over
+ * Under". `translateMarket` não sofria com isso (devolve o texto como veio),
+ * mas TODO O RESTO sofria: `MARKET_EXPLAIN` e `regraDoMercado` são indexados
+ * pela chave em inglês, então nenhum desses picks casava e todos caíam no
+ * texto genérico "Dá GREEN conforme as condições do mercado X" · que é
+ * exatamente a informação que não ajuda ninguém.
+ *
+ * Em 15/08/2026 isso valia para 232 dos 312 picks do histórico.
+ *
+ * A primeira chave vence de propósito: MARKET_PT tem vários sinônimos em
+ * inglês para o mesmo nome em português ('total corners', 'corners over under'
+ * e 'corners over/under' viram todos "Escanteios Mais/Menos"), e a primeira é
+ * a que MARKET_EXPLAIN também usa.
+ */
+const PT_PARA_CHAVE: Record<string, string> = (() => {
+  const idx: Record<string, string> = {}
+  for (const [en, pt] of Object.entries(MARKET_PT)) {
+    const k = pt.trim().toLowerCase()
+    if (!(k in idx)) idx[k] = en
+  }
+  return idx
+})()
+
+/**
+ * Chave em inglês para consultar MARKET_EXPLAIN, venha o mercado em inglês
+ * (nome cru da API) ou em português (o que o motor grava hoje).
+ */
+export function chaveCanonica(market?: string): string {
+  if (!market) return ''
+  const key = market.trim().toLowerCase()
+  if (MARKET_PT[key]) return key
+  // Alguns nomes carregam a competição no fim · "Escanteios Casa Mais/Menos
+  // (England)". O sufixo não muda a regra do mercado.
+  const semSufixo = key.replace(/\s*\([^)]*\)\s*$/, '').trim()
+  return PT_PARA_CHAVE[key] ?? PT_PARA_CHAVE[semSufixo] ?? key
 }
 
 export function translateMarket(m?: string): string {
   if (!m) return ''
   const key = m.trim().toLowerCase()
   if (MARKET_PT[key]) return MARKET_PT[key]
+  const canon = chaveCanonica(m)
+  if (MARKET_PT[canon]) return MARKET_PT[canon]
   for (const [k, v] of Object.entries(MARKET_PT)) {
     if (key.includes(k)) return v
   }
@@ -147,6 +201,15 @@ const MARKET_EXPLAIN: Record<string, ExplainFn> = {
   'fouls':                 _ouOr('o total de faltas da partida (somando os dois times)'),
   // "N ou mais" -- nao e' over/under, entao nao usa _ouOr: da GREEN a partir
   // de N defesas, inclusive N (P(X >= N), ver goalkeeper_model.py).
+  'total shots':           _ouOr('o total de finalizações da partida (somando os dois times, no gol ou fora)'),
+  'total shotongoal':      _ouOr('o total de finalizações no gol da partida (só as que exigem defesa ou entram)'),
+  'total shots on goal':   _ouOr('o total de finalizações no gol da partida (só as que exigem defesa ou entram)'),
+  'shots on goal':         _ouOr('o total de finalizações no gol da partida (só as que exigem defesa ou entram)'),
+  'offsides home total':   _ouOr('o total de impedimentos só da equipe da casa'),
+  'offsides away total':   _ouOr('o total de impedimentos só da equipe visitante'),
+  'offsides total':        _ouOr('o total de impedimentos da partida (somando os dois times)'),
+  'total - home goals over/under': _ouOr('o total de gols só da equipe da casa'),
+  'total - away goals over/under': _ouOr('o total de gols só da equipe visitante'),
   'goalkeeper saves':      () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais. Vale só as defesas dele, não as do time inteiro.',
   'player saves':          () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais.',
   'saves':                 () => 'Dá GREEN se esse goleiro fizer o número de defesas da linha ou mais.',
@@ -164,16 +227,22 @@ function sujeitoDoMercado(market: string): string {
 }
 
 /** Unidade contável do mercado, pro texto falar "escanteios" e não "unidades". */
-function unidadeDoMercado(sujeito: string): string {
+/** [singular, plural] da unidade contada · '' quando o mercado não conta nada. */
+function unidadeDoMercado(sujeito: string): readonly [string, string] {
   const s = sujeito.toLowerCase()
-  for (const [chave, palavra] of [
-    ['escanteio', 'escanteios'], ['cart', 'cartões'], ['falta', 'faltas'],
-    ['gol', 'gols'], ['chute', 'chutes'], ['defesa', 'defesas'],
-    ['impedimento', 'impedimentos'],
+  for (const [chave, sing, plur] of [
+    ['escanteio', 'escanteio', 'escanteios'],
+    ['cart', 'cartão', 'cartões'],
+    ['falta', 'falta', 'faltas'],
+    ['finaliza', 'finalização', 'finalizações'],
+    ['gol', 'gol', 'gols'],
+    ['chute', 'chute', 'chutes'],
+    ['defesa', 'defesa', 'defesas'],
+    ['impedimento', 'impedimento', 'impedimentos'],
   ] as const) {
-    if (s.includes(chave)) return palavra
+    if (s.includes(chave)) return [sing, plur]
   }
-  return ''
+  return ['', '']
 }
 
 export interface RegraDoMercado {
@@ -206,7 +275,9 @@ export interface RegraDoMercado {
  */
 export function regraDoMercado(market?: string, line?: string): RegraDoMercado | null {
   if (!market) return null
-  const key = market.trim().toLowerCase()
+  // Canoniza antes de consultar: o mercado chega em português na maioria dos
+  // picks, e o mapa de explicações é indexado em inglês.
+  const key = chaveCanonica(market)
   const lineTxt = translateLine(line) || ''
 
   const ouMatch = lineTxt.match(/^(Mais de|Menos de)\s+([\d.,]+)$/)
@@ -218,8 +289,10 @@ export function regraDoMercado(market?: string, line?: string): RegraDoMercado |
 
   const sujeito = sujeitoDoMercado(key)
   if (!sujeito) return null
-  const unidade = unidadeDoMercado(sujeito)
-  const conta = (n: number) => (unidade ? `${n} ${unidade}` : String(n))
+  const [singular, plural] = unidadeDoMercado(sujeito)
+  // Concordância de número: sem isto o texto saía "saírem 1 gols ou menos".
+  const conta = (n: number) =>
+    (plural ? `${n} ${Math.abs(n) === 1 ? singular : plural}` : String(n))
 
   const oQueE = `Conta ${sujeito}.`
   const frac = Math.round((valor % 1) * 100)
@@ -271,7 +344,7 @@ export function regraDoMercado(market?: string, line?: string): RegraDoMercado |
 /** Explicação curta em português de quando essa aposta (mercado + linha) dá GREEN. */
 export function explainMarket(market?: string, line?: string): string {
   if (!market) return ''
-  const key = market.trim().toLowerCase()
+  const key = chaveCanonica(market)
   const lineTxt = translateLine(line) || 'valor definido pela IA'
 
   // Quando dá pra falar em número inteiro, é essa a versão que vale · ver

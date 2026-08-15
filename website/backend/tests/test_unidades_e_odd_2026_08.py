@@ -374,3 +374,92 @@ def test_hora_do_jogo_sai_por_fatia_de_string():
     tela = _front_codigo("components/PicksPendingCard.tsx")
     assert "horaBR" in tela
     assert "toLocaleTimeString" not in tela
+
+
+# ────────────── 5. Comparativo por produto, info e traducao de mercado ──────────────
+
+
+def test_quebra_por_produto_sai_de_uma_consulta_so():
+    """A aba "Por Jogo" mostra o lucro de cada produto e a curva de cada um no
+    tempo. As duas coisas saem da MESMA varredura: o agregado por fonte e'
+    somado em Python a partir da serie, em vez de custar uma segunda ida ao
+    banco (154ms) pra refazer uma soma que ja' esta na mao.
+
+    E fica fora do caminho slim -- a Home nao usa nada disto.
+    """
+    corpo = _codigo("routers/public.py", "public_results")
+    assert "by_source_day = [] if slim else" in corpo
+    assert "GROUP BY match_date, source" in corpo
+    # O agregado nao pode ser uma segunda consulta.
+    assert corpo.count("GROUP BY match_date, source") == 1
+    assert "por_fonte" in corpo, "agregado por fonte deveria ser somado em Python"
+
+
+def test_por_jogo_mostra_numero_geral_e_nao_da_pagina():
+    """Lucro de dez linhas nao diz nada sobre a IA · diz sobre quais dez linhas
+    calharam de estar na pagina 1."""
+    tela = _front_codigo("pages/ResultadosPublicos.tsx")
+    assert "Lucro geral" in tela
+    assert "Lucro da página" not in tela, "o indicador voltou a ser da pagina"
+    assert "bySource" in tela and "bySourceDay" in tela
+    assert "PipelineProfitChart" in tela
+
+
+def test_curva_por_produto_e_acumulada_e_na_mesma_grade():
+    """Lucro diario e' serrilhado e vira ruido com seis series; a curva
+    acumulada mostra a inclinacao, que e' a leitura que importa.
+
+    E toda serie anda sobre a MESMA grade de dias -- sem isso, um pipeline que
+    publicou em menos dias apareceria esticado e pareceria subir mais rapido.
+    """
+    grafico = _front_codigo("components/PipelineProfitChart.tsx")
+    assert "acc +=" in grafico, "a curva tem que ser acumulada"
+    assert "Array.from(new Set(data.map(p => p.match_date))).sort()" in grafico
+
+
+def test_cards_explicam_no_icone_em_vez_de_subtitulo():
+    """A linha miuda embaixo de cada numero roubava a atencao do valor e quase
+    ninguem lia. Quem quer saber o que a metrica significa clica no info."""
+    # Ou o InfoTip direto (ladrilho escrito na tela), ou o `info` do StatTile,
+    # que monta o mesmo icone por dentro.
+    for tela in ("home/StatsBand.tsx", "pages/Picks.tsx",
+                 "pages/ResultadosPublicos.tsx", "pages/PerformanceIA.tsx"):
+        fonte = _front_codigo(tela)
+        assert "InfoTip" in fonte or "info=" in fonte, f"{tela} nao tem explicacao no icone"
+        assert "hint=" not in fonte, f"{tela} ainda tem subtitulo em ladrilho"
+
+    # O primitivo aceita `info`, e a Home nao usa mais `hint` nenhum.
+    assert "info?: string" in _front_codigo("components/ui/Card.tsx")
+    assert "hint:" not in _front_codigo("home/StatsBand.tsx")
+
+
+def test_mercado_em_portugues_encontra_a_propria_explicacao():
+    """A CAUSA DA INFO GENERICA.
+
+    O motor grava `picks.market` ja' traduzido, entao o pick chega como
+    "Escanteios Mais/Menos" e nao como "Corners Over Under". MARKET_EXPLAIN e
+    regraDoMercado sao indexados pela chave em ingles, entao NENHUM desses
+    picks casava e todos caiam em "Da GREEN conforme as condicoes do mercado
+    X" -- 232 dos 312 picks do historico em 15/08/2026.
+    """
+    fonte = _front("utils/marketTranslate.ts")
+    assert "PT_PARA_CHAVE" in fonte
+    assert "export function chaveCanonica" in fonte
+    # Os dois consumidores tem que canonizar antes de consultar o mapa.
+    for fn in ("export function regraDoMercado", "export function explainMarket"):
+        corpo = fonte[fonte.index(fn):]
+        corpo = corpo[:corpo.index("\n}")]
+        assert "chaveCanonica(market)" in corpo, f"{fn} nao canoniza"
+
+
+def test_mercados_que_vazavam_em_ingles_tem_traducao():
+    """"Total Shots Over 23.5" aparecia cru na Dica do Dia da Home."""
+    fonte = _front("utils/marketTranslate.ts")
+    for cru in ("'total shots'", "'total shotongoal'", "'offsides home total'"):
+        assert cru in fonte, f"{cru} continua sem traducao"
+
+
+def test_regra_do_mercado_concorda_em_numero():
+    """Saia "sairem 1 gols ou menos"."""
+    fonte = _front("utils/marketTranslate.ts")
+    assert "Math.abs(n) === 1 ? singular : plural" in fonte
