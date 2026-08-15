@@ -191,9 +191,19 @@ def _compute_suggested_stake_units(
 
 
 def _enrich_multipla_legs(cur, rows: list) -> list:
-    """Enriquece o JSONB de legs das múltiplas com home/away team IDs e nomes via fixtures."""
+    """Enriquece o JSONB de legs das múltiplas com home/away team IDs e nomes via fixtures.
+
+    UMA consulta pra todas as pernas de todas as multiplas. Antes era uma por
+    perna, dentro de dois lacos aninhados: tres multiplas de tres pernas viravam
+    nove idas ao banco (154ms cada, ver database.py:71-82) so' pra buscar nome e
+    escudo de time. O lote nao muda nada na saida -- mesmo dicionario, mesmos
+    campos, mesmo fallback pro que nao existe mais em `fixtures`.
+    """
     import json as _json
-    result = []
+
+    # 1ª passada: normaliza o JSONB e junta os fixture_id de todo mundo.
+    multiplas: list[tuple[dict, list]] = []
+    fids: set[int] = set()
     for row in rows:
         m = dict(row)
         legs = m.get("legs") or []
@@ -202,29 +212,42 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
                 legs = _json.loads(legs)
             except Exception:
                 legs = []
-        enriched = []
-        for leg in (legs if isinstance(legs, list) else []):
+        legs = [dict(leg) if isinstance(leg, dict) else leg
+                for leg in (legs if isinstance(legs, list) else [])]
+        for leg in legs:
             fid = leg.get("fixture_id") if isinstance(leg, dict) else None
-            leg = dict(leg) if isinstance(leg, dict) else leg
             if fid:
-                fx = _safe_query_one(cur, """
-                    SELECT home_team, away_team, home_team_id, away_team_id, league_id
-                    FROM fixtures WHERE fixture_id = %s
-                """, (fid,))
-                if fx:
-                    leg.update({
-                        "home": fx["home_team"],
-                        "away": fx["away_team"],
-                        "home_team_id": fx["home_team_id"],
-                        "away_team_id": fx["away_team_id"],
-                        "league_id":    fx["league_id"],
-                    })
-                else:
-                    # fixture não existe mais na tabela · usa nomes salvos no JSON
-                    leg.setdefault("home", leg.get("home_team", ""))
-                    leg.setdefault("away", leg.get("away_team", ""))
-            enriched.append(leg)
-        m["legs"] = enriched
+                fids.add(fid)
+        multiplas.append((m, legs))
+
+    por_fixture: dict = {}
+    if fids:
+        por_fixture = {r["fixture_id"]: r for r in _safe_query(cur, """
+            SELECT fixture_id, home_team, away_team, home_team_id, away_team_id, league_id
+            FROM fixtures WHERE fixture_id = ANY(%s)
+        """, (list(fids),))}
+
+    # 2ª passada: aplica o que veio do lote.
+    result = []
+    for m, legs in multiplas:
+        for leg in legs:
+            fid = leg.get("fixture_id") if isinstance(leg, dict) else None
+            if not fid:
+                continue
+            fx = por_fixture.get(fid)
+            if fx:
+                leg.update({
+                    "home": fx["home_team"],
+                    "away": fx["away_team"],
+                    "home_team_id": fx["home_team_id"],
+                    "away_team_id": fx["away_team_id"],
+                    "league_id":    fx["league_id"],
+                })
+            else:
+                # fixture não existe mais na tabela · usa nomes salvos no JSON
+                leg.setdefault("home", leg.get("home_team", ""))
+                leg.setdefault("away", leg.get("away_team", ""))
+        m["legs"] = legs
         result.append(m)
     return result
 
@@ -369,6 +392,16 @@ def get_today_suggestions(
             # A janela e' a mesma dos outros (`_merc_where`): o dia escolhido,
             # mais o que ainda esta pendente ate' 3 dias atras. Sem essa cauda,
             # pick de jogo adiado sumiria da tela antes de ser resolvido.
+            # ATENCAO AO EDITAR: ate 14/08 estas duas consultas rodavam aqui e
+            # DE NOVO, cem linhas abaixo, num laco generico que sobrescrevia as
+            # duas chaves. Eram quatro idas ao banco (com os _ufp_map junto) cujo
+            # resultado nunca chegava no navegador. Pior: a segunda versao era
+            # generica pras duas tabelas, entao nao trazia player_name/team_name
+            # de goleiros -- o card perdia o nome do goleiro no caminho.
+            #
+            # Ficou so' esta versao, que e' a tipada por tabela, agora com o JOIN
+            # de fixtures/leagues que so' a outra tinha (match_datetime e
+            # league_name; sem eles o card fica sem horario e sem nome de liga).
             result["faltas"] = [dict(r) for r in _safe_query(cur, f"""
                 SELECT pf.id, pf.fixture_id, pf.match_date,
                        pf.home_team, pf.away_team, pf.home_team_id, pf.away_team_id,
@@ -376,10 +409,16 @@ def get_today_suggestions(
                        pf.bet_house, pf.confidence, pf.prob_real,
                        pf.prob_real AS probability, pf.edge,
                        pf.reasoning, pf.stake_pct, pf.stake_units,
-                       pf.result, pf.profit, pf.created_at
+                       pf.result, pf.profit, pf.created_at,
+                       f.match_datetime, l.name AS league_name
                 FROM picks_faltas pf
+                LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
+                LEFT JOIN leagues  l ON l.league_id  = pf.league_id
                 WHERE {_merc_where.replace('match_date', 'pf.match_date').replace('result IS NULL', 'pf.result IS NULL')}
-                ORDER BY pf.match_date DESC, pf.edge DESC
+                -- Ordem do laco que sobrescrevia esta consulta, nao a que estava
+                -- escrita aqui: e' a que o usuario ve hoje na tela, e tirar a
+                -- consulta duplicada nao pode reordenar a aba de Mercados.
+                ORDER BY pf.edge DESC NULLS LAST
             """, _d)]
 
             result["goleiros"] = [dict(r) for r in _safe_query(cur, f"""
@@ -391,128 +430,81 @@ def get_today_suggestions(
                        pg.bet_house, pg.confidence, pg.prob_real,
                        pg.prob_real AS probability, pg.edge,
                        pg.reasoning, pg.stake_pct, pg.stake_units,
-                       pg.result, pg.profit, pg.created_at
+                       pg.result, pg.profit, pg.created_at,
+                       f.match_datetime, l.name AS league_name
                 FROM picks_goleiros pg
+                LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
+                LEFT JOIN leagues  l ON l.league_id  = pg.league_id
                 WHERE {_merc_where.replace('match_date', 'pg.match_date').replace('result IS NULL', 'pg.result IS NULL')}
-                ORDER BY pg.match_date DESC, pg.edge DESC
+                ORDER BY pg.edge DESC NULLS LAST
             """, _d)]
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
+            # Mercados proprios sao VIP. A chave existe sempre pro front nao
+            # precisar checar `undefined` antes de iterar.
+            result["faltas"] = []
+            result["goleiros"] = []
 
-        # Adiciona is_followed + user_stake_units + user_actual_odd para todos os tipos
+        # ── is_followed de TODOS os tipos, numa consulta so' ────────────────
+        #
+        # Eram SEIS idas ao banco: uma por tipo de pick (vip, faltas, goleiros,
+        # multipla) mais duas avulsas (dica do dia, alavancagem). A 154ms cada
+        # (ver database.py:71-82), quase um segundo pra responder uma pergunta
+        # que cabe numa consulta: "destes pares (tipo, id), quais este usuario
+        # ja seguiu?".
+        #
+        # O filtro e' pick_type = ANY(...) AND pick_id = ANY(...), que e' um
+        # superconjunto (casa tipo de um pick com id de outro), e nao um IN de
+        # tupla. Isso e' de proposito: usa os mesmos indices simples e o
+        # resultado e' exato de qualquer forma, porque o dicionario abaixo e'
+        # chaveado pelo PAR (tipo, id), nunca pelo id sozinho.
         user_id = current_user.get("id")
 
-        def _ufp_map(pick_type: str, ids: list) -> dict:
-            if not ids:
-                return {}
-            rows = _safe_query(cur, """
-                SELECT pick_id, stake_units, actual_odd, bet_house FROM user_followed_picks
-                WHERE user_id = %s AND pick_type = %s AND pick_id = ANY(%s)
-            """, (user_id, pick_type, ids))
-            return {r["pick_id"]: r for r in rows}
+        alvos: list[tuple[str, int]] = []
 
-        if user_id and result.get("vip"):
-            fm = _ufp_map("vip", [p["id"] for p in result["vip"] if p.get("id")])
-            for p in result["vip"]:
-                fr = fm.get(p.get("id"))
+        def _alvo(tipo: str, itens) -> None:
+            for p in itens:
+                if p and p.get("id"):
+                    alvos.append((tipo, p["id"]))
+
+        _alvo("vip",         result.get("vip") or [])
+        _alvo("multipla",    result.get("multiplas") or [])
+        _alvo("faltas",      result.get("faltas") or [])
+        _alvo("goleiros",    result.get("goleiros") or [])
+        _alvo("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
+        _alvo("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
+
+        seguidos: dict[tuple[str, int], dict] = {}
+        if user_id and alvos:
+            linhas = _safe_query(cur, """
+                SELECT pick_type, pick_id, stake_units, actual_odd, bet_house
+                FROM user_followed_picks
+                WHERE user_id = %s AND pick_type = ANY(%s) AND pick_id = ANY(%s)
+            """, (user_id,
+                  sorted({t for t, _ in alvos}),
+                  sorted({i for _, i in alvos})))
+            seguidos = {(r["pick_type"], r["pick_id"]): r for r in linhas}
+
+        def _marcar(tipo: str, itens) -> None:
+            """Sem `is_followed` o card nao sabe que a aposta ja foi registrada
+            e o botao "Apostar" reaparece como se nada tivesse acontecido."""
+            for p in itens:
+                if not p:
+                    continue
+                fr = seguidos.get((tipo, p.get("id")))
                 p["is_followed"]      = fr is not None
                 p["user_stake_units"] = float(fr["stake_units"]) if fr else None
                 p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
                 p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-                p["pick_type"] = "vip"
+                p["pick_type"] = tipo
 
-        # Faltas e goleiros seguem a mesma regra do VIP: sem `is_followed` o
-        # card nao sabe que a aposta ja foi registrada e o botao "Apostar"
-        # reaparece como se nada tivesse acontecido.
-        for _tipo in ("faltas", "goleiros"):
-            if user_id and result.get(_tipo):
-                fm = _ufp_map(_tipo, [p["id"] for p in result[_tipo] if p.get("id")])
-                for p in result[_tipo]:
-                    fr = fm.get(p.get("id"))
-                    p["is_followed"]      = fr is not None
-                    p["user_stake_units"] = float(fr["stake_units"]) if fr else None
-                    p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
-                    p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-                    p["pick_type"] = _tipo
-
-        if user_id and result.get("dica_do_dia"):
-            dica = result["dica_do_dia"]
-            dica_id = dica.get("id")
-            if dica_id:
-                fr = _safe_query_one(cur, """
-                    SELECT stake_units, actual_odd, bet_house FROM user_followed_picks
-                    WHERE user_id = %s AND pick_type = 'free' AND pick_id = %s
-                """, (user_id, dica_id))
-                dica["is_followed"]      = fr is not None
-                dica["user_stake_units"] = float(fr["stake_units"]) if fr else None
-                dica["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
-                dica["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-                dica["pick_type"] = "free"
-
-        if user_id and result.get("multiplas"):
-            fm = _ufp_map("multipla", [m["id"] for m in result["multiplas"] if m.get("id")])
-            for m in result["multiplas"]:
-                fr = fm.get(m.get("id"))
-                m["is_followed"]      = fr is not None
-                m["user_stake_units"] = float(fr["stake_units"]) if fr else None
-                m["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
-                m["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-                m["pick_type"] = "multipla"
-
-        if user_id and result.get("alavancagem"):
-            alav = result["alavancagem"]
-            alav_id = alav.get("id")
-            if alav_id:
-                fr = _safe_query_one(cur, """
-                    SELECT stake_units, actual_odd, bet_house FROM user_followed_picks
-                    WHERE user_id = %s AND pick_type = 'alavancagem' AND pick_id = %s
-                """, (user_id, alav_id))
-                alav["is_followed"]      = fr is not None
-                alav["user_stake_units"] = float(fr["stake_units"]) if fr else None
-                alav["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
-                alav["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-                alav["pick_type"] = "alavancagem"
-
-        # Mercados com modelo proprio (faltas, defesas de goleiro). Vem por
-        # ultimo pra nao mexer na ordem das chaves ja consumidas pelo front.
-        # Sao VIP: aparecem na aba Hoje pra quem tem acesso, junto do resto.
-        for chave, tabela in (("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
-            if not is_vip:
-                result[chave] = []
-                continue
-            linhas = _safe_query(cur, f"""
-                SELECT p.id, p.fixture_id, p.match_date,
-                       p.home_team, p.away_team, p.home_team_id, p.away_team_id,
-                       p.league_id, p.market, p.market_type, p.line, p.odd,
-                       p.bet_house, p.confidence, p.prob_real, p.prob_real AS probability, p.edge,
-                       p.reasoning, p.stake_units, p.result,
-                       f.match_datetime, l.name AS league_name
-                FROM {tabela} p
-                LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
-                -- league_name existe na tabela do pick, mas vem NULL nas linhas
-                -- antigas; o JOIN com `leagues` e o mesmo fallback que as
-                -- outras consultas ja fazem. Sem ele o card mostra o escudo da
-                -- liga sem o nome ao lado, divergindo do card VIP.
-                LEFT JOIN leagues l ON l.league_id = p.league_id
-                WHERE {("p.match_date = %s" if date else
-                        "p.match_date = (NOW() AT TIME ZONE 'America/Sao_Paulo')::date"
-                        " OR (p.result IS NULL AND p.match_date >="
-                        " (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - INTERVAL '3 days')")}
-                ORDER BY p.edge DESC NULLS LAST
-            """, _d)
-            picks = [dict(r) for r in linhas]
-            if user_id and picks:
-                fm = _ufp_map(chave, [p["id"] for p in picks if p.get("id")])
-                for p in picks:
-                    fr = fm.get(p.get("id"))
-                    p["is_followed"]      = fr is not None
-                    p["user_stake_units"] = float(fr["stake_units"]) if fr else None
-                    p["user_actual_odd"]  = float(fr["actual_odd"])  if fr and fr["actual_odd"] else None
-                    p["user_bet_house"]   = fr["bet_house"] if fr and fr["bet_house"] else None
-            for p in picks:
-                p["pick_type"] = chave
-            result[chave] = picks
+        _marcar("vip",         result.get("vip") or [])
+        _marcar("multipla",    result.get("multiplas") or [])
+        _marcar("faltas",      result.get("faltas") or [])
+        _marcar("goleiros",    result.get("goleiros") or [])
+        _marcar("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
+        _marcar("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
 
         # ── Calcula suggested_stake_units com banca real do usuário ─────────
         # Centraliza a lógica no backend; frontend apenas exibe o valor.

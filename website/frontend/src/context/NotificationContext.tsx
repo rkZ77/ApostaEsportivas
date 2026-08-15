@@ -163,10 +163,30 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     refresh().finally(() => setLoading(false))
     checkNew()
     checkLive()
+
     // /live/my-picks é quem cria as notificações de "entrou em jogo" no
     // servidor, então o refresh do sino vem depois dele no mesmo ciclo.
-    const timer = setInterval(() => { checkNew(); checkLive(); refresh() }, POLL_INTERVAL)
-    return () => clearInterval(timer)
+    const ciclo = () => { checkNew(); checkLive(); refresh() }
+
+    // ABA ESCONDIDA NÃO PESQUISA.
+    //
+    // Isto roda em TODA página pra todo usuário logado, e são três requisições
+    // por ciclo. Uma aba deixada aberta em segundo plano (o caso comum: o
+    // usuário abre o site, vai pro WhatsApp e volta depois do jogo) gastava
+    // três requisições por minuto a noite inteira, cada uma passando pela
+    // checagem de sessão no servidor. Nenhuma delas muda nada que o usuário
+    // possa ver com a aba escondida.
+    //
+    // Ao voltar pra aba, pesquisa na hora · sem isso ele veria dado velho por
+    // até um minuto justamente no momento em que está olhando.
+    const timer = setInterval(() => { if (!document.hidden) ciclo() }, POLL_INTERVAL)
+    const aoVoltar = () => { if (!document.hidden) ciclo() }
+    document.addEventListener('visibilitychange', aoVoltar)
+
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
   }, [user, refresh])
 
   const markRead = useCallback(async (id: number) => {

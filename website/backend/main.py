@@ -11,6 +11,7 @@ from dotenv import find_dotenv, load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
@@ -230,8 +231,24 @@ _LOGO_LADO = 64
 # ORIGINAL; sem trocar a chave, servidor que ja rodou continuaria devolvendo os
 # 45KB pra sempre, e a mudanca so' valeria em maquina nova.
 _LOGO_CACHE_V = "v2-64"
-_logo_disk_cache = pathlib.Path("/tmp/pickia_logos")
-_logo_disk_cache.mkdir(parents=True, exist_ok=True)
+
+# ONDE O CACHE MORA.
+#
+# `/tmp` some a cada deploy e a cada restart do container no Railway. Com uns 20
+# escudos por tela de Picks, o primeiro visitante depois de todo deploy pagava
+# 20 downloads na API-Sports mais 20 reducoes no Pillow -- e, ate' 14/08, com o
+# Pillow rodando dentro do handler async, ou seja, travando o event loop do
+# processo (que e' um so') pra todo mundo que estivesse usando o site.
+#
+# LOGO_CACHE_DIR aponta pra um volume persistente quando existir um. Sem a
+# variavel o comportamento e' o de antes, entao isto nao quebra nada em dev.
+_logo_disk_cache = pathlib.Path(os.getenv("LOGO_CACHE_DIR", "/tmp/pickia_logos"))
+try:
+    _logo_disk_cache.mkdir(parents=True, exist_ok=True)
+except OSError:
+    logger.warning("[LOGO] %s indisponivel, caindo pro /tmp", _logo_disk_cache)
+    _logo_disk_cache = pathlib.Path("/tmp/pickia_logos")
+    _logo_disk_cache.mkdir(parents=True, exist_ok=True)
 
 
 def _reduzir_logo(bruto: bytes) -> bytes:
@@ -264,18 +281,45 @@ def _reduzir_logo(bruto: bytes) -> bytes:
         return bruto
 
 
+def _ler_cache_logo(cache_path: pathlib.Path) -> bytes | None:
+    try:
+        return cache_path.read_bytes()
+    except OSError:
+        return None
+
+
+def _gravar_cache_logo(cache_path: pathlib.Path, conteudo: bytes) -> None:
+    # Grava em temporario e renomeia: dois requests pedindo o mesmo escudo ao
+    # mesmo tempo nao podem deixar um PNG pela metade no cache.
+    try:
+        tmp = cache_path.with_suffix(f".{os.getpid()}.tmp")
+        tmp.write_bytes(conteudo)
+        tmp.replace(cache_path)
+    except OSError:
+        logger.warning("[LOGO] nao consegui gravar %s", cache_path, exc_info=True)
+
+
 async def _serve_logo(kind: str, item_id: int) -> Response:
     cache_path = _logo_disk_cache / f"{kind}_{item_id}_{_LOGO_CACHE_V}.png"
-    if cache_path.exists():
-        return Response(cache_path.read_bytes(), media_type="image/png", headers=_LOGO_CACHE_HEADERS)
+
+    # TUDO QUE BLOQUEIA VAI PRO THREADPOOL.
+    #
+    # Este handler e' `async`, entao qualquer coisa sincrona aqui dentro trava o
+    # event loop -- e com um worker so' (ver Dockerfile) isso e' o site inteiro
+    # parado. Leitura de disco e' rapida mas nao e' de graca quando sao 20
+    # escudos de uma vez; `_reduzir_logo` e' LANCZOS + quantize do Pillow, que e'
+    # CPU pura e chegava a segundos por escudo em cache frio.
+    cached = await run_in_threadpool(_ler_cache_logo, cache_path)
+    if cached is not None:
+        return Response(cached, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
 
     url = f"{_LOGO_BASE}/{kind}s/{item_id}.png"
     try:
         async with httpx.AsyncClient(timeout=8.0) as client:
             r = await client.get(url)
             if r.status_code == 200 and r.content:
-                conteudo = _reduzir_logo(r.content)
-                cache_path.write_bytes(conteudo)
+                conteudo = await run_in_threadpool(_reduzir_logo, r.content)
+                await run_in_threadpool(_gravar_cache_logo, cache_path, conteudo)
                 return Response(conteudo, media_type="image/png", headers=_LOGO_CACHE_HEADERS)
     except Exception:
         pass

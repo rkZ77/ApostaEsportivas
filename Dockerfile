@@ -25,4 +25,9 @@ COPY --from=frontend /frontend/dist ./dist
 ENV PIPELINE_SRC_PATH=/app/pipeline
 # pipeline incluido em /app/pipeline
 EXPOSE 8000
-CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --proxy-headers --forwarded-allow-ips=*
+# WEB_CONCURRENCY controla quantos processos servem o site. Fica em 1 por padrao
+# (o comportamento de sempre) porque subir isto multiplica a memoria E as
+# conexoes com o Supabase: cada worker tem o SEU pool de DB_POOL_MAX. Antes de
+# passar pra 2, conferir o limite de conexoes do plano e dividir DB_POOL_MAX
+# pelo numero de workers.
+CMD uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000} --workers ${WEB_CONCURRENCY:-1} --proxy-headers --forwarded-allow-ips=*

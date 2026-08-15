@@ -945,6 +945,34 @@ def _enrich_leg(fid: int, market: str, line: str,
 @router.get("/fixture/{fixture_id}/live-stats")
 def get_fixture_live_stats(fixture_id: int, current_user: dict = Depends(get_current_user)):
     """Retorna estatísticas ao vivo de um jogo (escanteios, chutes, cartões, posse)."""
+    return _montar_live_stats(fixture_id)
+
+
+@router.get("/live-stats")
+def get_live_stats_bulk(fixture_ids: str, current_user: dict = Depends(get_current_user)):
+    """Mesma coisa que a rota acima, para varios jogos de uma vez.
+
+    A tela de Jogos abria UMA requisicao por partida ao vivo, a cada 30
+    segundos. Numa rodada com oito jogos simultaneos eram oito requisicoes por
+    ciclo, cada uma passando pela checagem de sessao e por um slot do pool.
+
+    Aqui o `_fetch_fixtures_bulk` pre-aquece o cache de todas as partidas numa
+    chamada so' a API-Football (ate' 20 por vez, limite deles), e o resto sai do
+    cache. Mesmo formato de resposta da rota individual, chaveado por id em
+    texto -- igual /is-live faz.
+    """
+    try:
+        fids = [int(x) for x in fixture_ids.split(",") if x.strip()]
+    except ValueError:
+        return {}
+    fids = fids[:50]
+    if not fids:
+        return {}
+    _fetch_fixtures_bulk(fids)
+    return {str(fid): _montar_live_stats(fid) for fid in fids}
+
+
+def _montar_live_stats(fixture_id: int) -> dict:
     data = _fetch_fixture(fixture_id)
     if not data:
         return {}

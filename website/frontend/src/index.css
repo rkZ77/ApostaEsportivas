@@ -75,9 +75,28 @@
     scroll-padding-top: 5rem;
   }
 
-  /* Quem prefere menos movimento não deve levar rolagem animada. */
+  /*
+   * Quem prefere menos movimento não deve levar rolagem animada · nem nenhuma
+   * outra.
+   *
+   * Antes isto só desligava o scroll suave, e o resto do site continuava
+   * animando: os `animate-pulse` dos esqueletos, os `animate-ping` de "ao vivo"
+   * e as transições do framer-motion. São animações INFINITAS, então enquanto
+   * uma estiver na tela o navegador não descansa entre quadros · no iPhone isso
+   * é bateria e é folga a menos pro scroll.
+   *
+   * 0.01ms em vez de 0s de propósito: um `animationend` que nunca dispara
+   * trava componente que espera o fim da animação pra seguir.
+   */
   @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto; }
+
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
   }
 
   body {

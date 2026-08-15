@@ -2,6 +2,7 @@ import os
 import time
 import logging
 import requests
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import Optional
@@ -127,61 +128,82 @@ def get_today_fixtures(
     next_utc_date = (local_dt + timedelta(days=1)).strftime("%Y-%m-%d")
     utc_dates_to_query = [target_brt, next_utc_date]
 
+    # A CONEXAO NAO ATRAVESSA AS CHAMADAS EXTERNAS.
+    #
+    # Antes era uma so', aberta aqui e fechada no fim, com `nº de ligas x 2`
+    # chamadas HTTP a API-Football no meio. Com 15 ligas sao 30 chamadas de ate'
+    # 10s de timeout cada, e o slot do pool (que tem 10 no total, ver
+    # database.py:87-91) ficava presso o tempo todo. Um usuario nessa tela com o
+    # cache frio tirava capacidade do site inteiro.
+    #
+    # Agora sao duas conexoes curtas, uma antes e outra depois. Com o pool, pegar
+    # de volta custa perto de nada; segurar por dez segundos custava caro.
     conn = get_connection()
     cur  = conn.cursor()
-    cur.execute("SELECT league_id, name, season FROM leagues ORDER BY league_id")
-    leagues = cur.fetchall()
+    try:
+        cur.execute("SELECT league_id, name, season FROM leagues ORDER BY league_id")
+        leagues = [dict(r) for r in cur.fetchall()]
+    finally:
+        cur.close(); conn.close()
 
     if not leagues:
-        cur.close(); conn.close()
         return []
+
+    # EM PARALELO, e nao em serie. Sao chamadas independentes esperando rede: o
+    # tempo total passa a ser o da mais lenta, nao a soma de todas. O teto de 8
+    # e' pra nao levar rate limit da API-Football num pico.
+    tarefas = [(row, utc_date) for row in leagues for utc_date in utc_dates_to_query]
+    with ThreadPoolExecutor(max_workers=min(8, len(tarefas))) as pool:
+        respostas = list(pool.map(
+            lambda t: (t[0], _fetch_by_utc_date(t[0]["league_id"], t[0]["season"], t[1])),
+            tarefas,
+        ))
 
     seen_ids: set[int] = set()
     all_fixtures: list[dict] = []
 
-    for row in leagues:
-        for utc_date in utc_dates_to_query:
-            items = _fetch_by_utc_date(row["league_id"], row["season"], utc_date)
-            for item in items:
-                fid = item["fixture"]["id"]
-                if fid in seen_ids:
-                    continue
-                if _brt_date_of(item) != target_brt:
-                    continue
-                seen_ids.add(fid)
-                all_fixtures.append(_parse_fixture(item, row["name"]))
+    # A ordem de `tarefas` e' a de `leagues`, e `pool.map` preserva ordem, entao
+    # o desempate de fixture repetida em duas ligas continua sendo o de antes.
+    for row, items in respostas:
+        for item in items:
+            fid = item["fixture"]["id"]
+            if fid in seen_ids:
+                continue
+            if _brt_date_of(item) != target_brt:
+                continue
+            seen_ids.add(fid)
+            all_fixtures.append(_parse_fixture(item, row["name"]))
 
     # Marca quais fixtures têm pick cadastrado para o dia
     if all_fixtures:
-        fixture_ids = [f["fixture_id"] for f in all_fixtures]
-        placeholders = ",".join(["%s"] * len(fixture_ids))
-        cur.execute(f"""
-            SELECT fixture_id, market, 'free' AS pick_type FROM picks_free
-            WHERE fixture_id IN ({placeholders}) AND match_date = %s
-            UNION ALL
-            SELECT fixture_id, market, 'vip' AS pick_type FROM picks_vip
-            WHERE fixture_id IN ({placeholders}) AND match_date = %s
-        """, fixture_ids + [target_brt] + fixture_ids + [target_brt])
-        picks_map: dict[int, dict] = {}
-        for r in cur.fetchall():
-            fid = r["fixture_id"]
-            # prefere vip se houver os dois
-            if fid not in picks_map or picks_map[fid]["pick_type"] == "free":
-                picks_map[fid] = {"market": r["market"], "pick_type": r["pick_type"]}
+        conn = get_connection()
+        cur  = conn.cursor()
+        try:
+            fixture_ids = [f["fixture_id"] for f in all_fixtures]
+            placeholders = ",".join(["%s"] * len(fixture_ids))
+            cur.execute(f"""
+                SELECT fixture_id, market, 'free' AS pick_type FROM picks_free
+                WHERE fixture_id IN ({placeholders}) AND match_date = %s
+                UNION ALL
+                SELECT fixture_id, market, 'vip' AS pick_type FROM picks_vip
+                WHERE fixture_id IN ({placeholders}) AND match_date = %s
+            """, fixture_ids + [target_brt] + fixture_ids + [target_brt])
+            picks_map: dict[int, dict] = {}
+            for r in cur.fetchall():
+                fid = r["fixture_id"]
+                # prefere vip se houver os dois
+                if fid not in picks_map or picks_map[fid]["pick_type"] == "free":
+                    picks_map[fid] = {"market": r["market"], "pick_type": r["pick_type"]}
+        finally:
+            # try/finally novo: sem ele, um erro aqui devolvia a conexao pro pool
+            # so' quando o coletor de lixo passasse -- e o pool tem 10 slots.
+            cur.close(); conn.close()
 
         for f in all_fixtures:
             pick = picks_map.get(f["fixture_id"])
             f["has_pick"]    = pick is not None
             f["pick_market"] = pick["market"] if pick else None
             f["pick_type_flag"] = pick["pick_type"] if pick else None
-    else:
-        for f in all_fixtures:
-            f["has_pick"] = False
-            f["pick_market"] = None
-            f["pick_type_flag"] = None
-
-    cur.close()
-    conn.close()
 
     all_fixtures.sort(key=lambda x: x["match_datetime"] or "")
     return all_fixtures

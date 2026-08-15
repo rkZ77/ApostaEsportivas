@@ -1,17 +1,34 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode, useEffect, useState } from 'react'
-import { AnimatePresence } from 'framer-motion'
-import { Spinner } from './components/ui'
+import { lazy, Suspense, Component, ReactNode, useEffect } from 'react'
+import Spinner from './components/ui/Spinner'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { NotificationProvider, useNotifications } from './context/NotificationContext'
-import AgenteButton from './components/AgenteButton'
-import CookieBanner from './components/CookieBanner'
-import UpdateBanner from './components/UpdateBanner'
-import ErrorToast from './components/ErrorToast'
-import PushPromptBanner from './components/PushPromptBanner'
-import MonthlyCloseModal from './components/MonthlyCloseModal'
+import { NotificationProvider } from './context/NotificationContext'
 import TopProgressBar from './components/TopProgressBar'
+
+/*
+ * O QUE PODE SER IMPORTADO NO TOPO DESTE ARQUIVO.
+ *
+ * Só o que precisa existir antes do primeiro pixel. Tudo aqui em cima entra no
+ * chunk `index`, que toda página baixa e executa antes de renderizar qualquer
+ * coisa · inclusive Termos, Privacidade e o link público de pick compartilhado.
+ *
+ * Até 14/08 as sobreposições abaixo eram importadas aqui, e todas usam
+ * framer-motion. Resultado: `vendor-motion` (43,8 KB comprimidos, medidos no
+ * build) no caminho crítico de todas as telas, cerca de um quarto do JavaScript
+ * da Home, para um banner de cookie e um popup mensal.
+ *
+ * Nenhuma delas é necessária para a primeira pintura, então todas viraram
+ * `lazy()` com fallback nulo: aparecem no quadro seguinte, sem segurar a tela.
+ * O TopProgressBar fica de fora de propósito · ele existe pra medir a troca de
+ * rota, então tem que estar montado desde o começo.
+ */
+const AgenteButton     = lazy(() => import('./components/AgenteButton'))
+const CookieBanner     = lazy(() => import('./components/CookieBanner'))
+const UpdateBanner     = lazy(() => import('./components/UpdateBanner'))
+const ErrorToast       = lazy(() => import('./components/ErrorToast'))
+const PushPromptBanner = lazy(() => import('./components/PushPromptBanner'))
+const GlobalModals     = lazy(() => import('./components/GlobalModals'))
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -115,43 +132,6 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return <Navigate to="/picks" replace />
 }
 
-// Rotas onde o fechamento pode pular na frente do usuário. Lista de permissão,
-// não de bloqueio: GlobalModals vive fora do <Routes>, então sem isso o popup
-// aparece em TUDO · landing, blog, termos, link público de pick compartilhado.
-// Quem está logado e cai na home (admin não é redirecionado pra /picks) levava
-// o modal por cima da página de vendas. /checkout fica de fora de propósito:
-// não se interrompe um pagamento em andamento.
-const MONTHLY_CLOSE_ROUTES = [
-  '/picks', '/banca', '/meus-picks', '/fixtures', '/estatisticas', '/agente', '/profile', '/admin',
-]
-
-function GlobalModals() {
-  const { user, isAdmin } = useAuth()
-  const { pathname } = useLocation()
-  // ?preview=monthly renderiza o modal com dados FABRICADOS (ferramenta de
-  // ajuste visual). Restrito a admin: qualquer usuário logado conseguia abrir
-  // e printar um fechamento de +R$ 187,50 que nunca existiu.
-  const isPreview = isAdmin && new URLSearchParams(window.location.search).get('preview') === 'monthly'
-  const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose } = useNotifications()
-
-  const inAppRoute = MONTHLY_CLOSE_ROUTES.some(r => pathname === r || pathname.startsWith(`${r}/`))
-
-  // Abre sozinho no primeiro acesso depois da virada do mês. O gatilho é a
-  // notificação do servidor ainda não lida, então isso vale por conta (não por
-  // navegador) e fechar o popup não apaga mais o fechamento: ele continua no
-  // sino até a banca ser confirmada.
-  useEffect(() => {
-    if (!user) return
-    if (isPreview || (pendingMonthlyClose && inAppRoute)) openMonthlyClose()
-  }, [user?.id, pendingMonthlyClose?.id, inAppRoute, isPreview, openMonthlyClose])
-
-  return (
-    <AnimatePresence>
-      {monthlyCloseOpen && <MonthlyCloseModal onClose={closeMonthlyClose} />}
-    </AnimatePresence>
-  )
-}
-
 // Redireciona apenas usuários recém-cadastrados para /como-funciona
 function FirstLoginRedirect() {
   const { user } = useAuth()
@@ -176,13 +156,20 @@ export default function App() {
               pra conseguir medi-la. Dentro, ela seria desmontada junto com a
               página que está saindo. */}
           <TopProgressBar />
-          <AgenteButton />
-          <CookieBanner />
-          <UpdateBanner />
-          <ErrorToast />
-          <PushPromptBanner />
-          <GlobalModals />
           <FirstLoginRedirect />
+
+          {/* Sobreposições · fallback nulo de propósito. Nenhuma delas participa
+              da primeira pintura, então não deve existir spinner reservando
+              espaço por elas: entram no quadro seguinte, sem piscar nada. */}
+          <Suspense fallback={null}>
+            <AgenteButton />
+            <CookieBanner />
+            <UpdateBanner />
+            <ErrorToast />
+            <PushPromptBanner />
+            <GlobalModals />
+          </Suspense>
+
           <RouteErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>

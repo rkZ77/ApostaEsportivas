@@ -30,7 +30,10 @@ export default function FinalCTA() {
           {/* Luz difusa subindo do rodapé do bloco. Decorativa. */}
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -bottom-24 left-1/2 -translate-x-1/2 w-[420px] h-[220px] bg-accent/15 blur-[90px] rounded-full"
+            /* Mesmo motivo do hero da Home: radial-gradient no lugar de
+               blur-[90px], que criava camada e filtro no Safari iOS. */
+            className="pointer-events-none absolute -bottom-40 left-1/2 -translate-x-1/2 w-[640px] h-[400px]"
+            style={{ background: 'radial-gradient(50% 50% at 50% 50%, rgb(var(--accent) / 0.15), transparent 70%)' }}
           />
           <div
             aria-hidden="true"

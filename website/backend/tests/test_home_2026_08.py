@@ -524,10 +524,32 @@ def test_mercados_usam_a_mesma_janela_dos_outros_tipos():
 
 def test_mercados_sabem_se_ja_foram_apostados():
     """Sem is_followed o card nao sabe que a aposta ja foi registrada e o
-    botao "Apostar" reaparece como se nada tivesse acontecido."""
+    botao "Apostar" reaparece como se nada tivesse acontecido.
+
+    Este teste checava o LACO que fazia isso (`for _tipo in ("faltas",
+    "goleiros")` com `_ufp_map`). Em 14/08 os seis lookups de "ja segui" viraram
+    UMA consulta so' -- eram seis idas ao banco de 154ms cada -- entao o laco
+    deixou de existir sem que a garantia mudasse. A asercao passou a ser sobre a
+    garantia: os dois tipos entram na marcacao junto com os outros.
+    """
     corpo = _codigo("routers/suggestions.py", "get_today_suggestions")
-    assert 'for _tipo in ("faltas", "goleiros")' in corpo
-    assert '_ufp_map(_tipo' in corpo
+    for tipo in ("faltas", "goleiros"):
+        assert f'_marcar("{tipo}"' in corpo, f"{tipo} ficou de fora do is_followed"
+        assert f'_alvo("{tipo}"' in corpo, f"{tipo} nao entra na consulta de seguidos"
+
+
+def test_today_nao_repete_consulta_de_faltas_e_goleiros():
+    """As duas tabelas eram consultadas DUAS vezes por requisicao: uma dentro do
+    `if is_vip:` e outra num laco generico cem linhas abaixo, que sobrescrevia a
+    primeira. Com os _ufp_map junto eram quatro idas ao banco (154ms cada) cujo
+    resultado nunca chegava no navegador -- e a versao que vencia era a generica,
+    que nao trazia player_name/team_name, entao o card de goleiros perdia o nome
+    do jogador no caminho."""
+    corpo = _codigo("routers/suggestions.py", "get_today_suggestions")
+    assert corpo.count("FROM picks_faltas") == 1
+    assert corpo.count("FROM picks_goleiros") == 1
+    # a consulta que sobrou e' a tipada, a unica que tem as colunas de goleiro
+    assert "pg.player_name" in corpo
 
 
 # ─────────────────────────── Favoritos, fora ───────────────────────────

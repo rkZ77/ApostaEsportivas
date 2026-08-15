@@ -38,6 +38,7 @@ from auth_utils import (
     set_auth_cookies, set_access_cookie, clear_auth_cookies,
     get_current_user, decode_token,
     REFRESH_COOKIE_NAME, COOKIE_NAME, oauth2_scheme,
+    invalidar_cache_usuario,
 )
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
@@ -587,6 +588,7 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         cur.execute("UPDATE users SET session_token=%s WHERE id=%s",
                     (hashlib.sha256(session_id.encode()).hexdigest(), user["id"]))
         conn.commit()
+        invalidar_cache_usuario(user["id"])
 
         user["plan"] = plan_final
         user["expires_at"] = expires_final
@@ -661,6 +663,9 @@ def login(body: LoginBody, response: Response, request: Request):
             (hashlib.sha256(session_id.encode()).hexdigest(), device, user["id"])
         )
         conn.commit()
+        # Sem isto, a sessao do aparelho ANTIGO sobreviveria ate o TTL do cache
+        # em auth_utils -- o "voce foi desconectado" chegaria 30s atrasado.
+        invalidar_cache_usuario(user["id"])
 
         # Aviso de plano perto de vencer · sino + e-mail, uma vez por faixa
         # (ver plan_expiry.py). Fica no login porque este backend nao tem mais
@@ -763,6 +768,7 @@ def logout(request: Request, response: Response, bearer: str | None = Depends(oa
                     (hashlib.sha256(secrets.token_hex(32).encode()).hexdigest(), user_id),
                 )
                 conn.commit()
+                invalidar_cache_usuario(user_id)
             finally:
                 cur.close(); conn.close()
     clear_auth_cookies(response)
@@ -1111,6 +1117,7 @@ def _reissue_tokens_for_user(response: Response, user_id: int, name: str, email:
         )
         u = cur.fetchone()
         conn.commit()
+        invalidar_cache_usuario(user_id)
         token_data = {
             "sub": str(user_id), "id": user_id,
             "name": name, "email": email,
@@ -1301,6 +1308,7 @@ def reset_password(body: ResetPasswordBody):
             (hash_password(body.new_password), new_session_token, row["id"]),
         )
         conn.commit()
+        invalidar_cache_usuario(row["id"])
         return {"ok": True}
     finally:
         cur.close(); conn.close()

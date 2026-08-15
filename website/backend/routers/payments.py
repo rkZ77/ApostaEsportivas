@@ -9,7 +9,7 @@ from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 import mercadopago
-from auth_utils import get_current_user
+from auth_utils import get_current_user, invalidar_cache_usuario
 from database import get_connection
 
 logger = logging.getLogger(__name__)
@@ -379,6 +379,13 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
             )
 
         conn.commit()
+        # O usuario acabou de pagar e esta olhando a tela: sem isto ele
+        # continuaria vendo o site como free ate o TTL do cache de sessao
+        # expirar (auth_utils). O referrer entra junto porque o credito de
+        # indicacao tambem pode ter promovido ele a VIP agora.
+        invalidar_cache_usuario(user_id_int)
+        if ref_row:
+            invalidar_cache_usuario(ref_row["referred_by"])
         logger.info("[PAYMENTS] VIP ativado para user_id=%s email=%s", user_id, user_email)
     finally:
         cur.close()

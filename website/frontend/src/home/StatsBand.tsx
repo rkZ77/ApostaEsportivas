@@ -21,6 +21,8 @@ export interface PublicSummary {
   reds: number
   profit: number
   roi: number
+  /** Ligas distintas com pick resolvido · vem do mesmo SELECT do resumo. */
+  leagues_count?: number
 }
 
 export default function StatsBand({
@@ -29,7 +31,7 @@ export default function StatsBand({
   loaded,
 }: {
   summary: PublicSummary | null
-  /** by_league.length da mesma resposta. */
+  /** summary.leagues_count da mesma resposta. */
   leaguesCount: number
   loaded: boolean
 }) {
