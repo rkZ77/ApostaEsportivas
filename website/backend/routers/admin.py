@@ -1,6 +1,7 @@
 import os
 import sys
 import asyncio
+import json
 import logging
 from collections import deque
 from datetime import datetime, timezone
@@ -1172,6 +1173,123 @@ def admin_picks_pendentes(
             },
             "itens": itens[:100],
         }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/picks/reparar-pernas")
+def admin_reparar_pernas(
+    limit: int = Query(20, ge=1, le=100),
+    dry_run: bool = Query(True),
+    current_user: dict = Depends(require_admin),
+):
+    """Recalcula o resultado de CADA perna das múltiplas já liquidadas.
+
+    Conserta o estrago do bug corrigido em fae4ccc: quatro call sites fechavam
+    o bilhete com `["RED"] * len(legs)` e esse carimbo era gravado no JSONB
+    `games`, marcando RED até em perna que ganhou ou que nem tinha jogado. A
+    correção de lá vale só pra bilhete novo · linha já gravada continua errada,
+    e é isso que esta rota alcança.
+
+    DUAS COISAS QUE ELA NÃO FAZ, de propósito:
+
+    · não toca em `result` nem em `profit` do bilhete. O bilhete estava certo
+      (uma perna RED mata a múltipla) e o dinheiro dele já entrou na banca de
+      quem seguiu. Reescrever isso mexeria em saldo por causa de um bug de
+      exibição.
+    · não alcança alavancagem, porque lá nunca houve o que corromper:
+      `_save_alavancagem_result` nunca gravou resultado por perna.
+
+    Custa chamada de API (uma fixture por perna), então tem `limit` e começa em
+    `dry_run` · quem repara histórico sem ver antes o que vai mudar acaba
+    descobrindo o alcance depois.
+    """
+    from routers.live import _enrich_leg, _fetch_fixtures_bulk, _locked_leg_result
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, games, result, match_date
+              FROM picks_multiplas
+             WHERE result IS NOT NULL AND games IS NOT NULL
+             ORDER BY match_date DESC, id DESC
+             LIMIT %s
+        """, (limit,))
+        bilhetes = [dict(r) for r in cur.fetchall()]
+
+        # Aquece o cache de fixtures de uma vez só · uma chamada por perna, em
+        # série, é o que transforma um reparo de 20 bilhetes em minutos.
+        fids = []
+        for b in bilhetes:
+            pernas = b["games"]
+            if isinstance(pernas, str):
+                try: pernas = json.loads(pernas)
+                except Exception: continue
+            if isinstance(pernas, list):
+                fids += [p.get("fixture_id") for p in pernas
+                         if isinstance(p, dict) and p.get("fixture_id")]
+        if fids:
+            _fetch_fixtures_bulk(fids)
+
+        mudancas, corrigidos = [], 0
+        for b in bilhetes:
+            pernas = b["games"]
+            if isinstance(pernas, str):
+                try: pernas = json.loads(pernas)
+                except Exception: continue
+            if not isinstance(pernas, list) or not pernas:
+                continue
+
+            antes  = [p.get("result") if isinstance(p, dict) else None for p in pernas]
+            depois = []
+            for p in pernas:
+                if not isinstance(p, dict) or not p.get("fixture_id"):
+                    depois.append(p.get("result") if isinstance(p, dict) else None)
+                    continue
+                try:
+                    leg = _enrich_leg(
+                        p["fixture_id"], p.get("market", ""), p.get("line", ""),
+                        p.get("home") or p.get("home_team") or "",
+                        p.get("away") or p.get("away_team") or "",
+                        p.get("home_team_id"), p.get("away_team_id"),
+                        float(p.get("odd", 1)), market_type=p.get("market_type"),
+                    )
+                    depois.append(_locked_leg_result(leg))
+                except Exception as e:
+                    logger.warning("[REPARO] perna do bilhete %s falhou: %s", b["id"], e)
+                    depois.append(p.get("result"))
+
+            if antes == depois:
+                continue
+            mudancas.append({
+                "pick_id":    b["id"],
+                "match_date": str(b["match_date"]) if b["match_date"] else None,
+                "bilhete":    b["result"],
+                "antes":      antes,
+                "depois":     depois,
+            })
+            if not dry_run:
+                for p, r in zip(pernas, depois):
+                    if isinstance(p, dict):
+                        p["result"] = r
+                cur.execute("UPDATE picks_multiplas SET games = %s WHERE id = %s",
+                            (json.dumps(pernas, default=str), b["id"]))
+                corrigidos += 1
+
+        if not dry_run:
+            conn.commit()
+        return {
+            "dry_run":     dry_run,
+            "analisados":  len(bilhetes),
+            "divergentes": len(mudancas),
+            "corrigidos":  corrigidos,
+            "mudancas":    mudancas[:50],
+        }
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()

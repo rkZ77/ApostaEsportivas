@@ -9,6 +9,7 @@ import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
+import AdminPendencias from '../components/AdminPendencias'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -103,6 +104,7 @@ const ABAS = [
   { key: 'ia',         label: 'IA'          },
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
+  { key: 'pendencias', label: 'Pendências'  },
   { key: 'ligas',      label: 'Ligas'       },
   { key: 'casas',      label: 'Casas'       },
 ] as const
@@ -701,6 +703,8 @@ export default function Admin() {
         </>)}
 
         {aba === 'live' && <AdminMotorLive />}
+
+        {aba === 'pendencias' && <AdminPendencias />}
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
