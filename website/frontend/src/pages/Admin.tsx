@@ -105,7 +105,6 @@ const ABAS = [
   { key: 'ia',         label: 'IA'          },
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
-  { key: 'pendencias', label: 'Pendências'  },
   { key: 'ligas',      label: 'Ligas'       },
   { key: 'casas',      label: 'Casas'       },
 ] as const
@@ -705,8 +704,6 @@ export default function Admin() {
 
         {aba === 'live' && <AdminMotorLive />}
 
-        {aba === 'pendencias' && <AdminPendencias />}
-
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
         {aba === 'visao' && (<>
@@ -1117,6 +1114,7 @@ export default function Admin() {
         </>)}
 
         {aba === 'picks' && (<>
+        <AdminPendencias />
         {/* Ações de resultado. Os dois endpoints já existiam no backend desde
             que o scheduler foi removido, mas não tinham botão nenhum -- só
             dava pra chamar por fora. Sem scheduler, esta é a única forma de

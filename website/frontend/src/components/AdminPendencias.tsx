@@ -181,8 +181,32 @@ export default function AdminPendencias() {
             Nada pendente. Tudo que já jogou foi liquidado.
           </p>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table className="w-full text-[11px] min-w-[620px]">
+          <>
+          {/* Celular: cartao por pick. A tabela de seis colunas so cabia com
+              rolagem lateral, e rolagem lateral dentro de pagina que ja rola
+              pra baixo e a forma mais rapida de perder a linha que se estava
+              lendo. O site e usado muito mais no celular que no PC. */}
+          <ul className="sm:hidden divide-y divide-line/60 -mx-1">
+            {dados.itens.map(i => (
+              <li key={`m-${i.pick_type}-${i.id}`} className="py-3 px-1">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[12px] text-ink-2 font-semibold leading-snug">
+                    {i.home_team} x {i.away_team}
+                  </span>
+                  <span className={`text-[10px] font-bold shrink-0 ${COR_MOTIVO[i.motivo] ?? 'text-ink-3'}`}>
+                    {i.motivo}
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink-3 mt-0.5">{i.market} {i.line}</p>
+                <p className="text-[10px] text-ink-4 font-mono mt-0.5">
+                  {i.match_date} · {i.pick_type} · fixture {i.fixture_id ?? 'sem'}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden sm:block overflow-x-auto -mx-4 px-4">
+            <table className="w-full text-[11px]">
               <thead>
                 <tr className="text-ink-4 text-left border-b border-line">
                   <th className="pb-2 font-medium">Data</th>
@@ -211,6 +235,7 @@ export default function AdminPendencias() {
               </tbody>
             </table>
           </div>
+          </>
         )}
         {/* Fixture que a API não conhece nunca vai resolver sozinha, e fica
             pedindo sync a cada rodada do checker. Vale o aviso separado. */}

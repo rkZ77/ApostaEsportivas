@@ -310,8 +310,36 @@ export default function AdminMotorLive() {
             tabela <span className="font-mono">picks_live</span> nem existe, e dry run não grava nada de propósito.
           </p>
         ) : (
-          <div className="overflow-x-auto -mx-4 px-4">
-            <table className="w-full text-[11px] min-w-[640px]">
+          <>
+          {/* Mesma razao da aba Pendencias: seis colunas nao cabem no celular,
+              e rolagem lateral dentro de pagina que rola pra baixo faz perder a
+              linha que se estava lendo. */}
+          <ul className="sm:hidden divide-y divide-line/60">
+            {picks.map(p => (
+              <li key={`m-${p.id}`} className="py-3">
+                <div className="flex items-start justify-between gap-2">
+                  <span className="text-[12px] text-ink-2 font-semibold leading-snug">
+                    {p.home_team_name} x {p.away_team_name}
+                  </span>
+                  <span className={`text-[10px] font-bold shrink-0 ${
+                    p.result === 'GREEN' ? 'text-green-400'
+                    : p.result === 'RED' ? 'text-red-400'
+                    : p.result ? 'text-ink-3'
+                    : 'text-amber-400'}`}>
+                    {p.result ?? (p.expiration_reason ? 'expirado' : 'aberto')}
+                  </span>
+                </div>
+                <p className="text-[11px] text-ink-3 mt-0.5">{p.market} {p.line}</p>
+                <p className="text-[10px] text-ink-4 font-mono mt-0.5">
+                  {p.minute_at_creation}&#39; · odd {Number(p.odd).toFixed(2)}
+                  {p.ev !== null && p.ev !== undefined && <> · EV {(Number(p.ev) * 100).toFixed(1)}%</>}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          <div className="hidden sm:block overflow-x-auto -mx-4 px-4">
+            <table className="w-full text-[11px]">
               <thead>
                 <tr className="text-ink-4 text-left border-b border-line">
                   <th className="pb-2 font-medium">Jogo</th>
@@ -350,6 +378,7 @@ export default function AdminMotorLive() {
               </tbody>
             </table>
           </div>
+          </>
         )}
       </div>
     </div>
