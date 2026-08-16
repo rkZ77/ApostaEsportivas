@@ -31,7 +31,9 @@ import ferramentas
 from cenas import CENAS, NARRACAO, falas_da_cena
 
 AQUI = Path(__file__).parent
-VOZ_PADRAO = "pt-BR-AntonioNeural"
+# Thalita é o modelo multilíngue, mais novo que Antonio e Francisca, e soa
+# menos sintético. Trocar com --voz; `--vozes` lista as opções.
+VOZ_PADRAO = "pt-BR-ThalitaMultilingualNeural"
 
 # Um pouco mais devagar que o padrão: o texto tem número e nome de time, e a
 # leitura corrida come a dicção justamente nessas partes.
