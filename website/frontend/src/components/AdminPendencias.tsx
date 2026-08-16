@@ -18,6 +18,7 @@ import { Spinner } from './ui'
  */
 
 interface Item {
+  travado: boolean
   pick_type: string
   id: number
   home_team: string | null
@@ -33,6 +34,7 @@ interface Dados {
   total: number
   simples: number
   travados: number
+  aguardando_jogo: number
   horas_de_corte: number
   bilhetes: Record<string, number>
   por_motivo: Record<string, number>
@@ -88,9 +90,10 @@ export default function AdminPendencias() {
       {/* Cards no mesmo formato da Visão geral */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {[
-          { l: 'Pendentes',       v: dados?.total ?? 0 },
+          { l: 'Aguardando o jogo', v: dados?.aguardando_jogo ?? 0,
+            sub: 'normal, ainda vai rolar' },
           { l: 'Travados',        v: dados?.travados ?? 0,
-            sub: `mais de ${dados?.horas_de_corte ?? 4}h`,
+            sub: `passou de ${dados?.horas_de_corte ?? 4}h do jogo`,
             c: (dados?.travados ?? 0) > 0 ? 'text-amber-400' : 'text-ink-1' },
           { l: 'Sem folha',       v: dados?.por_motivo?.['sem folha do jogo'] ?? 0,
             sub: 'esperando o collector' },
@@ -116,9 +119,16 @@ export default function AdminPendencias() {
               <Wrench className="w-3.5 h-3.5" /> Reparo das pernas de múltipla
             </h3>
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed">
-              Bilhete fechado antes da correção carimbava RED em toda perna, inclusive nas que
-              ganharam. Isto recalcula perna a perna e reescreve só o detalhe,
-              sem tocar no resultado nem no lucro do bilhete.
+              Havia um bug que, ao fechar uma múltipla no RED, marcava RED em <b>todas</b> as
+              pernas dela, inclusive nas que ganharam ou nem tinham jogado. O bilhete estava
+              certo (uma perna perdida mata a múltipla), o detalhe é que estava errado.
+              <br /><br />
+              Este botão relê cada perna dos bilhetes já fechados e reescreve só o detalhe.
+              Ele <b>não</b> mexe no resultado nem no lucro do bilhete, então sua banca não
+              muda. Simular mostra o que ele faria; nada é gravado até você aplicar.
+              <br /><br />
+              <span className="text-ink-3">Se der "0 com perna divergente", está tudo certo
+              e não há nada para reparar.</span>
             </p>
           </div>
           <button onClick={buscar} className="shrink-0 text-ink-4 hover:text-ink-1 transition-colors" aria-label="Atualizar">
@@ -193,8 +203,8 @@ export default function AdminPendencias() {
                   <span className="text-[12px] text-ink-2 font-semibold leading-snug">
                     {i.home_team} x {i.away_team}
                   </span>
-                  <span className={`text-[10px] font-bold shrink-0 ${COR_MOTIVO[i.motivo] ?? 'text-ink-3'}`}>
-                    {i.motivo}
+                  <span className={`text-[10px] font-bold shrink-0 ${i.travado ? (COR_MOTIVO[i.motivo] ?? 'text-ink-3') : 'text-ink-4'}`}>
+                    {i.travado ? i.motivo : 'aguardando'}
                   </span>
                 </div>
                 <p className="text-[11px] text-ink-3 mt-0.5">{i.market} {i.line}</p>
@@ -227,8 +237,8 @@ export default function AdminPendencias() {
                     </td>
                     <td className="py-2 pr-2 text-ink-3 max-w-[150px] truncate">{i.market} {i.line}</td>
                     <td className="py-2 pr-2 text-ink-4 font-mono">{i.fixture_id ?? '·'}</td>
-                    <td className={`py-2 font-semibold ${COR_MOTIVO[i.motivo] ?? 'text-ink-3'}`}>
-                      {i.motivo}
+                    <td className={`py-2 font-semibold ${i.travado ? (COR_MOTIVO[i.motivo] ?? 'text-ink-3') : 'text-ink-4'}`}>
+                      {i.travado ? i.motivo : 'aguardando o jogo'}
                     </td>
                   </tr>
                 ))}

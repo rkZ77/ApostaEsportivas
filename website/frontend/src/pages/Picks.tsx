@@ -1344,22 +1344,28 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
     [picks, tipo],
   )
 
+  const vazio = !carregando && (!picks || picks.length === 0)
+
   return (
     <div>
       <SectionHeader color={cor} label={titulo} badge="VIP" />
-      <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>
+      {/* Explicacao so' quando ha o que explicar. Secao vazia nao precisa de
+          paragrafo sobre um mercado que nao esta ali. */}
+      {!vazio && <p className="text-xs text-ink-3 leading-relaxed mb-4">{explicacao}</p>}
       {carregando ? (
         <PickLoading />
-      ) : !picks || picks.length === 0 ? (
-        <div className="card">
-          <EmptyState
-            title={`Nenhum pick de ${titulo.toLowerCase()} ainda`}
-            description={tipo === 'goleiros'
-              ? 'Defesas é um mercado raro: aparece em menos de 1% dos jogos. Dia sem pick é o normal aqui.'
-              : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
-            compact
-          />
-        </div>
+      ) : vazio ? (
+        /* Uma linha, nao uma caixa. Defesas aparece em menos de 1% dos jogos,
+           entao o estado vazio dele e' o que se ve praticamente TODO dia -- e
+           uma caixa tracejada de 150px de altura anunciando "nao tem nada"
+           ocupava mais tela que a secao que tem pick. Dia sem pick aqui e' o
+           normal, e o normal nao merece destaque. */
+        <p className="text-xs text-ink-4 leading-relaxed mb-2">
+          Sem pick de {titulo.toLowerCase()} hoje.{' '}
+          {tipo === 'goleiros'
+            ? 'É um mercado raro, aparece em menos de 1% dos jogos.'
+            : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
+        </p>
       ) : (
         <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
           {cards.map(c => (
@@ -1946,10 +1952,11 @@ export default function Picks() {
                 </span>
               </span>
             )}
-            <span className="flex items-center gap-1.5">
-              <LiveDot />
-              <span className="text-accent text-xs font-bold">AO VIVO</span>
-            </span>
+            {/* O selo "AO VIVO" da barra saiu. Ele piscava permanentemente,
+                sem depender de existir jogo rolando, entao nao informava nada
+                e ainda competia com o badge AO VIVO de verdade, que fica no
+                card do pick cujo jogo comecou. Dois vermelhos piscando com
+                significados diferentes na mesma tela e' pior que nenhum. */}
           </>
         ),
       }}
@@ -2845,11 +2852,15 @@ export default function Picks() {
                             >
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1 flex-wrap mb-0.5">
-                                    <TeamLogo id={pick.home_team_id_1} name={pick.home_team_1 ?? ''} size={14} />
+                                  {/* Sem escudo aqui de proposito. picks_alavancagem
+                                      nao tem coluna de team_id: o id so' chega quando a
+                                      fixture ainda existe pra enriquecer, e fixture velha
+                                      e' purgada. O resultado era metade da lista com
+                                      escudo e metade sem, que le como imagem quebrada.
+                                      Nenhum escudo e' consistente; metade nao e'. */}
+                                  <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
                                     <span className="text-xs font-bold text-ink-1 truncate">{pick.home_team_1}</span>
                                     <span className="text-ink-4 text-[10px]">vs</span>
-                                    <TeamLogo id={pick.away_team_id_1} name={pick.away_team_1 ?? ''} size={14} />
                                     <span className="text-xs font-bold text-ink-1 truncate">{pick.away_team_1}</span>
                                   </div>
                                   <div className="text-[10px] text-ink-3">{date}</div>
