@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
@@ -8,7 +9,7 @@ import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
-import { backdropFade, drawerRight } from '../lib/motion'
+import { backdropFade, dialogScale } from '../lib/motion'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
 import AnalysisModal from './AnalysisModal'
 import { AnimatePresence } from 'framer-motion'
@@ -167,21 +168,21 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   })()
 
   return (
+    <>
     <motion.div
       variants={backdropFade}
       initial="hidden"
       animate="visible"
       exit="exit"
-      className="fixed inset-0 z-[60] flex"
+      className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 backdrop-blur-sm sm:p-4"
       onClick={onClose}
     >
-      {/* overlay */}
-      <div className="flex-1 bg-black/70 backdrop-blur-sm hidden sm:block" />
-
-      {/* panel · full screen mobile, side panel desktop */}
+      {/* Modal no meio da tela, nao gaveta lateral · o pedido era abrir igual
+          ao card da aba Hoje. No celular continua ocupando a tela inteira,
+          que e o unico jeito de caber. */}
       <motion.div
-        variants={drawerRight}
-        className="w-full sm:max-w-lg bg-surface-0 sm:border-l border-line flex flex-col overflow-hidden"
+        variants={dialogScale}
+        className="w-full h-full sm:h-auto sm:max-h-[90dvh] sm:max-w-lg bg-surface-0 sm:border border-line sm:rounded-lg flex flex-col overflow-hidden"
         onClick={e => e.stopPropagation()}
       >
         <div className="shrink-0 border-b border-line">
@@ -271,20 +272,11 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
           )}
         </div>
 
-        <div className="flex border-b border-line shrink-0">
-          {tabs.map(({ key, label, Icon }) => (
-            <button
-              key={key}
-              onClick={() => setTab(key)}
-              className={`tab flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[10px] font-bold ${
-                tab === key ? 'tab-active' : ''
-              }`}
-            >
-              <Icon className="w-3.5 h-3.5" />
-              {label}
-            </button>
-          ))}
-        </div>
+        {/* A barra de abas (Forma, Classificacao, Chat) saiu: o painel existe
+            pra mostrar O PICK, igual ao card da aba Hoje. Forma e Classificacao
+            vivem dentro do "Entenda esta analise", que e onde se vai quando a
+            pergunta e "por que". O Chat continua alcancavel no rodape -- ele so
+            existe aqui, e tirar a aba sem mais nada o apagaria do site. */}
 
         <div className="flex-1 overflow-y-auto p-5">
           {loading ? (
@@ -418,249 +410,17 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 </div>
               )}
 
-              {tab === 'form' && (
-                <div className="space-y-5">
-                  {[
-                    { name: s.home_team_name, teamId: s.home_team_id, recent: data.home_recent },
-                    { name: s.away_team_name, teamId: s.away_team_id, recent: data.away_recent },
-                  ].map(({ name, teamId, recent }) => {
-                    const logo = TEAM_LOGO(teamId)
-                    return (
-                      <div key={name}>
-                        {/* Time + forma */}
-                        <div className="flex items-center gap-2 mb-2">
-                          {logo && (
-                            <img src={logo} alt="" width={20} height={20} className="w-5 h-5 object-contain"
-                              onError={e => (e.currentTarget.style.display = 'none')} />
-                          )}
-                          <span className="text-xs font-bold text-ink-1 truncate">{name}</span>
-                          <div className="flex gap-1 ml-auto">
-                            {recent.length > 0
-                              ? recent.map((m: RecentMatch, i: number) => <FormBadge key={i} r={m.resultado} />)
-                              : <span className="text-xs text-ink-4">Sem dados</span>
-                            }
-                          </div>
-                        </div>
-
-                        {/* Jogos recentes */}
-                        <div className="space-y-1.5">
-                          {recent.length === 0 ? (
-                            <p className="text-xs text-ink-4 py-2">Sem jogos recentes</p>
-                          ) : recent.map((m: RecentMatch, i: number) => {
-                            const date = new Date(m.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                            const isHome = m.is_home
-                            return (
-                              <div key={i} className="flex items-center gap-2 bg-surface-1 rounded-lg px-3 py-2 border border-line/50">
-                                <FormBadge r={m.resultado} />
-                                <span className="text-[10px] text-ink-3 w-9 shrink-0">{date}</span>
-                                <span className="text-[10px] text-ink-4 shrink-0">{isHome ? 'C' : 'F'}</span>
-                                <span className="flex-1 text-xs text-ink-1 font-bold">{m.gf} – {m.ga}</span>
-                                <span className="text-[10px] text-ink-4">{m.corners_f}c</span>
-                                <span className="text-[10px] text-ink-4">{Number(m.total_goals).toFixed(0)}g</span>
-                              </div>
-                            )
-                          })}
-                        </div>
-                      </div>
-                    )
-                  })}
+              {/* Chat em recolhido, no fim. Era uma aba; sem ela e sem isto
+                  o recurso sumiria do site inteiro, porque este painel e o
+                  UNICO lugar que renderiza PickSocial. */}
+              <details className="mt-4 pt-4 border-t border-line">
+                <summary className="cursor-pointer text-xs font-bold text-ink-3 hover:text-ink-1 select-none flex items-center gap-1.5">
+                  <MessageCircle className="w-3.5 h-3.5" /> Comentários
+                </summary>
+                <div className="mt-3">
+                  <PickSocial pickId={id} pickType={pickType} />
                 </div>
-              )}
-
-              {tab === 'standings' && (
-                <div>
-                  {standingsLoading ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Spinner size="lg" />
-                    </div>
-                  ) : !standings || standings.groups.length === 0 ? (
-                    <p className="text-ink-3 text-center py-10 text-sm">Classificação não disponível.</p>
-                  ) : standings.groups.map((g: any, gi: number) => (
-                    <div key={gi} className={gi > 0 ? 'mt-6' : ''}>
-                      {standings.groups.length > 1 && (
-                        <p className="text-[10px] text-ink-3 mb-2 font-semibold">{g.group}</p>
-                      )}
-                      <div className="bg-surface-1 rounded-lg border border-line overflow-hidden">
-                        {/* Header */}
-                        <div className="grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-line text-[10px] text-ink-4 font-semibold">
-                          <span>#</span>
-                          <span>Time</span>
-                          <span className="text-center">Pts</span>
-                          <span className="text-center">J</span>
-                          <span className="text-center">V</span>
-                          <span className="text-center">E</span>
-                          <span className="text-center">SG</span>
-                        </div>
-                        {g.teams.map((t: any, i: number) => {
-                          const isHome = t.team_id === standings.home_team_id
-                          const isAway = t.team_id === standings.away_team_id
-                          const logo = t.team_id ? `/api/proxy/team/${t.team_id}.png` : null
-                          return (
-                            <div
-                              key={i}
-                              className={`grid grid-cols-[28px_1fr_32px_28px_28px_28px_28px] gap-1 px-3 py-2 border-b border-line/40 last:border-0 items-center ${
-                                isHome ? 'bg-green-500/8 border-l-2 border-l-green-500' :
-                                isAway ? 'bg-blue-500/8 border-l-2 border-l-blue-500' : ''
-                              }`}
-                            >
-                              <span className={`text-xs font-black ${isHome || isAway ? 'text-ink-1' : 'text-ink-3'}`}>{t.pos}</span>
-                              <div className="flex items-center gap-1.5 min-w-0">
-                                {logo && (
-                                  <img src={logo} alt="" width={16} height={16} className="w-4 h-4 object-contain shrink-0"
-                                    onError={e => (e.currentTarget.style.display = 'none')} />
-                                )}
-                                <span className={`text-xs truncate ${isHome ? 'text-green-400 font-bold' : isAway ? 'text-blue-400 font-bold' : 'text-ink-2'}`}>
-                                  {t.team}
-                                </span>
-                              </div>
-                              <span className={`text-xs font-black text-center ${isHome || isAway ? 'text-ink-1' : 'text-ink-2'}`}>{t.pts}</span>
-                              <span className="text-[11px] text-ink-3 text-center">{t.played}</span>
-                              <span className="text-[11px] text-green-500 text-center">{t.won}</span>
-                              <span className="text-[11px] text-ink-3 text-center">{t.draw}</span>
-                              <span className={`text-[11px] text-center font-semibold ${(t.gd ?? 0) > 0 ? 'text-green-400' : (t.gd ?? 0) < 0 ? 'text-red-400' : 'text-ink-3'}`}>
-                                {(t.gd ?? 0) > 0 ? '+' : ''}{t.gd}
-                              </span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div className="flex gap-3 mt-2 px-1">
-                        <span className="flex items-center gap-1 text-[10px] text-green-400"><span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />{s?.home_team_name}</span>
-                        <span className="flex items-center gap-1 text-[10px] text-blue-400"><span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />{s?.away_team_name}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {tab === 'caminho' && (
-                <div>
-                  {caminhoLoading ? (
-                    <div className="flex items-center justify-center h-40">
-                      <Spinner size="lg" tone="orange" />
-                    </div>
-                  ) : caminho.length === 0 ? (
-                    <p className="text-ink-3 text-center py-10 text-sm">Nenhum histórico disponível.</p>
-                  ) : (
-                    <div className="space-y-0">
-                      {/* Banca inicial */}
-                      {(() => {
-                        const first = caminho[caminho.length - 1]
-                        const startBankroll = first?.bankroll_before
-                        const lastDone = [...caminho].reverse().find(p => p.result)
-                        const currentBankroll = lastDone?.bankroll_after ?? startBankroll
-                        return (
-                          <div className="flex items-center gap-3 bg-orange-500/10 border border-orange-500/20 rounded-lg px-4 py-3 mb-4">
-                            <div className="w-8 h-8 rounded-full bg-orange-500/20 flex items-center justify-center shrink-0">
-                              <span className="text-orange-400 text-xs font-black">R$</span>
-                            </div>
-                            <div className="flex-1">
-                              <div className="text-[10px] text-ink-3">Banca atual da série</div>
-                              <div className="text-lg font-black text-orange-400">
-                                R${Number(currentBankroll ?? 0).toFixed(0)}
-                              </div>
-                            </div>
-                            {startBankroll && currentBankroll && (
-                              <div className={`text-sm font-black ${currentBankroll >= startBankroll ? 'text-green-400' : 'text-red-400'}`}>
-                                {currentBankroll >= startBankroll ? '+' : ''}
-                                {((currentBankroll / startBankroll - 1) * 100).toFixed(1)}%
-                              </div>
-                            )}
-                          </div>
-                        )
-                      })()}
-
-                      {/* Timeline de picks */}
-                      {[...caminho].reverse().map((pick: any, idx: number) => {
-                        const isThisPick = pick.id === id
-                        const res = pick.result
-                        const resColor = res === 'GREEN' ? 'text-green-400 bg-green-500/10 border-green-500/30'
-                          : res === 'RED' ? 'text-red-400 bg-red-500/10 border-red-500/30'
-                          : 'text-ink-2 bg-surface-2 border-line-strong'
-                        const resLabel = res === 'GREEN' ? '✓' : res === 'RED' ? '✗' : '·'
-                        const date = pick.match_date
-                          ? new Date(pick.match_date + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
-                          : ''
-                        const bankBefore = pick.bankroll_before
-                        const bankAfter = pick.bankroll_after
-                        return (
-                          <div key={pick.id} className="flex gap-3">
-                            {/* Linha vertical + círculo */}
-                            <div className="flex flex-col items-center w-8 shrink-0">
-                              <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
-                                isThisPick
-                                  ? 'bg-orange-500 border-orange-400 text-black'
-                                  : res
-                                    ? (res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400' : 'bg-red-500/20 border-red-500/40 text-red-400')
-                                    : 'bg-surface-2 border-line-strong text-ink-2'
-                              }`}>
-                                {resLabel}
-                              </div>
-                              {idx < caminho.length - 1 && (
-                                <div className={`w-0.5 flex-1 my-1 ${res === 'GREEN' ? 'bg-green-500/30' : res === 'RED' ? 'bg-red-500/30' : 'bg-surface-2'}`} />
-                              )}
-                            </div>
-
-                            {/* Card do pick */}
-                            <div className={`flex-1 mb-2 rounded-lg border px-3 py-2.5 ${
-                              isThisPick ? 'border-orange-500/40 bg-orange-500/5' : 'border-line bg-surface-1'
-                            }`}>
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-center gap-1 flex-wrap mb-0.5">
-                                    {pick.home_team_id_1 && (
-                                      <img src={`/api/proxy/team/${pick.home_team_id_1}.png`}
-                                        alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain shrink-0"
-                                        onError={e => (e.currentTarget.style.display = 'none')} />
-                                    )}
-                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.home_team_1}</span>
-                                    <span className="text-ink-4 text-[10px]">vs</span>
-                                    {pick.away_team_id_1 && (
-                                      <img src={`/api/proxy/team/${pick.away_team_id_1}.png`}
-                                        alt="" width={14} height={14} className="w-3.5 h-3.5 object-contain shrink-0"
-                                        onError={e => (e.currentTarget.style.display = 'none')} />
-                                    )}
-                                    <span className="text-xs font-bold text-ink-1 truncate">{pick.away_team_1}</span>
-                                  </div>
-                                  <div className="text-[10px] text-ink-3 mt-0.5">
-                                    {date} · {pick.market_1}{pick.odd_combined ? ` @ ${Number(pick.odd_combined).toFixed(2)}` : ''}
-                                  </div>
-                                </div>
-                                {res && (
-                                  <span className={`text-[10px] font-black px-2 py-0.5 rounded border shrink-0 ${resColor}`}>
-                                    {res === 'GREEN' ? 'GREEN' : res === 'RED' ? 'RED' : res}
-                                  </span>
-                                )}
-                              </div>
-                              {/* Progressão de banca */}
-                              {(bankBefore || bankAfter) && (
-                                <div className="flex items-center gap-1.5 mt-1.5">
-                                  {bankBefore && <span className="text-[10px] text-ink-3">R${Number(bankBefore).toFixed(0)}</span>}
-                                  {bankBefore && bankAfter && <span className="text-[10px] text-ink-4">·</span>}
-                                  {bankAfter && (
-                                    <span className={`text-[10px] font-bold ${bankAfter > bankBefore ? 'text-green-400' : bankAfter < bankBefore ? 'text-red-400' : 'text-ink-2'}`}>
-                                      R${Number(bankAfter).toFixed(0)}
-                                    </span>
-                                  )}
-                                  {bankBefore && bankAfter && (
-                                    <span className={`text-[10px] ml-auto ${bankAfter >= bankBefore ? 'text-green-400' : 'text-red-400'}`}>
-                                      {bankAfter >= bankBefore ? '+' : ''}{Number(pick.profit ?? 0).toFixed(2)}u
-                                    </span>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {tab === 'social' && (
-                <PickSocial pickId={id} pickType={pickType} />
-              )}
+              </details>
 
               {/* Acoes do pick, no rodape do painel. Fora das abas de proposito:
                   elas valem pro pick inteiro, nao pra aba que esta aberta. */}
@@ -701,6 +461,13 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
         </div>
       </motion.div>
 
+    </motion.div>
+
+    {/* Fora do painel, no body. Dentro dele o modal ficava preso no stacking
+        context do z-[60] e abria ATRAS, visivel apagado no fundo -- era o bug
+        que o usuario viu. O portal tambem impede que o clique nele borbulhe
+        pro onClose do painel. */}
+    {createPortal(
       <AnimatePresence>
         {showAnalysis && s && (
           <AnalysisModal
@@ -720,7 +487,9 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
             }}
           />
         )}
-      </AnimatePresence>
-    </motion.div>
+      </AnimatePresence>,
+      document.body,
+    )}
+    </>
   )
 }

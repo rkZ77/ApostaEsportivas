@@ -128,7 +128,8 @@ interface AlavSerie {
   realized_total?: number
   history?: {
     id: number; initial: number; final: number; realized: number
-    end_reason: 'manual' | 'red'; started_at: string | null; ended_at: string | null
+    units: number; greens: number
+    end_reason: 'manual' | 'red' | 'meta'; started_at: string | null; ended_at: string | null
   }[]
 }
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
@@ -1896,24 +1897,28 @@ export default function Picks() {
         // escondido abaixo de sm, que é onde está a maioria dos usuários.
         subMobile: true,
         sub: tab === 'hoje' ? (
-          <span className="flex items-center gap-0.5">
+          /* Alvo de toque de verdade no celular. As setas tinham 14px com
+             padding de 2px · abaixo de qualquer minimo de acessibilidade, e
+             este e o controle mais usado da tela num site que vive no celular.
+             No desktop o mouse nao precisa disso, entao o tamanho encolhe. */
+          <span className="flex items-center gap-1 sm:gap-0.5 -my-1 sm:my-0">
             <button
               onClick={() => setSelectedOffset(o => o - 1)}
               aria-label="Dia anterior"
-              className="text-ink-3 hover:text-ink-2 transition-colors p-0.5 -ml-0.5"
+              className="text-ink-2 hover:text-ink-1 transition-colors p-2 sm:p-0.5 sm:-ml-0.5 rounded-md active:bg-surface-2"
             >
-              <ChevronLeft className="w-3.5 h-3.5" />
+              <ChevronLeft className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
             </button>
-            <span className="text-ink-2 capitalize font-medium">
+            <span className="text-ink-1 sm:text-ink-2 capitalize font-bold sm:font-medium text-sm sm:text-[11px]">
               {selectedOffset === 0 ? 'Hoje' : todayLabel}
             </span>
             <button
               onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
               disabled={selectedOffset >= 0}
               aria-label="Próximo dia"
-              className="text-ink-3 hover:text-ink-2 disabled:opacity-20 transition-colors p-0.5"
+              className="text-ink-2 hover:text-ink-1 disabled:opacity-20 transition-colors p-2 sm:p-0.5 rounded-md active:bg-surface-2"
             >
-              <ChevronRight className="w-3.5 h-3.5" />
+              <ChevronRight className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
             </button>
             {selectedOffset < 0 && (
               <button
@@ -2480,6 +2485,39 @@ export default function Picks() {
               </div>
             ) : (
               <>
+                {/* Como funciona, antes de qualquer numero. A alavancagem e o
+                    unico produto do site que nao e "uma aposta, um resultado",
+                    e sem explicar a regra o card vira um monte de valor solto. */}
+                <details className="card p-4 border-orange-500/20 mb-4">
+                  <summary className="cursor-pointer text-sm font-bold text-orange-400 select-none">
+                    Como funciona a alavancagem
+                  </summary>
+                  <div className="mt-3 space-y-2 text-xs text-ink-2 leading-relaxed">
+                    <p>
+                      Não é uma aposta por dia, é um <b>caminho</b>. Você define um valor de
+                      entrada e, a cada green, reaposta o bolo inteiro no pick do dia seguinte.
+                      Cada etapa tem odd combinada entre 1.40 e 1.55.
+                    </p>
+                    <p>
+                      O caminho fecha sozinho ao chegar em <b>{userAlavSerie?.meta ?? 6} greens</b>,
+                      que multiplicam a entrada por cerca de 10. Aí o lucro vira dinheiro e entra
+                      na sua banca. Você também pode encerrar antes, a qualquer momento: se quiser
+                      parar no segundo green, para no segundo.
+                    </p>
+                    <p>
+                      Se der <b>red</b> em qualquer etapa, o caminho acaba e você perde apenas o
+                      valor de entrada, nunca o acumulado. O bolo que estava em jogo nunca saiu da
+                      mesa, então nunca foi seu para perder. Um caminho novo começa em seguida, no
+                      mesmo valor.
+                    </p>
+                    <p className="text-ink-3">
+                      É por isso que o valor em andamento não conta na sua banca: ele está inteiro
+                      apostado na próxima etapa. Em unidades, o caminho arrisca 1u e paga cerca de
+                      +9u quando fecha.
+                    </p>
+                  </div>
+                </details>
+
                 {/* Config banca alavancagem */}
                 <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
                   <div className="flex items-center justify-between mb-3">
@@ -2598,6 +2636,45 @@ export default function Picks() {
                     </div>
                   )}
 
+                  {!!userAlavSerie?.history?.length && (
+                    <details className="mb-3">
+                      <summary className="cursor-pointer text-[11px] text-ink-3 hover:text-ink-1 select-none font-semibold">
+                        Caminhos anteriores ({userAlavSerie.history.length})
+                      </summary>
+                      <ul className="mt-2 divide-y divide-line/50">
+                        {userAlavSerie.history.map(h => (
+                          <li key={h.id} className="py-2 flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="text-[11px] text-ink-2">
+                                R${h.initial.toFixed(0)} <span className="text-ink-4">para</span> R${h.final.toFixed(0)}
+                                <span className={`ml-2 font-bold ${
+                                  h.end_reason === 'red' ? 'text-red-400'
+                                  : h.end_reason === 'meta' ? 'text-green-400' : 'text-orange-400'}`}>
+                                  {h.end_reason === 'red' ? 'estourou'
+                                   : h.end_reason === 'meta' ? 'bateu a meta' : 'encerrado por você'}
+                                </span>
+                              </p>
+                              <p className="text-[10px] text-ink-4">
+                                {/* "Peguei esse caminho?" · caminho sem green seguido existe
+                                    no banco mas nunca foi jogado. */}
+                                {h.greens > 0
+                                  ? `${h.greens} ${h.greens === 1 ? 'green seu' : 'greens seus'}`
+                                  : 'você não seguiu nenhum pick deste caminho'}
+                                {h.ended_at && ` · ${h.ended_at.slice(8, 10)}/${h.ended_at.slice(5, 7)}`}
+                              </p>
+                            </div>
+                            <span className={`font-mono text-xs font-bold shrink-0 ${h.realized >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                              {h.realized >= 0 ? '+' : ''}R${h.realized.toFixed(2)}
+                              <span className="block text-[10px] text-ink-4 font-normal text-right">
+                                {h.units >= 0 ? '+' : ''}{h.units.toFixed(2)}u
+                              </span>
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </details>
+                  )}
+
                   {!!userAlavSerie?.realized_total && (
                     <p className="text-[11px] text-ink-4 mb-3">
                       Já realizado em caminhos encerrados:{' '}
@@ -2634,7 +2711,7 @@ export default function Picks() {
                   ) : (
                     <button
                       onClick={() => setAlavInitInput(String(userAlavSerie.initial_bankroll))}
-                      className="text-xs text-ink-4 hover:text-orange-400 transition-colors underline"
+                      className="text-[11px] px-3 py-2 rounded-md border border-line-strong text-ink-2 hover:text-ink-1 hover:border-orange-400/40 font-bold transition-colors"
                     >
                       Alterar valor inicial
                     </button>

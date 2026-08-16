@@ -33,8 +33,14 @@ const features = [
     badge: 'VIP',
     badgeColor: 'bg-yellow-500/20 text-yellow-400',
     title: 'Alavancagem',
-    desc: 'Pick combinado (simples, dupla ou tripla) com odd entre 1.45 e 1.55. Ideal para crescimento constante de banca com risco controlado.',
-    items: ['Odd combinada 1.45–1.55', 'Risco controlado por design', 'Exclusivo VIP'],
+    desc: 'Não é uma aposta por dia, é um caminho. Você entra com um valor e, a cada green, reaposta o bolo inteiro no pick do dia seguinte. O caminho fecha ao chegar em 6 greens, ou antes disso quando você quiser parar.',
+    items: [
+      'Odd combinada entre 1.40 e 1.55 por etapa',
+      '6 greens multiplicam a entrada por 10',
+      'Um red custa só o valor de entrada, nunca o acumulado',
+      'Você pode encerrar a qualquer momento e levar o lucro',
+      'O que está rodando não entra na banca: só conta quando fecha',
+    ],
   },
   {
     icon: Zap,

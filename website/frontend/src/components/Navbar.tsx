@@ -7,7 +7,7 @@ import { useNotifications } from '../context/NotificationContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X, BookOpen, MessageCircle,
+  LogOut, Menu, X, BookOpen, MessageCircle, History,
 } from 'lucide-react'
 import Avatar from './Avatar'
 import NotificationBell from './NotificationBell'
@@ -171,6 +171,10 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                           </span>
                         )}
                       </Link>
+                      <Link to="/banca/fechamentos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
+                        <History className="w-4 h-4 text-green-400" />
+                        Fechamentos mensais
+                      </Link>
                       <a href={WA_SUPPORT} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <MessageCircle className="w-4 h-4 text-green-400" />
                         Suporte
@@ -296,6 +300,14 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
           >
             <BookOpen className="w-4 h-4 text-green-400" />
             Como funciona
+          </Link>
+          <Link
+            to="/banca/fechamentos"
+            onClick={() => setSidebarOpen(false)}
+            className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors"
+          >
+            <History className="w-4 h-4 text-green-400" />
+            Fechamentos mensais
           </Link>
           <a
             href={WA_SUPPORT}
