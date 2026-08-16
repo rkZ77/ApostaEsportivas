@@ -3,6 +3,7 @@ import { TrendingDown, TrendingUp } from 'lucide-react'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { Spinner } from '../components/ui'
+import LucroBarChart from '../components/LucroBarChart'
 import { fmtBRL, fmtSigned } from '../utils/format'
 
 /*
@@ -79,6 +80,19 @@ export default function BancaFechamentos() {
     (a, r) => (!a || Number(r.total_pnl) > Number(a.total_pnl) ? r : a), null)
   const unidades = (rows ?? []).reduce((acc, r) => acc + Number(r.profit_units ?? 0), 0)
 
+  // Barras do mais antigo pro mais novo · a lista vem invertida porque ler
+  // historico e comecar pelo recente, mas grafico se le da esquerda pra direita
+  // no sentido do tempo.
+  const barras = [...(rows ?? [])].reverse().map(r => ({
+    label: r.month_label.replace(/ \d{4}$/, '').slice(0, 3),
+    value: Number(r.total_pnl || 0),
+    meta: r.total_resolved ? `${r.greens}G/${r.reds}R em ${r.total_resolved}` : undefined,
+  }))
+
+  // Media por mes fechado · e a regua contra a qual cada mes se le. Sem ela
+  // "+R$ 300" nao diz se foi mes bom ou mes normal.
+  const media = rows && rows.length ? total / rows.length : 0
+
   return (
     <PageShell
       title="Fechamentos mensais"
@@ -139,6 +153,20 @@ export default function BancaFechamentos() {
             ))}
           </div>
 
+          {barras.length > 1 && (
+            <div className="card p-5">
+              <div className="flex items-baseline justify-between gap-3 mb-4">
+                <p className="text-xs text-ink-3 font-semibold">Resultado mês a mês</p>
+                <p className="text-[11px] text-ink-4">
+                  média de <span className={`font-mono font-bold ${media >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    {fmtSigned(media)}
+                  </span> por mês fechado
+                </p>
+              </div>
+              <LucroBarChart data={barras} height={200} />
+            </div>
+          )}
+
           <div className="card overflow-hidden divide-y divide-line/60">
             {rows.map(h => {
               const positivo = Number(h.total_pnl) >= 0
@@ -169,16 +197,45 @@ export default function BancaFechamentos() {
                         {h.profit_units >= 0 ? '+' : ''}{h.profit_units.toFixed(1)}u
                       </p>
                     )}
+                    {/* Contra a media · e o que transforma um numero solto em
+                        leitura ("esse mes foi acima ou abaixo do meu normal"). */}
+                    {rows.length > 1 && (
+                      <p className={`text-[10px] tabular-nums ${
+                        Number(h.total_pnl) >= media ? 'text-green-500/70' : 'text-red-400/70'
+                      }`}>
+                        {Number(h.total_pnl) >= media ? 'acima' : 'abaixo'} da média
+                      </p>
+                    )}
                   </div>
                 </div>
               )
             })}
           </div>
 
-          <p className="text-[11px] text-ink-4 leading-relaxed">
-            Cada linha é um mês já confirmado. O resultado do mês corrente ainda está
-            na Minha Banca e entra aqui quando você fechar.
-          </p>
+          <div className="card p-5">
+            <p className="text-xs text-ink-3 font-semibold mb-2">Como ler esta página</p>
+            <div className="text-[11px] text-ink-3 space-y-1.5 leading-relaxed">
+              <p>
+                Todo início de mês a sua banca do mês anterior é fechada e vira uma linha
+                aqui. O valor registrado é o que você tinha no fim daquele mês, e ele passa
+                a ser a base do mês seguinte.
+              </p>
+              <p>
+                <b className="text-ink-2">Em unidades</b> é o número que compara meses entre si:
+                reais dependem de quanto vale a sua unidade, e ela muda quando você
+                reconfigura a banca. Unidade é a mesma régua sempre.
+              </p>
+              <p>
+                <b className="text-ink-2">Meses no azul</b> separa consistência de sorte. Um
+                total alto vindo de um mês fora da curva conta uma história diferente de um
+                total alto vindo de seis meses positivos seguidos.
+              </p>
+              <p className="text-ink-4">
+                O mês corrente ainda não está aqui: ele vive na Minha Banca e entra quando
+                você confirmar o fechamento.
+              </p>
+            </div>
+          </div>
         </>
       )}
     </PageShell>
