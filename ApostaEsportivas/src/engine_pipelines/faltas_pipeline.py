@@ -38,6 +38,8 @@ from services.pick_engine.fouls_model import (
     MIN_JOGOS_TIME,
     analyze_fouls_market,
 )
+from services.pick_engine.fouls_calibration import recalibrar
+from services.pick_engine.market_pick_score import faixa_config, pick_score
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
 from engine_pipelines.decision_log import (
@@ -45,27 +47,32 @@ from engine_pipelines.decision_log import (
     log_decision, log_run, log_skip,
 )
 
-# SEM FAIXA DE ODD desde 2026-08-07 (decisao do usuario, junto com a mesma
-# remocao em goleiros). Era [1.35, 2.00], copiada dos pipelines de over/under
-# de time com a justificativa de que "fora dela o pick nao interessa
-# comercialmente". As constantes ficam como None em vez de sumir: documentam a
-# decisao e voltar atras e' trocar o valor, nao reescrever a checagem.
+# FAIXA DE ODD [1.10, 2.00], reposta em 2026-08-16 a pedido do usuario.
 #
-# ATENCAO -- aqui o efeito e' diferente do de goleiros, e mais forte. A
-# probabilidade de faltas NAO e' calculada por jogo: sai de uma tabela empirica
-# cujo menor valor e' 0.26 (linha 26.5, faixa ate 22.0 de previsao). Com
-# EDGE_MIN de 0.04, qualquer odd a partir de ~4.00 passa no corte de edge
-# SOZINHA, so' pela aritmetica (0.26 * 4.00 - 1 = +0.04), sem o modelo ter
-# opinado nada a favor. Na faixa mais forte da tabela (0.716) isso comeca ja'
-# em ~1.45.
+# HISTORICO: era [1.35, 2.00], removida em 2026-08-07 junto com a mesma remocao
+# em goleiros, com a justificativa de que fora dela "o pick nao interessa
+# comercialmente". Volta com o piso mais baixo porque a pergunta do produto
+# mudou: nao e' onde a odd esta' generosa, e' onde a estatistica ganha -- e
+# estatistica forte sai em odd BAIXA, nao alta.
 #
-# Enquanto existiu teto de 2.00, ele funcionava como rede contra dado ruim
-# (odd digitada errada, mercado mapeado no lugar errado) sem que ninguem tivesse
-# escrito isso em lugar nenhum. Sem o teto essa rede sumiu: uma unica odd
-# absurda numa linha suportada vira pick. Se aparecer pick de faltas com odd
-# muito fora do padrao do mercado, desconfie do DADO antes de comemorar o edge.
-ODD_MIN = None
-ODD_MAX = None
+# O TETO E' A PARTE QUE MAIS IMPORTA AQUI, e este bloco ja' avisava disso
+# enquanto ele nao existia. A probabilidade de faltas NAO e' calculada por jogo:
+# sai de uma tabela empirica cujo menor valor e' 0.26 (linha 26.5, faixa ate
+# 22.0 de previsao). Com EDGE_MIN de 0.04, qualquer odd a partir de ~4.00
+# passava no corte de edge SOZINHA, so' pela aritmetica (0.26 * 4.00 - 1 =
+# +0.04), sem o modelo ter opinado nada a favor. O PROB_MIN abaixo fechou esse
+# buraco pelo lado da probabilidade; o teto fecha pelo lado do preco e devolve a
+# rede contra dado ruim (odd digitada errada, mercado mapeado no lugar errado)
+# que existia por acidente e sumiu junto com a faixa antiga.
+#
+# O PISO DE 1.10 NAO BINDA NESTE PIPELINE, e isso e' conhecido: a maior taxa da
+# tabela e' 0.893, entao com EDGE_MIN 0.04 a menor odd alcancavel e'
+# 1/(0.893-0.04) = 1.17, e nas duas faixas mais comuns (0.792 e 0.716) o piso
+# real ja' e' 1.33 e 1.48. Quem limita o lado barato aqui e' o EDGE_MIN, nao
+# este numero. Fica declarado assim mesmo, pra a faixa ser a mesma dos dois
+# mercados e pra o dia em que a tabela for remedida com faixas melhores.
+ODD_MIN = 1.10
+ODD_MAX = 2.00
 
 # Edge minimo pra gravar. Abaixo disso a margem nao cobre o erro do proprio
 # modelo -- a faixa mais forte da tabela empirica foi medida em 159 jogos, o
@@ -89,6 +96,39 @@ EDGE_MIN = 0.04
 # a resposta certa e' medir faixas melhores, nao baixar o piso.
 PROB_MIN = DEFAULT_CONFIG.min_taxa
 
+# Ordenacao dos candidatos aprovados (2026-08-16). Antes disto a escolha da
+# linha e a ordem entre jogos saiam do MAIOR EDGE, que e' o criterio que o motor
+# generico abandonou em 14/08 por medicao -- ver a docstring de
+# market_pick_score. Os cortes nao mudaram: quem aprova continua sendo a faixa
+# de odd, o PROB_MIN e o EDGE_MIN acima.
+SCORE_CONFIG = faixa_config(ODD_MIN, ODD_MAX)
+
+# Satura no maior n da tabela de faixas de fouls_model (159 jogos). A faixa de
+# 50 jogos nao merece a mesma confianca que a de 159, e essa diferenca ja' era
+# devolvida por prob_over() desde sempre -- so' nunca tinha sido usada pra nada.
+AMOSTRA_SATURACAO = 159
+
+# MANDO SEPARADO NA MEDIA DE FALTAS (interruptor, 2026-08-16).
+#
+# False = comportamento historico: os jogos do time em casa e fora entram no
+# mesmo balde. True = so' os jogos no mando em que ele vai jogar, igual ao que
+# stats_model.pool_and_field faz no motor generico desde 08/08 e ao que
+# goleiros_pipeline passou a fazer em 16/08.
+#
+# POR QUE UM INTERRUPTOR, E NAO SIMPLESMENTE LIGADO. Duas perguntas diferentes:
+#
+#   consistencia  a tabela empirica precisa ter sido calibrada pelo MESMO
+#                 metodo, senao o mapeamento faixa -> taxa nao vale. Isso a
+#                 recalibragem automatica resolve: ela recebe este mesmo
+#                 booleano, entao os dois lados sempre andam juntos.
+#   qualidade     separar por mando PREVE MELHOR? Isso e' medicao, e a resposta
+#                 esta' na Parte A de scripts/medir_faltas_mando_e_pressao.py
+#                 (compara o erro medio dos dois metodos na mesma amostra).
+#
+# Fica em False ate' essa medicao existir. Ligar depois e' trocar este booleano:
+# a tabela se recalibra sozinha junto, sem nenhuma outra mudanca de codigo.
+USAR_MANDO = False
+
 
 def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> list:
     """Historico do time, respeitando o perfil da competicao.
@@ -111,21 +151,28 @@ def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> l
 NOMES_MERCADO_TOTAL = ("fouls. total", "total fouls", "fouls")
 
 
-def _media_faltas(historico: list, team_id: int) -> tuple[float | None, int]:
+def _media_faltas(historico: list, team_id: int,
+                  mando: str | None = None) -> tuple[float | None, int]:
     """Faltas por jogo que o time comete, no historico dele.
 
     O historico traz a linha do jogo inteiro (home_fouls e away_fouls), entao
     precisa escolher o lado certo jogo a jogo -- o time joga em casa e fora.
     Jogo sem a coluna preenchida e' descartado em vez de virar zero: zero
     falta nao existe e puxaria a media pra baixo.
+
+    `mando` None conta os dois mandos no mesmo balde (comportamento historico).
+    "home"/"away" conta so' os jogos naquele mando -- ver USAR_MANDO, e lembrar
+    que a tabela empirica precisa ter sido calibrada do mesmo jeito.
     """
     valores = []
     for jogo in historico:
         if jogo.get("home_team_id") == team_id:
-            v = jogo.get("home_fouls")
+            lado, v = "home", jogo.get("home_fouls")
         elif jogo.get("away_team_id") == team_id:
-            v = jogo.get("away_fouls")
+            lado, v = "away", jogo.get("away_fouls")
         else:
+            continue
+        if mando is not None and lado != mando:
             continue
         if v is not None and v > 0:
             valores.append(float(v))
@@ -206,7 +253,8 @@ def _fixtures_de_hoje(cur) -> list:
 
 def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
                      odds_service: OddsService,
-                     referee_service: RefereeStatsService) -> dict | None:
+                     referee_service: RefereeStatsService,
+                     faixas: dict | None = None) -> dict | None:
     """Candidato de faltas pra um jogo, ou None se nao der pra avaliar."""
     # load_odds_by_fixture (RAW), nao load_odds_structured: aquele agrupa por
     # line_value e valida pares Over/Under por probabilidade implicita. Em
@@ -226,29 +274,42 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     hist_casa = _historico(match_stats, fixture, fixture["home_team_id"])
     hist_fora = _historico(match_stats, fixture, fixture["away_team_id"])
 
-    media_casa, n_casa = _media_faltas(hist_casa, fixture["home_team_id"])
-    media_fora, n_fora = _media_faltas(hist_fora, fixture["away_team_id"])
+    media_casa, n_casa = _media_faltas(
+        hist_casa, fixture["home_team_id"], "home" if USAR_MANDO else None)
+    media_fora, n_fora = _media_faltas(
+        hist_fora, fixture["away_team_id"], "away" if USAR_MANDO else None)
 
     arbitro = referee_service.get_stats(fixture.get("referee"), fixture["season"])
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
     n_arbitro = int(arbitro["games"]) if arbitro and arbitro.get("games") else None
 
-    # Avalia TODAS as linhas oferecidas e fica com a de maior margem. As casas
-    # publicam 24.5 a 29.5 no mesmo jogo, e a margem varia bastante entre elas
-    # -- escolher a linha faz parte da decisao, nao e' detalhe de formatacao.
+    # Avalia TODAS as linhas oferecidas e fica com a de maior SCORE. As casas
+    # publicam 24.5 a 29.5 no mesmo jogo -- escolher a linha faz parte da
+    # decisao, nao e' detalhe de formatacao.
+    #
+    # Era "maior margem" ate' 2026-08-16, e trocar isso muda a linha escolhida na
+    # pratica: entre duas linhas do mesmo jogo, a mais alta sempre tem odd maior
+    # e por construcao tende a ter edge maior, entao o criterio antigo subia a
+    # linha sozinho. O score pesa a probabilidade (0.45) e a seguranca do preco
+    # (0.28) acima do edge (0.10), que e' o mesmo desenho do motor generico.
     melhor = None
     for linha, oferta in sorted(ofertas.items()):
         analise = analyze_fouls_market(
             media_casa=media_casa, media_fora=media_fora,
             media_arbitro=media_arbitro,
             n_casa=n_casa, n_fora=n_fora, n_arbitro=n_arbitro,
-            odd=oferta["odd"], linha=linha,
+            odd=oferta["odd"], linha=linha, faixas=faixas,
         )
         if not analise or analise.get("probability", 0) < PROB_MIN:
             continue
         if analise.get("edge", 0) < EDGE_MIN:
             continue
-        if melhor is None or analise["edge"] > melhor[0]["edge"]:
+        analise["pick_score"] = pick_score(
+            probability=analise["probability"], odd=oferta["odd"],
+            edge=analise["edge"], amostra=analise.get("faixa_amostra"),
+            amostra_saturacao=AMOSTRA_SATURACAO, config=SCORE_CONFIG,
+        )
+        if melhor is None or analise["pick_score"] > melhor[0]["pick_score"]:
             melhor = (analise, oferta)
 
     if melhor is None:
@@ -306,6 +367,13 @@ def _salvar(cur, c: dict) -> None:
         "media_fora": c["media_fora"], "n_fora": c["n_fora"],
         "media_arbitro": c["media_arbitro"], "n_arbitro": c["n_arbitro"],
         "fair_odd": c["fair_odd"], "edge": c["edge"], "ev": c["ev"],
+        "pick_score": c.get("pick_score"),
+        # De QUAL tabela saiu a probabilidade deste pick. Sem isto, dois picks
+        # com a mesma faixa e taxas diferentes ficariam inexplicaveis meses
+        # depois -- a lista de mudancas fica so' no log da rodada, aqui vai o
+        # resumo que identifica a versao da tabela.
+        "calibragem": {k: v for k, v in (c.get("calibragem") or {}).items()
+                       if k != "mudancas"},
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 
@@ -344,6 +412,22 @@ def run_faltas_engine():
           f"minimo {MIN_JOGOS_TIME} jogos por time "
           f"ou {MIN_JOGOS_ARBITRO} do arbitro)...")
 
+    # RECALIBRAGEM A CADA RODADA (2026-08-16, pedido do usuario: "adiciona no
+    # fluxo dos pipelines pra fazer isso sempre"). Remede a tabela empirica
+    # contra os jogos que existem HOJE, em vez de usar pra sempre a foto tirada
+    # em 01/08. Celula sem amostra nova suficiente mantem o valor congelado, e
+    # falha de banco devolve a tabela antiga inteira -- ver fouls_calibration.
+    faixas, calibragem = recalibrar(cur, usar_mando=USAR_MANDO)
+    print(f"[FALTAS_ENGINE] Tabela {calibragem['origem']}: "
+          f"{calibragem['jogos']} jogos, {calibragem['amostras']} amostras, "
+          f"{calibragem['celulas_trocadas']} celula(s) atualizada(s) "
+          f"(mando {'separado' if USAR_MANDO else 'misturado'}).")
+    if calibragem.get("erro"):
+        print(f"[FALTAS_ENGINE] Recalibragem falhou ({calibragem['erro']}); "
+              f"seguindo com a tabela congelada.")
+    for mudanca in calibragem.get("mudancas", []):
+        print(f"[FALTAS_ENGINE]   {mudanca}")
+
     match_stats = MatchStatsService()
     odds_service = OddsService()
     referee_service = RefereeStatsService()
@@ -351,7 +435,8 @@ def run_faltas_engine():
     candidatos = []
     for fixture in fixtures:
         try:
-            c = _avaliar_fixture(fixture, match_stats, odds_service, referee_service)
+            c = _avaliar_fixture(fixture, match_stats, odds_service,
+                                 referee_service, faixas=faixas)
         except Exception as e:
             print(f"[FALTAS_ENGINE] Erro no fixture {fixture['fixture_id']}: {e}")
             log_skip("FALTAS_ENGINE", fixture, f"{MOTIVO_ERRO}: {e}")
@@ -373,9 +458,10 @@ def run_faltas_engine():
         conn.close()
         return
 
-    # Maior margem primeiro: com linha unica, edge e' o unico criterio que
-    # separa dois candidatos (probabilidade sai da mesma tabela de faixas).
-    candidatos.sort(key=lambda c: c["edge"], reverse=True)
+    # Maior score primeiro (era maior edge ate' 2026-08-16). Aqui a ordem decide
+    # de verdade: cada jogo ja' entrou com um candidato so', entao esta e' a fila
+    # que a revisao de IA percorre e a que define quais picks o dia publica.
+    candidatos.sort(key=lambda c: c["pick_score"], reverse=True)
 
     gate = review_gate("faltas")
     salvos = 0
@@ -387,7 +473,8 @@ def run_faltas_engine():
         if not aprovado:
             print(f"[FALTAS_ENGINE] Fixture {c['fixture']['fixture_id']} vetado pela revisao de IA.")
             continue
-        _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review")})
+        _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review"),
+                      "calibragem": calibragem})
         salvos += 1
         print(f"[FALTAS_ENGINE] Salvo: {c['fixture']['home_team']} x {c['fixture']['away_team']} "
               f"· Over {c['line']} faltas @ {c['odd']} "

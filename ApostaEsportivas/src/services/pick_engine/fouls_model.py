@@ -149,20 +149,28 @@ _FAIXAS_POR_LINHA: dict[float, list[tuple[float, float, int]]] = {
 LINHAS_SUPORTADAS = tuple(sorted(_FAIXAS_POR_LINHA))
 
 
-def prob_over(previsto: float | None, linha: float = 22.5) -> tuple[float, int] | None:
+def prob_over(previsto: float | None, linha: float = 22.5,
+              faixas: dict | None = None) -> tuple[float, int] | None:
     """P(faltas totais > linha) e o n da faixa, pela tabela empirica.
 
     Devolve tambem o n porque uma faixa de 50 jogos nao merece a mesma
     confianca que uma de 159 -- quem consome decide o que fazer com isso.
-    Linha fora de LINHAS_SUPORTADAS devolve None: nao da' pra interpolar,
+    Linha fora das linhas da tabela devolve None: nao da' pra interpolar,
     porque a relacao nao e' parametrica (ver docstring do modulo).
+
+    `faixas` permite injetar uma tabela RECALIBRADA no lugar da congelada
+    (2026-08-16, ver services/pick_engine/fouls_calibration.py). Mesmo formato:
+    {linha: [(limite_superior, taxa, n), ...]}. None usa a congelada, que
+    continua sendo o comportamento de quem chama sem saber que isso existe --
+    inclusive todos os testes que travam os numeros medidos em 01/08.
     """
     if previsto is None:
         return None
-    faixas = _FAIXAS_POR_LINHA.get(round(linha, 1))
-    if faixas is None:
+    tabela = _FAIXAS_POR_LINHA if faixas is None else faixas
+    faixas_da_linha = tabela.get(round(linha, 1))
+    if faixas_da_linha is None:
         return None
-    for limite, taxa, n in faixas:
+    for limite, taxa, n in faixas_da_linha:
         if previsto < limite:
             return taxa, n
     return None
@@ -178,16 +186,19 @@ def analyze_fouls_market(media_casa: float | None, media_fora: float | None,
                          n_casa: int | None = None, n_fora: int | None = None,
                          n_arbitro: int | None = None,
                          odd: float | None = None,
-                         linha: float = 22.5) -> dict | None:
+                         linha: float = 22.5,
+                         faixas: dict | None = None) -> dict | None:
     """Candidato de pick de faltas totais numa linha, ou None.
 
-    So' avalia linhas de LINHAS_SUPORTADAS (as que tem faixa medida). Outras
+    So' avalia linhas que a tabela conhece (as que tem faixa medida). Outras
     exigem refazer a tabela empirica -- nao da' pra interpolar, porque a
     relacao nao e' parametrica.
+
+    `faixas` injeta uma tabela recalibrada; None usa a congelada. Ver prob_over.
     """
     previsto = expected_fouls(media_casa, media_fora, media_arbitro,
                               n_casa, n_fora, n_arbitro)
-    faixa = prob_over(previsto, linha)
+    faixa = prob_over(previsto, linha, faixas=faixas)
     if faixa is None:
         return None
     prob, n_faixa = faixa
