@@ -1752,6 +1752,136 @@ def list_monthly_closes(current_user: dict = Depends(get_current_user), limit: i
         conn.close()
 
 
+@router.get("/fechamentos/resumo")
+def get_fechamentos_resumo(current_user: dict = Depends(get_current_user)):
+    """Recortes do histórico do usuário: por tipo de pick e por liga.
+
+    O fechamento mensal responde "quanto deu no mês". Não responde as duas
+    perguntas que vêm logo depois e que mudam decisão: *em que produto eu vou
+    bem* e *em que liga eu vou bem*. Sem elas o usuário só sabe o placar, não
+    sabe o que repetir.
+
+    O P&L sai do mesmo `_compute_follow_pnl` do resto da banca · escrever uma
+    soma em SQL aqui ignoraria odd declarada e cashout, e o número dessa tela
+    passaria a discordar da banca sem ninguém perceber.
+
+    Liga só existe pros picks de UM jogo. Múltipla e alavancagem entram no
+    recorte por tipo e ficam fora do de liga · bilhete de várias pernas não
+    pertence a uma liga, e forçar uma inventaria o dado.
+    """
+    user_id = current_user["id"]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT unit_value FROM user_banca WHERE user_id = %s", (user_id,))
+        row = cur.fetchone()
+        unit_value = float(row["unit_value"]) if row and row["unit_value"] else 1.0
+
+        cur.execute("""
+            SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
+            FROM user_followed_picks uf
+            WHERE uf.user_id = %s
+        """, (user_id,))
+        followed = [dict(r) for r in cur.fetchall()]
+        if not followed:
+            return {"por_tipo": [], "por_liga": [], "unit_value": unit_value}
+
+        def _ids(t):
+            return [f["pick_id"] for f in followed if f["pick_type"] == t]
+
+        # Liga vem de match_statistics (registro permanente) com fallback na
+        # tabela `leagues` pro nome · mesmo caminho de routers/public.py.
+        maps: dict = {}
+        for tipo, tabela, col_odd in (
+            ("vip", "picks_vip", "odd"), ("free", "picks_free", "odd"),
+            ("faltas", "picks_faltas", "odd"), ("goleiros", "picks_goleiros", "odd"),
+        ):
+            ids = _ids(tipo)
+            m: dict = {}
+            if ids:
+                try:
+                    cur.execute(f"""
+                        SELECT p.id, p.result, p.{col_odd} AS odd,
+                               COALESCE(l.name, 'Liga ' || ms.league_id, 'Sem liga') AS league_name
+                          FROM {tabela} p
+                          LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
+                          LEFT JOIN leagues l ON l.league_id = ms.league_id
+                         WHERE p.id = ANY(%s)
+                    """, (ids,))
+                    for r in cur.fetchall():
+                        m[r["id"]] = dict(r)
+                except Exception:
+                    conn.rollback()
+            maps[tipo] = m
+
+        for tipo, tabela, col_odd in (
+            ("multipla", "picks_multiplas", "total_odd"),
+            ("alavancagem", "picks_alavancagem", "odd_combined"),
+        ):
+            ids = _ids(tipo)
+            m = {}
+            if ids:
+                try:
+                    cur.execute(
+                        f"SELECT id, result, {col_odd} AS odd FROM {tabela} WHERE id = ANY(%s)",
+                        (ids,))
+                    for r in cur.fetchall():
+                        m[r["id"]] = dict(r)
+                except Exception:
+                    conn.rollback()
+            maps[tipo] = m
+
+        def _vazio():
+            return {"picks": 0, "greens": 0, "reds": 0, "pnl": 0.0, "units": 0.0}
+
+        por_tipo: dict = {}
+        por_liga: dict = {}
+        for f in followed:
+            pick = maps.get(f["pick_type"], {}).get(f["pick_id"])
+            if not pick:
+                continue
+            label, profit_u, pnl_r = _compute_follow_pnl(pick, f, unit_value)
+            if label is None:
+                continue
+            for chave, alvo in (
+                (f["pick_type"], por_tipo),
+                # Alavancagem tem banca própria e não entra no P&L por liga do
+                # mesmo jeito que os outros; ver a docstring.
+                (pick.get("league_name") if f["pick_type"] not in ("multipla", "alavancagem") else None, por_liga),
+            ):
+                if not chave:
+                    continue
+                d = alvo.setdefault(chave, _vazio())
+                d["picks"] += 1
+                d["pnl"] += pnl_r or 0.0
+                d["units"] += profit_u or 0.0
+                if label == "GREEN":   d["greens"] += 1
+                elif label == "RED":   d["reds"] += 1
+
+        def _saida(dic, chave_nome):
+            out = []
+            for nome, d in dic.items():
+                out.append({
+                    chave_nome: nome,
+                    "picks":  d["picks"],
+                    "greens": d["greens"],
+                    "reds":   d["reds"],
+                    "pnl":    round(d["pnl"], 2),
+                    "units":  round(d["units"], 2),
+                    "win_rate": round(d["greens"] / d["picks"] * 100, 1) if d["picks"] else 0.0,
+                })
+            return sorted(out, key=lambda x: x["pnl"], reverse=True)
+
+        return {
+            "unit_value": unit_value,
+            "por_tipo": _saida(por_tipo, "tipo"),
+            "por_liga": _saida(por_liga, "liga"),
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.post("/reset-month")
 def reset_current_month(current_user: dict = Depends(get_current_user)):
     """Descadastra as apostas do MES CORRENTE, pro usuario recomecar o mes.

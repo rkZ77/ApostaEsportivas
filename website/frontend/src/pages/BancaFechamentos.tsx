@@ -22,6 +22,40 @@ import { fmtBRL, fmtSigned } from '../utils/format'
  * ponta, que é o que responde "esse mês foi bom por acerto ou por stake?".
  */
 
+interface Recorte {
+  tipo?: string; liga?: string
+  picks: number; greens: number; reds: number
+  pnl: number; units: number; win_rate: number
+}
+
+const TIPO_LABEL: Record<string, string> = {
+  vip: 'VIP', free: 'Dica do Dia', multipla: 'Múltiplas',
+  alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+}
+
+/** Uma linha de recorte · mesma forma pra tipo e pra liga. */
+function LinhaRecorte({ nome, r }: { nome: string; r: Recorte }) {
+  return (
+    <div className="flex items-center gap-3 py-2.5">
+      <div className="flex-1 min-w-0">
+        <p className="text-sm text-ink-1 font-semibold truncate">{nome}</p>
+        <p className="text-[11px] text-ink-4">
+          {r.picks} {r.picks === 1 ? 'pick' : 'picks'} · {r.greens}G/{r.reds}R
+          {r.picks > 0 && <> · {r.win_rate}%</>}
+        </p>
+      </div>
+      <div className="text-right shrink-0">
+        <p className={`font-mono text-sm font-black tabular-nums ${r.pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+          {fmtSigned(r.pnl)}
+        </p>
+        <p className="font-mono text-[10px] text-ink-4 tabular-nums">
+          {r.units >= 0 ? '+' : ''}{r.units.toFixed(1)}u
+        </p>
+      </div>
+    </div>
+  )
+}
+
 interface CloseRow {
   month_key: string
   month_label: string
@@ -61,11 +95,18 @@ function Composicao({ h }: { h: CloseRow }) {
 
 export default function BancaFechamentos() {
   const [rows, setRows] = useState<CloseRow[] | null>(null)
+  const [porTipo, setPorTipo] = useState<Recorte[]>([])
+  const [porLiga, setPorLiga] = useState<Recorte[]>([])
 
   useEffect(() => {
     api.get('/banca/monthly-closes', { params: { limit: 60 } })
       .then(r => setRows(r.data ?? []))
       .catch(() => setRows([]))
+    // Recortes falham separado da lista: sao complemento, e a pagina continua
+    // util sem eles.
+    api.get('/banca/fechamentos/resumo')
+      .then(r => { setPorTipo(r.data?.por_tipo ?? []); setPorLiga(r.data?.por_liga ?? []) })
+      .catch(() => {})
   }, [])
 
   // Acumulado de tudo que já foi fechado. É a leitura que a lista sozinha não
@@ -212,6 +253,39 @@ export default function BancaFechamentos() {
             })}
           </div>
 
+          {/* As duas perguntas que vem depois de "quanto deu": em QUE PRODUTO
+              eu vou bem e em QUE LIGA eu vou bem. Sem elas o usuario sabe o
+              placar mas nao sabe o que repetir. */}
+          {(porTipo.length > 0 || porLiga.length > 0) && (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {porTipo.length > 0 && (
+                <div className="card p-5">
+                  <p className="text-xs text-ink-3 font-semibold mb-1">Por tipo de pick</p>
+                  <p className="text-[11px] text-ink-4 mb-2">Todo o seu histórico, do que mais rendeu ao que menos</p>
+                  <div className="divide-y divide-line/60">
+                    {porTipo.map(r => (
+                      <LinhaRecorte key={r.tipo} nome={TIPO_LABEL[r.tipo ?? ''] ?? r.tipo ?? ''} r={r} />
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {porLiga.length > 0 && (
+                <div className="card p-5">
+                  <p className="text-xs text-ink-3 font-semibold mb-1">Por liga</p>
+                  <p className="text-[11px] text-ink-4 mb-2">
+                    Só picks de um jogo · múltipla e alavancagem não pertencem a uma liga
+                  </p>
+                  <div className="divide-y divide-line/60">
+                    {porLiga.slice(0, 10).map(r => (
+                      <LinhaRecorte key={r.liga} nome={r.liga ?? ''} r={r} />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="card p-5">
             <p className="text-xs text-ink-3 font-semibold mb-2">Como ler esta página</p>
             <div className="text-[11px] text-ink-3 space-y-1.5 leading-relaxed">
@@ -229,6 +303,11 @@ export default function BancaFechamentos() {
                 <b className="text-ink-2">Meses no azul</b> separa consistência de sorte. Um
                 total alto vindo de um mês fora da curva conta uma história diferente de um
                 total alto vindo de seis meses positivos seguidos.
+              </p>
+              <p>
+                <b className="text-ink-2">Por tipo e por liga</b> somam todo o seu histórico,
+                não só os meses fechados. Servem pra responder o que repetir: um produto ou uma
+                liga com muitos picks e saldo negativo diz mais que um mês ruim isolado.
               </p>
               <p className="text-ink-4">
                 O mês corrente ainda não está aqui: ele vive na Minha Banca e entra quando
