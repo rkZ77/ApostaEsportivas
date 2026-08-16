@@ -5,7 +5,7 @@ import logging
 from collections import deque
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
@@ -1045,6 +1045,136 @@ _PICK_TABLES = {
     "goleiros":    ("picks_goleiros",    "home_team",      "away_team"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
+
+
+#: Tabelas com UMA fixture por pick · só nelas dá pra cruzar com
+#: match_statistics e dizer se o provedor publicou a folha do jogo.
+_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros")
+
+
+@router.get("/picks/pendentes")
+def admin_picks_pendentes(
+    horas: int = Query(4, ge=1, le=240),
+    current_user: dict = Depends(require_admin),
+):
+    """Picks cujo jogo já devia ter terminado e que continuam sem resultado.
+
+    POR QUE ISTO EXISTE. Estatística ausente nunca vira RED · é a invariante 1
+    de services/settlement.py, escrita depois de um pick de escanteios ser
+    gravado RED porque `home_stats.get("Corner Kicks", 0)` devolveu 0 no
+    instante do apito final. A regra está certa e continua valendo.
+
+    Só que "não liquida e espera" é silencioso por natureza: se a folha do jogo
+    nunca chegar, o pick fica pendente pra sempre e ninguém fica sabendo. O
+    preço de acertar a invariante foi trocar um erro barulhento por um silêncio,
+    e é esse silêncio que esta rota quebra.
+
+    O diagnóstico é o que torna a lista acionável · "pendente" sozinho não diz
+    se falta esperar, re-sincronizar a estatística ou olhar o pick na mão:
+
+      sem folha do jogo   o provedor não publicou match_statistics · é o caso
+                          que a invariante protege, e o que resolve é o
+                          collector, não mexer no pick
+      folha incompleta    a folha existe mas o contador daquele mercado veio
+                          nulo · mesma origem, só que parcial
+      folha completa      o dado está lá e o pick continua pendente · aqui o
+                          suspeito é a liquidação, não a fonte
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        itens: list[dict] = []
+        for pt in _PICK_TABLES_UMA_FIXTURE:
+            table, home_col, away_col = _PICK_TABLES[pt]
+            try:
+                cur.execute(f"""
+                    SELECT p.id, p.{home_col} AS home_team, p.{away_col} AS away_team,
+                           p.match_date, p.market, p.line, p.fixture_id,
+                           (ms.fixture_id IS NOT NULL) AS tem_folha,
+                           ms.home_corners, ms.away_corners,
+                           ms.home_yellow_cards, ms.away_yellow_cards,
+                           ms.home_fouls, ms.away_fouls,
+                           ms.home_total_shots, ms.away_total_shots,
+                           ms.home_shots_on, ms.away_shots_on
+                      FROM {table} p
+                      LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
+                     WHERE p.result IS NULL
+                       AND p.match_date <= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                     ORDER BY p.match_date ASC, p.id ASC
+                     LIMIT 200
+                """)
+            except Exception:
+                # Instância sem a migração de alguma tabela: pula em vez de
+                # derrubar o painel inteiro (mesma escolha de /picks/search).
+                conn.rollback()
+                continue
+            for r in cur.fetchall():
+                d = dict(r)
+                contadores = [d.get(k) for k in (
+                    "home_corners", "away_corners", "home_yellow_cards", "away_yellow_cards",
+                    "home_fouls", "away_fouls", "home_total_shots", "away_total_shots",
+                    "home_shots_on", "away_shots_on",
+                )]
+                if not d["tem_folha"]:
+                    motivo = "sem folha do jogo"
+                elif any(c is None for c in contadores):
+                    motivo = "folha incompleta"
+                else:
+                    motivo = "folha completa"
+                itens.append({
+                    "pick_type":  pt,
+                    "id":         d["id"],
+                    "home_team":  d["home_team"],
+                    "away_team":  d["away_team"],
+                    "match_date": str(d["match_date"]) if d["match_date"] else None,
+                    "market":     d["market"],
+                    "line":       d["line"],
+                    "fixture_id": d["fixture_id"],
+                    "motivo":     motivo,
+                })
+
+        # Múltipla e alavancagem têm várias fixtures por bilhete · não dá pra
+        # apontar UMA folha faltando, então entram só na contagem.
+        bilhetes = {}
+        for pt in ("multipla", "alavancagem"):
+            table, _h, _a = _PICK_TABLES[pt]
+            try:
+                cur.execute(f"""
+                    SELECT COUNT(*) AS n FROM {table}
+                     WHERE result IS NULL
+                       AND match_date <= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                """)
+                bilhetes[pt] = int((cur.fetchone() or {}).get("n") or 0)
+            except Exception:
+                conn.rollback()
+                bilhetes[pt] = 0
+
+        # "Travado" = passou da janela em que a folha normalmente já chegou. É o
+        # corte que separa "o jogo acabou agora" de "isto não vai resolver
+        # sozinho", e é ajustável porque a janela boa depende do provedor.
+        from datetime import timedelta as _td
+        from zoneinfo import ZoneInfo
+
+        limite = (datetime.now(ZoneInfo("America/Sao_Paulo")) - _td(hours=horas)).date()
+        travados = [i for i in itens
+                    if i["match_date"] and i["match_date"] < limite.isoformat()]
+
+        return {
+            "total":            len(itens) + sum(bilhetes.values()),
+            "simples":          len(itens),
+            "bilhetes":         bilhetes,
+            "travados":         len(travados),
+            "horas_de_corte":   horas,
+            "por_motivo": {
+                "sem folha do jogo": sum(1 for i in itens if i["motivo"] == "sem folha do jogo"),
+                "folha incompleta":  sum(1 for i in itens if i["motivo"] == "folha incompleta"),
+                "folha completa":    sum(1 for i in itens if i["motivo"] == "folha completa"),
+            },
+            "itens": itens[:100],
+        }
+    finally:
+        cur.close()
+        conn.close()
 
 
 @router.get("/picks/search")

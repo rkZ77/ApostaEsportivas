@@ -433,6 +433,21 @@ class AIResultCheckerService:
     _STAT_MARKETS = ("goals", "corners", "cards", "offsides",
                      "fouls", "saves", "shots", "shots_on_target")
 
+    def _pendente(self, motivo: str):
+        """Marca POR QUE o pick nao foi liquidado e devolve UNRESOLVED.
+
+        O log dizia sempre a mesma frase -- "sem estatistica publicada, mercado
+        nao reconhecido ou linha ilegivel" -- pras tres causas juntas, e elas
+        pedem acoes opostas: folha faltando espera o collector, mercado
+        desconhecido e bug do checker, linha ilegivel e dado ruim na geracao.
+        Com uma frase so, descobrir qual era exigia reproduzir o caso na mao.
+
+        O motivo fica no objeto em vez de virar terceiro item da tupla porque
+        `evaluate_pick` e chamada em varios lugares que desempacotam 2 valores.
+        """
+        self._ultimo_motivo = motivo
+        return (None, Decimal("0"))
+
     def evaluate_pick(self, market, line, odd, stats, home_team=None, away_team=None,
                       market_type=None):
         mt     = self.detect_market_type(market, market_type)
@@ -465,14 +480,14 @@ class AIResultCheckerService:
             hg = stats.get("home_goals_ht")
             ag = stats.get("away_goals_ht")
             if hg is None or ag is None:
-                return (None, Decimal("0"))  # aguardando dados de HT
+                return self._pendente("placar do 1o tempo ainda nao coletado")
         elif prorrogacao:
             hg = stats.get("home_goals_90")
             ag = stats.get("away_goals_90")
             if hg is None or ag is None:
-                return (None, Decimal("0"))  # placar dos 90min ainda nao coletado
+                return self._pendente("placar dos 90min ainda nao coletado (jogo teve prorrogacao)")
             if mt in self._STAT_MARKETS and mt != "goals":
-                return (None, Decimal("0"))  # contador dos 90min nao existe na API
+                return self._pendente("contador dos 90min nao existe na API (jogo teve prorrogacao)")
         else:
             hg = stats.get("home_goals")
             ag = stats.get("away_goals")
@@ -484,7 +499,7 @@ class AIResultCheckerService:
         if mt in self._STAT_MARKETS and self._is_handicap(market, market_type):
             pair = self._resolve_side_pair(stats, mt, is_ht, market, prorrogacao)
             if pair is None:
-                return (None, Decimal("0"))
+                return self._pendente(f"handicap {mt}: contador nao publicado na folha")
             resolved_side = parsed["side"] or (side if side in ("home", "away") else None)
             return settlement.settle_asian_handicap(resolved_side, val, pair[0], pair[1])
 
@@ -516,7 +531,7 @@ class AIResultCheckerService:
         if mt == "handicap":
             return self.evaluate_handicap(hg, ag, line, val, side, home_team, away_team)
 
-        return (None, Decimal("0"))  # mercado desconhecido → não resolve
+        return self._pendente(f"mercado nao reconhecido: {market!r}")
 
     ##########################################################################
     # CALCULA PROFIT
@@ -569,8 +584,14 @@ class AIResultCheckerService:
                                                 home_team, away_team)
 
             if result is None:
-                print(f"[CHECKER] id={sid}: sem estatistica publicada, mercado nao "
-                      f"reconhecido ou linha ilegivel - segue pendente.")
+                # O motivo vem de self._pendente. Quando `evaluate_pick` sai
+                # por dentro de settlement (linha fora da grade asiatica, ou
+                # contador ausente na folha) nenhum motivo foi marcado, e a
+                # frase generica antiga continua sendo a resposta honesta.
+                motivo = getattr(self, "_ultimo_motivo", None) or (
+                    "estatistica do mercado ausente na folha ou linha ilegivel")
+                print(f"[CHECKER] id={sid}: {motivo} - segue pendente.")
+                self._ultimo_motivo = None
                 continue
 
             profit = self.calculate_profit(factor, odd)

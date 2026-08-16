@@ -146,7 +146,7 @@ export default function AdminMotorLive() {
               Motor Ao Vivo
             </h2>
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed">
-              Uma rodada por clique, sem agendamento · o consumo precisa ser medido rodada a
+              Uma rodada por clique, sem agendamento, porque o consumo precisa ser medido rodada a
               rodada antes de qualquer automação. Analisa partidas ao vivo de ligas cadastradas
               e só consulta odd de quem passa na triagem.
             </p>
@@ -165,8 +165,8 @@ export default function AdminMotorLive() {
         <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2">
           <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
           <p className="text-[11px] text-ink-2 leading-relaxed">
-            O disparo roda sempre com <span className="font-mono text-amber-300">DB_ENV=dev</span> ·
-            o pick gerado vai pro banco de <b>desenvolvimento</b>, mesmo clicando daqui da produção.
+            O disparo roda sempre com <span className="font-mono text-amber-300">DB_ENV=dev</span>,
+            então o pick gerado vai pro banco de <b>desenvolvimento</b>, mesmo clicando daqui da produção.
             É proposital: impede que o botão do admin vire o caminho por onde o motor escreve em prod.
           </p>
         </div>
@@ -276,7 +276,7 @@ export default function AdminMotorLive() {
         <div className="bg-surface-1 border border-line rounded-lg p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold text-ink-3">Desempenho</h3>
-            <span className="text-[10px] text-ink-4">só picks_live · não inclui pré-jogo</span>
+            <span className="text-[10px] text-ink-4">só picks_live, não inclui pré-jogo</span>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
@@ -307,7 +307,7 @@ export default function AdminMotorLive() {
         {picks.length === 0 ? (
           <p className="text-[11px] text-ink-4">
             Nada ainda. Antes da primeira rodada com <span className="font-mono">--gravar</span> a
-            tabela <span className="font-mono">picks_live</span> nem existe · dry run não grava nada de propósito.
+            tabela <span className="font-mono">picks_live</span> nem existe, e dry run não grava nada de propósito.
           </p>
         ) : (
           <div className="overflow-x-auto -mx-4 px-4">
