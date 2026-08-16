@@ -539,6 +539,18 @@ def _pode_disparar() -> tuple[bool, str]:
     )
 
 
+def _rodar_em_prod() -> bool:
+    """True quando o motor foi autorizado a escrever no banco DESTE servico.
+
+    A flag e a mesma que o proprio pipeline ja lia (`exigir_ambiente_dev` em
+    pick_engine_live/config.py) · nao existe uma segunda decisao aqui, so' o
+    backend parando de contrariar a que ja estava tomada. Enquanto ela nao
+    aparece, tudo segue indo pro banco de DEV como antes.
+    """
+    return os.getenv("LIVE_ENGINE_ALLOW_PROD", "").strip().lower() in (
+        "1", "true", "on", "yes", "sim")
+
+
 def _dev_configurado() -> list[str]:
     """Variaveis _DEV que faltam. Vazio = pode rodar.
 
@@ -549,6 +561,11 @@ def _dev_configurado() -> list[str]:
     partir dele criaria o risco real de o motor gravar pick na base errada
     acreditando que e' DEV.
     """
+    # Autorizado a rodar em prod, o motor usa o banco deste servico e as
+    # variaveis _DEV deixam de ser pre-condicao · exigi-las ali seria pedir
+    # credencial de um banco que a rodada nao vai tocar.
+    if _rodar_em_prod():
+        return []
     return [k for k in _CHAVES_DEV if not os.getenv(k)]
 
 
@@ -566,11 +583,20 @@ async def _rodar(body: RunBody) -> None:
         argumentos += ["--max", str(body.max_partidas)]
 
     try:
-        # DB_ENV=dev e' cravado aqui, nao herdado: o disparo pelo /admin nao
-        # pode ser o caminho por onde o motor Live alcanca o banco de
-        # producao. O proprio pipeline recusaria (exigir_ambiente_dev), mas
-        # depender so' da checagem do outro lado deixa a intencao implicita.
-        env = {**os.environ, "PYTHONPATH": diretorio, "DB_ENV": "dev"}
+        # Onde a rodada escreve.
+        #
+        # DB_ENV era cravado em "dev" aqui, sempre. A trava existia pra que o
+        # botao do /admin nao virasse o caminho acidental ate o banco de
+        # producao -- e o pipeline ja recusava do outro lado, por
+        # exigir_ambiente_dev(). Com LIVE_ENGINE_ALLOW_PROD=true a decisao
+        # passou a ser explicita e tomada, entao o backend para de contrariar
+        # a flag que o proprio motor ja respeita: a rodada herda o ambiente
+        # deste servico e grava onde ele aponta.
+        #
+        # Sem a flag, nada muda · continua indo pra dev.
+        env = {**os.environ, "PYTHONPATH": diretorio}
+        if not _rodar_em_prod():
+            env["DB_ENV"] = "dev"
         proc = await asyncio.create_subprocess_exec(
             sys.executable, script, *argumentos,
             stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE,
@@ -645,6 +671,7 @@ def diagnostico(current_user: dict = Depends(require_admin)):
 
     ligado = os.getenv("LIVE_ENGINE_ENABLED", "").strip().lower() in (
         "1", "true", "on", "yes", "sim")
+    em_prod = _rodar_em_prod()
     checagens = [
         {"item": "motor habilitado", "ok": ligado,
          "detalhe": f"LIVE_ENGINE_ENABLED={os.getenv('LIVE_ENGINE_ENABLED') or 'ausente'}"},
@@ -664,6 +691,9 @@ def diagnostico(current_user: dict = Depends(require_admin)):
         "pronto": all(c["ok"] for c in checagens),
         "checagens": checagens,
         "dry_run_padrao": os.getenv("LIVE_ENGINE_DRY_RUN", "true"),
+        # Onde o pick vai parar · e' a informacao que decide se a rodada e'
+        # teste ou producao, e ela nao pode ficar implicita num painel.
+        "grava_em": "produção" if em_prod else "desenvolvimento",
     }
 
 
