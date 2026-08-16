@@ -361,6 +361,43 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                     </div>
                   )}
 
+                  {/* Acoes ANTES da analise. O texto da IA e o bloco mais alto
+                      do painel e empurrava os dois botoes pra fora da primeira
+                      tela · quem abre pra compartilhar um green tinha que
+                      rolar um paragrafo inteiro pra achar o botao. Decisao
+                      primeiro, leitura depois. */}
+                  {(
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => setShowAnalysis(true)}
+                      className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors"
+                    >
+                      <Sparkles className="w-3.5 h-3.5" /> Entenda esta analise
+                  </button>
+                    <button
+                      onClick={() => shareStory({
+                        pickId: id,
+                        pickTypeRoute: pickType === 'free' ? 'free' : pickType,
+                        homeTeamName: s.home_team_name ?? s.home_team ?? 'Pick',
+                        awayTeamName: s.away_team_name ?? s.away_team,
+                        homeTeamId: s.home_team_id,
+                        awayTeamId: s.away_team_id,
+                        leagueName: s.league_name,
+                        pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'VIP'),
+                        market: translateMarket(s.market),
+                        line: translateLine(s.line),
+                        odd: Number(s.total_odd ?? s.odd ?? 0),
+                        result: s.result,
+                        profit: s.profit,
+                      })}
+                      disabled={sharing}
+                      className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors disabled:opacity-40"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      {sharing ? 'Gerando...' : shared ? 'Compartilhado' : 'Compartilhar'}
+                  </button>
+                  </div>
+                  )}
                   {/* Raciocínio da IA */}
                   <div>
                     <p className="text-[10px] text-ink-3 mb-2">Análise da IA</p>
@@ -422,40 +459,6 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                 </div>
               </details>
 
-              {/* Acoes do pick, no rodape do painel. Fora das abas de proposito:
-                  elas valem pro pick inteiro, nao pra aba que esta aberta. */}
-              {s && (
-                <div className="mt-5 pt-4 border-t border-line flex flex-wrap gap-2">
-                  <button
-                    onClick={() => setShowAnalysis(true)}
-                    className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors"
-                  >
-                    <Sparkles className="w-3.5 h-3.5" /> Entenda esta analise
-                  </button>
-                  <button
-                    onClick={() => shareStory({
-                      pickId: id,
-                      pickTypeRoute: pickType === 'free' ? 'free' : pickType,
-                      homeTeamName: s.home_team_name ?? s.home_team ?? 'Pick',
-                      awayTeamName: s.away_team_name ?? s.away_team,
-                      homeTeamId: s.home_team_id,
-                      awayTeamId: s.away_team_id,
-                      leagueName: s.league_name,
-                      pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'VIP'),
-                      market: translateMarket(s.market),
-                      line: translateLine(s.line),
-                      odd: Number(s.total_odd ?? s.odd ?? 0),
-                      result: s.result,
-                      profit: s.profit,
-                    })}
-                    disabled={sharing}
-                    className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors disabled:opacity-40"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    {sharing ? 'Gerando...' : shared ? 'Compartilhado' : 'Compartilhar'}
-                  </button>
-                </div>
-              )}
             </>
           )}
         </div>

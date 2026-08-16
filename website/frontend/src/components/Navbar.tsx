@@ -162,15 +162,6 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                         <BookOpen className="w-4 h-4 text-green-400" />
                         Como funciona
                       </Link>
-                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
-                        <Avatar name={user?.name ?? ''} size="sm" />
-                        Meu perfil
-                        {emailPendente && (
-                          <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
-                            E-mail
-                          </span>
-                        )}
-                      </Link>
                       <Link to="/banca/fechamentos" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <History className="w-4 h-4 text-green-400" />
                         Fechamentos mensais
@@ -180,7 +171,19 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                         Suporte
                       </a>
                     </div>
+                    {/* Conta e saida na mesma secao, separadas do resto por
+                        linha: as de cima sao NAVEGACAO do produto, estas duas
+                        sao da sua conta. */}
                     <div className="border-t border-line py-1">
+                      <Link to="/profile" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
+                        <Avatar name={user?.name ?? ''} size="sm" />
+                        Meu perfil
+                        {emailPendente && (
+                          <span className="ml-auto text-[10px] font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-1.5 py-0.5 rounded">
+                            E-mail
+                          </span>
+                        )}
+                      </Link>
                       <button
                         onClick={async () => { await logout(); navigate('/login') }}
                         className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-2 hover:text-red-400 hover:bg-surface-2 transition-colors"
