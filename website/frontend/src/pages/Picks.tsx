@@ -1895,6 +1895,9 @@ export default function Picks() {
       width="full"
       bar={{
         title: 'Picks',
+        // O navegador de dia é controle, não legenda: sem isto ele ficava
+        // escondido abaixo de sm, que é onde está a maioria dos usuários.
+        subMobile: true,
         sub: tab === 'hoje' ? (
           <span className="flex items-center gap-0.5">
             <button

@@ -21,6 +21,15 @@ export interface PageBar {
   title: React.ReactNode
   /** Linha de apoio. Some abaixo de sm, onde o espaço é do título. */
   sub?: React.ReactNode
+  /**
+   * Mantém o `sub` visível no celular.
+   *
+   * O padrão de esconder existe porque na maioria das páginas o `sub` é
+   * legenda, e legenda pode esperar. Em Picks ele não é: carrega o navegador
+   * de dia (setas + "voltar pra Hoje"), e o site é mobile-first, então o
+   * controle estava invisível justamente para a maior parte dos usuários.
+   */
+  subMobile?: boolean
   /** Botões à direita. */
   actions?: React.ReactNode
   /** true volta uma no histórico; string navega para a rota. */
@@ -103,7 +112,7 @@ export default function PageShell({
                   {bar.title}
                 </h1>
                 {bar.sub != null && (
-                  <p className="text-ink-3 text-[11px] mt-0.5 hidden sm:block">{bar.sub}</p>
+                  <p className={`text-ink-3 text-[11px] mt-0.5 ${bar.subMobile ? '' : 'hidden sm:block'}`}>{bar.sub}</p>
                 )}
               </div>
             </div>
