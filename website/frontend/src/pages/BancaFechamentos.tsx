@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { TrendingDown, TrendingUp } from 'lucide-react'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
-import { Spinner } from '../components/ui'
+import { PillGroup, Spinner } from '../components/ui'
 import LucroBarChart from '../components/LucroBarChart'
 import { fmtBRL, fmtSigned } from '../utils/format'
 
@@ -97,6 +97,9 @@ export default function BancaFechamentos() {
   const [rows, setRows] = useState<CloseRow[] | null>(null)
   const [porTipo, setPorTipo] = useState<Recorte[]>([])
   const [porLiga, setPorLiga] = useState<Recorte[]>([])
+  // Filtro por ano · o recorte natural do historico. Mes a mes ja e a lista;
+  // o que falta e conseguir isolar um periodo sem rolar 40 linhas.
+  const [ano, setAno] = useState<string>('tudo')
 
   useEffect(() => {
     api.get('/banca/monthly-closes', { params: { limit: 60 } })
@@ -112,19 +115,22 @@ export default function BancaFechamentos() {
   // Acumulado de tudo que já foi fechado. É a leitura que a lista sozinha não
   // dá: mês a mês o número é pequeno, e a soma é a que responde se a banca
   // cresceu no ano.
-  const total = (rows ?? []).reduce((acc, r) => acc + Number(r.total_pnl || 0), 0)
+  const anos = Array.from(new Set((rows ?? []).map(r => r.month_key.slice(0, 4)))).sort().reverse()
+  const filtradas = ano === 'tudo' ? (rows ?? []) : (rows ?? []).filter(r => r.month_key.startsWith(ano))
+
+  const total = filtradas.reduce((acc, r) => acc + Number(r.total_pnl || 0), 0)
   // "Somei X" nao diz se o resultado veio de consistencia ou de um mes fora da
   // curva. Meses positivos e o melhor/pior mes respondem isso de graca, com o
   // dado que a lista ja carrega.
-  const positivos = (rows ?? []).filter(r => Number(r.total_pnl) > 0).length
-  const melhor = (rows ?? []).reduce<CloseRow | null>(
+  const positivos = filtradas.filter(r => Number(r.total_pnl) > 0).length
+  const melhor = filtradas.reduce<CloseRow | null>(
     (a, r) => (!a || Number(r.total_pnl) > Number(a.total_pnl) ? r : a), null)
-  const unidades = (rows ?? []).reduce((acc, r) => acc + Number(r.profit_units ?? 0), 0)
+  const unidades = filtradas.reduce((acc, r) => acc + Number(r.profit_units ?? 0), 0)
 
   // Barras do mais antigo pro mais novo · a lista vem invertida porque ler
   // historico e comecar pelo recente, mas grafico se le da esquerda pra direita
   // no sentido do tempo.
-  const barras = [...(rows ?? [])].reverse().map(r => ({
+  const barras = [...filtradas].reverse().map(r => ({
     label: r.month_label.replace(/ \d{4}$/, '').slice(0, 3),
     value: Number(r.total_pnl || 0),
     meta: r.total_resolved ? `${r.greens}G/${r.reds}R em ${r.total_resolved}` : undefined,
@@ -132,7 +138,7 @@ export default function BancaFechamentos() {
 
   // Media por mes fechado · e a regua contra a qual cada mes se le. Sem ela
   // "+R$ 300" nao diz se foi mes bom ou mes normal.
-  const media = rows && rows.length ? total / rows.length : 0
+  const media = filtradas.length ? total / filtradas.length : 0
 
   return (
     <PageShell
@@ -147,6 +153,15 @@ export default function BancaFechamentos() {
       }}
       mainClassName="space-y-5"
     >
+      {rows !== null && rows.length > 0 && anos.length > 1 && (
+        <PillGroup
+          options={[{ value: 'tudo', label: 'Todos os anos' },
+                    ...anos.map(a => ({ value: a, label: a }))]}
+          value={ano}
+          onChange={setAno}
+        />
+      )}
+
       {rows === null ? (
         <div className="flex justify-center py-20"><Spinner size="lg" /></div>
       ) : rows.length === 0 ? (
@@ -208,8 +223,13 @@ export default function BancaFechamentos() {
             </div>
           )}
 
+          {filtradas.length === 0 ? (
+            <div className="card p-10 text-center border-dashed">
+              <p className="text-ink-3 text-sm">Nenhum fechamento em {ano}.</p>
+            </div>
+          ) : (
           <div className="card overflow-hidden divide-y divide-line/60">
-            {rows.map(h => {
+            {filtradas.map(h => {
               const positivo = Number(h.total_pnl) >= 0
               return (
                 <div key={h.month_key} className="px-4 py-4 flex items-start gap-3">
@@ -240,7 +260,7 @@ export default function BancaFechamentos() {
                     )}
                     {/* Contra a media · e o que transforma um numero solto em
                         leitura ("esse mes foi acima ou abaixo do meu normal"). */}
-                    {rows.length > 1 && (
+                    {filtradas.length > 1 && (
                       <p className={`text-[10px] tabular-nums ${
                         Number(h.total_pnl) >= media ? 'text-green-500/70' : 'text-red-400/70'
                       }`}>
@@ -252,6 +272,7 @@ export default function BancaFechamentos() {
               )
             })}
           </div>
+          )}
 
           {/* As duas perguntas que vem depois de "quanto deu": em QUE PRODUTO
               eu vou bem e em QUE LIGA eu vou bem. Sem elas o usuario sabe o
