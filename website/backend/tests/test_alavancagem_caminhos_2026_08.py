@@ -70,11 +70,12 @@ class FakeCur:
             self.series.append(row)
             self._result = [dict(row)]
         elif s.startswith("UPDATE alavancagem_series"):
-            ended_at, reason, final, realized, sid = params
+            ended_at, reason, final, realized, units, sid = params
             for row in self.series:
                 if row["id"] == sid:
                     row.update(ended_at=ended_at, end_reason=reason,
-                               final_amount=float(final), realized_pnl=float(realized))
+                               final_amount=float(final), realized_pnl=float(realized),
+                               realized_units=float(units))
             self._result = []
         elif "JOIN picks_alavancagem" in s:
             started_at = params[1]
@@ -84,8 +85,9 @@ class FakeCur:
                 for i, (f, r, o) in enumerate(self.picks, start=1)
                 if f >= started_at
             ]
-        elif "SUM(realized_pnl)" in s:
-            total = sum(float(x["realized_pnl"] or 0)
+        elif "SUM(realized_pnl)" in s or "SUM(realized_units)" in s:
+            col = "realized_units" if "SUM(realized_units)" in s else "realized_pnl"
+            total = sum(float(x.get(col) or 0)
                         for x in self.series if x["ended_at"] is not None)
             self._result = [{"total": total}]
         else:
@@ -175,9 +177,15 @@ def test_meta_fecha_o_caminho_sozinho():
     fechados = [s for s in cur.series if s["ended_at"] is not None]
     assert len(fechados) == 1
     assert fechados[0]["end_reason"] == ALAV_END_META
-    # 100 * 1.5^3 = 337.50 · realizado e' o lucro, nao o bolo
-    assert fechados[0]["final_amount"] == 337.5
-    assert fechados[0]["realized_pnl"] == 237.5
+    # O bolo e' 100 * 1.5^meta; realizado e' o LUCRO, nao o bolo. Calculado e
+    # nao cravado porque a meta e' parametro de produto e ja mudou uma vez.
+    esperado = 100.0
+    for _ in range(ALAV_META_PADRAO):
+        esperado = round(esperado * 1.5, 2)
+    assert fechados[0]["final_amount"] == esperado
+    assert fechados[0]["realized_pnl"] == round(esperado - 100.0, 2)
+    # E em unidades: o caminho arrisca 1u e paga (multiplicador - 1)u.
+    assert fechados[0]["realized_units"] == round(esperado / 100.0 - 1, 4)
     # E o caminho seguinte ja nasceu, com os greens que sobraram dentro dele.
     assert float(serie["initial_amount"]) == 100.0
 

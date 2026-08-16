@@ -421,12 +421,16 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
     # Caminhos encerrados dentro do mês. Somam no P&L mas não nas contagens de
     # green/red: um caminho não é um pick, e contá-lo estragaria o aproveitamento.
     alav_realized = round(_alav_realized_pnl(cur, user_id, since=month_start, until=month_end), 2)
+    alav_units    = _alav_realized_units(cur, user_id, since=month_start, until=month_end)
 
     stats = {
         "total_pnl": alav_realized, "greens": 0, "reds": 0, "push": 0,
         "half_wins": 0, "half_loss": 0, "total_resolved": 0,
         "total_followed": len(followed),
         "alavancagem_realized": alav_realized,
+        # Unidades, que e o vocabulario do placar · reais dependem do valor de
+        # unidade de cada um e nao comparam entre usuarios.
+        "alavancagem_units": alav_units,
     }
     if not followed:
         return stats
@@ -974,23 +978,37 @@ ALAV_END_MANUAL = "manual"
 ALAV_END_RED    = "red"
 ALAV_END_META   = "meta"
 
-#: Greens que fecham o caminho sozinho.
+#: Greens que fecham o caminho sozinho, e quanto ele vale em unidades.
 #:
-#: 3 não é o número que mais lucra · com a odd de 1,475 do motor, se a taxa de
-#: acerto for boa, 5 e 8 rendem mais por tentativa. É o número que mais ENSINA:
-#: um caminho de 3 fecha a cada ~7 dias contra ~18 em 5 e ~65 em 8, então em
-#: seis meses ele produz ~25 amostras completas contra ~10 e ~3.
+#: O caminho arrisca 1 unidade e, com a odd de 1,475 do motor, 6 greens
+#: multiplicam por 10,30 · ou seja +9,30u de lucro. RED em qualquer degrau custa
+#: exatamente 1u, porque o composto nunca saiu da mesa. É esse par (-1u de risco
+#: contra +9,3u de retorno) que entra em Meus Picks e na banca, na mesma unidade
+#: que o resto do site usa.
 #:
-#: E a amostra é o que decide todo o resto: a odd de 1,475 tem probabilidade
-#: implícita de 67,8%, ou seja o comprimento do caminho não CRIA lucro, ele
-#: multiplica a vantagem (ou a desvantagem) que já existe por pick. Acima de
-#: 67,8% caminho longo amplifica o ganho; abaixo, amplifica o buraco -- de
-#: -0,12 por tentativa em 3 passos pra -0,34 em 10. Escolher 8 antes de medir
-#: a taxa real é apostar que o motor bate 72% sem ter conferido.
+#: 6 é escolha do produto, não da matemática. A matemática diz que o
+#: comprimento não CRIA lucro: a odd de 1,475 já embute 67,8% de probabilidade,
+#: então caminho longo multiplica a vantagem por pick se ela existir, e
+#: multiplica o buraco se não existir. A 68% de acerto real, 6 greens fecham em
+#: ~9,9% das tentativas e cada caminho leva ~28 dias.
 #:
-#: Sobe pra 5 quando houver ~50 picks resolvidos mostrando taxa confortavelmente
-#: acima de 68%.
-ALAV_META_PADRAO = 3
+#: A consequência prática de 6 é que a amostra demora: ~13 caminhos completos
+#: por ano contra ~52 em 3. Se depois de uns meses o número de caminhos fechados
+#: for baixo demais pra concluir qualquer coisa, encurtar é o caminho.
+ALAV_META_PADRAO = 6
+
+
+def _alav_unidades(entrada: float, final: float) -> float:
+    """Resultado do caminho em unidades · o caminho arrisca 1u, sempre.
+
+    O valor de entrada em reais é escolha de cada usuário (R$50, R$200), então
+    ele não serve pra comparar caminho de gente diferente nem pra alimentar o
+    placar do site. Em unidades a conta é a mesma pra todo mundo: RED custa 1u,
+    e bater a meta paga (multiplicador - 1)u.
+    """
+    if entrada <= 0:
+        return 0.0
+    return round(final / entrada - 1, 4)
 
 
 def _alav_open_series(cur, user_id: int) -> Optional[dict]:
@@ -1117,9 +1135,11 @@ def _alav_sync(cur, user_id: int) -> Optional[dict]:
             final, realizado = 0.0, -entrada
         cur.execute("""
             UPDATE alavancagem_series
-               SET ended_at = %s, end_reason = %s, final_amount = %s, realized_pnl = %s
+               SET ended_at = %s, end_reason = %s, final_amount = %s,
+                   realized_pnl = %s, realized_units = %s
              WHERE id = %s
-        """, (boundary, motivo, final, realizado, series["id"]))
+        """, (boundary, motivo, final, realizado,
+              _alav_unidades(entrada, final), series["id"]))
         cur.execute(
             "INSERT INTO alavancagem_series (user_id, initial_amount, started_at) "
             "VALUES (%s, %s, %s) RETURNING id, initial_amount, started_at",
@@ -1131,6 +1151,26 @@ def _alav_sync(cur, user_id: int) -> Optional[dict]:
 def _alav_match_label(p: dict) -> str:
     home, away = p.get("home_team_1"), p.get("away_team_1")
     return f"{home} x {away}" if home and away else "Alavancagem"
+
+
+def _alav_realized_units(cur, user_id: int, since: Optional[str] = None,
+                         until: Optional[str] = None) -> float:
+    """Unidades realizadas em caminhos FECHADOS · é o número que vai pro placar.
+
+    Caminho aberto fica de fora pela mesma razão de sempre: o composto em
+    andamento não é dinheiro.
+    """
+    cond, params = "", [user_id]
+    if since is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s"; params.append(since)
+    if until is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') < %s";  params.append(until)
+    cur.execute(
+        "SELECT COALESCE(SUM(realized_units), 0) AS total FROM alavancagem_series "
+        f"WHERE user_id = %s AND ended_at IS NOT NULL{cond}",
+        params,
+    )
+    return round(float((cur.fetchone() or {}).get("total") or 0), 4)
 
 
 def _alav_realized_pnl(cur, user_id: int, since: Optional[str] = None,
@@ -1201,6 +1241,10 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
             "meta":             ALAV_META_PADRAO,
             "greens_no_caminho": len([s for s in series["steps"] if s["result"] == "GREEN"]),
             "realized_total":   round(_alav_realized_pnl(cur, user_id), 2),
+            "realized_units":   _alav_realized_units(cur, user_id),
+            # Quanto o caminho aberto vale AGORA em unidades · ainda nao e
+            # dinheiro, mas e o numero que o usuario compara com o resto.
+            "open_units":       _alav_unidades(initial, bankroll),
             "history":          history,
         }
         conn.commit()
@@ -1238,9 +1282,11 @@ def encerrar_alavancagem(current_user: dict = Depends(get_current_user)):
         realized = round(bankroll - initial, 2)
         cur.execute("""
             UPDATE alavancagem_series
-               SET ended_at = NOW(), end_reason = %s, final_amount = %s, realized_pnl = %s
+               SET ended_at = NOW(), end_reason = %s, final_amount = %s,
+                   realized_pnl = %s, realized_units = %s
              WHERE id = %s AND ended_at IS NULL
-        """, (ALAV_END_MANUAL, bankroll, realized, series["id"]))
+        """, (ALAV_END_MANUAL, bankroll, realized,
+              _alav_unidades(initial, bankroll), series["id"]))
         if cur.rowcount == 0:
             # Outra aba fechou primeiro · não realiza o mesmo lucro duas vezes.
             raise HTTPException(409, "Esse caminho já foi encerrado.")

@@ -2688,10 +2688,19 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
     ficariam todas de um lado da regua, dizendo o oposto do que parece.
     """
     referee = perna.get("referee")
-    if not referee or escopo != "total":
+    if not referee:
         return None
     if not market_form.e_mercado_de_cartoes(perna.get("market"), perna.get("market_type")):
         return None
+    # Mercado de UM time ("Cartoes Visitante") tambem ganha o arbitro, mas como
+    # CONTEXTO, nao como serie graduada. A linha do pick e de um time (~2.5) e o
+    # contador do arbitro e do jogo inteiro (~4.8): pintar as barras contra essa
+    # linha poria todas do mesmo lado da regua e diria o oposto do que parece.
+    # Antes disso a secao simplesmente sumia, e o usuario perguntou por que a
+    # multipla nao mostrava o arbitro que o VIP mostrava -- a resposta era que
+    # nem VIP mostrava, quando o mercado era de time. Some a comparacao, fica a
+    # informacao: quantos cartoes este arbitro da por jogo.
+    so_contexto = escopo != "total"
 
     jogos = _jogos_do_arbitro(cur, referee, perna.get("season"),
                               perna.get("fixture_id"), limit)
@@ -2703,10 +2712,19 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
     )
     if not serie["resolved"]:
         return None
+    if so_contexto:
+        # Sem linha nao ha regua, e sem regua o front nao pinta GREEN/RED · o
+        # resultado de cada jogo sai junto pra nao sobrar cor sem criterio.
+        serie["line"] = None
+        for m in serie["matches"]:
+            m["result"] = None
+        serie["hit_rate"] = None
+        serie["greens"] = 0
     return {
         "name": referee,
         "amostra_curta": len(jogos) < limit,
         "amostra_pedida": limit,
+        "contexto": so_contexto,
         **serie,
     }
 

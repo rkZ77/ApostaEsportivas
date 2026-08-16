@@ -148,6 +148,12 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 realized_pnl   NUMERIC(12,2)
             )
         """)
+        # Resultado do caminho em UNIDADES, do lado do resultado em reais.
+        # O caminho arrisca 1u e paga (multiplicador - 1)u ao bater a meta; RED
+        # custa exatamente -1u. E' assim que ele entra em Meus Picks e na banca,
+        # na mesma unidade do resto do site -- reais dependem do valor de
+        # unidade de cada usuario e nao servem pro placar comum.
+        cur.execute("ALTER TABLE alavancagem_series ADD COLUMN IF NOT EXISTS realized_units NUMERIC(10,4);")
         cur.execute("CREATE INDEX IF NOT EXISTS idx_alav_series_user ON alavancagem_series(user_id, started_at);")
         # Um caminho aberto por usuario. E' o que impede duas abas (ou dois
         # cliques) criarem caminhos paralelos e a replay ficar ambigua.

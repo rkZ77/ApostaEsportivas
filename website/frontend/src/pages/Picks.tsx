@@ -123,6 +123,8 @@ interface AlavSerie {
   can_close?: boolean
   meta?: number
   greens_no_caminho?: number
+  realized_units?: number
+  open_units?: number
   realized_total?: number
   history?: {
     id: number; initial: number; final: number; realized: number
@@ -2484,7 +2486,7 @@ export default function Picks() {
                     <div>
                       <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
                       <p className="text-xs text-ink-3 mt-0.5">
-                        Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 3} greens,
+                        Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 6} greens,
                         mas você pode encerrar antes quando quiser
                       </p>
                     </div>
@@ -2504,7 +2506,8 @@ export default function Picks() {
                         <div className="min-w-0">
                           <p className="text-[11px] text-ink-3">
                             {(userAlavSerie.open_profit ?? 0) > 0
-                              ? <>Lucro em jogo: <span className="font-mono font-black text-orange-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span></>
+                              ? <>Lucro em jogo: <span className="font-mono font-black text-orange-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span>
+                                 {!!userAlavSerie.open_units && <span className="text-ink-4"> ({userAlavSerie.open_units >= 0 ? '+' : ''}{userAlavSerie.open_units.toFixed(2)}u)</span>}</>
                               : 'Caminho recém-começado'}
                           </p>
                           <p className="text-[11px] text-ink-4 mt-0.5 leading-snug">
@@ -2601,6 +2604,9 @@ export default function Picks() {
                       <span className={`font-mono font-bold ${userAlavSerie.realized_total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                         {userAlavSerie.realized_total >= 0 ? '+' : ''}R${userAlavSerie.realized_total.toFixed(2)}
                       </span>
+                      {userAlavSerie.realized_units != null && (
+                        <span className="text-ink-4"> ({userAlavSerie.realized_units >= 0 ? '+' : ''}{userAlavSerie.realized_units.toFixed(2)}u)</span>
+                      )}
                     </p>
                   )}
                   {(!userAlavSerie?.configured || alavInitInput) ? (
