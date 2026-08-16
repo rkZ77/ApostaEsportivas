@@ -6,6 +6,7 @@ import logging
 import resend
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 import mercadopago
@@ -325,15 +326,16 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         # com "agora + dias do plano" -- sem isso, quem renova antes de vencer
         # (comportamento comum) perdia os dias restantes que ja tinha pago.
         # Mesmo padrao ja usado abaixo pro credito de indicacao (GREATEST).
-        cur.execute("SELECT name, email, expires_at FROM users WHERE id = %s", (user_id_int,))
+        cur.execute("SELECT name, email, expires_at, ga_client_id FROM users WHERE id = %s", (user_id_int,))
         row = cur.fetchone()
         if not row:
             logger.error("[PAYMENTS] user_id=%s não encontrado · pagamento %s ignorado", user_id, payment_id)
             _record_event(source, "usuario_inexistente", payment_id, f"user_id={user_id}")
             return {"status": "error", "payment_id": payment_id, "detail": "usuário não encontrado"}
 
-        user_name  = row["name"]
-        user_email = row["email"]
+        user_name     = row["name"]
+        user_email    = row["email"]
+        ga_client_id  = row["ga_client_id"]
         current_expires = row["expires_at"]  # naive UTC (coluna timestamp without time zone)
         now_naive = datetime.now(timezone.utc).replace(tzinfo=None)
         base = current_expires if (current_expires and current_expires > now_naive) else now_naive
@@ -392,6 +394,21 @@ def _apply_approved_payment(payment: dict, source: str) -> dict:
         conn.close()
 
     _record_event(source, "ativado", payment_id, f"user_id={user_id} plano={plan_key}")
+
+    # Receita no GA. Só chega aqui quem passou pelo ON CONFLICT DO NOTHING lá em
+    # cima, então é um evento por pagamento real · reprocessar o mesmo pagamento
+    # sai como "duplicate" antes deste ponto. Em thread pelo mesmo motivo do
+    # e-mail: o webhook do MercadoPago tem timeout, e esperar o Google responder
+    # pra confirmar um pagamento seria trocar dinheiro por métrica.
+    import threading
+
+    from analytics import send_purchase
+
+    threading.Thread(
+        target=send_purchase,
+        args=(ga_client_id, user_id_int, payment_id, plan_key, plan_info["title"], amount),
+        daemon=True,
+    ).start()
 
     # Email de confirmação de VIP (em thread separada para não atrasar a resposta)
     if user_email and user_name:
@@ -540,6 +557,10 @@ def try_activate_pending(user_id: int) -> dict | None:
 
 class CreatePreferenceBody(BaseModel):
     plan: str
+    # Cookie `_ga` cru, lido pelo front. Vem do navegador, então é tratado como
+    # entrada não confiável: só o formato conhecido é aceito (ver parse_ga_cookie)
+    # e o resto vira string vazia.
+    ga_cookie: Optional[str] = None
 
 
 @router.post("/create")
@@ -592,7 +613,17 @@ def create_preference(body: CreatePreferenceBody, current_user: dict = Depends(g
         conn = get_connection()
         cur = conn.cursor()
         try:
-            cur.execute("UPDATE users SET checkout_started_at = NOW() WHERE id = %s", (current_user["id"],))
+            # O client_id só é gravado quando veio um cookie legível: se o
+            # usuário voltar ao checkout com bloqueador ligado, o COALESCE
+            # preserva o id capturado numa visita anterior em vez de apagá-lo.
+            from analytics import parse_ga_cookie
+
+            ga_client_id = parse_ga_cookie(body.ga_cookie or "")
+            cur.execute(
+                "UPDATE users SET checkout_started_at = NOW(), "
+                "ga_client_id = COALESCE(NULLIF(%s, ''), ga_client_id) WHERE id = %s",
+                (ga_client_id, current_user["id"]),
+            )
             conn.commit()
         finally:
             cur.close()

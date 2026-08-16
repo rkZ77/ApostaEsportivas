@@ -44,6 +44,11 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS away_team_id INTEGER;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
+        # client_id do GA, capturado no checkout. Sem ele a receita chega no GA
+        # como sessao nova e direta, e a unica pergunta que o GA responde melhor
+        # que a tabela payments -- de qual canal veio quem paga -- fica sem
+        # resposta. Ver analytics.py.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ga_client_id VARCHAR(50);")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30) UNIQUE;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE;")
