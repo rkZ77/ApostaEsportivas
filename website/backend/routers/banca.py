@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from typing import Optional
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+from data_br import data_br
 from database import get_connection
 from auth_utils import get_current_user
 from routers.payments import PLANS
@@ -359,7 +360,7 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     nao era nem a banca real de hoje, nem a banca real no fim daquele periodo.
     """
     epoch = _get_bankroll_epoch(cur, user_id)
-    cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
+    cond = f" AND {data_br('uf.followed_at')} >= %s" if epoch is not None else ""
     params: list = [user_id] + ([epoch] if epoch is not None else [])
     cur.execute(f"""
         SELECT uf.pick_id, uf.pick_type, uf.stake_units, uf.actual_odd, uf.cashout_amount
@@ -406,14 +407,14 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
 
 def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, unit_value: float) -> dict:
     """P&L e contagem de resultados (vip/free/multipla) de um usuário dentro de [month_start, month_end)."""
-    cur.execute("""
+    cur.execute(f"""
         SELECT uf.id, uf.pick_id, uf.pick_type, uf.stake_units,
                uf.actual_odd, uf.cashout_amount
         FROM user_followed_picks uf
         WHERE uf.user_id = %s
           AND uf.pick_type != 'alavancagem'
-          AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
-          AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+          AND {data_br('uf.followed_at')} >= %s
+          AND {data_br('uf.followed_at')} <  %s
         ORDER BY uf.followed_at ASC
     """, (user_id, month_start, month_end))
     followed = [dict(r) for r in cur.fetchall()]
@@ -499,10 +500,10 @@ def get_banca(
         date_cond = ""
         date_params: list = [user_id]
         if from_date and to_date:
-            date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo')::date BETWEEN %s AND %s"
+            date_cond = f" AND {data_br('uf.followed_at')} BETWEEN %s AND %s"
             date_params += [from_date, to_date]
         elif from_date:
-            date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo')::date >= %s"
+            date_cond = f" AND {data_br('uf.followed_at')} >= %s"
             date_params.append(from_date)
         elif days > 0:
             date_cond = " AND uf.followed_at >= NOW() - (%s * INTERVAL '1 day')"
@@ -512,7 +513,7 @@ def get_banca(
             # Evita contar de novo o P&L de meses já fechados/rolados pro bankroll_start.
             epoch = _get_bankroll_epoch(cur, user_id)
             if epoch is not None:
-                date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s"
+                date_cond = f" AND {data_br('uf.followed_at')} >= %s"
                 date_params.append(epoch)
 
         cur.execute(f"""
@@ -1162,9 +1163,9 @@ def _alav_realized_units(cur, user_id: int, since: Optional[str] = None,
     """
     cond, params = "", [user_id]
     if since is not None:
-        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s"; params.append(since)
+        cond += f" AND {data_br('ended_at')} >= %s"; params.append(since)
     if until is not None:
-        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') < %s";  params.append(until)
+        cond += f" AND {data_br('ended_at')} < %s";  params.append(until)
     cur.execute(
         "SELECT COALESCE(SUM(realized_units), 0) AS total FROM alavancagem_series "
         f"WHERE user_id = %s AND ended_at IS NOT NULL{cond}",
@@ -1182,9 +1183,9 @@ def _alav_realized_pnl(cur, user_id: int, since: Optional[str] = None,
     """
     cond, params = "", [user_id]
     if since is not None:
-        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s"; params.append(since)
+        cond += f" AND {data_br('ended_at')} >= %s"; params.append(since)
     if until is not None:
-        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') < %s";  params.append(until)
+        cond += f" AND {data_br('ended_at')} < %s";  params.append(until)
     cur.execute(
         "SELECT COALESCE(SUM(realized_pnl), 0) AS total FROM alavancagem_series "
         f"WHERE user_id = %s AND ended_at IS NOT NULL{cond}",
@@ -1371,7 +1372,7 @@ def get_banca_summary(current_user: dict = Depends(get_current_user)):
         # mesmo criterio usado em GET /banca e /monthly-close (evita contar 2x o P&L
         # de meses já fechados/rolados pro bankroll_start).
         epoch = _get_bankroll_epoch(cur, user_id)
-        date_cond = " AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s" if epoch is not None else ""
+        date_cond = f" AND {data_br('uf.followed_at')} >= %s" if epoch is not None else ""
         params = [user_id] + ([epoch] if epoch is not None else [])
 
         cur.execute(f"""
@@ -1592,12 +1593,12 @@ def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end:
                 bankroll = float(series["initial_amount"])
                 break
 
-    cur.execute("""
+    cur.execute(f"""
         SELECT end_reason, realized_pnl
         FROM alavancagem_series
         WHERE user_id = %s AND ended_at IS NOT NULL
-          AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s
-          AND (ended_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+          AND {data_br('ended_at')} >= %s
+          AND {data_br('ended_at')} <  %s
     """, (user_id, month_start, month_end))
     closed = [dict(r) for r in cur.fetchall()]
 
@@ -1746,8 +1747,7 @@ def reset_current_month(current_user: dict = Depends(get_current_user)):
 
     1. So o mes corrente. O recorte usa _current_month_key() + _month_bounds(),
        os mesmos do fechamento mensal, e a comparacao e' por
-       `followed_at AT TIME ZONE 'America/Sao_Paulo'` -- identica a de
-       _compute_month_stats. Isso importa: se o filtro daqui divergisse do que
+       `data_br('followed_at')` -- identica a de _compute_month_stats. Isso importa: se o filtro daqui divergisse do que
        a tela soma, o usuario veria "13 apostas" no aviso e o comando apagaria
        outro conjunto. Mes anterior nao e' alcancavel por esta rota, nem por
        parametro: nao existe parametro.
@@ -1793,12 +1793,12 @@ def reset_current_month(current_user: dict = Depends(get_current_user)):
                 "Zerar agora deixaria o saldo errado.",
             )
 
-        cur.execute("""
+        cur.execute(f"""
             DELETE FROM user_followed_picks
             WHERE user_id = %s
               AND pick_type != 'alavancagem'
-              AND (followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
-              AND (followed_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+              AND {data_br('followed_at')} >= %s
+              AND {data_br('followed_at')} <  %s
         """, (user_id, month_start, month_end))
         removidas = cur.rowcount
         conn.commit()

@@ -335,8 +335,13 @@ def test_zerar_mes_usa_o_mesmo_recorte_que_a_tela_soma():
     um numero de apostas e o comando apagaria outro conjunto."""
     corpo = _codigo("routers/banca.py", "reset_current_month")
     soma  = _codigo("routers/banca.py", "_compute_month_stats")
-    for regra in ("followed_at AT TIME ZONE 'America/Sao_Paulo'",
-                  "pick_type != 'alavancagem'"):
+    # `data_br()` e nao um AT TIME ZONE solto: a forma antiga tratava o
+    # timestamp ingenuo (que esta em UTC) como se ja fosse horario de Brasilia
+    # e errava por 6 horas, jogando tudo que foi seguido depois das 18:00 BR no
+    # dia seguinte. Ver data_br.py, que ja documentava a conversao dupla.
+    # O alias muda entre as duas (`followed_at` num, `uf.followed_at` no
+    # outro), entao a checagem e' pelo helper + coluna, nao pela string exata.
+    for regra in ("data_br(", "followed_at')", "pick_type != 'alavancagem'"):
         assert regra in corpo, f"reset sem: {regra}"
         assert regra in soma,  f"soma sem: {regra}"
 

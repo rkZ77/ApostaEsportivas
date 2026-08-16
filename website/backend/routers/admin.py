@@ -972,9 +972,13 @@ def admin_revenue(current_user: dict = Depends(require_admin)):
         """)
         totals = dict(cur.fetchone())
 
-        cur.execute("""
+        # Mesmo erro de 6h que estava em banca.py: `created_at` e' timestamp
+        # ingenuo em UTC, entao um AT TIME ZONE so' o trata como se ja fosse
+        # horario de Brasilia. Pagamento feito depois das 18:00 BR caia no mes
+        # seguinte na virada. Ver data_br.py.
+        cur.execute(f"""
             SELECT
-                TO_CHAR(created_at AT TIME ZONE 'America/Sao_Paulo', 'YYYY-MM') AS month,
+                TO_CHAR({data_br('created_at')}, 'YYYY-MM') AS month,
                 COALESCE(SUM(amount), 0) AS total,
                 COUNT(*)                 AS count
             FROM payments

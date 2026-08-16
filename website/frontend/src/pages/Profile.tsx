@@ -272,12 +272,12 @@ export default function Profile() {
       title="Meu Perfil"
       description="Gerencie suas informações, senha, avatar e preferências de conta."
       noindex
-      width="default"
+      width="full"
       bar={{ back: true, title: 'Meu Perfil', sub: 'Gerencie suas informações e preferências' }}
-      mainClassName="space-y-6"
+      mainClassName="grid gap-6 lg:grid-cols-2 items-start"
     >
         {/* Info atual + upload de avatar */}
-        <div className="card p-5 flex items-center gap-4">
+        <div className="card p-5 flex items-center gap-4 lg:col-span-2">
           <div className="relative group cursor-pointer shrink-0" onClick={handleAvatarClick}>
             {user?.name && (
               <Avatar name={user.name} imageUrl={currentAvatar} size="lg" />
