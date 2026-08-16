@@ -2527,6 +2527,29 @@ export default function Picks() {
                   </div>
                 </details>
 
+                {/* Pick de hoje */}
+                {todayLoading ? <PickLoading /> : (
+                  <div>
+                    <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
+                    {today?.alavancagem ? (
+                      <AlavancagemCard
+                        pick={today.alavancagem}
+                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
+                        onConfigureBanca={irParaConfigAlavancagem}
+                        isLive={isAlavLive(today.alavancagem)}
+                      />
+                    ) : (
+                      <div className="card p-8 text-center border-dashed border-orange-500/20">
+                        <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
+                        <p className="text-ink-4 text-xs mt-1">Publicado quando a análise do dia fecha.</p>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Caminho DEPOIS do pick (16/08). Ele estava no topo e
+                    empurrava a entrada do dia pra baixo da dobra · o caminho e'
+                    o contexto, o pick e' o que se veio ver. */}
                 {/* Config banca alavancagem */}
                 <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
                   <div className="flex items-center justify-between mb-3">
@@ -2605,23 +2628,44 @@ export default function Picks() {
                   {/* Progresso até a meta. O caminho fecha sozinho ao bater, e
                       esse é o ponto: composto que não para é lucro que nunca
                       existe, porque um RED lá na frente transforma tudo em pó. */}
-                  {userAlavSerie?.configured && !!userAlavSerie.meta && (
-                    <div className="mb-3 flex items-center gap-2">
-                      <div className="flex gap-1">
-                        {Array.from({ length: userAlavSerie.meta }).map((_, i) => (
-                          <span
-                            key={i}
-                            className={`h-1.5 w-7 rounded-full ${
-                              i < (userAlavSerie.greens_no_caminho ?? 0) ? 'bg-orange-400' : 'bg-surface-2'
-                            }`}
-                          />
-                        ))}
+                  {userAlavSerie?.configured && !!userAlavSerie.meta && (() => {
+                    const feitos = userAlavSerie.greens_no_caminho ?? 0
+                    const meta = userAlavSerie.meta!
+                    const faltam = Math.max(0, meta - feitos)
+                    return (
+                      <div className="mb-4 rounded-lg border border-orange-500/20 bg-orange-500/[0.04] px-4 py-3">
+                        <div className="flex items-baseline justify-between gap-3 mb-2">
+                          <span className="text-xs text-ink-3">Progresso do caminho</span>
+                          <span className="font-mono text-sm">
+                            <span className="text-orange-400 font-black text-lg">{feitos}</span>
+                            <span className="text-ink-4"> de {meta} greens</span>
+                          </span>
+                        </div>
+                        {/* Degraus com numero dentro · a fileira de tracinhos de
+                            1,5px era pequena demais pra contar de relance, que e
+                            a unica coisa que se quer saber aqui. */}
+                        <div className="flex gap-1.5">
+                          {Array.from({ length: meta }).map((_, i) => (
+                            <span
+                              key={i}
+                              className={`flex-1 h-7 rounded-md flex items-center justify-center text-[11px] font-black transition-colors ${
+                                i < feitos
+                                  ? 'bg-orange-400 text-surface-0'
+                                  : 'bg-surface-2 text-ink-4 border border-line'
+                              }`}
+                            >
+                              {i + 1}
+                            </span>
+                          ))}
+                        </div>
+                        <p className="text-[11px] text-ink-4 mt-2 leading-snug">
+                          {faltam === 0
+                            ? 'Meta batida · o caminho fecha e o lucro vai pra sua banca.'
+                            : `Faltam ${faltam} ${faltam === 1 ? 'green' : 'greens'} pra fechar sozinho. Você pode encerrar antes quando quiser.`}
+                        </p>
                       </div>
-                      <span className="text-[11px] text-ink-4">
-                        {userAlavSerie.greens_no_caminho ?? 0} de {userAlavSerie.meta} greens
-                      </span>
-                    </div>
-                  )}
+                    )
+                  })()}
 
                   {/* Passos do caminho atual · a escada que levou até o bolo de hoje */}
                   {!!userAlavSerie?.steps?.length && (
@@ -2729,26 +2773,6 @@ export default function Picks() {
                     <p className="text-xs text-red-400 mt-2">{alavInitError}</p>
                   )}
                 </div>
-
-                {/* Pick de hoje */}
-                {todayLoading ? <PickLoading /> : (
-                  <div>
-                    <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
-                    {today?.alavancagem ? (
-                      <AlavancagemCard
-                        pick={today.alavancagem}
-                        userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
-                        onConfigureBanca={irParaConfigAlavancagem}
-                        isLive={isAlavLive(today.alavancagem)}
-                      />
-                    ) : (
-                      <div className="card p-8 text-center border-dashed border-orange-500/20">
-                        <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-ink-4 text-xs mt-1">Publicado quando a análise do dia fecha.</p>
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 {/* Stats da série */}
                 {(() => {
