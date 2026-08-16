@@ -1578,6 +1578,78 @@ def admin_descartar_pick(body: DescartarBody, current_user: dict = Depends(requi
         conn.close()
 
 
+@router.post("/picks/descartar-sinteticos")
+def admin_descartar_sinteticos(
+    dry_run: bool = Query(True),
+    current_user: dict = Depends(require_admin),
+):
+    """Descarta de uma vez todo pick pendente com fixture SINTETICA.
+
+    Fixture na faixa >= 9000000 nao existe na API-Football · e' semente de teste
+    que vazou pra tabela. O checker pede a folha dela a cada rodada, a API
+    responde "nao encontrado", e o pick fica pendente pra sempre. Nao ha cenario
+    em que ele resolva, entao nao ha o que esperar.
+
+    Mesmas duas cercas do descarte individual, pelos mesmos motivos: so' pick
+    SEM resultado, e os follows saem no mesmo commit. Comeca em dry_run porque
+    apagar em lote sem ver a lista antes e como se descobre o alcance tarde.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        alvos: list[dict] = []
+        for pt in _PICK_TABLES_UMA_FIXTURE:
+            tabela, home_col, away_col = _PICK_TABLES[pt]
+            try:
+                cur.execute(f"""
+                    SELECT id, fixture_id, {home_col} AS home_team, {away_col} AS away_team,
+                           match_date
+                      FROM {tabela}
+                     WHERE result IS NULL AND fixture_id >= 9000000
+                     ORDER BY id
+                """)
+            except Exception:
+                conn.rollback()
+                continue
+            for r in cur.fetchall():
+                d = dict(r)
+                alvos.append({
+                    "pick_type":  pt,
+                    "id":         d["id"],
+                    "fixture_id": d["fixture_id"],
+                    "jogo":       f"{d['home_team']} x {d['away_team']}",
+                    "match_date": str(d["match_date"]) if d["match_date"] else None,
+                })
+
+        removidos = follows = 0
+        if not dry_run and alvos:
+            for a in alvos:
+                tabela = _PICK_TABLES[a["pick_type"]][0]
+                cur.execute(
+                    "DELETE FROM user_followed_picks WHERE pick_id = %s AND pick_type = %s",
+                    (a["id"], a["pick_type"]))
+                follows += cur.rowcount or 0
+                cur.execute(f"DELETE FROM {tabela} WHERE id = %s AND result IS NULL", (a["id"],))
+                removidos += cur.rowcount or 0
+            conn.commit()
+            logger.info("[ADMIN] %d pick(s) sintetico(s) descartado(s) por %s",
+                        removidos, current_user.get("email"))
+
+        return {
+            "dry_run":  dry_run,
+            "encontrados": len(alvos),
+            "removidos": removidos,
+            "follows_removidos": follows,
+            "picks": alvos[:50],
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stats")
 def admin_stats(current_user: dict = Depends(require_admin)):
     conn = get_connection()

@@ -506,9 +506,23 @@ class AIResultCheckerService:
         if mt in self._STAT_MARKETS:
             stat_val = self._resolve_overunder(stats, mt, side, is_ht, market, prorrogacao)
             stat_min = self._resolve_overunder_min(stats, mt, side, is_ht, market, prorrogacao)
+            # As duas causas abaixo saiam por dentro do settlement, que devolve
+            # UNRESOLVED sem dizer nada -- e' o que fazia picks com folha
+            # completa cairem na frase generica e ninguem saber qual dos dois
+            # problemas era. Checar ANTES nao muda o veredito, so' o nomeia.
+            if op is None:
+                return self._pendente(f"linha ilegivel: {line!r} (mercado {market!r})")
+            if stat_val is None and stat_min is None:
+                return self._pendente(
+                    f"contador de {mt} ausente na folha do jogo "
+                    f"(mercado {market!r}, lado {side!r})")
             return settlement.settle_over_under_com_piso(stat_val, val, op, stat_min)
 
         if mt == "btts":
+            if hg is None or ag is None:
+                return self._pendente("placar ausente na folha (mercado de ambas marcam)")
+            if op is None:
+                return self._pendente(f"linha ilegivel em ambas marcam: {line!r}")
             return settlement.settle_btts(hg, ag, op)
 
         if mt == "to_qualify":
