@@ -585,6 +585,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           probability: dica.probability ?? null,
           ev: dica.ev ?? null,
           reasoning: dica.reasoning,
+          homeTeam: dica.home_team,
+          awayTeam: dica.away_team,
         }}
       />
     )}
@@ -925,6 +927,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
           probability: null,
           ev: m.ev ?? null,
           reasoning: m.reasoning,
+          homeTeam: legs[0]?.home ?? legs[0]?.home_team,
+          awayTeam: legs.length > 1 ? `+${legs.length - 1} jogo${legs.length - 1 > 1 ? 's' : ''}` : (legs[0]?.away ?? legs[0]?.away_team),
           // A série vem PERNA A PERNA · não existe uma que descreva o bilhete.
           pickId: m.id,
           pickType: 'multipla',

@@ -442,6 +442,8 @@ function SuggestionCard({
           probability: s.probability,
           ev: s.ev,
           reasoning: s.reasoning,
+          homeTeam: s.home_team_name,
+          awayTeam: s.away_team_name,
         }}
       />
     )}

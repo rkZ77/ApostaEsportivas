@@ -66,6 +66,16 @@ export interface AnalysisData {
    * aparece PERNA A PERNA, que é a versão honesta de "igual aos outros".
    */
   legs?: Array<{ market?: string | null; line?: string | null; odd?: number | null }>
+  /**
+   * Times do jogo · o modal nao dizia QUAL pick estava sendo explicado.
+   *
+   * Aberto pelo card da aba Hoje isso passava, porque o card estava logo
+   * atras. Aberto de dentro do painel de detalhe, o usuario ve so' mercado e
+   * linha -- e "Ambas as Equipes Marcam · Nao" e a mesma frase em cinco picks
+   * do mesmo dia.
+   */
+  homeTeam?: string | null
+  awayTeam?: string | null
 }
 
 /** Probabilidade que a casa está embutindo na odd. */
@@ -130,8 +140,13 @@ export default function AnalysisModal({
     <Modal
       onClose={onClose}
       width="lg"
+      // Pode ser aberto de dentro do painel do pick, que e z-[60].
+      acimaDeTudo
       title="Entenda esta análise"
-      description={`${data.market}${data.line ? ` · ${data.line}` : ''}`}
+      description={[
+        data.homeTeam && data.awayTeam ? `${data.homeTeam} x ${data.awayTeam}` : null,
+        `${data.market}${data.line ? ` · ${data.line}` : ''}`,
+      ].filter(Boolean).join(' · ')}
     >
       <div className="p-5 space-y-5">
 
