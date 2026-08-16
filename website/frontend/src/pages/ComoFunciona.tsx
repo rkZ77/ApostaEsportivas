@@ -94,7 +94,7 @@ export default function ComoFunciona() {
     <PageShell
       title="Como funciona"
       description="Entenda como a IA do Pick IA analisa cada jogo, gera os picks e como usar cada parte da plataforma."
-      width="prose"
+      width="full"
       bar={{
         title: 'Como funciona',
         sub: 'Um tour por tudo que a plataforma faz',
@@ -127,7 +127,7 @@ export default function ComoFunciona() {
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: '0px 0px -80px 0px' }}
-          className="space-y-4"
+          className="grid gap-4 lg:grid-cols-2"
         >
           {features.map(({ icon: Icon, color, bg, badge, title, desc, items }) => (
             <motion.div key={title} variants={fadeInUp} whileHover={{ y: -2 }} className={`border rounded-lg p-5 ${bg}`}>
