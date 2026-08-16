@@ -66,57 +66,33 @@ function ensureFonts(): Promise<void> {
 }
 
 /**
- * Fundo dos cards. Antes era um degradê preto + UM glow central redondo, igual
- * nos quatro cards, o que deixava a imagem chapada.
+ * Fundo dos cards · chapado, como nos carrosséis do Instagram.
  *
- * Agora: degradê de base, grade fina (mesma linguagem do `data-grid` do
- * tailwind.config, que o site usa), dois glows em diagonal na cor de destaque
- * (canto superior esquerdo e inferior direito) e uma vinheta que escurece as
- * bordas. A diagonal é o que dá movimento -- glow centralizado e simétrico é
- * justamente o que lê como estático.
+ * Já foi degradê + grade + dois glows diagonais + vinheta, cinco camadas
+ * empilhadas atrás de tudo. A intenção era dar movimento, mas o efeito somado
+ * foi uma lavagem esverdeada em cima da imagem inteira: o escudo dos times
+ * boiava num borrão e o card não parecia do mesmo produto que os carrosséis.
+ *
+ * Cor de destaque rende mais concentrada num elemento sólido do que diluída no
+ * fundo todo. A paleta é a mesma de scripts/video/cartoes.py.
  */
 function drawBackground(ctx: CanvasRenderingContext2D, accentHex: string): void {
-  // A cor de destaque entra JÁ no degradê de base, não só nos glows. Veio de
-  // uma alteração paralela feita direto no card de pick, com a intenção certa
-  // (chamar atenção no feed, em vez do brilho sutil de antes) -- aqui ela vale
-  // pros quatro cards em vez de um só.
-  const bg = ctx.createLinearGradient(0, 0, W * 0.35, H)
-  bg.addColorStop(0, `${accentHex}3a`)
-  bg.addColorStop(0.4, '#000000')
-  bg.addColorStop(1, '#08080a')
-  ctx.fillStyle = bg
+  // Fundo CHAPADO, mesmo #0a0a0c dos carrosseis (scripts/video/cartoes.py).
+  //
+  // A versao anterior empilhava cinco camadas: degrade de base tingido de
+  // verde, grade de linhas, dois glows radiais e uma vinheta. Cada uma sozinha
+  // era sutil; somadas viravam uma lavagem esverdeada que sujava o card
+  // inteiro e deixava o escudo dos times boiando num borrao. Cor de destaque
+  // rende mais em UM elemento solido do que espalhada pelo fundo todo.
+  ctx.fillStyle = '#0a0a0c'
   ctx.fillRect(0, 0, W, H)
 
-  ctx.save()
-  ctx.strokeStyle = `${accentHex}0f`
-  ctx.lineWidth = 1
-  const passo = 72
-  for (let x = 0; x <= W; x += passo) {
-    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke()
-  }
-  for (let y = 0; y <= H; y += passo) {
-    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke()
-  }
-  ctx.restore()
-
-  const glowTopo = ctx.createRadialGradient(W * 0.18, H * 0.16, 40, W * 0.18, H * 0.16, W * 0.95)
-  glowTopo.addColorStop(0, `${accentHex}7a`)
-  glowTopo.addColorStop(0.45, `${accentHex}1f`)
-  glowTopo.addColorStop(1, 'transparent')
-  ctx.fillStyle = glowTopo
-  ctx.fillRect(0, 0, W, H)
-
-  const glowBase = ctx.createRadialGradient(W * 0.86, H * 0.82, 40, W * 0.86, H * 0.82, W * 0.85)
-  glowBase.addColorStop(0, `${accentHex}3a`)
-  glowBase.addColorStop(1, 'transparent')
-  ctx.fillStyle = glowBase
-  ctx.fillRect(0, 0, W, H)
-
-  const vinheta = ctx.createRadialGradient(W / 2, H / 2, H * 0.32, W / 2, H / 2, H * 0.78)
-  vinheta.addColorStop(0, 'transparent')
-  vinheta.addColorStop(1, 'rgba(0,0,0,0.72)')
-  ctx.fillStyle = vinheta
-  ctx.fillRect(0, 0, W, H)
+  // Um unico brilho, curto e no topo, so' pra tirar a chapa morta.
+  const brilho = ctx.createRadialGradient(W / 2, -H * 0.1, 40, W / 2, -H * 0.1, W * 0.9)
+  brilho.addColorStop(0, `${accentHex}26`)
+  brilho.addColorStop(1, 'transparent')
+  ctx.fillStyle = brilho
+  ctx.fillRect(0, 0, W, H * 0.55)
 }
 
 /** Faixa fina de destaque no topo, com degradê que some nas pontas. */
@@ -177,8 +153,9 @@ function drawCircularLogo(ctx: CanvasRenderingContext2D, img: HTMLImageElement |
   ctx.beginPath()
   ctx.arc(cx, cy, r, 0, Math.PI * 2)
   ctx.closePath()
-  ctx.fillStyle = '#18181b'
-  ctx.fill()
+  // Sem disco atras: escudo de time e' PNG com transparencia, e o
+  // preenchimento #18181b aparecia como uma bolha preta em volta dele. O aro
+  // fica so' pro caso da imagem nao carregar, onde ele e' o proprio marcador.
   if (img) {
     ctx.clip()
     ctx.drawImage(img, cx - r, cy - r, size, size)
