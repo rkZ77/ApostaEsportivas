@@ -71,13 +71,20 @@ export default function BancaFechamentos() {
   // dá: mês a mês o número é pequeno, e a soma é a que responde se a banca
   // cresceu no ano.
   const total = (rows ?? []).reduce((acc, r) => acc + Number(r.total_pnl || 0), 0)
+  // "Somei X" nao diz se o resultado veio de consistencia ou de um mes fora da
+  // curva. Meses positivos e o melhor/pior mes respondem isso de graca, com o
+  // dado que a lista ja carrega.
+  const positivos = (rows ?? []).filter(r => Number(r.total_pnl) > 0).length
+  const melhor = (rows ?? []).reduce<CloseRow | null>(
+    (a, r) => (!a || Number(r.total_pnl) > Number(a.total_pnl) ? r : a), null)
+  const unidades = (rows ?? []).reduce((acc, r) => acc + Number(r.profit_units ?? 0), 0)
 
   return (
     <PageShell
       title="Fechamentos mensais"
       description="Histórico mês a mês da sua banca, com o resultado de cada fechamento confirmado."
       noindex
-      width="default"
+      width="full"
       bar={{
         back: '/banca',
         title: 'Fechamentos mensais',
@@ -97,18 +104,39 @@ export default function BancaFechamentos() {
         </div>
       ) : (
         <>
-          <div className="card p-5 flex items-center justify-between gap-4">
-            <div>
-              <p className="text-xs text-ink-3 font-semibold">Somando os meses fechados</p>
-              <p className="text-[11px] text-ink-4 mt-0.5">
-                {rows.length === 1 ? '1 mês registrado' : `${rows.length} meses registrados`}
-              </p>
-            </div>
-            <p className={`font-mono text-2xl font-black tabular-nums shrink-0 ${
-              total > 0 ? 'text-green-500' : total < 0 ? 'text-red-400' : 'text-ink-2'
-            }`}>
-              {total === 0 ? 'R$ 0' : fmtSigned(total)}
-            </p>
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+            {[
+              {
+                l: 'Somando os meses fechados',
+                v: total === 0 ? 'R$ 0' : fmtSigned(total),
+                sub: rows.length === 1 ? '1 mês registrado' : `${rows.length} meses registrados`,
+                c: total > 0 ? 'text-green-500' : total < 0 ? 'text-red-400' : 'text-ink-2',
+              },
+              {
+                l: 'Em unidades',
+                v: `${unidades >= 0 ? '+' : ''}${unidades.toFixed(1)}u`,
+                sub: 'independe do valor da sua unidade',
+                c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
+              },
+              {
+                l: 'Meses no azul',
+                v: `${positivos} de ${rows.length}`,
+                sub: 'consistência, não sorte de um mês',
+                c: positivos * 2 >= rows.length ? 'text-green-500' : 'text-ink-1',
+              },
+              {
+                l: 'Melhor mês',
+                v: melhor ? fmtSigned(melhor.total_pnl) : 'R$ 0',
+                sub: melhor?.month_label ?? '',
+                c: 'text-ink-1',
+              },
+            ].map(x => (
+              <div key={x.l} className="card p-4">
+                <p className={`font-mono text-xl font-black tabular-nums ${x.c}`}>{x.v}</p>
+                <p className="text-[11px] text-ink-3 mt-0.5 leading-snug">{x.l}</p>
+                <p className="text-[10px] text-ink-4 mt-0.5 leading-snug capitalize">{x.sub}</p>
+              </div>
+            ))}
           </div>
 
           <div className="card overflow-hidden divide-y divide-line/60">

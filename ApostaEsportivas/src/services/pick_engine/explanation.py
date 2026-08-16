@@ -132,10 +132,15 @@ def build_explanation(candidate: dict) -> dict:
     referee_sig = candidate.get("referee_signal")
     intensity = candidate.get("game_intensity")
     if referee_sig and intensity:
-        avg_red = referee_sig.get("avg_red") or 0.0
+        # Duas casas, nao o float cru. Sem o formato isto saia na tela do
+        # usuario como "media de 4.788018433179723 cartoes amarelos e
+        # 0.2857142857142857 vermelhos/jogo" -- precisao de 16 casas num numero
+        # que veio de dividir dois inteiros, e que ninguem le assim.
+        avg_yellow = float(referee_sig.get("avg_yellow") or 0.0)
+        avg_red = float(referee_sig.get("avg_red") or 0.0)
         positive_factors.append(
-            f"Árbitro com média de {referee_sig['avg_yellow']} cartões amarelos e "
-            f"{avg_red} vermelhos/jogo em {referee_sig['games']} jogos na temporada · "
+            f"Árbitro com média de {avg_yellow:.2f} cartões amarelos e "
+            f"{avg_red:.2f} vermelhos/jogo em {referee_sig['games']} jogos na temporada · "
             f"contexto de jogo classificado como '{intensity['label']}' "
             f"(score {intensity['score']*100:.0f}%)"
         )

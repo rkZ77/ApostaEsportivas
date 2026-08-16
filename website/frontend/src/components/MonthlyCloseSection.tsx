@@ -27,8 +27,13 @@ export default function MonthlyCloseSection() {
       api.get('/banca/monthly-closes').catch(() => null),
     ]).then(([closeRes, histRes]) => {
       const c = closeRes?.data
+      // Campos do fechamento de alavancagem mudaram junto com os caminhos:
+      // o que conta agora e caminho ENCERRADO (na mao ou na meta) e caminho
+      // que estourou, nao green/red de degrau. Com os nomes velhos isto era
+      // sempre falso e o fechamento sumia pra quem so tinha alavancagem.
+      const alav = c?.alavancagem
       const hasActivity = c && (c.total_followed > 0 ||
-        (c.alavancagem && (c.alavancagem.greens_this_month > 0 || c.alavancagem.reds_this_month > 0)))
+        (alav && (alav.closed_this_month > 0 || alav.busted_this_month)))
       setPending(c && !c.already_closed && hasActivity
         ? { month_label: c.month_label, total_pnl: c.total_pnl }
         : null)

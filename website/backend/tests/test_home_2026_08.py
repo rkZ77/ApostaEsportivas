@@ -296,12 +296,27 @@ def test_texto_para_ler_nao_vai_pra_largura_cheia():
     """A medida de leitura e' o unico teto que nao se negocia: 45 a 75
     caracteres por linha. Estas telas sao texto corrido ou formulario."""
     for pagina, largura in (
-        ("Termos", "prose"), ("Privacidade", "prose"), ("ComoFunciona", "prose"),
+        ("Termos", "prose"), ("Privacidade", "prose"),
         ("Blog", "prose"), ("BlogPost", "narrow"),
         ("Checkout", "narrow"), ("Agente", "narrow"),
     ):
         src = _front(f"pages/{pagina}.tsx")
         assert f'width="{largura}"' in src, f"{pagina} devia seguir em {largura}"
+
+
+def test_como_funciona_protege_a_leitura_pela_grade_e_nao_pela_pagina():
+    """ComoFunciona saiu de `prose` (16/08) porque parecia apertada ao lado do
+    resto do app, que roda em `full`.
+
+    A medida de leitura continua valendo -- so' passou a ser garantida por
+    outro meio: a pagina nao e' texto corrido, e' uma lista de CARDS, e em duas
+    colunas cada card fica em ~700px, dentro da faixa confortavel. Largura
+    cheia com coluna unica seria linha de 1440px, que e' justamente o que a
+    regra proibe. Se a grade cair, o teto tem que voltar.
+    """
+    src = _front("pages/ComoFunciona.tsx")
+    assert 'width="full"' in src
+    assert "lg:grid-cols-2" in src, "sem a grade, ComoFunciona tem que voltar pra prose"
 
 
 def test_grade_e_tabela_vao_pra_largura_cheia():

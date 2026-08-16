@@ -1209,12 +1209,23 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
         initial  = float(series["initial_amount"])
         bankroll = float(series["current_bankroll"])
 
+        # `etapas` responde "eu peguei esse caminho?" · caminho sem pick seguido
+        # existe no banco (o replay cria a linha) mas nunca foi jogado, e sem
+        # essa contagem ele apareceria no historico como se tivesse sido.
         cur.execute("""
-            SELECT id, initial_amount, final_amount, realized_pnl, end_reason,
-                   started_at, ended_at
-            FROM alavancagem_series
-            WHERE user_id = %s AND ended_at IS NOT NULL
-            ORDER BY ended_at DESC
+            SELECT s.id, s.initial_amount, s.final_amount, s.realized_pnl,
+                   s.realized_units, s.end_reason, s.started_at, s.ended_at,
+                   (SELECT COUNT(*)
+                      FROM user_followed_picks uf
+                      JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+                     WHERE uf.user_id = s.user_id
+                       AND uf.pick_type = 'alavancagem'
+                       AND pa.result = 'GREEN'
+                       AND uf.followed_at >= s.started_at
+                       AND uf.followed_at <  s.ended_at) AS greens
+            FROM alavancagem_series s
+            WHERE s.user_id = %s AND s.ended_at IS NOT NULL
+            ORDER BY s.ended_at DESC
             LIMIT 20
         """, (user_id,))
         history = [{
@@ -1222,6 +1233,8 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
             "initial":      float(r["initial_amount"]),
             "final":        float(r["final_amount"] or 0),
             "realized":     float(r["realized_pnl"] or 0),
+            "units":        float(r["realized_units"] or 0),
+            "greens":       int(r["greens"] or 0),
             "end_reason":   r["end_reason"],
             "started_at":   r["started_at"].isoformat() if r["started_at"] else None,
             "ended_at":     r["ended_at"].isoformat() if r["ended_at"] else None,
