@@ -489,6 +489,8 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               probability: s.probability,
               ev: s.ev,
               reasoning: s.reasoning,
+              homeTeam: s.home_team_name ?? s.home_team,
+              awayTeam: s.away_team_name ?? s.away_team,
             }}
           />
         )}

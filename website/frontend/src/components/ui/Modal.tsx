@@ -91,9 +91,19 @@ export default function Modal({
   sheetOnMobile = true,
   hideClose,
   className,
+  acimaDeTudo = false,
 }: {
   onClose: () => void
   children: React.ReactNode
+  /**
+   * Sobe acima de outros overlays.
+   *
+   * O padrao z-50 basta pra modal aberta a partir da pagina. Quando ela e
+   * aberta de DENTRO de outro overlay -- o painel do pick e z-[60] -- 50 fica
+   * atras, e o modal aparecia apagado no fundo mesmo estando em portal: portal
+   * tira do stacking context do pai, mas nao muda a ordem de z entre irmaos.
+   */
+  acimaDeTudo?: boolean
   /** Cabeçalho pronto. Omitir quando o conteúdo já traz o seu. */
   title?: React.ReactNode
   description?: React.ReactNode
@@ -115,7 +125,8 @@ export default function Modal({
       exit="exit"
       onClick={onClose}
       className={cn(
-        'fixed inset-0 z-50 flex justify-center bg-black/70 backdrop-blur-sm p-4',
+        'fixed inset-0 flex justify-center bg-black/70 backdrop-blur-sm p-4',
+        acimaDeTudo ? 'z-[70]' : 'z-50',
         sheetOnMobile ? 'items-end sm:items-center' : 'items-center',
       )}
     >
