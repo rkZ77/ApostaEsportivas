@@ -65,6 +65,25 @@ STATUS_EXPIRADO = "EXPIRED"
 STATUS_LIQUIDADO = "SETTLED"
 
 
+def require_live_reader(user: dict = Depends(require_vip)) -> dict:
+    """Quem pode LER o feed/estatistica do Motor Live.
+
+    Enquanto o motor esta em validacao, so' admin. A aba do usuario ja' esta
+    desligada por `VITE_LIVE_PICKS_ENABLED`, mas isso e' o front: qualquer VIP
+    que conheca a rota alcanca `/feed` e `/stats` do mesmo jeito, e `stats`
+    publica taxa de acerto de um motor que ainda nao foi medido. Numero de
+    motor em teste vazando como se fosse produto e' pior do que numero nenhum.
+
+    `LIVE_PICKS_PUBLIC=true` libera pra VIP quando o produto abrir · e' o mesmo
+    interruptor do front, do lado do servidor, e nao depende de rebuild.
+    """
+    if os.getenv("LIVE_PICKS_PUBLIC", "").strip().lower() in ("1", "true", "on", "yes", "sim"):
+        return user
+    if user.get("plan") != "admin":
+        raise HTTPException(403, "Motor Ao Vivo em validação · disponível apenas para admin.")
+    return user
+
+
 def _tabela_existe(cur) -> bool:
     """picks_live so' existe onde o motor Live ja rodou. Em producao a tabela
     nao deve existir, e o produto inteiro precisa responder 'vazio' em vez de
@@ -269,7 +288,7 @@ def _enriquecer(pick: dict) -> dict:
 
 @router.get("/feed")
 def feed(
-    current_user: dict = Depends(require_vip),
+    current_user: dict = Depends(require_live_reader),
     incluir_encerrados: bool = Query(True, description="mostra tambem os ja liquidados de hoje"),
     limit: int = Query(30, ge=1, le=100),
 ):
@@ -353,7 +372,7 @@ def feed(
 
 
 @router.get("/stats")
-def estatisticas(current_user: dict = Depends(require_vip)):
+def estatisticas(current_user: dict = Depends(require_live_reader)):
     """Performance do Live, SEPARADA da do pre-jogo.
 
     Nenhuma consulta daqui toca picks_vip, picks_free ou as outras quatro
@@ -445,7 +464,7 @@ def estatisticas(current_user: dict = Depends(require_vip)):
 
 
 @router.get("/{pick_id}/detail")
-def detalhe(pick_id: int, current_user: dict = Depends(require_vip)):
+def detalhe(pick_id: int, current_user: dict = Depends(require_live_reader)):
     """O pick com o rastro completo do motor. Responde literalmente 'o que o
     motor sabia quando criou este pick'."""
     conn = get_connection()
