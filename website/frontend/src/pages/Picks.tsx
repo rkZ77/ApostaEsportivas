@@ -2160,7 +2160,21 @@ export default function Picks() {
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
-                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                      /* Colunas seguem a quantidade real de múltiplas. O grid
+                         fixo de 3-4 colunas foi feito pensando em vitrine cheia,
+                         mas o dia normal tem UMA múltipla · ela caía em 1/3 da
+                         tela e o card, que é o mais denso do site (duas pernas,
+                         linha de stats, barra de probabilidade), truncava até o
+                         nome dos times. Com uma só ela ganha largura de leitura;
+                         o max-w impede que vire uma faixa gigante no ultrawide. */
+                      <motion.div
+                        variants={staggerContainer} initial="hidden" animate="visible"
+                        className={`grid gap-4 ${
+                          multiplas.length === 1 ? 'max-w-2xl'
+                          : multiplas.length === 2 ? 'md:grid-cols-2'
+                          : 'md:grid-cols-2 xl:grid-cols-3'
+                        }`}
+                      >
                         {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </motion.div>
                     )}
