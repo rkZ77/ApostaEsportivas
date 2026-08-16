@@ -10,6 +10,7 @@ import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminPendencias from '../components/AdminPendencias'
+import AdminEngajamento from '../components/AdminEngajamento'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -1297,6 +1298,7 @@ export default function Admin() {
         </>)}
 
         {aba === 'usuarios' && (<>
+        <AdminEngajamento />
         {/* Criar usuário */}
         {creating && (
           <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">

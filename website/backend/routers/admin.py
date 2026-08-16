@@ -1053,6 +1053,77 @@ _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 _PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros")
 
 
+@router.get("/users/engajamento")
+def admin_users_engajamento(current_user: dict = Depends(require_admin)):
+    """Quem ainda aparece, quem sumiu, e quem o WhatsApp alcançaria.
+
+    As duas perguntas moram na mesma rota porque são a mesma consulta: a
+    audiência de cada aviso do WhatsApp é um recorte de atividade, e calcular
+    isso em dois lugares é como as contagens começam a divergir.
+
+    O corte de inatividade é 10 dias porque é o segmento de reengajamento
+    definido em website/scripts/whatsapp/ · alterar aqui sem alterar lá faz o
+    painel prometer um número de envios que o disparo não cumpre.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                COUNT(*)                                                          AS total,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '1 day')  AS hoje,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '7 days') AS semana,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '30 days') AS mes,
+                COUNT(*) FILTER (WHERE last_login_at IS NULL)                      AS nunca_entrou,
+                COUNT(*) FILTER (WHERE last_login_at <  NOW() - INTERVAL '10 days') AS inativos_10d,
+                COUNT(*) FILTER (WHERE phone IS NOT NULL AND phone <> '')          AS com_telefone,
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE))           AS com_opt_in,
+                COUNT(*) FILTER (WHERE plan IN ('vip','admin'))                    AS vips
+            FROM users
+        """)
+        u = dict(cur.fetchone() or {})
+
+        # Audiência de cada template. `com_opt_in` é o teto real de todos eles:
+        # sem consentimento não sai mensagem, por mais que o telefone exista.
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE))            AS picks_do_dia,
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE)
+                                   AND (last_login_at IS NULL
+                                        OR last_login_at < NOW() - INTERVAL '10 days')) AS reengajamento
+            FROM users
+            WHERE phone IS NOT NULL AND phone <> ''
+        """)
+        w = dict(cur.fetchone() or {})
+
+        # Resultado green/red só alcança quem SEGUIU pick · é o que diferencia
+        # esse aviso dos outros dois, e o motivo de ele ser barato.
+        cur.execute("""
+            SELECT COUNT(DISTINCT uf.user_id) AS n
+              FROM user_followed_picks uf
+              JOIN users us ON us.id = uf.user_id
+             WHERE COALESCE(us.whatsapp_opt_in, FALSE)
+               AND uf.followed_at >= NOW() - INTERVAL '30 days'
+        """)
+        seguidores = int((cur.fetchone() or {}).get("n") or 0)
+
+        return {
+            "usuarios": {k: int(v or 0) for k, v in u.items()},
+            "whatsapp": {
+                "picks_do_dia":   int(w.get("picks_do_dia") or 0),
+                "resultado":      seguidores,
+                "reengajamento":  int(w.get("reengajamento") or 0),
+                # Nada foi implementado do lado do envio · o painel mostra
+                # audiência, não fila de disparo, e dizer isso evita que o
+                # número seja lido como "vai sair".
+                "envio_ativo":    False,
+            },
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/picks/pendentes")
 def admin_picks_pendentes(
     horas: int = Query(4, ge=1, le=240),

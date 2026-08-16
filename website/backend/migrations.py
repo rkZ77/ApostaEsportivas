@@ -49,6 +49,12 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # que a tabela payments -- de qual canal veio quem paga -- fica sem
         # resposta. Ver analytics.py.
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ga_client_id VARCHAR(50);")
+        # Consentimento pra WhatsApp. Separado do telefone de proposito: o
+        # `phone` foi coletado no cadastro pra CONTA, nao pra marketing, e
+        # disparar pra base inteira sem opt-in explicito e o caminho mais curto
+        # pro numero ser denunciado e banido. Ver website/scripts/whatsapp/.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN DEFAULT FALSE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in_at TIMESTAMP;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30) UNIQUE;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE;")

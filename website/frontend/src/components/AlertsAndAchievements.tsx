@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BellRing, Trophy, Lock } from 'lucide-react'
+import { Bell, BellOff, BellRing, Trophy, Lock } from 'lucide-react'
 import api from '../services/api'
 import { Badge, Panel, PanelHead, Spinner } from './ui'
 
@@ -79,7 +79,19 @@ function AlertRow({ alert, onToggle, onThreshold }: {
   )
 }
 
-export default function AlertsAndAchievements() {
+/** O que o Perfil sabe sobre push. Vem de fora porque o hook ja vive la e
+ *  duplicar a inscricao criaria dois donos do mesmo estado. */
+export interface PushInfo {
+  supported: boolean
+  vapidKey: string
+  subscribed: boolean
+  permission: string
+  loading: boolean
+  subscribe: () => void
+  unsubscribe: () => void
+}
+
+export default function AlertsAndAchievements({ push }: { push?: PushInfo }) {
   const [alerts, setAlerts] = useState<Alert[] | null>(null)
   const [achievements, setAchievements] = useState<Achievement[] | null>(null)
   const [unlockedCount, setUnlockedCount] = useState(0)
@@ -118,7 +130,7 @@ export default function AlertsAndAchievements() {
 
       <Panel>
         <PanelHead
-          label={<span className="flex items-center gap-2"><BellRing className="w-3.5 h-3.5" />Alertas</span>}
+          label={<span className="flex items-center gap-2"><BellRing className="w-3.5 h-3.5" />Notificações</span>}
           meta={alerts ? `${alerts.filter(a => a.enabled).length} ativos` : undefined}
         />
         {alerts === null ? (
@@ -126,6 +138,44 @@ export default function AlertsAndAchievements() {
         ) : (
           <>
             <div className="divide-y divide-line/50">
+              {/* Entrega e conteudo no mesmo painel. Eram duas secoes separadas
+                  ("Ativar notificacoes" e "Alertas") que respondiam a mesma
+                  pergunta pela metade: uma ligava o canal sem dizer o que
+                  chega, a outra escolhia o que chega sem dizer por onde. */}
+              {push?.supported && push.vapidKey !== '' && (
+                <div className="flex items-center justify-between gap-4 px-5 py-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-surface-2'}`}>
+                      {push.subscribed
+                        ? <Bell className="w-4 h-4 text-green-400" />
+                        : <BellOff className="w-4 h-4 text-ink-3" />}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-ink-1">Avisos no aparelho</p>
+                      <p className="text-xs text-ink-3">
+                        {push.subscribed
+                          ? 'Ativos. O sino continua guardando tudo mesmo assim.'
+                          : 'Sem isso os avisos ficam só no sino do site.'}
+                      </p>
+                    </div>
+                  </div>
+                  {push.permission === 'denied' ? (
+                    <span className="text-xs text-ink-4 shrink-0">Bloqueado no navegador</span>
+                  ) : (
+                    <button
+                      onClick={push.subscribed ? push.unsubscribe : push.subscribe}
+                      disabled={push.loading}
+                      className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40 ${
+                        push.subscribed
+                          ? 'bg-surface-2 text-ink-2 hover:bg-surface-3'
+                          : 'bg-green-500 text-black hover:bg-green-400'
+                      }`}
+                    >
+                      {push.loading ? '...' : push.subscribed ? 'Desativar' : 'Ativar'}
+                    </button>
+                  )}
+                </div>
+              )}
               {alerts.map(a => (
                 <AlertRow
                   key={a.kind}
@@ -136,8 +186,7 @@ export default function AlertsAndAchievements() {
               ))}
             </div>
             <p className="px-5 py-3 border-t border-line text-[11px] text-ink-4 leading-relaxed">
-              Os avisos chegam pelo sino e, se você tiver autorizado, por notificação no
-              aparelho. Nenhum alerta dispara fora do horário em que a IA publica.
+              Tudo chega no sino do site, e também no aparelho se você tiver ativado acima.
             </p>
           </>
         )}

@@ -243,15 +243,13 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
   const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
 
-  const planStatusColor = isAdmin ? 'text-purple-400'
-    : isTrial ? 'text-amber-400'
-    : isVip ? 'text-yellow-400'
-    : 'text-ink-2'
-
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')
   useEffect(() => {
-    if (!user?.expires_at || (!isVip && !isTrial)) { setCountdown(''); return }
+    // Admin nunca expira, e `isVip` inclui admin · sem esta exclusão o
+    // contador lia o expires_at velho da conta e anunciava "Expira em
+    // Expirado" pra quem tem acesso permanente. Profile.tsx já cortava assim.
+    if (!user?.expires_at || isAdmin || (!isVip && !isTrial)) { setCountdown(''); return }
     const tick = () => {
       const diff = new Date(user.expires_at).getTime() - Date.now()
       if (diff <= 0) { setCountdown('Expirado'); return }
@@ -276,12 +274,11 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
         </div>
         <p className="text-ink-3 text-xs mt-0.5 truncate">{user.email}</p>
 
-        {/* Assinatura inline */}
+        {/* Assinatura inline.
+            "Status atual: VIP" saiu daqui: o plano já aparece no badge ao lado
+            do nome e de novo na navbar, e três vezes na mesma tela não informa
+            mais que uma. Sobra o que o badge NÃO diz, que é quanto tempo falta. */}
         <div className="mt-2 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-ink-3 text-xs">Status atual:</span>
-            <span className={`text-xs font-black ${planStatusColor}`}>{planLabel}</span>
-          </div>
           {countdown && (
             <span className="text-ink-2 text-xs">
               Expira em <span className="font-mono font-bold text-ink-1 tabular-nums">{countdown}</span>
@@ -618,16 +615,12 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
 // Vazio do Pick Seguro
 function PickSeguroEmpty() {
-  const hour = new Date().getHours()
-  const msg = hour < 12
-    ? 'O Pick do Dia chega até às 12h (normalmente bem antes).'
-    : 'Nenhum Pick do Dia disponível para hoje.'
+  const msg = 'Nenhum Pick do Dia disponível para hoje.'
 
   return (
     <div className="card p-10 text-center border-dashed">
       <p className="text-ink-3 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
       <p className="text-ink-4 text-xs">{msg}</p>
-      {hour < 12 && <p className="text-ink-4 text-xs mt-2">Publicado todos os dias até às 12h</p>}
     </div>
   )
 }
@@ -2631,7 +2624,7 @@ export default function Picks() {
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-ink-4 text-xs mt-1">Publicado diariamente até às 12h.</p>
+                        <p className="text-ink-4 text-xs mt-1">Publicado quando a análise do dia fecha.</p>
                       </div>
                     )}
                   </div>
