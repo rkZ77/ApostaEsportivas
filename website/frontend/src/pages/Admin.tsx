@@ -834,24 +834,6 @@ export default function Admin() {
         {/* Stats · usuários */}
         {stats && (
           <>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
-              {[
-                { label: 'Total',         value: stats.total,         color: 'text-ink-1' },
-                { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
-                { label: 'Trial',         value: stats.trial,          color: 'text-blue-400' },
-                { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
-                { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
-                { label: 'Online hoje',   value: stats.ativos_hoje,    color: 'text-green-400' },
-                { label: 'Online 7 dias', value: stats.ativos_semana,  color: 'text-teal-400' },
-                { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="stat-card text-center py-3">
-                  <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
-                  <div className="text-xs text-ink-3 mt-1">{label}</div>
-                </div>
-              ))}
-            </div>
-
             {/* O card antigo de "Picks de hoje" saiu daqui: virou o bloco
                 acima, alimentado por /admin/overview, que cobre os 6 tipos
                 (faltas e goleiros nao existiam quando este foi escrito). */}
@@ -1345,6 +1327,26 @@ export default function Admin() {
         </>)}
 
         {aba === 'usuarios' && (<>
+        {/* Contagem por plano e atividade. Moraram na Visao geral ate 16/08 e
+            vieram pra ca: sao numeros SOBRE USUARIO, e quem esta olhando a
+            base nao devia trocar de aba pra ver quantos VIP existem. */}
+        {stats && (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-4">
+            {[
+              { label: 'Total',         value: stats.total,          color: 'text-ink-1' },
+              { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
+              { label: 'Trial',         value: stats.trial,          color: 'text-blue-400' },
+              { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
+              { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
+              { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="stat-card text-center py-3">
+                <div className={`font-mono text-3xl font-black ${color}`}>{value}</div>
+                <div className="text-xs text-ink-3 mt-1">{label}</div>
+              </div>
+            ))}
+          </div>
+        )}
         <AdminEngajamento />
         {/* Criar usuário */}
         {creating && (

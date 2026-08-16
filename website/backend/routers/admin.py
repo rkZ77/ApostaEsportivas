@@ -1051,6 +1051,18 @@ _PICK_TABLES = {
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
+#: Coluna de odd de cada tabela · NAO e' `odd` em todas.
+#:
+#: `SELECT odd FROM picks_alavancagem` estoura com "column odd does not exist",
+#: e era por isso que marcar RED numa alavancagem pelo /admin devolvia erro em
+#: qualquer ambiente. Multipla tinha o mesmo problema. O mapeamento ja existia
+#: em /picks/search, escrito inline; aqui vira constante pra nao precisar
+#: existir uma terceira vez.
+_ODD_COL = {
+    "vip": "odd", "free": "odd", "faltas": "odd", "goleiros": "odd",
+    "multipla": "total_odd", "alavancagem": "odd_combined",
+}
+
 
 #: Tabelas com UMA fixture por pick · só nelas dá pra cruzar com
 #: match_statistics e dizer se o provedor publicou a folha do jogo.
@@ -1200,6 +1212,8 @@ def admin_picks_pendentes(
                 itens.append({
                     "pick_type":  pt,
                     "id":         d["id"],
+                    # Preenchido depois, quando o corte de horas ja e conhecido.
+                    "travado":    False,
                     "home_team":  d["home_team"],
                     "away_team":  d["away_team"],
                     "match_date": str(d["match_date"]) if d["match_date"] else None,
@@ -1232,12 +1246,18 @@ def admin_picks_pendentes(
         from zoneinfo import ZoneInfo
 
         limite = (datetime.now(ZoneInfo("America/Sao_Paulo")) - _td(hours=horas)).date()
-        travados = [i for i in itens
-                    if i["match_date"] and i["match_date"] < limite.isoformat()]
+        for i in itens:
+            i["travado"] = bool(i["match_date"] and i["match_date"] < limite.isoformat())
+        travados = [i for i in itens if i["travado"]]
+        # Jogo de HOJE que ainda nao terminou nao e pendencia, e o estado normal
+        # de um pick recem-publicado. Misturar os dois na mesma lista fazia o
+        # painel gritar todo dia de manha sobre a rodada da noite.
+        aguardando = len(itens) - len(travados)
 
         return {
             "total":            len(itens) + sum(bilhetes.values()),
             "simples":          len(itens),
+            "aguardando_jogo":  aguardando,
             "bilhetes":         bilhetes,
             "travados":         len(travados),
             "horas_de_corte":   horas,
@@ -1246,7 +1266,9 @@ def admin_picks_pendentes(
                 "folha incompleta":  sum(1 for i in itens if i["motivo"] == "folha incompleta"),
                 "folha completa":    sum(1 for i in itens if i["motivo"] == "folha completa"),
             },
-            "itens": itens[:100],
+            # Travado primeiro: e o que pede acao. O resto vai junto pra
+            # conferencia, marcado, mas nunca na frente.
+            "itens": (travados + [i for i in itens if not i["travado"]])[:100],
         }
     finally:
         cur.close()
@@ -1452,8 +1474,9 @@ def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(requ
     conn = get_connection()
     cur = conn.cursor()
     try:
-        # Calcula profit simples quando resultado é definido (apenas para picks com odd)
-        cur.execute(f"SELECT odd FROM {table} WHERE id = %s", (body.pick_id,))
+        # Profit em unidades, a partir da odd da tabela certa (ver _ODD_COL).
+        odd_col = _ODD_COL[body.pick_type]
+        cur.execute(f"SELECT {odd_col} AS odd FROM {table} WHERE id = %s", (body.pick_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Pick não encontrado")
