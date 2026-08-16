@@ -75,7 +75,11 @@ def _juntar_video(abertura: Path, cena: Path, fecho: Path, dur_cena: float,
     off2 = (ABERTURA + dur_cena - TRANSICAO) - TRANSICAO
     total = ABERTURA + dur_cena + dur_fecho - 2 * TRANSICAO
 
-    normal = f"scale={LARGURA}:{ALTURA},fps={FPS},format=yuv420p,setsar=1"
+    # A cena vem em 540x960 (ver VIEWPORT em estudio.py) e sobe 2x aqui.
+    # lanczos porque o conteúdo é texto de interface: o bilinear padrão
+    # borra as bordas das letras justamente onde a leitura acontece.
+    normal = (f"scale={LARGURA}:{ALTURA}:flags=lanczos,"
+              f"fps={FPS},format=yuv420p,setsar=1")
     filtro = (
         f"[0:v]{normal}[v0];"
         f"[1:v]{normal}[v1];"

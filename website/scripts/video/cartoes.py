@@ -10,11 +10,22 @@ As cores saem dos mesmos tokens do site (`frontend/src/index.css`): fundo
 """
 from __future__ import annotations
 
+import base64
 from pathlib import Path
 
 from playwright.sync_api import sync_playwright
 
 LARGURA, ALTURA = 1080, 1920
+
+# Lido do próprio site, não copiado pra cá: trocou o logo lá, troca aqui junto.
+LOGO = (Path(__file__).parents[2] / "frontend" / "public" / "logo.png").resolve()
+
+
+def _logo_embutido() -> str:
+    """O logo como data URI · a página é renderizada sem servidor."""
+    if not LOGO.exists():
+        return ""
+    return "data:image/png;base64," + base64.b64encode(LOGO.read_bytes()).decode()
 
 FUNDO = "#0a0a0c"
 TINTA = "#fafafa"
@@ -39,10 +50,15 @@ body::before {{
   pointer-events:none;
 }}
 .marca {{
-  position:absolute; top:150px; left:96px;
-  font-size:38px; font-weight:800; letter-spacing:-.02em; color:{TINTA};
+  position:absolute; top:132px; left:96px;
+  display:flex; align-items:center; gap:22px;
+  font-size:40px; font-weight:800; letter-spacing:-.02em; color:{TINTA};
 }}
-.marca span {{ color:{ACENTO}; }}
+.marca img {{ width:92px; height:92px; display:block; }}
+/* Só o "IA" é verde. Um seletor solto em `.marca span` pegava o wordmark
+   inteiro e pintava "Pick" de verde junto. */
+.marca .nome {{ color:{TINTA}; }}
+.marca .nome span {{ color:{ACENTO}; }}
 .conteudo {{ position:relative; z-index:1; }}
 .barra {{
   width:132px; height:9px; background:{ACENTO};
@@ -68,7 +84,7 @@ body::before {{
 """
 
 _ABERTURA = """
-<div class="marca">Pick<span>IA</span></div>
+<div class="marca">{logo}<span class="nome">Pick<span>IA</span></span></div>
 <div class="conteudo">
   <div class="barra"></div>
   <div class="gancho">{gancho}</div>
@@ -77,7 +93,7 @@ _ABERTURA = """
 """
 
 _FECHO = """
-<div class="marca">Pick<span>IA</span></div>
+<div class="marca">{logo}<span class="nome">Pick<span>IA</span></span></div>
 <div class="conteudo">
   <div class="barra"></div>
   <div class="fecho">{fecho}</div>
@@ -96,6 +112,9 @@ def render(cena: str, textos: dict[str, str], destino: Path) -> tuple[Path, Path
     destino.mkdir(parents=True, exist_ok=True)
     abertura = destino / f"{cena}-abertura.png"
     fecho = destino / f"{cena}-fecho.png"
+
+    uri = _logo_embutido()
+    textos = {**textos, "logo": f'<img src="{uri}" alt="">' if uri else ""}
 
     with sync_playwright() as pw:
         navegador = pw.chromium.launch()

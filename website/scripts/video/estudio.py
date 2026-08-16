@@ -71,7 +71,9 @@ _OVERLAY_JS = r"""
     ].join(';');
     const texto = document.createElement('span');
     texto.style.cssText = [
-      'font:800 23px/1.28 Inter,system-ui,-apple-system,"Segoe UI",sans-serif',
+      /* 26px num quadro de 540 vira 52px no 1080 final · tamanho de legenda
+         de Reels. Se mexer no VIEWPORT, mexa aqui junto. */
+      'font:800 26px/1.28 Inter,system-ui,-apple-system,"Segoe UI",sans-serif',
       'letter-spacing:-.01em', 'color:#fff', 'text-align:center',
       'background:rgba(10,10,12,.88)',
       '-webkit-backdrop-filter:blur(8px)', 'backdrop-filter:blur(8px)',
@@ -190,7 +192,7 @@ class Estudio:
         )
         opcoes = dict(
             viewport=VIEWPORT,
-            device_scale_factor=2,
+            device_scale_factor=1,
             is_mobile=True,
             has_touch=True,
             locale="pt-BR",
@@ -201,6 +203,11 @@ class Estudio:
         if self.sessao and self.sessao.exists():
             opcoes["storage_state"] = str(self.sessao)
         self._ctx = self._browser.new_context(**opcoes)
+        # Aceita os cookies antes da página nascer. O banner é `fixed
+        # bottom-0` e cobria justamente a faixa da legenda em toda cena.
+        self._ctx.add_init_script(
+            "try { localStorage.setItem('cookie_consent', '1'); } catch (e) {}"
+        )
         self._ctx.add_init_script(_OVERLAY_JS)
         self.page = self._ctx.new_page()
         # O Playwright começa a capturar junto com a página, então este é o
@@ -244,6 +251,23 @@ class Estudio:
     def ir(self, rota: str, espera: float = 1.6) -> None:
         self.page.goto(f"{self.base_url}{rota}", wait_until="domcontentloaded")
         self.page.wait_for_timeout(int(espera * 1000))
+        self.limpar_overlays()
+
+    def limpar_overlays(self) -> None:
+        """
+        Tira do caminho o que cobre o rodapé da tela.
+
+        A barra "Testar o VIP por 2 dias" da home só tem estado em React (nada
+        de localStorage), então some com clique e volta a cada carga · por isso
+        isto roda em todo `ir`, e não uma vez só. Sem barulho se não existir.
+        """
+        fechar = self.page.locator("[aria-label='Fechar chamada']")
+        try:
+            if fechar.count():
+                fechar.first.click(timeout=1500)
+                self.pausa(0.35)
+        except Exception:
+            pass
 
     def pausa(self, segundos: float) -> None:
         self.page.wait_for_timeout(int(segundos * 1000))

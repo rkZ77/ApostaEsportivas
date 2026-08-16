@@ -35,19 +35,45 @@ winget install Gyan.FFmpeg
 - **edge-tts** faz a voz. Usa as vozes neurais do Edge, que são boas o
   bastante pra publicar e **não pedem conta nem chave de API**. A única voz
   pt-BR instalada no Windows é a "Microsoft Maria Desktop", robótica demais.
+
+  Padrão: `pt-BR-ThalitaMultilingualNeural`. Troque com `--voz`; as opções
+  saem em `python narracao.py --vozes`. Mas o maior culpado por voz soando de
+  robô quase nunca é a voz · é o texto. Frase longa e simétrica de anúncio
+  entrega na hora. A narração aqui é escrita pra ser FALADA: frase curta,
+  "pra" no lugar de "para", nada de tríade publicitária.
 - **ffmpeg** monta. Tem que ser o completo: o que vem junto do Playwright é
   build reduzida (`--disable-everything`, só webm/vp8) e não faz H.264, AAC
   nem mp4. `ferramentas.py` acha o binário mesmo antes de reiniciar o shell.
 
-## Conta demo
+## Login: por que é manual (e por que vai continuar sendo)
 
-As cenas `banca`, `pegar-pick`, `acompanhar` e `agente` precisam de login VIP.
-Crie a conta pelo painel admin (`POST /api/admin/users`), com `plan: "vip"` ·
-sem `plan_expires_at` o VIP não expira. A senha precisa de 10+ caracteres, uma
-maiúscula e um número, mesma política do cadastro público.
+As cenas `banca`, `pegar-pick`, `acompanhar` e `agente` precisam de sessão VIP.
+**Não existe login automatizado aqui, e não é limitação do script:**
+`/api/auth/login` e `/api/auth/register` passam por `_verify_captcha`, e o
+Turnstile detecta navegador instrumentado. Medido no noprod: a Cloudflare
+devolve 401 no endpoint de challenge e nenhum token é emitido, headless ou com
+janela aberta, mesmo esperando 40 segundos. Isso é o anti-bot funcionando; não
+tente contornar.
 
-Essa conta é a **única** coisa que o processo escreve no banco, e é uma linha
-em `users`.
+O caminho é não passar pelo captcha. Você loga uma vez, à mão, e a sessão é
+reaproveitada:
+
+```
+python gravar.py --url https://SEU-NOPROD --login-manual
+```
+
+Abre um navegador de verdade, você entra normalmente (resolvendo o captcha) e
+a sessão é gravada em `sessao.json`. Depois disso as cenas rodam sozinhas.
+
+Dois detalhes que economizam raiva:
+
+- O backend guarda um `session_token` **único por usuário**. Logar de novo em
+  outro lugar derruba a sessão salva. Grave logo depois de salvar.
+- `sessao.json` é credencial. Está no `.gitignore`, e é bom que continue.
+
+Se quiser uma conta demo dedicada em vez da sua, crie pelo painel admin
+(`POST /api/admin/users`, com `plan: "vip"` · sem `plan_expires_at` o VIP não
+expira). Pelo admin não precisa de CPF nem passa por captcha.
 
 ## Uso
 
@@ -55,18 +81,13 @@ em `users`.
 python narracao.py --vozes                    lista as vozes disponíveis
 python narracao.py --todas --voz pt-BR-FranciscaNeural
 python gravar.py --listar
-python gravar.py --url https://SEU-NOPROD --todas --usuario demo@… --senha …
-python gravar.py --url https://SEU-NOPROD --cena banca --ver     navegador visível
+python gravar.py --url https://SEU-NOPROD --login-manual     uma vez só
+python gravar.py --url https://SEU-NOPROD --todas
+python gravar.py --url https://SEU-NOPROD --cena banca --ver  navegador visível
 python montar.py --todas --musica trilha.mp3
 ```
 
-Variáveis de ambiente no lugar das flags:
-
-```
-PICKIA_URL=https://SEU-NOPROD
-PICKIA_DEMO_USER=demo@pickia.com.br
-PICKIA_DEMO_SENHA=Demo123456
-```
+`PICKIA_URL` funciona no lugar do `--url`.
 
 | pasta | conteúdo |
 |---|---|
@@ -75,16 +96,51 @@ PICKIA_DEMO_SENHA=Demo123456
 | `cartoes/` | png de abertura e fecho |
 | `pronto/` | **o mp4 final** |
 
+## Por que a gravação é 540x960 e o mp4 é 1080x1920
+
+O Playwright captura em **pixels CSS** e ignora o `device_scale_factor`. Ele
+também só reduz a imagem pra caber em `record_video_size`, nunca amplia. Pedir
+1080x1920 na gravação fazia a página sair desenhada 1:1 no canto superior
+esquerdo de um quadro cinza.
+
+Então a cena é gravada em 540x960 (9:16 exato, e abaixo do breakpoint `sm` de
+640px do Tailwind, o que garante o layout mobile) e o `montar.py` amplia num 2x
+exato com lanczos. Mexeu no `VIEWPORT` de `estudio.py`? Ajuste junto o tamanho
+da fonte da legenda, que está calibrado pra esse quadro.
+
+O gravador também aceita os cookies via localStorage antes da página nascer e
+fecha a barra "Testar o VIP por 2 dias" a cada navegação · as duas são `fixed
+bottom-0` e cobriam exatamente a faixa da legenda.
+
 ## Cenas
+
+Cada cena é um vídeo de **um assunto só**, entre 25 e 40 segundos. Vídeo longo
+cobrindo tudo foi testado e descartado: dava 70 segundos e ninguém termina.
 
 | nome | conteúdo | login |
 |---|---|---|
-| `convite` | chamada pra conhecer o site e criar conta | não |
-| `visao-geral` | o que o site faz, de ponta a ponta | não |
-| `banca` | configurar a banca do zero | sim |
-| `pegar-pick` | pegar um pick e abrir "Entenda esta análise" | sim |
-| `acompanhar` | meus picks, minha banca e resultados | sim |
+| `convite` | chamada: você aposta no escuro? | não |
+| `cadastro` | criar conta grátis em 1 minuto | não |
+| `como-funciona` | de onde vem o pick | não |
+| `resultados` | o histórico aberto | não |
+| `banca-config` | configurar a banca do zero | sim |
+| `pick-abrir` | abrir um pick e ver a análise | sim |
+| `pick-registrar` | registrar a aposta e o stake | sim |
+| `meus-picks` | acompanhar suas apostas | sim |
+| `minha-banca` | a evolução da sua banca | sim |
 | `agente` | conversar com o Agente IA | sim |
+
+## Carrosséis pro feed
+
+```
+python carrossel.py --listar
+python carrossel.py --todos
+```
+
+PNG 1080x1350 (4:5, o formato que ocupa mais altura no feed) em `carrossel/`.
+Três carrosséis de 7 slides: `como-funciona`, `banca`, `pegar-pick`. Capa,
+cinco slides de conteúdo e um de chamada pra ação. O texto vive em
+`CARROSSEIS`, no topo de `carrossel.py`.
 
 ## O que o gravador NÃO faz no banco
 

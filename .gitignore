@@ -22,6 +22,9 @@ website/scripts/video/voz/
 website/scripts/video/cartoes/
 website/scripts/video/saida/
 website/scripts/video/pronto/
+website/scripts/video/carrossel/
+# sessao.json e' credencial: cookie de sessao logada em producao.
+website/scripts/video/sessao.json
 
 # Venv do ApostaEsportivas
 ApostaEsportivas/venv/
