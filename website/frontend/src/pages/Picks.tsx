@@ -38,7 +38,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { fmtUnits } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -121,6 +121,8 @@ interface AlavSerie {
   steps?: AlavStep[]
   open_profit?: number
   can_close?: boolean
+  meta?: number
+  greens_no_caminho?: number
   realized_total?: number
   history?: {
     id: number; initial: number; final: number; realized: number
@@ -2082,12 +2084,14 @@ export default function Picks() {
                       </div>
                     ))}
                   </div>
-                  {/* Premissa do lucro numa linha só, embaixo · a Banca sugere
-                      stake variável, e sem isto o número não bate com o que o
-                      usuário vê na banca dele. */}
-                  <p className="text-[10px] text-ink-4 mt-2">
-                    Plano fixo de stake: {STAKE_LABEL_PADRAO}.
-                  </p>
+                  {/* A legenda do plano de stake saiu daqui. Ela dizia "4u em
+                      picks simples" logo acima de um card que manda apostar 5u,
+                      porque os dois números falam de coisas diferentes: o plano
+                      fixo mede o PLACAR da IA, o card sugere a stake pra banca
+                      DAQUELE usuário. Explicar isso na tela custava mais texto
+                      do que o número valia, e sem explicar virava contradição.
+                      A premissa continua publicada nas telas de resultado, onde
+                      não existe card de Kelly pra contradizer. */}
                 </div>
               )}
 
@@ -2479,7 +2483,10 @@ export default function Picks() {
                   <div className="flex items-center justify-between mb-3">
                     <div>
                       <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
-                      <p className="text-xs text-ink-3 mt-0.5">Cada GREEN reaposta o bolo inteiro. Encerre pra transformar em dinheiro</p>
+                      <p className="text-xs text-ink-3 mt-0.5">
+                        Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 3} greens,
+                        mas você pode encerrar antes quando quiser
+                      </p>
                     </div>
                     {userAlavSerie?.configured && (
                       <div className="font-mono text-right">
@@ -2542,6 +2549,27 @@ export default function Picks() {
                       {alavCloseMsg && (
                         <p className="text-xs text-green-400 font-semibold mt-2 leading-snug">{alavCloseMsg}</p>
                       )}
+                    </div>
+                  )}
+
+                  {/* Progresso até a meta. O caminho fecha sozinho ao bater, e
+                      esse é o ponto: composto que não para é lucro que nunca
+                      existe, porque um RED lá na frente transforma tudo em pó. */}
+                  {userAlavSerie?.configured && !!userAlavSerie.meta && (
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {Array.from({ length: userAlavSerie.meta }).map((_, i) => (
+                          <span
+                            key={i}
+                            className={`h-1.5 w-7 rounded-full ${
+                              i < (userAlavSerie.greens_no_caminho ?? 0) ? 'bg-orange-400' : 'bg-surface-2'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-ink-4">
+                        {userAlavSerie.greens_no_caminho ?? 0} de {userAlavSerie.meta} greens
+                      </span>
                     </div>
                   )}
 

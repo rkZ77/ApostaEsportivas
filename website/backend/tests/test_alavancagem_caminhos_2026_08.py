@@ -70,11 +70,11 @@ class FakeCur:
             self.series.append(row)
             self._result = [dict(row)]
         elif s.startswith("UPDATE alavancagem_series"):
-            ended_at, reason, realized, sid = params
+            ended_at, reason, final, realized, sid = params
             for row in self.series:
                 if row["id"] == sid:
                     row.update(ended_at=ended_at, end_reason=reason,
-                               final_amount=0.0, realized_pnl=float(realized))
+                               final_amount=float(final), realized_pnl=float(realized))
             self._result = []
         elif "JOIN picks_alavancagem" in s:
             started_at = params[1]
@@ -160,6 +160,50 @@ def test_dois_reds_geram_dois_caminhos_fechados():
     assert len(fechados) == 2
     assert all(f["realized_pnl"] == -100.0 for f in fechados)
     assert serie["current_bankroll"] == 100.0        # caminho novo, zerado
+
+
+def test_meta_fecha_o_caminho_sozinho():
+    """Composto que nao para e' lucro que nunca existe: basta um RED la na
+    frente pra transformar tudo em po. A meta e' o que faz o ganho virar
+    dinheiro sem depender de o usuario estar olhando."""
+    from routers.banca import ALAV_END_META, ALAV_META_PADRAO
+
+    picks = [(BASE + timedelta(days=i), "GREEN", 1.5) for i in range(ALAV_META_PADRAO + 2)]
+    cur = _cur(100, picks)
+    serie = _alav_sync(cur, user_id=1)
+
+    fechados = [s for s in cur.series if s["ended_at"] is not None]
+    assert len(fechados) == 1
+    assert fechados[0]["end_reason"] == ALAV_END_META
+    # 100 * 1.5^3 = 337.50 · realizado e' o lucro, nao o bolo
+    assert fechados[0]["final_amount"] == 337.5
+    assert fechados[0]["realized_pnl"] == 237.5
+    # E o caminho seguinte ja nasceu, com os greens que sobraram dentro dele.
+    assert float(serie["initial_amount"]) == 100.0
+
+
+def test_meta_nao_engole_o_green_seguinte():
+    """A fronteira de microsegundo tem que valer pro fechamento por meta igual
+    vale pro RED · senao o green que bateu a meta entraria tambem no caminho
+    novo e o daria de graca."""
+    from routers.banca import ALAV_META_PADRAO
+
+    picks = [(BASE + timedelta(days=i), "GREEN", 2.0) for i in range(ALAV_META_PADRAO + 1)]
+    cur = _cur(10, picks)
+    serie = _alav_sync(cur, user_id=1)
+    # O caminho novo tem SO' o green que sobrou: 10 * 2 = 20, nao 40.
+    assert serie["current_bankroll"] == 20.0
+    assert len(serie["steps"]) == 1
+
+
+def test_encerrar_antes_da_meta_continua_livre():
+    """A meta e' onde ele fecha sozinho, nao uma trava. Quem quiser parar no
+    segundo green para no segundo green."""
+    import inspect
+
+    from routers import banca
+    src = inspect.getsource(banca.encerrar_alavancagem)
+    assert "ALAV_META_PADRAO" not in src, "encerrar na mao nao pode exigir a meta"
 
 
 def test_sem_configuracao_nao_cria_caminho():

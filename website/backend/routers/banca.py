@@ -972,6 +972,25 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
 
 ALAV_END_MANUAL = "manual"
 ALAV_END_RED    = "red"
+ALAV_END_META   = "meta"
+
+#: Greens que fecham o caminho sozinho.
+#:
+#: 3 não é o número que mais lucra · com a odd de 1,475 do motor, se a taxa de
+#: acerto for boa, 5 e 8 rendem mais por tentativa. É o número que mais ENSINA:
+#: um caminho de 3 fecha a cada ~7 dias contra ~18 em 5 e ~65 em 8, então em
+#: seis meses ele produz ~25 amostras completas contra ~10 e ~3.
+#:
+#: E a amostra é o que decide todo o resto: a odd de 1,475 tem probabilidade
+#: implícita de 67,8%, ou seja o comprimento do caminho não CRIA lucro, ele
+#: multiplica a vantagem (ou a desvantagem) que já existe por pick. Acima de
+#: 67,8% caminho longo amplifica o ganho; abaixo, amplifica o buraco -- de
+#: -0,12 por tentativa em 3 passos pra -0,34 em 10. Escolher 8 antes de medir
+#: a taxa real é apostar que o motor bate 72% sem ter conferido.
+#:
+#: Sobe pra 5 quando houver ~50 picks resolvidos mostrando taxa confortavelmente
+#: acima de 68%.
+ALAV_META_PADRAO = 3
 
 
 def _alav_open_series(cur, user_id: int) -> Optional[dict]:
@@ -1040,6 +1059,7 @@ def _alav_sync(cur, user_id: int) -> Optional[dict]:
         bankroll = float(series["initial_amount"])
         steps: list[dict] = []
         red_at = None
+        meta_at = None
 
         for p in picks:
             odd = float(p["odd_combined"] or 1)
@@ -1055,6 +1075,13 @@ def _alav_sync(cur, user_id: int) -> Optional[dict]:
                     "before":    round(before, 2),
                     "after":     bankroll,
                 })
+                # Bateu a meta: o caminho fecha aqui e o lucro vira dinheiro,
+                # mesmo que o usuário não estivesse olhando. Sem isso o caminho
+                # nunca para sozinho, e um composto que não para é um lucro que
+                # nunca existe · basta um RED lá na frente pra ele virar pó.
+                if len([s for s in steps if s["result"] == "GREEN"]) >= ALAV_META_PADRAO:
+                    meta_at = p["followed_at"]
+                    break
             elif p["result"] == "RED":
                 steps.append({
                     "pick_id":   p["id"],
@@ -1070,20 +1097,29 @@ def _alav_sync(cur, user_id: int) -> Optional[dict]:
             # PUSH e meio-green não existem em alavancagem (odd combinada
             # resolvida como bloco), mas se aparecerem o bolo segue intacto.
 
-        if red_at is None:
+        if red_at is None and meta_at is None:
             series["current_bankroll"] = round(bankroll, 2)
             series["steps"] = steps
             return series
 
-        # RED: fecha perdendo só o valor de entrada e abre o próximo caminho no
-        # mesmo valor inicial. O `+ 1 microsecond` é a fronteira que impede o
-        # pick do RED de ser recontado no caminho seguinte.
-        boundary = red_at + timedelta(microseconds=1)
+        # Fecha o caminho e abre o próximo no mesmo valor de entrada. O
+        # `+ 1 microsecond` é a fronteira que impede o pick que fechou (o RED ou
+        # o green da meta) de ser recontado no caminho seguinte.
+        # `entrada` é o que ESTE caminho começou valendo; `initial` é o valor
+        # configurado hoje pelo usuário, que é com o que o PRÓXIMO nasce. Os dois
+        # coincidem quase sempre, mas divergem quando ele muda o valor no meio.
+        entrada = float(series["initial_amount"])
+        if meta_at is not None:
+            boundary, motivo = meta_at + timedelta(microseconds=1), ALAV_END_META
+            final, realizado = bankroll, round(bankroll - entrada, 2)
+        else:
+            boundary, motivo = red_at + timedelta(microseconds=1), ALAV_END_RED
+            final, realizado = 0.0, -entrada
         cur.execute("""
             UPDATE alavancagem_series
-               SET ended_at = %s, end_reason = %s, final_amount = 0, realized_pnl = %s
+               SET ended_at = %s, end_reason = %s, final_amount = %s, realized_pnl = %s
              WHERE id = %s
-        """, (boundary, ALAV_END_RED, -float(series["initial_amount"]), series["id"]))
+        """, (boundary, motivo, final, realizado, series["id"]))
         cur.execute(
             "INSERT INTO alavancagem_series (user_id, initial_amount, started_at) "
             "VALUES (%s, %s, %s) RETURNING id, initial_amount, started_at",
@@ -1158,7 +1194,12 @@ def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
             "steps":            series["steps"],
             # Lucro do caminho aberto: existe na tela, não existe na banca.
             "open_profit":      round(bankroll - initial, 2),
+            # Encerrar na mão continua livre a qualquer altura · a meta é o
+            # ponto em que ele fecha SOZINHO, não uma trava. Quem quiser parar
+            # no segundo green para no segundo green.
             "can_close":        bankroll > initial,
+            "meta":             ALAV_META_PADRAO,
+            "greens_no_caminho": len([s for s in series["steps"] if s["result"] == "GREEN"]),
             "realized_total":   round(_alav_realized_pnl(cur, user_id), 2),
             "history":          history,
         }
@@ -1520,7 +1561,8 @@ def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end:
         "initial_bankroll":    initial,
         # Caminhos, não picks: o que importa no fechamento é quantos você levou
         # até o fim e quantos estouraram, não o green de cada degrau.
-        "closed_this_month":   len([c for c in closed if c["end_reason"] == ALAV_END_MANUAL]),
+        "closed_this_month":   len([c for c in closed
+                                   if c["end_reason"] in (ALAV_END_MANUAL, ALAV_END_META)]),
         "busted_this_month":   any(c["end_reason"] == ALAV_END_RED for c in closed),
         "realized_this_month": round(sum(float(c["realized_pnl"] or 0) for c in closed), 2),
     }

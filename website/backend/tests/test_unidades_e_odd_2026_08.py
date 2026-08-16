@@ -435,9 +435,20 @@ def test_ladrilho_e_numero_e_rotulo_e_mais_nada():
     assert "info?: string" not in _front_codigo("components/ui/Card.tsx")
     assert "hint:" not in _front_codigo("home/StatsBand.tsx")
 
-    # A premissa sobrevive na linha de apoio.
+    # A premissa sobrevive na linha de apoio das telas de RESULTADO.
     assert "Plano fixo de stake" in _front("home/StatsBand.tsx")
-    assert "Plano fixo de stake" in _front("pages/Picks.tsx")
+
+    # Em Picks ela saiu (16/08). A tensao que esta funcao documentava era real
+    # -- a Banca sugere stake variavel e o placar usa stake fixa -- mas a
+    # solucao de publicar as duas premissas lado a lado nao funcionou na tela:
+    # "4u em picks simples" ficava logo acima de um card mandando apostar 5u, e
+    # o leitor le contradicao, nao nuance. Os dois numeros respondem perguntas
+    # diferentes (placar da IA x stake pra banca DAQUELE usuario) e explicar
+    # isso no rodape custava mais texto do que o numero valia.
+    #
+    # Nas telas de resultado a legenda fica, porque la nao existe card de Kelly
+    # pra contradizer -- e' so' premissa de calculo, que e' o papel dela.
+    assert "Plano fixo de stake" not in _front("pages/Picks.tsx")
 
     # O InfoTip do MERCADO, dentro do card de pick, continua -- ele explica o
     # que o mercado e', que foi pedido explicitamente.
