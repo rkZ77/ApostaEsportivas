@@ -31,6 +31,8 @@ export interface OddAtualizada {
   origem: string | null
   /** Bilhete com pernas que não puderam ser reconsultadas. */
   parcial: boolean
+  /** Jogo já em andamento · a odd do pick foi mantida, ver a nota abaixo. */
+  aoVivo: boolean
 }
 
 const DIFERENCA_MINIMA = 0.001
@@ -44,7 +46,7 @@ export function useOddAtualizada() {
     params: { fixture_id?: number | null; market_type?: string | null; line?: string | null },
   ): Promise<OddAtualizada> {
     const base = Number(pickOdd)
-    if (!params.fixture_id) return { odd: base, mudou: false, origem: null, parcial: false }
+    if (!params.fixture_id) return { odd: base, mudou: false, origem: null, parcial: false, aoVivo: false }
     setBuscando(true)
     try {
       const { data } = await api.get('/live/pick-odd', {
@@ -54,16 +56,31 @@ export function useOddAtualizada() {
           line: params.line ?? '',
         },
       })
+      // JOGO EM ANDAMENTO NAO ATUALIZA A ODD.
+      //
+      // Odd ao vivo de um mercado que ja virou contra e outra aposta, nao a
+      // mesma com preco novo: um Under 4.5 com 4 gols marcados sai de 1.80 pra
+      // 4.00 porque esta quase perdido. Preencher o modal com 4.00 sugere que
+      // foi isso que o usuario pegou, e o registro entra na banca dele com uma
+      // odd que ele nunca teve -- estragando P&L e CLV justamente pra proteger
+      // os dois.
+      //
+      // Pre-jogo continua atualizando nas duas direcoes: la a odd nova E a
+      // mesma aposta, so' que reprecificada.
+      if (data?.is_live) {
+        return { odd: base, mudou: false, origem: null, parcial: false, aoVivo: true }
+      }
       const nova = Number(data?.odd)
-      if (!nova || !Number.isFinite(nova)) return { odd: base, mudou: false, origem: null, parcial: false }
+      if (!nova || !Number.isFinite(nova)) return { odd: base, mudou: false, origem: null, parcial: false, aoVivo: false }
       return {
         odd: nova,
         mudou: Math.abs(nova - base) > DIFERENCA_MINIMA,
         origem: data?.source ?? null,
         parcial: false,
+        aoVivo: false,
       }
     } catch {
-      return { odd: base, mudou: false, origem: null, parcial: false }
+      return { odd: base, mudou: false, origem: null, parcial: false, aoVivo: false }
     } finally {
       setBuscando(false)
     }
@@ -82,15 +99,21 @@ export function useOddAtualizada() {
         params: { pick_id: pickId, pick_type: pickType },
       })
       const nova = Number(data?.odd)
-      if (!nova || !Number.isFinite(nova)) return { odd: base, mudou: false, origem: null, parcial: true }
+      // Mesma regra do pick simples: se QUALQUER perna ja esta em jogo, o
+      // produto das odds deixa de descrever o bilhete que o usuario pegou.
+      if (data?.is_live || data?.any_live) {
+        return { odd: base, mudou: false, origem: null, parcial: !!data?.partial, aoVivo: true }
+      }
+      if (!nova || !Number.isFinite(nova)) return { odd: base, mudou: false, origem: null, parcial: true, aoVivo: false }
       return {
         odd: nova,
         mudou: Math.abs(nova - base) > DIFERENCA_MINIMA,
         origem: 'ticket',
         parcial: !!data?.partial,
+        aoVivo: false,
       }
     } catch {
-      return { odd: base, mudou: false, origem: null, parcial: true }
+      return { odd: base, mudou: false, origem: null, parcial: true, aoVivo: false }
     } finally {
       setBuscando(false)
     }
