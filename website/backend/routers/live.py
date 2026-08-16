@@ -995,6 +995,24 @@ def _save_live_pick_result(pick_id: int, result: str, odd: float, conn) -> None:
     logger.info("[AUTO-RESULT] live #%s -> %s (%+.4fu)", pick_id, result, profit)
 
 
+def _bilhete_morto(legs_results: list[str | None]) -> bool:
+    """Uma perna RED já mata a múltipla/alavancagem · não precisa esperar o resto.
+
+    Existe como função porque o atalho estava escrito à mão em quatro lugares e
+    nos quatro do mesmo jeito errado: `legs_results = ["RED"] * len(legs_out)`.
+    Isso fechava o bilhete certo e, no caminho, CARIMBAVA RED em toda perna --
+    inclusive nas que ganharam e nas que nem tinham jogado. O usuário via uma
+    múltipla RED com as duas pernas marcadas com X e ia conferir: nenhuma tinha
+    perdido de verdade.
+
+    O commit ffffbf31 corrigiu a TELA (perna passou a ler o resultado dela), o
+    que só deixou o dado errado aparecer em vez de a tela inventá-lo. A origem
+    era esta: quem escreve. Bilhete e perna são duas perguntas diferentes e
+    agora só o bilhete usa o atalho.
+    """
+    return any(r == settlement.RED for r in legs_results)
+
+
 def _multipla_combined_result(legs_results: list[str | None],
                               legs_odds: list | None = None,
                               ticket_odd=None) -> str | None:
@@ -1068,11 +1086,21 @@ def _gravar_resultado_das_pernas(cur, tabela: str, pick_id: int,
 
 
 def _save_multipla_result(pick_id: int, legs_results: list[str | None],
-                          total_odd: float, conn, legs_odds: list | None = None) -> None:
-    result = _multipla_combined_result(legs_results, legs_odds, total_odd)
+                          total_odd: float, conn, legs_odds: list | None = None,
+                          forced_result: str | None = None) -> None:
+    """`forced_result` fecha o BILHETE sem exigir todas as pernas encerradas ·
+    uma perna RED já mata a múltipla. As pernas continuam guardando o resultado
+    DELAS, incluindo `None` pra quem ainda não jogou. Ver _leg_result_do_bilhete."""
+    result = forced_result or _multipla_combined_result(legs_results, legs_odds, total_odd)
     if result is None:
         return
-    profit = _combined_profit(legs_results, legs_odds, total_odd, result)
+    if forced_result:
+        # Com perna em aberto não dá pra recompor a odd efetiva em combine_legs,
+        # e nem precisa: bilhete morto por perna perdida paga -1u, seja qual for
+        # o resto.
+        profit = _profit_for_result(result, total_odd)
+    else:
+        profit = _combined_profit(legs_results, legs_odds, total_odd, result)
     c = conn.cursor()
     games_json = _gravar_resultado_das_pernas(c, "picks_multiplas", pick_id, legs_results)
     if games_json is not None:
@@ -1090,11 +1118,16 @@ def _save_multipla_result(pick_id: int, legs_results: list[str | None],
 
 def _save_alavancagem_result(pick_id: int, legs_results: list[str | None],
                              odd_combined: float, conn,
-                             legs_odds: list | None = None) -> None:
-    result = _multipla_combined_result(legs_results, legs_odds, odd_combined)
+                             legs_odds: list | None = None,
+                             forced_result: str | None = None) -> None:
+    """Mesmo contrato de `_save_multipla_result` · ver a nota de forced_result lá."""
+    result = forced_result or _multipla_combined_result(legs_results, legs_odds, odd_combined)
     if result is None:
         return
-    profit = _combined_profit(legs_results, legs_odds, odd_combined, result)
+    if forced_result:
+        profit = _profit_for_result(result, odd_combined)
+    else:
+        profit = _combined_profit(legs_results, legs_odds, odd_combined, result)
     c = conn.cursor()
     c.execute("UPDATE picks_alavancagem SET result=%s, profit=%s WHERE id=%s AND result IS NULL",
               (result, profit, pick_id))
@@ -1827,12 +1860,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 if final_result is None:
                     leg_results = [_locked_leg_result(l) for l in legs_out]
                     leg_odds    = [l.get("odd") for l in legs_out]
-                    if any(r == "RED" for r in leg_results):
-                        leg_results = ["RED"] * len(legs_out)
-                    if all(r is not None for r in leg_results):
-                        final_result = _multipla_combined_result(leg_results, leg_odds, total_odd)
+                    morto       = _bilhete_morto(leg_results)
+                    if morto or all(r is not None for r in leg_results):
+                        final_result = "RED" if morto else _multipla_combined_result(leg_results, leg_odds, total_odd)
                         if final_result:
-                            _save_multipla_result(pick_id, leg_results, total_odd, conn, leg_odds)
+                            _save_multipla_result(pick_id, leg_results, total_odd, conn, leg_odds,
+                                                  forced_result="RED" if morto else None)
                             if not is_today:
                                 continue
 
@@ -1884,12 +1917,12 @@ def get_live_my_picks(current_user: dict = Depends(get_current_user)):
                 if final_result is None:
                     leg_results = [_locked_leg_result(l) for l in legs_out]
                     leg_odds    = [l.get("odd") for l in legs_out]
-                    if any(r == "RED" for r in leg_results):
-                        leg_results = ["RED"] * len(legs_out)
-                    if all(r is not None for r in leg_results):
-                        final_result = _multipla_combined_result(leg_results, leg_odds, odd_combined)
+                    morto       = _bilhete_morto(leg_results)
+                    if morto or all(r is not None for r in leg_results):
+                        final_result = "RED" if morto else _multipla_combined_result(leg_results, leg_odds, odd_combined)
                         if final_result:
-                            _save_alavancagem_result(pick_id, leg_results, odd_combined, conn, leg_odds)
+                            _save_alavancagem_result(pick_id, leg_results, odd_combined, conn, leg_odds,
+                                                     forced_result="RED" if morto else None)
                             if not is_today:
                                 continue
 
@@ -2151,8 +2184,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     total_odd   = float(p["total_odd"] or 1)
                     leg_results = [_locked_leg_result(l) for l in legs_out]
                     leg_odds    = [l.get("odd") for l in legs_out]
-                    if any(r == "RED" for r in leg_results):
-                        _save_multipla_result(p["id"], ["RED"] * len(legs_out), total_odd, conn, leg_odds)
+                    if _bilhete_morto(leg_results):
+                        _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds,
+                                              forced_result="RED")
                         resolved["multipla"] += 1
                     elif all(r is not None for r in leg_results):
                         _save_multipla_result(p["id"], leg_results, total_odd, conn, leg_odds)
@@ -2228,8 +2262,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                     odd_combined = float(p["odd_combined"] or 1)
                     leg_results  = [_locked_leg_result(l) for l in legs_out]
                     leg_odds     = [l.get("odd") for l in legs_out]
-                    if any(r == "RED" for r in leg_results):
-                        _save_alavancagem_result(p["id"], ["RED"] * len(legs_out), odd_combined, conn, leg_odds)
+                    if _bilhete_morto(leg_results):
+                        _save_alavancagem_result(p["id"], leg_results, odd_combined, conn, leg_odds,
+                                                 forced_result="RED")
                         resolved["alavancagem"] += 1
                     elif all(r is not None for r in leg_results):
                         _save_alavancagem_result(p["id"], leg_results, odd_combined, conn, leg_odds)

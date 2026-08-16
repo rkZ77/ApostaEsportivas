@@ -16,9 +16,9 @@ interface AlavancagemMonthData {
   configured: boolean
   current_bankroll: number
   initial_bankroll: number
-  greens_this_month: number
-  reds_this_month: number
+  closed_this_month: number
   busted_this_month: boolean
+  realized_this_month: number
 }
 
 interface CloseData {
@@ -59,9 +59,9 @@ const MOCK_DATA: CloseData = {
     configured: true,
     current_bankroll: 320,
     initial_bankroll: 100,
-    greens_this_month: 3,
-    reds_this_month: 1,
+    closed_this_month: 2,
     busted_this_month: true,
+    realized_this_month: 240,
   },
   already_closed: false,
 }
@@ -180,7 +180,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
 
   if (loading) return null
 
-  const hasAlavActivity = !!data?.alavancagem && (data.alavancagem.greens_this_month > 0 || data.alavancagem.reds_this_month > 0)
+  const hasAlavActivity = !!data?.alavancagem && (data.alavancagem.closed_this_month > 0 || data.alavancagem.busted_this_month)
 
   // Estado vazio explícito em vez de fechar sozinho: o modal também é aberto
   // de propósito (sino e página Banca), e um popup que abre e some sem dizer
@@ -329,21 +329,27 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               </div>
             )}
 
-            {/* Alavancagem · série é composta, não entra na banca de unidades acima */}
+            {/* Alavancagem · só caminho encerrado virou dinheiro. O que está em
+                andamento aparece à parte porque ainda está todo em jogo. */}
             {data.alavancagem?.configured && (
               <div className="mx-5 mb-3 bg-surface-1 rounded-lg border border-line px-4 py-3">
-                <p className="text-[10px] text-ink-3 mb-1.5">Série de alavancagem</p>
+                <p className="text-[10px] text-ink-3 mb-1.5">Alavancagem</p>
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-black text-ink-1">{fmtBRL(data.alavancagem.current_bankroll)}</span>
+                  <span className={`text-sm font-black ${data.alavancagem.realized_this_month >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                    {data.alavancagem.realized_this_month >= 0 ? '+' : ''}{fmtBRL(data.alavancagem.realized_this_month)}
+                  </span>
                   <span className="text-[11px] text-ink-3">
-                    {data.alavancagem.greens_this_month}G · {data.alavancagem.reds_this_month}R no mês
+                    {data.alavancagem.closed_this_month} {data.alavancagem.closed_this_month === 1 ? 'caminho encerrado' : 'caminhos encerrados'}
                   </span>
                 </div>
                 {data.alavancagem.busted_this_month && (
                   <p className="text-[11px] text-orange-400 font-semibold mt-1">
-                    Série resetou pra {fmtBRL(data.alavancagem.initial_bankroll)} esse mês
+                    Um caminho estourou esse mês, e perdeu só o valor de entrada
                   </p>
                 )}
+                <p className="text-[11px] text-ink-4 mt-1">
+                  Em andamento: {fmtBRL(data.alavancagem.current_bankroll)} , ainda não conta como dinheiro
+                </p>
               </div>
             )}
 

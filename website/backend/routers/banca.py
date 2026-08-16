@@ -367,8 +367,12 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
         WHERE uf.user_id = %s AND uf.pick_type != 'alavancagem' {cond}
     """, params)
     followed = [dict(r) for r in cur.fetchall()]
+    # Caminhos de alavancagem já encerrados entram aqui e em nenhum outro lugar:
+    # o pick a pick da alavancagem fica de fora (`pick_type != 'alavancagem'`
+    # acima) porque no meio do caminho o lucro não é sacável. Fechou, é dinheiro.
+    alav_realized = _alav_realized_pnl(cur, user_id, since=epoch)
     if not followed:
-        return round(bankroll_start, 2)
+        return round(bankroll_start + alav_realized, 2)
 
     vip_ids      = [f["pick_id"] for f in followed if f["pick_type"] == "vip"]
     free_ids     = [f["pick_id"] for f in followed if f["pick_type"] == "free"]
@@ -389,7 +393,7 @@ def _compute_bankroll_current(cur, user_id: int, bankroll_start: float, unit_val
     type_map = {"vip": vip_map, "free": free_map, "multipla": multipla_map,
                 **_mercado_maps(cur, followed)}
 
-    total = bankroll_start
+    total = bankroll_start + alav_realized
     for f in followed:
         pick = type_map.get(f["pick_type"], {}).get(f["pick_id"])
         if not pick:
@@ -414,10 +418,19 @@ def _compute_month_stats(cur, user_id: int, month_start: str, month_end: str, un
     """, (user_id, month_start, month_end))
     followed = [dict(r) for r in cur.fetchall()]
 
+    # Caminhos encerrados dentro do mês. Somam no P&L mas não nas contagens de
+    # green/red: um caminho não é um pick, e contá-lo estragaria o aproveitamento.
+    alav_realized = round(_alav_realized_pnl(cur, user_id, since=month_start, until=month_end), 2)
+    alav_units    = _alav_realized_units(cur, user_id, since=month_start, until=month_end)
+
     stats = {
-        "total_pnl": 0.0, "greens": 0, "reds": 0, "push": 0,
+        "total_pnl": alav_realized, "greens": 0, "reds": 0, "push": 0,
         "half_wins": 0, "half_loss": 0, "total_resolved": 0,
         "total_followed": len(followed),
+        "alavancagem_realized": alav_realized,
+        # Unidades, que e o vocabulario do placar · reais dependem do valor de
+        # unidade de cada um e nao comparam entre usuarios.
+        "alavancagem_units": alav_units,
     }
     if not followed:
         return stats
@@ -950,46 +963,352 @@ def follow_pick(body: FollowPick, current_user: dict = Depends(get_current_user)
         conn.close()
 
 
+# ── Caminhos de alavancagem ───────────────────────────────────────────────────
+# Alavancagem não é uma aposta por dia, é um caminho: entra com um valor e a cada
+# GREEN reaposta o bolo inteiro no dia seguinte. Por isso o lucro do meio do
+# caminho NÃO é dinheiro · ele está todo em jogo na entrada seguinte, e contá-lo
+# na banca mostraria um lucro que o usuário não pode sacar. Vira dinheiro só
+# quando o caminho fecha, e fecha de dois jeitos:
+#   · na mão, quando o usuário decide parar  →  realizado = bolo - inicial
+#   · no RED, que zera o bolo                →  realizado = -inicial
+# O RED custar só o valor de entrada não é generosidade da conta: o composto
+# nunca saiu da mesa, então nunca foi perdido.
+
+ALAV_END_MANUAL = "manual"
+ALAV_END_RED    = "red"
+ALAV_END_META   = "meta"
+
+#: Greens que fecham o caminho sozinho, e quanto ele vale em unidades.
+#:
+#: O caminho arrisca 1 unidade e, com a odd de 1,475 do motor, 6 greens
+#: multiplicam por 10,30 · ou seja +9,30u de lucro. RED em qualquer degrau custa
+#: exatamente 1u, porque o composto nunca saiu da mesa. É esse par (-1u de risco
+#: contra +9,3u de retorno) que entra em Meus Picks e na banca, na mesma unidade
+#: que o resto do site usa.
+#:
+#: 6 é escolha do produto, não da matemática. A matemática diz que o
+#: comprimento não CRIA lucro: a odd de 1,475 já embute 67,8% de probabilidade,
+#: então caminho longo multiplica a vantagem por pick se ela existir, e
+#: multiplica o buraco se não existir. A 68% de acerto real, 6 greens fecham em
+#: ~9,9% das tentativas e cada caminho leva ~28 dias.
+#:
+#: A consequência prática de 6 é que a amostra demora: ~13 caminhos completos
+#: por ano contra ~52 em 3. Se depois de uns meses o número de caminhos fechados
+#: for baixo demais pra concluir qualquer coisa, encurtar é o caminho.
+ALAV_META_PADRAO = 6
+
+
+def _alav_unidades(entrada: float, final: float) -> float:
+    """Resultado do caminho em unidades · o caminho arrisca 1u, sempre.
+
+    O valor de entrada em reais é escolha de cada usuário (R$50, R$200), então
+    ele não serve pra comparar caminho de gente diferente nem pra alimentar o
+    placar do site. Em unidades a conta é a mesma pra todo mundo: RED custa 1u,
+    e bater a meta paga (multiplicador - 1)u.
+    """
+    if entrada <= 0:
+        return 0.0
+    return round(final / entrada - 1, 4)
+
+
+def _alav_open_series(cur, user_id: int) -> Optional[dict]:
+    cur.execute(
+        "SELECT id, initial_amount, started_at FROM alavancagem_series "
+        "WHERE user_id = %s AND ended_at IS NULL",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def _alav_sync(cur, user_id: int) -> Optional[dict]:
+    """
+    Põe os caminhos em dia e devolve o estado do caminho ABERTO (ou None se o
+    usuário nunca configurou a alavancagem).
+
+    Todo o fechamento por RED acontece aqui, e não num job: o resultado do pick
+    é gravado por outro caminho do sistema (resolução puxada por visita) e
+    obrigar aquele fluxo a conhecer caminho de alavancagem acoplaria as duas
+    coisas. Aqui é idempotente · reprocessar não muda nada, porque um caminho
+    fechado nunca é revisitado.
+
+    Também é o backfill: quem já tinha histórico antes desta tabela existir cai
+    no `INSERT` de baixo com started_at no primeiro pick seguido, e o laço
+    reconstrói caminho por caminho todos os REDs que ele já levou.
+    """
+    cur.execute("SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
+    row = cur.fetchone()
+    if not row or row["alav_bankroll_init"] is None:
+        return None
+    initial = float(row["alav_bankroll_init"])
+
+    series = _alav_open_series(cur, user_id)
+    if not series:
+        # Nenhum caminho aberto: abre um começando no primeiro pick de
+        # alavancagem que o usuário seguiu (ou agora, se ainda não seguiu nenhum).
+        cur.execute(
+            "SELECT MIN(followed_at) AS first_at FROM user_followed_picks "
+            "WHERE user_id = %s AND pick_type = 'alavancagem'",
+            (user_id,),
+        )
+        first_at = (cur.fetchone() or {}).get("first_at")
+        cur.execute(
+            "INSERT INTO alavancagem_series (user_id, initial_amount, started_at) "
+            "VALUES (%s, %s, COALESCE(%s, NOW())) RETURNING id, initial_amount, started_at",
+            (user_id, initial, first_at),
+        )
+        series = dict(cur.fetchone())
+
+    # Cada volta do laço resolve UM caminho. Sai quando o caminho aberto chega
+    # ao fim dos picks sem levar RED · aí ele continua aberto, que é o normal.
+    while True:
+        cur.execute("""
+            SELECT pa.id, pa.result, pa.odd_combined, pa.match_date,
+                   pa.home_team_1, pa.away_team_1, uf.followed_at
+            FROM user_followed_picks uf
+            JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+            WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem'
+              AND pa.result IS NOT NULL
+              AND uf.followed_at >= %s
+            ORDER BY pa.match_date ASC, uf.followed_at ASC
+        """, (user_id, series["started_at"]))
+        picks = [dict(r) for r in cur.fetchall()]
+
+        bankroll = float(series["initial_amount"])
+        steps: list[dict] = []
+        red_at = None
+        meta_at = None
+
+        for p in picks:
+            odd = float(p["odd_combined"] or 1)
+            if p["result"] == "GREEN":
+                before = bankroll
+                bankroll = round(bankroll * odd, 2)
+                steps.append({
+                    "pick_id":   p["id"],
+                    "result":    "GREEN",
+                    "odd":       odd,
+                    "date":      p["match_date"].isoformat() if p["match_date"] else None,
+                    "match":     _alav_match_label(p),
+                    "before":    round(before, 2),
+                    "after":     bankroll,
+                })
+                # Bateu a meta: o caminho fecha aqui e o lucro vira dinheiro,
+                # mesmo que o usuário não estivesse olhando. Sem isso o caminho
+                # nunca para sozinho, e um composto que não para é um lucro que
+                # nunca existe · basta um RED lá na frente pra ele virar pó.
+                if len([s for s in steps if s["result"] == "GREEN"]) >= ALAV_META_PADRAO:
+                    meta_at = p["followed_at"]
+                    break
+            elif p["result"] == "RED":
+                steps.append({
+                    "pick_id":   p["id"],
+                    "result":    "RED",
+                    "odd":       odd,
+                    "date":      p["match_date"].isoformat() if p["match_date"] else None,
+                    "match":     _alav_match_label(p),
+                    "before":    round(bankroll, 2),
+                    "after":     0.0,
+                })
+                red_at = p["followed_at"]
+                break
+            # PUSH e meio-green não existem em alavancagem (odd combinada
+            # resolvida como bloco), mas se aparecerem o bolo segue intacto.
+
+        if red_at is None and meta_at is None:
+            series["current_bankroll"] = round(bankroll, 2)
+            series["steps"] = steps
+            return series
+
+        # Fecha o caminho e abre o próximo no mesmo valor de entrada. O
+        # `+ 1 microsecond` é a fronteira que impede o pick que fechou (o RED ou
+        # o green da meta) de ser recontado no caminho seguinte.
+        # `entrada` é o que ESTE caminho começou valendo; `initial` é o valor
+        # configurado hoje pelo usuário, que é com o que o PRÓXIMO nasce. Os dois
+        # coincidem quase sempre, mas divergem quando ele muda o valor no meio.
+        entrada = float(series["initial_amount"])
+        if meta_at is not None:
+            boundary, motivo = meta_at + timedelta(microseconds=1), ALAV_END_META
+            final, realizado = bankroll, round(bankroll - entrada, 2)
+        else:
+            boundary, motivo = red_at + timedelta(microseconds=1), ALAV_END_RED
+            final, realizado = 0.0, -entrada
+        cur.execute("""
+            UPDATE alavancagem_series
+               SET ended_at = %s, end_reason = %s, final_amount = %s,
+                   realized_pnl = %s, realized_units = %s
+             WHERE id = %s
+        """, (boundary, motivo, final, realizado,
+              _alav_unidades(entrada, final), series["id"]))
+        cur.execute(
+            "INSERT INTO alavancagem_series (user_id, initial_amount, started_at) "
+            "VALUES (%s, %s, %s) RETURNING id, initial_amount, started_at",
+            (user_id, initial, boundary),
+        )
+        series = dict(cur.fetchone())
+
+
+def _alav_match_label(p: dict) -> str:
+    home, away = p.get("home_team_1"), p.get("away_team_1")
+    return f"{home} x {away}" if home and away else "Alavancagem"
+
+
+def _alav_realized_units(cur, user_id: int, since: Optional[str] = None,
+                         until: Optional[str] = None) -> float:
+    """Unidades realizadas em caminhos FECHADOS · é o número que vai pro placar.
+
+    Caminho aberto fica de fora pela mesma razão de sempre: o composto em
+    andamento não é dinheiro.
+    """
+    cond, params = "", [user_id]
+    if since is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s"; params.append(since)
+    if until is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') < %s";  params.append(until)
+    cur.execute(
+        "SELECT COALESCE(SUM(realized_units), 0) AS total FROM alavancagem_series "
+        f"WHERE user_id = %s AND ended_at IS NOT NULL{cond}",
+        params,
+    )
+    return round(float((cur.fetchone() or {}).get("total") or 0), 4)
+
+
+def _alav_realized_pnl(cur, user_id: int, since: Optional[str] = None,
+                       until: Optional[str] = None) -> float:
+    """Soma o realizado dos caminhos FECHADOS, por data de fechamento.
+
+    Caminho aberto fica de fora de propósito · é o que garante que o composto em
+    andamento não apareça como dinheiro na banca.
+    """
+    cond, params = "", [user_id]
+    if since is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s"; params.append(since)
+    if until is not None:
+        cond += " AND (ended_at AT TIME ZONE 'America/Sao_Paulo') < %s";  params.append(until)
+    cur.execute(
+        "SELECT COALESCE(SUM(realized_pnl), 0) AS total FROM alavancagem_series "
+        f"WHERE user_id = %s AND ended_at IS NOT NULL{cond}",
+        params,
+    )
+    return float((cur.fetchone() or {}).get("total") or 0)
+
+
 @router.get("/alavancagem-serie")
 def get_alavancagem_serie(current_user: dict = Depends(get_current_user)):
     user_id = current_user["id"]
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("""
-            SELECT alav_bankroll_init
-            FROM user_banca
-            WHERE user_id = %s
-        """, (user_id,))
-        row = cur.fetchone()
+        series = _alav_sync(cur, user_id)
+        if series is None:
+            conn.commit()
+            return {"configured": False, "current_bankroll": 0.0, "initial_bankroll": 0.0,
+                    "steps": [], "open_profit": 0.0, "realized_total": 0.0, "history": []}
 
-        if not row or row["alav_bankroll_init"] is None:
-            return {"configured": False, "current_bankroll": 0.0, "initial_bankroll": 0.0}
-
-        initial = float(row["alav_bankroll_init"])
-        bankroll = initial
+        initial  = float(series["initial_amount"])
+        bankroll = float(series["current_bankroll"])
 
         cur.execute("""
-            SELECT pa.result, pa.odd_combined
-            FROM user_followed_picks uf
-            JOIN picks_alavancagem pa ON pa.id = uf.pick_id
-            WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem' AND pa.result IS NOT NULL
-            ORDER BY pa.match_date ASC
+            SELECT id, initial_amount, final_amount, realized_pnl, end_reason,
+                   started_at, ended_at
+            FROM alavancagem_series
+            WHERE user_id = %s AND ended_at IS NOT NULL
+            ORDER BY ended_at DESC
+            LIMIT 20
         """, (user_id,))
+        history = [{
+            "id":           r["id"],
+            "initial":      float(r["initial_amount"]),
+            "final":        float(r["final_amount"] or 0),
+            "realized":     float(r["realized_pnl"] or 0),
+            "end_reason":   r["end_reason"],
+            "started_at":   r["started_at"].isoformat() if r["started_at"] else None,
+            "ended_at":     r["ended_at"].isoformat() if r["ended_at"] else None,
+        } for r in cur.fetchall()]
 
-        for pick in cur.fetchall():
-            result = pick["result"]
-            odd = float(pick["odd_combined"] or 1)
-            if result == "GREEN":
-                bankroll = round(bankroll * odd, 2)
-            elif result == "RED":
-                bankroll = initial
-
-        return {
-            "configured": True,
-            "current_bankroll": round(bankroll, 2),
+        payload = {
+            "configured":       True,
+            "series_id":        series["id"],
+            "current_bankroll": bankroll,
             "initial_bankroll": initial,
+            "steps":            series["steps"],
+            # Lucro do caminho aberto: existe na tela, não existe na banca.
+            "open_profit":      round(bankroll - initial, 2),
+            # Encerrar na mão continua livre a qualquer altura · a meta é o
+            # ponto em que ele fecha SOZINHO, não uma trava. Quem quiser parar
+            # no segundo green para no segundo green.
+            "can_close":        bankroll > initial,
+            "meta":             ALAV_META_PADRAO,
+            "greens_no_caminho": len([s for s in series["steps"] if s["result"] == "GREEN"]),
+            "realized_total":   round(_alav_realized_pnl(cur, user_id), 2),
+            "realized_units":   _alav_realized_units(cur, user_id),
+            # Quanto o caminho aberto vale AGORA em unidades · ainda nao e
+            # dinheiro, mas e o numero que o usuario compara com o resto.
+            "open_units":       _alav_unidades(initial, bankroll),
+            "history":          history,
         }
+        conn.commit()
+        return payload
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/alavancagem-encerrar")
+def encerrar_alavancagem(current_user: dict = Depends(get_current_user)):
+    """Fecha o caminho aberto na mão: o composto vira dinheiro e entra na banca.
+
+    Só deixa fechar com lucro · fechar em cima do valor de entrada não realiza
+    nada e só serviria pra sujar o histórico com caminhos vazios. Pra desistir
+    sem lucro o usuário muda o valor inicial, que já reabre um caminho novo.
+    """
+    user_id = current_user["id"]
+    _check_banca_rate(user_id)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        series = _alav_sync(cur, user_id)
+        if series is None:
+            raise HTTPException(400, "Configure o valor inicial da alavancagem primeiro.")
+
+        initial  = float(series["initial_amount"])
+        bankroll = float(series["current_bankroll"])
+        if bankroll <= initial:
+            raise HTTPException(400, "O caminho ainda não tem lucro pra encerrar.")
+
+        realized = round(bankroll - initial, 2)
+        cur.execute("""
+            UPDATE alavancagem_series
+               SET ended_at = NOW(), end_reason = %s, final_amount = %s,
+                   realized_pnl = %s, realized_units = %s
+             WHERE id = %s AND ended_at IS NULL
+        """, (ALAV_END_MANUAL, bankroll, realized,
+              _alav_unidades(initial, bankroll), series["id"]))
+        if cur.rowcount == 0:
+            # Outra aba fechou primeiro · não realiza o mesmo lucro duas vezes.
+            raise HTTPException(409, "Esse caminho já foi encerrado.")
+
+        cur.execute(
+            "INSERT INTO alavancagem_series (user_id, initial_amount, started_at) "
+            "VALUES (%s, %s, NOW())",
+            (user_id, initial),
+        )
+        conn.commit()
+        return {
+            "ok": True,
+            "realized_pnl":     realized,
+            "final_amount":     bankroll,
+            "next_initial":     initial,
+        }
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
     finally:
         cur.close()
         conn.close()
@@ -1016,6 +1335,16 @@ def set_alavancagem_init(body: AlavancagemInit, current_user: dict = Depends(get
                 SET alav_bankroll_init = EXCLUDED.alav_bankroll_init,
                     updated_at = NOW()
         """, (user_id, float(bankroll_init), float(bankroll_init)))
+        # Trocar o valor de entrada recomeça o caminho aberto, e só ele: caminho
+        # já fechado tem lucro realizado na banca e reescrever a base dele mudaria
+        # dinheiro do passado. Se o caminho aberto já tinha GREENs, eles ficam
+        # pra trás junto com o valor antigo · é uma decisão do usuário de sair
+        # daquele caminho, não um saque.
+        cur.execute("""
+            UPDATE alavancagem_series
+               SET initial_amount = %s, started_at = NOW()
+             WHERE user_id = %s AND ended_at IS NULL
+        """, (float(bankroll_init), user_id))
         conn.commit()
         return {"ok": True, "initial_bankroll": float(bankroll_init)}
     finally:
@@ -1231,47 +1560,57 @@ def sync_monthly_close_notification(cur, user_id: int) -> None:
 
 
 def _get_alavancagem_month_stats(cur, user_id: int, month_start: str, month_end: str) -> Optional[dict]:
-    """Progressão completa da série de alavancagem (banca atual da série) + quantos
-    passos GREEN/RED aconteceram dentro do mês alvo. None se o usuário nunca configurou."""
+    """Estado do caminho aberto + o que os caminhos encerrados renderam no mês.
+
+    Só leitura de propósito · quem põe os caminhos em dia é `_alav_sync`, no
+    GET da aba. O fechamento mensal roda dentro da transação de outro endpoint e
+    não pode abrir/fechar caminho como efeito colateral de um relatório.
+    """
     cur.execute("SELECT alav_bankroll_init FROM user_banca WHERE user_id = %s", (user_id,))
     row = cur.fetchone()
     if not row or row["alav_bankroll_init"] is None:
         return None
 
     initial = float(row["alav_bankroll_init"])
+
+    series = _alav_open_series(cur, user_id)
     bankroll = initial
+    if series:
+        cur.execute("""
+            SELECT pa.result, pa.odd_combined
+            FROM user_followed_picks uf
+            JOIN picks_alavancagem pa ON pa.id = uf.pick_id
+            WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem'
+              AND pa.result IS NOT NULL AND uf.followed_at >= %s
+            ORDER BY pa.match_date ASC, uf.followed_at ASC
+        """, (user_id, series["started_at"]))
+        bankroll = float(series["initial_amount"])
+        for pick in cur.fetchall():
+            if pick["result"] == "GREEN":
+                bankroll = round(bankroll * float(pick["odd_combined"] or 1), 2)
+            elif pick["result"] == "RED":
+                bankroll = float(series["initial_amount"])
+                break
 
     cur.execute("""
-        SELECT pa.result, pa.odd_combined,
-               ((uf.followed_at AT TIME ZONE 'America/Sao_Paulo') >= %s
-                AND (uf.followed_at AT TIME ZONE 'America/Sao_Paulo') < %s) AS in_month
-        FROM user_followed_picks uf
-        JOIN picks_alavancagem pa ON pa.id = uf.pick_id
-        WHERE uf.user_id = %s AND uf.pick_type = 'alavancagem' AND pa.result IS NOT NULL
-        ORDER BY pa.match_date ASC
-    """, (month_start, month_end, user_id))
-
-    month_greens = month_reds = 0
-    busted_this_month = False
-    for pick in cur.fetchall():
-        result = pick["result"]
-        odd = float(pick["odd_combined"] or 1)
-        if result == "GREEN":
-            bankroll = round(bankroll * odd, 2)
-            if pick["in_month"]: month_greens += 1
-        elif result == "RED":
-            bankroll = initial
-            if pick["in_month"]:
-                month_reds += 1
-                busted_this_month = True
+        SELECT end_reason, realized_pnl
+        FROM alavancagem_series
+        WHERE user_id = %s AND ended_at IS NOT NULL
+          AND (ended_at AT TIME ZONE 'America/Sao_Paulo') >= %s
+          AND (ended_at AT TIME ZONE 'America/Sao_Paulo') <  %s
+    """, (user_id, month_start, month_end))
+    closed = [dict(r) for r in cur.fetchall()]
 
     return {
-        "configured":         True,
-        "current_bankroll":   round(bankroll, 2),
-        "initial_bankroll":   initial,
-        "greens_this_month":  month_greens,
-        "reds_this_month":    month_reds,
-        "busted_this_month":  busted_this_month,
+        "configured":          True,
+        "current_bankroll":    round(bankroll, 2),
+        "initial_bankroll":    initial,
+        # Caminhos, não picks: o que importa no fechamento é quantos você levou
+        # até o fim e quantos estouraram, não o green de cada degrau.
+        "closed_this_month":   len([c for c in closed
+                                   if c["end_reason"] in (ALAV_END_MANUAL, ALAV_END_META)]),
+        "busted_this_month":   any(c["end_reason"] == ALAV_END_RED for c in closed),
+        "realized_this_month": round(sum(float(c["realized_pnl"] or 0) for c in closed), 2),
     }
 
 
@@ -1414,9 +1753,13 @@ def reset_current_month(current_user: dict = Depends(get_current_user)):
        parametro: nao existe parametro.
 
     2. Alavancagem fica de fora, com o mesmo `pick_type != 'alavancagem'` do
-       resto do arquivo. Ela nao entra nesta banca (a tela diz isso em texto) e
-       tem banca propria em user_banca.alavancagem_init -- apagar o que a conta
-       nem soma seria destruicao sem beneficio.
+       resto do arquivo -- e agora por outro motivo, entao vale escrever: desde
+       que caminho encerrado passou a somar na banca, nao e' mais verdade que
+       "alavancagem nao entra nesta banca". O que entra e' o realizado de
+       caminho FECHADO, e caminho fechado e' dinheiro sacado, do mesmo jeito que
+       banca_withdrawals. Zerar o mes nao desfaz saque. Apagar os follows de
+       alavancagem aqui, alem disso, reescreveria a replay de caminhos ja'
+       encerrados e mudaria lucro do passado.
 
     3. Nada de fechamento mensal e' tocado, e mes JA FECHADO nao e' zeravel.
        banca_monthly_closes e banca_withdrawals sao historico assinado. Na

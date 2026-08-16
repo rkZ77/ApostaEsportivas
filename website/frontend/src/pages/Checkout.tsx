@@ -203,7 +203,12 @@ export default function Checkout() {
     setError('')
     setLoading(true)
     try {
-      const { data } = await api.post('/payments/create', { plan: selectedPlan })
+      // O `_ga` viaja junto pro backend disparar o purchase pelo servidor: o
+      // MercadoPago leva o usuário pra fora e quem paga por PIX costuma não
+      // voltar pro /checkout/sucesso, então evento de compra no navegador
+      // perderia boa parte da receita. Ver backend/analytics.py.
+      const gaCookie = document.cookie.split('; ').find(c => c.startsWith('_ga='))?.slice(4) ?? ''
+      const { data } = await api.post('/payments/create', { plan: selectedPlan, ga_cookie: gaCookie })
       window.location.href = data.init_point
     } catch (err: any) {
       setError(err.response?.data?.detail ?? 'Erro ao iniciar pagamento. Tente novamente.')

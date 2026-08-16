@@ -647,47 +647,6 @@ export default function Profile() {
           )}
         </div>
 
-        {/* Notificacoes push */}
-        {push.supported && push.vapidKey !== '' && (
-          <div className="card p-5">
-            <p className="text-xs text-ink-3 font-semibold mb-3">Notificações</p>
-            <div className="flex items-center justify-between gap-4">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${push.subscribed ? 'bg-green-500/10' : 'bg-surface-2'}`}>
-                  {push.subscribed
-                    ? <Bell className="w-4 h-4 text-green-400" />
-                    : <BellOff className="w-4 h-4 text-ink-3" />}
-                </div>
-                <div className="min-w-0">
-                  <p className="text-sm font-semibold text-ink-1">
-                    {push.subscribed ? 'Notificações ativas' : 'Ativar notificações'}
-                  </p>
-                  <p className="text-xs text-ink-3 truncate">
-                    {push.subscribed
-                      ? 'Aviso quando os picks do dia forem publicados'
-                      : 'Receba aviso quando os picks do dia saírem'}
-                  </p>
-                </div>
-              </div>
-              {push.permission === 'denied' ? (
-                <span className="text-xs text-ink-4 shrink-0">Bloqueado no navegador</span>
-              ) : (
-                <button
-                  onClick={push.subscribed ? push.unsubscribe : push.subscribe}
-                  disabled={push.loading}
-                  className={`shrink-0 px-4 py-2 rounded-lg text-xs font-bold transition-colors disabled:opacity-40 ${
-                    push.subscribed
-                      ? 'bg-surface-2 text-ink-2 hover:bg-surface-3'
-                      : 'bg-green-500 text-black hover:bg-green-400'
-                  }`}
-                >
-                  {push.loading ? '...' : push.subscribed ? 'Desativar' : 'Ativar'}
-                </button>
-              )}
-            </div>
-          </div>
-        )}
-
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">
           <div>
@@ -750,7 +709,7 @@ export default function Profile() {
 
         {/* Alertas e conquistas. Vêm de /api/personal, tela própria dentro do
             perfil pra não criar mais uma rota pra dois blocos curtos. */}
-        <AlertsAndAchievements />
+        <AlertsAndAchievements push={push} />
     </PageShell>
   )
 }

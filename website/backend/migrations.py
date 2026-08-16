@@ -44,6 +44,17 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS home_team_id INTEGER;")
         cur.execute("ALTER TABLE picks_free ADD COLUMN IF NOT EXISTS away_team_id INTEGER;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone VARCHAR(30);")
+        # client_id do GA, capturado no checkout. Sem ele a receita chega no GA
+        # como sessao nova e direta, e a unica pergunta que o GA responde melhor
+        # que a tabela payments -- de qual canal veio quem paga -- fica sem
+        # resposta. Ver analytics.py.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS ga_client_id VARCHAR(50);")
+        # Consentimento pra WhatsApp. Separado do telefone de proposito: o
+        # `phone` foi coletado no cadastro pra CONTA, nao pra marketing, e
+        # disparar pra base inteira sem opt-in explicito e o caminho mais curto
+        # pro numero ser denunciado e banido. Ver website/scripts/whatsapp/.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN DEFAULT FALSE;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in_at TIMESTAMP;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS username VARCHAR(30) UNIQUE;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS avatar_url TEXT;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS trial_used BOOLEAN DEFAULT FALSE;")
@@ -120,6 +131,36 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS unit_value NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS alav_bankroll_init NUMERIC(10,2);")
         cur.execute("ALTER TABLE user_banca ADD COLUMN IF NOT EXISTS last_manual_setup_month VARCHAR(7);")
+        # Caminhos de alavancagem. Cada linha e' UM caminho: comeca com
+        # initial_amount, os GREENs vao compondo em cima e ele so' vira dinheiro
+        # de verdade quando fecha -- na mao (o usuario decide sacar) ou no RED
+        # (perde o inicial e nada mais, porque o composto nunca foi sacado).
+        # Enquanto ended_at e' NULL o caminho esta' rodando e NAO entra na banca.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS alavancagem_series (
+                id             SERIAL PRIMARY KEY,
+                user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                initial_amount NUMERIC(12,2) NOT NULL,
+                started_at     TIMESTAMP NOT NULL DEFAULT NOW(),
+                ended_at       TIMESTAMP,
+                end_reason     VARCHAR(10),
+                final_amount   NUMERIC(12,2),
+                realized_pnl   NUMERIC(12,2)
+            )
+        """)
+        # Resultado do caminho em UNIDADES, do lado do resultado em reais.
+        # O caminho arrisca 1u e paga (multiplicador - 1)u ao bater a meta; RED
+        # custa exatamente -1u. E' assim que ele entra em Meus Picks e na banca,
+        # na mesma unidade do resto do site -- reais dependem do valor de
+        # unidade de cada usuario e nao servem pro placar comum.
+        cur.execute("ALTER TABLE alavancagem_series ADD COLUMN IF NOT EXISTS realized_units NUMERIC(10,4);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_alav_series_user ON alavancagem_series(user_id, started_at);")
+        # Um caminho aberto por usuario. E' o que impede duas abas (ou dois
+        # cliques) criarem caminhos paralelos e a replay ficar ambigua.
+        cur.execute("""
+            CREATE UNIQUE INDEX IF NOT EXISTS idx_alav_series_um_aberto
+            ON alavancagem_series(user_id) WHERE ended_at IS NULL
+        """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS user_followed_picks (
                 id          SERIAL PRIMARY KEY,

@@ -1,11 +1,12 @@
 import os
 import sys
 import asyncio
+import json
 import logging
 from collections import deque
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
@@ -1045,6 +1046,324 @@ _PICK_TABLES = {
     "goleiros":    ("picks_goleiros",    "home_team",      "away_team"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
+
+
+#: Tabelas com UMA fixture por pick · só nelas dá pra cruzar com
+#: match_statistics e dizer se o provedor publicou a folha do jogo.
+_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros")
+
+
+@router.get("/users/engajamento")
+def admin_users_engajamento(current_user: dict = Depends(require_admin)):
+    """Quem ainda aparece, quem sumiu, e quem o WhatsApp alcançaria.
+
+    As duas perguntas moram na mesma rota porque são a mesma consulta: a
+    audiência de cada aviso do WhatsApp é um recorte de atividade, e calcular
+    isso em dois lugares é como as contagens começam a divergir.
+
+    O corte de inatividade é 10 dias porque é o segmento de reengajamento
+    definido em website/scripts/whatsapp/ · alterar aqui sem alterar lá faz o
+    painel prometer um número de envios que o disparo não cumpre.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT
+                COUNT(*)                                                          AS total,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '1 day')  AS hoje,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '7 days') AS semana,
+                COUNT(*) FILTER (WHERE last_login_at >= NOW() - INTERVAL '30 days') AS mes,
+                COUNT(*) FILTER (WHERE last_login_at IS NULL)                      AS nunca_entrou,
+                COUNT(*) FILTER (WHERE last_login_at <  NOW() - INTERVAL '10 days') AS inativos_10d,
+                COUNT(*) FILTER (WHERE phone IS NOT NULL AND phone <> '')          AS com_telefone,
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE))           AS com_opt_in,
+                COUNT(*) FILTER (WHERE plan IN ('vip','admin'))                    AS vips
+            FROM users
+        """)
+        u = dict(cur.fetchone() or {})
+
+        # Audiência de cada template. `com_opt_in` é o teto real de todos eles:
+        # sem consentimento não sai mensagem, por mais que o telefone exista.
+        cur.execute("""
+            SELECT
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE))            AS picks_do_dia,
+                COUNT(*) FILTER (WHERE COALESCE(whatsapp_opt_in, FALSE)
+                                   AND (last_login_at IS NULL
+                                        OR last_login_at < NOW() - INTERVAL '10 days')) AS reengajamento
+            FROM users
+            WHERE phone IS NOT NULL AND phone <> ''
+        """)
+        w = dict(cur.fetchone() or {})
+
+        # Resultado green/red só alcança quem SEGUIU pick · é o que diferencia
+        # esse aviso dos outros dois, e o motivo de ele ser barato.
+        cur.execute("""
+            SELECT COUNT(DISTINCT uf.user_id) AS n
+              FROM user_followed_picks uf
+              JOIN users us ON us.id = uf.user_id
+             WHERE COALESCE(us.whatsapp_opt_in, FALSE)
+               AND uf.followed_at >= NOW() - INTERVAL '30 days'
+        """)
+        seguidores = int((cur.fetchone() or {}).get("n") or 0)
+
+        return {
+            "usuarios": {k: int(v or 0) for k, v in u.items()},
+            "whatsapp": {
+                "picks_do_dia":   int(w.get("picks_do_dia") or 0),
+                "resultado":      seguidores,
+                "reengajamento":  int(w.get("reengajamento") or 0),
+                # Nada foi implementado do lado do envio · o painel mostra
+                # audiência, não fila de disparo, e dizer isso evita que o
+                # número seja lido como "vai sair".
+                "envio_ativo":    False,
+            },
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/picks/pendentes")
+def admin_picks_pendentes(
+    horas: int = Query(4, ge=1, le=240),
+    current_user: dict = Depends(require_admin),
+):
+    """Picks cujo jogo já devia ter terminado e que continuam sem resultado.
+
+    POR QUE ISTO EXISTE. Estatística ausente nunca vira RED · é a invariante 1
+    de services/settlement.py, escrita depois de um pick de escanteios ser
+    gravado RED porque `home_stats.get("Corner Kicks", 0)` devolveu 0 no
+    instante do apito final. A regra está certa e continua valendo.
+
+    Só que "não liquida e espera" é silencioso por natureza: se a folha do jogo
+    nunca chegar, o pick fica pendente pra sempre e ninguém fica sabendo. O
+    preço de acertar a invariante foi trocar um erro barulhento por um silêncio,
+    e é esse silêncio que esta rota quebra.
+
+    O diagnóstico é o que torna a lista acionável · "pendente" sozinho não diz
+    se falta esperar, re-sincronizar a estatística ou olhar o pick na mão:
+
+      sem folha do jogo   o provedor não publicou match_statistics · é o caso
+                          que a invariante protege, e o que resolve é o
+                          collector, não mexer no pick
+      folha incompleta    a folha existe mas o contador daquele mercado veio
+                          nulo · mesma origem, só que parcial
+      folha completa      o dado está lá e o pick continua pendente · aqui o
+                          suspeito é a liquidação, não a fonte
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        itens: list[dict] = []
+        for pt in _PICK_TABLES_UMA_FIXTURE:
+            table, home_col, away_col = _PICK_TABLES[pt]
+            try:
+                cur.execute(f"""
+                    SELECT p.id, p.{home_col} AS home_team, p.{away_col} AS away_team,
+                           p.match_date, p.market, p.line, p.fixture_id,
+                           (ms.fixture_id IS NOT NULL) AS tem_folha,
+                           ms.home_corners, ms.away_corners,
+                           ms.home_yellow_cards, ms.away_yellow_cards,
+                           ms.home_fouls, ms.away_fouls,
+                           ms.home_total_shots, ms.away_total_shots,
+                           ms.home_shots_on, ms.away_shots_on
+                      FROM {table} p
+                      LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
+                     WHERE p.result IS NULL
+                       AND p.match_date <= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                     ORDER BY p.match_date ASC, p.id ASC
+                     LIMIT 200
+                """)
+            except Exception:
+                # Instância sem a migração de alguma tabela: pula em vez de
+                # derrubar o painel inteiro (mesma escolha de /picks/search).
+                conn.rollback()
+                continue
+            for r in cur.fetchall():
+                d = dict(r)
+                contadores = [d.get(k) for k in (
+                    "home_corners", "away_corners", "home_yellow_cards", "away_yellow_cards",
+                    "home_fouls", "away_fouls", "home_total_shots", "away_total_shots",
+                    "home_shots_on", "away_shots_on",
+                )]
+                if not d["tem_folha"]:
+                    motivo = "sem folha do jogo"
+                elif any(c is None for c in contadores):
+                    motivo = "folha incompleta"
+                else:
+                    motivo = "folha completa"
+                itens.append({
+                    "pick_type":  pt,
+                    "id":         d["id"],
+                    "home_team":  d["home_team"],
+                    "away_team":  d["away_team"],
+                    "match_date": str(d["match_date"]) if d["match_date"] else None,
+                    "market":     d["market"],
+                    "line":       d["line"],
+                    "fixture_id": d["fixture_id"],
+                    "motivo":     motivo,
+                })
+
+        # Múltipla e alavancagem têm várias fixtures por bilhete · não dá pra
+        # apontar UMA folha faltando, então entram só na contagem.
+        bilhetes = {}
+        for pt in ("multipla", "alavancagem"):
+            table, _h, _a = _PICK_TABLES[pt]
+            try:
+                cur.execute(f"""
+                    SELECT COUNT(*) AS n FROM {table}
+                     WHERE result IS NULL
+                       AND match_date <= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                """)
+                bilhetes[pt] = int((cur.fetchone() or {}).get("n") or 0)
+            except Exception:
+                conn.rollback()
+                bilhetes[pt] = 0
+
+        # "Travado" = passou da janela em que a folha normalmente já chegou. É o
+        # corte que separa "o jogo acabou agora" de "isto não vai resolver
+        # sozinho", e é ajustável porque a janela boa depende do provedor.
+        from datetime import timedelta as _td
+        from zoneinfo import ZoneInfo
+
+        limite = (datetime.now(ZoneInfo("America/Sao_Paulo")) - _td(hours=horas)).date()
+        travados = [i for i in itens
+                    if i["match_date"] and i["match_date"] < limite.isoformat()]
+
+        return {
+            "total":            len(itens) + sum(bilhetes.values()),
+            "simples":          len(itens),
+            "bilhetes":         bilhetes,
+            "travados":         len(travados),
+            "horas_de_corte":   horas,
+            "por_motivo": {
+                "sem folha do jogo": sum(1 for i in itens if i["motivo"] == "sem folha do jogo"),
+                "folha incompleta":  sum(1 for i in itens if i["motivo"] == "folha incompleta"),
+                "folha completa":    sum(1 for i in itens if i["motivo"] == "folha completa"),
+            },
+            "itens": itens[:100],
+        }
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.post("/picks/reparar-pernas")
+def admin_reparar_pernas(
+    limit: int = Query(20, ge=1, le=100),
+    dry_run: bool = Query(True),
+    current_user: dict = Depends(require_admin),
+):
+    """Recalcula o resultado de CADA perna das múltiplas já liquidadas.
+
+    Conserta o estrago do bug corrigido em fae4ccc: quatro call sites fechavam
+    o bilhete com `["RED"] * len(legs)` e esse carimbo era gravado no JSONB
+    `games`, marcando RED até em perna que ganhou ou que nem tinha jogado. A
+    correção de lá vale só pra bilhete novo · linha já gravada continua errada,
+    e é isso que esta rota alcança.
+
+    DUAS COISAS QUE ELA NÃO FAZ, de propósito:
+
+    · não toca em `result` nem em `profit` do bilhete. O bilhete estava certo
+      (uma perna RED mata a múltipla) e o dinheiro dele já entrou na banca de
+      quem seguiu. Reescrever isso mexeria em saldo por causa de um bug de
+      exibição.
+    · não alcança alavancagem, porque lá nunca houve o que corromper:
+      `_save_alavancagem_result` nunca gravou resultado por perna.
+
+    Custa chamada de API (uma fixture por perna), então tem `limit` e começa em
+    `dry_run` · quem repara histórico sem ver antes o que vai mudar acaba
+    descobrindo o alcance depois.
+    """
+    from routers.live import _enrich_leg, _fetch_fixtures_bulk, _locked_leg_result
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT id, games, result, match_date
+              FROM picks_multiplas
+             WHERE result IS NOT NULL AND games IS NOT NULL
+             ORDER BY match_date DESC, id DESC
+             LIMIT %s
+        """, (limit,))
+        bilhetes = [dict(r) for r in cur.fetchall()]
+
+        # Aquece o cache de fixtures de uma vez só · uma chamada por perna, em
+        # série, é o que transforma um reparo de 20 bilhetes em minutos.
+        fids = []
+        for b in bilhetes:
+            pernas = b["games"]
+            if isinstance(pernas, str):
+                try: pernas = json.loads(pernas)
+                except Exception: continue
+            if isinstance(pernas, list):
+                fids += [p.get("fixture_id") for p in pernas
+                         if isinstance(p, dict) and p.get("fixture_id")]
+        if fids:
+            _fetch_fixtures_bulk(fids)
+
+        mudancas, corrigidos = [], 0
+        for b in bilhetes:
+            pernas = b["games"]
+            if isinstance(pernas, str):
+                try: pernas = json.loads(pernas)
+                except Exception: continue
+            if not isinstance(pernas, list) or not pernas:
+                continue
+
+            antes  = [p.get("result") if isinstance(p, dict) else None for p in pernas]
+            depois = []
+            for p in pernas:
+                if not isinstance(p, dict) or not p.get("fixture_id"):
+                    depois.append(p.get("result") if isinstance(p, dict) else None)
+                    continue
+                try:
+                    leg = _enrich_leg(
+                        p["fixture_id"], p.get("market", ""), p.get("line", ""),
+                        p.get("home") or p.get("home_team") or "",
+                        p.get("away") or p.get("away_team") or "",
+                        p.get("home_team_id"), p.get("away_team_id"),
+                        float(p.get("odd", 1)), market_type=p.get("market_type"),
+                    )
+                    depois.append(_locked_leg_result(leg))
+                except Exception as e:
+                    logger.warning("[REPARO] perna do bilhete %s falhou: %s", b["id"], e)
+                    depois.append(p.get("result"))
+
+            if antes == depois:
+                continue
+            mudancas.append({
+                "pick_id":    b["id"],
+                "match_date": str(b["match_date"]) if b["match_date"] else None,
+                "bilhete":    b["result"],
+                "antes":      antes,
+                "depois":     depois,
+            })
+            if not dry_run:
+                for p, r in zip(pernas, depois):
+                    if isinstance(p, dict):
+                        p["result"] = r
+                cur.execute("UPDATE picks_multiplas SET games = %s WHERE id = %s",
+                            (json.dumps(pernas, default=str), b["id"]))
+                corrigidos += 1
+
+        if not dry_run:
+            conn.commit()
+        return {
+            "dry_run":     dry_run,
+            "analisados":  len(bilhetes),
+            "divergentes": len(mudancas),
+            "corrigidos":  corrigidos,
+            "mudancas":    mudancas[:50],
+        }
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
 
 
 @router.get("/picks/search")

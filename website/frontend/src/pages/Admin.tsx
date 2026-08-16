@@ -8,6 +8,9 @@ import PageShell from '../components/PageShell'
 import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
+import AdminMotorLive from '../components/AdminMotorLive'
+import AdminPendencias from '../components/AdminPendencias'
+import AdminEngajamento from '../components/AdminEngajamento'
 import { fmtBRL } from '../utils/format'
 
 interface User {
@@ -98,6 +101,7 @@ const ABAS = [
   { key: 'visao',      label: 'Visão geral' },
   { key: 'usuarios',   label: 'Usuários'    },
   { key: 'pipeline',   label: 'Pipeline'    },
+  { key: 'live',       label: 'Ao Vivo'     },
   { key: 'ia',         label: 'IA'          },
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
@@ -207,39 +211,24 @@ export default function Admin() {
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
-  /* ── Motor Ao Vivo · painel próprio ────────────────────────────────────
-     Fora do grid de PIPELINE_ACTIONS de propósito: o Live não é etapa do
-     pipeline diário, roda só durante os jogos, é DEV apenas e tem controles
-     que nenhum outro step tem (dry run e fixture dirigida). Misturar no grid
-     daria a entender que ele entra no "Rodar Tudo", que é justamente o que
-     não pode acontecer enquanto o consumo de API não estiver medido. */
-  const [liveDiag, setLiveDiag] = useState<{
-    pronto: boolean
-    checagens: Array<{ item: string; ok: boolean; detalhe: string }>
-  } | null>(null)
-  const [liveRun, setLiveRun] = useState<{
-    status: string; started_at: string | null; finished_at: string | null
-    returncode: number | null; log: string | null; error: string | null
-  } | null>(null)
-  const [liveDryRun, setLiveDryRun] = useState(true)
-  const [liveFixture, setLiveFixture] = useState('')
-  const [liveLogAberto, setLiveLogAberto] = useState(false)
-
-  const carregarLive = useCallback(() => {
-    api.get('/live-picks/diagnostico').then(r => setLiveDiag(r.data)).catch(() => setLiveDiag(null))
-    api.get('/live-picks/run-status').then(r => setLiveRun(r.data)).catch(() => {})
-  }, [])
+  /* ── Motor Ao Vivo ──────────────────────────────────────────────────────
+     Mudou de casa (16/08): virou aba própria em components/AdminMotorLive.
+     Ficava aqui como um bloco entre outros seis da aba Pipeline, sem espaço
+     pra mostrar o que a rodada produziu · e testar o motor é um ciclo
+     (dispara · lê o log · vê os picks · liquida · confere a taxa) que não
+     cabia num cartão. Continua fora do grid de PIPELINE_ACTIONS pelo motivo
+     de sempre: o Live não é etapa do pipeline diário e não pode entrar no
+     "Rodar Tudo" enquanto o consumo de API não estiver medido. */
 
   useEffect(() => {
     const poll = () => {
       api.get('/admin/pipeline-status').then(r => setPipelineStatus(r.data)).catch(() => {})
       api.get('/admin/ai-review-status').then(r => setAiReviewStatus(r.data)).catch(() => {})
-      carregarLive()
     }
     poll()
     const id = setInterval(poll, 3000)
     return () => clearInterval(id)
-  }, [carregarLive])
+  }, [])
 
   /* Log ao vivo · busca só o que chegou desde a última consulta (`desde`), em
      vez de rebaixar o log inteiro a cada segundo. `logCursor` num ref e não em
@@ -281,19 +270,6 @@ export default function Admin() {
   useEffect(() => {
     if (logAutoScroll && logAberto) logFimRef.current?.scrollIntoView({ block: 'nearest' })
   }, [logLinhas, logAutoScroll, logAberto])
-
-  const rodarLive = async () => {
-    try {
-      await api.post('/live-picks/run', {
-        dry_run: liveDryRun,
-        fixture_id: liveFixture.trim() ? Number(liveFixture.trim()) : null,
-      })
-      setLiveLogAberto(true)
-      carregarLive()
-    } catch (err: any) {
-      showToast(err.response?.data?.detail || 'Erro ao iniciar o motor Ao Vivo', false)
-    }
-  }
 
   const runPipeline = async (command: string) => {
     setRunningCmd(command)
@@ -688,92 +664,6 @@ export default function Admin() {
           )}
         </div>
 
-        {/* ── Motor Ao Vivo · DEV apenas ─────────────────────────────────── */}
-        <div className="bg-surface-1 border border-line rounded-lg p-4 mt-4">
-          <div className="flex items-start justify-between gap-3 mb-3">
-            <div>
-              <h2 className="text-sm font-bold text-ink-1 flex items-center gap-2">
-                Motor Ao Vivo
-                <span className="text-[10px] font-mono px-1.5 py-0.5 rounded border border-red-400/25 bg-red-500/10 text-red-300">
-                  DEV
-                </span>
-              </h2>
-              <p className="text-[11px] text-ink-4 mt-1 leading-relaxed">
-                Uma rodada por clique, sem agendamento. Analisa no máximo 3 partidas ao vivo
-                de ligas cadastradas entre 15&#39; e 80&#39;, e só consulta odd de quem passa na triagem.
-              </p>
-            </div>
-            {liveDiag && (
-              <span className={`shrink-0 text-[10px] font-bold px-2 py-0.5 rounded border ${
-                liveDiag.pronto
-                  ? 'text-green-400 border-green-500/30 bg-green-500/10'
-                  : 'text-amber-400 border-amber-500/30 bg-amber-500/10'}`}>
-                {liveDiag.pronto ? 'pronto' : 'falta configurar'}
-              </span>
-            )}
-          </div>
-
-          {/* Diagnóstico: seis pré-condições independentes. Sem isto, descobrir
-              qual falhou exigiria ler log de subprocesso num ambiente remoto. */}
-          {liveDiag && !liveDiag.pronto && (
-            <ul className="mb-3 space-y-1">
-              {liveDiag.checagens.map(c => (
-                <li key={c.item} className="flex items-start gap-2 text-[11px]">
-                  <span className={`mt-1 w-1.5 h-1.5 rounded-full shrink-0 ${
-                    c.ok ? 'bg-green-500' : 'bg-amber-400'}`} />
-                  <span className={c.ok ? 'text-ink-4' : 'text-ink-2'}>
-                    {c.item}
-                    <span className="text-ink-4"> · {c.detalhe}</span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2">
-            <label className="flex items-center gap-1.5 text-[11px] text-ink-2 cursor-pointer">
-              <input type="checkbox" checked={liveDryRun}
-                onChange={e => setLiveDryRun(e.target.checked)}
-                className="accent-accent" />
-              dry run (calcula e mostra, não grava)
-            </label>
-            <input
-              value={liveFixture}
-              onChange={e => setLiveFixture(e.target.value.replace(/\D/g, ''))}
-              placeholder="fixture (opcional)"
-              inputMode="numeric"
-              className="w-40 bg-surface-2 border border-line rounded-md px-2 py-1 text-[11px] text-ink-1 placeholder:text-ink-4"
-            />
-            <button
-              onClick={rodarLive}
-              disabled={liveRun?.status === 'running'}
-              className="text-[11px] px-3 py-1.5 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
-            >
-              {liveRun?.status === 'running'
-                ? <><Spinner size="sm" className="w-2.5 h-2.5" tone="ink" /> rodando</>
-                : <><Play className="w-3 h-3" /> Executar análise Live</>}
-            </button>
-            {liveRun && liveRun.status !== 'idle' && (
-              <button onClick={() => setLiveLogAberto(!liveLogAberto)}
-                className="text-[11px] text-ink-4 hover:text-ink-2 underline">
-                {liveLogAberto ? 'esconder log' : 'ver log'}
-              </button>
-            )}
-            {liveRun?.finished_at && (
-              <span className={`text-[11px] ${
-                liveRun.returncode === 0 ? 'text-ink-4' : 'text-red-400'}`}>
-                última: {liveRun.finished_at}
-              </span>
-            )}
-          </div>
-
-          {liveLogAberto && (liveRun?.log || liveRun?.error) && (
-            <pre className={`mt-3 text-[10px] bg-surface-0 rounded p-2 whitespace-pre-wrap break-all overflow-y-auto max-h-96 ${
-              liveRun.returncode === 0 ? 'text-ink-2' : 'text-red-400'}`}>
-              {liveRun.error || liveRun.log}
-            </pre>
-          )}
-        </div>
 
         {/* Revisão IA · contadores ao vivo enquanto o pipeline roda. A leitura
             de desempenho por modelo (e a lista de pareceres) mora na aba IA,
@@ -811,6 +701,8 @@ export default function Admin() {
           </div>
         </div>
         </>)}
+
+        {aba === 'live' && <AdminMotorLive />}
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
@@ -1134,7 +1026,35 @@ export default function Admin() {
             <p className="text-center text-ink-4 text-sm py-6">Nenhum pagamento registrado.</p>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Celular: cartão por pagamento. Sete colunas não cabem em tela
+                  de telefone, e o admin é aberto no celular tanto quanto o
+                  resto do site. A tabela continua igual do md pra cima. */}
+              <ul className="md:hidden divide-y divide-line/40">
+                {paymentsPage_.map((p, i) => (
+                  <li key={`m-${i}`} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-ink-1 font-medium text-sm truncate">{p.user_name}</p>
+                        <p className="text-ink-4 text-[11px] truncate">{p.user_email}</p>
+                      </div>
+                      <span className="text-green-400 font-semibold font-mono text-sm shrink-0">
+                        R${Number(p.amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                      <span className={p.status === 'approved' ? 'badge-green' : 'badge-free'}>{p.status}</span>
+                      <span className="text-[11px] text-ink-3 capitalize">{p.plan_key}</span>
+                      {p.payment_method && <span className="text-[11px] text-ink-4">{p.payment_method}</span>}
+                    </div>
+                    <p className="text-[10px] text-ink-4 font-mono mt-1">
+                      {new Date(p.created_at).toLocaleDateString('pt-BR')}
+                      {p.expires_at && <> · expira {new Date(p.expires_at).toLocaleDateString('pt-BR')}</>}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-line">
@@ -1191,7 +1111,27 @@ export default function Admin() {
           {paymentEvents.length === 0 ? (
             <p className="text-center text-ink-4 text-sm py-6">Nenhum evento registrado.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mesmo motivo da tabela de pagamentos acima. Aqui o campo que
+                importa é o `detail`, que é texto longo e some no fim de uma
+                linha larga · no cartão ele ganha a largura inteira. */}
+            <ul className="md:hidden divide-y divide-line/40">
+              {paymentEvents.map((e, i) => (
+                <li key={`m-${i}`} className="px-4 py-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={e.status === 'ativado' ? 'badge-green' : 'badge-free'}>{e.status}</span>
+                    <span className="text-[11px] text-ink-2">{e.source}</span>
+                    <span className="text-[10px] text-ink-4 font-mono ml-auto">
+                      {new Date(e.created_at).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  {e.detail && <p className="text-[11px] text-ink-3 mt-1 break-words">{e.detail}</p>}
+                  <p className="text-[10px] text-ink-4 font-mono mt-0.5">{e.mp_payment_id}</p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-line">
@@ -1217,11 +1157,13 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
         </>)}
 
         {aba === 'picks' && (<>
+        <AdminPendencias />
         {/* Ações de resultado. Os dois endpoints já existiam no backend desde
             que o scheduler foi removido, mas não tinham botão nenhum -- só
             dava pra chamar por fora. Sem scheduler, esta é a única forma de
@@ -1403,6 +1345,7 @@ export default function Admin() {
         </>)}
 
         {aba === 'usuarios' && (<>
+        <AdminEngajamento />
         {/* Criar usuário */}
         {creating && (
           <form onSubmit={handleCreate} className="card p-5 mb-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -2056,7 +1999,36 @@ export default function Admin() {
                 Nenhuma casa encontrada. Rode a coleta de odds primeiro.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Celular: cartão por casa. Seis colunas com dois botões de ação
+                  na última é o pior caso pra rolagem lateral · a ação fica
+                  justamente na ponta que não aparece. */}
+              <ul className="md:hidden divide-y divide-line/40">
+                {bookmakers.map(bk => (
+                  <li key={`m-${bk.bookmaker_id}`} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-ink-1 font-medium text-sm">{bk.bookmaker_name}</span>
+                      <span className={bk.ativo ? 'badge-green shrink-0' : 'text-xs text-ink-4 shrink-0'}>
+                        {bk.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink-4 font-mono mt-0.5">
+                      #{bk.bookmaker_id} · {bk.n_odds.toLocaleString('pt-BR')} odds
+                      {' · '}{bk.n_fixtures.toLocaleString('pt-BR')} fixtures
+                    </p>
+                    <button
+                      className="mt-2 text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 transition-colors"
+                      onClick={() => setNovoBookmaker({
+                        bookmaker_id: String(bk.bookmaker_id),
+                        bookmaker_name: bk.bookmaker_name,
+                      })}>
+                      Editar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-line">
@@ -2133,9 +2105,10 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
             <p className="text-[11px] text-ink-4 px-4 py-3 border-t border-line leading-relaxed">
-              Desativar para de coletar odds desta casa — o histórico existente fica intacto.
+              Desativar para de coletar odds desta casa, e o histórico existente fica intacto.
               O ID é o mesmo que a API-Football usa internamente.
             </p>
           </div>

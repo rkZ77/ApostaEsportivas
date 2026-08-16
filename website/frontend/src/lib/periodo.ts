@@ -15,11 +15,16 @@
  * Aqui fica a lista e a conta. As telas escolhem só COMO desenhar.
  */
 
-export type PeriodoKey = 'tudo' | 'hoje' | '7d' | '30d' | 'mes' | 'mes_passado'
+export type PeriodoKey = 'tudo' | 'hoje' | 'ontem' | '7d' | '30d' | 'mes' | 'mes_passado'
 
 export const PERIODOS: Array<{ key: PeriodoKey; label: string }> = [
   { key: 'tudo',        label: 'Tudo' },
   { key: 'hoje',        label: 'Hoje' },
+  // "Ontem" é o recorte que mais se usa e o único que faltava: quase todo jogo
+  // termina de madrugada, então na manhã seguinte "Hoje" está vazio e "7 dias"
+  // mistura a rodada de ontem com a semana inteira. Sem ele, conferir a rodada
+  // que acabou de fechar exigia contar no calendário.
+  { key: 'ontem',       label: 'Ontem' },
   { key: '7d',          label: '7 dias' },
   { key: '30d',         label: '30 dias' },
   { key: 'mes',         label: 'Este mês' },
@@ -60,6 +65,9 @@ export function limitesDoMes(offset: number): { de: string; ate: string } {
 export function janelaDoPeriodo(p: PeriodoKey): { de: string; ate: string } | null {
   if (p === 'tudo') return null
   if (p === 'hoje') return { de: hojeBR(), ate: hojeBR() }
+  // Janela fechada em ontem, não "de ontem até hoje": senão "Ontem" mostraria
+  // os jogos de hoje junto e deixaria de responder o que ele pergunta.
+  if (p === 'ontem') return { de: diasAtrasBR(1), ate: diasAtrasBR(1) }
   if (p === '7d')   return { de: diasAtrasBR(7),  ate: hojeBR() }
   if (p === '30d')  return { de: diasAtrasBR(30), ate: hojeBR() }
   return limitesDoMes(p === 'mes' ? 0 : -1)

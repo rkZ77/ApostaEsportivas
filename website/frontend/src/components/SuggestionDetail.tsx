@@ -2,13 +2,16 @@ import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { X, TrendingUp, Activity, List, MessageCircle, Route, Lock } from 'lucide-react'
+import { X, TrendingUp, Activity, List, MessageCircle, Route, Lock, Share2, Sparkles } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
 import { backdropFade, drawerRight } from '../lib/motion'
+import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import AnalysisModal from './AnalysisModal'
+import { AnimatePresence } from 'framer-motion'
 
 interface RecentMatch {
   match_date: string; is_home: boolean; gf: number; ga: number
@@ -48,6 +51,12 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
   const [caminho, setCaminho] = useState<any[]>([])
   const [caminhoLoading, setCaminhoLoading] = useState(false)
   const [locked, setLocked] = useState(false)
+  // Compartilhar e "Entenda esta analise" existiam so' no card da aba Hoje.
+  // Quem chegava pelo historico (Meus Picks, Banca) via os mesmos dados sem as
+  // duas acoes, entao o mesmo pick tinha dois comportamentos dependendo da
+  // porta de entrada.
+  const [showAnalysis, setShowAnalysis] = useState(false)
+  const { share: shareStory, sharing, shared } = useShareStoryImage()
 
   useEffect(() => {
     setLoading(true); setData(null); setLocked(false); setTab('ia'); setStandings(null); setCaminho([])
@@ -652,10 +661,66 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               {tab === 'social' && (
                 <PickSocial pickId={id} pickType={pickType} />
               )}
+
+              {/* Acoes do pick, no rodape do painel. Fora das abas de proposito:
+                  elas valem pro pick inteiro, nao pra aba que esta aberta. */}
+              {s && (
+                <div className="mt-5 pt-4 border-t border-line flex flex-wrap gap-2">
+                  <button
+                    onClick={() => setShowAnalysis(true)}
+                    className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors"
+                  >
+                    <Sparkles className="w-3.5 h-3.5" /> Entenda esta analise
+                  </button>
+                  <button
+                    onClick={() => shareStory({
+                      pickId: id,
+                      pickTypeRoute: pickType === 'free' ? 'free' : pickType,
+                      homeTeamName: s.home_team_name ?? s.home_team ?? 'Pick',
+                      awayTeamName: s.away_team_name ?? s.away_team,
+                      homeTeamId: s.home_team_id,
+                      awayTeamId: s.away_team_id,
+                      leagueName: s.league_name,
+                      pickType: pickType === 'free' ? 'Dica do Dia' : (PICK_TYPE_LABEL[pickType] ?? 'VIP'),
+                      market: translateMarket(s.market),
+                      line: translateLine(s.line),
+                      odd: Number(s.total_odd ?? s.odd ?? 0),
+                      result: s.result,
+                      profit: s.profit,
+                    })}
+                    disabled={sharing}
+                    className="flex-1 min-w-[9rem] flex items-center justify-center gap-1.5 text-xs font-bold text-ink-2 border border-line-strong rounded-md py-2.5 hover:text-ink-1 hover:border-ink-4 transition-colors disabled:opacity-40"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    {sharing ? 'Gerando...' : shared ? 'Compartilhado' : 'Compartilhar'}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
       </motion.div>
+
+      <AnimatePresence>
+        {showAnalysis && s && (
+          <AnalysisModal
+            onClose={() => setShowAnalysis(false)}
+            data={{
+              market: translateMarket(s.market),
+              line: translateLine(s.line),
+              marketRaw: s.market,
+              lineRaw: s.line,
+              pickId: id,
+              pickType,
+              odd: Number(s.total_odd ?? s.odd ?? 0),
+              confidence: s.confidence,
+              probability: s.probability,
+              ev: s.ev,
+              reasoning: s.reasoning,
+            }}
+          />
+        )}
+      </AnimatePresence>
     </motion.div>
   )
 }

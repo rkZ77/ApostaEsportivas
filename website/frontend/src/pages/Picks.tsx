@@ -38,7 +38,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { fmtUnits, STAKE_LABEL_PADRAO } from '../utils/format'
+import { fmtUnits } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -106,6 +106,31 @@ const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas' }
 const TODAY = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 
 interface AlavFilters { date_from: string; date_to: string; resultado: string }
+
+/** Um caminho de alavancagem. `current_bankroll` é o bolo em jogo, não saldo:
+ *  só vira dinheiro (e entra na banca) quando o caminho é encerrado. */
+interface AlavStep {
+  pick_id: number; result: 'GREEN' | 'RED'; odd: number
+  date: string | null; match: string; before: number; after: number
+}
+interface AlavSerie {
+  configured: boolean
+  series_id?: number
+  current_bankroll: number
+  initial_bankroll: number
+  steps?: AlavStep[]
+  open_profit?: number
+  can_close?: boolean
+  meta?: number
+  greens_no_caminho?: number
+  realized_units?: number
+  open_units?: number
+  realized_total?: number
+  history?: {
+    id: number; initial: number; final: number; realized: number
+    end_reason: 'manual' | 'red'; started_at: string | null; ended_at: string | null
+  }[]
+}
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
@@ -222,15 +247,13 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
   const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
 
-  const planStatusColor = isAdmin ? 'text-purple-400'
-    : isTrial ? 'text-amber-400'
-    : isVip ? 'text-yellow-400'
-    : 'text-ink-2'
-
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')
   useEffect(() => {
-    if (!user?.expires_at || (!isVip && !isTrial)) { setCountdown(''); return }
+    // Admin nunca expira, e `isVip` inclui admin · sem esta exclusão o
+    // contador lia o expires_at velho da conta e anunciava "Expira em
+    // Expirado" pra quem tem acesso permanente. Profile.tsx já cortava assim.
+    if (!user?.expires_at || isAdmin || (!isVip && !isTrial)) { setCountdown(''); return }
     const tick = () => {
       const diff = new Date(user.expires_at).getTime() - Date.now()
       if (diff <= 0) { setCountdown('Expirado'); return }
@@ -255,12 +278,11 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
         </div>
         <p className="text-ink-3 text-xs mt-0.5 truncate">{user.email}</p>
 
-        {/* Assinatura inline */}
+        {/* Assinatura inline.
+            "Status atual: VIP" saiu daqui: o plano já aparece no badge ao lado
+            do nome e de novo na navbar, e três vezes na mesma tela não informa
+            mais que uma. Sobra o que o badge NÃO diz, que é quanto tempo falta. */}
         <div className="mt-2 flex items-center gap-3 flex-wrap">
-          <div className="flex items-center gap-1.5">
-            <span className="text-ink-3 text-xs">Status atual:</span>
-            <span className={`text-xs font-black ${planStatusColor}`}>{planLabel}</span>
-          </div>
           {countdown && (
             <span className="text-ink-2 text-xs">
               Expira em <span className="font-mono font-bold text-ink-1 tabular-nums">{countdown}</span>
@@ -597,16 +619,12 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
 
 // Vazio do Pick Seguro
 function PickSeguroEmpty() {
-  const hour = new Date().getHours()
-  const msg = hour < 12
-    ? 'O Pick do Dia chega até às 12h (normalmente bem antes).'
-    : 'Nenhum Pick do Dia disponível para hoje.'
+  const msg = 'Nenhum Pick do Dia disponível para hoje.'
 
   return (
     <div className="card p-10 text-center border-dashed">
       <p className="text-ink-3 text-sm font-semibold mb-1">Pick do Dia indisponível</p>
       <p className="text-ink-4 text-xs">{msg}</p>
-      {hour < 12 && <p className="text-ink-4 text-xs mt-2">Publicado todos os dias até às 12h</p>}
     </div>
   )
 }
@@ -1637,10 +1655,13 @@ export default function Picks() {
   const [alavError,    setAlavError]    = useState(false)
   const [alavHasMore,    setAlavHasMore]    = useState(false)
   const [alavLoadingMore, setAlavLoadingMore] = useState(false)
-  const [userAlavSerie, setUserAlavSerie] = useState<{ configured: boolean; current_bankroll: number; initial_bankroll: number } | null>(null)
+  const [userAlavSerie, setUserAlavSerie] = useState<AlavSerie | null>(null)
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
   const [alavInitError, setAlavInitError] = useState('')
+  const [alavEncerrando, setAlavEncerrando] = useState(false)
+  const [alavConfirmClose, setAlavConfirmClose] = useState(false)
+  const [alavCloseMsg, setAlavCloseMsg] = useState('')
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
   const [showBancaModal, setShowBancaModal] = useState(false)
 
@@ -1814,6 +1835,27 @@ export default function Picks() {
     }
   }
 
+  const encerrarCaminho = async () => {
+    setAlavEncerrando(true)
+    setAlavInitError('')
+    try {
+      const r = await api.post('/banca/alavancagem-encerrar')
+      const s = await api.get('/banca/alavancagem-serie')
+      setUserAlavSerie(s.data)
+      setAlavConfirmClose(false)
+      setAlavCloseMsg(
+        `Caminho encerrado. R$${Number(r.data.realized_pnl).toFixed(2)} foram pra sua banca. ` +
+        `O próximo começa em R$${Number(r.data.next_initial).toFixed(2)}.`,
+      )
+      // A banca principal mudou · o resumo em cache mostraria o valor velho.
+      api.get('/banca/summary').then(b => setBancaSummary(b.data)).catch(() => {})
+    } catch (e: any) {
+      setAlavInitError(e.response?.data?.detail || 'Erro ao encerrar. Tente novamente.')
+    } finally {
+      setAlavEncerrando(false)
+    }
+  }
+
   const ALAV_PAGE_SIZE = 50
 
   function doFetchAlavancagem(f: AlavFilters) {
@@ -1850,6 +1892,9 @@ export default function Picks() {
       width="full"
       bar={{
         title: 'Picks',
+        // O navegador de dia é controle, não legenda: sem isto ele ficava
+        // escondido abaixo de sm, que é onde está a maioria dos usuários.
+        subMobile: true,
         sub: tab === 'hoje' ? (
           <span className="flex items-center gap-0.5">
             <button
@@ -2041,12 +2086,14 @@ export default function Picks() {
                       </div>
                     ))}
                   </div>
-                  {/* Premissa do lucro numa linha só, embaixo · a Banca sugere
-                      stake variável, e sem isto o número não bate com o que o
-                      usuário vê na banca dele. */}
-                  <p className="text-[10px] text-ink-4 mt-2">
-                    Plano fixo de stake: {STAKE_LABEL_PADRAO}.
-                  </p>
+                  {/* A legenda do plano de stake saiu daqui. Ela dizia "4u em
+                      picks simples" logo acima de um card que manda apostar 5u,
+                      porque os dois números falam de coisas diferentes: o plano
+                      fixo mede o PLACAR da IA, o card sugere a stake pra banca
+                      DAQUELE usuário. Explicar isso na tela custava mais texto
+                      do que o número valia, e sem explicar virava contradição.
+                      A premissa continua publicada nas telas de resultado, onde
+                      não existe card de Kelly pra contradizer. */}
                 </div>
               )}
 
@@ -2115,7 +2162,21 @@ export default function Picks() {
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
                     {!canSeeVip ? <VipLockOverlay color="blue" /> : (
-                      <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+                      /* Colunas seguem a quantidade real de múltiplas. O grid
+                         fixo de 3-4 colunas foi feito pensando em vitrine cheia,
+                         mas o dia normal tem UMA múltipla · ela caía em 1/3 da
+                         tela e o card, que é o mais denso do site (duas pernas,
+                         linha de stats, barra de probabilidade), truncava até o
+                         nome dos times. Com uma só ela ganha largura de leitura;
+                         o max-w impede que vire uma faixa gigante no ultrawide. */
+                      <motion.div
+                        variants={staggerContainer} initial="hidden" animate="visible"
+                        className={`grid gap-4 ${
+                          multiplas.length === 1 ? 'max-w-2xl'
+                          : multiplas.length === 2 ? 'md:grid-cols-2'
+                          : 'md:grid-cols-2 xl:grid-cols-3'
+                        }`}
+                      >
                         {multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
                       </motion.div>
                     )}
@@ -2423,16 +2484,131 @@ export default function Picks() {
                 <div ref={alavConfigRef} className="card p-5 border-orange-500/20 scroll-mt-24">
                   <div className="flex items-center justify-between mb-3">
                     <div>
-                      <p className="font-display text-sm font-bold text-orange-400">Banca Alavancagem</p>
-                      <p className="text-xs text-ink-3 mt-0.5">Separada da sua banca principal. Reinveste a cada GREEN, reseta no RED</p>
+                      <p className="font-display text-sm font-bold text-orange-400">Caminho de Alavancagem</p>
+                      <p className="text-xs text-ink-3 mt-0.5">
+                        Cada GREEN reaposta o bolo inteiro. Fecha sozinho em {userAlavSerie?.meta ?? 6} greens,
+                        mas você pode encerrar antes quando quiser
+                      </p>
                     </div>
                     {userAlavSerie?.configured && (
                       <div className="font-mono text-right">
                         <div className="text-2xl font-black text-orange-400">R${userAlavSerie.current_bankroll.toFixed(2)}</div>
-                        <div className="text-xs text-ink-4">início: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
+                        <div className="text-xs text-ink-4">entrada: R${userAlavSerie.initial_bankroll.toFixed(2)}</div>
                       </div>
                     )}
                   </div>
+
+                  {/* O ponto todo da tela: enquanto o caminho roda, esse número
+                      não é saldo · está inteiro apostado na próxima entrada. */}
+                  {userAlavSerie?.configured && (
+                    <div className="mb-3 rounded-lg border border-orange-500/20 bg-orange-500/[0.06] px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="text-[11px] text-ink-3">
+                            {(userAlavSerie.open_profit ?? 0) > 0
+                              ? <>Lucro em jogo: <span className="font-mono font-black text-orange-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span>
+                                 {!!userAlavSerie.open_units && <span className="text-ink-4"> ({userAlavSerie.open_units >= 0 ? '+' : ''}{userAlavSerie.open_units.toFixed(2)}u)</span>}</>
+                              : 'Caminho recém-começado'}
+                          </p>
+                          <p className="text-[11px] text-ink-4 mt-0.5 leading-snug">
+                            Não conta na sua banca enquanto o caminho estiver rodando.
+                            {' '}Se der RED você perde só os R${userAlavSerie.initial_bankroll.toFixed(2)} da entrada.
+                          </p>
+                        </div>
+                        {userAlavSerie.can_close && !alavConfirmClose && (
+                          <button
+                            onClick={() => { setAlavConfirmClose(true); setAlavCloseMsg('') }}
+                            className="shrink-0 bg-orange-500 hover:bg-orange-400 text-ink-1 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                          >
+                            Encerrar
+                          </button>
+                        )}
+                      </div>
+
+                      {alavConfirmClose && (
+                        <div className="mt-3 pt-3 border-t border-orange-500/20">
+                          <p className="text-xs text-ink-2 leading-snug">
+                            Encerrar agora leva <span className="font-mono font-black text-green-400">+R${(userAlavSerie.open_profit ?? 0).toFixed(2)}</span> pra sua banca
+                            {' '}e recomeça um caminho novo em R${userAlavSerie.initial_bankroll.toFixed(2)}.
+                          </p>
+                          <div className="flex gap-2 mt-2.5">
+                            <button
+                              onClick={encerrarCaminho}
+                              disabled={alavEncerrando}
+                              className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-surface-0 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                            >
+                              {alavEncerrando ? 'Encerrando...' : 'Confirmar e sacar'}
+                            </button>
+                            <button
+                              onClick={() => setAlavConfirmClose(false)}
+                              className="px-3 py-2 rounded-md border border-line-strong text-ink-3 hover:text-ink-1 text-xs font-bold transition-colors"
+                            >
+                              Continuar o caminho
+                            </button>
+                          </div>
+                        </div>
+                      )}
+
+                      {alavCloseMsg && (
+                        <p className="text-xs text-green-400 font-semibold mt-2 leading-snug">{alavCloseMsg}</p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Progresso até a meta. O caminho fecha sozinho ao bater, e
+                      esse é o ponto: composto que não para é lucro que nunca
+                      existe, porque um RED lá na frente transforma tudo em pó. */}
+                  {userAlavSerie?.configured && !!userAlavSerie.meta && (
+                    <div className="mb-3 flex items-center gap-2">
+                      <div className="flex gap-1">
+                        {Array.from({ length: userAlavSerie.meta }).map((_, i) => (
+                          <span
+                            key={i}
+                            className={`h-1.5 w-7 rounded-full ${
+                              i < (userAlavSerie.greens_no_caminho ?? 0) ? 'bg-orange-400' : 'bg-surface-2'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                      <span className="text-[11px] text-ink-4">
+                        {userAlavSerie.greens_no_caminho ?? 0} de {userAlavSerie.meta} greens
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Passos do caminho atual · a escada que levou até o bolo de hoje */}
+                  {!!userAlavSerie?.steps?.length && (
+                    <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                      <span className="text-[10px] text-ink-4 font-mono">R${userAlavSerie.initial_bankroll.toFixed(0)}</span>
+                      {userAlavSerie.steps.map(s => (
+                        <span key={s.pick_id} className="flex items-center gap-1">
+                          <span className="text-ink-4 text-[10px]">&rsaquo;</span>
+                          <span
+                            title={`${s.match} · odd ${s.odd.toFixed(2)}`}
+                            className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded ${
+                              s.result === 'GREEN'
+                                ? 'bg-green-500/10 text-green-400'
+                                : 'bg-red-500/10 text-red-400 line-through'
+                            }`}
+                          >
+                            R${s.after.toFixed(0)}
+                          </span>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  {!!userAlavSerie?.realized_total && (
+                    <p className="text-[11px] text-ink-4 mb-3">
+                      Já realizado em caminhos encerrados:{' '}
+                      <span className={`font-mono font-bold ${userAlavSerie.realized_total >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        {userAlavSerie.realized_total >= 0 ? '+' : ''}R${userAlavSerie.realized_total.toFixed(2)}
+                      </span>
+                      {userAlavSerie.realized_units != null && (
+                        <span className="text-ink-4"> ({userAlavSerie.realized_units >= 0 ? '+' : ''}{userAlavSerie.realized_units.toFixed(2)}u)</span>
+                      )}
+                    </p>
+                  )}
                   {(!userAlavSerie?.configured || alavInitInput) ? (
                     <div className="flex gap-2 mt-2">
                       <input
@@ -2482,7 +2658,7 @@ export default function Picks() {
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">
                         <p className="text-ink-3 text-sm font-semibold">Pick de alavancagem não gerado para hoje.</p>
-                        <p className="text-ink-4 text-xs mt-1">Publicado diariamente até às 12h.</p>
+                        <p className="text-ink-4 text-xs mt-1">Publicado quando a análise do dia fecha.</p>
                       </div>
                     )}
                   </div>

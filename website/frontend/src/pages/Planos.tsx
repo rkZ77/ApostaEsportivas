@@ -402,7 +402,7 @@ export default function Planos() {
             <div>
               <h3 className="text-sm font-bold text-ink-1">Indicações</h3>
               <p className="text-ink-3 text-xs mt-0.5">
-                +1 dia VIP por cadastro · +2 dias VIP se assinar o plano
+                +1 dia VIP por cadastro, e +2 dias VIP se assinar o plano
               </p>
             </div>
 
@@ -564,7 +564,7 @@ export default function Planos() {
           <div className="bg-surface-1 border border-yellow-400/20 rounded-lg p-6 flex items-center justify-between gap-4">
             <div>
               <p className="text-ink-1 font-black text-sm">Quer acesso VIP completo?</p>
-              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA · a partir de {fmtPlanPrice(monthly.price)}/mês</p>
+              <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA, a partir de {fmtPlanPrice(monthly.price)}/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
               className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-md transition-colors">
