@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
+import { pctProb } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
@@ -147,6 +148,7 @@ function SuggestionCard({
       market: s.market ? translateMarket(s.market) : undefined,
       line: translateLine(s.line),
       odd: Number(s.odd),
+      probabilityPct: pctProb(s.probability ?? s.confidence),
       result: s.result,
       // Mesma regra do card: sem aposta seguida, a imagem mostra o resultado
       // DO PICK em 1u · nao o ganho que o usuario teria tido se tivesse entrado.

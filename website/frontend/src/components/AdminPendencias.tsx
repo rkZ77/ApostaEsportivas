@@ -68,6 +68,22 @@ export default function AdminPendencias() {
 
   useEffect(() => { buscar() }, [buscar])
 
+  const descartar = async (i: Item) => {
+    if (!window.confirm(
+      `Descartar o pick ${i.pick_type} #${i.id} (${i.home_team} x ${i.away_team})?
+
+` +
+      'Use só para pick que NUNCA vai resolver, como fixture que não existe na API. ' +
+      'O pick e os follows dele são apagados.'
+    )) return
+    try {
+      await api.post('/admin/picks/descartar', { pick_type: i.pick_type, pick_id: i.id })
+      buscar()
+    } catch (e: any) {
+      setErro(e.response?.data?.detail || 'Falha ao descartar.')
+    }
+  }
+
   const repararPernas = async (aplicar: boolean) => {
     setReparando(true)
     setErro('')
@@ -225,6 +241,7 @@ export default function AdminPendencias() {
                   <th className="pb-2 font-medium">Mercado</th>
                   <th className="pb-2 font-medium">Fixture</th>
                   <th className="pb-2 font-medium">Motivo</th>
+                  <th className="pb-2 font-medium"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-line/60">
@@ -239,6 +256,20 @@ export default function AdminPendencias() {
                     <td className="py-2 pr-2 text-ink-4 font-mono">{i.fixture_id ?? '·'}</td>
                     <td className={`py-2 font-semibold ${i.travado ? (COR_MOTIVO[i.motivo] ?? 'text-ink-3') : 'text-ink-4'}`}>
                       {i.travado ? i.motivo : 'aguardando o jogo'}
+                    </td>
+                    <td className="py-2 text-right">
+                      {/* So' pra fixture sintetica: e o unico caso em que da pra
+                          afirmar que o pick NUNCA vai resolver. Nos outros o
+                          dado pode chegar atrasado, e apagar seria perder pick
+                          bom por impaciencia. */}
+                      {(i.fixture_id ?? 0) >= 9000000 && (
+                        <button
+                          onClick={() => descartar(i)}
+                          className="text-[10px] px-2 py-1 rounded border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                          Descartar
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

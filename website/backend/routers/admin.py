@@ -1512,6 +1512,72 @@ def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(requ
         conn.close()
 
 
+class DescartarBody(BaseModel):
+    pick_type: str
+    pick_id:   int
+
+    @field_validator("pick_type")
+    @classmethod
+    def _tipo(cls, v):
+        if v not in _PICK_TABLES:
+            raise ValueError(f"pick_type inválido. Use: {list(_PICK_TABLES)}")
+        return v
+
+
+@router.post("/picks/descartar")
+def admin_descartar_pick(body: DescartarBody, current_user: dict = Depends(require_admin)):
+    """Apaga um pick que NUNCA vai resolver.
+
+    Existe por um caso concreto: um pick de picks_vip com fixture_id 9000001,
+    id sintético que não existe na API-Football. O collector pedia a folha dele
+    a cada rodada do checker, a API respondia "não encontrado", e o pick ficava
+    pendente pra sempre -- poluindo o painel de pendências e gastando uma
+    chamada por rodada, sem chance nenhuma de fechar.
+
+    DUAS CERCAS, porque isto apaga dado:
+
+    1. Só pick SEM resultado. Pick já liquidado tem lucro contado na banca de
+       quem seguiu; apagá-lo mudaria saldo de usuário pelas costas. Aqui o
+       404 é proposital -- se tem resultado, o caminho é corrigir o resultado,
+       não sumir com a linha.
+
+    2. Os follows vão junto, no mesmo commit. Deixar `user_followed_picks`
+       apontando pra um pick que não existe mais é como nasce card fantasma na
+       tela de Meus Picks.
+    """
+    tabela = _PICK_TABLES[body.pick_type][0]
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT result FROM {tabela} WHERE id = %s", (body.pick_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Pick não encontrado.")
+        if row["result"] is not None:
+            raise HTTPException(400,
+                "Este pick já tem resultado. Descartar é só pra pick que nunca vai "
+                "resolver · pra corrigir um resultado errado, use Alterar resultado.")
+
+        cur.execute(
+            "DELETE FROM user_followed_picks WHERE pick_id = %s AND pick_type = %s",
+            (body.pick_id, body.pick_type))
+        follows = cur.rowcount or 0
+        cur.execute(f"DELETE FROM {tabela} WHERE id = %s", (body.pick_id,))
+        conn.commit()
+        logger.info("[ADMIN] Pick %s #%s descartado por %s (%d follow(s) junto)",
+                    body.pick_type, body.pick_id, current_user.get("email"), follows)
+        return {"ok": True, "follows_removidos": follows}
+    except HTTPException:
+        conn.rollback()
+        raise
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        cur.close()
+        conn.close()
+
+
 @router.get("/stats")
 def admin_stats(current_user: dict = Depends(require_admin)):
     conn = get_connection()

@@ -38,7 +38,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
-import { fmtUnits } from '../utils/format'
+import {fmtUnits, pctProb } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -370,6 +370,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       market: translateMarket(dica.market),
       line: translateLine(dica.line),
       odd: Number(dica.odd),
+      probabilityPct: pctProb(dica.probability ?? dica.confidence),
       result: dica.result,
       profit: dica.result
         ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? 1,
@@ -677,6 +678,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       pickType: 'multipla',
       market: `Múltipla · ${legs.length} seleções`,
       odd: Number(m.total_odd),
+      probabilityPct: pctProb(m.probability ?? m.confidence),
       result: m.result,
       profit: m.result
         ? calcProfitUnits(m.result, Number(m.total_odd), m.user_stake_units ?? 1,
