@@ -23,7 +23,11 @@ import { Spinner } from './ui'
  */
 
 interface Checagem { item: string; ok: boolean; detalhe: string }
-interface Diagnostico { pronto: boolean; checagens: Checagem[]; dry_run_padrao: string }
+interface Diagnostico {
+  pronto: boolean; checagens: Checagem[]; dry_run_padrao: string
+  /** "produção" | "desenvolvimento" · onde a rodada grava. */
+  grava_em?: string
+}
 interface RunStatus {
   status: 'idle' | 'running' | 'ok' | 'error'
   started_at: string | null
@@ -161,15 +165,27 @@ export default function AdminMotorLive() {
         </div>
 
         {/* Onde o pick vai parar. É a informação que decide se a rodada é teste
-            ou produção, e ela não pode ficar implícita num painel de admin. */}
-        <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
-          <p className="text-[11px] text-ink-2 leading-relaxed">
-            O disparo roda sempre com <span className="font-mono text-amber-300">DB_ENV=dev</span>,
-            então o pick gerado vai pro banco de <b>desenvolvimento</b>, mesmo clicando daqui da produção.
-            É proposital: impede que o botão do admin vire o caminho por onde o motor escreve em prod.
-          </p>
-        </div>
+            ou produção, e ela não pode ficar implícita num painel de admin.
+            Vem do servidor · o painel não adivinha o ambiente. */}
+        {diag?.grava_em === 'produção' ? (
+          <div className="mt-3 flex items-start gap-2 rounded-md border border-red-500/30 bg-red-500/[0.08] px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-red-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-ink-2 leading-relaxed">
+              Esta rodada grava no banco de <b className="text-red-300">PRODUÇÃO</b>
+              {' '}(<span className="font-mono text-red-300">LIVE_ENGINE_ALLOW_PROD</span> ligado).
+              O pick gerado é real e entra na base de verdade. Use dry run enquanto estiver testando.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-3 flex items-start gap-2 rounded-md border border-amber-500/25 bg-amber-500/[0.07] px-3 py-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-400 shrink-0 mt-0.5" />
+            <p className="text-[11px] text-ink-2 leading-relaxed">
+              O disparo roda com <span className="font-mono text-amber-300">DB_ENV=dev</span>, então o
+              pick vai pro banco de <b>desenvolvimento</b> mesmo clicando daqui da produção. Pra gravar
+              na base real, ligue <span className="font-mono text-amber-300">LIVE_ENGINE_ALLOW_PROD=true</span>.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* ── Diagnóstico · sempre visível ──────────────────────────────────── */}
