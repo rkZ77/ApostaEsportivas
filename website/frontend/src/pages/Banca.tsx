@@ -132,7 +132,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
             {/* Indicador de saúde da banca */}
             {bancaStatus === 'blocked' && totalUnits !== null && (
               <div className="mt-2 bg-red-500/10 border border-red-500/30 rounded-lg px-3 py-2 text-xs">
-                <p className="text-red-400 font-black mb-0.5">Bloqueado · risco de ruína</p>
+                <p className="text-red-400 font-black mb-0.5">Bloqueado: risco de ruína</p>
                 <p className="text-red-300">
                   Com R${fmtBRL(uvNum)} por unidade sua banca teria apenas <strong>{Math.floor(totalUnits)} unidades</strong>.
                   Menos de 20 unidades é alto risco de ruína total.
@@ -145,7 +145,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
             )}
             {bancaStatus === 'warning' && totalUnits !== null && unitPct !== null && (
               <div className="mt-2 bg-yellow-500/10 border border-yellow-500/30 rounded-lg px-3 py-2 text-xs">
-                <p className="text-yellow-400 font-black mb-0.5">Atenção · unidade acima do ideal</p>
+                <p className="text-yellow-400 font-black mb-0.5">Atenção: unidade acima do ideal</p>
                 <p className="text-yellow-300">
                   Sua banca teria <strong>{Math.floor(totalUnits)} unidades</strong> ({unitPct.toFixed(1)}% por unidade).
                   Recomendado: mínimo 50 unidades (≤ 2% por unidade).
@@ -386,7 +386,7 @@ export default function Banca() {
                 entra aqui é caminho encerrado, não green de degrau. */}
             <div className="flex items-center gap-1.5 -mt-2 text-[11px] text-ink-4">
               <Info className="w-3 h-3 shrink-0" />
-              <span>Alavancagem entra nesta banca só quando você encerra o caminho · o que está rodando fica de fora</span>
+              <span>Alavancagem entra nesta banca só quando você encerra o caminho, e o que está rodando fica de fora</span>
             </div>
 
             {/*

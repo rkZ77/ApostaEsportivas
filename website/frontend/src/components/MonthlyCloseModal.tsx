@@ -344,11 +344,11 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 </div>
                 {data.alavancagem.busted_this_month && (
                   <p className="text-[11px] text-orange-400 font-semibold mt-1">
-                    Um caminho estourou esse mês · perdeu só o valor de entrada
+                    Um caminho estourou esse mês, e perdeu só o valor de entrada
                   </p>
                 )}
                 <p className="text-[11px] text-ink-4 mt-1">
-                  Em andamento: {fmtBRL(data.alavancagem.current_bankroll)} · ainda não conta como dinheiro
+                  Em andamento: {fmtBRL(data.alavancagem.current_bankroll)} , ainda não conta como dinheiro
                 </p>
               </div>
             )}

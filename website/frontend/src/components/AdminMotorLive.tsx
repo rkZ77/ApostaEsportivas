@@ -292,9 +292,9 @@ export default function AdminMotorLive() {
             ))}
           </div>
           <p className="text-[11px] text-ink-4 mt-2 leading-relaxed">
-            {stats.greens}G · {stats.reds}R · {stats.push}P em {stats.resolvidos} resolvidos ·
-            {' '}{stats.expirados} tiveram a janela da odd fechada antes de alguém pegar
-            {stats.minuto_medio !== null && <> · minuto médio de entrada {stats.minuto_medio}&#39;</>}
+            {stats.greens}G · {stats.reds}R · {stats.push}P em {stats.resolvidos} resolvidos,
+            {' '}e {stats.expirados} tiveram a janela da odd fechada antes de alguém pegar
+            {stats.minuto_medio !== null && <>, com minuto médio de entrada {stats.minuto_medio}&#39;</>}
           </p>
         </div>
       )}

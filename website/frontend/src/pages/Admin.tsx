@@ -1026,7 +1026,35 @@ export default function Admin() {
             <p className="text-center text-ink-4 text-sm py-6">Nenhum pagamento registrado.</p>
           ) : (
             <>
-              <div className="overflow-x-auto">
+              {/* Celular: cartão por pagamento. Sete colunas não cabem em tela
+                  de telefone, e o admin é aberto no celular tanto quanto o
+                  resto do site. A tabela continua igual do md pra cima. */}
+              <ul className="md:hidden divide-y divide-line/40">
+                {paymentsPage_.map((p, i) => (
+                  <li key={`m-${i}`} className="px-4 py-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-ink-1 font-medium text-sm truncate">{p.user_name}</p>
+                        <p className="text-ink-4 text-[11px] truncate">{p.user_email}</p>
+                      </div>
+                      <span className="text-green-400 font-semibold font-mono text-sm shrink-0">
+                        R${Number(p.amount).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                      <span className={p.status === 'approved' ? 'badge-green' : 'badge-free'}>{p.status}</span>
+                      <span className="text-[11px] text-ink-3 capitalize">{p.plan_key}</span>
+                      {p.payment_method && <span className="text-[11px] text-ink-4">{p.payment_method}</span>}
+                    </div>
+                    <p className="text-[10px] text-ink-4 font-mono mt-1">
+                      {new Date(p.created_at).toLocaleDateString('pt-BR')}
+                      {p.expires_at && <> · expira {new Date(p.expires_at).toLocaleDateString('pt-BR')}</>}
+                    </p>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-line">
@@ -1083,7 +1111,27 @@ export default function Admin() {
           {paymentEvents.length === 0 ? (
             <p className="text-center text-ink-4 text-sm py-6">Nenhum evento registrado.</p>
           ) : (
-            <div className="overflow-x-auto">
+            <>
+            {/* Mesmo motivo da tabela de pagamentos acima. Aqui o campo que
+                importa é o `detail`, que é texto longo e some no fim de uma
+                linha larga · no cartão ele ganha a largura inteira. */}
+            <ul className="md:hidden divide-y divide-line/40">
+              {paymentEvents.map((e, i) => (
+                <li key={`m-${i}`} className="px-4 py-3">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className={e.status === 'ativado' ? 'badge-green' : 'badge-free'}>{e.status}</span>
+                    <span className="text-[11px] text-ink-2">{e.source}</span>
+                    <span className="text-[10px] text-ink-4 font-mono ml-auto">
+                      {new Date(e.created_at).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  {e.detail && <p className="text-[11px] text-ink-3 mt-1 break-words">{e.detail}</p>}
+                  <p className="text-[10px] text-ink-4 font-mono mt-0.5">{e.mp_payment_id}</p>
+                </li>
+              ))}
+            </ul>
+
+            <div className="overflow-x-auto hidden md:block">
               <table className="w-full text-xs">
                 <thead>
                   <tr className="border-b border-line">
@@ -1109,6 +1157,7 @@ export default function Admin() {
                 </tbody>
               </table>
             </div>
+            </>
           )}
         </div>
         </>)}
@@ -1950,7 +1999,36 @@ export default function Admin() {
                 Nenhuma casa encontrada. Rode a coleta de odds primeiro.
               </p>
             ) : (
-              <div className="overflow-x-auto">
+              <>
+              {/* Celular: cartão por casa. Seis colunas com dois botões de ação
+                  na última é o pior caso pra rolagem lateral · a ação fica
+                  justamente na ponta que não aparece. */}
+              <ul className="md:hidden divide-y divide-line/40">
+                {bookmakers.map(bk => (
+                  <li key={`m-${bk.bookmaker_id}`} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-ink-1 font-medium text-sm">{bk.bookmaker_name}</span>
+                      <span className={bk.ativo ? 'badge-green shrink-0' : 'text-xs text-ink-4 shrink-0'}>
+                        {bk.ativo ? 'Ativo' : 'Inativo'}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-ink-4 font-mono mt-0.5">
+                      #{bk.bookmaker_id} · {bk.n_odds.toLocaleString('pt-BR')} odds
+                      {' · '}{bk.n_fixtures.toLocaleString('pt-BR')} fixtures
+                    </p>
+                    <button
+                      className="mt-2 text-[11px] text-ink-2 border border-line-strong rounded px-2 py-1 hover:text-ink-1 transition-colors"
+                      onClick={() => setNovoBookmaker({
+                        bookmaker_id: String(bk.bookmaker_id),
+                        bookmaker_name: bk.bookmaker_name,
+                      })}>
+                      Editar
+                    </button>
+                  </li>
+                ))}
+              </ul>
+
+              <div className="overflow-x-auto hidden md:block">
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-line">
@@ -2027,9 +2105,10 @@ export default function Admin() {
                   </tbody>
                 </table>
               </div>
+              </>
             )}
             <p className="text-[11px] text-ink-4 px-4 py-3 border-t border-line leading-relaxed">
-              Desativar para de coletar odds desta casa — o histórico existente fica intacto.
+              Desativar para de coletar odds desta casa, e o histórico existente fica intacto.
               O ID é o mesmo que a API-Football usa internamente.
             </p>
           </div>
