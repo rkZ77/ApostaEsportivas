@@ -44,6 +44,8 @@ from services.pick_engine.goalkeeper_model import (
     MIN_OPPONENT_SAMPLE,
     analyze_saves_market,
 )
+from services.pick_engine.market_pick_score import faixa_config, pick_score
+from services.pick_engine.saves_calibration import recalibrar as recalibrar_saves
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
 from engine_pipelines.decision_log import (
@@ -51,28 +53,33 @@ from engine_pipelines.decision_log import (
     log_decision, log_run, log_skip,
 )
 
-# SEM FAIXA DE ODD desde 2026-08-07 (decisao do usuario, tomada depois de ver a
-# medicao abaixo). Era [1.35, 2.00], herdada dos pipelines de over/under de
-# TIME. Prop de jogador nao precifica igual, e a consequencia era estrutural,
-# nao azar: nos jogos de 07/08, TODA linha dentro de [1.35, 2.00] tinha edge
-# negativo, e as unicas que passavam o EDGE_MIN estavam fora e do lado alto
-# (Vagner 5+ @ 5.70 com edge +0.070 e 6+ @ 10.50 com +0.063). Com a faixa, este
-# pipeline nunca geraria pick -- e de fato nao gerou nenhum desde que existe.
+# FAIXA DE ODD [1.10, 2.00], reposta em 2026-08-16 a pedido do usuario.
 #
-# As constantes ficam como None em vez de sumir: documentam a decisao e voltar
-# atras e' trocar o valor, nao reescrever a checagem.
+# HISTORICO, que importa pra nao repetir o erro: era [1.35, 2.00], herdada dos
+# pipelines de over/under de TIME, e foi removida em 2026-08-07 porque nos jogos
+# daquele dia TODA linha dentro dela tinha edge negativo -- as unicas que
+# passavam o EDGE_MIN estavam fora e do lado ALTO (Vagner 5+ @ 5.70 com edge
+# +0.070 e 6+ @ 10.50 com +0.063). Sem faixa, o pipeline passou a achar valor so'
+# na cauda, e em 08/08 gerou "Everson 6 ou mais defesas" @ 11.00 com 15.4% de
+# probabilidade: um pick que perde 6 vezes a cada 7.
 #
-# O que continua filtrando: EDGE_MIN. Odd <= 1.00 nao precisa de guarda propria
-# porque edge = prob * odd - 1 fica negativo sozinho e o corte de edge pega.
+# O QUE MUDOU ENTRE 07/08 E HOJE e' o PROB_MIN abaixo. Aquela medicao de 07/08
+# descreve um pipeline SEM piso de probabilidade, onde a unica coisa que
+# sobrevivia era a cauda -- por isso a faixa parecia estar matando o pipeline
+# inteiro. Com o piso, a cauda ja' nao gera candidato, entao a faixa nao volta a
+# zerar nada pelo mesmo motivo de antes: ela agora corta o que o piso ja'
+# cortou, e passa a valer como rede contra dado ruim.
 #
-# RISCO ASSUMIDO, escrito aqui de proposito: o modelo acha valor justamente na
-# cauda, que e' onde a estimativa dele e' mais fragil -- o EDGE_MIN daqui ja' e'
-# 0.06 contra 0.04 de faltas exatamente porque "a amostra por goleiro e' pequena
-# e a distribuicao e' superdispersa". Um edge de +0.06 calculado sobre uma
-# probabilidade de 15% erra de sinal com facilidade. Se odd alta comecar a
-# resolver RED com frequencia, esta faixa e' o primeiro lugar pra olhar.
-ODD_MIN = None
-ODD_MAX = None
+# O PISO DESCE DE 1.35 PRA 1.10 porque e' ali que mora o pick que este modelo
+# realmente sustenta: com mu perto da media da liga (2.54 defesas), "1 ou mais"
+# da' ~85% de probabilidade, que e' pick de odd baixa, nao de cauda.
+#
+# ATENCAO ao combinar os dois cortes -- edge >= EDGE_MIN exige probabilidade >=
+# 1/odd + EDGE_MIN, ou seja 96.9% em odd 1.10, 89.3% em 1.20 e 82.9% em 1.30.
+# Na pratica o trecho 1.10-1.27 da faixa e' inalcancavel, e quem limita ali e' o
+# EDGE_MIN, nao o piso.
+ODD_MIN = 1.10
+ODD_MAX = 2.00
 
 # Margem minima pra gravar. Mais exigente que faltas (0.04) porque aqui a
 # amostra por goleiro e' pequena e a distribuicao e' superdispersa: erro de
@@ -97,6 +104,17 @@ EDGE_MIN = 0.06
 # das atuacoes) e vai gerar bem menos. O modelo acha valor na cauda, e a cauda
 # e' justamente o que este piso corta.
 PROB_MIN = DEFAULT_CONFIG.min_taxa
+
+# Ordenacao dos candidatos aprovados (2026-08-16). Antes disto tudo era decidido
+# por MAIOR EDGE -- ver a docstring de market_pick_score pro numero medido que
+# derrubou esse criterio no motor generico em 14/08. Os cortes nao mudaram.
+SCORE_CONFIG = faixa_config(ODD_MIN, ODD_MAX)
+
+# Satura em 10 jogos do adversario no mando certo. O minimo do modelo e' 5
+# (MIN_OPPONENT_SAMPLE) e o pool por mando fica na casa de 7-8 jogos, mesma
+# ordem de grandeza que pool_and_field mediu no motor generico -- saturar em 10
+# mantem a diferenca entre 5 e 8 jogos visivel sem premiar historico gigante.
+AMOSTRA_SATURACAO = 10
 
 NOMES_MERCADO = ("goalkeeper saves", "saves", "player saves")
 
@@ -235,17 +253,42 @@ def _historico(match_stats: MatchStatsService, fixture: dict, team_id: int) -> l
         team_id, fixture["season"], fixture["league_id"], since_date=since)
 
 
-def _media_chutes_no_alvo(historico: list, team_id: int) -> tuple[float | None, int]:
-    """Chutes no alvo que o time PRODUZ por jogo (o que o goleiro adversario
-    vai ter que defender). Escolhe o lado certo jogo a jogo."""
+def _media_chutes_no_alvo(historico: list, team_id: int,
+                          mando: str) -> tuple[float | None, int]:
+    """Chutes no alvo que o time PRODUZ por jogo NO MANDO em que ele vai jogar
+    hoje (o que o goleiro adversario vai ter que defender).
+
+    MANDO (2026-08-16). Ate' aqui esta funcao somava os jogos do time em casa e
+    fora no mesmo balde, e a media saia de uma mistura de dois mandos. E' o
+    MESMO erro que o motor generico corrigiu em 2026-08-08 em
+    stats_model.pool_and_field, com diferenca medida em producao naquele dia:
+
+        Serie A 2026:  5.62 escanteios do mandante x 4.41 do visitante (+27%)
+        Serie B 2026:  5.78 x 4.25 (+36%)
+
+    A correcao nunca chegou aqui porque este pipeline nao passa por
+    pool_and_field (motor proprio, ver docstring do modulo). O efeito e' direto
+    na previsao: um time que chuta muito em casa e pouco fora inflava a
+    expectativa de defesas do goleiro adversario quando o jogo era FORA, que e'
+    exatamente o caso que o usuario levantou.
+
+    Efeito colateral aceito, o mesmo que pool_and_field aceitou: o pool cai
+    aproximadamente pela metade. Com MIN_OPPONENT_SAMPLE de 5, time com
+    historico curto no mando certo deixa de gerar candidato -- e' o numero
+    honesto, e o balde misturado de antes era grande por incluir jogo que nao
+    respondia a pergunta.
+    """
+    if mando not in ("home", "away"):
+        raise ValueError(f"mando invalido: {mando!r}")
+
+    campo = "home_shots_on" if mando == "home" else "away_shots_on"
+    chave_time = "home_team_id" if mando == "home" else "away_team_id"
+
     valores = []
     for jogo in historico:
-        if jogo.get("home_team_id") == team_id:
-            v = jogo.get("home_shots_on")
-        elif jogo.get("away_team_id") == team_id:
-            v = jogo.get("away_shots_on")
-        else:
+        if jogo.get(chave_time) != team_id:
             continue
+        v = jogo.get(campo)
         if v is not None and v > 0:
             valores.append(float(v))
     if not valores:
@@ -278,7 +321,8 @@ def _fixtures_de_hoje(cur) -> list:
 
 
 def melhor_por_goleiro(candidatos: list) -> list:
-    """UM candidato por goleiro, o de maior edge.
+    """UM candidato por goleiro, em DOIS passos: melhor preco, depois melhor
+    linha.
 
     As linhas do mesmo goleiro sao a mesma aposta em graus diferentes (6+
     implica 5+ implica 4+), e a MESMA linha ainda reaparece quando duas casas
@@ -292,24 +336,45 @@ def melhor_por_goleiro(candidatos: list) -> list:
     aposta quatro vezes, gastar quatro revisoes de IA e multiplicar por quatro a
     exposicao real do assinante num goleiro so'.
 
-    Maior edge e' o mesmo criterio que faltas usa pra escolher entre linhas do
-    mesmo jogo, e resolve os dois casos de uma vez: entre duas casas na mesma
-    linha, a de odd maior tem edge maior.
+    POR QUE DOIS PASSOS, E NAO UM SO' COMO ANTES (2026-08-16)
+    --------------------------------------------------------
+    Ate' aqui um unico criterio (maior edge) resolvia os dois casos de uma vez,
+    porque entre duas casas na MESMA linha a de odd maior tem edge maior. Com o
+    score isso deixa de valer, e no sentido perigoso: o termo de seguranca
+    premia odd baixa, entao comparar duas casas na mesma linha pelo score
+    escolheria o PIOR preco pra exatamente a mesma aposta.
+
+    Os dois passos separam perguntas que sao mesmo diferentes:
+
+      1. MESMA aposta em casas diferentes -> so' o preco decide, maior odd vence.
+      2. Apostas diferentes no mesmo goleiro -> decide o score (probabilidade,
+         seguranca do preco, amostra e edge), igual ao resto do motor.
 
     A reducao e' por GOLEIRO e nao por jogo: os dois goleiros da partida sao
     apostas distintas e ambos podem sair.
     """
-    melhor: dict = {}
+    # 1. Mesma linha em casas diferentes: fica a de melhor preco.
+    melhor_preco: dict = {}
     for c in candidatos:
-        atual = melhor.get(c["goleiro"]["player_id"])
-        if atual is None or c["edge"] > atual["edge"]:
-            melhor[c["goleiro"]["player_id"]] = c
+        chave = (c["goleiro"]["player_id"], c["n_defesas"])
+        atual = melhor_preco.get(chave)
+        if atual is None or c["odd"] > atual["odd"]:
+            melhor_preco[chave] = c
+
+    # 2. Linhas diferentes do mesmo goleiro: fica a de melhor score.
+    melhor: dict = {}
+    for c in melhor_preco.values():
+        player_id = c["goleiro"]["player_id"]
+        atual = melhor.get(player_id)
+        if atual is None or c["pick_score"] > atual["pick_score"]:
+            melhor[player_id] = c
     return list(melhor.values())
 
 
 def _avaliar_fixture(fixture: dict, goleiros: dict,
                      match_stats: MatchStatsService,
-                     odds_service: OddsService) -> list:
+                     odds_service: OddsService,
+                     constantes: dict | None = None) -> list:
     """Candidatos de defesas pra um jogo (pode haver um por goleiro)."""
     # RAW pelo mesmo motivo do pipeline de faltas: load_odds_structured
     # agrupa por line_value e descarta o que nao parear como Over/Under.
@@ -321,8 +386,12 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
     # Media de chutes no alvo de cada lado, calculada uma vez por jogo.
     hist_casa = _historico(match_stats, fixture, fixture["home_team_id"])
     hist_fora = _historico(match_stats, fixture, fixture["away_team_id"])
-    chutes_casa, n_casa = _media_chutes_no_alvo(hist_casa, fixture["home_team_id"])
-    chutes_fora, n_fora = _media_chutes_no_alvo(hist_fora, fixture["away_team_id"])
+    # Cada lado no mando em que ele vai jogar HOJE: o mandante produz chutes
+    # como mandante, o visitante como visitante. Ver _media_chutes_no_alvo.
+    chutes_casa, n_casa = _media_chutes_no_alvo(
+        hist_casa, fixture["home_team_id"], mando="home")
+    chutes_fora, n_fora = _media_chutes_no_alvo(
+        hist_fora, fixture["away_team_id"], mando="away")
 
     candidatos = []
     for o in structured:
@@ -347,11 +416,13 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             # Descarta em vez de chutar o lado.
             continue
 
-        # De qual lado ele esta -> quem chuta contra ele.
+        # De qual lado ele esta -> quem chuta contra ele, e em que mando esse
+        # adversario joga hoje (goleiro da casa enfrenta o visitante jogando
+        # como visitante, e vice-versa).
         if info["team_id"] == fixture["home_team_id"]:
-            adversario_chutes, adversario_n = chutes_fora, n_fora
+            adversario_chutes, adversario_n, adversario_mando = chutes_fora, n_fora, "away"
         elif info["team_id"] == fixture["away_team_id"]:
-            adversario_chutes, adversario_n = chutes_casa, n_casa
+            adversario_chutes, adversario_n, adversario_mando = chutes_casa, n_casa, "home"
         else:
             continue
 
@@ -362,6 +433,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             odd=odd,
             # "N ou mais" = P(X >= N) = prob_over(N - 0.5). Ver docstring.
             line=n_defesas - 0.5,
+            constantes=constantes,
         )
         if not analise:
             continue
@@ -370,6 +442,12 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
         if analise.get("edge", 0) < EDGE_MIN:
             continue
 
+        analise["pick_score"] = pick_score(
+            probability=analise["probability"], odd=odd, edge=analise["edge"],
+            amostra=adversario_n, amostra_saturacao=AMOSTRA_SATURACAO,
+            config=SCORE_CONFIG,
+        )
+
         candidatos.append({
             **analise,
             "fixture": fixture,
@@ -377,6 +455,7 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             "n_defesas": n_defesas,
             "adversario_chutes": adversario_chutes,
             "adversario_n": adversario_n,
+            "adversario_mando": adversario_mando,
             "bookmaker": o.get("bookmaker_name") or o.get("bookmaker"),
             "market_id": o.get("market_id"),
             "market_name": o.get("market_name") or "Goalkeeper Saves",
@@ -387,14 +466,15 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
 
 def _explicar(c: dict) -> str:
     g = c["goleiro"]
+    onde = "jogando em casa" if c.get("adversario_mando") == "home" else "jogando fora"
     partes = [
-        f"{g['player_name']} enfrenta um adversario que produz "
-        f"{c['adversario_chutes']} chutes no alvo por jogo "
-        f"({c['adversario_n']} jogos de historico)."
+        f"{g['player_name']} enfrenta um adversário que produz "
+        f"{c['adversario_chutes']} chutes no alvo por jogo {onde} "
+        f"({c['adversario_n']} jogos nesse mando)."
     ]
     if g.get("saves_avg"):
         partes.append(
-            f"Ele faz {g['saves_avg']} defesas por jogo em {g['jogos']} atuacoes."
+            f"Ele faz {g['saves_avg']} defesas por jogo em {g['jogos']} atuações."
         )
     partes.append(f"Defesas esperadas: {c['expected_saves']}.")
     partes.append(
@@ -415,10 +495,16 @@ def _salvar(cur, c: dict) -> None:
         "expected_saves": c["expected_saves"],
         "adversario_chutes_no_alvo": c["adversario_chutes"],
         "adversario_amostra": c["adversario_n"],
+        "adversario_mando": c.get("adversario_mando"),
         "goleiro_saves_avg": g.get("saves_avg"),
         "goleiro_jogos": g.get("jogos"),
         "lift_vs_base": c.get("lift_vs_base"),
         "fair_odd": c["fair_odd"], "edge": c["edge"], "ev": c["ev"],
+        "pick_score": c.get("pick_score"),
+        # De quais constantes saiu esta probabilidade. Sem isto, um pick de hoje
+        # e um de dois meses atras com a mesma entrada e saidas diferentes
+        # ficariam inexplicaveis.
+        "calibragem": c.get("calibragem"),
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 
@@ -471,13 +557,30 @@ def run_goleiros_engine():
           f"{len(goleiros)} goleiro(s) conhecidos "
           f"(minimo {MIN_OPPONENT_SAMPLE} jogos do adversario)...")
 
+    # RECALIBRAGEM A CADA RODADA (2026-08-16, mesmo pedido que colocou isto no
+    # pipeline de faltas). Remede a relacao chute-no-alvo -> defesa, a media da
+    # liga e a dispersao contra as atuacoes que existem hoje, em vez de usar pra
+    # sempre os tres numeros medidos em 01/08. Amostra curta ou falha de banco
+    # devolve as congeladas -- ver saves_calibration.
+    constantes, calibragem = recalibrar_saves(cur)
+    print(f"[GOLEIROS_ENGINE] Constantes {calibragem['origem']}: "
+          f"{calibragem['atuacoes']} atuacoes"
+          + (f", var/media {calibragem['variancia_sobre_media']}"
+             if calibragem.get("variancia_sobre_media") else "") + ".")
+    if calibragem.get("erro"):
+        print(f"[GOLEIROS_ENGINE] Recalibragem falhou ({calibragem['erro']}); "
+              f"seguindo com as constantes congeladas.")
+    for troca in calibragem.get("trocadas", []):
+        print(f"[GOLEIROS_ENGINE]   {troca}")
+
     match_stats = MatchStatsService()
     odds_service = OddsService()
 
     candidatos = []
     for fixture in fixtures:
         try:
-            do_fixture = _avaliar_fixture(fixture, goleiros, match_stats, odds_service)
+            do_fixture = _avaliar_fixture(fixture, goleiros, match_stats,
+                                          odds_service, constantes=constantes)
         except Exception as e:
             print(f"[GOLEIROS_ENGINE] Erro no fixture {fixture['fixture_id']}: {e}")
             log_skip("GOLEIROS_ENGINE", fixture, f"{MOTIVO_ERRO}: {e}")
@@ -500,7 +603,9 @@ def run_goleiros_engine():
         conn.close()
         return
 
-    candidatos.sort(key=lambda c: c["edge"], reverse=True)
+    # Maior score primeiro (era maior edge ate' 2026-08-16): esta e' a fila que
+    # a revisao de IA percorre e a que define o que o dia publica.
+    candidatos.sort(key=lambda c: c["pick_score"], reverse=True)
 
     gate = review_gate("goleiros")
     salvos = 0
@@ -511,7 +616,8 @@ def run_goleiros_engine():
         if not aprovado:
             print(f"[GOLEIROS_ENGINE] {c['goleiro']['player_name']} vetado pela revisao de IA.")
             continue
-        _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review")})
+        _salvar(cur, {**c, "ai_review": aprovado[0].get("ai_review"),
+                      "calibragem": calibragem})
         salvos += 1
         print(f"[GOLEIROS_ENGINE] Salvo: {c['goleiro']['player_name']} "
               f"({c['goleiro']['team_name']}) · {c['n_defesas']}+ defesas @ {c['odd']} "

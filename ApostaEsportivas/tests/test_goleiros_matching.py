@@ -84,10 +84,14 @@ def test_acento_nao_atrapalha():
 # --------------------------------------------------------------------------
 # Deduplicacao por goleiro (2026-08-07)
 # --------------------------------------------------------------------------
-def _cand(player_id, n_defesas, odd, edge):
+def _cand(player_id, n_defesas, odd, edge, pick_score=None):
+    """Candidato minimo. `pick_score` default derivado do edge preserva a ordem
+    que estes testes assumiam quando o criterio era so' edge (ate' 2026-08-16);
+    quem precisa exercitar score e preco em desacordo passa o valor na mao."""
     return {
         "goleiro": {"player_id": player_id, "player_name": f"gk-{player_id}"},
         "n_defesas": n_defesas, "odd": odd, "edge": edge,
+        "pick_score": edge if pick_score is None else pick_score,
     }
 
 
@@ -114,8 +118,7 @@ def test_linhas_do_mesmo_goleiro_viram_um_pick_so():
 
 def test_mesma_linha_em_duas_casas_fica_com_a_odd_maior():
     """Este pipeline le odd RAW, entao nao tem o 'melhor preco por linha' que o
-    de faltas faz. Maior edge resolve: na mesma linha, odd maior tem edge
-    maior."""
+    de faltas faz."""
     reduzidos = melhor_por_goleiro([
         _cand(900, 5, 5.70, 0.0699),
         _cand(900, 5, 7.00, 0.1025),
@@ -123,6 +126,39 @@ def test_mesma_linha_em_duas_casas_fica_com_a_odd_maior():
 
     assert len(reduzidos) == 1
     assert reduzidos[0]["odd"] == 7.00
+
+
+def test_mesma_linha_ignora_o_score_e_decide_so_pelo_preco():
+    """Regressao 2026-08-16, do dia em que o score entrou.
+
+    O score premia odd baixa (termo de seguranca), entao usa-lo pra comparar
+    duas casas na MESMA linha escolheria o pior preco pra exatamente a mesma
+    aposta. Aqui a odd pior tem score MAIOR de proposito: mesmo assim quem tem
+    que sair e' a de 7.00.
+
+    Entre linhas diferentes o score volta a mandar -- e' o teste seguinte."""
+    reduzidos = melhor_por_goleiro([
+        _cand(900, 5, 5.70, 0.0699, pick_score=0.90),
+        _cand(900, 5, 7.00, 0.1025, pick_score=0.10),
+    ])
+
+    assert len(reduzidos) == 1
+    assert reduzidos[0]["odd"] == 7.00
+
+
+def test_entre_linhas_diferentes_quem_decide_e_o_score():
+    """O contrario do teste acima: linhas diferentes sao apostas diferentes, e
+    ai' o criterio e' o score, nao a odd. A linha de odd menor vence quando o
+    score dela e' melhor -- que e' o ponto inteiro de ter trocado 'maior edge'
+    por 'maior score' (ver market_pick_score)."""
+    reduzidos = melhor_por_goleiro([
+        _cand(900, 1, 1.30, 0.05, pick_score=0.80),
+        _cand(900, 6, 10.50, 0.20, pick_score=0.20),
+    ])
+
+    assert len(reduzidos) == 1
+    assert reduzidos[0]["n_defesas"] == 1
+    assert reduzidos[0]["odd"] == 1.30
 
 
 def test_goleiros_diferentes_continuam_sendo_dois_picks():

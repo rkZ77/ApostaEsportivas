@@ -72,9 +72,23 @@ def prob_over(line: float, mu: float, r: float = DISPERSION_R) -> float:
     return max(0.0, min(1.0, 1.0 - abaixo))
 
 
+def _const(constantes: dict | None, chave: str, padrao: float) -> float:
+    """Constante recalibrada, ou a congelada quando nao houver.
+
+    `constantes` vem de saves_calibration.recalibrar (2026-08-16). None mantem
+    exatamente os numeros medidos em 01/08, que e' o que todo chamador que nao
+    sabe da recalibragem continua vendo -- inclusive os testes que travam eles.
+    """
+    if not constantes:
+        return padrao
+    valor = constantes.get(chave)
+    return padrao if valor is None else valor
+
+
 def expected_saves(opponent_shots_on_avg: float | None,
                    keeper_saves_avg: float | None = None,
-                   sample_size: int | None = None) -> float | None:
+                   sample_size: int | None = None,
+                   constantes: dict | None = None) -> float | None:
     """Defesas esperadas do goleiro neste jogo.
 
     Combina dois sinais e encolhe pra media da liga quando a amostra e'
@@ -90,7 +104,8 @@ def expected_saves(opponent_shots_on_avg: float | None,
     """
     sinais = []
     if opponent_shots_on_avg is not None and opponent_shots_on_avg > 0:
-        sinais.append(opponent_shots_on_avg * SAVE_RATE_PER_SHOT_ON)
+        sinais.append(opponent_shots_on_avg
+                      * _const(constantes, "save_rate_per_shot_on", SAVE_RATE_PER_SHOT_ON))
     if keeper_saves_avg is not None and keeper_saves_avg > 0:
         sinais.append(keeper_saves_avg)
     if not sinais:
@@ -99,7 +114,8 @@ def expected_saves(opponent_shots_on_avg: float | None,
     # O sinal do adversario pesa o dobro: e' o que o backtest sustenta.
     mu = sinais[0] if len(sinais) == 1 else (sinais[0] * 2 + sinais[1]) / 3
 
-    encolhido = shrink_taxa(mu, sample_size, LEAGUE_MEAN_SAVES)
+    encolhido = shrink_taxa(mu, sample_size,
+                            _const(constantes, "league_mean_saves", LEAGUE_MEAN_SAVES))
     return round(encolhido if encolhido is not None else mu, 3)
 
 
@@ -107,7 +123,8 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
                          keeper_saves_avg: float | None,
                          sample_size: int | None,
                          odd: float | None,
-                         line: float = 1.5) -> dict | None:
+                         line: float = 1.5,
+                         constantes: dict | None = None) -> dict | None:
     """Candidato de pick de defesas, ou None se nao der pra avaliar.
 
     Devolve probabilidade, odd justa, edge e EV no mesmo formato que o resto
@@ -117,11 +134,12 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
     if sample_size is not None and sample_size < MIN_OPPONENT_SAMPLE:
         return None
 
-    mu = expected_saves(opponent_shots_on_avg, keeper_saves_avg, sample_size)
+    mu = expected_saves(opponent_shots_on_avg, keeper_saves_avg, sample_size,
+                        constantes=constantes)
     if mu is None:
         return None
 
-    prob = prob_over(line, mu)
+    prob = prob_over(line, mu, _const(constantes, "dispersion_r", DISPERSION_R))
     if prob <= 0:
         return None
 
@@ -132,7 +150,8 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
         "probability": round(prob, 4),
         "fair_odd": odd_justa,
         "sample_size": sample_size,
-        "lift_vs_base": round(prob - BASE_RATE_OVER_15, 4),
+        "lift_vs_base": round(
+            prob - _const(constantes, "base_rate_over_15", BASE_RATE_OVER_15), 4),
     }
     if odd is not None and odd > 1:
         resultado["odd"] = float(odd)
