@@ -53,3 +53,18 @@ export function maskPhone(value: string): string {
   if (d.length <= 10) return `(${d.slice(0,2)}) ${d.slice(2,6)}-${d.slice(6)}`
   return `(${d.slice(0,2)}) ${d.slice(2,7)}-${d.slice(7)}`
 }
+
+
+/** Probabilidade 0-1 do banco em 0-100 pro card de compartilhar.
+ *
+ * `probability` e `confidence` sao campos DIFERENTES e confidence vive acima
+ * (0,816 contra 0,755 no mesmo pick, medido em picks_vip), entao quem chama
+ * passa probability primeiro e so' cai em confidence quando ela nao existe --
+ * picks VIP antigos e multiplas nao tem a coluna. Devolve null em vez de 0
+ * quando nao ha nada: 0% seria uma afirmacao, e ausencia nao e' zero.
+ */
+export function pctProb(v: unknown): number | null {
+  const n = Number(v)
+  if (!isFinite(n) || n <= 0) return null
+  return n <= 1 ? n * 100 : n
+}

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion'
 import { X, TrendingUp, Activity, List, MessageCircle, Route, Lock, Share2, Sparkles } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
+import { pctProb } from '../utils/format'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
@@ -387,6 +388,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         market: translateMarket(s.market),
                         line: translateLine(s.line),
                         odd: Number(s.total_odd ?? s.odd ?? 0),
+                        probabilityPct: pctProb(s.probability ?? s.confidence),
                         result: s.result,
                         profit: s.profit,
                       })}

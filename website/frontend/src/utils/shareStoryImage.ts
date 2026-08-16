@@ -18,6 +18,16 @@ export interface StoryImageInput {
   shareUrl: string
   /** Win rate geral do site (0-100), pra prova social no card. Omitir se indisponível. */
   winRatePct?: number | null
+  /**
+   * Probabilidade estimada DESTE pick (0-100).
+   *
+   * Tem prioridade sobre `winRatePct` no terceiro ladrilho. O card mostrava
+   * "ACERTO 30D", que e' o acerto do SITE nos ultimos 30 dias -- numero de
+   * outro assunto, colado em cima de odd e lucro que sao deste pick. Quem le
+   * junta os tres e entende que 67% era a chance daquela aposta. Probabilidade
+   * do proprio pick responde a pergunta que o leitor ja estava fazendo.
+   */
+  probabilityPct?: number | null
 }
 
 // ── Tipografia ───────────────────────────────────────────────────────────
@@ -302,9 +312,10 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   })
   cursorY += 122
 
-  // Estatísticas: odd, lucro e (se disponível) acerto geral do site
+  // Estatísticas: odd, lucro e a chance estimada deste pick.
   cursorY += 90
-  const hasWinRate = input.winRatePct != null
+  const prob = input.probabilityPct ?? null
+  const hasWinRate = prob == null && input.winRatePct != null
   const profitText = input.profit != null
     ? `${input.profit >= 0 ? '+' : ''}${input.profit.toFixed(2)}u`
     : `+${(input.odd - 1).toFixed(2)}u`
@@ -313,7 +324,14 @@ export async function buildStoryImage(input: StoryImageInput): Promise<Blob> {
   const stats = [
     { label: 'ODD', value: input.odd.toFixed(2), color: '#4ade80' },
     { label: input.profit != null ? 'LUCRO' : 'LUCRO POT.', value: profitText, color: profitColor },
-    ...(hasWinRate ? [{ label: 'ACERTO 30D', value: `${Math.round(input.winRatePct!)}%`, color: '#facc15' }] : []),
+    // Prioridade pra probabilidade DO PICK · "ACERTO 30D" fica so' de reserva,
+    // pra quando o pick nao carrega probabilidade, e com rotulo que diz de
+    // quem e o numero.
+    ...(prob != null
+      ? [{ label: 'CHANCE', value: `${Math.round(prob)}%`, color: '#facc15' }]
+      : hasWinRate
+        ? [{ label: 'ACERTO DO SITE', value: `${Math.round(input.winRatePct!)}%`, color: '#facc15' }]
+        : []),
   ]
   const totalW = W - 200
   const colW = totalW / stats.length
