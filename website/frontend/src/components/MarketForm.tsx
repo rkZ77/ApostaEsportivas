@@ -63,6 +63,11 @@ interface Serie {
   greens: number
   hit_rate: number | null
   average: number | null
+  /* Frase de fato sobre a série, montada no backend a partir DESTES mesmos
+     números (market_form.frase_da_serie). Vem pronta e traduzida: montar aqui
+     abriria a porta pra o texto e as barras divergirem, que é exatamente o que
+     já aconteceu entre o card e o motor. */
+  frase?: string | null
   /** Vieram menos jogos do que a série pediu · ver o aviso no rodapé dela. */
   amostra_curta: boolean
   amostra_pedida: number
@@ -140,11 +145,20 @@ function Grafico({
         )}
       </div>
 
-      <p className="text-[11px] text-ink-4 mb-3">
+      <p className="text-[11px] text-ink-4 mb-2">
         {serie.label} · últimos {jogos.length} jogos {contexto}
         {serie.average != null && <> · média {serie.average}</>}
         {taxa != null && <> · {serie.greens} GREEN em {serie.resolved}</>}
       </p>
+
+      {/* O fato em uma frase, do jeito que o apostador lê nas casas. Fica ACIMA
+          das barras porque é o resumo delas · quem só bate o olho leva o número
+          principal, quem quiser o detalhe desce pro gráfico. */}
+      {serie.frase && (
+        <p className="text-[12px] text-ink-2 leading-snug mb-3 bg-surface-2/60 border border-line/60 rounded-lg px-2.5 py-2">
+          {serie.frase}
+        </p>
+      )}
 
       <div className="relative h-20 flex items-end gap-1">
         {/* Linha do pick, atravessando. É a régua contra a qual as barras são
