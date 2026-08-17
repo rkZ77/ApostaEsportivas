@@ -131,6 +131,35 @@ class PickEngineConfig:
     # escolhido medindo contra os picks ja resolvidos, nao por gosto.
     model_disagreement_threshold: float | None = 0.15
 
+    # QUAL taxa a regra de desacordo compara contra o Poisson (2026-08-17).
+    #
+    # False (padrao, comportamento de producao): compara a taxa JA ENCOLHIDA.
+    # True: compara a taxa BRUTA, antes do encolhimento bayesiano.
+    #
+    # Por que isto e' um interruptor e nao uma correcao direta: o encolhimento
+    # puxa a taxa em direcao ao mercado, e o Poisson normalmente esta' do MESMO
+    # lado que o mercado. Logo o encolhimento reduz justamente a distancia que a
+    # regra procura -- os dois mecanismos se cancelam, e quanto mais violento o
+    # desacordo original, melhor ele fica escondido.
+    #
+    # Medido nos 8 RED de pick simples de 14-16/08/2026 (VIP+Free, todos): em
+    # 8 de 8 a taxa bruta estava ACIMA do Poisson, em 7 de 8 por mais de 13
+    # pontos, e a regra nao disparou nenhuma vez. Exemplo: Atletico-MG x Gremio,
+    # Under 10 escanteios -- bruta 92.7% (n~6), Poisson 60.4%, publicada 66.3%,
+    # edge anunciado +15.8%. Saiu 14 escanteios. Comparando o bruto, o desacordo
+    # e' 32.3pp e a regra teria publicado 60.4%.
+    #
+    # O argumento de principio a favor do True: "a contagem propria concorda com
+    # o modelo de distribuicao?" e' pergunta sobre a EVIDENCIA. Encolher pro
+    # mercado e' outra correcao (regularizacao de amostra curta) e nao faz a
+    # contagem concordar com o Poisson -- so' move o numero. Comparar o encolhido
+    # mistura as duas coisas.
+    #
+    # Fica em False ate' o backtest medir volume de pick e hit-rate nos dois
+    # modos. Ligar reduz volume por construcao (a regra passa a disparar muito
+    # mais), e volume nao pode cair sem que o acerto suba.
+    disagreement_on_raw_rate: bool = False
+
     # Amostra (Q)
     sample_rich_n: int = 8
     sample_rich_q: float = 1.00

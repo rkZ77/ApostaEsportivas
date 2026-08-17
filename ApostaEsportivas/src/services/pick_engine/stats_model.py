@@ -210,6 +210,37 @@ def classify_market(market_name: str):
       pela API, exclui por seguranca em vez de advinhar."""
     name = market_name.lower()
 
+    # MERCADO COMBINADO com "ambas marcam" -- fora de escopo, e checado ANTES de
+    # tudo porque cada combo bateria num check diferente mais abaixo (achado
+    # 2026-08-17, rodando o modo debug contra fixture real).
+    #
+    # A API-Football manda, alem do "Both Teams Score" simples:
+    #     "Results/Both Teams Score"          1X2 + BTTS   ("Home/Yes", "Away/No")
+    #     "Total Goals/Both Teams To Score"   O/U + BTTS   ("o/yes 2.5", "u/no 2.5")
+    #     "Double Chance/Both Teams To Score" DC  + BTTS
+    #
+    # Se o guard morasse dentro do ramo de btts, o primeiro viraria btts, o
+    # terceiro cairia em double_chance (o check de dupla chance vem antes) e cada
+    # combo novo precisaria de mais uma linha. Aqui em cima, a regra e' uma so'.
+    #
+    # Os tres JA eram descartados, mas por ACIDENTE de parse:
+    # _build_market_hit_fn exige direction em (yes/sim/no/nao), "Home/Yes" nao
+    # bate, compute_taxa devolvia None e a entrada morria rotulada "sem taxa
+    # calculavel (amostra insuficiente)". Mesma situacao de "Goalkeeper Saves"
+    # antes de 2026-08-01, e a decisao e' a mesma que foi tomada la': descartar
+    # por DECISAO, nao por acidente.
+    #
+    # Nao e' cosmetico. Sao ~10 entradas fantasma POR FIXTURE rotuladas "btts" no
+    # rastro de debug/homologacao, e foi isso que fez um relatorio de auditoria
+    # afirmar "btts apareceu 440x e publicou 0x" enquanto o motor publicava ambas
+    # marcam normalmente. Rastro sujo produz conclusao errada com o motor certo.
+    #
+    # A regra e' a BARRA: nome de BTTS simples nunca tem "/" (ver as chaves de
+    # website/frontend/src/utils/marketTranslate.ts). Combo novo que a API
+    # inventar amanha ja nasce excluido, sem precisar de outra linha aqui.
+    if "both teams" in name and "/" in name:
+        return None
+
     if "handicap" in name:
         if "half" in name:
             return None
@@ -277,6 +308,7 @@ def classify_market(market_name: str):
     if name.strip() in ("match winner", "winner"):
         return ("outcome", "total")
 
+    # Combinado (ex.: "Results/Both Teams Score") ja saiu no topo desta funcao.
     if "both teams" in name and "score" in name and "half" not in name:
         return ("btts", "total")
 

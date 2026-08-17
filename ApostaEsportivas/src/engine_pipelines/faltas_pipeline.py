@@ -216,6 +216,16 @@ def _odds_over_faltas(structured_odds: list) -> dict[float, dict]:
                 "linha": linha,
                 "bookmaker": o.get("bookmaker_name") or o.get("bookmaker"),
                 "market_id": o.get("market_id"),
+                # PT primeiro, ingles como reserva -- mesma ordem que
+                # pick_engine/orchestrator.py usa pra montar market_name. Sem o
+                # market_pt aqui, "Fouls. Total" ia CRU pra picks_faltas.market
+                # e dali pra tela (2 picks em producao antes desta correcao,
+                # achados na auditoria de 2026-08-17). O nome gravado tambem e' a
+                # chave que o front usa pra explicar a regra do mercado
+                # (chaveCanonica em marketTranslate.ts), entao nome cru nao e'
+                # so' feio: cai no texto generico "conforme as condicoes do
+                # mercado", que e' justamente o que nao ajuda ninguem.
+                "market_pt": o.get("market_pt"),
                 "market_name": o.get("market_name"),
             }
     return melhores
@@ -321,7 +331,8 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         "fixture": fixture,
         "bookmaker": oferta["bookmaker"],
         "market_id": oferta["market_id"],
-        "market_name": oferta["market_name"] or "Fouls. Total",
+        "market_name": (oferta.get("market_pt") or oferta.get("market_name")
+                        or "Faltas Mais/Menos"),
         "n_casa": n_casa, "n_fora": n_fora,
         "media_casa": media_casa, "media_fora": media_fora,
         "media_arbitro": media_arbitro, "n_arbitro": n_arbitro,
