@@ -114,3 +114,85 @@ def test_comparacao_de_linha_ignora_caixa_e_espaco(label_vip, label_free):
     assert ranking.correlation_group("goals") not in vip[JOGO_DO_VIP]["grupos"]
 
     assert _nivel_repeticao(_pick("goals", label_free), JOGO_DO_VIP, vip, set()) is None
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# A ESCADA NÃO BASTA: ela lê picks_vip no COMEÇO da rodada (2026-08-17)
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# Caso real em produção, achado pelo usuário: Internacional x Remo, "Ambas as
+# Equipes Marcam Yes @1.90" IDÊNTICO em picks_vip e picks_free · mesma odd,
+# mesma probabilidade (60.19%), mesma confiança. Free gravado 19:26:44, VIP
+# 19:27:21.
+#
+# _nivel_repeticao estava correto o tempo todo. O que falhou foi o PRESSUPOSTO
+# dele: "o VIP roda antes". O /admin dispara cada pipeline como subprocesso
+# separado, então os dois correm juntos e a Free lê uma picks_vip que ainda não
+# tem a linha do VIP · select-then-insert clássico.
+#
+# É a mesma lição que picks_live já tinha aprendido ("trava de duplicata no
+# BANCO, não em Python... foi exatamente assim que a múltipla duplicou em
+# 2026-07-25") e que este pipeline nunca recebeu.
+
+from engine_pipelines.dica_pipeline import _vip_ja_rodou_hoje
+
+
+class _CursorFake:
+    """Cursor mínimo: guarda o SQL executado e devolve o que for programado."""
+
+    def __init__(self, retorno=None, erro=None):
+        self.retorno, self.erro = retorno, erro
+        self.sql = []
+
+    def execute(self, sql, params=None):
+        self.sql.append(sql)
+        if self.erro:
+            raise self.erro
+
+    def fetchone(self):
+        return self.retorno
+
+
+def test_vip_que_ja_rodou_libera_a_free():
+    assert _vip_ja_rodou_hoje(_CursorFake(retorno=(1,))) is True
+
+
+def test_vip_que_nao_rodou_barra_a_free():
+    """Sem o VIP, a Free não tem contra o que checar exclusividade."""
+    assert _vip_ja_rodou_hoje(_CursorFake(retorno=None)) is False
+
+
+def test_a_checagem_olha_engine_decisions_e_nao_picks_vip():
+    """A distinção que importa: "VIP não rodou" ≠ "VIP rodou e não achou nada".
+
+    picks_vip vazia é ambígua entre os dois. engine_decisions separa, porque o
+    VIP grava uma decisão por fixture avaliado mesmo sem aprovar pick nenhum.
+    Se esta checagem migrar para picks_vip, um dia legítimo sem pick VIP passa
+    a bloquear a Free para sempre."""
+    cur = _CursorFake(retorno=(1,))
+    _vip_ja_rodou_hoje(cur)
+    sql = " ".join(cur.sql).lower()
+    assert "engine_decisions" in sql
+    assert "vip_engine" in sql
+    assert "picks_vip" not in sql
+
+
+def test_falha_de_banco_nao_derruba_a_free():
+    """Falha aberto: banco antigo sem engine_decisions não pode zerar a Free.
+    O gate atômico do INSERT continua cobrindo o caso comum (VIP commitou
+    primeiro), então abrir aqui não deixa o buraco escancarado."""
+    assert _vip_ja_rodou_hoje(_CursorFake(erro=RuntimeError("tabela sumiu"))) is True
+
+
+def test_o_insert_da_free_checa_picks_vip_na_mesma_instrucao():
+    """A segunda camada, lida do próprio SQL: sem o NOT EXISTS contra picks_vip
+    dentro do INSERT, a corrida volta a existir mesmo com a ordem certa."""
+    import inspect
+    from engine_pipelines import dica_pipeline
+
+    fonte = inspect.getsource(dica_pipeline._save_pick)
+    assert "NOT EXISTS" in fonte, "o INSERT precisa checar picks_vip atomicamente"
+    assert "picks_vip" in fonte
+    # os três eixos do pick idêntico
+    assert "fixture_id" in fonte and "market_type" in fonte
+    assert "LOWER(TRIM(" in fonte, "a linha compara sem caixa/espaço, como _nivel_repeticao"
