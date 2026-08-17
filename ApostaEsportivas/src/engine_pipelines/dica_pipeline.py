@@ -64,6 +64,42 @@ def _today_vip_used_market_groups(cur) -> set:
     return {ranking.correlation_group(r[0]) for r in cur.fetchall() if r[0]}
 
 
+def _vip_ja_rodou_hoje(cur) -> bool:
+    """O VIP ja passou hoje? A exclusividade INTEIRA da Free depende disso.
+
+    Toda a escada de _nivel_repeticao le `picks_vip` pra saber o que ja esta
+    reservado. Se a Free rodar ANTES do VIP, ela le uma tabela vazia, conclui
+    que todo jogo esta livre e pode publicar exatamente o pick que o VIP vai
+    publicar em seguida.
+
+    Foi o que aconteceu em producao em 17/08/2026: Internacional x Remo,
+    "Ambas as Equipes Marcam Yes @1.90", IDENTICO nos dois -- mesma odd, mesma
+    probabilidade (60.19%), mesma confianca. O pick free foi gravado 19:26:44 e
+    o VIP 19:27:21. Os dois pipelines rodaram concorrentes (o /admin dispara
+    cada um como subprocesso separado), entao a ordem de cmd_tudo() -- que roda
+    VIP primeiro e em que todo o desenho se apoia -- nao valeu.
+
+    "VIP nao rodou" e' diferente de "VIP rodou e nao achou nada": o segundo e'
+    um dia legitimo em que a Free pode publicar a vontade. Quem separa os dois
+    e' `engine_decisions`, que o VIP grava por fixture avaliado mesmo quando nao
+    aprova pick nenhum (ver decision_log.log_decision).
+
+    Falha aberto de proposito: se a tabela nao existir (banco antigo), devolve
+    True e a Free roda como antes. O gate atomico do INSERT continua protegendo
+    o caso mais comum, que e' o VIP ter commitado primeiro.
+    """
+    try:
+        cur.execute(
+            f"""SELECT 1 FROM engine_decisions
+                 WHERE pipeline = 'VIP_ENGINE' AND created_at::date = {HOJE_BR}
+                 LIMIT 1"""
+        )
+        return cur.fetchone() is not None
+    except Exception as e:
+        print(f"[DICA_ENGINE] Aviso: nao deu pra confirmar se o VIP ja rodou ({e}).")
+        return True
+
+
 def _today_vip_por_fixture(cur) -> dict:
     """{fixture_id: {"grupos": {...}, "picks": {(market_type, line), ...}}} do
     VIP de hoje.
@@ -363,6 +399,26 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         default=str, ensure_ascii=False,
     )
 
+    # INSERT ... SELECT ... WHERE NOT EXISTS, e nao VALUES: a checagem contra
+    # `picks_vip` acontece DENTRO da mesma instrucao, no momento do commit.
+    #
+    # A escada de _nivel_repeticao ja recusa o pick identico ao do VIP, mas ela
+    # le picks_vip no COMECO da rodada -- e' select-then-insert, e nao enxerga um
+    # VIP que commitou no meio do caminho. O /admin dispara cada pipeline como
+    # subprocesso separado, entao os dois correm juntos de verdade.
+    #
+    # Caso real (17/08/2026): Internacional x Remo, "Ambas as Equipes Marcam
+    # Yes @1.90" identico em picks_vip e picks_free -- mesma odd, mesma
+    # probabilidade (60.19%), mesma confianca. Free gravado 19:26:44, VIP
+    # 19:27:21.
+    #
+    # E' a mesma licao que picks_live ja aprendeu ("trava de duplicata no BANCO,
+    # nao em Python... foi exatamente assim que a multipla duplicou em
+    # 2026-07-25") e que este pipeline nunca recebeu.
+    #
+    # Fecha o caso do VIP commitar PRIMEIRO. O caso oposto (Free antes do VIP)
+    # nao tem resposta em SQL -- ninguem pode checar contra uma linha que ainda
+    # nao existe -- e por isso _vip_ja_rodou_hoje() barra a rodada la em cima.
     cur.execute(f"""
         INSERT INTO picks_free
             (fixture_id, match_date, home_team, away_team,
@@ -370,7 +426,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
              league_id, league_name, market, market_type, line, odd, bet_house,
              market_id, confidence, prob_real, edge, reasoning,
              stake_pct, stake_units, engine_debug)
-        VALUES (%s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        SELECT %s, {HOJE_BR}, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s
+         WHERE NOT EXISTS (
+             SELECT 1 FROM picks_vip v
+              WHERE v.match_date  = {HOJE_BR}
+                AND v.fixture_id  = %s
+                AND v.market_type = %s
+                AND LOWER(TRIM(COALESCE(v.line, ''))) = LOWER(TRIM(COALESCE(%s, '')))
+         )
         ON CONFLICT (match_date) DO UPDATE SET
             fixture_id   = EXCLUDED.fixture_id,
             home_team    = EXCLUDED.home_team,
@@ -405,7 +468,14 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
         pick["market_name"], pick["market_type"], pick["value_label"], pick["odd"], pick["best_bookmaker"],
         pick["market_id"], pick["confidence"], pick["taxa_real"], pick["edge"], reasoning,
         stake_pct, stake_units, engine_debug,
+        # Os tres do WHERE NOT EXISTS acima.
+        fixture["fixture_id"], pick["market_type"], pick["value_label"],
     ))
+    if cur.rowcount == 0:
+        print("[DICA_ENGINE] Pick descartado no gravar: o VIP publicou este mesmo "
+              "pick (jogo + mercado + linha) enquanto a Free rodava.")
+        return False
+    return True
 
 
 def run_dica_engine():
@@ -414,6 +484,19 @@ def run_dica_engine():
 
     if _has_today_dica(cur):
         print("[DICA_ENGINE] Já existe pick de hoje.")
+        cur.close()
+        conn.close()
+        return
+
+    # O VIP reserva a partida (decisao do usuario, 2026-08-05) e a Free le
+    # `picks_vip` pra saber o que sobrou. Rodar antes dele nao produz uma Free
+    # pior -- produz uma Free cuja exclusividade nao foi verificada contra nada.
+    # Nao publicar e' melhor que publicar o mesmo pick que o VIP vai vender.
+    if not _vip_ja_rodou_hoje(cur):
+        motivo = ("VIP ainda nao rodou hoje: sem ele nao da pra saber que jogo/mercado "
+                  "esta reservado, e a Free nao pode publicar sem essa checagem")
+        print(f"[DICA_ENGINE] {motivo}.")
+        log_run("DICA_ENGINE", motivo)
         cur.close()
         conn.close()
         return
@@ -453,10 +536,15 @@ def run_dica_engine():
         conn.close()
         return
     pick = reviewed[0]
-    _save_pick(cur, fixture, pick, quality_score)
+    gravou = _save_pick(cur, fixture, pick, quality_score)
     conn.commit()
     cur.close()
     conn.close()
+
+    if not gravou:
+        log_run("DICA_ENGINE",
+                "o VIP publicou este mesmo pick enquanto a Free rodava")
+        return
 
     print(f"[DICA_ENGINE] Salvo: fixture {fixture['fixture_id']} · "
           f"{pick['market_name']} {pick['value_label']} @ {pick['odd']} "

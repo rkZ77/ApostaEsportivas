@@ -187,6 +187,32 @@ _MARKET_NAME_PT_FALLBACK: list[tuple[str, str]] = [
     ("fouls. away total", "Faltas Visitante Mais/Menos"),
     ("fouls. total", "Faltas Mais/Menos"),
     ("fouls", "Faltas Mais/Menos"),
+    # Chutes, impedimentos e defesas (2026-08-17). Estas chaves ja existiam em
+    # marketTranslate.ts (front) e faltavam AQUI, entao odds_values.market_pt
+    # ficava NULL e o motor gravava o nome CRU em picks.market -- o pick free de
+    # 17/08 saiu como "Total Shots".
+    #
+    # O React disfarcava (translateMarket cobre estas chaves), mas
+    # routers/suggestions.py::_MARKET_PT e' um subconjunto menor e NAO cobre --
+    # e e' ele que serve as respostas em markdown e o servidor MCP. Ou seja o
+    # ingles vazava exatamente pelos caminhos sem React.
+    #
+    # ORDEM IMPORTA: a lista e' varrida por substring, entao "shots on goal" tem
+    # que vir antes de "total shots" -- senao "Total Shots On Goal" casaria com o
+    # generico e viraria "Finalizacoes" em vez de "Finalizacoes no Gol", que e'
+    # outro mercado (chute no alvo ~8-10/jogo contra chute total ~20-25).
+    ("total shotongoal", "Finalizações no Gol Mais/Menos"),
+    ("shots on goal", "Finalizações no Gol Mais/Menos"),
+    ("shot on target", "Finalizações no Gol Mais/Menos"),
+    ("total shots", "Finalizações Mais/Menos"),
+    ("offsides home total", "Impedimentos Casa Mais/Menos"),
+    ("offsides away total", "Impedimentos Visitante Mais/Menos"),
+    ("offsides total", "Impedimentos Mais/Menos"),
+    ("goalkeeper saves", "Defesas do goleiro"),
+    ("home team total goals", "Total de Gols Casa"),
+    ("away team total goals", "Total de Gols Visitante"),
+    ("total - home", "Total de Gols Casa"),
+    ("total - away", "Total de Gols Visitante"),
     ("corners over/under", "Escanteios Mais/Menos"),
     ("corners 1x2", "Escanteios 1x2"),
     ("home corners over/under", "Escanteios Casa Mais/Menos"),

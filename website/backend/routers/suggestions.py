@@ -61,6 +61,31 @@ _MARKET_PT = {
     "total - away": "Total de Gols Visitante",
     "first half winner": "Vencedor do 1º Tempo",
     "both teams to score - first half": "BTTS - 1º Tempo",
+    # Chutes, impedimentos, faltas e defesas (2026-08-17). Existiam em
+    # marketTranslate.ts (front) e faltavam aqui · esta tabela era um
+    # SUBCONJUNTO da do front, e é ela que serve as respostas em markdown e o
+    # servidor MCP, ou seja os caminhos SEM React. O pick free de 17/08 saiu
+    # como "Total Shots" e só o React o traduzia.
+    #
+    # A raiz foi corrigida no coletor (odds_collector_service.
+    # _MARKET_NAME_PT_FALLBACK, que deixava market_pt NULL). Estas entradas
+    # cobrem o histórico já gravado em inglês, que não é reprocessado.
+    "total shots": "Finalizações Mais/Menos",
+    "total shotongoal": "Finalizações no Gol Mais/Menos",
+    "total shots on goal": "Finalizações no Gol Mais/Menos",
+    "shots on goal": "Finalizações no Gol Mais/Menos",
+    "offsides total": "Impedimentos Mais/Menos",
+    "offsides home total": "Impedimentos Casa Mais/Menos",
+    "offsides away total": "Impedimentos Visitante Mais/Menos",
+    "fouls. total": "Faltas Mais/Menos",
+    "fouls. home total": "Faltas Casa Mais/Menos",
+    "fouls. away total": "Faltas Visitante Mais/Menos",
+    "fouls": "Faltas Mais/Menos",
+    "goalkeeper saves": "Defesas do goleiro",
+    "home team total goals": "Total de Gols Casa",
+    "away team total goals": "Total de Gols Visitante",
+    "total - home goals over/under": "Total de Gols Casa",
+    "total - away goals over/under": "Total de Gols Visitante",
 }
 _TEAM_PAT = [
     (r"^(.+?)\s*-\s*goals over/under\s*$",   r"\1 - Gols Mais/Menos"),
