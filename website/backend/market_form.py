@@ -254,3 +254,78 @@ def serie_do_mercado(jogos: list, market: str, market_type: str | None, line: st
         "matches": itens,
         **resumo(itens),
     }
+
+
+#: Unidade contavel de cada rotulo de contador, no singular e no plural. Sai do
+#: rotulo que `_stat_for_market` ja devolve, entao nao ha segunda lista de
+#: mercados pra manter em dia -- so' a palavra que a frase precisa conjugar.
+_UNIDADE = (
+    ("escanteio",  ("escanteio", "escanteios")),
+    ("cart",       ("cartão", "cartões")),
+    ("falta",      ("falta", "faltas")),
+    ("defesa",     ("defesa", "defesas")),
+    ("chutes no alvo", ("chute no alvo", "chutes no alvo")),
+    ("chute",      ("chute", "chutes")),
+    ("impediment", ("impedimento", "impedimentos")),
+    ("gol",        ("gol", "gols")),
+)
+
+
+def _unidade(rotulo: str) -> tuple:
+    r = (rotulo or "").lower()
+    for chave, par in _UNIDADE:
+        if chave in r:
+            return par
+    return ("", "")
+
+
+def frase_da_serie(time: str, serie: dict, mando: str | None = None) -> str | None:
+    """Uma frase de FATO sobre a serie, no formato que o apostador reconhece das
+    casas ("O Internacional passou de 26.5 chutes em 4 dos ultimos 5 jogos em
+    casa").
+
+    Sai dos MESMOS numeros que desenham as barras -- `resumo()` ja devolve
+    greens/resolved/average, e nada aqui recalcula nem estima. Se a serie nao
+    tem jogo resolvido, nao ha frase: preferir silencio a uma afirmacao sem
+    amostra e' a mesma regra que faz a secao inteira sumir quando nada resolve.
+
+    NAO E' TEXTO DE VENDA, e a diferenca importa. A frase conta os jogos em que
+    a linha BATEU, mesmo quando isso contraria o pick -- num Over 26.5 em que o
+    visitante so' passou em 2 dos 5, e' isso que ela diz. Mostrar so' o lado
+    favoravel seria a mesma coisa que o motor faz de errado quando publica a
+    taxa otimista e esconde as estimativas que discordam.
+    """
+    resolvidos = serie.get("resolved") or 0
+    if not resolvidos:
+        return None
+    verdes = serie.get("greens") or 0
+    linha = serie.get("line")
+    op = (serie.get("op") or "").lower()
+    media = serie.get("average")
+    _sing, plural = _unidade(serie.get("label") or "")
+
+    onde = ""
+    if mando == "home":
+        onde = " em casa"
+    elif mando == "away":
+        onde = " fora"
+
+    cauda = f" · média de {media:g}" if media is not None else ""
+
+    # BTTS: o contador e' o placar do time que menos marcou, e falar em
+    # "0.5 gols" seria descrever a regua do grafico em vez do mercado.
+    if op in ("yes", "no"):
+        return (f"As duas equipes marcaram em {verdes} dos últimos "
+                f"{resolvidos} jogos do {time}{onde}.")
+
+    if linha is None:
+        return None
+
+    unidade = f" {plural}" if plural else ""
+    if op == "over":
+        return (f"O {time} passou de {linha:g}{unidade} em {verdes} dos últimos "
+                f"{resolvidos} jogos{onde}{cauda}.")
+    if op == "under":
+        return (f"O {time} ficou abaixo de {linha:g}{unidade} em {verdes} dos "
+                f"últimos {resolvidos} jogos{onde}{cauda}.")
+    return None

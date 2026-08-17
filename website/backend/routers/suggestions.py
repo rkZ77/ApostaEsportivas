@@ -2695,6 +2695,11 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
             # nao precisar saber quantos jogos foram pedidos.
             "amostra_curta": len(jogos) < limit,
             "amostra_pedida": limit,
+            # Frase de fato, no formato que o apostador reconhece das casas.
+            # Vem do MESMO `serie` que desenha as barras, entao numero e texto
+            # nao tem como divergir -- e ela conta os jogos em que a linha
+            # bateu mesmo quando isso contraria o pick. Ver market_form.
+            "frase": market_form.frase_da_serie(nome, serie, lado),
             **serie,
         })
 
