@@ -2522,6 +2522,24 @@ def _fixture_meta(cur, fixture_id, home_team_id=None, away_team_id=None) -> dict
 # que a serie precisa pra identificar o jogo. Uma lista so' pras duas consultas
 # (time e arbitro): se elas divergirem, uma das duas series perde um contador em
 # silencio -- e o sintoma seria "sem dado" em barra que tem dado.
+# ESTA LISTA E O `_ADAPTADOR` DE market_form.py SAO O MESMO CONTRATO, EM DOIS
+# LUGARES. `folha_do_jogo` so' copia as chaves que o adaptador conhece, e so'
+# consegue copiar o que ESTA CONSULTA trouxe. Faltar em qualquer um dos dois
+# produz o mesmo sintoma, e ele e' silencioso: `_stat_side` devolve None pra todo
+# jogo, nenhuma barra resolve, e "Como esse mercado vem se comportando" some da
+# tela sem erro nenhum no log.
+#
+# Foi o que aconteceu com CHUTES (2026-08-17, pick free Internacional x Remo,
+# "Total Shots Over 26.5"): `Total Shots` e `Offsides` tinham sido adicionados ao
+# _ADAPTADOR justamente pra fechar esse buraco, mas as colunas nunca entraram
+# aqui. A correcao ficou pela metade e o sintoma continuou identico.
+#
+# O motor NAO sofria do mesmo: ele le por MatchStatsService, com a sua propria
+# lista de colunas, e por isso calculava taxa de 60.4% em 15 jogos pro mesmo
+# mercado enquanto o card nao achava um unico jogo. Card e pick contando
+# historias diferentes sobre o mesmo numero e' pior que nao mostrar serie.
+#
+# Ao registrar familia nova: coluna AQUI + entrada no _ADAPTADOR. As duas.
 _COLUNAS_DA_SERIE = """
         ms.fixture_id, ms.match_date, ms.home_goals, ms.away_goals,
         ms.home_team_id, ms.away_team_id,
@@ -2529,7 +2547,9 @@ _COLUNAS_DA_SERIE = """
         ms.home_yellow_cards, ms.away_yellow_cards,
         ms.home_red_cards, ms.away_red_cards,
         ms.home_fouls, ms.away_fouls,
-        ms.home_shots_on, ms.away_shots_on
+        ms.home_shots_on, ms.away_shots_on,
+        ms.home_total_shots, ms.away_total_shots,
+        ms.home_offsides, ms.away_offsides
 """
 
 
