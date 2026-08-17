@@ -206,17 +206,26 @@ def acompanhar(intervalo: int = 10, intervalo_ocioso: int = 15, orcamento: int =
                                         "hora": _agora().strftime("%H:%M")})
 
             elegiveis = int(relatorio.get("fixtures_elegiveis") or 0)
-            if elegiveis:
+            # Jogo das nossas ligas que ainda pode virar pick nesta partida:
+            # tipicamente um que esta no minuto 10' e entra na janela daqui a
+            # pouco. Ate 2026-08-16 este numero nao existia no relatorio (o
+            # campo estava so' num comentario do live_pipeline), entao a rodada
+            # que enxergava um jogo prestes a comecar contava como OCIOSA e
+            # esperava o intervalo longo -- justamente atravessando a entrada
+            # dele na janela. Contar no radar nao gera pick sozinho; so' escolhe
+            # a espera curta e impede o encerramento prematuro da sessao.
+            no_radar = int(relatorio.get("fixtures_no_radar") or 0)
+            if elegiveis or no_radar:
                 ociosas_seguidas = 0
             else:
                 ociosas_seguidas += 1
                 sessao["ociosas"] += 1
                 if ociosas_seguidas >= ocioso_para:
                     print(f"\n[LIVE-WATCH] {ociosas_seguidas} rodadas seguidas sem jogo "
-                          f"elegivel. Encerrando -- a janela de hoje fechou.")
+                          f"elegivel nem no radar. Encerrando -- a janela de hoje fechou.")
                     break
 
-            espera = intervalo if elegiveis else intervalo_ocioso
+            espera = intervalo if (elegiveis or no_radar) else intervalo_ocioso
             parada = _motivo_de_parada(sessao, orcamento, ate, max_rodadas, espera)
             if parada:
                 print(f"\n[LIVE-WATCH] {parada}")

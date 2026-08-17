@@ -455,39 +455,51 @@ def selecionar_partidas(brutos: list, cur, config: LiveEngineConfig) -> tuple[li
         # `categoria` separa "nao e' um jogo nosso" de "e' nosso, mas agora
         # nao da'". Sao respostas diferentes pra quem acompanha: a primeira
         # significa que nao ha o que fazer, a segunda que o jogo esta' no radar
-        # e a proxima passada pode render. Ver `fixtures_no_radar` no
-        # relatorio, que e' o numero que o live_watch usa pra decidir se espera
-        # o intervalo curto ou o longo.
+        # e a proxima passada pode render.
+        #
+        # `pode_voltar` e' o que transforma isso em decisao, e por isso e' um
+        # campo e nao uma leitura do texto do motivo: minuto 12' entra na janela
+        # daqui a pouco, minuto 85' nunca mais volta, e as duas coisas cairiam
+        # na mesma categoria "janela". E' esse booleano que alimenta
+        # `fixtures_no_radar` no relatorio, que o live_watch usa pra escolher
+        # entre a espera curta e a longa.
+        def _fora(categoria: str, motivo: str, pode_voltar: bool) -> None:
+            descartadas.append({"fixture_id": fid, "jogo": nome, "liga": liga,
+                                "minuto": minuto, "categoria": categoria,
+                                "motivo": motivo, "pode_voltar": pode_voltar})
+
         if liga not in permitidas:
-            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "liga",
-                                "motivo": f"liga {liga} nao cadastrada"})
+            _fora("liga", f"liga {liga} nao cadastrada", False)
             continue
         if status not in ("1H", "2H", "HT"):
-            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
-                                "motivo": f"status {status}"})
+            _fora("status", f"status {status}", False)
             continue
         if minuto is None:
-            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "status",
-                                "motivo": "sem minuto publicado"})
+            # A API as vezes demora a publicar o minuto de um jogo que ja'
+            # comecou; a proxima passada costuma ter.
+            _fora("status", "sem minuto publicado", True)
             continue
         if not (config.minuto_inicial <= int(minuto) <= config.minuto_final):
-            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "janela",
-                                "motivo": f"minuto {minuto}' fora da janela "
-                                          f"{config.minuto_inicial}'-{config.minuto_final}'"})
+            antes_da_janela = int(minuto) < config.minuto_inicial
+            _fora("janela",
+                  f"minuto {minuto}' fora da janela "
+                  f"{config.minuto_inicial}'-{config.minuto_final}'"
+                  + (" (ainda entra)" if antes_da_janela else " (ja passou)"),
+                  antes_da_janela)
             continue
 
         anteriores = picks_da_partida(cur, fid)
         if len(anteriores) >= config.max_picks_por_partida:
-            descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
-                                "motivo": f"ja tem {len(anteriores)} pick(s), teto e' "
-                                          f"{config.max_picks_por_partida}"})
+            _fora("antiflood",
+                  f"ja tem {len(anteriores)} pick(s), teto e' "
+                  f"{config.max_picks_por_partida}", False)
             continue
         if anteriores:
             ultimo = max(p["minuto"] or 0 for p in anteriores)
             if int(minuto) - ultimo < config.minutos_entre_picks:
-                descartadas.append({"fixture_id": fid, "jogo": nome, "categoria": "antiflood",
-                                    "motivo": f"pick recente no minuto {ultimo}' "
-                                              f"(intervalo minimo {config.minutos_entre_picks}')"})
+                _fora("antiflood",
+                      f"pick recente no minuto {ultimo}' "
+                      f"(intervalo minimo {config.minutos_entre_picks}')", True)
                 continue
 
         elegiveis.append(bruto)
@@ -496,6 +508,59 @@ def selecionar_partidas(brutos: list, cur, config: LiveEngineConfig) -> tuple[li
     # estimativa depende do baseline e mais ela descreve ESTA partida.
     elegiveis.sort(key=lambda b: -(_minuto_de(b) or 0))
     return elegiveis[:config.max_partidas], descartadas
+
+
+def resumir_descartes(descartadas: list) -> dict:
+    """Descartes agrupados, pra a rodada explicar POR QUE nao saiu sugestao.
+
+    Ate' 2026-08-16 o relatorio imprimia "82 descartadas por liga, status,
+    janela ou pick recente" e parava ai'. Como quase toda rodada descarta tudo
+    (a API devolve os jogos do mundo inteiro e o projeto acompanha 8 ligas),
+    essa linha era o que o usuario via praticamente sempre -- sem nenhuma
+    informacao sobre o que fazer a respeito.
+
+    `no_radar` sao os jogos DAS NOSSAS ligas que ainda podem virar pick nesta
+    partida (`pode_voltar`). E' o numero acionavel: se ele for maior que zero,
+    esperar cinco minutos e rodar de novo tem chance de render.
+    """
+    por_categoria: dict = {}
+    por_liga: dict = {}
+    no_radar = []
+
+    for d in descartadas or []:
+        categoria = d.get("categoria") or "?"
+        por_categoria[categoria] = por_categoria.get(categoria, 0) + 1
+        if categoria == "liga":
+            por_liga[d.get("liga")] = por_liga.get(d.get("liga"), 0) + 1
+        elif d.get("pode_voltar"):
+            no_radar.append(d)
+
+    no_radar.sort(key=lambda d: -(d.get("minuto") or 0))
+    return {"por_categoria": por_categoria, "por_liga": por_liga,
+            "no_radar": no_radar, "total": len(descartadas or [])}
+
+
+def imprimir_descartes(resumo: dict, limite_radar: int = 8) -> None:
+    """O resumo em texto. Silencioso quando nao houve descarte."""
+    if not resumo["total"]:
+        return
+
+    rotulos = {"liga": "liga nao cadastrada", "status": "status/minuto",
+               "janela": "fora da janela", "antiflood": "ja tem pick recente"}
+    print(f"  {resumo['total']} descartada(s):")
+    for categoria, n in sorted(resumo["por_categoria"].items(), key=lambda kv: -kv[1]):
+        print(f"    {n:>4}  {rotulos.get(categoria, categoria)}")
+
+    radar = resumo["no_radar"]
+    if not radar:
+        print("    nenhuma partida das nossas ligas pode render nesta janela.")
+        return
+
+    print(f"  no radar ({len(radar)} das nossas ligas, ainda podem render):")
+    for d in radar[:limite_radar]:
+        print(f"    {d['jogo']}: {d['motivo']}")
+    if len(radar) > limite_radar:
+        print(f"    ... e mais {len(radar) - limite_radar}")
 
 
 def ja_existe_pick_equivalente(anteriores: list, candidato: dict,
@@ -771,6 +836,11 @@ def run_live_engine(fixture_id: int | None = None,
         "ok": False, "dry_run": config.dry_run, "engine_version": ENGINE_VERSION,
         "requisicoes": 0, "limite_requisicoes": config.max_requisicoes,
         "fixtures_encontradas": 0, "fixtures_elegiveis": 0,
+        # Jogos das nossas ligas que nao qualificaram AGORA mas ainda podem
+        # nesta partida. Nasce zerado aqui pra existir mesmo nos retornos
+        # antecipados (motor desligado, ambiente errado) -- quem le nao precisa
+        # saber por onde a rodada saiu.
+        "fixtures_no_radar": 0, "descartes": {},
         "partidas": [], "picks_criados": [], "erros": [], "orcamento_esgotado": False,
     }
 
@@ -814,11 +884,11 @@ def run_live_engine(fixture_id: int | None = None,
         relatorio["fixtures_elegiveis"] = len(elegiveis)
         print(f"\nFixtures encontradas: {len(brutos)}")
         print(f"Fixtures elegiveis:   {len(elegiveis)}   (limite {config.max_partidas})")
-        if descartadas and len(descartadas) <= 12:
-            for d in descartadas:
-                print(f"  descartada · {d['jogo']}: {d['motivo']}")
-        elif descartadas:
-            print(f"  ({len(descartadas)} descartadas por liga, status, janela ou pick recente)")
+
+        resumo_descartes = resumir_descartes(descartadas)
+        relatorio["fixtures_no_radar"] = len(resumo_descartes["no_radar"])
+        relatorio["descartes"] = resumo_descartes
+        imprimir_descartes(resumo_descartes)
 
         for indice, bruto in enumerate(elegiveis, start=1):
             relatorio["partidas"].append(
