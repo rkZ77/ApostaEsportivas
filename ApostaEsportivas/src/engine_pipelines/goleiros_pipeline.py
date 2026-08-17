@@ -458,7 +458,13 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             "adversario_mando": adversario_mando,
             "bookmaker": o.get("bookmaker_name") or o.get("bookmaker"),
             "market_id": o.get("market_id"),
-            "market_name": o.get("market_name") or "Goalkeeper Saves",
+            # PT primeiro, igual ao orchestrator do pre-jogo e ao pipeline de
+            # faltas. Sem isto "Goalkeeper Saves" iria CRU pra
+            # picks_goleiros.market e pra tela. Ainda nao houve pick de goleiro
+            # publicado em producao, entao aqui a correcao e' preventiva -- o
+            # mesmo defeito ja tinha chegado ao usuario via faltas.
+            "market_name": (o.get("market_pt") or o.get("market_name")
+                            or "Defesas do goleiro"),
         })
 
     return melhor_por_goleiro(candidatos)

@@ -418,9 +418,32 @@ def analyze_fixture_markets(
 
             fit_poisson = probability_model.model_fit(taxa_ajustada, poisson_linha)
             fit_referee = probability_model.model_fit(taxa_ajustada, referee_linha)
+            # O MESMO desacordo medido contra a taxa BRUTA, sempre calculado e
+            # sempre gravado -- inclusive quando nao decide nada (config.
+            # disagreement_on_raw_rate=False). Sem o par de numeros no rastro nao
+            # da' pra medir depois quanto o encolhimento estava escondendo, que e'
+            # exatamente a pergunta que a flag existe pra responder.
+            fit_poisson_bruta = probability_model.model_fit(taxa_bruta_raw, poisson_linha)
+            fit_referee_bruta = probability_model.model_fit(taxa_bruta_raw, referee_linha)
+
+            # QUAL dos dois pares dispara a regra. Ver config.disagreement_on_raw_rate
+            # pro porque: o encolhimento puxa a taxa pro mercado, o Poisson esta' do
+            # mesmo lado, e ai o encolhimento apaga a distancia que a regra procura.
+            fits_de_decisao = (
+                ((poisson_linha, fit_poisson_bruta), (referee_linha, fit_referee_bruta))
+                if config.disagreement_on_raw_rate
+                else ((poisson_linha, fit_poisson), (referee_linha, fit_referee))
+            )
             taxa_pre_desacordo = None
+            # A DETECCAO usa o fit escolhido acima; a ACAO continua comparando
+            # contra taxa_ajustada. Os dois papeis sao diferentes de proposito:
+            # detectar e' "a evidencia discorda do modelo?", agir e' "a outra
+            # estimativa e' mais pessimista do que eu publicaria?". Trocar o
+            # segundo por taxa_bruta_raw deixaria a regra SUBIR a probabilidade
+            # num caso em que o encolhimento ja tinha corrigido pra baixo, e a
+            # regra nunca pode subir (ver test_desacordo_nunca_sobe_a_probabilidade).
             menores = [
-                p for p, d in ((poisson_linha, fit_poisson), (referee_linha, fit_referee))
+                p for p, d in fits_de_decisao
                 if p is not None and d is not None
                 and config.model_disagreement_threshold is not None
                 and d > config.model_disagreement_threshold
@@ -489,6 +512,10 @@ def analyze_fixture_markets(
                 "referee_probability": referee_linha,
                 "referee_fit_diff":    fit_referee,
                 "referee_lambda":      referee_lambda,
+                # O desacordo contra a taxa BRUTA. E' o numero que mede quanto o
+                # encolhimento estava escondendo -- ver config.disagreement_on_raw_rate.
+                "model_fit_diff_bruta":   fit_poisson_bruta,
+                "referee_fit_diff_bruta": fit_referee_bruta,
                 **({"taxa_real_pre_desacordo": taxa_pre_desacordo}
                    if taxa_pre_desacordo is not None else {}),
                 "_direction":       direcao,
