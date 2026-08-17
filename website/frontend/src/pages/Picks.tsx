@@ -337,6 +337,25 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   const [modalOdd, setModalOdd] = useState(Number(dica.odd))
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  /*
+   * O que o usuário registrou · ver o comentário gêmeo em SuggestionCard.tsx.
+   *
+   * Este card era pior que o outro: além de não atualizar depois de registrar,
+   * ele NUNCA teve o estado "Apostado". Com o pick pendente ele sempre mostrava
+   * a stake SUGERIDA e a odd DO PICK, mesmo depois de recarregar a página e
+   * mesmo com a aposta gravada em user_followed_picks.
+   *
+   * Caso real (17/08/2026, Internacional x Remo): registrou 6u a 1.52 e o card
+   * seguiu anunciando "Apostar 2u", odd 1.75 e "Lucro pot. +1.50u". Os três
+   * números descreviam uma aposta que não era a dele.
+   */
+  const [registrado, setRegistrado] = useState<
+    { stakeUnits: number; actualOdd: number; betHouse: string } | null
+  >(null)
+  const seguido      = registrado != null || (dica.is_followed ?? false)
+  const stakeSeguida = registrado?.stakeUnits ?? dica.user_stake_units ?? null
+  const oddSeguida   = registrado?.actualOdd ?? dica.user_actual_odd ?? null
+  const casaSeguida  = registrado?.betHouse ?? dica.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcFreeStake fallback (max 2%)
@@ -397,6 +416,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     try {
       await api.post('/banca/follow', { pick_id: dica.id, pick_type: 'free', stake_units: stakeUnits, actual_odd: actualOdd, bet_house: betHouse })
       setFollowed(true)
+      setRegistrado({ stakeUnits, actualOdd, betHouse })
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
@@ -457,10 +477,38 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       <div className="font-mono flex items-stretch divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
-          <div className="text-3xl font-black text-green-400">{Number(dica.odd).toFixed(2)}</div>
-          <div className="text-[10px] text-ink-4 mt-0.5">{dica.bet_house}</div>
+          <div className="text-3xl font-black text-green-400">
+            {seguido && oddSeguida != null
+              ? Number(oddSeguida).toFixed(2)
+              : Number(dica.odd).toFixed(2)}
+          </div>
+          {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(dica.odd)) > 0.001 && (
+            <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(dica.odd).toFixed(2)}</div>
+          )}
+          <div className="text-[10px] text-ink-4 mt-0.5">{seguido && casaSeguida ? casaSeguida : dica.bet_house}</div>
         </div>
-        {stakeSuggestion && !dica.result ? (
+        {!dica.result && seguido && stakeSeguida != null ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
+              <div className="text-xl font-black text-green-400">{stakeSeguida}u</div>
+              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+              {(() => {
+                const effOdd = oddSeguida ?? Number(dica.odd)
+                const profitU = (effOdd - 1) * stakeSeguida
+                return (
+                  <>
+                    <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                  </>
+                )
+              })()}
+            </div>
+          </>
+        ) : stakeSuggestion && !dica.result ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
@@ -478,9 +526,9 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
             /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
                pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
                ganho que ele nunca teve, na conta da banca dele. */
-            const seguiu = dica.user_stake_units != null
-            const u = seguiu ? dica.user_stake_units! : 1
-            const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? dica.user_actual_odd : null)
+            const seguiu = stakeSeguida != null
+            const u = seguiu ? stakeSeguida! : 1
+            const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
@@ -648,6 +696,14 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
   const [modalOdd, setModalOdd] = useState<number | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  // Mesmo defeito e mesma correção do PickSeguroCard acima: sem isto o card
+  // segue anunciando a stake sugerida e a odd do bilhete depois de registrado.
+  const [registrado, setRegistrado] = useState<
+    { stakeUnits: number; actualOdd: number; betHouse: string } | null
+  >(null)
+  const seguido      = registrado != null || !!m.is_followed
+  const stakeSeguida = registrado?.stakeUnits ?? m.user_stake_units ?? null
+  const oddSeguida   = registrado?.actualOdd ?? m.user_actual_odd ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
   // Prioridade: suggested_stake_units do backend, senão calcMultiplaStake fallback (max 2.5%)
@@ -711,6 +767,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
         bet_house: betHouse,
       })
       setFollowed(true)
+      setRegistrado({ stakeUnits, actualOdd, betHouse })
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
@@ -768,9 +825,37 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       <div className="font-mono flex items-center gap-0 divide-x divide-line/60 border-b border-line/60">
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Odd combinada</div>
-          <div className="text-3xl font-black text-green-400">{Number(m.total_odd).toFixed(2)}</div>
+          <div className="text-3xl font-black text-green-400">
+            {seguido && oddSeguida != null
+              ? Number(oddSeguida).toFixed(2)
+              : Number(m.total_odd).toFixed(2)}
+          </div>
+          {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(m.total_odd)) > 0.001 && (
+            <div className="text-[9px] text-ink-4 mt-0.5">bilhete: {Number(m.total_odd).toFixed(2)}</div>
+          )}
         </div>
-        {stakeSuggestion && !m.result ? (
+        {!m.result && seguido && stakeSeguida != null ? (
+          <>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
+              <div className="text-xl font-black text-blue-400">{stakeSeguida}u</div>
+              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
+            </div>
+            <div className="flex-1 px-4 py-3 text-center">
+              <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
+              {(() => {
+                const effOdd = oddSeguida ?? Number(m.total_odd)
+                const profitU = (effOdd - 1) * stakeSeguida
+                return (
+                  <>
+                    <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
+                    {banca && <div className="text-[11px] text-green-600 font-semibold">+R${(profitU * banca.unit_value).toFixed(0)}</div>}
+                  </>
+                )
+              })()}
+            </div>
+          </>
+        ) : stakeSuggestion && !m.result ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostar</div>
@@ -788,9 +873,9 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
             /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
                pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
                ganho que ele nunca teve, na conta da banca dele. */
-            const seguiu = m.user_stake_units != null
-            const u = seguiu ? m.user_stake_units! : 1
-            const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? m.user_actual_odd : null)
+            const seguiu = stakeSeguida != null
+            const u = seguiu ? stakeSeguida! : 1
+            const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
