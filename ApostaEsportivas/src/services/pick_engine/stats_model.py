@@ -241,6 +241,33 @@ def classify_market(market_name: str):
     if "both teams" in name and "/" in name:
         return None
 
+    # COMBINADO COM O RESULTADO (1X2 + outra coisa). "Result/Total Goals" manda
+    # valores "Home/Over 2.5", "Draw/Under 2.5" -- contem "goal" e caia em
+    # ("goals", "total") como se fosse Gols Mais/Menos.
+    #
+    # Mesma familia de acidente do combinado de BTTS logo acima, e mesmo
+    # desfecho: ja era descartado, mas por parse (o value nao vira over/under
+    # simples), morrendo rotulado "poucos bookmakers" -- sao 300 entradas
+    # fantasma em 20 fixtures, todas rotuladas `goals` no rastro.
+    #
+    # Foi essa poluicao que me fez reportar "min_bookmakers_count mata 358 de 512
+    # entradas de gols em silencio" e quase propor baixar o limiar. Medido depois:
+    # 100% do que aquele gate descarta e' formato exotico como este, porque
+    # load_odds_structured JA derruba over/under com menos de 2 casas antes.
+    # Baixar o limiar nao traria gol nenhum -- traria isto aqui.
+    #
+    # Mercado de resultado esta' fora do pool por decisao de produto desde
+    # 2026-07-24 (_RESULT_FAMILIES), entao o combinado dele tambem esta'.
+    if name.startswith("result/") or name.startswith("results/"):
+        return None
+
+    # "Own Goal" (houve gol contra?) contem "goal" e caia em ("goals", "total"),
+    # comparado contra o total de gols da partida. Nao e' mercado de contagem: e'
+    # um sim/nao sobre um evento raro, sem nenhuma relacao com a linha de gols.
+    # Mesma classe do bug ja corrigido de "Goalkeeper Saves" caindo em gols.
+    if "own goal" in name:
+        return None
+
     if "handicap" in name:
         if "half" in name:
             return None
