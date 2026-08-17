@@ -106,6 +106,40 @@ function SuggestionCard({
   const [modalOdd, setModalOdd]   = useState(Number(s.odd))
   const [apiError, setApiError]   = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
+  /*
+   * O que o usuário ACABOU de registrar, antes de a lista ser recarregada.
+   *
+   * `handleConfirm` marcava só `followed = true`. O botão virava "Registrado"
+   * e todo o resto do card continuava lendo `s.*`, que ainda vinha da resposta
+   * anterior do backend, sem os campos de follow. Como o painel só mostra
+   * "Apostado" quando `s.user_stake_units != null`, ele caía no ramo de
+   * sugestão e seguia exibindo a stake e a odd SUGERIDAS.
+   *
+   * Caso real (17/08/2026, pick free Internacional x Remo): o usuário
+   * registrou 6u a 1.52 e o card continuou mostrando "Apostar 2u" com a odd
+   * 1.75 · os dois números que ele mais precisa conferir depois de apostar,
+   * ambos errados, e sem nenhum aviso de que aquilo já não descrevia a aposta
+   * dele. O banco estava certo o tempo todo (user_followed_picks id=499).
+   *
+   * Guardar aqui, e não recarregar a lista inteira, é o que mantém a correção
+   * dentro do card: ele é usado em Home, Picks, PickPublico e Compartilhar, e
+   * nem todos têm um callback de refresh para chamar.
+   */
+  const [registrado, setRegistrado] = useState<
+    { stakeUnits: number; actualOdd: number; betHouse: string } | null
+  >(null)
+
+  /*
+   * Fonte única do que o card exibe depois de registrado: o que acabou de ser
+   * registrado nesta sessão vence, senão o que o backend trouxe.
+   *
+   * Sem isto, cada lugar do card decidia sozinho entre `s.*` e o estado local,
+   * e foi assim que "Registrado" e "Apostar 2u" apareceram na mesma tela.
+   */
+  const seguido      = registrado != null || (s.is_followed ?? false)
+  const stakeSeguida = registrado?.stakeUnits ?? s.user_stake_units ?? null
+  const oddSeguida   = registrado?.actualOdd ?? s.user_actual_odd ?? null
+  const casaSeguida  = registrado?.betHouse ?? s.user_bet_house ?? null
   const { share: shareStory, sharing, shared } = useShareStoryImage()
   const { odd: buscarOdd, buscando: buscandoOdd } = useOddAtualizada()
   // Prioridade: 1) suggested_stake_units do backend (já usa banca real)
@@ -153,8 +187,8 @@ function SuggestionCard({
       // Mesma regra do card: sem aposta seguida, a imagem mostra o resultado
       // DO PICK em 1u · nao o ganho que o usuario teria tido se tivesse entrado.
       profit: s.result
-        ? calcProfitUnits(s.result, Number(s.odd), s.user_stake_units ?? 1,
-                          s.user_stake_units != null ? s.user_actual_odd : null)
+        ? calcProfitUnits(s.result, Number(s.odd), stakeSeguida ?? 1,
+                          stakeSeguida != null ? oddSeguida : null)
         : null,
     })
   }
@@ -187,6 +221,9 @@ function SuggestionCard({
         bet_house: betHouse,
       })
       setFollowed(true)
+      // O card passa a descrever a aposta DELE na mesma hora, sem esperar
+      // recarregar a lista -- ver o comentário em `registrado`.
+      setRegistrado({ stakeUnits, actualOdd, betHouse })
       setShowModal(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
@@ -275,29 +312,29 @@ function SuggestionCard({
         <div className="flex-1 px-5 py-3 text-center">
           <div className="text-[10px] text-ink-3 mb-0.5">Odd</div>
           <div className="text-3xl font-black text-green-400">
-            {s.is_followed && s.user_actual_odd != null
-              ? Number(s.user_actual_odd).toFixed(2)
+            {seguido && oddSeguida != null
+              ? Number(oddSeguida).toFixed(2)
               : Number(s.odd).toFixed(2)}
           </div>
-          {s.is_followed && s.user_actual_odd != null && Math.abs(s.user_actual_odd - Number(s.odd)) > 0.001 && (
+          {seguido && oddSeguida != null && Math.abs(oddSeguida - Number(s.odd)) > 0.001 && (
             <div className="text-[9px] text-ink-4 mt-0.5">pick: {Number(s.odd).toFixed(2)}</div>
           )}
           <div className="text-[10px] text-ink-4 mt-0.5">
-            {s.is_followed && s.user_bet_house ? s.user_bet_house : s.bet_house}
+            {seguido && casaSeguida ? casaSeguida : s.bet_house}
           </div>
         </div>
-        {!s.result && s.is_followed && s.user_stake_units != null ? (
+        {!s.result && seguido && stakeSeguida != null ? (
           <>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Apostado</div>
-              <div className="text-xl font-black text-green-400">{s.user_stake_units}u</div>
-              {banca && <div className="text-[11px] text-ink-4">R${(s.user_stake_units * banca.unit_value).toFixed(0)}</div>}
+              <div className="text-xl font-black text-green-400">{stakeSeguida}u</div>
+              {banca && <div className="text-[11px] text-ink-4">R${(stakeSeguida * banca.unit_value).toFixed(0)}</div>}
             </div>
             <div className="flex-1 px-4 py-3 text-center">
               <div className="text-[10px] text-ink-3 mb-0.5">Lucro pot.</div>
               {(() => {
-                const effOdd = s.user_actual_odd ?? Number(s.odd)
-                const profitU = (effOdd - 1) * s.user_stake_units
+                const effOdd = oddSeguida ?? Number(s.odd)
+                const profitU = (effOdd - 1) * stakeSeguida
                 return (
                   <>
                     <div className="text-xl font-black text-ink-1">+{profitU.toFixed(2)}u</div>
@@ -339,9 +376,9 @@ function SuggestionCard({
              * rótulo dizendo isso. Sem reais: real depende de stake, e stake
              * que não houve não vira dinheiro.
              */
-            const seguiu = s.user_stake_units != null
-            const u = seguiu ? s.user_stake_units! : 1
-            const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? s.user_actual_odd : null)
+            const seguiu = stakeSeguida != null
+            const u = seguiu ? stakeSeguida! : 1
+            const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
             return (
