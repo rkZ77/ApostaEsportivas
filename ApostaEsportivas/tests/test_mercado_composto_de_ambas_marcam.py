@@ -69,3 +69,37 @@ def test_o_composto_nao_vira_mercado_de_resultado_por_acidente():
     passar, a checagem seguinte poderia classificar como outcome e reabrir um
     mercado de resultado -- que esta' fora do pool por decisao de produto."""
     assert classify_market("Results/Both Teams Score") is None
+
+
+# ─────────── combinados com RESULTADO, e o "Own Goal" (2026-08-17) ───────────
+#
+# Mesma familia de acidente, achada medindo o que min_bookmakers_count=2
+# descartava: 100% do que aquele gate derruba e' formato exotico como estes,
+# porque load_odds_structured JA derruba over/under com menos de 2 casas antes.
+# Sao ~300 entradas fantasma em 20 fixtures, todas rotuladas `goals` no rastro --
+# e foi essa poluicao que quase fez uma auditoria propor baixar o limiar.
+
+
+@pytest.mark.parametrize("nome", [
+    "Result/Total Goals",
+    "Results/Total Goals",
+    "Result/Both Teams Score",
+])
+def test_combinado_com_resultado_sai_do_pool(nome):
+    assert classify_market(nome) is None, f"{nome!r} e' combo com 1X2"
+
+
+def test_own_goal_nao_e_mercado_de_gols():
+    """"Own Goal" (houve gol contra?) contem "goal" e caia em ("goals","total"),
+    comparado contra o total de gols da partida. E' um sim/nao sobre evento raro.
+    Mesma classe do bug ja corrigido de "Goalkeeper Saves" caindo em gols."""
+    assert classify_market("Own Goal") is None
+    assert classify_market("own goal") is None
+
+
+def test_gols_de_verdade_continuam_passando():
+    """A regressao que importa: os guards novos nao podem cortar o mercado real."""
+    assert classify_market("Goals Over/Under") == ("goals", "total")
+    assert classify_market("Home Team Total Goals") == ("goals", "home")
+    assert classify_market("Away Team Total Goals") == ("goals", "away")
+    assert classify_market("Total Goals") == ("goals", "total")
