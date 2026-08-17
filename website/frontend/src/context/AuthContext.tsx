@@ -1,5 +1,9 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react'
 import api from '../services/api'
+// Os eventos ficam aqui, e não nas telas: login e cadastro entram por mais de
+// um caminho (Login, checkout, link de indicação) e medir em cada tela deixaria
+// buraco no funil na primeira tela nova.
+import { entrou, criouConta } from '../lib/analytics'
 
 interface User {
   id: number
@@ -41,6 +45,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const login = async (identifier: string, password: string, captcha_token?: string): Promise<User> => {
     const { data } = await api.post('/auth/login', { identifier, password, captcha_token })
     _save(data.user)
+    entrou()
     return data.user
   }
 
@@ -48,6 +53,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const { data } = await api.post('/auth/register', { name, email, password, phone, cpf, username, ref_code, accepted_terms, captcha_token })
     localStorage.setItem('pickia_just_registered', '1')
     _save(data.user)
+    criouConta()
     return data.user
   }
 

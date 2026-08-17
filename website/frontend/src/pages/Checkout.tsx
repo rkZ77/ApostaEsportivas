@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import api from '../services/api'
 import { WA_SUPPORT } from '../lib/support'
+import { iniciouCheckout } from '../lib/analytics'
 
 /* O plano em destaque é escolha de venda, não vem do backend: o resto (preço,
    período, desconto) vem de usePlans. */
@@ -208,6 +209,10 @@ export default function Checkout() {
       // voltar pro /checkout/sucesso, então evento de compra no navegador
       // perderia boa parte da receita. Ver backend/analytics.py.
       const gaCookie = document.cookie.split('; ').find(c => c.startsWith('_ga='))?.slice(4) ?? ''
+      // begin_checkout é o último passo que o navegador consegue medir: daqui
+      // o usuário sai pro MercadoPago e só o servidor vê o resto.
+      const plano = plans.find(p => p.id === selectedPlan)
+      if (plano) iniciouCheckout(plano)
       const { data } = await api.post('/payments/create', { plan: selectedPlan, ga_cookie: gaCookie })
       window.location.href = data.init_point
     } catch (err: any) {

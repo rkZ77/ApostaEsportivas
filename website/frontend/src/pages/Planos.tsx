@@ -1,13 +1,14 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { Lightbulb, Crown, User } from 'lucide-react'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
 import PublicNav from '../components/PublicNav'
 import api from '../services/api'
 import { WA_SUPPORT } from '../lib/support'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
+import { viuOsPlanos } from '../lib/analytics'
 import NumberTicker from '../components/ui/NumberTicker'
 
 const PLAN_DAYS: Record<string, number> = {
@@ -29,7 +30,7 @@ interface ReferralData {
 export default function Planos() {
   const navigate = useNavigate()
   const { user, isVip, isAdmin, daysUntilExpiry, updateUser } = useAuth()
-  const { plans, monthly } = usePlans()
+  const { plans, monthly, loaded } = usePlans()
 
   const [meData, setMeData]               = useState<any>(null)
   const [trialUsed, setTrialUsed]         = useState<boolean | null>(null)
@@ -41,6 +42,18 @@ export default function Planos() {
   const [referralCopied, setReferralCopied] = useState(false)
 
   const isTrial = user?.plan === 'trial'
+
+  /*
+   * view_item_list só depois que /payments/plans respondeu. Disparar antes
+   * mandaria pro GA os valores de reserva do usePlans, e o relatório passaria
+   * a comparar preço que ninguém viu na tela.
+   */
+  const jaMediuOsPlanos = useRef(false)
+  useEffect(() => {
+    if (!loaded || jaMediuOsPlanos.current) return
+    jaMediuOsPlanos.current = true
+    viuOsPlanos(plans)
+  }, [loaded, plans])
 
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')
