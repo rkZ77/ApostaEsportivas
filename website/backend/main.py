@@ -24,6 +24,7 @@ _env_dir = os.path.dirname(_dotenv_path) if _dotenv_path else "."
 load_dotenv(os.path.join(_env_dir, ".env.dev"), override=False)
 load_dotenv(os.path.join(_env_dir, ".env.prod"), override=False)
 
+import agent_web
 from migrations import run_startup_migrations
 from routers import admin, auth, banca, chat, fixtures, leaderboard, live, live_picks, notifications, payments, personal, public, social, suggestions
 from runtime_env import side_effects_note
@@ -94,6 +95,52 @@ app.add_middleware(
     allow_headers=["Content-Type", "Authorization"],
     max_age=600,
 )
+
+
+@app.middleware("http")
+async def superficie_de_agente(request: Request, call_next):
+    """Mesma URL, markdown pra quem pediu markdown.
+
+    Fica ANTES do security_headers no arquivo de proposito. O Starlette
+    empilha ao contrario, entao definido aqui este middleware e' o mais
+    interno, e a resposta em markdown ainda sobe pelo security_headers e
+    recebe nosscript, nosniff e companhia. Definido depois, ela sairia sem
+    cabecalho de seguranca nenhum.
+
+    O `Vary: Accept` nao e' detalhe: sem ele o Cloudflare guardaria a primeira
+    resposta (HTML ou markdown) e serviria ela pros dois publicos.
+    """
+    if request.method != "GET":
+        return await call_next(request)
+
+    chave = agent_web.caminho_com_markdown(request.url.path)
+    if chave is None:
+        return await call_next(request)
+
+    if agent_web.prefere_markdown(request.headers.get("accept", "")):
+        # Threadpool porque /resultados.md le' o banco, e psycopg2 e' bloqueante.
+        # Chamado direto aqui dentro, ele travaria o event loop do processo
+        # inteiro (WEB_CONCURRENCY e' 1) enquanto a consulta roda: um agente
+        # lento seguraria a Home de todo mundo. Rota sincrona nao tem esse
+        # problema porque o FastAPI ja' a joga no threadpool sozinho; middleware
+        # nao.
+        pronta = await run_in_threadpool(agent_web.resposta_markdown, chave)
+        if pronta is not None:
+            return pronta
+
+    response = await call_next(request)
+
+    link = agent_web.link_header(chave)
+    if link:
+        response.headers["Link"] = link
+
+    # Merge por token: "Accept-Encoding" ja' costuma estar la', e comparar por
+    # substring diria que "Accept" ja' existe.
+    tokens = [t.strip() for t in response.headers.get("Vary", "").split(",") if t.strip()]
+    if not any(t.lower() == "accept" for t in tokens):
+        tokens.append("Accept")
+    response.headers["Vary"] = ", ".join(tokens)
+    return response
 
 
 @app.middleware("http")
@@ -359,6 +406,10 @@ app.include_router(live.router)
 app.include_router(live_picks.router)
 app.include_router(notifications.router)
 app.include_router(personal.router)
+# Superficie pra agente de IA: llms.txt, markdown das paginas publicas,
+# /.well-known e o servidor MCP. Precisa entrar ANTES do catch-all do SPA
+# (fim deste arquivo), senao /llms.txt cai no index.html.
+app.include_router(agent_web.router)
 
 
 @app.on_event("startup")
