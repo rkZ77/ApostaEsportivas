@@ -63,6 +63,8 @@ env/
 # Node / Frontend
 node_modules/
 dist/
+# Indice do blog para o llms.txt · gerado no prebuild a partir dos *.meta.ts
+website/frontend/public/blog-index.json
 .nuxt/
 .output/
 *.local

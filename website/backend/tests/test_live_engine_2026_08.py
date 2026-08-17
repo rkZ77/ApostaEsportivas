@@ -1469,3 +1469,44 @@ def test_horario_de_parada_no_passado_significa_amanha(monkeypatch):
     passado = (agora - timedelta(hours=1)).strftime("%H:%M")
     assert lw._hora(passado) > agora
     assert lw._hora(None) is None
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# 5 · JANELA DO FEED (2026-08-16)
+# ═════════════════════════════════════════════════════════════════════════
+def test_feed_tem_janela_parametrizavel_com_default_de_um_dia():
+    """O painel do admin e a aba publica fazem perguntas diferentes ao mesmo
+    endpoint.
+
+    Publica: "o que esta acontecendo" -- hoje e ontem basta, e por isso o
+    default NAO pode mudar. Admin: "o motor esta acertando" -- e essa nao cabe
+    em dois dias.
+
+    O sintoma que motivou isto: /stats nao tem filtro de data nenhum, entao o
+    painel dizia "5 resolvidos, 2 greens" com uma lista de 2 picks logo abaixo,
+    escondendo as 3 que formaram o numero.
+    """
+    import inspect
+    import routers.live_picks as lp
+
+    assinatura = inspect.signature(lp.feed)
+    assert "dias" in assinatura.parameters, "feed precisa aceitar a janela"
+    assert assinatura.parameters["dias"].default.default == 1, (
+        "o default do feed e' o comportamento da aba publica e nao pode mudar")
+
+    fonte = inspect.getsource(lp.feed)
+    assert "INTERVAL '1 day'" in fonte
+    assert "- (%s * INTERVAL '1 day')" in fonte, (
+        "a janela tem que ser parametrizada; hardcoded volta a esconder historico")
+
+
+def test_stats_do_live_nao_tem_filtro_de_data():
+    """A contraparte do teste acima: as estatisticas descrevem o historico
+    INTEIRO de proposito. Se um filtro de data entrar aqui sem entrar no feed
+    (ou vice-versa), o painel volta a se contradizer na mesma tela."""
+    import inspect
+    import routers.live_picks as lp
+
+    fonte = inspect.getsource(lp.estatisticas)
+    assert "INTERVAL" not in fonte
+    assert "match_date >=" not in fonte

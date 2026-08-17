@@ -47,6 +47,28 @@ interface Stats {
 
 const POLL_MS = 3000
 
+/*
+ * Janela do histórico. O feed nasceu servindo a aba pública, onde "ao vivo"
+ * significa hoje e ontem · aqui a pergunta é outra ("o motor está acertando?")
+ * e ela não cabe em dois dias.
+ *
+ * Sem isto o painel se contradizia na mesma tela: as estatísticas do topo
+ * contam o histórico inteiro, então o cabeçalho dizia 5 resolvidos e a lista
+ * logo abaixo mostrava 2 · escondendo justamente as 3 que formaram o número.
+ */
+const PERIODOS = [
+  { dias: 1,   label: 'hoje e ontem' },
+  { dias: 7,   label: '7 dias' },
+  { dias: 30,  label: '30 dias' },
+  { dias: 365, label: 'tudo' },
+] as const
+
+/** "2026-08-16" -> "16/08". Por fatia de string, nunca `new Date`: match_date é
+ *  DATE pura e o construtor a interpreta como UTC, o que volta um dia atrás
+ *  no fuso de Brasília. */
+const diaMes = (d?: string | null) =>
+  d ? d.slice(5, 10).split('-').reverse().join('/') : '·'
+
 export default function AdminMotorLive() {
   const [diag, setDiag]       = useState<Diagnostico | null>(null)
   const [run, setRun]         = useState<RunStatus | null>(null)
@@ -55,6 +77,7 @@ export default function AdminMotorLive() {
   const [dryRun, setDryRun]   = useState(true)
   const [fixture, setFixture] = useState('')
   const [maxPart, setMaxPart] = useState('')
+  const [dias, setDias]       = useState<number>(PERIODOS[1].dias)
   const [logAberto, setLogAberto] = useState(false)
   const [erro, setErro]       = useState('')
   const [carregando, setCarregando] = useState(true)
@@ -66,12 +89,15 @@ export default function AdminMotorLive() {
     // primeira rodada a tabela picks_live não existe e os dois respondem
     // `disponivel: false` · isso não é erro do painel.
     const [f, s] = await Promise.allSettled([
-      api.get('/live-picks/feed', { params: { limit: 40 } }),
+      // limit no teto do endpoint: aqui a lista é material de auditoria, não
+      // vitrine · truncar em 40 recriaria em silêncio o problema que a janela
+      // de período veio resolver.
+      api.get('/live-picks/feed', { params: { limit: 100, dias } }),
       api.get('/live-picks/stats'),
     ])
     if (f.status === 'fulfilled') setPicks(f.value.data?.picks ?? [])
     if (s.status === 'fulfilled') setStats(s.value.data?.disponivel ? s.value.data : null)
-  }, [])
+  }, [dias])
 
   const buscarTudo = useCallback(async () => {
     try {
@@ -317,14 +343,43 @@ export default function AdminMotorLive() {
 
       {/* ── Picks da rodada ───────────────────────────────────────────────── */}
       <div className="bg-surface-1 border border-line rounded-lg p-4">
-        <h3 className="text-xs font-semibold text-ink-3 mb-3">
-          Picks gerados {picks.length > 0 && <span className="text-ink-4 font-normal">· {picks.length}</span>}
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <h3 className="text-xs font-semibold text-ink-3">
+            Picks gerados {picks.length > 0 && <span className="text-ink-4 font-normal">· {picks.length}</span>}
+          </h3>
+          <div className="flex items-center gap-0.5">
+            {PERIODOS.map(p => (
+              <button
+                key={p.dias}
+                type="button"
+                onClick={() => setDias(p.dias)}
+                aria-pressed={dias === p.dias}
+                className={`px-2 py-1 rounded text-[11px] transition-colors ${
+                  dias === p.dias
+                    ? 'bg-surface-3 text-ink-1 font-semibold'
+                    : 'text-ink-4 hover:text-ink-2 hover:bg-surface-2'}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {picks.length === 0 ? (
-          <p className="text-[11px] text-ink-4">
-            Nada ainda. Antes da primeira rodada com <span className="font-mono">--gravar</span> a
-            tabela <span className="font-mono">picks_live</span> nem existe, e dry run não grava nada de propósito.
-          </p>
+          /* Duas causas diferentes pra lista vazia, e dizer a errada custa
+             tempo de investigação: sem NENHUM pick resolvido é porque o motor
+             nunca gravou; com resolvidos no topo e lista vazia é a janela que
+             está curta, e a saída é clicar em "tudo". */
+          stats && stats.total_gerados > 0 ? (
+            <p className="text-[11px] text-ink-4">
+              Nenhum pick neste período, mas existem {stats.total_gerados} no histórico.
+              Amplie a janela acima para vê-los.
+            </p>
+          ) : (
+            <p className="text-[11px] text-ink-4">
+              Nada ainda. Antes da primeira rodada com <span className="font-mono">--gravar</span> a
+              tabela <span className="font-mono">picks_live</span> nem existe, e dry run não grava nada de propósito.
+            </p>
+          )
         ) : (
           <>
           {/* Mesma razao da aba Pendencias: seis colunas nao cabem no celular,
@@ -347,7 +402,7 @@ export default function AdminMotorLive() {
                 </div>
                 <p className="text-[11px] text-ink-3 mt-0.5">{p.market} {p.line}</p>
                 <p className="text-[10px] text-ink-4 font-mono mt-0.5">
-                  {p.minute_at_creation}&#39; · odd {Number(p.odd).toFixed(2)}
+                  {diaMes(p.match_date)} · {p.minute_at_creation}&#39; · odd {Number(p.odd).toFixed(2)}
                   {p.ev !== null && p.ev !== undefined && <> · EV {(Number(p.ev) * 100).toFixed(1)}%</>}
                 </p>
               </li>
@@ -358,6 +413,7 @@ export default function AdminMotorLive() {
             <table className="w-full text-[11px]">
               <thead>
                 <tr className="text-ink-4 text-left border-b border-line">
+                  <th className="pb-2 font-medium">Data</th>
                   <th className="pb-2 font-medium">Jogo</th>
                   <th className="pb-2 font-medium">Mercado</th>
                   <th className="pb-2 font-medium text-right">Min</th>
@@ -369,6 +425,9 @@ export default function AdminMotorLive() {
               <tbody className="divide-y divide-line/60">
                 {picks.map(p => (
                   <tr key={p.id}>
+                    <td className="py-2 pr-2 text-ink-4 font-mono whitespace-nowrap">
+                      {diaMes(p.match_date)}
+                    </td>
                     <td className="py-2 pr-2 text-ink-2 max-w-[180px] truncate">
                       {p.home_team_name} x {p.away_team_name}
                     </td>

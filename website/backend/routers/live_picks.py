@@ -290,6 +290,8 @@ def _enriquecer(pick: dict) -> dict:
 def feed(
     current_user: dict = Depends(require_live_reader),
     incluir_encerrados: bool = Query(True, description="mostra tambem os ja liquidados de hoje"),
+    dias: int = Query(1, ge=0, le=365,
+                      description="quantos dias para tras alem de hoje (0 = so hoje)"),
     limit: int = Query(30, ge=1, le=100),
 ):
     """Oportunidades do Motor Live. E' o que a aba Ao Vivo consome.
@@ -297,6 +299,17 @@ def feed(
     Abrir a aba tambem expira o que venceu e liquida o que ja encerrou --
     mesmo padrao de `maybe_resolve_pending` no /today: a visita e' o gatilho,
     site parado nao gasta nada.
+
+    `dias` NASCE EM 1 pra a aba publica nao mudar de comportamento: la' o feed
+    e' "o que esta acontecendo", e pick de tres dias atras nao e' ao vivo.
+
+    Ele existe porque o PAINEL DO ADMIN tem outra pergunta -- "o motor esta'
+    acertando?" -- e essa nao cabe numa janela de dois dias. Ate' 2026-08-16 o
+    admin reusava este endpoint com o default, e o resultado era um painel que
+    se contradizia na mesma tela: `/stats` conta o historico INTEIRO (nao tem
+    filtro de data nenhum), entao o cabecalho dizia "5 resolvidos, 2 greens"
+    enquanto a lista logo abaixo mostrava 2 picks -- escondendo justamente as
+    3 que formaram o numero.
     """
     conn = get_connection()
     cur = conn.cursor()
@@ -323,10 +336,11 @@ def feed(
                    odd_at_creation, odd_timestamp, odd_valid_until, status,
                    expiration_reason, engine_version, result, profit, created_at
             FROM picks_live
-            WHERE match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date - INTERVAL '1 day'
+            WHERE match_date >= (NOW() AT TIME ZONE 'America/Sao_Paulo')::date
+                                - (%s * INTERVAL '1 day')
             ORDER BY (result IS NOT NULL), created_at DESC
             LIMIT %s
-        """, (limit,))
+        """, (dias, limit))
         linhas = [dict(r) for r in cur.fetchall()]
 
         if not incluir_encerrados:

@@ -1,10 +1,11 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode, useEffect } from 'react'
+import { lazy, Suspense, Component, ReactNode, useEffect, useCallback } from 'react'
 import Spinner from './components/ui/Spinner'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
 import TopProgressBar from './components/TopProgressBar'
+import { useWebMCP } from './hooks/useWebMCP'
 
 /*
  * O QUE PODE SER IMPORTADO NO TOPO DESTE ARQUIVO.
@@ -146,6 +147,17 @@ function FirstLoginRedirect() {
   return null
 }
 
+/*
+ * Ferramentas WebMCP. Importado no topo por ser código pequeno e sem
+ * dependência: o hook inteiro é uma detecção de recurso e quatro funções, e
+ * navegador sem `navigator.modelContext` sai dele no primeiro `if`.
+ */
+function FerramentasDeAgente() {
+  const navigate = useNavigate()
+  useWebMCP(useCallback((rota: string) => navigate(rota), [navigate]))
+  return null
+}
+
 export default function App() {
   return (
     <HelmetProvider>
@@ -157,6 +169,7 @@ export default function App() {
               página que está saindo. */}
           <TopProgressBar />
           <FirstLoginRedirect />
+          <FerramentasDeAgente />
 
           {/* Sobreposições · fallback nulo de propósito. Nenhuma delas participa
               da primeira pintura, então não deve existir spinner reservando
