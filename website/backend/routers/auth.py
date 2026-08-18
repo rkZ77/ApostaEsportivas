@@ -32,6 +32,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from database import get_connection
+from sms import SMSNaoEnviado, enviar_sms
 from auth_utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -51,6 +52,29 @@ _LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
 _account_login_failures: dict[str, list[float]] = defaultdict(list)
 ACCOUNT_LOGIN_MAX_FAILURES = 10
 ACCOUNT_LOGIN_LOCKOUT_SECS = 900
+
+# ── Carencia de confirmacao de e-mail ───────────────────────────────────────
+#
+# O cadastro loga a pessoa na hora e manda o link em background, entao ate
+# 18/08/2026 dava pra usar a conta pra sempre sem nunca confirmar nada. Travar
+# no ato do cadastro resolveria, mas jogaria fora quem tem o e-mail caindo em
+# spam -- exatamente a friccao que a saida do CPF acabou de remover.
+#
+# Meio termo: entra livre por EMAIL_GATE_CARENCIA_DIAS, depois o login exige a
+# confirmacao. Quem esta ativo no site confirma nesse prazo sem nem perceber;
+# quem digitou e-mail errado para no dia 3, que e' o objetivo.
+EMAIL_GATE_CARENCIA_DIAS = 3
+
+# So vale pra quem se cadastrou a partir daqui. Contas antigas -- inclusive VIP
+# pagante -- nunca tiveram esse contrato: trava-las agora seria cobrar
+# retroativamente uma regra que nao existia quando elas se cadastraram, e
+# tirar do ar gente que paga.
+EMAIL_GATE_DESDE = "2026-08-18"
+
+# Reenvio automatico ao esbarrar no gate. Sem cooldown, dez tentativas de login
+# viram dez e-mails e o dominio paga por isso na reputacao.
+EMAIL_GATE_REENVIO_COOLDOWN_SECS = 300
+_email_gate_ultimo_reenvio: dict[int, float] = {}
 
 
 def _check_account_lockout(key: str) -> None:
@@ -461,6 +485,10 @@ class UpdateProfileBody(BaseModel):
     username: Optional[str] = None
 
 
+class VerifyPhoneBody(BaseModel):
+    code: str
+
+
 class RequestPasswordChangeBody(BaseModel):
     current_password: str
     new_password: str
@@ -598,8 +626,50 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         cur.close(); conn.close()
 
 
+def _mascarar_email(email: str) -> str:
+    """`fulano@dominio.com` -> `fu***@dominio.com`.
+
+    A pessoa precisa reconhecer o endereco pra saber onde procurar (ou pra
+    perceber que digitou errado), mas a resposta de um 403 nao deve entregar
+    o e-mail inteiro de uma conta pra quem estiver com a tela na frente.
+    """
+    usuario, _, dominio = email.partition("@")
+    if not dominio:
+        return email
+    visivel = usuario[:2] if len(usuario) > 2 else usuario[:1]
+    return f"{visivel}***@{dominio}"
+
+
+def _reenviar_verificacao_no_gate(cur, conn, user: dict, background_tasks: BackgroundTasks) -> None:
+    """Gera um link novo e agenda o envio, respeitando o cooldown.
+
+    Envolto em try/except porque nada aqui pode mudar a resposta: o login ja
+    esta barrado de qualquer forma, e falhar o reenvio nao deve virar 500 --
+    a pessoa ainda tem o e-mail original na caixa.
+    """
+    agora = time.time()
+    ultimo = _email_gate_ultimo_reenvio.get(user["id"], 0.0)
+    if agora - ultimo < EMAIL_GATE_REENVIO_COOLDOWN_SECS:
+        return
+    try:
+        token = secrets.token_urlsafe(32)
+        cur.execute(
+            "UPDATE users SET email_verification_token=%s WHERE id=%s",
+            (_hash_token(token), user["id"]),
+        )
+        conn.commit()
+        _email_gate_ultimo_reenvio[user["id"]] = agora
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
+        background_tasks.add_task(
+            _send_verification_email, user["email"], user["name"], token, site_url
+        )
+    except Exception as e:
+        conn.rollback()
+        logger.warning("[LOGIN] Falha ao reenviar verificacao (user %s): %s", user["id"], e)
+
+
 @router.post("/login")
-def login(body: LoginBody, response: Response, request: Request):
+def login(body: LoginBody, response: Response, request: Request, background_tasks: BackgroundTasks):
     _verify_captcha(body.captcha_token, request)
     lockout_key = body.identifier.strip().lower()
     _check_account_lockout(lockout_key)
@@ -608,7 +678,18 @@ def login(body: LoginBody, response: Response, request: Request):
     cur = conn.cursor()
     try:
         id_type, id_value = _resolve_identifier(body.identifier)
-        _LOGIN_COLS = "id, name, email, phone, username, password_hash, plan, active, expires_at, email_verified, avatar_url"
+        # O gate e' avaliado no banco de proposito: `created_at` e' TIMESTAMP
+        # sem fuso, entao compara-lo com um datetime do Python exigiria
+        # adivinhar o fuso da coluna. No SQL, ele e o NOW() vivem no mesmo
+        # referencial e a pergunta se responde sozinha. Os dois valores
+        # interpolados sao constantes do modulo, nunca entrada de usuario.
+        _LOGIN_COLS = (
+            "id, name, email, phone, username, password_hash, plan, active, expires_at, "
+            "email_verified, avatar_url, "
+            f"(email_verified IS NOT TRUE "
+            f" AND created_at >= DATE '{EMAIL_GATE_DESDE}' "
+            f" AND created_at < NOW() - INTERVAL '{EMAIL_GATE_CARENCIA_DIAS} days') AS email_gate_travado"
+        )
         if id_type == "email":
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE email = %s", (id_value,))
         else:
@@ -625,6 +706,24 @@ def login(body: LoginBody, response: Response, request: Request):
             _record_account_failure(lockout_key)
             raise HTTPException(status_code=401, detail="Credenciais inválidas")
         _account_login_failures.pop(lockout_key, None)
+
+        # Passou da carencia sem confirmar o e-mail: barra e reenvia o link.
+        #
+        # O reenvio sai daqui, e nao de um endpoint publico, porque a senha ja
+        # foi conferida duas linhas acima -- ninguem consegue usar isto pra
+        # descobrir se um e-mail tem conta, nem pra disparar e-mail pros
+        # outros. E' tambem o unico caminho que sobra pra pessoa: /auth/
+        # resend-verification exige estar logada, e logada ela nao consegue
+        # mais ficar.
+        if user.get("email_gate_travado"):
+            _reenviar_verificacao_no_gate(cur, conn, user, background_tasks)
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Confirme seu e-mail para continuar. Acabamos de reenviar o link para "
+                    f"{_mascarar_email(user['email'])} · confira também o spam."
+                ),
+            )
 
         # Auto-expire VIP/trial expirado
         if user["plan"] in ("vip", "trial") and user.get("expires_at"):
@@ -1042,6 +1141,162 @@ def activate_trial(response: Response, current_user: dict = Depends(get_current_
             "plan": "trial",
             "expires_at": trial_expires.isoformat(),
             "message": "Trial VIP ativado com sucesso! Você tem 2 dias de acesso completo.",
+        }
+    finally:
+        cur.close(); conn.close()
+
+
+# ── Verificação de telefone por SMS ──────────────────────────────────────────
+#
+# O telefone virou a chave de "1 conta por pessoa" quando o CPF saiu do
+# cadastro, mas número não conferido não prova nada -- dá pra digitar o do
+# vizinho. Estes dois endpoints são o que transforma `users.phone` em barreira,
+# e o que faz `phone_verified` valer trial em `_ativar_trial_se_elegivel`.
+
+PHONE_CODE_VALIDADE_MIN   = 10
+PHONE_CODE_MAX_TENTATIVAS = 5
+PHONE_CODE_COOLDOWN_SEGS  = 60
+PHONE_CODE_MAX_POR_DIA    = 5
+
+
+def _gerar_codigo_numerico() -> str:
+    """6 dígitos, com `secrets` e não `random`.
+
+    `random` é previsível a partir de saídas anteriores · para um código que
+    dá acesso a trial, isso é uma chave adivinhável.
+    """
+    return f"{secrets.randbelow(1_000_000):06d}"
+
+
+@router.post("/phone/send-code")
+def enviar_codigo_telefone(current_user: dict = Depends(get_current_user)):
+    """Manda um código de 6 dígitos por SMS para o telefone da conta."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT phone, phone_verified FROM users WHERE id = %s",
+            (current_user["sub"],),
+        )
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Usuário não encontrado")
+        row = dict(row)
+        if not row.get("phone"):
+            raise HTTPException(400, "Cadastre um telefone no perfil antes de verificar.")
+        if row.get("phone_verified"):
+            return {"ok": True, "ja_verificado": True}
+
+        # Cooldown e teto diário no banco, não em memória: o Railway reinicia o
+        # processo a cada deploy e um teto em RAM zeraria junto, o que num
+        # canal pago é dinheiro indo embora.
+        cur.execute(
+            f"""
+            SELECT
+              COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '1 day') AS no_dia,
+              COUNT(*) FILTER (
+                WHERE created_at > NOW() - INTERVAL '{PHONE_CODE_COOLDOWN_SEGS} seconds'
+              ) AS recentes
+            FROM phone_verification_codes
+            WHERE user_id = %s
+            """,
+            (current_user["sub"],),
+        )
+        uso = dict(cur.fetchone() or {})
+        if (uso.get("recentes") or 0) > 0:
+            raise HTTPException(429, "Aguarde um minuto para pedir um novo código.")
+        if (uso.get("no_dia") or 0) >= PHONE_CODE_MAX_POR_DIA:
+            raise HTTPException(429, "Muitas tentativas hoje. Tente novamente amanhã.")
+
+        codigo = _gerar_codigo_numerico()
+        cur.execute(
+            f"""
+            INSERT INTO phone_verification_codes (user_id, phone, code_hash, expires_at)
+            VALUES (%s, %s, %s, NOW() + INTERVAL '{PHONE_CODE_VALIDADE_MIN} minutes')
+            """,
+            (current_user["sub"], row["phone"], _hash_token(codigo)),
+        )
+        conn.commit()
+
+        # O envio vem DEPOIS do commit de propósito: se o SMS sair e a gravação
+        # falhar, o usuário recebe um código que o banco não conhece.
+        try:
+            enviar_sms(
+                row["phone"],
+                f"{codigo} e o seu codigo de verificacao Pick IA. Vale por {PHONE_CODE_VALIDADE_MIN} minutos.",
+            )
+        except SMSNaoEnviado as e:
+            logger.warning("[OTP] Falha ao enviar SMS (user %s): %s", current_user["sub"], e)
+            raise HTTPException(502, "Não foi possível enviar o SMS agora. Tente em alguns minutos.")
+
+        return {"ok": True, "expira_em_minutos": PHONE_CODE_VALIDADE_MIN}
+    finally:
+        cur.close(); conn.close()
+
+
+@router.post("/phone/verify-code")
+def verificar_codigo_telefone(body: VerifyPhoneBody, current_user: dict = Depends(get_current_user)):
+    """Confere o código e, se bater, marca o telefone e libera o trial."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT phone, phone_verified FROM users WHERE id = %s", (current_user["sub"],))
+        usuario = dict(cur.fetchone() or {})
+        if not usuario:
+            raise HTTPException(404, "Usuário não encontrado")
+        if usuario.get("phone_verified"):
+            return {"ok": True, "ja_verificado": True, "trial_ativado": False}
+
+        cur.execute(
+            """
+            SELECT id, phone, code_hash, attempts, expires_at < NOW() AS expirado
+            FROM phone_verification_codes
+            WHERE user_id = %s AND consumed_at IS NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+            """,
+            (current_user["sub"],),
+        )
+        registro = cur.fetchone()
+        if not registro:
+            raise HTTPException(400, "Peça um código antes de verificar.")
+        registro = dict(registro)
+
+        if registro["expirado"]:
+            raise HTTPException(400, "Código expirado. Peça um novo.")
+        if registro["attempts"] >= PHONE_CODE_MAX_TENTATIVAS:
+            raise HTTPException(429, "Muitas tentativas. Peça um código novo.")
+        # O número mudou depois que o código saiu: validar aqui carimbaria
+        # `phone_verified` num telefone que ninguém conferiu.
+        if registro["phone"] != usuario.get("phone"):
+            raise HTTPException(400, "O telefone mudou. Peça um código novo.")
+
+        informado = re.sub(r"\D", "", body.code or "")
+        if _hash_token(informado) != registro["code_hash"]:
+            cur.execute(
+                "UPDATE phone_verification_codes SET attempts = attempts + 1 WHERE id = %s",
+                (registro["id"],),
+            )
+            conn.commit()
+            restantes = PHONE_CODE_MAX_TENTATIVAS - (registro["attempts"] + 1)
+            if restantes <= 0:
+                raise HTTPException(429, "Muitas tentativas. Peça um código novo.")
+            raise HTTPException(400, f"Código incorreto. Restam {restantes} tentativas.")
+
+        cur.execute(
+            "UPDATE phone_verification_codes SET consumed_at = NOW() WHERE id = %s",
+            (registro["id"],),
+        )
+        cur.execute("UPDATE users SET phone_verified = TRUE WHERE id = %s", (current_user["sub"],))
+        # Mesmo helper do link de e-mail: telefone provado também paga trial.
+        trial_expira = _ativar_trial_se_elegivel(cur, current_user["sub"])
+        conn.commit()
+        invalidar_cache_usuario(current_user["sub"])
+
+        return {
+            "ok": True,
+            "trial_ativado": trial_expira is not None,
+            "trial_expires_at": trial_expira.isoformat() if trial_expira else None,
         }
     finally:
         cur.close(); conn.close()

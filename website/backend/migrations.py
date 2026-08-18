@@ -118,6 +118,30 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
                 CREATE UNIQUE INDEX IF NOT EXISTS users_phone_uniq
                 ON users (phone) WHERE phone IS NOT NULL
             """)
+        # Codigos de verificacao de telefone (OTP por SMS).
+        #
+        # Guarda o HASH do codigo, nunca o codigo: quem ler a tabela nao pode
+        # verificar telefone dos outros. `attempts` existe porque 6 digitos sao
+        # 1 milhao de combinacoes -- sem teto de tentativa, forca bruta acha em
+        # minutos. `phone` fica gravado junto porque o codigo vale pro numero
+        # que estava la na hora do pedido: trocar o telefone e usar o codigo
+        # antigo verificaria o numero errado.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS phone_verification_codes (
+                id          SERIAL PRIMARY KEY,
+                user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                phone       VARCHAR(30) NOT NULL,
+                code_hash   VARCHAR(64) NOT NULL,
+                expires_at  TIMESTAMP NOT NULL,
+                attempts    INTEGER NOT NULL DEFAULT 0,
+                consumed_at TIMESTAMP,
+                created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("""
+            CREATE INDEX IF NOT EXISTS idx_phone_codes_user
+            ON phone_verification_codes (user_id, created_at DESC)
+        """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id                SERIAL PRIMARY KEY,

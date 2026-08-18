@@ -85,6 +85,53 @@ export default function Profile() {
     api.get('/auth/me').then(r => { setMeData(r.data); setUsername(r.data.username ?? '') }).catch(() => {})
   }, [])
 
+  // ── Verificação de telefone por SMS ──────────────────────────────────────
+  // O telefone é a chave de "1 conta por pessoa" desde que o CPF saiu do
+  // cadastro, e número não conferido não prova nada. Verificar aqui também
+  // paga o trial, pelo mesmo helper do link de e-mail.
+  const [smsCodigo, setSmsCodigo]       = useState('')
+  const [smsEnviando, setSmsEnviando]   = useState(false)
+  const [smsEnviado, setSmsEnviado]     = useState(false)
+  const [smsCooldown, setSmsCooldown]   = useState(0)
+  const [smsVerificando, setSmsVerificando] = useState(false)
+  const [smsErro, setSmsErro]           = useState('')
+  const [smsOk, setSmsOk]               = useState(false)
+  const [smsTrial, setSmsTrial]         = useState(false)
+
+  useEffect(() => {
+    if (smsCooldown <= 0) return
+    const t = setTimeout(() => setSmsCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [smsCooldown])
+
+  const pedirCodigoSms = async () => {
+    setSmsEnviando(true); setSmsErro('')
+    try {
+      await api.post('/auth/phone/send-code')
+      setSmsEnviado(true)
+      setSmsCooldown(60)
+    } catch (err: any) {
+      setSmsErro(err?.response?.data?.detail ?? 'Não foi possível enviar o código.')
+    } finally { setSmsEnviando(false) }
+  }
+
+  const confirmarCodigoSms = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSmsVerificando(true); setSmsErro('')
+    try {
+      const { data } = await api.post('/auth/phone/verify-code', { code: smsCodigo })
+      setSmsOk(true)
+      setMeData((prev: any) => ({ ...prev, phone_verified: true }))
+      if (data?.trial_ativado) {
+        setSmsTrial(true)
+        updateUser({ plan: 'trial', expires_at: data.trial_expires_at })
+      }
+      setSmsCodigo('')
+    } catch (err: any) {
+      setSmsErro(err?.response?.data?.detail ?? 'Não foi possível verificar o código.')
+    } finally { setSmsVerificando(false) }
+  }
+
   const handleResendEmail = async () => {
     setEmailResending(true)
     try {
@@ -627,6 +674,84 @@ export default function Profile() {
                 </form>
               )}
             </div>
+          )}
+        </div>
+
+        {/* Telefone · verificação por SMS */}
+        <div className={`card p-6 space-y-4 ${!meData?.phone_verified && !smsOk ? 'border-yellow-400/30' : ''}`}>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-bold text-ink-1">Telefone</h2>
+              <p className="text-ink-3 text-xs mt-0.5">Confirme o número da sua conta</p>
+            </div>
+            {meData?.phone_verified || smsOk
+              ? <span className="text-xs font-bold text-green-400 bg-green-400/10 border border-green-400/20 px-2.5 py-1 rounded-lg shrink-0">Verificado</span>
+              : <span className="text-xs font-bold text-yellow-400 bg-yellow-400/10 border border-yellow-400/20 px-2.5 py-1 rounded-lg shrink-0">Não verificado</span>
+            }
+          </div>
+
+          <p className="text-sm text-ink-2 font-medium">{displayPhone(user?.phone ?? '') || 'Nenhum telefone cadastrado'}</p>
+
+          {smsTrial && (
+            <p className="text-green-400 text-xs font-semibold">
+              Telefone confirmado · 2 dias de VIP liberados!
+            </p>
+          )}
+
+          {!meData?.phone_verified && !smsOk && user?.phone && (
+            <div className="space-y-3">
+              {!smsEnviado && (
+                <p className="text-xs text-ink-3 leading-relaxed">
+                  Enviamos um código de 6 dígitos por SMS.
+                  {user?.plan === 'free' && !meData?.trial_used && ' Confirmar libera 2 dias de VIP.'}
+                </p>
+              )}
+
+              {smsEnviado && (
+                <form onSubmit={confirmarCodigoSms} className="space-y-2">
+                  <label htmlFor="sms-codigo" className="text-xs text-ink-3 block">
+                    Código enviado para {displayPhone(user.phone)}
+                  </label>
+                  <input
+                    id="sms-codigo"
+                    className="input w-full text-center tracking-[0.4em] font-mono text-lg"
+                    value={smsCodigo}
+                    onChange={e => setSmsCodigo(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                    placeholder="000000"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    maxLength={6}
+                  />
+                  <button
+                    type="submit"
+                    disabled={smsVerificando || smsCodigo.length < 6}
+                    className="w-full py-2.5 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
+                  >
+                    {smsVerificando ? 'Verificando…' : 'Confirmar código'}
+                  </button>
+                </form>
+              )}
+
+              {smsErro && <p className="text-red-400 text-xs">{smsErro}</p>}
+
+              <button
+                onClick={pedirCodigoSms}
+                disabled={smsEnviando || smsCooldown > 0}
+                className="w-full py-2.5 rounded-md border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 text-xs font-semibold transition-colors disabled:opacity-50"
+              >
+                {smsEnviando
+                  ? 'Enviando…'
+                  : smsCooldown > 0
+                    ? `Reenviar em ${smsCooldown}s`
+                    : smsEnviado ? 'Reenviar código' : 'Enviar código por SMS'}
+              </button>
+            </div>
+          )}
+
+          {!user?.phone && (
+            <p className="text-xs text-ink-4">
+              Cadastre um telefone no formulário acima para poder verificar.
+            </p>
           )}
         </div>
 
