@@ -10,6 +10,7 @@ import { WA_SUPPORT } from '../lib/support'
 import { usePlans, fmtPlanPrice } from '../hooks/usePlans'
 import { viuOsPlanos } from '../lib/analytics'
 import NumberTicker from '../components/ui/NumberTicker'
+import { rotuloDoPlano } from '../components/ui'
 
 const PLAN_DAYS: Record<string, number> = {
   trial: 2, mensal: 30, trimestral: 90, semestral: 180, anual: 365,
@@ -243,7 +244,7 @@ export default function Planos() {
                 <div className="flex items-center gap-2 flex-wrap mb-1">
                   <span className="text-ink-3 text-xs">Status atual:</span>
                   <span className={`text-xs font-black ${isTrial ? 'text-amber-400' : urgent ? 'text-red-400' : 'text-yellow-400'}`}>
-                    {isTrial ? 'TRIAL' : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
+                    {isTrial ? rotuloDoPlano('trial') : subType ? `VIP ${PLAN_LABEL[subType]}` : 'VIP'}
                   </span>
                   {urgent && (
                     <span className="font-mono text-[10px] bg-red-500/20 text-red-400 border border-red-500/30 px-2 py-0.5 rounded-sm font-bold animate-pulse">

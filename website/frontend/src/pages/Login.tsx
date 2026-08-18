@@ -213,7 +213,7 @@ export default function Login() {
 
           {mode === 'register' ? (
             <div className="mt-8 text-left max-w-xs mx-auto">
-              <p className="text-ink-3 text-xs font-medium mb-4">No seu trial de 2 dias você acessa:</p>
+              <p className="text-ink-3 text-xs font-medium mb-4">No seu teste de 2 dias você acessa:</p>
               <div className="space-y-3">
                 {[
                   { dot: 'bg-green-500',  text: 'Picks VIP diários com edge positivo' },

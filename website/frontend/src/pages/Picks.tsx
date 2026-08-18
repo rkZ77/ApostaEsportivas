@@ -12,6 +12,7 @@ import PageShell from '../components/PageShell'
 import Avatar from '../components/Avatar'
 import {
   LiveDot, Spinner, EmptyState, SkeletonPickGrid, Badge, PickTypeBadge, ResultBadge,
+  rotuloDoPlano,
 } from '../components/ui'
 import { aplicarFiltro, FILTRO_INICIAL, type MercadoFiltro } from '../lib/mercadoFiltro'
 import EngineStatus from '../components/EngineStatus'
@@ -246,7 +247,7 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   const isTrial = user.plan === 'trial'
 
   const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
-  const planLabel = isAdmin ? 'ADMIN' : isTrial ? 'TRIAL' : isVip ? 'VIP' : 'FREE'
+  const planLabel = rotuloDoPlano(isAdmin ? 'admin' : isTrial ? 'trial' : isVip ? 'vip' : 'free')
 
   // Countdown ao vivo
   const [countdown, setCountdown] = useState('')

@@ -1335,7 +1335,7 @@ export default function Admin() {
             {[
               { label: 'Total',         value: stats.total,          color: 'text-ink-1' },
               { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
-              { label: 'Trial',         value: stats.trial,          color: 'text-blue-400' },
+              { label: 'Teste',         value: stats.trial,          color: 'text-blue-400' },
               { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
               { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
               { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
@@ -1356,7 +1356,7 @@ export default function Admin() {
             <input className="input" placeholder="Senha (min 10 chars, maiúscula, número)" type="password" value={newUser.password} onChange={e => setNewUser(v => ({ ...v, password: e.target.value }))} required />
             <select className="input" value={newUser.plan} onChange={e => setNewUser(v => ({ ...v, plan: e.target.value }))}>
               <option value="free">Free</option>
-              <option value="trial">Trial</option>
+              <option value="trial">Teste</option>
               <option value="vip">VIP</option>
               <option value="admin">Admin</option>
             </select>
@@ -1476,7 +1476,7 @@ export default function Admin() {
                           className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-1 focus:outline-none"
                         >
                           <option value="free">Free</option>
-                          <option value="trial">Trial</option>
+                          <option value="trial">Teste</option>
                           <option value="vip">VIP</option>
                           <option value="admin">Admin</option>
                         </select>
@@ -1561,7 +1561,7 @@ export default function Admin() {
                   className="bg-surface-2 border border-line-strong rounded-lg px-2 py-1 text-xs text-ink-1 focus:outline-none flex-1"
                 >
                   <option value="free">Free</option>
-                  <option value="trial">Trial</option>
+                  <option value="trial">Teste</option>
                   <option value="vip">VIP</option>
                   <option value="admin">Admin</option>
                 </select>

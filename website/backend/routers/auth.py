@@ -664,6 +664,19 @@ def _mascarar_email(email: str) -> str:
     return f"{visivel}***@{dominio}"
 
 
+def _deve_barrar_por_email(plano: str | None, gate_travado: bool | None) -> bool:
+    """A conta perde o login por nao ter confirmado o e-mail?
+
+    Funcao separada porque esta e a regra que fica entre o assinante e o
+    produto que ele pagou. Ate a correcao de 18/08/2026 ela olhava so a data e
+    o e-mail, e um assinante novo que nunca clicou no link levaria 403 no
+    terceiro dia -- pagando. Aqui ela fica testavel sem subir servidor nenhum.
+
+    So barra quem esta no free. VIP, trial e admin entram sempre.
+    """
+    return plano == "free" and bool(gate_travado)
+
+
 def _reenviar_verificacao_no_gate(cur, conn, user: dict, background_tasks: BackgroundTasks) -> None:
     """Gera um link novo e agenda o envio, respeitando o cooldown.
 
@@ -739,17 +752,10 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         # outros. E' tambem o unico caminho que sobra pra pessoa: /auth/
         # resend-verification exige estar logada, e logada ela nao consegue
         # mais ficar.
-        if user.get("email_gate_travado"):
-            _reenviar_verificacao_no_gate(cur, conn, user, background_tasks)
-            raise HTTPException(
-                status_code=403,
-                detail=(
-                    "Confirme seu e-mail para continuar. Acabamos de reenviar o link para "
-                    f"{_mascarar_email(user['email'])} · confira também o spam."
-                ),
-            )
-
-        # Auto-expire VIP/trial expirado
+        # Auto-expire VIP/trial expirado.
+        #
+        # Vem ANTES do gate de e-mail de proposito: e' ele quem decide se a
+        # conta ainda tem plano, e o gate so' vale pra quem esta' no free.
         if user["plan"] in ("vip", "trial") and user.get("expires_at"):
             exp = user["expires_at"]
             if exp.tzinfo is None:
@@ -759,6 +765,24 @@ def login(body: LoginBody, response: Response, request: Request, background_task
                 conn.commit()
                 user["plan"] = "free"
                 user["expires_at"] = None
+
+        # Passou da carencia sem confirmar o e-mail: barra e reenvia o link.
+        #
+        # SO' PRA QUEM ESTA' NO FREE. Quem tem VIP, trial ou admin entra sempre,
+        # confirmado ou nao: trancar do lado de fora alguem que acabou de pagar
+        # e' o pior erro possivel desta tela, e nao seria hipotetico -- ate' a
+        # correcao de 18/08/2026 a condicao olhava so' a data e o e-mail, entao
+        # um assinante novo que nunca clicou no link levaria 403 no terceiro
+        # dia. O trial nem chega aqui, ja' que so' nasce apos a verificacao.
+        if _deve_barrar_por_email(user["plan"], user.get("email_gate_travado")):
+            _reenviar_verificacao_no_gate(cur, conn, user, background_tasks)
+            raise HTTPException(
+                status_code=403,
+                detail=(
+                    "Confirme seu e-mail para continuar. Acabamos de reenviar o link para "
+                    f"{_mascarar_email(user['email'])} · confira também o spam."
+                ),
+            )
 
         # Sessão única: novo login invalida sessão anterior e grava dispositivo
         device = _detect_device(request.headers.get("user-agent", ""))
