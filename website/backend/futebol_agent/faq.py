@@ -114,10 +114,9 @@ _FAQ: list[dict] = [
         ],
         "resposta": (
             "Sim: todo cadastro tem direito a um **trial gratuito de 2 dias** com acesso completo "
-            "ao VIP, uma única vez por conta. Ele é liberado quando você confirma um contato · "
-            "clicando no link que enviamos por e-mail, ou verificando seu telefone com o código "
-            "por SMS em Perfil. Qualquer um dos dois libera. Se o e-mail não chegou, dá pra "
-            "reenviar em Perfil."
+            "ao VIP, uma única vez por conta. Ele é liberado assim que você confirma o e-mail · "
+            "é só clicar no link que enviamos no cadastro. Se não chegou, dá pra reenviar em "
+            "Perfil (confira também o spam)."
         ),
     },
     {

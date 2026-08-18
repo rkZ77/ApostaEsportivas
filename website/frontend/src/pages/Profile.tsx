@@ -677,7 +677,10 @@ export default function Profile() {
           )}
         </div>
 
-        {/* Telefone · verificação por SMS */}
+        {/* Telefone · verificação por SMS.
+            Some inteiro quando não há provedor de SMS configurado: sem isso o
+            usuário veria um botão que responde "enviado" sem nada chegar. */}
+        {(meData?.sms_disponivel || meData?.phone_verified) && (
         <div className={`card p-6 space-y-4 ${!meData?.phone_verified && !smsOk ? 'border-yellow-400/30' : ''}`}>
           <div className="flex items-start justify-between gap-3">
             <div>
@@ -754,6 +757,7 @@ export default function Profile() {
             </p>
           )}
         </div>
+        )}
 
         {/* Seção de Indicações */}
         <div className="card p-6 space-y-4">

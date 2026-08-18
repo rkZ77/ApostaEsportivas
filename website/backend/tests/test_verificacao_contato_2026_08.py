@@ -147,6 +147,22 @@ def test_fixo_de_dez_digitos_nao_perde_o_ddd():
 
 # ── envio ────────────────────────────────────────────────────────────────────
 
+def test_sem_provedor_o_sms_conta_como_indisponivel(monkeypatch):
+    """`log` e' modo de desenvolvimento, nao canal.
+
+    Trata-lo como disponivel faria a tela do perfil oferecer um botao que
+    responde "codigo enviado" com o codigo indo so' pro log do servidor. E' o
+    estado padrao hoje: o SMS fica desligado ate haver credito no provedor.
+    """
+    monkeypatch.delenv("SMS_PROVIDER", raising=False)
+    assert sms_mod.sms_configurado() is False
+
+
+def test_com_provedor_o_sms_fica_disponivel(monkeypatch):
+    monkeypatch.setenv("SMS_PROVIDER", "comtele")
+    assert sms_mod.sms_configurado() is True
+
+
 def test_modo_log_nao_estoura_e_nao_chama_rede(monkeypatch):
     """É o que faz o fluxo inteiro ser testável em dev sem chave nem crédito."""
     monkeypatch.delenv("SMS_PROVIDER", raising=False)
