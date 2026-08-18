@@ -17,6 +17,7 @@ from routers import auth
 from routers.auth import (
     EMAIL_GATE_CARENCIA_DIAS,
     EMAIL_GATE_DESDE,
+    _deve_barrar_por_email,
     _gerar_codigo_numerico,
     _mascarar_email,
     _reenviar_verificacao_no_gate,
@@ -40,6 +41,26 @@ def test_mascara_aguenta_string_sem_arroba():
 
 
 # ── carência do gate ─────────────────────────────────────────────────────────
+
+@pytest.mark.parametrize("plano", ["vip", "admin", "trial"])
+def test_quem_tem_plano_nunca_e_barrado(plano):
+    """A regra que fica entre o assinante e o produto que ele pagou.
+
+    Ate 18/08/2026 a condicao olhava so a data e o e-mail: um assinante novo
+    que nunca clicou no link levaria 403 no terceiro dia, pagando. Se este
+    teste cair, alguem religou esse caminho.
+    """
+    assert _deve_barrar_por_email(plano, True) is False
+
+
+def test_free_vencido_o_prazo_e_barrado():
+    """O contraponto · sem isto a trava nao existe."""
+    assert _deve_barrar_por_email("free", True) is True
+
+
+def test_free_dentro_do_prazo_entra():
+    assert _deve_barrar_por_email("free", False) is False
+
 
 def test_carencia_nao_e_zero():
     """Zero dias seria a trava imediata que foi descartada de propósito:

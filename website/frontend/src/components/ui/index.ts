@@ -9,7 +9,7 @@
 export { default as Button, IconButton } from './Button'
 export type { ButtonProps } from './Button'
 
-export { default as Badge, PlanBadge, PickTypeBadge, ResultBadge, LiveDot } from './Badge'
+export { default as Badge, PlanBadge, PickTypeBadge, ResultBadge, LiveDot, PLANO_META, planoMeta, rotuloDoPlano } from './Badge'
 export type { BadgeTone } from './Badge'
 
 export { default as Card, StatTile, SectionHead } from './Card'

@@ -51,15 +51,34 @@ export default function Badge({
   )
 }
 
+/**
+ * Como cada plano se chama e se pinta na tela · fonte única.
+ *
+ * Existe porque o rótulo estava reescrito em cinco lugares e eles divergiram:
+ * a mesma conta aparecia como "TESTE" no selo da Navbar e "TRIAL" no cartão
+ * de saudação dos Picks, e o Profile usava as duas formas em pontos
+ * diferentes do mesmo arquivo. Como o produto é todo em português, o nome é
+ * TESTE · quem quiser outro rótulo muda aqui e muda em todo lugar.
+ */
+export const PLANO_META: Record<string, { tone: BadgeTone; label: string; cor: string }> = {
+  vip:   { tone: 'yellow',  label: 'VIP',   cor: 'text-yellow-400' },
+  admin: { tone: 'purple',  label: 'Admin', cor: 'text-purple-400' },
+  trial: { tone: 'amber',   label: 'Teste', cor: 'text-amber-400' },
+  free:  { tone: 'neutral', label: 'Free',  cor: 'text-ink-2' },
+}
+
+export function planoMeta(plan?: string) {
+  return PLANO_META[plan ?? 'free'] ?? PLANO_META.free
+}
+
+/** Rótulo em caixa alta, pro selo e pros títulos que gritam. */
+export function rotuloDoPlano(plan?: string): string {
+  return planoMeta(plan).label.toUpperCase()
+}
+
 /** Plano do usuário. Mesmas cores das classes .badge-* legadas. */
 export function PlanBadge({ plan, className }: { plan?: string; className?: string }) {
-  const map: Record<string, { tone: BadgeTone; label: string }> = {
-    vip:   { tone: 'yellow',  label: 'VIP' },
-    admin: { tone: 'purple',  label: 'Admin' },
-    trial: { tone: 'amber',   label: 'Teste' },
-    free:  { tone: 'neutral', label: 'Free' },
-  }
-  const { tone, label } = map[plan ?? 'free'] ?? map.free
+  const { tone, label } = planoMeta(plan)
   return <Badge tone={tone} className={className}>{label}</Badge>
 }
 

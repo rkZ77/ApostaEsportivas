@@ -10,6 +10,7 @@ import {
   LogOut, Menu, X, BookOpen, MessageCircle, History,
 } from 'lucide-react'
 import Avatar from './Avatar'
+import { rotuloDoPlano } from './ui'
 import NotificationBell from './NotificationBell'
 
 const planBadge: Record<string, string> = {
@@ -144,7 +145,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                       : ''}
                   </span>
                   <span className={planBadge[user?.plan ?? 'free']}>
-                    {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
+                    {rotuloDoPlano(user?.plan)}
                   </span>
                 </div>
               </button>
@@ -260,7 +261,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
           <div>
             <div className="text-ink-1 text-sm font-semibold">{user?.name}</div>
             <span className={`mt-1 ${planBadge[user?.plan ?? 'free']}`}>
-              {user?.plan === 'vip' ? 'VIP' : user?.plan === 'admin' ? 'ADMIN' : user?.plan === 'trial' ? 'TESTE' : 'FREE'}
+              {rotuloDoPlano(user?.plan)}
             </span>
           </div>
           {emailPendente && (
