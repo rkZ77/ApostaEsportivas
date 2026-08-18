@@ -63,13 +63,37 @@ ACCOUNT_LOGIN_LOCKOUT_SECS = 900
 # Meio termo: entra livre por EMAIL_GATE_CARENCIA_DIAS, depois o login exige a
 # confirmacao. Quem esta ativo no site confirma nesse prazo sem nem perceber;
 # quem digitou e-mail errado para no dia 3, que e' o objetivo.
-EMAIL_GATE_CARENCIA_DIAS = 3
+def _gate_carencia_dias() -> int:
+    """Dias de folga antes do login exigir a confirmacao."""
+    try:
+        valor = int(os.getenv("EMAIL_GATE_CARENCIA_DIAS", "3"))
+    except ValueError:
+        return 3
+    # Zero seria a trava imediata que foi descartada de proposito: e-mail no
+    # spam viraria cadastro perdido no dia 1.
+    return valor if valor >= 1 else 3
 
-# So vale pra quem se cadastrou a partir daqui. Contas antigas -- inclusive VIP
-# pagante -- nunca tiveram esse contrato: trava-las agora seria cobrar
-# retroativamente uma regra que nao existia quando elas se cadastraram, e
-# tirar do ar gente que paga.
-EMAIL_GATE_DESDE = "2026-08-18"
+
+def _gate_desde() -> str:
+    """Data de corte, em YYYY-MM-DD.
+
+    So vale pra quem se cadastrou a partir daqui. Contas antigas -- inclusive
+    VIP pagante -- nunca tiveram esse contrato: trava-las seria cobrar
+    retroativamente uma regra que nao existia no cadastro delas, e tirar do ar
+    gente que paga.
+
+    O formato e' conferido porque este valor entra no SQL por interpolacao (a
+    data nao cabe em placeholder dentro de `DATE '...'`). Variavel de ambiente
+    e' controlada por quem opera o servidor, mas uma constante que vira SQL sem
+    validacao e' o tipo de coisa que envelhece mal.
+    """
+    valor = (os.getenv("EMAIL_GATE_DESDE") or "").strip()
+    return valor if re.fullmatch(r"\d{4}-\d{2}-\d{2}", valor) else "2026-08-18"
+
+
+# Lidos uma vez, no import: sao decisao de operacao, nao de requisicao.
+EMAIL_GATE_CARENCIA_DIAS = _gate_carencia_dias()
+EMAIL_GATE_DESDE = _gate_desde()
 
 # Reenvio automatico ao esbarrar no gate. Sem cooldown, dez tentativas de login
 # viram dez e-mails e o dominio paga por isso na reputacao.
