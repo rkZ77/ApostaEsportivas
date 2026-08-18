@@ -53,6 +53,31 @@ def test_gate_so_vale_para_contas_novas():
     assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", EMAIL_GATE_DESDE)
 
 
+def test_data_de_corte_torta_cai_no_padrao(monkeypatch):
+    """O valor entra no SQL por interpolacao (data nao cabe em placeholder
+    dentro de `DATE '...'`), entao formato invalido nao pode passar adiante."""
+    for lixo in ["ontem", "2026-8-1", "'; DROP TABLE users; --", ""]:
+        monkeypatch.setenv("EMAIL_GATE_DESDE", lixo)
+        assert auth._gate_desde() == "2026-08-18"
+
+
+def test_data_de_corte_valida_e_respeitada(monkeypatch):
+    monkeypatch.setenv("EMAIL_GATE_DESDE", "2026-01-01")
+    assert auth._gate_desde() == "2026-01-01"
+
+
+@pytest.mark.parametrize("valor", ["0", "-3", "abc", ""])
+def test_carencia_invalida_cai_no_padrao(monkeypatch, valor):
+    """Zero seria a trava imediata que foi descartada de proposito."""
+    monkeypatch.setenv("EMAIL_GATE_CARENCIA_DIAS", valor)
+    assert auth._gate_carencia_dias() == 3
+
+
+def test_carencia_valida_e_respeitada(monkeypatch):
+    monkeypatch.setenv("EMAIL_GATE_CARENCIA_DIAS", "7")
+    assert auth._gate_carencia_dias() == 7
+
+
 class CursorFalso:
     def __init__(self):
         self.executados = []

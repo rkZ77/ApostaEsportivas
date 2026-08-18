@@ -335,6 +335,16 @@ export default function Login() {
 
             {mode === 'register' && (
               <div className="flex items-center gap-2 -mt-1 mb-1">
+                {regStep === 2 && (
+                  <button
+                    type="button"
+                    onClick={() => setRegStep(1)}
+                    aria-label="Voltar para o passo 1"
+                    className="shrink-0 -ml-1 w-7 h-7 flex items-center justify-center rounded-md text-ink-3 hover:text-ink-1 hover:bg-surface-2 transition-colors"
+                  >
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
+                )}
                 {[1, 2].map(step => (
                   <div key={step} className={`h-1 flex-1 rounded-full transition-colors ${step <= regStep ? 'bg-green-500' : 'bg-surface-2'}`} />
                 ))}
@@ -367,13 +377,6 @@ export default function Login() {
                     autoComplete="email" />
                 </div>
               </>
-            )}
-
-            {mode === 'register' && regStep === 2 && (
-              <button type="button" onClick={() => setRegStep(1)}
-                className="text-ink-3 hover:text-ink-2 text-xs font-semibold transition-colors -mt-1 mb-1">
-                ← Voltar
-              </button>
             )}
 
             {mode === 'register' && regStep === 2 && (
