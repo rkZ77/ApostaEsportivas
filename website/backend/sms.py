@@ -56,6 +56,16 @@ def provedor_ativo() -> str:
     return (os.getenv("SMS_PROVIDER") or "log").strip().lower()
 
 
+def sms_configurado() -> bool:
+    """Existe provedor de verdade neste ambiente?
+
+    `log` conta como NAO configurado de proposito. Ele e' o modo de
+    desenvolvimento -- escreve o codigo no log e devolve sucesso -- entao
+    trata-lo como disponivel faria a tela prometer um SMS que nunca sai.
+    """
+    return provedor_ativo() != "log"
+
+
 def _enviar_comtele(telefone: str, texto: str) -> None:
     chave = (os.getenv("SMS_COMTELE_AUTH_KEY") or "").strip()
     if not chave:

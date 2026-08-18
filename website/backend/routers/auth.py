@@ -32,7 +32,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from database import get_connection
-from sms import SMSNaoEnviado, enviar_sms
+from sms import SMSNaoEnviado, enviar_sms, sms_configurado
 from auth_utils import (
     hash_password, verify_password,
     create_access_token, create_refresh_token,
@@ -1094,6 +1094,12 @@ def me(current_user: dict = Depends(get_current_user)):
                 d["expires_at"] = None
         if d.get("expires_at"):
             d["expires_at"] = d["expires_at"].isoformat()
+        # A tela do perfil so' oferece verificacao por SMS quando ha provedor
+        # configurado. Sem isso, o botao responderia "codigo enviado" com o
+        # codigo indo pro log do servidor e o usuario esperando um SMS que
+        # nunca sai. Vem do backend, e nao de uma constante no front, pra que
+        # ligar o SMS seja so' setar a variavel no Railway -- sem deploy novo.
+        d["sms_disponivel"] = sms_configurado()
         return d
     finally:
         cur.close(); conn.close()
@@ -1186,6 +1192,11 @@ def enviar_codigo_telefone(current_user: dict = Depends(get_current_user)):
             raise HTTPException(400, "Cadastre um telefone no perfil antes de verificar.")
         if row.get("phone_verified"):
             return {"ok": True, "ja_verificado": True}
+        # A UI ja esconde o botao quando nao ha provedor, mas quem chama a API
+        # direto precisa ouvir "nao da" em vez de receber sucesso e esperar um
+        # SMS que ficou so' no log.
+        if not sms_configurado():
+            raise HTTPException(503, "Verificação por SMS indisponível no momento. Confirme seu e-mail.")
 
         # Cooldown e teto diário no banco, não em memória: o Railway reinicia o
         # processo a cada deploy e um teto em RAM zeraria junto, o que num
