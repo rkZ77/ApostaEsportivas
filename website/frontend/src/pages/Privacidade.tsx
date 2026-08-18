@@ -27,7 +27,7 @@ export default function Privacidade() {
           <section>
             <h2 className="text-ink-1 font-bold text-base mb-3">2. Dados que coletamos</h2>
             <ul className="list-disc list-inside space-y-1 text-ink-2">
-              <li><span className="text-ink-2">Cadastro:</span> nome, e-mail, telefone e CPF (exigido para trial gratuito e cumprimento de obrigações legais)</li>
+              <li><span className="text-ink-2">Cadastro:</span> nome, nome de usuário, e-mail e telefone (o telefone identifica a conta e limita o trial gratuito a uma vez por pessoa)</li>
               <li><span className="text-ink-2">Pagamento:</span> histórico de transações processadas pelo MercadoPago (não armazenamos dados de cartão)</li>
               <li><span className="text-ink-2">Uso do serviço:</span> picks seguidos, comentários, reações e dados de banca</li>
               <li><span className="text-ink-2">Técnicos:</span> endereço IP, tipo de navegador e horários de acesso (para segurança e rate limiting)</li>
@@ -52,7 +52,7 @@ export default function Privacidade() {
             <h2 className="text-ink-1 font-bold text-base mb-3">4. Base legal (LGPD)</h2>
             <p className="text-ink-2">
               Tratamos seus dados com base no <span className="text-ink-2">cumprimento de contrato</span> (art. 7º, V da LGPD)
-              para a prestação do serviço, <span className="text-ink-2">obrigação legal</span> (art. 7º, II) para CPF e dados
+              para a prestação do serviço, <span className="text-ink-2">obrigação legal</span> (art. 7º, II) para os dados
               financeiros, e <span className="text-ink-2">legítimo interesse</span> (art. 7º, IX) para segurança da plataforma.
             </p>
           </section>

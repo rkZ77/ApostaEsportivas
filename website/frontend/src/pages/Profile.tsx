@@ -34,7 +34,6 @@ export default function Profile() {
   const [phone, setPhone]           = useState(displayPhone(user?.phone ?? ''))
   // Sincroniza phone quando refreshUser() completar (login não retornava phone antes)
   useEffect(() => { if (user?.phone) setPhone(displayPhone(user.phone)) }, [user?.phone])
-  const [cpf, setCpf]               = useState('')
   const [loading, setLoading]       = useState(false)
   const [successMsg, setSuccessMsg] = useState('')
   const [error, setError]           = useState('')
@@ -210,7 +209,6 @@ export default function Profile() {
     if (name !== user?.name)                         body.name = name
     if (username !== (meData?.username ?? ''))       body.username = username
     if (phone !== (user?.phone ?? ''))               body.phone = phone
-    if (cpf.trim())                                  body.cpf = cpf.trim()
 
     if (!Object.keys(body).length) { setError('Nenhuma alteração detectada'); return }
 
@@ -218,13 +216,7 @@ export default function Profile() {
     try {
       const { data } = await api.put('/auth/profile', body)
       updateUser(data)
-      if (data.trial_activated) {
-        setSuccessMsg('CPF verificado! 2 dias de VIP gratuito ativados!')
-        setMeData((prev: any) => ({ ...prev, has_cpf: true, trial_used: true }))
-      } else {
-        setSuccessMsg('Perfil atualizado!')
-      }
-      setCpf('')
+      setSuccessMsg('Perfil atualizado!')
     } catch (err: any) {
       setError(err.response?.data?.detail || 'Erro ao atualizar')
     } finally {
@@ -372,19 +364,10 @@ export default function Profile() {
             <input className="input w-full" value={phone} onChange={e => setPhone(maskPhone(e.target.value))} placeholder="(11) 99999-9999" type="tel" inputMode="numeric" />
           </div>
 
-          {!meData?.has_cpf && (
-            <div>
-              <label className="text-xs text-ink-3 block mb-1.5">
-                CPF <span className="text-ink-4">(necessário para ativar o teste gratuito)</span>
-              </label>
-              <input className="input w-full" value={cpf} onChange={e => setCpf(e.target.value)}
-                placeholder="000.000.000-00" />
-              {user?.plan === 'free' && !meData?.trial_used && (
-                <p className="text-xs text-green-500 mt-1">
-                  Adicione seu CPF e salve para receber 2 dias de VIP grátis.
-                </p>
-              )}
-            </div>
+          {user?.plan === 'free' && !meData?.trial_used && !user?.email_verified && (
+            <p className="text-xs text-green-500">
+              Confirme seu e-mail para liberar 2 dias de VIP grátis.
+            </p>
           )}
 
           <hr className="border-line" />

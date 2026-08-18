@@ -26,7 +26,6 @@ export const autenticacao = {
     email: string
     password: string
     phone: string
-    cpf: string
     username: string
     accepted_terms: boolean
   }) => api.post<RespostaLogin>('/auth/register', dados).then((r) => r.data),

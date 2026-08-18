@@ -110,11 +110,13 @@ _FAQ: list[dict] = [
         "id": "trial",
         "perguntas": [
             "tem teste gratis", "como funciona o trial", "posso testar o vip", "trial gratuito",
-            "como ativo o trial", "tenho direito a trial",
+            "como ativo o trial", "tenho direito a trial", "preciso de cpf", "por que pedem cpf",
         ],
         "resposta": (
-            "Sim: usuários com CPF cadastrado no perfil podem ativar um **trial gratuito de 2 dias** com "
-            "acesso completo ao VIP, uma única vez por CPF. Ative em Perfil → Ativar Trial."
+            "Sim: todo cadastro tem direito a um **trial gratuito de 2 dias** com acesso completo "
+            "ao VIP, uma única vez por conta. Ele é liberado assim que você confirma o e-mail · "
+            "é só clicar no link que enviamos no cadastro. Se o e-mail não chegou, dá pra reenviar "
+            "em Perfil."
         ),
     },
     {

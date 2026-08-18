@@ -63,7 +63,7 @@ export default function Termos() {
               <li>Os planos VIP dão acesso a picks completos pelo período contratado (mensal, trimestral, semestral ou anual)</li>
               <li>O pagamento é processado pelo MercadoPago e cobrado no ato da contratação</li>
               <li>Após ativação, o plano não é reembolsável, exceto nos casos previstos pelo Código de Defesa do Consumidor (CDC)</li>
-              <li>O trial gratuito de 2 dias é disponibilizado uma única vez por CPF</li>
+              <li>O trial gratuito de 2 dias é disponibilizado uma única vez por conta, liberado após a confirmação do e-mail</li>
               <li>Preços podem ser alterados mediante aviso prévio de 30 dias</li>
             </ul>
           </section>
@@ -72,7 +72,7 @@ export default function Termos() {
             <h2 className="text-ink-1 font-bold text-base mb-3">6. Conta do usuário</h2>
             <ul className="list-disc list-inside space-y-2 text-ink-2">
               <li>Você é responsável pela confidencialidade da sua senha</li>
-              <li>Uma conta por CPF. Contas duplicadas podem ser suspensas</li>
+              <li>Uma conta por número de telefone. Contas duplicadas podem ser suspensas</li>
               <li>É proibido compartilhar credenciais de acesso</li>
               <li>Uso indevido ou fraude resulta em cancelamento imediato sem reembolso</li>
             </ul>

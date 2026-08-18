@@ -12,6 +12,10 @@ export default function VerifyEmail() {
   const token = params.get('token')
 
   const [state, setState]         = useState<'redirect' | 'loading' | 'success' | 'error'>(token ? 'loading' : 'redirect')
+  // O trial de 2 dias passou a ser liberado pelo /auth/verify-email (o CPF
+  // saiu do cadastro em 18/08/2026). A tela precisa anunciar isso: quem
+  // clicou no link ganhou VIP e nao tem como saber por outro caminho.
+  const [trialAtivado, setTrialAtivado] = useState(false)
   const [resending, setResending] = useState(false)
   const [resent, setResent]       = useState(false)
   const [cooldown, setCooldown]   = useState(0)
@@ -35,10 +39,16 @@ export default function VerifyEmail() {
     if (!token) return
     setState('loading')
     api.post('/auth/verify-email', { token })
-      .then(() => {
+      .then(({ data }) => {
         updateUser({ email_verified: true })
+        if (data?.trial_ativado) {
+          setTrialAtivado(true)
+          updateUser({ plan: 'trial', expires_at: data.trial_expires_at })
+        }
         setState('success')
-        setTimeout(() => navigate('/picks'), 2000)
+        // Com trial na mão vale deixar a tela respirar antes de redirecionar,
+        // senão o aviso do VIP some antes de ser lido.
+        setTimeout(() => navigate('/picks'), data?.trial_ativado ? 4000 : 2000)
       })
       .catch((err) => {
         setErrMsg(err.response?.data?.detail || 'Link inválido ou expirado.')
@@ -103,12 +113,21 @@ export default function VerifyEmail() {
               </svg>
             </div>
             <h1 className="text-2xl font-bold text-ink-1 mb-2">E-mail confirmado!</h1>
-            <p className="text-ink-2 text-sm mb-6">Sua conta está ativa. Acessando seus picks…</p>
+            {trialAtivado ? (
+              <>
+                <p className="text-ink-1 text-sm font-semibold mb-1">2 dias de VIP liberados.</p>
+                <p className="text-ink-3 text-sm mb-6">
+                  Você tem acesso completo às análises, à múltipla e à alavancagem. Aproveite.
+                </p>
+              </>
+            ) : (
+              <p className="text-ink-2 text-sm mb-6">Sua conta está ativa. Acessando seus picks…</p>
+            )}
             <button
               onClick={() => navigate('/picks')}
               className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-ink-1 font-bold text-sm transition-colors"
             >
-              Acessar picks
+              {trialAtivado ? 'Ver os picks do VIP' : 'Acessar picks'}
             </button>
           </>
         )}

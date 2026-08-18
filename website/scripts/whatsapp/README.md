@@ -1,8 +1,11 @@
 # Notificações por WhatsApp
 
-Três avisos, só isso. A régua é a mesma do sino: se a mensagem não muda uma
-decisão do usuário, ela não é enviada. WhatsApp não é canal de conteúdo aqui, é
-canal de aviso · quem quiser detalhe abre o site.
+Três avisos e um código, só isso. A régua é a mesma do sino: se a mensagem não
+muda uma decisão do usuário, ela não é enviada. WhatsApp não é canal de conteúdo
+aqui, é canal de aviso · quem quiser detalhe abre o site.
+
+O código de verificação (seção 4) é a exceção que não é aviso: ele prova o
+telefone e libera o trial, papel que era do CPF até 18/08/2026.
 
 | Aviso | Quem recebe | Frequência máxima | Gatilho no código |
 |---|---|---|---|
@@ -136,10 +139,53 @@ inventar número aqui.
 
 ---
 
+## 4. Código de verificação (OTP) · pendente da WABA
+
+Este é o único aviso que **não** é notificação: é o que prova o telefone e
+libera o trial. Entrou na lista em 18/08/2026, quando o CPF saiu do cadastro e
+o telefone virou a chave de "1 conta por pessoa".
+
+**Nome:** `codigo_de_acesso_v1` · **Categoria:** AUTHENTICATION · **Idioma:** pt_BR
+
+```
+{{1}} é o seu código de verificação.
+```
+
+- **Botão:** copiar código (o tipo próprio de template de autenticação)
+- **Validade:** 10 minutos · **Variável:** `{{1}}` código de 6 dígitos
+
+### Como plugar
+
+O backend já está preparado. `users.phone_verified` existe e
+`_ativar_trial_se_elegivel()` em [auth.py](../../backend/routers/auth.py) já
+aceita **e-mail OU telefone**, então basta um endpoint que valide o código e
+marque `phone_verified = TRUE` · o trial sai sozinho pelo mesmo caminho do
+link de e-mail. Falta só a tabela de códigos (hash do código, expiração,
+tentativas) e o envio.
+
+### Por que o e-mail continua sendo a porta principal
+
+O OTP **não pode ser a única via de cadastro**. A política da Meta sobre o
+setor de apostas vale para a conta inteira, não por template: se o número for
+banido, um cadastro que dependa só do WhatsApp para de receber conta nova. Com
+o e-mail como caminho garantido, um ban custa a via rápida, não o funil.
+
+Ordem certa quando a autorização sair: subir o template, medir a taxa de
+entrega e só então oferecer o WhatsApp como opção **ao lado** do e-mail.
+
+Ganho de brinde: quem verifica pelo WhatsApp entrega o `whatsapp_opt_in`
+explícito que as três notificações acima exigem, no momento em que a pessoa
+está justamente esperando uma mensagem.
+
+---
+
 ## O que falta no banco
 
-`users.phone` já existe em E.164 e é obrigatório no cadastro, então o destino já
-está pronto. Faltam duas coisas:
+`users.phone` já existe em E.164, é obrigatório no cadastro e agora é único,
+então o destino já está pronto.
+
+`users.phone_verified` e o índice único de `phone` já entraram em 18/08/2026
+junto com a saída do CPF · ver `migrations.py`. Falta o resto:
 
 ```sql
 ALTER TABLE users ADD COLUMN IF NOT EXISTS whatsapp_opt_in BOOLEAN DEFAULT FALSE;
