@@ -86,6 +86,38 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("UPDATE users SET reset_token=NULL, reset_token_expires_at=NULL WHERE reset_token IS NOT NULL AND LENGTH(reset_token) < 64")
         cur.execute("UPDATE users SET email_verification_token=NULL WHERE email_verification_token IS NOT NULL AND LENGTH(email_verification_token) < 64")
         cur.execute("UPDATE users SET phone = '+55' || regexp_replace(phone, '[^0-9]', '', 'g') WHERE phone IS NOT NULL AND phone NOT LIKE '+%' AND length(regexp_replace(phone, '[^0-9]', '', 'g')) BETWEEN 10 AND 11")
+        # Telefone provado (hoje so' pelo codigo do WhatsApp, quando a WABA
+        # sair). Junto com email_verified e' o que paga o trial desde que o
+        # CPF saiu do cadastro -- ver _ativar_trial_se_elegivel em auth.py.
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS phone_verified BOOLEAN DEFAULT FALSE;")
+        # Numero unico = 1 conta por chip, que e' o que substituiu o "1 conta
+        # por CPF". Vem DEPOIS da normalizacao E.164 acima, senao o mesmo
+        # numero em dois formatos passaria batido pelo indice.
+        #
+        # A criacao e' condicional porque `phone` nunca foi unico: se a base
+        # ja tiver duplicata, um CREATE UNIQUE INDEX cru estoura e o except
+        # geral la embaixo faz rollback de TODAS as migrations deste arquivo.
+        # O cadastro ja checa duplicata em query separada, entao sem o indice
+        # o que se perde e' so' a protecao contra corrida.
+        cur.execute("""
+            SELECT COUNT(*) AS n FROM (
+                SELECT phone FROM users
+                WHERE phone IS NOT NULL
+                GROUP BY phone HAVING COUNT(*) > 1
+            ) d
+        """)
+        dup = cur.fetchone()
+        dup_n = (dup["n"] if isinstance(dup, dict) or hasattr(dup, "keys") else dup[0]) or 0
+        if dup_n:
+            logger.warning(
+                "[MIGRATION] %s telefone(s) repetido(s) em users - indice unico de phone NAO criado. "
+                "Resolver os duplicados e rodar o setup de novo.", dup_n
+            )
+        else:
+            cur.execute("""
+                CREATE UNIQUE INDEX IF NOT EXISTS users_phone_uniq
+                ON users (phone) WHERE phone IS NOT NULL
+            """)
         cur.execute("""
             CREATE TABLE IF NOT EXISTS payments (
                 id                SERIAL PRIMARY KEY,

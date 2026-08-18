@@ -29,6 +29,7 @@ const CookieBanner     = lazy(() => import('./components/CookieBanner'))
 const UpdateBanner     = lazy(() => import('./components/UpdateBanner'))
 const ErrorToast       = lazy(() => import('./components/ErrorToast'))
 const PushPromptBanner = lazy(() => import('./components/PushPromptBanner'))
+const VerifyEmailBanner = lazy(() => import('./components/VerifyEmailBanner'))
 const GlobalModals     = lazy(() => import('./components/GlobalModals'))
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
@@ -180,6 +181,7 @@ export default function App() {
             <UpdateBanner />
             <ErrorToast />
             <PushPromptBanner />
+            <VerifyEmailBanner />
             <GlobalModals />
           </Suspense>
 

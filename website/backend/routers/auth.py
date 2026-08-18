@@ -46,7 +46,7 @@ _LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
 
 # Lockout por conta (além do lockout por IP em main.py): sem isso, um ataque
 # distribuído por IP contorna o limite por IP mas ainda bate sempre na mesma
-# conta-alvo. Chave é o identifier normalizado (email/cpf/username), não o id
+# conta-alvo. Chave é o identifier normalizado (email/username), não o id
 # do usuário, já que uma conta inexistente/errada também deve contar.
 _account_login_failures: dict[str, list[float]] = defaultdict(list)
 ACCOUNT_LOGIN_MAX_FAILURES = 10
@@ -161,25 +161,6 @@ def _validate_password(password: str) -> None:
         raise HTTPException(400, "Senha deve ter número")
 
 
-def _validate_cpf(cpf: str) -> str:
-    """Valida CPF brasileiro e retorna apenas dígitos. Lança 400 se inválido."""
-    digits = re.sub(r"\D", "", cpf)
-    if len(digits) != 11:
-        raise HTTPException(400, "CPF inválido. Informe os 11 dígitos.")
-    if len(set(digits)) == 1:
-        raise HTTPException(400, "CPF inválido.")
-    # Dígito verificador 1
-    s = sum(int(digits[i]) * (10 - i) for i in range(9))
-    d1 = (s * 10 % 11) % 10
-    if d1 != int(digits[9]):
-        raise HTTPException(400, "CPF inválido.")
-    # Dígito verificador 2
-    s = sum(int(digits[i]) * (11 - i) for i in range(10))
-    d2 = (s * 10 % 11) % 10
-    if d2 != int(digits[10]):
-        raise HTTPException(400, "CPF inválido.")
-    return digits
-
 _USERNAME_RE = re.compile(r"^[a-z0-9_]{3,20}$")
 
 # DDDs válidos no Brasil (11-99, exceto blocos não atribuídos)
@@ -226,12 +207,14 @@ def _generate_username(name: str, cur) -> str:
 
 def _resolve_identifier(identifier: str) -> tuple[str, str]:
     """Detecta tipo do identificador e retorna (tipo, valor_normalizado).
-    Tipos: 'email', 'cpf', 'username'
+    Tipos: 'email', 'username'
+
+    O CPF era um terceiro tipo ate 18/08/2026 e saiu junto com o campo do
+    cadastro: manter o login por um dado que conta nova nao tem mais so'
+    serviria pra sustentar uma coluna que ninguem alimenta. Quem tinha CPF
+    continua entrando por e-mail ou usuario, que toda conta tem.
     """
     stripped = identifier.strip()
-    digits = re.sub(r"\D", "", stripped)
-    if len(digits) == 11:
-        return "cpf", digits
     if "@" in stripped:
         return "email", stripped.lower()
     return "username", stripped.lower()
@@ -454,14 +437,13 @@ class RegisterBody(BaseModel):
     email: EmailStr
     password: str
     phone: str
-    cpf: str
     username: Optional[str] = None
     ref_code: Optional[str] = None
     accepted_terms: bool = False
     captcha_token: Optional[str] = None
 
 class LoginBody(BaseModel):
-    identifier: str  # e-mail, CPF ou username
+    identifier: str  # e-mail ou username
     password: str
     captcha_token: Optional[str] = None
 
@@ -476,7 +458,6 @@ class ResetPasswordBody(BaseModel):
 class UpdateProfileBody(BaseModel):
     name: Optional[str] = None
     phone: Optional[str] = None
-    cpf: Optional[str] = None
     username: Optional[str] = None
 
 
@@ -503,12 +484,17 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         if cur.fetchone():
             raise HTTPException(status_code=400, detail="Email já cadastrado")
 
-        # Valida phone, CPF e username
+        # Valida phone e username.
+        #
+        # O CPF saiu do cadastro em 18/08/2026. Ele nunca teve funcao fiscal
+        # aqui -- nao aparece em pagamento nem em nota, so' ancorava o trial --
+        # e pedir CPF em site de aposta e' onde o cadastro morre. Quem segura o
+        # trial agora e' o telefone: CPF de terceiro se acha no Google, chip
+        # novo custa dinheiro. Ele ja era coletado, so' nao era unico.
         phone_e164 = _validate_phone_br(body.phone)
-        cpf_digits = _validate_cpf(body.cpf)
-        cur.execute("SELECT id FROM users WHERE cpf = %s", (cpf_digits,))
+        cur.execute("SELECT id FROM users WHERE phone = %s", (phone_e164,))
         if cur.fetchone():
-            raise HTTPException(status_code=400, detail="CPF já cadastrado. Cada CPF permite apenas 1 conta.")
+            raise HTTPException(status_code=400, detail="Telefone já cadastrado. Cada número permite apenas 1 conta.")
 
         # Resolve username (obrigatório)
         raw_username = (body.username or "").strip().lstrip("@").lower()
@@ -541,22 +527,20 @@ def register(body: RegisterBody, response: Response, background_tasks: Backgroun
         _validate_password(body.password)
         client_ip = request.headers.get("x-forwarded-for", request.client.host if request.client else None)
         cur.execute(
-            "INSERT INTO users (name, email, password_hash, phone, cpf, username, referred_by, referral_code, terms_accepted_at, terms_ip) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, NOW(), %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
-            (' '.join(w.capitalize() for w in body.name.strip().split()), body.email, hash_password(body.password), phone_e164, cpf_digits, final_username, referrer_id, new_ref_code, client_ip),
+            "INSERT INTO users (name, email, password_hash, phone, username, referred_by, referral_code, terms_accepted_at, terms_ip) VALUES (%s, %s, %s, %s, %s, %s, %s, NOW(), %s) RETURNING id, name, email, phone, username, plan, active, expires_at",
+            (' '.join(w.capitalize() for w in body.name.strip().split()), body.email, hash_password(body.password), phone_e164, final_username, referrer_id, new_ref_code, client_ip),
         )
         user = dict(cur.fetchone())
-        # Trial gratuito de 2 dias · apenas para usuários que forneceram CPF no cadastro
+        # O trial NAO nasce mais junto com a conta.
+        #
+        # Antes ele saia no INSERT porque o CPF obrigatorio ja era a barreira.
+        # Sem CPF, dar 2 dias de VIP a quem so' digitou um e-mail entrega o
+        # trial pra qualquer descartavel. Agora ele espera a prova de contato
+        # e sai por `_ativar_trial_se_elegivel`, no link do e-mail ou no
+        # codigo do WhatsApp. Efeito colateral bom: o trial vira a recompensa
+        # de confirmar o contato, que e' o que faz a base ficar limpa.
         plan_final = "free"
         expires_final = None
-        if cpf_digits:
-            trial_expires = datetime.now(timezone.utc) + timedelta(days=2)
-            cur.execute(
-                "UPDATE users SET plan='trial', expires_at=%s, trial_used=TRUE WHERE id=%s",
-                (trial_expires, user["id"])
-            )
-            plan_final = "trial"
-            expires_final = trial_expires.isoformat()
-            user["trial_used"] = True
 
         # Crédito de indicação por registro: +1 dia VIP para o referrer
         if referrer_id:
@@ -627,8 +611,6 @@ def login(body: LoginBody, response: Response, request: Request):
         _LOGIN_COLS = "id, name, email, phone, username, password_hash, plan, active, expires_at, email_verified, avatar_url"
         if id_type == "email":
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE email = %s", (id_value,))
-        elif id_type == "cpf":
-            cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE cpf = %s", (id_value,))
         else:
             cur.execute(f"SELECT {_LOGIN_COLS} FROM users WHERE username = %s", (id_value,))
         row = cur.fetchone()
@@ -799,6 +781,38 @@ def _send_welcome_email(to: str, name: str, site_url: str) -> None:
     )
 
 
+def _ativar_trial_se_elegivel(cur, user_id: int) -> Optional[datetime]:
+    """Libera os 2 dias de VIP quando a conta prova um contato real.
+
+    Regra unica pros tres caminhos que ativam trial -- o link do e-mail, o
+    botao do perfil e o codigo do WhatsApp, quando a WABA sair -- pra que a
+    condicao nao se separe em tres copias que divergem. Vale e-mail OU
+    telefone: se a Meta reprovar o template de OTP, o cadastro continua
+    entregando trial pelo e-mail em vez de travar.
+
+    Retorna o vencimento quando ativou e None quando nao havia o que ativar.
+    Nao commita de proposito: quem chama e' dono da transacao.
+    """
+    cur.execute(
+        "SELECT plan, trial_used, email_verified, phone_verified FROM users WHERE id = %s",
+        (user_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        return None
+    u = dict(row)
+    if u.get("plan") != "free" or u.get("trial_used"):
+        return None
+    if not (u.get("email_verified") or u.get("phone_verified")):
+        return None
+    expira = datetime.now(timezone.utc) + timedelta(days=2)
+    cur.execute(
+        "UPDATE users SET plan='trial', expires_at=%s, trial_used=TRUE WHERE id=%s",
+        (expira, user_id),
+    )
+    return expira
+
+
 @router.post("/verify-email")
 def verify_email_endpoint(body: VerifyEmailBody, background_tasks: BackgroundTasks):
     conn = get_connection()
@@ -815,10 +829,19 @@ def verify_email_endpoint(body: VerifyEmailBody, background_tasks: BackgroundTas
             "UPDATE users SET email_verified=true, email_verification_token=NULL WHERE id=%s",
             (row["id"],),
         )
+        # Confirmar o e-mail e' o que paga o trial agora. O cookie de sessao
+        # nao e' reemitido aqui porque este endpoint tambem roda deslogado
+        # (link aberto em outro aparelho); o plano novo entra no proximo
+        # /auth/me, que e' o que a tela consulta ao voltar.
+        trial_expira = _ativar_trial_se_elegivel(cur, row["id"])
         conn.commit()
         site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         background_tasks.add_task(_send_welcome_email, row["email"], row["name"], site_url)
-        return {"ok": True}
+        return {
+            "ok": True,
+            "trial_ativado": trial_expira is not None,
+            "trial_expires_at": trial_expira.isoformat() if trial_expira else None,
+        }
     finally:
         cur.close(); conn.close()
 
@@ -951,7 +974,7 @@ def me(current_user: dict = Depends(get_current_user)):
     cur = conn.cursor()
     try:
         cur.execute(
-            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, (cpf IS NOT NULL) AS has_cpf, last_login_device, last_login_at FROM users WHERE id = %s",
+            "SELECT id, name, email, phone, username, plan, active, expires_at, subscription_type, created_at, avatar_url, trial_used, email_verified, phone_verified, last_login_device, last_login_at FROM users WHERE id = %s",
             (current_user["sub"],),
         )
         row = cur.fetchone()
@@ -983,25 +1006,27 @@ def activate_trial(response: Response, current_user: dict = Depends(get_current_
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT id, plan, trial_used, cpf FROM users WHERE id = %s", (current_user["sub"],))
+        cur.execute(
+            "SELECT id, plan, trial_used, email_verified, phone_verified FROM users WHERE id = %s",
+            (current_user["sub"],),
+        )
         user = cur.fetchone()
         if not user:
             raise HTTPException(404, "Usuário não encontrado")
+        user = dict(user)
 
-        if dict(user).get("trial_used"):
+        if user.get("trial_used"):
             raise HTTPException(400, "Você já utilizou o período de teste gratuito.")
 
-        if dict(user)["plan"] not in ("free",):
+        if user["plan"] not in ("free",):
             raise HTTPException(400, "Disponível apenas para usuários Free.")
 
-        if not dict(user).get("cpf"):
-            raise HTTPException(400, "Informe seu CPF no perfil para ativar o trial. Cada CPF pode usar o trial apenas uma vez.")
+        if not (user.get("email_verified") or user.get("phone_verified")):
+            raise HTTPException(400, "Confirme seu e-mail para ativar o teste gratuito. O link foi enviado no cadastro.")
 
-        trial_expires = datetime.now(timezone.utc) + timedelta(days=2)
-        cur.execute(
-            "UPDATE users SET plan='trial', expires_at=%s, trial_used=TRUE WHERE id=%s",
-            (trial_expires, current_user["sub"]),
-        )
+        trial_expires = _ativar_trial_se_elegivel(cur, current_user["sub"])
+        if not trial_expires:
+            raise HTTPException(400, "Não foi possível ativar o teste gratuito.")
         conn.commit()
 
         token_data = {
@@ -1024,17 +1049,16 @@ def activate_trial(response: Response, current_user: dict = Depends(get_current_
 
 @router.put("/profile")
 def update_profile(body: UpdateProfileBody, response: Response, current_user: dict = Depends(get_current_user)):
-    """Usuário atualiza próprio nome, telefone, CPF ou senha."""
+    """Usuário atualiza próprio nome, usuário, telefone ou senha."""
     conn = get_connection()
     cur = conn.cursor()
     try:
-        cur.execute("SELECT password_hash, plan, trial_used, cpf FROM users WHERE id = %s", (current_user["sub"],))
+        cur.execute("SELECT password_hash, plan, trial_used, phone FROM users WHERE id = %s", (current_user["sub"],))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Usuário não encontrado")
 
         fields, values = [], []
-        cpf_added = False
 
         if body.name:
             fields.append("name = %s"); values.append(' '.join(w.capitalize() for w in body.name.strip().split()))
@@ -1050,16 +1074,17 @@ def update_profile(body: UpdateProfileBody, response: Response, current_user: di
 
         if body.phone is not None:
             normalized = _validate_phone_br(body.phone) if body.phone.strip() else None
-            fields.append("phone = %s"); values.append(normalized)
-
-        if body.cpf is not None and body.cpf.strip():
-            cpf_digits = _validate_cpf(body.cpf)
-            if not row["cpf"]:  # só deixa adicionar se ainda não tem CPF
-                cur.execute("SELECT id FROM users WHERE cpf = %s AND id != %s", (cpf_digits, current_user["sub"]))
+            # Mesma unicidade do cadastro: sem ela, trocar o telefone pelo
+            # perfil seria a porta lateral pra reusar um numero ja gasto.
+            if normalized:
+                cur.execute("SELECT id FROM users WHERE phone = %s AND id != %s", (normalized, current_user["sub"]))
                 if cur.fetchone():
-                    raise HTTPException(400, "CPF já cadastrado em outra conta.")
-                fields.append("cpf = %s"); values.append(cpf_digits)
-                cpf_added = True
+                    raise HTTPException(400, "Telefone já cadastrado em outra conta.")
+            if normalized != row["phone"]:
+                # Numero novo e' numero nao provado: a verificacao antiga nao
+                # vale pra ele, senao trocar de numero herdaria o selo.
+                fields.append("phone_verified = FALSE")
+            fields.append("phone = %s"); values.append(normalized)
 
         if not fields:
             raise HTTPException(400, "Nenhum campo para atualizar")
@@ -1086,17 +1111,6 @@ def update_profile(body: UpdateProfileBody, response: Response, current_user: di
             )
 
         conn.commit()
-
-        # Se CPF foi adicionado agora e usuário ainda não usou trial, ativar automaticamente
-        if cpf_added and row["plan"] == "free" and not row["trial_used"]:
-            trial_expires = datetime.now(timezone.utc) + timedelta(days=2)
-            cur.execute(
-                "UPDATE users SET plan='trial', expires_at=%s, trial_used=TRUE WHERE id=%s",
-                (trial_expires, current_user["sub"]),
-            )
-            conn.commit()
-            updated["plan"] = "trial"
-            updated["trial_activated"] = True
 
         return updated
     finally:
@@ -1138,7 +1152,7 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
     nova, e manda um código de 6 dígitos por e-mail. A senha só muda de fato
     na confirmação (/profile/password/confirm) -- reusa reset_token/
     reset_token_expires_at (mesmas colunas do "esqueci minha senha"), mas
-    aqui o usuário já está autenticado, então não precisa e-mail/CPF, só o
+    aqui o usuário já está autenticado, então não precisa e-mail/usuário, só o
     código bater com o hash guardado pra este user_id."""
     _check_profile_rate(current_user["sub"])
     conn = get_connection()

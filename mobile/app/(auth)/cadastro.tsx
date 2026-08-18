@@ -7,18 +7,10 @@ import { Botao, Txt } from '../../src/components/ui'
 import { Campo } from '../../src/components/Campo'
 import { cores, espaco, raio } from '../../src/theme/tokens'
 
-/* Máscaras só de apresentação · o backend valida e normaliza (_validate_cpf,
-   _validate_phone_br em routers/auth.py). Aqui é para o campo ficar legível
+/* Máscara só de apresentação · o backend valida e normaliza
+   (_validate_phone_br em routers/auth.py). Aqui é para o campo ficar legível
    enquanto se digita, não para validar. */
 const soDigitos = (v: string) => v.replace(/\D/g, '')
-
-function mascaraCpf(v: string) {
-  const d = soDigitos(v).slice(0, 11)
-  return d
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d)/, '$1.$2')
-    .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
-}
 
 function mascaraTelefone(v: string) {
   const d = soDigitos(v).slice(0, 11)
@@ -33,7 +25,6 @@ export default function Cadastro() {
   const [usuario, setUsuario] = useState('')
   const [email, setEmail] = useState('')
   const [telefone, setTelefone] = useState('')
-  const [cpf, setCpf] = useState('')
   const [senha, setSenha] = useState('')
   const [aceitou, setAceitou] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
@@ -52,7 +43,6 @@ export default function Cadastro() {
         email: email.trim(),
         password: senha,
         phone: soDigitos(telefone),
-        cpf: soDigitos(cpf),
         username: usuario.trim().toLowerCase(),
         accepted_terms: true,
       })
@@ -86,13 +76,6 @@ export default function Cadastro() {
           placeholder="(11) 90000-0000"
           teclado="phone-pad"
           autoComplete="tel"
-        />
-        <Campo
-          rotulo="CPF"
-          valor={cpf}
-          aoMudar={(v) => setCpf(mascaraCpf(v))}
-          placeholder="000.000.000-00"
-          teclado="number-pad"
         />
         <Campo
           rotulo="Senha"

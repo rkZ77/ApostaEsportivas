@@ -10,28 +10,6 @@ import Turnstile, { TurnstileHandle } from '../components/Turnstile'
 import { getPasswordStrength } from '../utils/passwordStrength'
 import { tabFade } from '../lib/motion'
 
-function formatCPF(v: string) {
-  const d = v.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 3) return d
-  if (d.length <= 6) return `${d.slice(0, 3)}.${d.slice(3)}`
-  if (d.length <= 9) return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6)}`
-  return `${d.slice(0, 3)}.${d.slice(3, 6)}.${d.slice(6, 9)}-${d.slice(9)}`
-}
-
-function validateCPF(cpf: string): boolean {
-  const d = cpf.replace(/\D/g, '')
-  if (d.length !== 11) return false
-  if (/^(\d)\1{10}$/.test(d)) return false
-  let s = 0
-  for (let i = 0; i < 9; i++) s += parseInt(d[i]) * (10 - i)
-  const d1 = (s * 10 % 11) % 10
-  if (d1 !== parseInt(d[9])) return false
-  s = 0
-  for (let i = 0; i < 10; i++) s += parseInt(d[i]) * (11 - i)
-  const d2 = (s * 10 % 11) % 10
-  return d2 === parseInt(d[10])
-}
-
 function validateEmail(email: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email.trim())
 }
@@ -63,7 +41,7 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   )
 }
 
-type LoginMethod = 'username' | 'email' | 'cpf'
+type LoginMethod = 'username' | 'email'
 
 export default function Login() {
   const { login, register } = useAuth()
@@ -77,12 +55,10 @@ export default function Login() {
   // Login fields
   const [loginUsername, setLoginUsername] = useState('')
   const [loginEmail, setLoginEmail]       = useState('')
-  const [loginCpf, setLoginCpf]           = useState('')
 
   // Register fields
   const [name, setName]         = useState('')
   const [username, setUsername] = useState('')
-  const [cpf, setCpf]           = useState('')
   const [phone, setPhone]       = useState('')
   const [email, setEmail]       = useState('')
   const [password, setPassword] = useState('')
@@ -125,14 +101,8 @@ export default function Login() {
     }
   }, [])
 
-  const handleLoginCpf = (v: string) => setLoginCpf(formatCPF(v))
-  const handleRegCpf   = (v: string) => setCpf(formatCPF(v))
-
-  const getIdentifier = () => {
-    if (loginMethod === 'username') return loginUsername.trim()
-    if (loginMethod === 'email')    return loginEmail.trim()
-    return loginCpf.trim()
-  }
+  const getIdentifier = () =>
+    loginMethod === 'username' ? loginUsername.trim() : loginEmail.trim()
 
   const submit = async (e: FormEvent) => {
     e.preventDefault()
@@ -142,10 +112,9 @@ export default function Login() {
       const id = getIdentifier()
       if (!id) { setError('Preencha o campo de identificação.'); return }
       if (loginMethod === 'email' && !validateEmail(id)) { setError('Email inválido.'); return }
-      if (loginMethod === 'cpf' && id.replace(/\D/g, '').length !== 11) { setError('CPF inválido.'); return }
     } else if (regStep === 1) {
-      // Passo 1: só dados de acesso -- CPF/telefone ficam pro passo 2, reduz
-      // a primeira tela de 7 campos obrigatórios pra 4.
+      // Passo 1: só dados de acesso -- o telefone fica pro passo 2, que desde
+      // a saída do CPF (18/08/2026) tem 3 campos em vez de 4.
       if (!name.trim() || name.trim().split(' ').filter(Boolean).length < 2) {
         setError('Informe seu nome completo (nome e sobrenome).')
         return
@@ -157,7 +126,6 @@ export default function Login() {
       setRegStep(2)
       return
     } else {
-      if (!validateCPF(cpf)) { setError('CPF inválido. Verifique os dígitos informados.'); return }
       const phoneDigits = phone.replace(/\D/g, '')
       if (phoneDigits.length < 10 || phoneDigits.length > 11) {
         setError('WhatsApp inválido. Use o formato (DDD) 9XXXX-XXXX.')
@@ -173,7 +141,7 @@ export default function Login() {
         await login(getIdentifier(), password, captchaToken || undefined)
         navigate(redirectTo ?? '/picks')
       } else {
-        await register(name.trim(), email, password, phone, cpf.replace(/\D/g, ''), username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
+        await register(name.trim(), email, password, phone, username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
         localStorage.removeItem('ref_code')
         navigate(redirectTo ?? '/picks#guia')
       }
@@ -208,15 +176,14 @@ export default function Login() {
     setError('')
     setRegStep(1)
     setCaptchaToken('')
-    setLoginUsername(''); setLoginEmail(''); setLoginCpf('')
-    setName(''); setUsername(''); setCpf(''); setPhone(''); setConfirm('')
+    setLoginUsername(''); setLoginEmail('')
+    setName(''); setUsername(''); setPhone(''); setConfirm('')
   }
 
 
   const loginTabs: { key: LoginMethod; label: string }[] = [
     { key: 'username', label: 'Usuário' },
     { key: 'email',    label: 'E-mail'  },
-    { key: 'cpf',      label: 'CPF'     },
   ]
 
   return (
@@ -361,13 +328,6 @@ export default function Login() {
                       required className="input w-full" placeholder="seu@email.com"
                       autoComplete="email" autoFocus />
                   )}
-                  {loginMethod === 'cpf' && (
-                    <motion.input key="cpf" variants={tabFade} initial="hidden" animate="visible" exit="exit"
-                      id="login-identifier" type="text" value={loginCpf}
-                      onChange={e => handleLoginCpf(e.target.value)}
-                      required className="input w-full" placeholder="000.000.000-00"
-                      inputMode="numeric" autoComplete="off" autoFocus />
-                  )}
                   </AnimatePresence>
                 </div>
               </>
@@ -419,20 +379,16 @@ export default function Login() {
             {mode === 'register' && regStep === 2 && (
               <>
                 <div>
-                  <label htmlFor="reg-cpf" className="block text-sm text-ink-2 mb-1.5 font-medium">CPF</label>
-                  <input id="reg-cpf" type="text" value={cpf}
-                    onChange={e => handleRegCpf(e.target.value)}
-                    required className="input" placeholder="000.000.000-00"
-                    inputMode="numeric" autoComplete="off" autoFocus />
-                  <p className="text-xs text-ink-4 mt-1">1 trial por CPF. Não compartilhamos seus dados.</p>
-                </div>
-                <div>
                   <label htmlFor="reg-phone" className="block text-sm text-ink-2 mb-1.5 font-medium">WhatsApp</label>
                   <input id="reg-phone" type="tel" value={phone}
                     onChange={e => setPhone(maskPhone(e.target.value))}
                     required className="input" placeholder="(11) 99999-9999"
-                    inputMode="numeric" autoComplete="tel" />
+                    inputMode="numeric" autoComplete="tel" autoFocus />
+                  <p className="text-xs text-ink-4 mt-1">1 conta por número. Só enviamos mensagem se você autorizar.</p>
                 </div>
+                <p className="text-xs text-ink-3 bg-surface-1 border border-line rounded-lg px-3 py-2.5 leading-relaxed">
+                  Confirme seu e-mail depois do cadastro para liberar <span className="text-ink-2 font-semibold">2 dias de VIP grátis</span>.
+                </p>
               </>
             )}
 
