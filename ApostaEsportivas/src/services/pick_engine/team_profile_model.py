@@ -420,7 +420,14 @@ def profile_score_for_market(matchup: dict | None, market_type: str) -> float | 
     86% perdendo pra cartoes com EV +57%/80% so por causa disso."""
     if not matchup:
         return None
-    entry = matchup.get(market_type)
+    # BTTS le' o matchup de GOLS. compare_matchup produz tres chaves (goals,
+    # corners, cards) e "ambas marcam" nao tem uma propria -- o sinal tatico
+    # que serve pra ele e' o mesmo da familia de gols (eficiencia de
+    # finalizacao dos dois lados). Ate' 2026-08-20 isso funcionava por
+    # acidente, porque o orchestrator gravava market_type="goals" no candidato
+    # de BTTS; quando ele ganhou tipo proprio, a busca passaria a devolver None
+    # e o BTTS perderia o termo de Perfil no Score Final em silencio.
+    entry = matchup.get("goals" if market_type == "btts" else market_type)
     if not entry:
         return 0.5
     delta = max(min(entry.get("delta", 0.0), 2.0), -2.0)

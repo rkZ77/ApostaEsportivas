@@ -258,7 +258,29 @@ def analyze_fixture_markets(
             team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
         )
-        market_type = "goals" if family == "btts" else family
+        # BTTS TEM market_type PROPRIO (2026-08-20). Ate' aqui ele era gravado
+        # como "goals", e isso escondia o melhor mercado do motor dentro do
+        # balde do segundo melhor. Medido em PROD no mesmo dia, separando os
+        # dois pelo NOME do mercado porque o market_type nao separava:
+        #
+        #     Ambas Marcam    n= 31   80,6% de acerto   +12,12 u   ROI ~+39%
+        #     Gols over/under n=119   69,7% de acerto    +7,71 u   ROI  ~+6%
+        #
+        # Sao dinamicas diferentes -- um e' binario sobre os dois times
+        # marcarem, o outro e' contagem total -- e estavam sendo calibrados
+        # juntos (calibration.calibration_adjustment e
+        # calibration_model.fit_por_grupo agrupam por market_type). Com o balde
+        # unico, a curva de um contaminava o outro e nenhum dos dois podia ser
+        # medido em separado.
+        #
+        # A protecao de correlacao NAO se perde: ranking._CORRELATION_GROUP_
+        # OVERRIDES ja mapeia "btts" -> "goals" desde 2026-08-10, entao a
+        # multipla/alavancagem continuam impedidas de juntar "Over 1.5 gols" com
+        # "Ambas Marcam" no mesmo bilhete. E a liquidacao ja' esperava por isto:
+        # ai_result_checker_service._MARKET_TYPE_HINTS tem "btts": "btts", e o
+        # hint so' entra quando o texto do mercado nao decide -- antes um pick
+        # de BTTS carregava o hint errado ("goals") pra esse caso de borda.
+        market_type = family
         # Time que o escopo do mercado aponta -- resolve o mando POR PARTIDA
         # na taxa/variancia/estabilidade/outlier. Sem isso, um mercado
         # "Home Corners"/"Away Team Total Goals" lia a coluna fixa do escopo

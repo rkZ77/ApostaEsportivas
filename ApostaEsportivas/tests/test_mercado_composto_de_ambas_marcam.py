@@ -103,3 +103,46 @@ def test_gols_de_verdade_continuam_passando():
     assert classify_market("Home Team Total Goals") == ("goals", "home")
     assert classify_market("Away Team Total Goals") == ("goals", "away")
     assert classify_market("Total Goals") == ("goals", "total")
+
+
+# ═════════════════════════════════════════════════════════════════════════
+# market_type PROPRIO PARA BTTS (2026-08-20)
+# ═════════════════════════════════════════════════════════════════════════
+def test_btts_tem_market_type_proprio():
+    """Ate 2026-08-20 o BTTS era gravado como market_type="goals", e isso
+    escondia o melhor mercado do motor dentro do balde do segundo melhor.
+    Medido em PROD, separando os dois pelo NOME (porque o market_type nao
+    separava): Ambas Marcam 80,6% de acerto e +12,12 u em 31 picks, contra
+    69,7% e +7,71 u em 119 de over/under de gols.
+
+    Sao dinamicas diferentes e estavam sendo calibrados juntos."""
+    from services.pick_engine import stats_model
+    assert stats_model.classify_market("Both Teams Score") == ("btts", "total")
+
+
+def test_correlacao_de_btts_com_gols_sobrevive_ao_tipo_proprio():
+    """A protecao que impede "Over 1.5 gols" + "Ambas Marcam" no mesmo bilhete
+    e' por correlation_group, nao por market_type. Se ela cair junto com a
+    mudanca de tipo, a multipla volta a multiplicar duas pernas correlacionadas
+    como se fossem independentes."""
+    from services.pick_engine import ranking
+    assert ranking.correlation_group("btts") == "goals"
+    assert ranking.correlation_group("goals") == "goals"
+
+
+def test_btts_continua_lendo_o_matchup_de_gols():
+    """compare_matchup so' produz goals/corners/cards. Com tipo proprio, a
+    busca por "btts" devolveria None e o BTTS perderia o termo de Perfil no
+    Score Final em silencio."""
+    from services.pick_engine import team_profile_model
+    matchup = {"goals": {"delta": 1.5, "label": "over"}}
+    assert (team_profile_model.profile_score_for_market(matchup, "btts")
+            == team_profile_model.profile_score_for_market(matchup, "goals"))
+    assert team_profile_model.profile_score_for_market(matchup, "btts") is not None
+
+
+def test_liquidacao_ja_esperava_o_tipo_btts():
+    """O hint so' entra quando o TEXTO do mercado nao decide. Antes, nesse caso
+    de borda, um pick de BTTS carregava o hint errado ("goals")."""
+    from services.ai_result_checker_service import AIResultCheckerService
+    assert AIResultCheckerService._MARKET_TYPE_HINTS.get("btts") == "btts"
