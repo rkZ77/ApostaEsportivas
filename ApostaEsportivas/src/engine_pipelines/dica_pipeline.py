@@ -27,6 +27,7 @@ from services.pick_engine import stats_model
 from services.pick_engine import ranking
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
+from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
     log_decision, log_run, log_skip,
@@ -481,6 +482,11 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
 def run_dica_engine():
     conn = get_connection()
     cur = conn.cursor()
+    # Regulamento de mata-mata das competicoes nao cadastradas a mao, do
+    # banco pra memoria, UMA vez por rodada. Sem isto o motor devolve
+    # DESCONHECIDO pro formato dessas competicoes, que e' o comportamento
+    # de antes -- nada quebra, so' se sabe menos.
+    competition_rules_store.carregar(cur)
 
     if _has_today_dica(cur):
         print("[DICA_ENGINE] Já existe pick de hoje.")

@@ -307,9 +307,29 @@ _REGRAS: dict[int, RegrasDeMataMata] = {
 
 
 def regras_de_mata_mata(league_id) -> RegrasDeMataMata:
-    """Regulamento cadastrado da competicao. Competicao nao cadastrada devolve
-    tudo None -- "nao sei", que e' diferente de "nao tem"."""
-    return _REGRAS.get(league_id, _REGRAS_PADRAO)
+    """Regulamento da competicao. Competicao nao cadastrada devolve tudo None
+    -- "nao sei", que e' diferente de "nao tem".
+
+    ORDEM DE AUTORIDADE: o cadastro a mao (_REGRAS acima) vence a tabela
+    `competition_rules`. Nao e' desconfianca da tabela, e' hierarquia de
+    evidencia: as sete linhas de _REGRAS sao regulamento conferido e versionado
+    junto do codigo; a tabela e' preenchida por
+    scripts/descobrir_regulamento.py, que pergunta a um modelo. Quando as duas
+    responderem, a resposta conferida ganha -- e quando so' a tabela responder,
+    ela e' melhor que o DESCONHECIDO que havia antes.
+
+    A leitura da tabela e' um dict ja' carregado em memoria (ver
+    competition_rules_store.carregar): nenhuma consulta acontece por fixture, e
+    a ausencia do modulo/tabela nao muda nada.
+    """
+    if league_id in _REGRAS:
+        return _REGRAS[league_id]
+    try:
+        from services.pick_engine import competition_rules_store
+        do_banco = competition_rules_store.regras_do_banco(league_id)
+    except Exception:
+        do_banco = None
+    return do_banco or _REGRAS_PADRAO
 
 
 def formato_declarado(league_id, fase: str | None) -> str | None:

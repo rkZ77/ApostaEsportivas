@@ -55,6 +55,7 @@ from services.pick_engine_live import live_odds, live_state, orchestrator
 from services.pick_engine_live.config import (
     ENGINE_VERSION, AmbienteInvalido, LiveEngineConfig, exigir_ambiente_dev,
 )
+from services.pick_engine import competition_rules_store
 from services.pick_engine_live.live_feed import (
     LiveFeed, OrcamentoEsgotado, ler_estatisticas,
 )
@@ -882,6 +883,11 @@ def run_live_engine(fixture_id: int | None = None,
     feed = LiveFeed(limite_requisicoes=config.max_requisicoes)
     conn = get_connection()
     cur = conn.cursor()
+    # Regulamento de mata-mata das competicoes nao cadastradas a mao, do
+    # banco pra memoria, UMA vez por rodada. Sem isto o motor devolve
+    # DESCONHECIDO pro formato dessas competicoes, que e' o comportamento
+    # de antes -- nada quebra, so' se sabe menos.
+    competition_rules_store.carregar(cur)
 
     try:
         criar_tabelas(cur)
