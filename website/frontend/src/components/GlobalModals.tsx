@@ -1,10 +1,11 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import MonthlyCloseModal from './MonthlyCloseModal'
+import TrialEndedModal from './TrialEndedModal'
 
 /*
  * Modais que vivem fora do <Routes>.
@@ -34,7 +35,10 @@ export default function GlobalModals() {
   // ajuste visual). Restrito a admin: qualquer usuário logado conseguia abrir
   // e printar um fechamento de +R$ 187,50 que nunca existiu.
   const isPreview = isAdmin && new URLSearchParams(window.location.search).get('preview') === 'monthly'
-  const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose } = useNotifications()
+  const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
+          pendingTrialEnded, markRead } = useNotifications()
+  const [trialEndedOpen, setTrialEndedOpen] = useState(false)
+  const [trialEndedVisto, setTrialEndedVisto] = useState(false)
 
   const inAppRoute = MONTHLY_CLOSE_ROUTES.some(r => pathname === r || pathname.startsWith(`${r}/`))
 
@@ -47,9 +51,36 @@ export default function GlobalModals() {
     if (isPreview || (pendingMonthlyClose && inAppRoute)) openMonthlyClose()
   }, [user?.id, pendingMonthlyClose?.id, inAppRoute, isPreview, openMonthlyClose])
 
+  /*
+   * Fim do teste grátis · abre uma vez e nunca mais.
+   *
+   * `trialEndedVisto` é só a trava DESTA sessão de página, pra o modal não
+   * reabrir enquanto o markRead não volta do servidor (o poll de 60s traria a
+   * notificação ainda como não lida nesse intervalo). A garantia de verdade é
+   * do servidor: dedupe_key fixa + UNIQUE (user_id, dedupe_key), e o
+   * rebaixamento de trial pra free só acontece uma vez na vida da conta.
+   *
+   * Não concorre com o fechamento mensal: dois modais na mesma tela é um em
+   * cima do outro. O fechamento tem prioridade por ser o que pede AÇÃO (a
+   * pessoa confirma a banca do mês); este aqui é convite, e espera a vez.
+   */
+  const podeAbrirTrial = pendingTrialEnded && inAppRoute && !monthlyCloseOpen && !pendingMonthlyClose
+
+  useEffect(() => {
+    if (!user || trialEndedVisto) return
+    if (podeAbrirTrial) setTrialEndedOpen(true)
+  }, [user?.id, podeAbrirTrial, trialEndedVisto])
+
+  const fecharTrialEnded = () => {
+    setTrialEndedOpen(false)
+    setTrialEndedVisto(true)
+    if (pendingTrialEnded) markRead(pendingTrialEnded.id)
+  }
+
   return (
     <AnimatePresence>
       {monthlyCloseOpen && <MonthlyCloseModal onClose={closeMonthlyClose} />}
+      {trialEndedOpen && !monthlyCloseOpen && <TrialEndedModal onClose={fecharTrialEnded} />}
     </AnimatePresence>
   )
 }

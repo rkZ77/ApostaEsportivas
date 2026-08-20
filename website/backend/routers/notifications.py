@@ -253,6 +253,7 @@ TYPE_NEW_PICKS     = "new_picks"
 TYPE_PICK_LIVE     = "pick_live"
 TYPE_PICK_RESULT   = "pick_result"
 TYPE_PLAN_EXPIRING = "plan_expiring"
+TYPE_TRIAL_ENDED   = "trial_ended"
 
 LIST_LIMIT   = 40
 PURGE_DAYS   = 60   # notificações lidas mais velhas que isso são descartadas

@@ -37,7 +37,7 @@ const LivePicks     = lazy(() => import('../components/LivePicks'))
 const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, TrendingUp, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import {fmtUnits, pctProb } from '../utils/format'
@@ -2668,6 +2668,23 @@ export default function Picks() {
                       </div>
                     )}
                   </div>
+
+                  {/* Ponte pra tela de leitura do caminho.
+                      Esta aba é onde se OPERA (segue degrau, encerra); o
+                      histórico, a escada e os caminhos passados moram em
+                      /banca/alavancagem. Sem este botão a tela de leitura só
+                      era alcançável por quem passasse pela Minha Banca · ou
+                      seja, ninguém que estivesse justamente acompanhando o
+                      caminho. */}
+                  {userAlavSerie?.configured && (
+                    <button
+                      onClick={() => navigate('/banca/alavancagem')}
+                      className="w-full mb-3 flex items-center justify-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-orange-400/40 px-3 py-2.5 rounded-md transition-colors"
+                    >
+                      <TrendingUp className="w-3.5 h-3.5 shrink-0 text-orange-400" />
+                      Ver o caminho completo e o histórico
+                    </button>
+                  )}
 
                   {/* O ponto todo da tela: enquanto o caminho roda, esse número
                       não é saldo · está inteiro apostado na próxima entrada. */}

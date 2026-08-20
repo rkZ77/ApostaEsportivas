@@ -16,6 +16,7 @@ import { TeamLogo } from '../components/TeamLogo'
 import InfoTip from '../components/InfoTip'
 import ResetMonthModal from '../components/ResetMonthModal'
 import PipelinesBreakdown from '../components/PipelinesBreakdown'
+import AlavancagemPanel from '../components/AlavancagemPanel'
 import { PAGE_WIDTH } from '../lib/pageWidth'
 
 const SOURCE_LBL: Record<string, string> = {
@@ -26,8 +27,13 @@ const SOURCE_LBL: Record<string, string> = {
 /* Sub-páginas em aba. `apostas` é a lista de sempre; `pipelines` é a leitura
    da mesma lista quebrada por produto. Hash na URL, igual /admin. */
 const ABAS = [
-  { key: 'apostas',   label: 'Apostas' },
-  { key: 'pipelines', label: 'Por pipeline' },
+  { key: 'apostas',     label: 'Apostas' },
+  { key: 'pipelines',   label: 'Por pipeline' },
+  /* Alavancagem tem aba PRÓPRIA e não uma linha na quebra por pipeline: ela
+     não entra em `entries` (caminho em andamento não é dinheiro) e se mede em
+     caminho encerrado, não em pick. Mesma tela que /banca/alavancagem serve,
+     porque é a mesma pergunta feita dos dois lados. */
+  { key: 'alavancagem', label: 'Alavancagem' },
 ] as const
 type Aba = typeof ABAS[number]['key']
 
@@ -311,6 +317,8 @@ export default function MeusPicks() {
               Tentar novamente
             </button>
           </div>
+        ) : aba === 'alavancagem' ? (
+          <AlavancagemPanel />
         ) : aba === 'pipelines' ? (
           /* Lê o `by_pipeline` que já veio no mesmo GET /banca desta tela.
              O período do filtro de pills NÃO se aplica aqui: a quebra vem

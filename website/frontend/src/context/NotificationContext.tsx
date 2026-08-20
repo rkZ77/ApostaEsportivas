@@ -14,6 +14,7 @@ const POLL_INTERVAL = 60_000
    que não é resultado nenhum. */
 export type NotificationType =
   | 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result' | 'plan_expiring'
+  | 'trial_ended'
 
 export interface AppNotification {
   id: number
@@ -36,6 +37,9 @@ interface NotificationCtx {
   markAllRead: () => Promise<void>
   /** Fechamento do mês passado ainda não visto · é o que dispara o popup automático. */
   pendingMonthlyClose: AppNotification | null
+  /** Teste grátis que acabou e ainda não foi visto · dispara o popup de conversão,
+      uma vez só por conta (a notificação tem dedupe_key fixa no servidor). */
+  pendingTrialEnded: AppNotification | null
   /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
   monthlyCloseOpen: boolean
   openMonthlyClose: () => void
@@ -57,6 +61,7 @@ const NotificationContext = createContext<NotificationCtx>({
   markRead: async () => {},
   markAllRead: async () => {},
   pendingMonthlyClose: null,
+  pendingTrialEnded: null,
   monthlyCloseOpen: false,
   openMonthlyClose: () => {},
   closeMonthlyClose: () => {},
@@ -209,6 +214,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const clearLive = () => setHasLive(false)
 
   const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
+  const pendingTrialEnded   = items.find(n => n.type === 'trial_ended'   && !n.read) ?? null
 
   const [monthlyCloseOpen, setMonthlyCloseOpen] = useState(false)
   const openMonthlyClose  = useCallback(() => setMonthlyCloseOpen(true), [])
@@ -217,6 +223,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   return (
     <NotificationContext.Provider value={{
       items, unreadCount, loading, refresh, markRead, markAllRead, pendingMonthlyClose,
+      pendingTrialEnded,
       monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
       hasNew, markSeen, liveCount, hasLive, clearLive,
     }}>
