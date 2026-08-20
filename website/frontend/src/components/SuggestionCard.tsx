@@ -5,6 +5,7 @@ import { toastUp, fadeInUp } from '../lib/motion'
 import api from '../services/api'
 import { pctProb } from '../utils/format'
 import { calcVipStake, calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
+import { stakeDe, contaEmUnidades } from '../utils/stakePlan'
 import ApostaModal from './ApostaModal'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import { PICK_TYPE_BORDER } from '../utils/resultStyle'
@@ -185,9 +186,12 @@ function SuggestionCard({
       probabilityPct: pctProb(s.probability ?? s.confidence),
       result: s.result,
       // Mesma regra do card: sem aposta seguida, a imagem mostra o resultado
-      // DO PICK em 1u · nao o ganho que o usuario teria tido se tivesse entrado.
-      profit: s.result
-        ? calcProfitUnits(s.result, Number(s.odd), stakeSeguida ?? 1,
+      // DO PICK na stake do plano publico (stakePlan.ts) · nao o ganho que o
+      // usuario teria tido se tivesse entrado. Alavancagem nao entra no plano
+      // (peso 0), entao a imagem dela sai sem numero de unidade.
+      profit: s.result && (stakeSeguida != null || contaEmUnidades(pickTypeRoute))
+        ? calcProfitUnits(s.result, Number(s.odd),
+                          stakeSeguida ?? stakeDe(pickTypeRoute),
                           stakeSeguida != null ? oddSeguida : null)
         : null,
     })
@@ -372,12 +376,22 @@ function SuggestionCard({
              * declarou, odd que ele pegou, e o valor em reais pela unidade da
              * banca dele.
              *
-             * Não seguiu -> mostra o resultado DO PICK, em uma unidade, com o
-             * rótulo dizendo isso. Sem reais: real depende de stake, e stake
-             * que não houve não vira dinheiro.
+             * Não seguiu -> mostra o resultado DO PICK na stake do PLANO
+             * PÚBLICO (stakePlan.ts), com o rótulo dizendo em quantas unidades.
+             * Era 1u fixo, e isso fazia o card discordar do placar da mesma
+             * semana: /public/results já pesava o mesmo pick por 4u (VIP) ou 3u
+             * (free e mercados). Dois números do mesmo pick, na mesma tela.
+             * Sem reais: real depende de stake, e stake que não houve não vira
+             * dinheiro.
+             *
+             * Alavancagem não tem stake de plano (peso 0): ela é um caminho e
+             * só vira unidade na banca de quem apostou. Pra quem não seguiu, o
+             * card mostra o resultado e diz que não conta em unidades, em vez
+             * de estampar um "+0,00u" que parece defeito.
              */
             const seguiu = stakeSeguida != null
-            const u = seguiu ? stakeSeguida! : 1
+            const contaU = seguiu || contaEmUnidades(pickType)
+            const u = seguiu ? stakeSeguida! : stakeDe(pickType)
             const p = calcProfitUnits(s.result, Number(s.odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
@@ -387,10 +401,21 @@ function SuggestionCard({
                   <div className="text-[10px] text-ink-3 mb-0.5">
                     {seguiu ? 'Seu lucro' : 'Lucro do pick'}
                   </div>
-                  <div className={`text-xl font-black ${color}`}>
-                    {p >= 0 ? '+' : ''}{p.toFixed(2)}u
-                  </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
+                  {contaU ? (
+                    <>
+                      <div className={`text-xl font-black ${color}`}>
+                        {p >= 0 ? '+' : ''}{p.toFixed(2)}u
+                      </div>
+                      <div className="text-[10px] text-ink-4">
+                        {seguiu ? `(${u}u)` : `por ${u}u`}
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      <div className="text-xl font-black text-ink-3">-</div>
+                      <div className="text-[10px] text-ink-4">só conta apostado</div>
+                    </>
+                  )}
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
                   {seguiu ? (

@@ -13,8 +13,8 @@ import { fmtUnits } from '../utils/format'
  * é a inclinação · linha subindo é produto pagando, linha de lado é produto
  * empatando, linha descendo é produto custando dinheiro.
  *
- * Escala em unidades, mesmo plano de stake do resto do site (4u em pick
- * simples, 1u em bilhete), então as linhas são comparáveis entre si.
+ * Escala em unidades, mesmo plano de stake do resto do site
+ * (backend/stake_plan.py), então as linhas são comparáveis entre si.
  *
  * SVG na mão, como os outros gráficos do projeto (DailyGreensChart,
  * ProfitChart): não há biblioteca de gráfico nas dependências, e trazer uma

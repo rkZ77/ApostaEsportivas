@@ -29,7 +29,7 @@ export interface PublicSummary {
   total: number
   greens: number
   reds: number
-  /** Lucro em unidades · stake fixa de 1u por pick (ver fmtUnits). */
+  /** Lucro em unidades · já pesado pelo plano de stake_plan.py (ver fmtUnits). */
   profit: number
   roi: number
   /** Ligas distintas com pick resolvido · vem do mesmo SELECT do resumo. */

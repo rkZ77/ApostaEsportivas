@@ -383,11 +383,22 @@ export default function Banca() {
             </div>
 
             {/* Aviso alavancagem · a regra mudou e a distinção importa: o que
-                entra aqui é caminho encerrado, não green de degrau. */}
-            <div className="flex items-center gap-1.5 -mt-2 text-[11px] text-ink-4">
+                entra aqui é caminho encerrado, não green de degrau.
+
+                Virou LINK em 2026-08-19: o aviso dizia o que a alavancagem não
+                é, e não dava onde vê-la. Quem seguia caminho ficava sem tela
+                nenhuma pra acompanhar · agora a frase leva pra /banca/alavancagem,
+                que é a contabilidade separada dela. */}
+            <button
+              onClick={() => navigate('/banca/alavancagem')}
+              className="flex items-center gap-1.5 -mt-2 text-[11px] text-ink-4 hover:text-ink-2 text-left transition-colors"
+            >
               <Info className="w-3 h-3 shrink-0" />
-              <span>Alavancagem entra nesta banca só quando você encerra o caminho, e o que está rodando fica de fora</span>
-            </div>
+              <span>
+                Alavancagem entra nesta banca só quando você encerra o caminho, e o
+                que está rodando fica de fora · <span className="underline">ver separado</span>
+              </span>
+            </button>
 
             {/*
               Painel: gráfico à esquerda, sequência e distribuição à direita.

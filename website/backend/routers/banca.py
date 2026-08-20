@@ -305,6 +305,140 @@ def _compute_follow_pnl(pick: dict, follow: dict, unit_value: float):
     return result, profit_u, pnl_r
 
 
+def _dia_br(followed_at_iso: Optional[str]):
+    """Dia de Brasília de um `followed_at`, ou None se não der pra ler.
+
+    A coluna é `timestamp` ingênuo em UTC (é por isso que o resto do módulo a
+    filtra com `data_br('uf.followed_at')`). Cortar os 10 primeiros caracteres
+    do ISO, como o gráfico fazia, devolve a data UTC: entre 21:00 e 00:00 de
+    Brasília ela já virou, então a aposta das 22h de segunda era plotada na
+    terça.
+    """
+    if not followed_at_iso:
+        return None
+    try:
+        dt = datetime.fromisoformat(followed_at_iso)
+    except ValueError:
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=ZoneInfo("UTC"))
+    return dt.astimezone(BR_TZ).date()
+
+
+def _curva_diaria(entries: list, bankroll_start: float) -> list[dict]:
+    """Evolução da banca com UM ponto por dia, e só de dia já encerrado.
+
+    O QUE ERA (e por que estava errado)
+    -----------------------------------
+    Um ponto por PICK resolvido, todos carimbados com a mesma data. Quem seguiu
+    cinco picks no dia 19/08 via cinco pontos "19/08" empilhados no eixo: o
+    gráfico parecia ter cinco dias de histórico onde havia um, e a linha subia e
+    descia dentro de um dia só, que não é o que "evolução da banca" comunica.
+
+    O QUE É AGORA · duas condições, as duas pedidas pelo usuário (2026-08-19):
+
+    1. O dia tem que ter FECHADO. `hoje` nunca entra na curva -- um ponto do dia
+       corrente é um ponto que ainda vai mudar, e a curva de banca é justamente
+       o registro do que já não muda mais.
+
+    2. O dia não pode ter aposta PENDENTE. E isso interrompe a curva ali, não
+       pula o dia: o saldo é acumulado, então plotar D+1 por cima de um D
+       incompleto desenharia uma banca que nunca existiu. Antes o `if pnl is not
+       None` fazia exatamente esse pulo, em silêncio.
+
+    O dia é o de Brasília e vem do `followed_at`, que é a mesma âncora do
+    fechamento mensal (`_compute_month_stats`). Trocar pra data do jogo aqui
+    faria o gráfico e o fechamento contarem meses diferentes.
+    """
+    hoje_br = datetime.now(BR_TZ).date()
+
+    por_dia: dict = {}
+    for e in entries:
+        dia = _dia_br(e.get("followed_at"))
+        if dia is None:
+            continue
+        acc = por_dia.setdefault(dia, {"pnl": 0.0, "pendente": False})
+        # `pnl` só é None em pick não resolvido e sem cashout (ver
+        # _compute_follow_pnl) -- então é o teste de "ainda está de pé".
+        if e["pnl"] is None:
+            acc["pendente"] = True
+        else:
+            acc["pnl"] += e["pnl"]
+
+    curva: list[dict] = []
+    saldo = bankroll_start
+    for dia in sorted(por_dia):
+        if dia >= hoje_br or por_dia[dia]["pendente"]:
+            break
+        saldo += por_dia[dia]["pnl"]
+        curva.append({"date": dia.isoformat(), "bankroll": round(saldo, 2)})
+    return curva
+
+
+#: Rótulo e ordem de exibição da quebra por pipeline. "mercados" agrupa faltas
+#: e defesas de goleiro: são os dois mercados próprios, nasceram juntos e o
+#: usuário lê os dois como uma coisa só ("mercados"). Manter separados daria
+#: duas linhas de volume baixo onde uma já responde.
+PIPELINES_DA_QUEBRA: tuple = (
+    ("vip",       "VIP",       ("vip",)),
+    ("free",      "Free",      ("free",)),
+    ("multipla",  "Múltipla",  ("multipla", "multiplas")),
+    ("mercados",  "Mercados",  ("faltas", "goleiros")),
+    ("live",      "Ao Vivo",   ("live",)),
+)
+
+
+def _quebra_por_pipeline(entries: list, unit_value: float) -> list[dict]:
+    """Desempenho de cada pipeline dentro da banca do usuário.
+
+    A tela de Meus Picks só sabia dizer o total. "Estou no lucro" e "estou no
+    lucro APESAR de um pipeline" são diagnósticos diferentes, e o segundo é o
+    único que diz o que parar de seguir -- o dado pra separar os dois já estava
+    em `entries` (cada linha carrega `pick_type`), só não era agregado.
+
+    ALAVANCAGEM NÃO APARECE AQUI, e não por esquecimento: ela não está em
+    `entries`. A consulta que os monta filtra `pick_type != 'alavancagem'`
+    porque caminho em andamento não é dinheiro -- ele só vira P&L quando
+    encerra, por `alavancagem_series`. Somar degrau a degrau junto dos outros
+    contaria a mesma aposta por duas réguas. A tela dela é /banca/alavancagem.
+
+    `yield` usa unidades apostadas (régua de tipster) e não a banca inicial:
+    é o número que compara pipelines de volume diferente entre si.
+    """
+    por_tipo: dict = {}
+    for e in entries:
+        if not e["result"] or e["pnl"] is None:
+            continue
+        por_tipo.setdefault(e["pick_type"], []).append(e)
+
+    quebra: list[dict] = []
+    for chave, rotulo, tipos in PIPELINES_DA_QUEBRA:
+        linhas = [e for t in tipos for e in por_tipo.get(t, [])]
+        if not linhas:
+            continue
+        total = len(linhas)
+        greens = sum(1 for e in linhas if e["result"] == "GREEN")
+        reds   = sum(1 for e in linhas if e["result"] == "RED")
+        pnl    = sum(e["pnl"] for e in linhas)
+        staked = sum(e["stake_units"] for e in linhas)
+        units  = (pnl / unit_value) if unit_value else 0.0
+        quebra.append({
+            "key":          chave,
+            "label":        rotulo,
+            "total":        total,
+            "greens":       greens,
+            "reds":         reds,
+            "pnl":          round(pnl, 2),
+            "units":        round(units, 2),
+            "staked_units": round(staked, 2),
+            "win_rate":     round(greens / total * 100) if total else 0,
+            "yield":        round(units / staked * 100, 1) if staked > 0 else 0.0,
+        })
+
+    quebra.sort(key=lambda q: q["pnl"], reverse=True)
+    return quebra
+
+
 def _get_bankroll_epoch(cur, user_id: int) -> Optional[str]:
     """
     Data-limite (exclusiva, 'YYYY-MM-DD') até onde o P&L do usuário já foi
@@ -658,16 +792,12 @@ def get_banca(
         except Exception:
             pass
 
-        # Gráfico (usa running que já acumula com unit_value)
-        chart: list[dict] = []
-        running2 = bankroll_start
-        for e in entries:
-            if e["pnl"] is not None:
-                running2 += e["pnl"]
-                chart.append({
-                    "date": (e["followed_at"] or "")[:10],
-                    "bankroll": round(running2, 2),
-                })
+        # Gráfico · um ponto por DIA FECHADO (ver _curva_diaria).
+        chart = _curva_diaria(entries, bankroll_start)
+
+        # Quebra por pipeline · o total acima continua sendo o total SEM
+        # alavancagem (ela nem entra em `entries`, ver o WHERE da consulta).
+        by_pipeline = _quebra_por_pipeline(entries, unit_value)
 
         # Banca atual sempre "de verdade" (todo o historico desde o ultimo
         # fechamento), nao presa ao periodo filtrado acima -- ver docstring
@@ -711,6 +841,9 @@ def get_banca(
             "resolved_total":       len(resolved),
             "has_more_resolved":    resolved_offset + resolved_limit < len(resolved),
             "chart":                chart,
+            # Quebra por pipeline · alimenta /meus-picks/pipelines. Sai do
+            # mesmo `entries` do total, então os dois nunca discordam.
+            "by_pipeline":          by_pipeline,
         }
     finally:
         cur.close()

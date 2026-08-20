@@ -26,7 +26,7 @@ import { winRate as calcWinRate, fmtUnits, STAKE_LABEL_PADRAO } from '../utils/f
 
 interface Summary {
   total: number; greens: number; reds: number; push: number
-  /** Lucro em unidades · stake fixa de 1u por pick (ver fmtUnits). */
+  /** Lucro em unidades · já pesado pelo plano de stake_plan.py (ver fmtUnits). */
   profit: number; stake_total: number; roi: number
   vip_profit?: number; vip_total?: number
   free_profit?: number; free_total?: number
