@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { PillGroup, Spinner } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, type PeriodoKey } from '../lib/periodo'
-import { ChevronLeft, ChevronRight, Trash2, RotateCcw, BarChart3 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
@@ -15,11 +15,21 @@ import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import InfoTip from '../components/InfoTip'
 import ResetMonthModal from '../components/ResetMonthModal'
+import PipelinesBreakdown from '../components/PipelinesBreakdown'
+import { PAGE_WIDTH } from '../lib/pageWidth'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
   faltas: 'Faltas', goleiros: 'Defesas',
 }
+
+/* Sub-páginas em aba. `apostas` é a lista de sempre; `pipelines` é a leitura
+   da mesma lista quebrada por produto. Hash na URL, igual /admin. */
+const ABAS = [
+  { key: 'apostas',   label: 'Apostas' },
+  { key: 'pipelines', label: 'Por pipeline' },
+] as const
+type Aba = typeof ABAS[number]['key']
 
 const pnlColor = (v: number | null) =>
   v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
@@ -36,6 +46,10 @@ export default function MeusPicks() {
   const [showRemoved,  setShowRemoved]  = useState(false)
   const [autoSwitched, setAutoSwitched] = useState(false)
   const [loadingMore,  setLoadingMore]  = useState(false)
+  const [aba, setAba] = useState<Aba>(() => {
+    const h = window.location.hash.replace('#', '') as Aba
+    return ABAS.some(a => a.key === h) ? h : 'apostas'
+  })
   const load = useCallback(() => {
     setLoading(true)
     setError(false)
@@ -210,18 +224,6 @@ export default function MeusPicks() {
          * armadilha. O clique aqui só ABRE o aviso · nada é apagado nele.
          */
         actions: (data?.entries?.length ?? 0) > 0 ? (
-          <>
-          {/* Quebra por pipeline · a página responde "ganhei com o quê", que é
-              a pergunta que esta tela não respondia. Fica ao lado de "Zerar
-              mês" por ser a outra coisa que se faz com esta lista inteira. */}
-          <button
-            onClick={() => navigate('/meus-picks/pipelines')}
-            title="Ver quanto cada pipeline rendeu na sua banca"
-            className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line-strong hover:border-ink-4/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
-          >
-            <BarChart3 className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
-            Por pipeline
-          </button>
           <button
             onClick={() => setShowReset(true)}
             disabled={(mesAtual?.apostas ?? 0) === 0}
@@ -235,9 +237,46 @@ export default function MeusPicks() {
             <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
             Zerar mês
           </button>
-          </>
         ) : undefined,
       }}
+      beforeMain={
+        /* Sub-páginas em aba, mesmo padrão de /admin e da tela de Picks: hash
+           na URL pra dar pra abrir/recarregar direto em /meus-picks#pipelines.
+           `beforeMain` é full-bleed (a borda vai de ponta a ponta), então o
+           alinhamento com o conteúdo sai de PAGE_WIDTH em vez de um valor
+           repetido aqui.
+
+           A quebra por pipeline já foi PÁGINA separada, por um dia. Como aba
+           ela lê o `by_pipeline` do mesmo GET /banca que esta tela já fez ·
+           a página refazia a chamada idêntica pra buscar o mesmo payload, e
+           tirava o usuário de contexto por um recorte da MESMA lista que ele
+           estava olhando. */
+        <div className="border-b border-line">
+          <div className={`mx-auto ${PAGE_WIDTH.full}`}>
+            <div className="flex">
+              {ABAS.map(a => (
+                <motion.button
+                  key={a.key}
+                  whileTap={{ scale: 0.95 }}
+                  onClick={() => { setAba(a.key); window.location.hash = a.key }}
+                  className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
+                    aba === a.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
+                  }`}
+                >
+                  {a.label}
+                  {aba === a.key && (
+                    <motion.div
+                      layoutId="meus-picks-tab-underline"
+                      className="absolute left-0 right-0 -bottom-px h-0.5 bg-accent"
+                      transition={{ type: 'spring', stiffness: 500, damping: 40 }}
+                    />
+                  )}
+                </motion.button>
+              ))}
+            </div>
+          </div>
+        </div>
+      }
     >
       <AnimatePresence>
       {showReset && mesAtual && (
@@ -272,6 +311,12 @@ export default function MeusPicks() {
               Tentar novamente
             </button>
           </div>
+        ) : aba === 'pipelines' ? (
+          /* Lê o `by_pipeline` que já veio no mesmo GET /banca desta tela.
+             O período do filtro de pills NÃO se aplica aqui: a quebra vem
+             agregada do servidor sobre a janela inteira, e refazer a conta no
+             cliente por período faria as duas abas discordarem do mesmo dado. */
+          <PipelinesBreakdown pipelines={data?.by_pipeline ?? []} />
         ) : (
           <div className="space-y-4">
 
