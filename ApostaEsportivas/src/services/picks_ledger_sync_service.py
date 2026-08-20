@@ -21,7 +21,7 @@ import psycopg2.extras
 from utils.db_utils import get_connection
 from services.pick_legs_extractor import fetch_all_legs, fixture_context
 from services.ai_result_checker_service import AIResultCheckerService
-from services.pick_engine import attribution, competition_profile
+from services.pick_engine import attribution, competition_profile, match_context_model
 
 _PICK_TYPE_BY_TABLE = {
     "picks_vip": "vip",
@@ -173,13 +173,57 @@ def _fixture_dimensions(cur, fixture_id: int | None) -> dict:
         row = cur.fetchone()
         if row:
             return {"referee": row[0], "kickoff_at": row[1], "round_label": row[2]}
+        # `round` tambem existe em match_statistics desde que o collector passou
+        # a grava-lo -- ler os dois aqui e' o que impede a perna de mata-mata
+        # perder a fase so' porque a linha efemera de `fixtures` ja' expirou.
         cur.execute(
-            "SELECT match_date FROM match_statistics WHERE fixture_id = %s LIMIT 1",
+            "SELECT match_date, round FROM match_statistics WHERE fixture_id = %s LIMIT 1",
             (fixture_id,))
         row = cur.fetchone()
-        return {"referee": None, "kickoff_at": row[0] if row else None, "round_label": None}
+        return {"referee": None, "kickoff_at": row[0] if row else None,
+                "round_label": row[1] if row else None}
     except Exception:
         return vazio
+
+
+def _formato_do_confronto(cur, fx: dict, leg: dict, league_id, ctx: dict | None):
+    """COPA_IDA_E_VOLTA | COPA_JOGO_UNICO | ... da partida desta perna.
+
+    Reconstroi o confronto do mesmo jeito que o motor faz na hora de gerar o
+    pick (match_context_model), so' que a partir do que ficou gravado. Nunca
+    levanta: dimensao de relatorio nao pode derrubar a sincronizacao do ledger.
+    """
+    fase = match_context_model.parse_fase(fx.get("round_label"))
+    if fase is None:
+        return None
+    try:
+        cur.execute(
+            "SELECT home_team_id, away_team_id, match_date FROM match_statistics "
+            "WHERE fixture_id = %s LIMIT 1", (leg.get("fixture_id"),))
+        row = cur.fetchone()
+        if not row:
+            return None
+        home_id, away_id, quando = row
+        cur.execute("""
+            SELECT match_date, league_id, season, home_team_id, away_team_id,
+                   home_goals, away_goals
+              FROM match_statistics
+             WHERE status = 'FT' AND league_id = %s AND home_team_id = %s AND away_team_id = %s
+               AND match_date < %s
+          ORDER BY match_date DESC LIMIT 5
+        """, (league_id, away_id, home_id, quando))
+        h2h = [{"match_date": r[0], "league_id": r[1], "season": r[2],
+                "home_team_id": r[3], "away_team_id": r[4],
+                "home_goals": r[5], "away_goals": r[6]} for r in cur.fetchall()]
+        ida = match_context_model.encontrar_jogo_de_ida(
+            h2h, league_id, (ctx or {}).get("season"),
+            mandante_da_ida=away_id, referencia=quando)
+        leg_num, _ = match_context_model.inferir_leg(fx.get("round_label"), ida)
+        formato, _origem = match_context_model.resolver_formato(
+            league_id, fase, leg_num, ida)
+        return formato
+    except Exception:
+        return None
 
 
 def _closing_odd_for(cur, fixture_id: int | None, market_type: str | None, line: str | None):
@@ -277,7 +321,15 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
     return {
         "season": (ctx or {}).get("season"),
         "competition_type": perfil.type,
-        "round_phase": competition_profile.classify_round_phase(fx["round_label"]),
+        # O formato RESOLVIDO manda sobre o texto do round. Sem ele, medido em
+        # 2026-08-19: as 34 pernas de mata-mata ja' gravadas estavam TODAS como
+        # KNOCKOUT_SINGLE e nenhuma como KNOCKOUT_TWO_LEGS, porque a
+        # API-Football manda "Round of 16" seco pras oitavas de Libertadores e
+        # Sul-Americana -- competicoes em que oitavas SAO de ida e volta. Como
+        # round_phase e' dimensao de segmentacao em attribution.py, jogo unico
+        # e volta de mata-mata estavam somando no mesmo balde.
+        "round_phase": competition_profile.classify_round_phase(
+            fx["round_label"], formato=_formato_do_confronto(cur, fx, leg, league_id, ctx)),
         "round_label": fx["round_label"],
         "referee": fx["referee"],
         "kickoff_at": kickoff,

@@ -276,6 +276,39 @@ def final_score(candidate: dict) -> float:
     )
 
 
+
+def _valores_de_aprovacao(c: dict) -> tuple:
+    """(taxa, ev) que os gates de aprovacao devem olhar neste candidato.
+
+    O CONTEXTO NAO PODE CRIAR ELEGIBILIDADE (2026-08-19). tie_effect desloca a
+    probabilidade nos dois sentidos a partir do agregado do confronto, e a
+    medicao que o calibra tem 4 jogos por celula. Deixar esse ajuste decidir a
+    APROVACAO seria contrariar o pedido de forma direta -- "nao quero que o
+    contexto de mata-mata sozinho transforme uma aposta ruim em uma aposta
+    boa" -- porque num mercado de odd 1.67 quatro pontos percentuais de
+    probabilidade viram sete pontos de EV: o suficiente pra atravessar o corte
+    sozinho.
+
+    A regra e' ASSIMETRICA de proposito, e a assimetria e' o ponto: pros dois
+    lados, vale o numero mais conservador.
+
+        ajuste POSITIVO  -> aprova pelos valores SEM contexto. O bonus
+                            continua valendo pro EV publicado e pro Score
+                            Final (ele e' informacao real), mas quem entra na
+                            lista tem que entrar pelo proprio merito
+                            estatistico.
+        ajuste NEGATIVO  -> aprova pelos valores COM contexto. Aqui o contexto
+                            PODE reprovar sozinho: um Under de escanteio do
+                            time que vai administrar o jogo perde por um motivo
+                            que a amostra historica nao enxerga.
+    """
+    ef = c.get("tie_effect") or {}
+    delta = ef.get("delta_prob") or 0.0
+    if delta > 0 and c.get("taxa_real_sem_contexto") is not None:
+        return c["taxa_real_sem_contexto"], c.get("ev_sem_contexto", c["ev"])
+    return c["taxa_real"], c["ev"]
+
+
 def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CONFIG, top_n: int = 10) -> list:
     """Descarta taxa<min_taxa / amostra<min_amostra / confidence<min_confidence
     / EV<=min_ev, ordena pelo Score Final e devolve os top_n melhores --
@@ -299,15 +332,16 @@ def rank_all_candidates(candidates: list, config: PickEngineConfig = DEFAULT_CON
     esse candidato ainda concorreria por final_score (que nao usa odd) e
     podia virar o pick final com odd baixa demais para VIP/Free (achado
     real rodando o motor contra jogos ao vivo)."""
-    eligible = [
-        c for c in candidates
-        if c["taxa_real"] >= config.min_taxa
-        and c["amostra"] >= config.min_amostra
-        and c["confidence"] >= config.min_confidence
-        and c["ev"] > config.min_ev
-        and c["odd"] >= config.min_odd
-        and _dentro_da_faixa(c["odd"], config)
-    ]
+    eligible = []
+    for c in candidates:
+        taxa_aprov, ev_aprov = _valores_de_aprovacao(c)
+        if (taxa_aprov >= config.min_taxa
+                and c["amostra"] >= config.min_amostra
+                and c["confidence"] >= config.min_confidence
+                and ev_aprov > config.min_ev
+                and c["odd"] >= config.min_odd
+                and _dentro_da_faixa(c["odd"], config)):
+            eligible.append(c)
     for c in eligible:
         c["final_score"] = final_score(c)
     eligible.sort(key=lambda c: c["final_score"], reverse=True)
@@ -325,14 +359,15 @@ def rank_all_candidates_debug(candidates: list, config: PickEngineConfig = DEFAU
     eligible, discarded = [], []
     for c in candidates:
         reasons = []
-        if c["taxa_real"] < config.min_taxa:
-            reasons.append(f"taxa abaixo do minimo ({c['taxa_real']*100:.1f}% < {config.min_taxa*100:.0f}%)")
+        taxa_aprov, ev_aprov = _valores_de_aprovacao(c)
+        if taxa_aprov < config.min_taxa:
+            reasons.append(f"taxa abaixo do minimo ({taxa_aprov*100:.1f}% < {config.min_taxa*100:.0f}%)")
         if c["amostra"] < config.min_amostra:
             reasons.append(f"amostra insuficiente ({c['amostra']} < {config.min_amostra})")
         if c["confidence"] < config.min_confidence:
             reasons.append(f"confidence abaixo do minimo ({c['confidence']*100:.1f}% < {config.min_confidence*100:.0f}%)")
-        if c["ev"] <= config.min_ev:
-            reasons.append(f"EV nao positivo ({c['ev']*100:+.1f}%)")
+        if ev_aprov <= config.min_ev:
+            reasons.append(f"EV nao positivo ({ev_aprov*100:+.1f}%)")
         if c["odd"] < config.min_odd:
             reasons.append(f"odd abaixo do minimo ({c['odd']} < {config.min_odd})")
         if not _dentro_da_faixa(c["odd"], config):

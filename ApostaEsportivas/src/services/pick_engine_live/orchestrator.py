@@ -313,6 +313,13 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
 
     if valor["ev"] < config.ev_minimo:
         motivos.append(f"EV {valor['ev']:+.1%} abaixo do minimo ({config.ev_minimo:+.1%})")
+    # Piso de probabilidade. Ver config.probabilidade_minima pros dois picks
+    # reais que passaram sem ele -- os dois entraram por EV, e o EV veio da
+    # odd, nao da leitura do jogo.
+    if prob < config.probabilidade_minima:
+        motivos.append(
+            f"probabilidade {prob:.1%} abaixo do minimo ({config.probabilidade_minima:.0%}): "
+            f"o EV vem da odd, nao da leitura da partida")
     if conf["confidence"] < config.confianca_minima:
         motivos.append(f"confianca {conf['confidence']:.0%} abaixo do minimo ({config.confianca_minima:.0%})")
     if entrada["odd"] < config.odd_minima:
@@ -340,17 +347,78 @@ def _gates(entrada: dict, prob: float, valor: dict, conf: dict, conv: dict,
     return motivos
 
 
-def melhor_candidato(avaliados: list[dict]) -> dict | None:
-    """O aprovado de maior EV. Empate desempata por confianca.
+#: Pesos da escolha entre candidatos aprovados. Espelham a licao que o
+#: pre-jogo pagou pra aprender (pick_engine/config.py, rebalanceamento de
+#: 2026-08-14): nos 65 picks resolvidos dele, edge de 10-20% acertou 57,1% e
+#: edge abaixo de 10% acertou 71,4%. EV maior anunciava pick PIOR, nao melhor,
+#: porque contra mercado liquido um EV grande quase sempre significa que a
+#: probabilidade do modelo esta otimista -- nao que a casa errou.
+#:
+#: Lá o peso do edge caiu de 0.25 pra 0.10 e o da taxa subiu pra 0.40. Aqui o
+#: EV valia 100% da escolha ate 2026-08-20, que e' exatamente o que o pre-jogo
+#: abandonou. Os mesmos 0.10 pro termo de preco, e o peso principal na leitura
+#: da partida.
+PESO_PROBABILIDADE = 0.45
+PESO_CONFIANCA = 0.25
+PESO_SEGURANCA_DA_ODD = 0.20
+PESO_EV = 0.10
 
-    O pre-jogo separa "qual mercado vence" (so' estatistica) de "qual linha
-    vence" (com odd). Aqui essa separacao nao se aplica: com duas familias e um
-    mercado ja' repreçado pelo minuto, nao ha disputa entre familias pra
-    arbitrar -- ha uma pergunta so', que e' onde o preco esta' mais atrasado em
-    relacao ao jogo. Se a V2 abrir cartoes, chutes e faltas, essa decisao volta
-    a valer a pena e deve ser revisitada.
+#: EV a partir do qual o termo de preco satura. Acima disto, mais EV nao
+#: pontua mais -- e' o teto que impede a odd de voltar pela janela.
+EV_DE_SATURACAO = 0.20
+
+
+def score_de_selecao(candidato: dict,
+                     config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> float:
+    """Quanto este candidato merece ser O pick da partida.
+
+    Nao e' gate -- os gates ja' rodaram e este candidato passou. E' so' a
+    ordenacao entre aprovados, e ela deixou de ser "o de maior EV" em
+    2026-08-20 pelo motivo medido em PESO_EV acima.
+
+    A seguranca da odd segue a mesma logica do `_safety_bonus` do pre-jogo:
+    dentro da faixa permitida, a odd mais baixa vale mais, porque odd baixa e'
+    o mercado concordando com o modelo e odd alta e' o mercado discordando.
+    Ao vivo isso pesa ainda mais que no pre-jogo: a odd se move com o jogo, e
+    uma odd que continua alta aos 60' e' o mercado dizendo que nao viu o que o
+    modelo acha que viu.
+    """
+    prob = float(candidato.get("probability") or 0.0)
+    conf = float(candidato.get("confidence") or 0.0)
+    ev = float(candidato.get("ev") or 0.0)
+    odd = float(candidato.get("odd") or 0.0)
+
+    faixa = max(config.odd_maxima - config.odd_minima, 1e-9)
+    seguranca = max(0.0, min(1.0, (config.odd_maxima - odd) / faixa))
+    ev_norm = max(0.0, min(ev, EV_DE_SATURACAO)) / EV_DE_SATURACAO
+
+    return round(
+        prob * PESO_PROBABILIDADE
+        + conf * PESO_CONFIANCA
+        + seguranca * PESO_SEGURANCA_DA_ODD
+        + ev_norm * PESO_EV,
+        4,
+    )
+
+
+def melhor_candidato(avaliados: list[dict],
+                     config: LiveEngineConfig = DEFAULT_LIVE_CONFIG) -> dict | None:
+    """O aprovado de maior `score_de_selecao`. Empate desempata por confianca.
+
+    ATE 2026-08-20 ESTA FUNCAO ESCOLHIA POR MAIOR EV, e a docstring justificava
+    assim: "com duas familias e um mercado ja' repreçado pelo minuto, nao ha
+    disputa entre familias pra arbitrar". O argumento estava errado num ponto,
+    e os 7 picks gravados em DEV mostram onde: a disputa nao e' so' entre
+    FAMILIAS, e' entre LINHAS da mesma familia. Escolher por EV entre linhas e'
+    escolher a linha mais barata em relacao ao que o modelo acha -- e quando o
+    modelo esta otimista, essa e' a pior linha, nao a melhor.
+
+    Foi assim que o `goals Under 1.5 @3.50` com 31% de probabilidade venceu a
+    disputa da propria partida: nenhuma outra linha tinha EV maior, porque
+    nenhuma outra tinha odd 3.50.
     """
     aprovados = [c for c in avaliados if c["aprovado"]]
     if not aprovados:
         return None
-    return max(aprovados, key=lambda c: (c["ev"], c["confidence"]))
+    return max(aprovados,
+               key=lambda c: (score_de_selecao(c, config), c["confidence"]))

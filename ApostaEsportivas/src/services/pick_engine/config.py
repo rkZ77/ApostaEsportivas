@@ -227,6 +227,21 @@ class PickEngineConfig:
     # bloqueio pelo decision_log antes de confiar cegamente.
     use_context_gate: bool = True
 
+    # Efeito medido do agregado sobre o mercado DE CADA LADO (tie_effect.py,
+    # 2026-08-19) -- LIGADO por padrao, pelo mesmo motivo do gate acima e com
+    # uma diferenca que vale registrar: as constantes dele nao sao escolhidas,
+    # sao a medicao sobre os jogos de volta reais da base, encolhida pela
+    # propria imprecisao e limitada por teto duro por familia.
+    #
+    # E' a peca que faltava pro motor usar o agregado nos dois sentidos. Ate'
+    # aqui ele so' sabia PENALIZAR Under; um "Escanteios Casa Over" num jogo
+    # em que o mandante precisa reverter recebia ajuste zero.
+    #
+    # Desligar volta ao comportamento anterior sem reverter codigo: o gate de
+    # contexto retoma sozinho os mercados de lado (ver a checagem de `scope`
+    # em context_gate.pressao_contraria).
+    use_tie_effect: bool = True
+
 
 DEFAULT_CONFIG = PickEngineConfig()
 

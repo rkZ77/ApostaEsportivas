@@ -6,7 +6,7 @@ from services.pick_engine import (
     stats_model, market_model, confidence, calibration, ranking, explanation,
     context_model, team_profile_model, news_model, probability_model, variance_model,
     data_validation, bayesian_model, referee_model,
-    market_anchor, selection_bias, context_gate,
+    market_anchor, selection_bias, context_gate, tie_effect,
 )
 
 _CARDS_FAMILIES = ("cards", "handicap_cards")
@@ -204,7 +204,8 @@ def analyze_fixture_markets(
     eliminated_markets = []
     if calibration_data is None:
         calibration_data = calibration.get_market_calibration()
-    ctx_score = context_model.context_score(context_data) if context_data else None
+    ctx_score = (context_model.context_score(context_data, match_context)
+                 if context_data else None)
     news_score = news_model.news_score(news_data) if news_data else None
     referee_sig = referee_model.referee_signal(referee_stats, config, league_stats=league_stats)
     game_intensity = referee_model.game_intensity(context_data, matchup_data, referee_sig)
@@ -600,6 +601,14 @@ def analyze_fixture_markets(
         candidate = {
             **best_line,
             "market_type": market_type,
+            # ESCOPO NO CANDIDATO (2026-08-19). Ele existia so' como chave do
+            # agrupamento aqui em cima e morria neste ponto -- as camadas
+            # seguintes recebiam "corners" sem saber se era o total da partida
+            # ou o escanteio de UM time. E' a informacao que faltava pro
+            # contexto de agregado agir do lado certo (ver tie_effect.py), e a
+            # ausencia dela era o motivo de o gate de contexto tratar
+            # "Escanteios Casa" e "Escanteios Totais" como o mesmo mercado.
+            "scope": scope,
             "confidence": conf,
             "risco": confidence.risco_from_confidence(conf, config),
             "convergence": convergence,
@@ -613,6 +622,11 @@ def analyze_fixture_markets(
             "model_fit_adjustment": m_adjustment,
             "context_score": ctx_score,
             "context_raw": context_data,
+            # Contexto de CONFRONTO (agregado, fase, formato, regulamento).
+            # Separado de context_raw porque responde outra pergunta: aquele
+            # descreve a condicao dos times (descanso, tabela, mando), este
+            # descreve o que a partida e' dentro da competicao.
+            "match_context_raw": match_context,
             "profile_score": team_profile_model.profile_score_for_market(matchup_data, market_type),
             "matchup_raw": matchup_data.get(market_type) if matchup_data else None,
             "news_score": news_score,
@@ -632,7 +646,8 @@ def analyze_fixture_markets(
     if match_context and config.use_context_gate:
         sobreviventes = []
         for c in candidates:
-            veredito = context_gate.evaluate(c, match_context)
+            veredito = context_gate.evaluate(
+                c, match_context, delegar_lados=config.use_tie_effect)
             c["context_gate"] = veredito
             if veredito["bloqueado"]:
                 if debug:
@@ -651,6 +666,45 @@ def analyze_fixture_markets(
                 c["ev"] = round(p * c["odd"] - 1, 4)
             sobreviventes.append(c)
         candidates = sobreviventes
+
+    # Efeito medido do agregado sobre o mercado DE CADA LADO. Vem DEPOIS do
+    # gate (que ja' tirou de circulacao o que nao deveria existir) e ANTES da
+    # camada probabilistica, pelo mesmo motivo que o gate: calibrar e ancorar
+    # uma probabilidade que ainda vai ser corrigida por contexto seria calibrar
+    # um numero intermediario.
+    #
+    # Diferente do gate, este passo NAO elimina candidato -- ele corrige a
+    # estimativa nos dois sentidos, e as duas correcoes tem teto (ver
+    # tie_effect.TETO_DE_DELTA).
+    if match_context and config.use_tie_effect:
+        for c in candidates:
+            ef = tie_effect.efeito(c, match_context)
+            c["tie_effect"] = ef
+            if not ef.get("aplicavel"):
+                continue
+            if ef["delta_prob"]:
+                # A estimativa SEM contexto fica guardada, e nao e' so' rastro:
+                # e' o numero que decide a aprovacao quando o ajuste e'
+                # positivo (ver ranking._valores_de_aprovacao). O contexto pode
+                # melhorar o EV publicado e a ordem do ranking; nao pode ser o
+                # que faz um mercado passar no corte.
+                c["taxa_real_sem_contexto"] = c["taxa_real"]
+                c["ev_sem_contexto"] = c["ev"]
+                c["edge_sem_contexto"] = c.get("edge")
+                p = max(0.0, min(1.0, round(c["taxa_real"] + ef["delta_prob"], 4)))
+                c["taxa_real"] = p
+                baseline = c.get("prob_baseline_value")
+                if baseline is not None:
+                    c["edge"] = round(p - baseline, 4)
+                c["ev"] = round(p * c["odd"] - 1, 4)
+            if ef["delta_confianca"]:
+                c["confidence"] = round(min(max(
+                    c["confidence"] + ef["delta_confianca"],
+                    config.confidence_min_clamp), config.confidence_max_clamp), 4)
+                # Risco DERIVA do confidence -- recalcular aqui e' o que impede
+                # um pick sair anunciando "BAIXO" com a confianca ja' descontada
+                # pelo regime da partida.
+                c["risco"] = confidence.risco_from_confidence(c["confidence"], config)
 
     candidates = apply_probability_layer(
         candidates, config, calibrators=calibrators, clv_by_market=clv_by_market,

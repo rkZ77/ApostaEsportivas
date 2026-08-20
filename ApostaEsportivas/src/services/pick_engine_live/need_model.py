@@ -97,6 +97,11 @@ def agregado_ao_vivo(tie: dict | None, saldo_mandante: int | None) -> dict | Non
         "ida_home": ida_home,
         "ida_away": ida_away,
         "saldo_mandante_agora": int(saldo_mandante),
+        # Quantos gols o lado atras precisa AGORA so' pra empatar o agregado.
+        # E' o numero que muda a cada gol e que separa "precisa de 1" de
+        # "precisa de 3" -- sem ele a necessidade era binaria, e um time
+        # perdendo o confronto por 1 era lido igual a um perdendo por 3.
+        "gols_para_reverter": abs(diferenca) or None,
     }
 
 
@@ -167,19 +172,29 @@ def necessidade(estado: dict, contexto_pre_jogo: dict | None = None) -> dict:
     # e o agregado ao vivo ja' incorpora o placar de agora.
     if agregado:
         quem = agregado["quem_precisa"]
-        precisa_home = 1.0 if quem in (HOME, AMBOS) else 0.0
-        precisa_away = 1.0 if quem in (AWAY, AMBOS) else 0.0
+        # QUANTOS gols faltam, nao so' se faltam. Precisar de 1 gol e precisar
+        # de 3 produzem comportamentos diferentes em campo, e o modelo tratava
+        # os dois como 1.0 ate 2026-08-19. A escala e' a mesma do pre-jogo
+        # (match_context_model._PRESSAO_POR_DIFERENCA), pra o motor ao vivo nao
+        # ler a mesma situacao numa escala e o pre-jogo noutra.
+        faltam = agregado.get("gols_para_reverter") or 0
+        grau = {0: 0.0, 1: 0.60, 2: 0.85}.get(min(faltam, 3), 1.00)
+        precisa_home = grau if quem in (HOME, AMBOS) else 0.0
+        precisa_away = grau if quem in (AWAY, AMBOS) else 0.0
         # O peso da fase modula: precisar de um gol numa final nao e' o mesmo
         # que precisar de um gol numa fase de 32.
         peso = tie.get("peso_fase") or 0.6
         precisa_home *= peso
         precisa_away *= peso
         if quem == AMBOS:
-            descricao.append(f"agregado empatado em {agregado['diferenca_agregada']}, "
-                             "os dois precisam do resultado")
+            # Agregado empatado AO VIVO e' um estado instavel, nao um empate
+            # confortavel: qualquer gol decide. Os dois precisam, e o grau
+            # acima e' zero (faltam=0), entao a necessidade vem da fase.
+            precisa_home = precisa_away = peso * 0.60
+            descricao.append("agregado empatado, os dois precisam do resultado")
         elif quem:
             alvo = "mandante" if quem == HOME else "visitante"
-            descricao.append(f"{alvo} precisa reverter o agregado")
+            descricao.append(f"{alvo} precisa de {faltam} gol(s) pra empatar o agregado")
         origem = "mata_mata"
     else:
         precisa_home = _necessidade_de_tabela(pressao, HOME, saldo)

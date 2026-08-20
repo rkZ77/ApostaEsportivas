@@ -9,21 +9,33 @@ partida nao pertencia a distribuicao que gerou a amostra.
 
 O MECANISMO, E POR QUE ELE E' DIRECIONAL
 ----------------------------------------
-Time que precisa do resultado se abre. Isso nao e' folclore, e' consequencia:
-quem esta atras no agregado tem que atacar, quem esta na frente recua pra
-segurar, e a partida inteira desloca junto:
-
-    escanteios   sobe   (mais volume ofensivo de um lado, mais pressao)
-    chutes       sobe   (idem)
-    gols         sobe   (jogo mais aberto dos dois lados)
-    cartoes      sobe   (falta tatica de quem segura, frustracao de quem ataca)
-    faltas       sobe   (mesmo motivo)
-
-Todos os cinco apontam PRA CIMA. Ou seja: num jogo assim, o mercado perigoso
-nao e' "cartoes", e' "UNDER de qualquer um deles". O gate antigo
+Time que precisa do resultado se abre, quem esta na frente recua pra segurar,
+e o Under de volume passa a ser a aposta perigosa. O gate antigo
 (referee_model.cards_market_eligible) era cego a direcao -- bloqueava jogo
 frio inteiro e liberava jogo quente inteiro, Over e Under igualmente. Era
 exatamente a cegueira que deixou o Under passar.
+
+O QUE A MEDICAO DE 2026-08-19 CORRIGIU NESTA DESCRICAO
+------------------------------------------------------
+Este cabecalho afirmava que as cinco familias (escanteios, chutes, gols,
+cartoes, faltas) sobem juntas quando a partida abre. Medido sobre os jogos de
+volta reais da base (ver a tabela completa em tie_effect.py), duas afirmacoes
+estavam erradas, e uma delas invertida:
+
+    FALTAS CAEM pro lado que precisa reverter (-2.48 por jogo, o sinal mais
+    forte da tabela). Quem persegue o resultado tem a bola, e quem tem a bola
+    nao comete falta.
+
+    CARTOES nao se movem nos lados assimetricos. Sobem no agregado EMPATADO
+    (+0.70 por lado) -- que e' exatamente o Fluminense x Vasco que originou
+    este modulo, entao o caso fundador continua de pe', so' que agora com o
+    numero e delimitado ao cenario em que ele vale.
+
+O que este gate faz continua correto no ESCOPO em que ele age -- mercado de
+jogo inteiro, direcao Under, penalidade proporcional. O que mudou e' que
+mercado de UM TIME saiu daqui: ali a pergunta e' de qual lado o volume vai, e
+quem responde e' tie_effect.py, com efeito medido por papel no agregado. Ver
+a checagem de `scope` em pressao_contraria.
 
 POR QUE PENALIDADE PROPORCIONAL E NAO REGRA BINARIA
 ---------------------------------------------------
@@ -42,10 +54,23 @@ from __future__ import annotations
 
 from services.pick_engine import competitive_pressure, match_context_model, rivalry_model
 
-# Familias cujo volume sobe quando a partida abre. Todas compartilham o mesmo
-# mecanismo (mais ataque, mais desespero, mais falta tatica), entao todas
-# recebem o mesmo tratamento direcional.
-FAMILIAS_DIRECIONAIS = ("cards", "corners", "shots", "shots_on_target", "goals", "fouls")
+# Familias cujo volume sobe quando a partida abre, e por isso um Under nelas
+# contradiz o contexto.
+#
+# `fouls` SAIU da lista em 2026-08-19, e saiu por medicao, nao por gosto. A
+# lista tinha sido montada sobre um mecanismo suposto -- "quem segura comete
+# falta tatica, quem ataca comete falta por frustracao, logo falta sobe". Os
+# jogos de volta reais da base dizem o contrario, e com folga: o lado que
+# precisa reverter comete 2.48 faltas A MENOS por jogo (3.9 erros-padrao, o
+# sinal mais forte de toda a medicao), e o lado que administra tambem cai
+# (-1.14). Faz sentido depois de visto -- quem persegue o resultado tem a bola,
+# e quem tem a bola nao comete falta.
+#
+# Manter `fouls` aqui deixava as duas camadas do motor discordando sobre a
+# MESMA partida: este gate empurrava o Under de faltas pra baixo enquanto
+# tie_effect, lendo o efeito medido, empurrava pra cima. Duas camadas em
+# sentidos opostos sobre o mesmo fato nao e' conservadorismo, e' ruido.
+FAMILIAS_DIRECIONAIS = ("cards", "corners", "shots", "shots_on_target", "goals")
 
 # Acima deste score de "quanto esta em jogo" (match_context_model.stakes_score,
 # 0.5 = jogo comum) a partida e' tratada como decisao. 0.68 exige mais que
@@ -104,7 +129,8 @@ def build_context(round_str: str | None, home_team_id: int, away_team_id: int,
     else:
         jogo_ida = match_context_model.encontrar_jogo_de_ida(
             h2h_matches or [], league_id, season, before_date=before_date)
-    tie = match_context_model.tie_context(round_str, home_team_id, away_team_id, jogo_ida)
+    tie = match_context_model.tie_context(round_str, home_team_id, away_team_id, jogo_ida,
+                                          league_id=league_id)
     rivalidade = rivalry_model.rivalry_signal(h2h_matches or [], baseline_cartoes)
     # Necessidade competitiva de pontos corridos. E' o irmao de liga do `tie`:
     # o mata-mata diz quem precisa do resultado por causa do agregado, a tabela
@@ -158,8 +184,15 @@ def build_for_fixture(match_stats, fixture: dict, convergencia_cartoes: dict | N
         return None
 
 
-def pressao_contraria(candidate: dict, contexto: dict | None) -> dict:
+def pressao_contraria(candidate: dict, contexto: dict | None,
+                      delegar_lados: bool = False) -> dict:
     """Quanto o contexto contradiz a direcao deste candidato.
+
+    `delegar_lados=True` entrega os mercados de UM TIME (scope home/away)
+    pra tie_effect e nao age neles -- ver a checagem de escopo no corpo.
+    Default False de proposito: com o efeito medido desligado
+    (config.use_tie_effect), este gate volta a ser o unico a olhar o
+    agregado, e nenhum candidato fica sem camada nenhuma.
 
     Devolve o total e as parcelas separadas -- a explicacao de rejeicao precisa
     poder dizer QUAL sinal pesou, nao so' que pesou.
@@ -177,6 +210,20 @@ def pressao_contraria(candidate: dict, contexto: dict | None) -> dict:
     direcao = _direcao(candidate)
     if direcao not in ("under", "over"):
         return {"total": 0.0, "parcelas": parcelas, "aplicavel": False}
+
+    # MERCADO DE UM TIME SO' E' DE OUTRA CAMADA (2026-08-19). Este gate mede
+    # "quanto a partida contradiz esta direcao" sem olhar de QUEM e' o mercado
+    # -- ele nasceu pra escanteio/cartao do jogo inteiro, onde essa pergunta
+    # basta. Num "Escanteios Casa" a pergunta certa e' outra: aquele lado
+    # especifico ataca ou administra? Quem responde isso e' tie_effect, com o
+    # efeito medido POR PAPEL no agregado.
+    #
+    # Os dois lendo o mesmo agregado cobrariam duas vezes pelo mesmo fato --
+    # o double-counting que o pedido nomeia. A divisao e' de escopo: total
+    # aqui, lado la'.
+    if delegar_lados and candidate.get("scope") in ("home", "away"):
+        return {"total": 0.0, "parcelas": parcelas, "aplicavel": False,
+                "delegado_a": "tie_effect"}
 
     # O contexto empurra o volume PRA CIMA. Logo ele contradiz "under" e
     # confirma "over" -- so' o lado contrariado e' penalizado. Confirmar nao
@@ -245,14 +292,15 @@ def pressao_contraria(candidate: dict, contexto: dict | None) -> dict:
     return {"total": round(min(total, PENALIDADE_MAX), 4), "parcelas": parcelas, "aplicavel": True}
 
 
-def evaluate(candidate: dict, contexto: dict | None) -> dict:
+def evaluate(candidate: dict, contexto: dict | None,
+             delegar_lados: bool = False) -> dict:
     """Veredito do gate pra um candidato.
 
     Devolve sempre: `bloqueado`, `penalidade` (a subtrair da probabilidade),
     `motivos` (lista de frases prontas) e o rastro completo. Nunca devolve so'
     um booleano -- o motor precisa poder explicar a rejeicao.
     """
-    pressao = pressao_contraria(candidate, contexto)
+    pressao = pressao_contraria(candidate, contexto, delegar_lados=delegar_lados)
     total = pressao["total"]
     bloqueado = total >= BLOQUEIO_LIMIAR
 

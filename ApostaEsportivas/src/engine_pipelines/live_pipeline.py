@@ -327,13 +327,15 @@ def contexto_pre_jogo(cur, estado: dict) -> dict | None:
     if not (fid and home_id and away_id):
         return None
     try:
-        cur.execute("SELECT round, season FROM fixtures WHERE fixture_id = %s", (fid,))
+        cur.execute(
+            "SELECT round, season, match_datetime FROM fixtures WHERE fixture_id = %s", (fid,))
         linha = cur.fetchone()
         if not linha:
             cur.execute(
-                "SELECT round, season FROM match_statistics WHERE fixture_id = %s", (fid,))
+                "SELECT round, season, match_date FROM match_statistics WHERE fixture_id = %s",
+                (fid,))
             linha = cur.fetchone()
-        round_str, season = (linha or (None, None))
+        round_str, season, quando = (linha or (None, None, None))
 
         match_stats = MatchStatsService()
         h2h = match_stats.get_h2h_matches(home_id, away_id)
@@ -346,6 +348,19 @@ def contexto_pre_jogo(cur, estado: dict) -> dict | None:
             # Live nao consome (nao ha mercado de cartao na V1) -- passar None
             # deixa a rivalidade marcada como nao confiavel, que e' o correto.
             baseline_cartoes=None, league_table=tabela,
+            # A DATA DESTA PARTIDA, que faltava aqui ate 2026-08-19 e cegava o
+            # Live inteiro pro agregado.
+            #
+            # `encontrar_jogo_de_ida` so' aceita a busca estrita (a que prova
+            # qual e' a ida pela inversao de mando) quando tem a janela de dias
+            # pra conferir; sem `match_date` ela devolve None de proposito, e a
+            # busca estrita e' a UNICA usada quando o rotulo nao traz a perna.
+            # Medido no mesmo dia: a API-Football manda "Round of 16" seco pras
+            # oitavas de Libertadores e Sul-Americana, entao o rotulo nunca traz
+            # a perna nessas competicoes -- o Live tratava toda volta de
+            # mata-mata como jogo solto, sem agregado, caindo na necessidade de
+            # tabela de uma competicao que nem tem tabela naquela fase.
+            match_date=quando,
         )
     except Exception as e:
         print(f"[LIVE] Contexto pre-jogo indisponivel para {fid}: {e}")
@@ -1042,7 +1057,7 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
               f"p={c['probability']*100:.0f}% ev={c['ev']:+.1%} "
               f"conf={c['confidence']*100:.0f}% sinal={(c['live_signal_score'] or 0)*100:.0f}%{motivo}")
 
-    melhor = orchestrator.melhor_candidato(avaliados)
+    melhor = orchestrator.melhor_candidato(avaliados, config)
     if not melhor:
         print("DECISAO: NO PICK")
         resumo["decisao"] = "NO PICK"

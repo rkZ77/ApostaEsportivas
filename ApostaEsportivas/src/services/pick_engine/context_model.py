@@ -117,7 +117,7 @@ def build_context(home_matches: list, away_matches: list, home_team_id: int, awa
     }
 
 
-def context_score(context: dict) -> float:
+def context_score(context: dict, match_context: dict | None = None) -> float:
     """Reduz o contexto a um score numerico (0-1, neutro=0.5) para somar no
     Score Final -- ajustes pequenos e limitados, nunca uma certeza. Toda
     parcela e rastreavel a um campo do context dict.
@@ -127,7 +127,17 @@ def context_score(context: dict) -> float:
     "pressao_alta" vem da classificacao/saldo de gols da fase de LIGA; numa
     fase de mata-mata essa classificacao ja deixou de valer (a fase de
     grupos acabou), entao aplicar o bonus seria usar um sinal que nao
-    reflete mais a realidade da partida atual."""
+    reflete mais a realidade da partida atual.
+
+    O BURACO QUE ISSO ABRIA, TAPADO EM 2026-08-19: desligar a pressao de
+    tabela no mata-mata estava certo, mas nada entrava no lugar. O efeito era
+    o oposto do pretendido -- uma final de copa saia do Score Final com
+    contexto MAIS NEUTRO (0.5 + descanso) que uma rodada qualquer de
+    campeonato, porque a rodada ainda ganhava a parcela de tabela. `stakes`
+    (match_context, do agregado e da fase reais) e' o sinal que a fase de
+    mata-mata tem pra dar, e entra na MESMA faixa de 0.06 -- o topo da escala
+    nao sobe, so' deixa de haver um regime sem sinal nenhum.
+    """
     score = 0.5
 
     rh, ra = context.get("rest_days_home"), context.get("rest_days_away")
@@ -135,8 +145,17 @@ def context_score(context: dict) -> float:
         diff = rh - ra
         score += max(min(diff / 3 * 0.05, 0.10), -0.10)
 
+    tie = (match_context or {}).get("tie") or {}
     round_phase = context.get("round_phase")
-    is_knockout = round_phase in ("KNOCKOUT_SINGLE", "KNOCKOUT_TWO_LEGS")
+    is_knockout = bool(tie.get("is_mata_mata")) or round_phase in (
+        "KNOCKOUT_SINGLE", "KNOCKOUT_TWO_LEGS")
+    if is_knockout and match_context:
+        # stakes vai de 0.5 (jogo comum) a 1.0 (volta de final com agregado
+        # empatado); reescalado pra a mesma faixa de 0-0.06 da pressao de
+        # tabela, porque as duas respondem a mesma pergunta -- quanto esta
+        # partida decide -- por caminhos diferentes.
+        stakes = match_context.get("stakes", 0.5)
+        score += round(max(0.0, min((stakes - 0.5) / 0.5, 1.0)) * 0.06, 4)
     if not is_knockout:
         # Camada medida primeiro (2026-08-14). O +0.03 chapado de
         # "pressao_alta" tratava o 10o da rodada 5 igual ao 10o da rodada 35 --

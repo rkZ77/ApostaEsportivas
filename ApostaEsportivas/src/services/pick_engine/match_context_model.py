@@ -38,6 +38,8 @@ from datetime import datetime
 
 import re
 
+from services.pick_engine import competition_profile
+
 # "2nd Leg", "1st leg", "Leg 2", "2ª Mão" -- a API-Football manda em ingles,
 # mas o padrao aceita variantes pra nao quebrar se o rotulo mudar de forma.
 _LEG_PATTERNS = (
@@ -55,6 +57,12 @@ _FASES = (
     (re.compile(r"\bquarter", re.I),         "QUARTAS"),
     (re.compile(r"\bround\s+of\s+16\b", re.I), "OITAVAS"),
     (re.compile(r"\bround\s+of\s+32\b", re.I), "TRINTA_E_DOIS"),
+    # Repescagem/preliminar tem que ser testada ANTES de "playoff" e de
+    # "final": a API-Football rotula a repescagem da Champions como "Knockout
+    # Round Play-offs" e a da Libertadores como "Play-in"/"Preliminary Round",
+    # e sem esta linha as tres cairiam em PLAYOFF, que pesa mais.
+    (re.compile(r"\brepechage\b|\bplay[\s-]?in\b|\bpreliminary\b|"
+                r"\bknockout\s+round\s+play[\s-]?offs?\b|\brepescagem\b", re.I), "REPESCAGEM"),
     (re.compile(r"\bfinal\b", re.I),         "FINAL"),
     (re.compile(r"\bplay[\s-]?off", re.I),   "PLAYOFF"),
     (re.compile(r"\bgroup\b", re.I),         "GRUPOS"),
@@ -66,12 +74,21 @@ _FASES = (
 _PESO_FASE = {
     "FINAL": 1.00, "SEMIFINAL": 0.85, "QUARTAS": 0.70,
     "OITAVAS": 0.60, "TRINTA_E_DOIS": 0.50, "PLAYOFF": 0.55,
-    "TERCEIRO_LUGAR": 0.35, "GRUPOS": 0.30,
+    "REPESCAGEM": 0.45, "TERCEIRO_LUGAR": 0.35, "GRUPOS": 0.30,
 }
 
 
 _FASES_MATA_MATA = ("FINAL", "SEMIFINAL", "QUARTAS", "OITAVAS",
-                    "TRINTA_E_DOIS", "PLAYOFF", "TERCEIRO_LUGAR")
+                    "TRINTA_E_DOIS", "PLAYOFF", "REPESCAGEM", "TERCEIRO_LUGAR")
+
+# Formatos que o motor distingue. PONTOS_CORRIDOS e' o caso normal; os dois de
+# copa sao separados porque a pergunta que se faz deles e' outra (ver
+# resolver_formato). DESCONHECIDO existe pra nunca ter que escolher entre
+# advinhar e fingir que a partida e' comum.
+PONTOS_CORRIDOS = "PONTOS_CORRIDOS"
+COPA_JOGO_UNICO = "COPA_JOGO_UNICO"
+COPA_IDA_E_VOLTA = "COPA_IDA_E_VOLTA"
+FORMATO_DESCONHECIDO = "DESCONHECIDO"
 
 # Distancia maxima entre ida e volta pra tratar dois encontros como o MESMO
 # confronto. Legs ficam de 6 a 9 dias; encontro de fase de grupos, meses. A
@@ -136,6 +153,50 @@ def parse_fase(round_str: str | None) -> str | None:
         if padrao.search(round_str):
             return nome
     return None
+
+
+def resolver_formato(league_id, fase: str | None, leg_do_rotulo: int | None,
+                     jogo_de_ida: dict | None) -> tuple:
+    """(formato, origem) -- o formato REAL desta fase, por evidencia primeiro.
+
+    "Nao assuma que toda competicao chamada copa possui ida e volta" e' o
+    pedido, e a ordem abaixo e' a resposta. Cada fonte so' e' consultada
+    quando a anterior nao respondeu, e a mais forte e' a que menos depende de
+    cadastro:
+
+      1. `rotulo`     a API escreveu "1st Leg"/"2nd Leg". Ela sabe. So' vale
+                      o rotulo LITERAL (parse_leg) -- a perna INFERIDA nao
+                      entra aqui, senao a origem diria "rotulo" pra uma
+                      conclusao que veio do confronto, e a distincao entre "a
+                      API disse" e "o motor deduziu" e' justamente o que
+                      `formato_origem` existe pra carregar.
+      2. `confronto`  existe um jogo anterior entre os dois, na mesma
+                      competicao e temporada, com o mando invertido e dentro
+                      da janela de dias. Isso nao e' indicio: e' a definicao
+                      de confronto de duas pernas.
+      3. `regulamento` o que competition_profile declara pra aquela fase --
+                      so' consultado quando nao ha evidencia, e e' o que cobre
+                      o JOGO DE IDA (onde nao existe confronto anterior pra
+                      olhar) e a final unica de um torneio de duas pernas.
+      4. nada          fase de mata-mata sem evidencia e sem regulamento
+                      cadastrado -> DESCONHECIDO. Nao vira "jogo unico" por
+                      omissao: jogo unico e' uma afirmacao, e o motor nao a
+                      tem.
+
+    Fora de mata-mata (fase de grupos, rodada de campeonato, fase que o parser
+    nao reconheceu) o formato e' PONTOS_CORRIDOS -- nao ha confronto agregado
+    a reconstruir, e e' o caminho que a esmagadora maioria dos jogos toma.
+    """
+    if fase not in _FASES_MATA_MATA:
+        return PONTOS_CORRIDOS, "fase"
+    if leg_do_rotulo is not None:
+        return COPA_IDA_E_VOLTA, "rotulo"
+    if jogo_de_ida is not None:
+        return COPA_IDA_E_VOLTA, "confronto"
+    declarado = competition_profile.formato_declarado(league_id, fase)
+    if declarado:
+        return declarado, "regulamento"
+    return FORMATO_DESCONHECIDO, None
 
 
 def peso_da_fase(fase: str | None) -> float:
@@ -208,8 +269,66 @@ def encontrar_jogo_de_ida(h2h: list, league_id, season, before_date=None,
     return max(candidatos, key=lambda j: j.get("match_date") or 0)
 
 
+# Deslocamento de volume OFENSIVO DO LADO que precisa reverter o agregado,
+# 0-1, por tamanho da desvantagem. Nao e' escala inventada: e' a forma da
+# medicao de 2026-08-19 sobre os jogos de volta reais da base de producao
+# (11 confrontos com estatistica completa, baseline casado por mando):
+#
+#     lado atras no agregado   escanteios +1.98 (ep 1.18)  chutes +2.95 (ep 1.61)
+#     lado na frente           escanteios -1.66 (ep 1.52)  chutes -0.30 (ep 2.61)
+#     agregado empatado        escanteios -0.64 (ep 0.99)  chutes +0.49 (ep 1.66)
+#
+# Duas conclusoes, e as duas contrariam o que "mata-mata abre o jogo" sugere:
+#
+#   1. AGREGADO EMPATADO NAO DESLOCA VOLUME. E' o cenario de maior tensao
+#      (e stakes_score continua dizendo isso, porque importancia e' outra
+#      coisa), mas os dois times se anulam e a partida sai igual a uma
+#      partida comum. Por isso o empate vale 0.0 aqui, nao o maximo.
+#   2. O EFEITO E' REDISTRIBUICAO, NAO CRIACAO. O total da partida quase nao
+#      se move (+0.95 escanteios, ep 1.04 -- indistinguivel de zero); o que
+#      muda e' de QUEM sao os escanteios. Ver tie_effect.py, que e' quem usa
+#      esta escala e que por isso quase nao age em mercado de jogo inteiro.
+_PRESSAO_POR_DIFERENCA = {0: 0.00, 1: 0.60, 2: 0.85, 3: 1.00}
+
+# Quem esta na frente segura, mas segura MENOS do que o outro ataca -- os dois
+# numeros medidos acima nao sao simetricos (-1.66 contra +1.98).
+_FATOR_DE_QUEM_ADMINISTRA = 0.80
+
+
+def _pressao_por_lado(diferenca: int | None, peso_fase: float) -> dict:
+    """Necessidade ofensiva de cada lado, -1 a +1, do ponto de vista do
+    MANDANTE DE HOJE. Positivo = precisa atacar; negativo = pode administrar.
+
+    `diferenca` e' o agregado pelo mandante atual (+1 = mandante ganhando o
+    confronto por 1). O peso da fase modula: precisar de um gol numa final
+    aperta mais que numa repescagem.
+    """
+    if diferenca is None:
+        return {"home": 0.0, "away": 0.0, "magnitude": 0.0,
+                "papel_home": None, "papel_away": None, "aplicavel": False}
+    intensidade = _PRESSAO_POR_DIFERENCA.get(min(abs(diferenca), 3), 1.00)
+    # peso_fase vai de 0.30 (grupos) a 1.00 (final); reescalado pra nao zerar
+    # a fase mais fraca nem inflar a mais forte.
+    modulador = 0.70 + 0.30 * peso_fase
+    forca = round(intensidade * modulador, 4)
+    if diferenca == 0:
+        return {"home": 0.0, "away": 0.0, "magnitude": 0.0,
+                "papel_home": "empatado", "papel_away": "empatado", "aplicavel": True}
+    if diferenca > 0:                      # mandante na frente: ele administra
+        lados = {"home": round(-forca * _FATOR_DE_QUEM_ADMINISTRA, 4), "away": forca,
+                 "papel_home": "na_frente", "papel_away": "atras"}
+    else:                                  # mandante atras: ele ataca
+        lados = {"home": forca, "away": round(-forca * _FATOR_DE_QUEM_ADMINISTRA, 4),
+                 "papel_home": "atras", "papel_away": "na_frente"}
+    # `magnitude` e' a forca do confronto SEM a assimetria de papel embutida.
+    # Existe porque tie_effect ja' tem o efeito de cada papel MEDIDO em separado
+    # (atras e na_frente nao sao espelhos um do outro nos dados), e usar os
+    # numeros com sinal acima aplicaria a assimetria duas vezes.
+    return {**lados, "magnitude": forca, "aplicavel": True}
+
+
 def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
-                jogo_de_ida: dict | None = None) -> dict:
+                jogo_de_ida: dict | None = None, league_id=None) -> dict:
     """Retrato completo do confronto eliminatorio.
 
     `home_team_id`/`away_team_id` sao os do jogo A SER ANALISADO (a volta,
@@ -217,11 +336,19 @@ def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
     um calculo de agregado costuma errar de sinal -- por isso os gols de cada
     lado sao resolvidos por team_id, nunca pela coluna home/away.
 
+    `league_id` (2026-08-19) traz o REGULAMENTO da competicao: formato
+    declarado da fase, prorrogacao, penaltis e gol fora. Opcional -- sem ele o
+    formato ainda sai da evidencia do confronto, so' nao ha regra de
+    classificacao pra expor.
+
     Sempre devolve os numeros brutos junto dos rotulos.
     """
     fase = parse_fase(round_str)
     leg, leg_origem = inferir_leg(round_str, jogo_de_ida)
     is_mata_mata = fase in _FASES_MATA_MATA
+    formato, formato_origem = resolver_formato(
+        league_id, fase, parse_leg(round_str), jogo_de_ida)
+    regras = competition_profile.regras_de_mata_mata(league_id)
 
     contexto = {
         "fase": fase,
@@ -233,12 +360,27 @@ def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
         "is_mata_mata": bool(is_mata_mata),
         "is_jogo_de_volta": leg == 2,
         "peso_fase": peso_da_fase(fase),
+        "formato": formato,
+        # "rotulo" | "confronto" | "regulamento" | "fase" | None -- de onde
+        # veio a afirmacao de formato. Sem isso nao da' pra distinguir
+        # "sabemos que e' jogo unico" de "ninguem disse o contrario".
+        "formato_origem": formato_origem,
+        "regras": {
+            # Tri-estado preservado ate' a ponta: None = nao declarado.
+            # Nenhum calculo deste motor aplica gol fora sem True literal.
+            "gol_fora": regras.away_goals,
+            "prorrogacao": regras.prorrogacao,
+            "penaltis": regras.penaltis,
+        },
         "placar_ida": None,
         "agregado_home": None,
         "agregado_away": None,
+        "diferenca_agregada": None,
+        "gols_para_reverter": None,
         "lider_agregado": None,
         "precisa_de_resultado": None,
         "empate_classifica": None,
+        "pressao_por_lado": {"home": 0.0, "away": 0.0, "aplicavel": False},
         "is_approximation": True,
     }
 
@@ -258,6 +400,11 @@ def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
     # Agregado ANTES desta partida: o que cada um fez na ida.
     contexto["agregado_home"] = gols_home
     contexto["agregado_away"] = gols_away
+    contexto["diferenca_agregada"] = gols_home - gols_away
+    # Quantos gols o lado atras precisa so' pra empatar o agregado. E' o
+    # numero que separa "reverter um 1x0" de "reverter um 3x0", e o que o
+    # motor ao vivo recalcula a cada gol.
+    contexto["gols_para_reverter"] = abs(gols_home - gols_away) or None
 
     if gols_home > gols_away:
         contexto["lider_agregado"] = "home"
@@ -275,6 +422,8 @@ def tie_context(round_str: str | None, home_team_id: int, away_team_id: int,
         contexto["precisa_de_resultado"] = "ambos"
         contexto["empate_classifica"] = None
 
+    contexto["pressao_por_lado"] = _pressao_por_lado(
+        contexto["diferenca_agregada"], contexto["peso_fase"])
     return contexto
 
 
@@ -313,13 +462,17 @@ def descrever(contexto: dict | None) -> list:
     partes = []
     nomes = {"FINAL": "final", "SEMIFINAL": "semifinal", "QUARTAS": "quartas de final",
              "OITAVAS": "oitavas de final", "TRINTA_E_DOIS": "fase de 32",
-             "PLAYOFF": "play-off", "TERCEIRO_LUGAR": "disputa de terceiro lugar"}
+             "PLAYOFF": "play-off", "REPESCAGEM": "repescagem",
+             "TERCEIRO_LUGAR": "disputa de terceiro lugar"}
     fase_txt = nomes.get(contexto.get("fase"), "mata-mata")
+    formato = contexto.get("formato")
 
     if contexto.get("leg") == 2:
         partes.append(f"jogo de volta de {fase_txt}")
     elif contexto.get("leg") == 1:
         partes.append(f"jogo de ida de {fase_txt}")
+    elif formato == COPA_JOGO_UNICO:
+        partes.append(f"{fase_txt} em jogo unico")
     else:
         partes.append(f"partida de {fase_txt}")
 
@@ -329,11 +482,28 @@ def descrever(contexto: dict | None) -> list:
             f"ida terminou {placar['gols_mandante_atual']} a {placar['gols_visitante_atual']} "
             f"para o mandante de hoje"
         )
+    faltam = contexto.get("gols_para_reverter")
     if contexto.get("precisa_de_resultado") == "ambos":
         partes.append("agregado empatado, os dois precisam do resultado")
     elif contexto.get("precisa_de_resultado") == "home":
-        partes.append("mandante precisa reverter o agregado")
+        partes.append(f"mandante precisa de {faltam} gol(s) so' pra empatar o agregado "
+                      f"e tende a assumir a iniciativa")
+        partes.append("visitante joga com a vantagem e pode administrar")
     elif contexto.get("precisa_de_resultado") == "away":
-        partes.append("visitante precisa reverter o agregado")
+        partes.append(f"visitante precisa de {faltam} gol(s) so' pra empatar o agregado "
+                      f"e tende a assumir a iniciativa")
+        partes.append("mandante joga com a vantagem e pode administrar")
+
+    # Regra de classificacao -- so' aparece quando a competicao a DECLARA.
+    # Silencio aqui e' proposital: dizer "sem gol fora" numa competicao cujo
+    # regulamento nao esta cadastrado seria afirmar o que nao se sabe.
+    regras = contexto.get("regras") or {}
+    if formato == COPA_IDA_E_VOLTA and regras.get("gol_fora") is True:
+        partes.append("competicao usa criterio de gol fora")
+    if contexto.get("precisa_de_resultado") == "ambos":
+        if regras.get("prorrogacao") is True:
+            partes.append("empate no agregado leva a prorrogacao")
+        elif regras.get("prorrogacao") is False and regras.get("penaltis") is True:
+            partes.append("empate no agregado vai direto aos penaltis")
 
     return partes
