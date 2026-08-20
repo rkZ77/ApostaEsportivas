@@ -39,6 +39,7 @@ import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
+import { stakeDe } from '../utils/stakePlan'
 import {fmtUnits, pctProb } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
@@ -393,7 +394,8 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       probabilityPct: pctProb(dica.probability ?? dica.confidence),
       result: dica.result,
       profit: dica.result
-        ? calcProfitUnits(dica.result, Number(dica.odd), dica.user_stake_units ?? 1,
+        ? calcProfitUnits(dica.result, Number(dica.odd),
+                          dica.user_stake_units ?? stakeDe('free'),
                           dica.user_stake_units != null ? dica.user_actual_odd : null)
         : null,
     })
@@ -526,9 +528,13 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
           (() => {
             /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
                pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
-               ganho que ele nunca teve, na conta da banca dele. */
+               ganho que ele nunca teve, na conta da banca dele.
+
+               Quem NÃO seguiu vê o pick na stake do plano público
+               (stakePlan.ts · free = 3u), não em 1u fixo: o placar da mesma
+               tela já pesava esse mesmo pick pelo plano. */
             const seguiu = stakeSeguida != null
-            const u = seguiu ? stakeSeguida! : 1
+            const u = seguiu ? stakeSeguida! : stakeDe('free')
             const p = calcProfitUnits(dica.result, Number(dica.odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
@@ -539,7 +545,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `por ${u}u`}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
                   {seguiu ? (
@@ -740,7 +746,8 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
       probabilityPct: pctProb(m.probability ?? m.confidence),
       result: m.result,
       profit: m.result
-        ? calcProfitUnits(m.result, Number(m.total_odd), m.user_stake_units ?? 1,
+        ? calcProfitUnits(m.result, Number(m.total_odd),
+                          m.user_stake_units ?? stakeDe('multipla'),
                           m.user_stake_units != null ? m.user_actual_odd : null)
         : null,
     })
@@ -873,9 +880,13 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
           (() => {
             /* Dinheiro só pra quem apostou · ver SuggestionCard: a stake caía
                pra sugestão quando o usuário NÃO seguiu, e o card anunciava um
-               ganho que ele nunca teve, na conta da banca dele. */
+               ganho que ele nunca teve, na conta da banca dele.
+
+               Quem NÃO seguiu vê o bilhete na stake do plano público
+               (stakePlan.ts · múltipla = 1u). O número não muda hoje: o que
+               muda é a origem dele, que passa a ser a mesma do placar. */
             const seguiu = stakeSeguida != null
-            const u = seguiu ? stakeSeguida! : 1
+            const u = seguiu ? stakeSeguida! : stakeDe('multipla')
             const p = calcProfitUnits(m.result, Number(m.total_odd), u, seguiu ? oddSeguida : null)
             const color = p >= 0 ? 'text-green-400' : 'text-red-400'
             const profitR = seguiu && banca ? Math.abs(p) * banca.unit_value : null
@@ -886,7 +897,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
                   <div className={`text-xl font-black ${color}`}>
                     {p >= 0 ? '+' : ''}{p.toFixed(2)}u
                   </div>
-                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : 'por 1u'}</div>
+                  <div className="text-[10px] text-ink-4">{seguiu ? `(${u}u)` : `por ${u}u`}</div>
                 </div>
                 <div className="flex-1 px-4 py-3 text-center">
                   {seguiu ? (
@@ -1820,7 +1831,7 @@ export default function Picks() {
   const topoPronto = !todayLoading && quickStatsPronto
 
   // Lucro acumulado em unidades. `profit` já vem somado dos seis pipelines em
-  // /suggestions/stats/quick e já está em unidades (stake fixa de 1u por pick),
+  // /suggestions/stats/quick e já está em unidades (pesado por stake_plan.py),
   // então aqui é só ler: nada de recalcular odd por odd no cliente.
   const lucroUnidades = Number(quickStats?.profit ?? 0)
 

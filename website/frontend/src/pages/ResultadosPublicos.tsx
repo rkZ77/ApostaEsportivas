@@ -679,9 +679,20 @@ export default function ResultadosPublicos() {
                         <span className="font-mono text-[11px] font-bold text-ink-2 w-10 text-right shrink-0 tabular-nums">
                           {f.win_rate}%
                         </span>
-                        <span className={`font-mono text-xs font-black w-16 text-right shrink-0 tabular-nums ${Number(f.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                          {fmtUnits(Number(f.profit), 1)}
-                        </span>
+                        {/* Fonte com stake_total zerado não entra no lucro em
+                            unidades do placar (hoje: alavancagem, que é um
+                            caminho e só vira unidade na banca de quem apostou
+                            · ver backend/stake_plan.py). Estampar "+0,0u" aí
+                            leria como "não deu lucro", que é outra coisa. */}
+                        {Number(f.stake_total) > 0 ? (
+                          <span className={`font-mono text-xs font-black w-16 text-right shrink-0 tabular-nums ${Number(f.profit) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            {fmtUnits(Number(f.profit), 1)}
+                          </span>
+                        ) : (
+                          <span className="font-mono text-[10px] text-ink-4 w-16 text-right shrink-0" title="Só conta em unidades na banca de quem apostou">
+                            n/a
+                          </span>
+                        )}
                       </div>
                     ))}
                   </div>

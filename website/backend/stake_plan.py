@@ -8,34 +8,63 @@ aposta a mesma coisa numa entrada simples e num bilhete de quatro pernas.
 O placar publico entao anuncia um plano fixo, declarado aqui e em nenhum outro
 lugar:
 
-    pick simples (VIP, free, faltas, defesas) ......... 4u
-    bilhete combinado (multipla, alavancagem) ......... 1u
+    VIP ................................................ 4u
+    free, faltas, defesas de goleiro .................... 3u
+    multipla ........................................... 1u
+    alavancagem ........................................ nao entra
+
+O VIP fica um degrau acima porque e' o produto de maior convicção do motor: e'
+onde o filtro e' mais duro e onde a assinatura e' cobrada. Free, faltas e
+defesas sao entrada simples tambem (um jogo, um mercado), mas entram um degrau
+abaixo -- sao vitrine, e o placar publico nao deve pesar vitrine igual ao
+produto pago.
 
 Combinada leva 1u pelo motivo de sempre: a variancia de um bilhete e' outra
 coisa, e igualar a stake inflaria tanto o lucro nos meses bons quanto o buraco
-nos ruins. Faltas e defesas seguem os simples porque sao isso -- uma entrada,
-um jogo, um mercado.
+nos ruins.
+
+POR QUE A ALAVANCAGEM VALE ZERO AQUI (decisao do usuario, 2026-08-19)
+---------------------------------------------------------------------
+Ela nao e' um pick que se liquida em unidade: e' um CAMINHO. O bilhete em
+andamento nao e' dinheiro, o resultado so' vira unidade quando o caminho
+encerra, e o RED custa so' a entrada -- essa conta ja existe e mora em
+`alavancagem_series` (banca.py::_alav_unidades), na banca de quem de fato
+apostou. Somar o `profit` dela no placar publico contava a mesma coisa por uma
+regra que nao e' a dela.
+
+Peso zero, e nao remocao da fonte, de proposito: a alavancagem CONTINUA
+aparecendo no historico publico, com o resultado dela, na quebra por fonte e na
+taxa de acerto. O que ela deixa de fazer e' mover o lucro e o ROI em unidades.
+Tirar do UNION apagaria o produto da tela.
 
 DUAS REGRAS PRA NAO QUEBRAR O NUMERO:
 
 1. `profit` e `stake` andam JUNTOS. Multiplicar o lucro pelo peso sem
    multiplicar a stake faria o ROI (lucro/stake) saltar pelo mesmo fator, e o
-   site passaria a anunciar um ROI que nao existe.
+   site passaria a anunciar um ROI que nao existe. Vale pro zero tambem: a
+   alavancagem some das DUAS somas, entao o ROI nao e' diluido por uma stake
+   que nao rendeu.
 
 2. Este arquivo e' a fonte unica. O mesmo numero alimenta /public/results (Home,
    Resultados, Performance) e /suggestions/stats/quick (tela de Picks); com a
    tabela escrita duas vezes, as duas telas passariam a discordar em silencio
    sobre o lucro da IA -- e uma discordancia dessas e' a coisa que mais
    rapidamente derruba a confianca no placar.
+
+   O front tem um espelho em frontend/src/utils/stakePlan.ts, porque o card de
+   pick precisa do numero antes de qualquer resposta do backend. Ele nao e' uma
+   segunda fonte: test_unidades_e_odd_2026_08.py compara os dois e quebra se
+   divergirem.
 """
 
 STAKE_PADRAO: dict[str, int] = {
     "vip":         4,
-    "free":        4,
-    "faltas":      4,
-    "goleiros":    4,
+    "free":        3,
+    "faltas":      3,
+    "goleiros":    3,
     "multiplas":   1,
-    "alavancagem": 1,
+    # Zero = fora do placar de unidades. Ver o bloco no topo deste arquivo.
+    "alavancagem": 0,
 }
 
 # Fonte desconhecida entra com 1u: subestima, nunca infla.
@@ -46,12 +75,25 @@ def stake_de(source: str) -> int:
     return STAKE_PADRAO.get(source, STAKE_FALLBACK)
 
 
+def conta_em_unidades(source: str) -> bool:
+    """Se esta fonte move o lucro em unidades do placar publico.
+
+    Existe pra tela poder dizer "nao conta em unidades" em vez de estampar um
+    `+0,0u` que parece defeito. Quem le' o peso pra CALCULAR usa `stake_de`;
+    quem le' pra ESCREVER na tela pergunta aqui.
+    """
+    return stake_de(source) > 0
+
+
 def rotulo_curto() -> str:
-    """'4u em picks simples · 1u em múltiplas' · texto que vai pra tela.
+    """'VIP 4u · free e mercados 3u · múltipla 1u' · texto que vai pra tela.
 
     Sai daqui pra que mudar o plano mude a legenda junto. Uma legenda velha
     grudada num numero novo e' pior do que nao ter legenda.
+
+    A alavancagem nao aparece na legenda porque nao entra na conta que a
+    legenda explica -- citar "0u" convidaria a leitura errada de que ela deu
+    zero de lucro.
     """
-    simples = STAKE_PADRAO["vip"]
-    bilhete = STAKE_PADRAO["multiplas"]
-    return f"{simples}u em picks simples · {bilhete}u em múltiplas"
+    return (f"VIP {STAKE_PADRAO['vip']}u · free e mercados {STAKE_PADRAO['free']}u"
+            f" · múltipla {STAKE_PADRAO['multiplas']}u")

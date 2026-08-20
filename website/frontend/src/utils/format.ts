@@ -16,7 +16,7 @@ export function winRate(greens: number, total: number): number | null {
  * A resposta traz `stake_label` montado em backend/stake_plan.py, que é a
  * fonte da verdade · isto aqui é só o texto de partida.
  */
-export const STAKE_LABEL_PADRAO = '4u em picks simples · 1u em múltiplas'
+export const STAKE_LABEL_PADRAO = 'VIP 4u · free e mercados 3u · múltipla 1u'
 
 /**
  * Lucro em unidades, sempre com sinal. `+42,7u` · `−1,00u`.
@@ -24,8 +24,8 @@ export const STAKE_LABEL_PADRAO = '4u em picks simples · 1u em múltiplas'
  * Todo número público de unidade sai daqui. A base de cálculo é a coluna
  * `profit` das seis tabelas de picks, que guarda o lucro de UMA unidade
  * (settlement.py: GREEN -> odd-1, HALF-WIN -> (odd-1)/2, PUSH -> 0, HALF-LOSS
- * -> -0.5, RED -> -1); o peso do plano de stake (4u em pick simples, 1u em
- * bilhete) já vem multiplicado do backend, então aqui é só formatar.
+ * -> -0.5, RED -> -1); o peso do plano de stake (backend/stake_plan.py) já vem
+ * multiplicado do backend, então aqui é só formatar.
  *
  * Isso NÃO é a stake sugerida da Banca, que varia por confiança
  * (stakeUtils.ts). Quem mostra este número tem que exibir STAKE_LABEL_PADRAO

@@ -88,21 +88,70 @@ def test_media_por_produto_nao_vira_tile_ao_lado_do_roi():
 
 
 def test_plano_de_stake_vive_num_lugar_so():
-    """4u em pick simples, 1u em bilhete · escrito uma vez, lido por todos.
+    """VIP 4u, free e mercados 3u, multipla 1u · escrito uma vez, lido por todos.
 
     Com a tabela repetida, /public/results (Home, Resultados, Performance) e
     /suggestions/stats/quick (tela de Picks) passariam a anunciar lucros
     diferentes pra mesma IA, e nada acusaria a divergencia.
-    """
-    from stake_plan import STAKE_PADRAO
 
-    assert STAKE_PADRAO["vip"] == STAKE_PADRAO["free"] == 4
-    assert STAKE_PADRAO["multiplas"] == STAKE_PADRAO["alavancagem"] == 1
-    # Faltas e defesas sao pick simples (um jogo, um mercado): seguem o simples.
-    assert STAKE_PADRAO["faltas"] == STAKE_PADRAO["goleiros"] == 4
+    Numeros revisados em 2026-08-19 a pedido do usuario: o VIP fica um degrau
+    acima do que e' vitrine (free, faltas, defesas), e a alavancagem sai do
+    placar em unidades -- ela e' um caminho, e so' vira unidade na banca de
+    quem apostou (alavancagem_series).
+    """
+    from stake_plan import STAKE_PADRAO, conta_em_unidades
+
+    assert STAKE_PADRAO["vip"] == 4
+    # Free e os mercados proprios sao a vitrine: entrada simples tambem, mas
+    # um degrau abaixo do produto pago.
+    assert STAKE_PADRAO["free"] == STAKE_PADRAO["faltas"] == STAKE_PADRAO["goleiros"] == 3
+    assert STAKE_PADRAO["multiplas"] == 1
+    # Zero = fora do placar de unidades, NAO "deu zero de lucro".
+    assert STAKE_PADRAO["alavancagem"] == 0
+    assert not conta_em_unidades("alavancagem")
+    assert conta_em_unidades("vip") and conta_em_unidades("free")
 
     for arquivo in ("routers/public.py", "routers/suggestions.py"):
         assert "stake_plan import" in _fonte(arquivo), f"{arquivo} nao le o plano central"
+
+
+def test_espelho_do_plano_no_front_bate_com_o_backend():
+    """O card de pick precisa do plano ANTES de o backend responder.
+
+    Ele mostra "lucro do pick" pra quem NAO apostou, e antes caia num 1u fixo
+    -- entao o mesmo pick aparecia a 1u no card e a 4u no placar da mesma tela.
+    A correcao foi o card ler o plano; o preco e' um espelho em TypeScript, e o
+    preco do espelho e' este teste. Sem ele, mudar um lado e esquecer o outro
+    reintroduz exatamente a divergencia que o plano central existe pra impedir.
+    """
+    import re
+    from stake_plan import STAKE_PADRAO, STAKE_FALLBACK
+
+    fonte = _front("utils/stakePlan.ts")
+    bloco = fonte[fonte.index("STAKE_PADRAO"):fonte.index("STAKE_FALLBACK")]
+    espelho = {m.group(1): int(m.group(2))
+               for m in re.finditer(r"(\w+):\s*(\d+),", bloco)}
+
+    for tipo, unidades in STAKE_PADRAO.items():
+        assert espelho.get(tipo) == unidades, (
+            f"{tipo}: backend {unidades}u, front {espelho.get(tipo)}u")
+
+    # O front usa a forma de rota ('multipla'); o backend, o nome da tabela.
+    # A chave extra tem que apontar pro mesmo peso, senao o card da multipla
+    # cai no fallback sem ninguem perceber.
+    assert espelho.get("multipla") == STAKE_PADRAO["multiplas"]
+    assert f"STAKE_FALLBACK = {STAKE_FALLBACK}" in fonte
+
+    # Quem calcula pergunta pro plano, nao pro literal. O defeito era o 1u
+    # chutado -- so' na stake de quem NAO seguiu; `stakeSuggestion?.units ?? 1`
+    # e' outra coisa (sugestao da Banca) e continua valendo.
+    for tela in ("components/SuggestionCard.tsx", "pages/Picks.tsx"):
+        codigo = _front_codigo(tela)
+        assert "stakePlan" in codigo, f"{tela} nao le o plano"
+        assert "stakeSeguida! : 1" not in codigo, f"{tela}: nao-seguiu voltou pra 1u fixo"
+        for pos in [m.start() for m in re.finditer(r"calcProfitUnits\(", codigo)]:
+            chamada = codigo[pos:pos + 240]
+            assert "?? 1," not in chamada, f"{tela}: calcProfitUnits ainda chuta 1u"
 
 
 def test_peso_multiplica_lucro_e_stake_juntos():

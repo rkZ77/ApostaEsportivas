@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { PillGroup, Spinner } from '../components/ui'
 import { PERIODOS, PERIODO_PADRAO, dentroDoPeriodo, type PeriodoKey } from '../lib/periodo'
-import { ChevronLeft, ChevronRight, Trash2, RotateCcw } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Trash2, RotateCcw, BarChart3 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import { tabFade, toastUp } from '../lib/motion'
@@ -210,6 +210,18 @@ export default function MeusPicks() {
          * armadilha. O clique aqui só ABRE o aviso · nada é apagado nele.
          */
         actions: (data?.entries?.length ?? 0) > 0 ? (
+          <>
+          {/* Quebra por pipeline · a página responde "ganhei com o quê", que é
+              a pergunta que esta tela não respondia. Fica ao lado de "Zerar
+              mês" por ser a outra coisa que se faz com esta lista inteira. */}
+          <button
+            onClick={() => navigate('/meus-picks/pipelines')}
+            title="Ver quanto cada pipeline rendeu na sua banca"
+            className="flex items-center gap-1.5 text-xs font-semibold text-ink-3 hover:text-ink-1 border border-line-strong hover:border-ink-4/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
+          >
+            <BarChart3 className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
+            Por pipeline
+          </button>
           <button
             onClick={() => setShowReset(true)}
             disabled={(mesAtual?.apostas ?? 0) === 0}
@@ -223,6 +235,7 @@ export default function MeusPicks() {
             <RotateCcw className="w-3.5 h-3.5 shrink-0 hidden sm:block" />
             Zerar mês
           </button>
+          </>
         ) : undefined,
       }}
     >
