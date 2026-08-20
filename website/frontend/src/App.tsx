@@ -47,7 +47,6 @@ const Banca          = lazy(() => import('./pages/Banca'))
 const BancaSaque     = lazy(() => import('./pages/BancaSaque'))
 const BancaFechamentos = lazy(() => import('./pages/BancaFechamentos'))
 const MeusPicks      = lazy(() => import('./pages/MeusPicks'))
-const MeusPicksPipelines = lazy(() => import('./pages/MeusPicksPipelines'))
 const BancaAlavancagem   = lazy(() => import('./pages/BancaAlavancagem'))
 const VerifyEmail    = lazy(() => import('./pages/VerifyEmail'))
 const Privacidade    = lazy(() => import('./pages/Privacidade'))
@@ -205,7 +204,6 @@ export default function App() {
                 <Route path="/banca/saque" element={<PrivateRoute><BancaSaque /></PrivateRoute>} />
                 <Route path="/banca/fechamentos" element={<PrivateRoute><BancaFechamentos /></PrivateRoute>} />
                 <Route path="/meus-picks" element={<PrivateRoute><MeusPicks /></PrivateRoute>} />
-                <Route path="/meus-picks/pipelines" element={<PrivateRoute><MeusPicksPipelines /></PrivateRoute>} />
                 <Route path="/banca/alavancagem" element={<PrivateRoute><BancaAlavancagem /></PrivateRoute>} />
                 <Route path="/forgot-password" element={<PublicRoute><ForgotPassword /></PublicRoute>} />
                 <Route path="/verify-email" element={<VerifyEmail />} />
