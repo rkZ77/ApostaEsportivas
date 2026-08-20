@@ -105,9 +105,14 @@ def _odds(linha="4.5"):
 
 
 def _rodar(referee_stats, linha="4.5"):
-    """Times que dao MUITO cartao (7 por jogo) -- a taxa empirica e o Poisson
-    dos times concordam em Over 4.5. So' o arbitro discorda."""
-    hist = [_jogo(i, 4, 3) for i in range(10)]
+    """Times que dao MUITO cartao (9 por jogo) -- a taxa empirica e o modelo
+    dos times concordam em Over 4.5. So' o arbitro discorda.
+
+    Eram 7 por jogo ate' 2026-08-20. Com a dispersao medida de cartao e o
+    limiar em 0.12, um jogo de 7 cartoes da' 83% na contagem e 71% no modelo:
+    os TIMES ja' discordavam entre si, e o cenario deixava de isolar o
+    arbitro, que e' a variavel que estes testes existem pra medir."""
+    hist = [_jogo(i, 5, 4) for i in range(10)]
     return orchestrator.analyze_fixture_markets(
         _odds(linha), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},
@@ -127,7 +132,7 @@ def test_arbitro_muito_permissivo_ja_era_barrado_pela_porteira():
 
 
 def test_arbitro_permissivo_rebaixa_o_over_dos_times():
-    """Times de 7 cartoes por jogo (taxa 83%, Poisson 83%) com um arbitro de 3.4
+    """Times de 9 cartoes por jogo (taxa 83%, modelo 85%) com um arbitro de 3.4
     pontos: as duas leituras dos times concordam entre si e o arbitro discorda
     das duas. E' a forma exata do #1579."""
     permissivo = {"games": 8, "avg_yellow": 3.0, "avg_red": 0.0}

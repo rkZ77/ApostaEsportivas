@@ -319,6 +319,29 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
     # correlacao fraca de rodada (mesma liga, mesmo dia), que empurra a
     # probabilidade real um pouco pra cima da estimada -- erro pro lado
     # conservador.
+    #
+    # A INDEPENDENCIA FOI MEDIDA EM 2026-08-20, e ela se sustenta.
+    #
+    # A multipla vinha 2 GREEN em 14 nos ultimos 30 dias, com bilhetes
+    # anunciando EV de +53% e +71%. A suspeita obvia era que o produto
+    # estivesse errado -- ou por correlacao entre as pernas, ou por
+    # concentracao de mercado (havia bilhete de escanteio+escanteio e de
+    # chutes+chutes). Simulei 2.677 bilhetes de 2 pernas sobre o dado real,
+    # fora da amostra:
+    #
+    #     recorte                bilhetes   produto diz   real     erro
+    #     mesma familia               717        71.5%   72.5%   -1.0pp
+    #     familias diferentes       1.960        70.1%   70.8%   -0.7pp
+    #
+    # O produto e' praticamente nao-enviesado, e perna repetida NAO e' pior --
+    # e' marginalmente melhor, dentro do ruido. Nao ha caso pra proibir
+    # familia repetida nem pra somar um piso de prob_combinada.
+    #
+    # O erro estava inteiro nas PERNAS: cada uma era estimada por Poisson numa
+    # familia superdispersa e saia 3,5 a 5,6 pontos inflada
+    # (probability_model._DISPERSAO). O produto entao elevava o erro ao
+    # quadrado sem ter erro proprio nenhum. Corrigida a perna, a multipla se
+    # corrige junto -- e qualquer regra extra aqui estaria tratando sintoma.
     prob_combinada = 1.0
     for p in legs:
         prob_combinada *= float(p["taxa_real"])

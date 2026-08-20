@@ -88,6 +88,7 @@ def _const(constantes: dict | None, chave: str, padrao: float) -> float:
 def expected_saves(opponent_shots_on_avg: float | None,
                    keeper_saves_avg: float | None = None,
                    sample_size: int | None = None,
+                   keeper_sample: int | None = None,
                    constantes: dict | None = None) -> float | None:
     """Defesas esperadas do goleiro neste jogo.
 
@@ -102,20 +103,40 @@ def expected_saves(opponent_shots_on_avg: float | None,
 
     Retorna None se nao houver nem um dos dois -- nunca inventa numero.
     """
+    base_liga = _const(constantes, "league_mean_saves", LEAGUE_MEAN_SAVES)
+
     sinais = []
     if opponent_shots_on_avg is not None and opponent_shots_on_avg > 0:
         sinais.append(opponent_shots_on_avg
                       * _const(constantes, "save_rate_per_shot_on", SAVE_RATE_PER_SHOT_ON))
     if keeper_saves_avg is not None and keeper_saves_avg > 0:
-        sinais.append(keeper_saves_avg)
+        # A MEDIA DO GOLEIRO E' ENCOLHIDA PELA AMOSTRA DELE (2026-08-20).
+        #
+        # Ate' aqui ela entrava crua na mistura, com peso 1/3, e o unico
+        # encolhimento acontecia depois, sobre o blend, usando `sample_size`
+        # -- que e' a quantidade de jogos do ADVERSARIO, nao do goleiro. Um
+        # goleiro com UMA aparicao contribuia com o placar de defesas de um
+        # jogo unico como se fosse a media dele, porque quem tinha 8 jogos era
+        # o time que chuta contra ele.
+        #
+        # Medido em PROD: das 125 aparicoes com historico previo, 86 vem de
+        # goleiro com 1 ou 2 jogos anteriores. Nao e' caso de borda, e' o caso
+        # comum -- `player_match_stats` so' tem 240 aparicoes de goleiro na
+        # base inteira.
+        #
+        # Nao e' regra nova: e' o mesmo encolhimento que o resto do motor ja'
+        # aplica a toda taxa de amostra curta. O que estava errado era a
+        # amostra que chegava aqui.
+        encolhido_do_goleiro = shrink_taxa(keeper_saves_avg, keeper_sample, base_liga)
+        sinais.append(encolhido_do_goleiro
+                      if encolhido_do_goleiro is not None else keeper_saves_avg)
     if not sinais:
         return None
 
     # O sinal do adversario pesa o dobro: e' o que o backtest sustenta.
     mu = sinais[0] if len(sinais) == 1 else (sinais[0] * 2 + sinais[1]) / 3
 
-    encolhido = shrink_taxa(mu, sample_size,
-                            _const(constantes, "league_mean_saves", LEAGUE_MEAN_SAVES))
+    encolhido = shrink_taxa(mu, sample_size, base_liga)
     return round(encolhido if encolhido is not None else mu, 3)
 
 
@@ -124,7 +145,8 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
                          sample_size: int | None,
                          odd: float | None,
                          line: float = 1.5,
-                         constantes: dict | None = None) -> dict | None:
+                         constantes: dict | None = None,
+                         keeper_sample: int | None = None) -> dict | None:
     """Candidato de pick de defesas, ou None se nao der pra avaliar.
 
     Devolve probabilidade, odd justa, edge e EV no mesmo formato que o resto
@@ -135,7 +157,7 @@ def analyze_saves_market(opponent_shots_on_avg: float | None,
         return None
 
     mu = expected_saves(opponent_shots_on_avg, keeper_saves_avg, sample_size,
-                        constantes=constantes)
+                        keeper_sample=keeper_sample, constantes=constantes)
     if mu is None:
         return None
 

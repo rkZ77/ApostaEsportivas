@@ -44,27 +44,44 @@ def convergence_adjustment(direction: str, line_val: float | None, convergence: 
     return 0.10 if implied_direction == direction else -0.10
 
 
-def model_fit_adjustment(model_fit_diff: float | None) -> float:
+def model_fit_adjustment(model_fit_diff: float | None,
+                         config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """Delta pra somar no confidence (termo M): quanto a probabilidade do
-    modelo Poisson (probability_model) concorda com a taxa empirica bruta
+    modelo (probability_model) concorda com a taxa empirica bruta
     (stats_model) pra MESMA linha -- duas estimativas independentes
     concordando e sinal de que o padrao e real, nao ajuste por acaso.
-    Diferenca pequena (<=10 pontos percentuais) -> +0.05 (confirmador
-    extra). Diferenca grande (>=15pp) -> -0.05 (os dois modelos discordam,
-    desconfie). Entre os dois, ou sem dado (familia sem leitura Poisson) ->
-    0 (neutro).
+    Diferenca pequena -> +0.05 (confirmador extra). Diferenca grande ->
+    -0.05 (os dois modelos discordam, desconfie). Entre os dois, ou sem dado
+    (familia sem leitura de modelo) -> 0 (neutro).
 
     O corte de baixo era 0.30 ate' 2026-08-08, e nessa faixa larga ele nunca
     disparava na pratica: o pick #1573, com 24.5pp de desacordo, recebeu 0.0.
     Hoje bate com config.model_disagreement_threshold, que e' onde o
     orchestrator passa a usar a estimativa menor -- um desacordo que muda a
     probabilidade tem que cobrar confidence tambem, senao o mesmo fato seria
-    tratado como grave num lugar e irrelevante no outro."""
+    tratado como grave num lugar e irrelevante no outro.
+
+    O limiar passou a ser LIDO da config em 2026-08-20, em vez de repetido
+    aqui como 0.15. Os dois numeros ja' tinham que ser iguais e havia um teste
+    so' pra vigiar isso -- quando a config foi pra 0.12 o teste pegou a
+    divergencia, que e' exatamente o que ele existia pra fazer. Derivar em vez
+    de duplicar tira a chance de acontecer de novo.
+
+    O corte de baixo acompanha: fica em 0.10, mas nunca acima do limiar de
+    penalidade menos uma folga -- senao um limiar apertado faria a MESMA
+    diferenca ganhar bonus e penalidade ao mesmo tempo."""
     if model_fit_diff is None:
         return 0.0
-    if model_fit_diff <= 0.10:
+    penaliza = config.model_disagreement_threshold
+    if penaliza is None:
+        # Regra desligada: sem um ponto onde o desacordo passa a mudar a
+        # probabilidade, cobrar confidence por ele seria punir por um criterio
+        # que o motor decidiu nao usar.
+        return 0.05 if model_fit_diff <= 0.10 else 0.0
+    confirma = min(0.10, penaliza - 0.02)
+    if model_fit_diff <= confirma:
         return 0.05
-    if model_fit_diff >= 0.15:
+    if model_fit_diff >= penaliza:
         return -0.05
     return 0.0
 

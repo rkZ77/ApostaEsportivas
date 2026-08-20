@@ -234,14 +234,64 @@ def lambda_residual(familia: str, observado: int | None, minuto: int | None,
     }
 
 
+def dispersao_residual(familia: str, baseline_por_partida: float | None,
+                       lambda_residual_valor: float | None,
+                       minutos_restantes_valor: int | None) -> float:
+    """phi do que AINDA FALTA, derivado do phi da partida inteira.
+
+    O pre-jogo mediu que escanteio tem variancia 1.82x a media
+    (probability_model._DISPERSAO). Aqui a pergunta e' outra: quanto disso
+    ainda vale depois de ver 40 minutos de jogo?
+
+    NAO e' uma interpolacao inventada -- e' a preditiva posterior do MESMO
+    modelo Gama-Poisson que produziu aquele numero. Se o ritmo da partida e'
+    um multiplicador theta ~ Gama(r, r) sobre a taxa base, entao:
+
+        contagem da partida inteira  ->  phi_total = 1 + lambda_total / r
+        logo                              r = lambda_total / (phi_total - 1)
+
+    Observar o primeiro trecho do jogo atualiza theta. A preditiva do trecho
+    que falta e' Binomial Negativa com
+
+        phi_restante = 1 + lambda_restante / (r + exposicao_ja_observada)
+
+    onde a exposicao e' o lambda ESPERADO do trecho ja' jogado (o parametro de
+    taxa da Gama posterior anda com a exposicao, nao com a contagem).
+
+    O comportamento sai certo sozinho, sem nenhum ajuste manual -- escanteio
+    com lambda 8.79 e phi 1.82 da' r = 10.7 e:
+
+        minuto 15  ->  phi 1.60   (quase nada resolvido, quase o phi total)
+        minuto 45  ->  phi 1.29
+        minuto 80  ->  phi 1.05   (o jogo ja' se revelou, volta pra Poisson)
+
+    E' por isso que o pre-jogo nao podia simplesmente emprestar o numero dele
+    pro ao vivo: 1.82 aos 80 minutos seria descontar duas vezes uma incerteza
+    que a partida ja' resolveu.
+    """
+    phi_total = pm.dispersao(familia, "total")
+    if (phi_total <= 1.0 or not baseline_por_partida
+            or not lambda_residual_valor or lambda_residual_valor <= 0):
+        return 1.0
+    r = baseline_por_partida / (phi_total - 1.0)
+    restantes = max(0, min(MINUTOS_REGULAMENTARES, minutos_restantes_valor or 0))
+    fracao_ja_jogada = 1.0 - (restantes / MINUTOS_REGULAMENTARES)
+    exposicao = baseline_por_partida * max(0.0, fracao_ja_jogada)
+    return round(1.0 + lambda_residual_valor / (r + exposicao), 4)
+
+
 def probabilidade_da_linha(lam: float, linha: float, direcao: str,
-                           ja_observado: int) -> float | None:
+                           ja_observado: int, phi: float = 1.0) -> float | None:
     """P(total da partida bater a linha), a partir do lambda do que falta.
 
     A conversao e' a peca que mantem modelo e liquidacao falando do mesmo
     numero. Pick de "Over 9.5 escanteios" criado com 7 no placar precisa de
     mais de 2.5 escanteios, entao a pergunta virada pro Poisson e'
     P(X_restante > 2.5).
+
+    `phi` e' a dispersao do trecho que falta (ver dispersao_residual). O
+    default 1.0 e' Poisson exato -- quem chamar sem ele ve o comportamento
+    anterior a 2026-08-20.
 
     Linha ja resolvida pelo placar devolve certeza pratica, nao 1.0 exato: EV
     infinito quebraria o gate seguinte. Quem corta esse caso e' o
@@ -257,10 +307,10 @@ def probabilidade_da_linha(lam: float, linha: float, direcao: str,
     if direcao == "over":
         if faltam < 0:
             return 0.9999
-        return pm.prob_over(faltam, lam)
+        return pm.prob_over(faltam, lam, phi)
     if faltam < 0:
         return 0.0001
-    return pm.prob_under(faltam, lam)
+    return pm.prob_under(faltam, lam, phi)
 
 
 def encolher_contra_mercado(prob_modelo: float, prob_mercado: float | None,

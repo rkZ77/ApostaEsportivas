@@ -620,7 +620,7 @@ def analyze_fixture_markets(
         # esconder a maior das duas divergencias atras da media anularia
         # justamente o sinal que a regra existe pra capturar.
         pior_fit = max((d for d in (model_fit_diff, referee_fit_diff) if d is not None), default=None)
-        m_adjustment = (confidence.model_fit_adjustment(pior_fit)
+        m_adjustment = (confidence.model_fit_adjustment(pior_fit, config)
                         if (has_poisson_signal or referee_prob is not None) else 0.0)
 
         total_delta = (cal_delta or 0) - v_penalty + m_adjustment
