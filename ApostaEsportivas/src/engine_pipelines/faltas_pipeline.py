@@ -289,6 +289,13 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
     media_fora, n_fora = _media_faltas(
         hist_fora, fixture["away_team_id"], "away" if USAR_MANDO else None)
 
+    # Contexto de confronto (2026-08-20). Faltas era um dos dois pipelines
+    # cegos ao agregado, e e' o mercado com o efeito MEDIDO mais forte de
+    # todos: o lado que precisa reverter comete 2.48 faltas A MENOS por jogo
+    # (3.9 erros-padrao), e o que administra tambem cai. Como aqui so' se
+    # publica OVER, o agregado aberto joga direto contra o pick.
+    contexto = context_gate.build_for_fixture(match_stats, fixture)
+
     arbitro = referee_service.get_stats(fixture.get("referee"), fixture["season"])
     media_arbitro = float(arbitro["avg_fouls"]) if arbitro and arbitro.get("avg_fouls") else None
     n_arbitro = int(arbitro["games"]) if arbitro and arbitro.get("games") else None
@@ -310,7 +317,14 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
             n_casa=n_casa, n_fora=n_fora, n_arbitro=n_arbitro,
             odd=oferta["odd"], linha=linha, faixas=faixas,
         )
-        if not analise or analise.get("probability", 0) < PROB_MIN:
+        if not analise:
+            continue
+        # ANTES dos cortes, nao depois: o contexto tem que poder REPROVAR uma
+        # linha, e nao so' enfeitar a explicacao de uma ja aprovada.
+        analise = tie_effect.aplicar_em_analise(
+            analise, contexto, familia="fouls", escopo="total", direcao="over",
+            linha=linha, lambda_esperado=analise.get("expected_fouls"))
+        if analise.get("probability", 0) < PROB_MIN:
             continue
         if analise.get("edge", 0) < EDGE_MIN:
             continue
@@ -358,6 +372,8 @@ def _explicar(c: dict) -> str:
         f"Odd justa {c['fair_odd']} contra {c['odd']} oferecida "
         f"(margem de {c['edge'] * 100:+.1f}%)."
     )
+    for frase in tie_effect.descrever(c.get("tie_effect")):
+        partes.append(frase.capitalize() + ".")
     return " ".join(partes)
 
 

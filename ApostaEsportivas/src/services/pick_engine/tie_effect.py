@@ -86,9 +86,22 @@ _MEDIDO: dict[str, dict[str, tuple]] = {
     "shots":   {"atras": (2.95, 1.61), "na_frente": (-0.30, 2.61)},
     "goals":   {"atras": (1.16, 0.47), "na_frente": (0.11, 0.48)},
     "fouls":   {"atras": (-2.48, 0.64), "na_frente": (-1.14, 2.32)},
-    # cards e saves NAO tem entrada de papel de proposito: a medicao devolveu
-    # zero pros dois nos lados assimetricos. Cartao aparece so' no bloco de
-    # agregado empatado, abaixo.
+    # cards, saves e shots_on_target NAO tem entrada de papel, e a ausencia dos
+    # tres e' resultado de medicao, nao esquecimento:
+    #
+    #   cards            -0.35 (ep 0.76) / -0.16 (ep 0.86)
+    #   saves            +0.79 (ep 1.22) / +0.01 (ep 0.89)
+    #   shots_on_target  +0.87 (ep 0.96) / +0.60 (ep 1.65)
+    #
+    # As tres celulas de "na_frente" merecem nota, porque contrariam a
+    # intuicao que quase virou codigo em 2026-08-20: o time que administra a
+    # vantagem NAO chuta menos no alvo (+0.60) e o goleiro dele NAO faz menos
+    # defesa (+0.01). "O time com 5 gols de vantagem vai se fechar e o goleiro
+    # do outro lado nem trabalha" e' uma historia boa que a base nao conta --
+    # quem administra contra-ataca contra uma defesa adiantada, e o volume de
+    # finalizacao no alvo fica onde estava.
+    #
+    # Cartao aparece so' no bloco de agregado empatado, abaixo.
 }
 
 #: Efeito medido POR LADO no cenario de agregado empatado. Unica familia em
@@ -235,8 +248,20 @@ def efeito(candidate: dict, contexto: dict | None) -> dict:
                 "motivo": "familia sem lambda proprio: nao ha como converter "
                           "deslocamento de contagem em probabilidade"}
     if not delta_conta:
+        # SEM EFEITO DE DIRECAO AINDA E' UM REGIME DIFERENTE (corrigido
+        # 2026-08-20). Ate aqui esta saida devolvia delta_confianca=0, e com
+        # isso o mercado de DEFESAS -- cuja medicao deu zero de direcao, ver
+        # _MEDIDO -- saia de uma volta de mata-mata com agregado de 5 gols
+        # exatamente com a mesma confianca de uma rodada de campeonato.
+        #
+        # Sao duas perguntas diferentes: "o agregado empurra este mercado pra
+        # algum lado?" (aqui, nao) e "a amostra que produziu a estimativa
+        # descreve esta partida?" (aqui tambem nao). A segunda continua valendo
+        # quando a primeira responde zero.
         return {**vazio, "aplicavel": True, "papel": papel, "escopo": escopo,
-                "motivo": "efeito medido nulo para esta familia neste papel"}
+                "delta_confianca": -round(_penalidade_de_regime(tie, contexto), 4),
+                "motivo": "efeito medido nulo para esta familia neste papel; "
+                          "resta o desconto de regime"}
 
     p_base = probability_model.poisson_prob_for_line(lam, linha, direcao)
     p_novo = probability_model.poisson_prob_for_line(
@@ -307,15 +332,83 @@ def _detalhe(tie: dict, papel: str | None, escopo: str | None,
     elif papel == "empatado":
         situacao = "agregado empatado"
     else:
-        situacao = "jogo inteiro, com os dois efeitos se cancelando"
+        # O texto tem que dizer o que ACONTECEU, nao repetir a regra geral.
+        # "os dois efeitos se cancelando" foi escrito pensando em escanteios,
+        # onde um lado sobe e o outro desce -- mas em faltas os dois caem
+        # juntos, e a frase saia descrevendo um cancelamento que nao houve.
+        situacao = ("jogo inteiro, somando o que cada lado desloca"
+                    if delta_conta else "jogo inteiro")
     return (f"{situacao}: {fam_txt} deslocados em {delta_conta:+.2f} "
             f"por jogo pelo historico de jogos de volta")
+
+
+def aplicar_em_analise(analise: dict, contexto: dict | None, *, familia: str,
+                       escopo: str, direcao: str, linha: float,
+                       lambda_esperado: float | None) -> dict:
+    """Aplica o efeito num candidato dos pipelines de MERCADO PROPRIO.
+
+    Faltas e defesas de goleiro nao passam por analyze_fixture_markets -- eles
+    tem matematica propria (fouls_model, goalkeeper_model) e montam o candidato
+    a mao. Ate 2026-08-20 isso significava que os dois eram os UNICOS pipelines
+    completamente cegos ao contexto de confronto: um pick de defesas saia de uma
+    volta de mata-mata com 5 gols de diferenca no agregado exatamente como sairia
+    de uma rodada de campeonato.
+
+    Devolve um dict novo (nunca muta o recebido) com `probability` deslocada,
+    `edge` e `fair_odd` recalculados a partir dela, e o rastro em `tie_effect`.
+    edge e' `probability - 1/odd` nos dois pipelines, e recalcular a partir da
+    probabilidade final e' o que impede os tres numeros de sairem de sincronia --
+    o mesmo cuidado que apply_probability_layer ja toma no motor generico.
+
+    A probabilidade so' desce por causa do desconto de regime; ela NUNCA sobe
+    por ele. Regime diferente e' incerteza, e incerteza nao melhora aposta.
+    """
+    candidato = {
+        "market_type": familia, "scope": escopo, "_direction": direcao,
+        "_line_val": linha,
+        "convergence": ({"expected_value": lambda_esperado}
+                        if lambda_esperado is not None else None),
+    }
+    ef = efeito(candidato, contexto)
+    saida = {**analise, "tie_effect": ef}
+    if not ef.get("aplicavel"):
+        return saida
+
+    prob = analise.get("probability")
+    odd = analise.get("odd")
+    if prob is None or not odd:
+        return saida
+
+    nova = prob + (ef.get("delta_prob") or 0.0)
+    # O desconto de regime vira desconto de PROBABILIDADE aqui, e nao de
+    # confidence, por uma razao de estrutura: nestes dois pipelines a
+    # `confidence` gravada E' a propria probabilidade (ver o comentario em
+    # faltas_pipeline._salvar). Cobrar nos dois campos seria cobrar duas vezes
+    # o mesmo fato; cobrar so' num "confidence" que e' copia do outro seria nao
+    # cobrar em lugar nenhum.
+    nova += (ef.get("delta_confianca") or 0.0)
+    nova = max(0.0, min(1.0, round(nova, 4)))
+    if nova == prob:
+        return saida
+
+    saida["probability"] = nova
+    saida["probability_sem_contexto"] = prob
+    saida["edge"] = round(nova - (1.0 / float(odd)), 4)
+    saida["fair_odd"] = round(1.0 / nova, 3) if nova > 0 else None
+    return saida
 
 
 def descrever(ef: dict | None) -> list:
     """Frases prontas pra 'Entenda esta analise'. Vazio quando o efeito nao
     agiu -- nao ha nada a contar."""
-    if not ef or not ef.get("aplicavel") or not ef.get("delta_prob"):
+    # Basta UM dos dois deltas. O de confianca existe sozinho quando a familia
+    # nao tem efeito de direcao medido (defesas, cartoes em confronto
+    # assimetrico) -- e e' justamente ali que o usuario mais precisa ler que a
+    # partida nao pertence ao universo da amostra, porque nada mais no texto
+    # vai contar isso pra ele.
+    if not ef or not ef.get("aplicavel"):
+        return []
+    if not ef.get("delta_prob") and not ef.get("delta_confianca"):
         return []
     linhas = []
     for p in ef["parcelas"]:

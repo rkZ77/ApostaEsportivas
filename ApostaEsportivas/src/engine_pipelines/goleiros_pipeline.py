@@ -48,6 +48,7 @@ from services.pick_engine.market_pick_score import faixa_config, pick_score
 from services.pick_engine.saves_calibration import recalibrar as recalibrar_saves
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine.ai_review import review_gate
+from services.pick_engine import context_gate, tie_effect
 from engine_pipelines.decision_log import (
     MOTIVO_ERRO, MOTIVO_SEM_CANDIDATO,
     log_decision, log_run, log_skip,
@@ -393,6 +394,20 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
     chutes_fora, n_fora = _media_chutes_no_alvo(
         hist_fora, fixture["away_team_id"], mando="away")
 
+    # Contexto de confronto (2026-08-20). Aqui ele NAO desloca a
+    # probabilidade por direcao, e a razao e' medicao, nao esquecimento: nos
+    # jogos de volta reais da base, defesas de goleiro deram +0.79 (ep 1.22)
+    # pro lado que precisa reverter e +0.01 (ep 0.89) pro que administra --
+    # zero nos dois. A historia de que "o time com vantagem se fecha e o
+    # goleiro do outro lado nem trabalha" nao aparece nos numeros; quem
+    # administra contra-ataca contra uma defesa adiantada.
+    #
+    # O que sobra, e que importa, e' o DESCONTO DE REGIME: a media de chutes
+    # no alvo do adversario sai dos jogos normais dele, e uma volta de
+    # mata-mata com o agregado aberto nao pertence aquela distribuicao. Isso e'
+    # incerteza sobre a estimativa, e vira desconto de probabilidade.
+    contexto = context_gate.build_for_fixture(match_stats, fixture)
+
     candidatos = []
     for o in structured:
         nome_mercado = (o.get("market_name") or "").strip().lower()
@@ -437,6 +452,14 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
         )
         if not analise:
             continue
+        # ANTES dos cortes: o desconto de regime tem que poder reprovar o pick.
+        # `escopo` e' o lado do GOLEIRO -- tie_effect inverte sozinho pra ler a
+        # pressao do adversario (ver _lado_do_escopo), que e' quem chuta nele.
+        analise = tie_effect.aplicar_em_analise(
+            analise, contexto, familia="saves",
+            escopo=("home" if info["team_id"] == fixture["home_team_id"] else "away"),
+            direcao="over", linha=n_defesas - 0.5,
+            lambda_esperado=analise.get("expected_saves"))
         if analise.get("probability", 0) < PROB_MIN:
             continue
         if analise.get("edge", 0) < EDGE_MIN:
