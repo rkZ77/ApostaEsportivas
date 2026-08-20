@@ -1,6 +1,6 @@
 import { Info } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
-import { fmtSigned } from '../utils/format'
+import { fmtSigned, fmtUnits } from '../utils/format'
 
 /*
  * Quebra por pipeline · aba de Meus Picks.
@@ -64,7 +64,7 @@ function CardPipeline({ p, volumeTotal }: { p: Pipeline; volumeTotal: number }) 
             {fmtSigned(p.pnl)}
           </p>
           <p className="font-mono text-[10px] text-ink-4 tabular-nums">
-            {p.units >= 0 ? '+' : ''}{p.units.toFixed(1)}u
+            {fmtUnits(p.units)}
           </p>
         </div>
       </div>
@@ -78,7 +78,7 @@ function CardPipeline({ p, volumeTotal }: { p: Pipeline; volumeTotal: number }) 
              compara pipelines de volume diferente entre si. ROI sobre a banca
              faria o pipeline mais frequente parecer sempre o melhor. */
           { l: 'Yield', v: `${p.yield >= 0 ? '+' : ''}${p.yield.toFixed(1)}%` },
-          { l: 'Arriscado', v: `${p.staked_units.toFixed(1)}u` },
+          { l: 'Arriscado', v: `${p.staked_units.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}u` },
         ].map(({ l, v }) => (
           <div key={l} className="text-center">
             <p className="font-mono text-sm font-bold text-ink-1 tabular-nums">{v}</p>
@@ -126,7 +126,7 @@ export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[
           },
           {
             l: 'Em unidades',
-            v: `${unidades >= 0 ? '+' : ''}${unidades.toFixed(1)}u`,
+            v: fmtUnits(unidades),
             sub: 'independe do valor da sua unidade',
             c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
           },

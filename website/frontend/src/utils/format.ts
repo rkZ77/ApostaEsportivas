@@ -68,3 +68,17 @@ export function pctProb(v: unknown): number | null {
   if (!isFinite(n) || n <= 0) return null
   return n <= 1 ? n * 100 : n
 }
+
+
+/** Sobe só a inicial da frase, deixando o resto como veio.
+ *
+ * O `capitalize` do CSS sobe a inicial de CADA palavra, e em português isso
+ * escreve "Quinta-Feira, 20 De Agosto": a preposição e o segundo termo do dia
+ * composto viram nome próprio. `toLocaleDateString('pt-BR')` já devolve a
+ * forma correta, toda minúscula · o que falta é só a maiúscula de início de
+ * frase, e ela não é decisão de estilo, é ortografia.
+ */
+export function capitalizarFrase(texto: string): string {
+  if (!texto) return texto
+  return texto.charAt(0).toUpperCase() + texto.slice(1)
+}

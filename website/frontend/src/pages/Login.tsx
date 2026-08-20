@@ -294,7 +294,7 @@ export default function Login() {
             {mode === 'login' && (
               <>
                 <div>
-                  <label htmlFor="login-identifier" className="block text-sm text-ink-2 mb-2 font-medium">Login ID</label>
+                  <label htmlFor="login-identifier" className="block text-sm text-ink-2 mb-2 font-medium">Entrar com</label>
                   {/* Tabs estilo Betano */}
                   <div className="flex rounded-md overflow-hidden border border-line-strong mb-3">
                     {loginTabs.map(tab => (

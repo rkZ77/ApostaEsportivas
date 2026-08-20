@@ -10,7 +10,7 @@ import PageShell from '../components/PageShell'
 import { translateMarket, explainMarket } from '../utils/marketTranslate'
 import SuggestionDetail from '../components/SuggestionDetail'
 import ProfitChart from '../components/ProfitChart'
-import { fmtBRL, fmtSigned, winRate as calcWinRate } from '../utils/format'
+import { fmtBRL, fmtSigned, winRate as calcWinRate, capitalizarFrase } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import InfoTip from '../components/InfoTip'
@@ -505,7 +505,7 @@ export default function MeusPicks() {
                     </button>
                     <div className="text-center">
                       <div className="flex items-center justify-center gap-1.5">
-                        <span className="text-sm font-black text-ink-1 capitalize">{dayLabel(selectedKey)}</span>
+                        <span className="text-sm font-black text-ink-1">{capitalizarFrase(dayLabel(selectedKey))}</span>
                         {clampedOffset > 0 && (
                           <button
                             onClick={() => setDayOffset(0)}

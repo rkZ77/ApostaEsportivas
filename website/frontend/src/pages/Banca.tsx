@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext'
 import PageShell from '../components/PageShell'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
-import { fmtBRL, fmtSigned } from '../utils/format'
+import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 import { getResultStyle, PICK_TYPE_CLS } from '../utils/resultStyle'
 import { TeamLogo } from '../components/TeamLogo'
 import { Button, NumberTicker, PillGroup, Spinner } from '../components/ui'
@@ -367,15 +367,19 @@ export default function Banca() {
                   sub: `${data?.greens ?? 0}G / ${data?.reds ?? 0}R de ${data?.total_resolved ?? 0}`,
                 },
                 {
-                  label: 'Ganho p/ unidade',
+                  label: 'Ganho por unidade',
                   value: ganhoUnidades,
-                  formatter: (v: number) => `${v >= 0 ? '+' : ''}${v.toFixed(1)}u`,
+                  // fmtUnits e não toFixed: o resto da tela escreve 1.229,22
+                  // e este tile respondia 122.9u, com ponto decimal de inglês.
+                  formatter: (v: number) => fmtUnits(v),
                   color: ganhoUnidades >= 0 ? 'text-green-500' : 'text-red-400',
                   sub: 'excl. alavancagem',
                 },
               ].map(({ label, value, formatter, color, sub }) => (
                 <div key={label} className="stat-card text-center">
-                  <NumberTicker value={value} formatter={formatter} className={`font-mono text-3xl font-black ${color}`} />
+                  {/* No celular cada tile tem ~150px: em text-3xl um "+R$ 1.229,22" quebrava
+                      entre o "R$" e o número, como se fossem duas informações. */}
+                  <NumberTicker value={value} formatter={formatter} className={`font-mono text-2xl sm:text-3xl font-black whitespace-nowrap ${color}`} />
                   <div className="text-xs text-ink-3 mt-1">{label}</div>
                   <div className="text-[10px] text-ink-4 mt-0.5">{sub}</div>
                 </div>

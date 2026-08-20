@@ -4,7 +4,7 @@ import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { PillGroup, Spinner } from '../components/ui'
 import LucroBarChart from '../components/LucroBarChart'
-import { fmtBRL, fmtSigned } from '../utils/format'
+import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 
 /*
  * Histórico de fechamentos mensais, em página própria.
@@ -49,7 +49,7 @@ function LinhaRecorte({ nome, r }: { nome: string; r: Recorte }) {
           {fmtSigned(r.pnl)}
         </p>
         <p className="font-mono text-[10px] text-ink-4 tabular-nums">
-          {r.units >= 0 ? '+' : ''}{r.units.toFixed(1)}u
+          {fmtUnits(r.units)}
         </p>
       </div>
     </div>
@@ -184,7 +184,7 @@ export default function BancaFechamentos() {
               },
               {
                 l: 'Em unidades',
-                v: `${unidades >= 0 ? '+' : ''}${unidades.toFixed(1)}u`,
+                v: fmtUnits(unidades),
                 sub: 'independe do valor da sua unidade',
                 c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
               },
@@ -255,7 +255,7 @@ export default function BancaFechamentos() {
                     </p>
                     {h.profit_units != null && (
                       <p className="font-mono text-[10px] text-ink-4 tabular-nums">
-                        {h.profit_units >= 0 ? '+' : ''}{h.profit_units.toFixed(1)}u
+                        {fmtUnits(h.profit_units)}
                       </p>
                     )}
                     {/* Contra a media · e o que transforma um numero solto em

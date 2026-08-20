@@ -155,7 +155,7 @@ export default function NextGames({ revelar = true, onCarregou }: {
 
   useEffect(() => {
     api.get('/public/next-fixtures', { params: { limit: 8 } })
-      .then(r => setGames(r.data ?? []))
+      .then(r => setGames(Array.isArray(r.data) ? r.data : []))
       .catch(() => setGames([]))
       .finally(() => { setLoading(false); onCarregou?.() })
   }, [])

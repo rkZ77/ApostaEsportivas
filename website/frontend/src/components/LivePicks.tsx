@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
-import { Radio, ChevronDown } from 'lucide-react'
+import {
+  Radio, ChevronDown, RefreshCw, CornerUpRight, RectangleVertical,
+  Footprints, Hand, Crosshair, Target, Flag, Goal,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import api from '../services/api'
 import { backdropFade, sheetUp } from '../lib/motion'
 
@@ -139,6 +143,113 @@ function TeamLogo({ id, name, size = 24 }: { id?: number; name: string; size?: n
   )
 }
 
+/* ── Relógio do jogo ────────────────────────────────────────────────────────
+ *
+ * A API-Football devolve o minuto INTEIRO (`elapsed`) e o poll é de 15s, então
+ * o card mostrava "67'" congelado até a rodada seguinte: três quartos do tempo
+ * parado numa tela que promete acompanhamento ao vivo. É a diferença que salta
+ * aos olhos ao comparar com o bilhete da Betano, onde o cronômetro corre.
+ *
+ * Aqui o minuto do servidor é a âncora e os segundos correm no cliente até o
+ * próximo fetch. O que ele NÃO faz é inventar: como a API não diz em que
+ * segundo do minuto respondeu, o relógio parte de :00 e o fetch seguinte
+ * corrige o desvio (no máximo 59s, na prática 15s).
+ *
+ * Intervalo, pênaltis e jogo suspenso PARAM o relógio · lá o tempo de jogo não
+ * corre. E acréscimo trava no teto do período ("45+", "90+") em vez de exibir
+ * um 47:12 que não existe: passado o teto, o quanto ainda falta é decisão do
+ * árbitro, não conta de minuto.
+ */
+const PERIODO_CAP: Record<string, number> = { '1H': 45, '2H': 90, ET: 120 }
+const RELOGIO_PARADO = new Set(['HT', 'BT', 'P', 'SUSP', 'INT'])
+
+function useRelogio(elapsed: number | null | undefined, status: string, syncedAt: number): string | null {
+  const correndo = elapsed != null && LIVE_SET.has(status) && !RELOGIO_PARADO.has(status)
+  const [, tick] = useState(0)
+  useEffect(() => {
+    if (!correndo) return
+    const id = setInterval(() => tick(t => t + 1), 1000)
+    return () => clearInterval(id)
+  }, [correndo])
+
+  if (elapsed == null) return null
+  if (!correndo) return `${elapsed}'`
+  const cap   = PERIODO_CAP[status]
+  const total = elapsed * 60 + Math.max(0, Math.floor((Date.now() - syncedAt) / 1000))
+  if (cap != null && total >= cap * 60) return `${cap}+`
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+/* Avisa por ~1,4s que o número mudou de uma leitura para a outra.
+ *
+ * Num card que respira de 15 em 15 segundos, o escanteio novo (ou o gol)
+ * trocava o dígito em silêncio e passava despercebido: o usuário só descobria
+ * comparando com o que lembrava. É o que a casa de aposta resolve piscando o
+ * contador quando o evento entra.
+ *
+ * Só dispara da segunda leitura em diante · a primeira renderização é o estado
+ * inicial da tela, não novidade, e piscar tudo ao abrir seria ruído. */
+function useMudou(valor: number | null | undefined): boolean {
+  const anterior = useRef(valor)
+  const [mudou, setMudou] = useState(false)
+  useEffect(() => {
+    if (anterior.current === valor) return
+    const tinhaAntes = anterior.current != null
+    anterior.current = valor
+    if (!tinhaAntes || valor == null) return
+    setMudou(true)
+    const id = setTimeout(() => setMudou(false), 1400)
+    return () => clearTimeout(id)
+  }, [valor])
+  return mudou
+}
+
+const DESTAQUE = 'bg-green-400/20 ring-1 ring-green-400/40 rounded-sm px-1'
+
+/* Ícone da família de estatística, lido do rótulo que o backend já monta
+   ("Escanteios Casa", "Defesas do Goleiro", ...). Casa por palavra e não por
+   market_type porque o rótulo é o único campo que /live/my-picks manda pro
+   card · e é ele que o usuário lê ao lado do número. Sem correspondência,
+   devolve null e o chip aparece só com texto, como antes. */
+function iconeDoStat(label?: string | null): LucideIcon | null {
+  const l = (label || '').toLowerCase()
+  if (l.includes('escanteio'))  return CornerUpRight
+  if (l.includes('cart'))       return RectangleVertical
+  if (l.includes('falta'))      return Footprints
+  if (l.includes('defesa'))     return Hand
+  if (l.includes('alvo'))       return Crosshair
+  if (l.includes('chute'))      return Target
+  if (l.includes('impediment')) return Flag
+  if (l.includes('gol') || l.includes('ambas')) return Goal
+  return null
+}
+
+/* O contador do mercado apostado, no formato do bilhete de casa de aposta:
+   ícone da estatística, rótulo e o número em destaque. */
+function StatChip({ label, value, cls = '', compact = false }: {
+  label?: string | null; value: number; cls?: string; compact?: boolean
+}) {
+  const Icon   = iconeDoStat(label)
+  const mudou  = useMudou(value)
+  return (
+    <span className={`font-mono inline-flex items-center gap-1 font-black shrink-0 ml-2 ${cls}`}>
+      {Icon && <Icon className={compact ? 'w-3 h-3 shrink-0' : 'w-3.5 h-3.5 shrink-0'} strokeWidth={2.5} />}
+      {!compact && label && <span className="truncate font-semibold">{label}</span>}
+      <span className={`tabular-nums transition-all duration-500 ${mudou ? DESTAQUE : ''}`}>{value}</span>
+    </span>
+  )
+}
+
+/* Placar, com a mesma piscada do contador quando sai gol. */
+function Placar({ home, away, cls }: { home: number | null; away: number | null; cls: string }) {
+  const mudou = useMudou((Number(home) || 0) * 100 + (Number(away) || 0))
+  return (
+    <span className={`font-mono font-black tabular-nums mx-1 transition-all duration-500 ${cls} ${mudou ? DESTAQUE : ''}`}>
+      {home} x {away}
+    </span>
+  )
+}
+
 function StatBar({ currentVal, lineVal, direction }: {
   currentVal: number; lineVal: number; direction: 'over' | 'under'
 }) {
@@ -147,26 +258,31 @@ function StatBar({ currentVal, lineVal, direction }: {
   const fillPos = Math.min((currentVal / maxVal) * 100, 100)
   const winning = direction === 'over' ? currentVal > lineVal : currentVal < lineVal
   const fillColor = winning ? '#22c55e' : '#ef4444'
+  /* Só o rótulo da LINHA fica sobre a barra.
+   *
+   * O valor atual também tinha um rótulo, pendurado abaixo do preenchimento:
+   * ele invadia a frase "Probabilidade de acertar" quando o contador estava em
+   * zero, e repetia o número que o chip da estatística já mostra a dois
+   * centímetros dali, na mesma cor. Sobrou o que a barra sozinha não diz · onde
+   * está a linha. O tamanho do preenchimento continua contando o resto.
+   */
   return (
-    <div className="relative h-2 bg-surface-3/60 rounded-full mt-3 mb-4">
+    <div className="relative h-2 bg-surface-3/60 rounded-full mt-6 mb-3">
       <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
         style={{ width: `${fillPos}%`, backgroundColor: fillColor }} />
       <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-white/50 rounded"
         style={{ left: `${linePos}%` }} />
-      <div className="absolute -top-5 text-[10px] font-black text-ink-1/70"
-        style={{ left: `${linePos}%`, transform: 'translateX(-50%)' }}>
+      <div className="absolute -top-5 text-[10px] font-black text-ink-1/70 tabular-nums"
+        style={{ left: `${Math.max(linePos, 4)}%`, transform: 'translateX(-50%)' }}>
         {lineVal}
-      </div>
-      <div className="absolute -bottom-5 text-[10px] font-black"
-        style={{ left: `${Math.min(fillPos, 95)}%`, transform: 'translateX(-50%)', color: fillColor }}>
-        {currentVal}
       </div>
     </div>
   )
 }
 
-function LiveLeg({ leg }: { leg: any }) {
+function LiveLeg({ leg, syncedAt }: { leg: any; syncedAt: number }) {
   const isLive    = LIVE_SET.has(leg.status)
+  const relogio   = useRelogio(leg.elapsed, leg.status, syncedAt)
   const legLineLc = leg.line?.toLowerCase() ?? ''
   const hasBar    = leg.current_val != null && leg.line_val != null &&
     (legLineLc.startsWith('over') || legLineLc.startsWith('mais') ||
@@ -189,17 +305,18 @@ function LiveLeg({ leg }: { leg: any }) {
           <TeamLogo id={leg.home_team_id} name={leg.home_team || ''} size={14} />
           <span className="text-xs text-ink-2 truncate">{leg.home_team}</span>
           {leg.status !== 'NS' && (
-            <span className="font-mono text-xs font-black text-ink-1 tabular-nums mx-1 shrink-0">
-              {leg.home_goals} – {leg.away_goals}
-            </span>
+            <Placar home={leg.home_goals} away={leg.away_goals} cls="text-xs text-ink-1 shrink-0" />
           )}
           <span className="text-ink-4 text-xs shrink-0">vs</span>
           <span className="text-xs text-ink-2 truncate">{leg.away_team}</span>
           <TeamLogo id={leg.away_team_id} name={leg.away_team || ''} size={14} />
         </div>
         <div className="flex items-center gap-2 shrink-0 ml-2">
-          {isLive && leg.elapsed != null && (
-            <span className="font-mono text-[9px] font-black text-green-400 animate-pulse">{leg.elapsed}'</span>
+          {isLive && relogio && (
+            <span className="font-mono flex items-center gap-1 text-[9px] font-black text-green-400 tabular-nums">
+              <span className="w-1 h-1 rounded-full bg-green-500 animate-pulse shrink-0" />
+              {relogio}
+            </span>
           )}
           {legProb != null && (
             <span className={`font-mono text-[9px] font-black border px-1.5 py-0.5 rounded ${probCls}`}>
@@ -217,9 +334,7 @@ function LiveLeg({ leg }: { leg: any }) {
       <div className="flex items-center justify-between text-xs">
         <span className="text-ink-3 truncate">{leg.market} · {leg.line}</span>
         {leg.current_val != null && (
-          <span className={`font-mono font-black shrink-0 ml-2 ${stColor}`}>
-            {leg.stat_label}: {leg.current_val}
-          </span>
+          <StatChip label={leg.stat_label} value={leg.current_val} cls={stColor} compact />
         )}
       </div>
       {hasBar && !leg.is_locked && (
@@ -271,7 +386,7 @@ function CashoutModal({ pick, unitValue, onClose, onDone }: {
         <div>
           <p className="font-bold text-ink-1 text-sm">Registrar Cashout</p>
           <p className="text-xs text-ink-3 mt-0.5">
-            Quanto você recebeu de volta (R$)?
+            Digite o valor que a casa pagou ao encerrar a aposta.
           </p>
         </div>
 
@@ -372,8 +487,11 @@ function isEarlyLocked(pick: any): boolean {
   return false
 }
 
-function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: number; onRefresh: () => void }) {
+function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
+  pick: any; unitValue?: number; onRefresh: () => void; syncedAt: number
+}) {
   const [showCashout, setShowCashout] = useState(false)
+  const relogio     = useRelogio(pick.elapsed, pick.status, syncedAt)
   const isLive      = pick.is_live
   const isFinished  = FINISHED_SET.has(pick.status)
   const isMulti     = pick.pick_type === 'multipla' || pick.pick_type === 'alavancagem'
@@ -428,8 +546,17 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
     : displayProb >= 35
     ? 'text-yellow-400 bg-yellow-400/10 border-yellow-500/25'
     : 'text-red-400 bg-red-400/10 border-red-500/25'
-  const suggestedCashout = displayProb != null && potRetR != null
-    ? potRetR * (displayProb / 100) : null
+  /* O botão NÃO estima quanto a casa vai pagar de cashout.
+   *
+   * A conta antiga era retorno potencial x probabilidade, e ela não tem como
+   * bater com a Betano ou a Superbet: cada casa aplica a própria margem sobre
+   * a odd repreçada DELA, e a API-Football sequer publica odd ao vivo para
+   * metade dos mercados que o motor gera (escanteios de um time, faltas,
+   * defesas do goleiro). O número saía convincente e errado, ao lado de um
+   * campo onde o usuário digita o valor verdadeiro.
+   *
+   * Quem sabe quanto recebeu é ele, na tela da casa. Aqui só se registra.
+   */
   const isCopa = pick.league_id === 1
 
   // Expandido por padrão: só ao vivo; aguardando e resolvido ficam fechados
@@ -448,13 +575,6 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
         <span className="text-xs text-ink-3">{STATUS_LABEL[pick.status] ?? pick.status}</span>
       )}
     </div>
-  ) : canCashout && suggestedCashout != null ? (
-    <button
-      onClick={e => { e.stopPropagation(); setShowCashout(true) }}
-      className="text-xs font-bold text-ink-1 bg-green-700 hover:bg-green-600 px-3 py-1.5 rounded-md transition-colors whitespace-nowrap"
-    >
-      Cash Out R${suggestedCashout.toFixed(0)}
-    </button>
   ) : displayProb != null ? (
     <span className={`font-mono text-xs font-black border px-1.5 py-0.5 rounded ${probCls}`}>{displayProb}%</span>
   ) : isLive ? (
@@ -494,9 +614,9 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               {TYPE_LABEL[pick.pick_type] ?? pick.pick_type}
             </span>
             {isLive && (
-              <span className="font-mono flex items-center gap-1 text-[9px] font-black text-green-400">
-                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-                {pick.elapsed ? `${pick.elapsed}'` : 'AO VIVO'}
+              <span className="font-mono flex items-center gap-1 text-[10px] font-black text-green-400 tabular-nums">
+                <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse shrink-0" />
+                {relogio ?? 'AO VIVO'}
               </span>
             )}
             {stakeR != null && (
@@ -524,7 +644,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
           <div className="px-4 py-3">
             {isMulti ? (
               <div className="space-y-2">
-                {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} />)}
+                {(pick.legs ?? []).map((leg: any, i: number) => <LiveLeg key={i} leg={leg} syncedAt={syncedAt} />)}
                 {multiProb != null && !hasResult && (
                   <div className="pt-2 border-t border-line/60 space-y-1.5">
                     <div className="font-mono flex justify-between text-xs">
@@ -544,9 +664,8 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                   <TeamLogo id={pick.home_team_id} name={pick.home_team || ''} size={16} />
                   <span className="text-sm font-bold text-ink-1 truncate">{pick.home_team}</span>
                   {pick.status !== 'NS' && (
-                    <span className={`font-mono text-sm font-black tabular-nums mx-1 ${isLive ? 'text-green-400' : 'text-ink-2'}`}>
-                      {pick.home_goals} – {pick.away_goals}
-                    </span>
+                    <Placar home={pick.home_goals} away={pick.away_goals}
+                      cls={`text-sm ${isLive ? 'text-green-400' : 'text-ink-2'}`} />
                   )}
                   <span className="text-ink-4 text-xs">vs</span>
                   <span className="text-sm font-bold text-ink-1 truncate">{pick.away_team}</span>
@@ -556,7 +675,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                 <div className="flex items-center justify-between text-xs">
                   <span className="text-ink-2 truncate">{pick.market} · {pick.line}</span>
                   {pick.current_val != null && (
-                    <span className={`font-mono font-black shrink-0 ml-2 ${stColor}`}>{pick.stat_label}: {pick.current_val}</span>
+                    <StatChip label={pick.stat_label} value={pick.current_val} cls={stColor} />
                   )}
                 </div>
                 {hasBar && !effectiveLocked && (
@@ -572,7 +691,7 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
                     <div className="h-1 bg-surface-2 rounded-full overflow-hidden">
                       <div className={`h-full rounded-full transition-all duration-700 ${liveProb >= 60 ? 'bg-green-500' : liveProb >= 35 ? 'bg-yellow-400' : 'bg-red-500'}`} style={{ width: `${liveProb}%` }} />
                     </div>
-                    <p className="text-[9px] text-ink-4">Estimativa via Poisson, atualiza a cada 5s</p>
+                    <p className="text-[9px] text-ink-4">Estimativa via Poisson, atualiza a cada 15s</p>
                   </div>
                 )}
               </div>
@@ -614,12 +733,19 @@ function PickCard({ pick, unitValue, onRefresh }: { pick: any; unitValue?: numbe
               </div>
             )}
             {canCashout && (
-              <button
-                onClick={() => setShowCashout(true)}
-                className="w-full mt-1 text-sm font-bold text-ink-1 bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
-              >
-                {suggestedCashout != null ? `Cash Out · R$${suggestedCashout.toFixed(0)}` : 'Cash Out'}
-              </button>
+              /* Alvo de toque cheio no celular; no desktop encolhe e vai pra
+                 direita, onde moram os valores · registrar cashout é exceção,
+                 não a ação principal do card, e uma faixa verde de 1100px
+                 dizia o contrário. O alinhamento sai do wrapper e não de um
+                 `ml-auto` no botão, que dependia do modo de layout do pai. */
+              <div className="flex sm:justify-end mt-1">
+                <button
+                  onClick={() => setShowCashout(true)}
+                  className="w-full sm:w-auto sm:px-6 text-sm font-bold text-ink-1 bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
+                >
+                  Registrar Cash Out
+                </button>
+              </div>
             )}
           </div>
         </div>
@@ -673,10 +799,19 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
   const [refreshing, setRefreshing] = useState(false)
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
 
+  /* Instante em que os minutos deste lote chegaram do servidor · é a âncora do
+     relógio de cada card (ver useRelogio). Fica separado de `lastUpdate`
+     porque só se move quando a resposta chega de fato: um poll que falhou não
+     pode adiantar o cronômetro de todo mundo. */
+  const [syncedAt, setSyncedAt] = useState(() => Date.now())
+
   const load = useCallback(() => {
     setRefreshing(true)
     api.get('/live/my-picks')
-      .then(r => { setPicks(r.data); setLastUpdate(new Date()) })
+      /* Array.isArray e não `r.data` direto: a rota devolve lista, e qualquer
+         outra coisa (erro serializado, resposta de proxy) fazia o
+         `picks.some` logo abaixo derrubar a aba inteira no boundary. */
+      .then(r => { setPicks(Array.isArray(r.data) ? r.data : []); setLastUpdate(new Date()); setSyncedAt(Date.now()) })
       .catch(() => {})
       .finally(() => { setLoading(false); setRefreshing(false) })
   }, [])
@@ -856,14 +991,14 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
               Atualizando...
             </span>
           )}
-          <button onClick={load} aria-label="Atualizar"
-            className="text-xs text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 px-2 py-1 rounded-lg transition-colors">
-            ↻
+          <button onClick={load} aria-label="Atualizar" disabled={refreshing}
+            className="flex items-center justify-center text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 w-9 h-9 rounded-lg transition-colors disabled:opacity-50">
+            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {picks.length === 0 ? (
+      {allPicks.length === 0 ? (
         <div className="card p-10 text-center border-dashed">
           <div className="flex justify-center mb-4">
             <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center">
@@ -885,7 +1020,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
                 <span className="font-mono text-[10px] text-green-400/60 bg-green-500/10 px-1.5 py-0.5 rounded-sm">{live.length}</span>
               </div>
               <div className="space-y-3">
-                {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
+                {live.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} syncedAt={syncedAt} />)}
               </div>
             </div>
           )}
@@ -898,7 +1033,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
                 <span className="font-mono text-[10px] text-ink-2 bg-surface-2 px-1.5 py-0.5 rounded-sm">{pending.length}</span>
               </div>
               <div className="space-y-3">
-                {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
+                {pending.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} syncedAt={syncedAt} />)}
               </div>
             </div>
           )}
@@ -911,7 +1046,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
                 <span className="font-mono text-[10px] text-ink-3 bg-surface-2/50 px-1.5 py-0.5 rounded-sm">{finalized.length}</span>
               </div>
               <div className="space-y-3">
-                {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} />)}
+                {finalized.map(p => <PickCard key={`${p.pick_type}-${p.pick_id}`} pick={p} unitValue={unitValue} onRefresh={load} syncedAt={syncedAt} />)}
               </div>
             </div>
           )}
@@ -920,7 +1055,7 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
 
       {lastUpdate && (
         <p className="text-center text-[10px] text-ink-4">
-          {hasLive ? 'Atualiza a cada 5s · ' : ''}última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
+          {hasLive ? 'Atualiza a cada 15s · ' : ''}última atualização: {lastUpdate.toLocaleTimeString('pt-BR')}
         </p>
       )}
     </div>

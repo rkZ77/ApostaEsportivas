@@ -201,7 +201,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
               value={newComment}
               onChange={e => setNewComment(e.target.value.slice(0, 300))}
               onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submitComment() } }}
-              placeholder="Comente sobre este pick... (Enter para enviar)"
+              placeholder="Comente sobre este pick..."
               className="flex-1 bg-surface-2 border border-line-strong rounded-lg px-3 py-2 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50"
               disabled={submitting}
             />
