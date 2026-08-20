@@ -597,7 +597,92 @@ def comparavel_em_90(pool: list, family: str) -> list:
     if family in ("goals", "btts"):
         return [m for m in pool
                 if (m.get("status") or "FT") not in PRORROGACAO or _tem_placar_de_90(m)]
-    return [m for m in pool if (m.get("status") or "FT") not in PRORROGACAO]
+    pool = [m for m in pool if (m.get("status") or "FT") not in PRORROGACAO]
+    return [m for m in pool if _tem_folha_da_familia(m, family)]
+
+
+def _tem_folha_da_familia(m: dict, family: str) -> bool:
+    """O jogo tem o contador desta familia publicado?
+
+    A CORRECAO GERAL DO `or 0` (2026-08-20). `_extract_stat` faz
+    `m.get(campo) or 0` em toda familia, e isso transforma "a API nao publicou"
+    em "aconteceu zero". Nao e' o mesmo tipo de coisa, e o erro tem direcao
+    fixa: sempre puxa a taxa pra baixo, ou seja, sempre infla o Under.
+
+    Cobertura medida em PROD no mesmo dia, nos 1.646 jogos FT:
+
+        gols/placar        100%      <- sem lacuna
+        chutes no alvo      99,0%
+        escanteios/amarelo  98,8%
+        faltas              98,3%
+        chutes totais       98,1%
+        defesas             97,9%
+        impedimentos        96,1%
+        VERMELHO            68,7%    <- o buraco de verdade
+
+    Nas familias de 96-99% o vies e' de 1 a 4% da amostra e passaria
+    despercebido; em cartoes ele e' de 36%, e ja' aparece na calibracao
+    (cartoes anuncia 74,6% e realiza 62,5%). O filtro e' o mesmo pros dois
+    casos porque o defeito e' o mesmo -- o que muda e' so' o tamanho.
+
+    Jogo sem NENHUM campo da familia (chamador antigo, fixture de teste) passa:
+    a checagem existe pra pegar folha PARCIAL, e ausencia total de campo nunca
+    pode encolher o pool -- mesma regra do `status` acima.
+    """
+    if family == "cards":
+        return _tem_folha_de_cartao_completa(m)
+    if family in ("goals", "btts"):
+        return True          # placar e' 100% e ja' tratado por gols_90
+    campos = _FAMILY_STAT_FIELDS.get(family)
+    if not campos:
+        return True
+    lados = [campos.get("home"), campos.get("away")]
+    presentes = [m.get(c) is not None for c in lados if c]
+    if not presentes or not any(presentes):
+        return True          # a folha inteira nao veio: nao e' folha parcial
+    return all(presentes)
+
+
+def _tem_folha_de_cartao_completa(m: dict) -> bool:
+    """O jogo tem os DOIS contadores de cartao, amarelo e vermelho?
+
+    A METADE QUE FALTAVA DA CORRECAO DE 2026-07-25. Aquela fez o motor passar a
+    LER a coluna de vermelho (antes _FAMILY_STAT_FIELDS so' apontava pra
+    amarelo, e a taxa de "Under cartoes" saia inflada). O que ela nao cobriu e'
+    a coluna estar VAZIA: `_cards_points` faz `m.get("home_red_cards") or 0`, e
+    isso transforma "nao sei" em "nao houve" -- o mesmo erro de tipo que o
+    tri-estado de gol fora existe pra evitar no regulamento.
+
+    E nao e' caso raro. Medido em PROD em 2026-08-20, sobre os jogos FT:
+
+        cobertura de vermelho          68,7%   (498 jogos com amarelo e sem vermelho)
+        o inverso (vermelho sem amarelo)    3 jogos
+        media onde HA dado             0,391 vermelho/jogo = 0,78 ponto de cartao
+        ignorar o vermelho vira o lado de 11,5% dos jogos numa linha 5.5
+
+    Ou seja: ~4% de qualquer amostra de cartoes ficava do lado errado da linha,
+    e SEMPRE na mesma direcao, pra Under. E' consistente com a calibracao
+    medida no mesmo dia -- cartoes anuncia 74,6% e realiza 62,5%.
+
+    Ficou provado que NULL nao significa zero: entre as linhas preenchidas de
+    2026, 66% sao zeros EXPLICITOS. A API publica o zero quando sabe; campo
+    vazio e' lacuna de coleta, nao ausencia de cartao.
+
+    O jogo sai do pool em vez de ser imputado porque imputar a media seria
+    chutar sempre pro mesmo lado, e porque e' a postura que o resto do motor ja'
+    usa (ver parse_fase, resolver_formato, tie_effect): na duvida, nao responde.
+    O preco e' amostra menor de cartoes, e quando ela nao alcancar
+    config.min_amostra o pick simplesmente nao sai -- que e' o resultado certo.
+
+    Jogo sem NENHUM dos dois campos (chamador antigo, fixture de teste) passa:
+    a checagem existe pra pegar folha PARCIAL, e ausencia total de campo nunca
+    pode encolher o pool -- mesma regra do `status` acima.
+    """
+    amarelo = m.get("home_yellow_cards") is not None or m.get("away_yellow_cards") is not None
+    vermelho = m.get("home_red_cards") is not None or m.get("away_red_cards") is not None
+    if not amarelo and not vermelho:
+        return True
+    return amarelo and vermelho
 
 
 def _extract_stat(m: dict, family: str, scope: str, team_id: int | None = None):
