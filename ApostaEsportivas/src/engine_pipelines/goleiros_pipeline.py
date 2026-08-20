@@ -445,6 +445,12 @@ def _avaliar_fixture(fixture: dict, goleiros: dict,
             opponent_shots_on_avg=adversario_chutes,
             keeper_saves_avg=info["saves_avg"],
             sample_size=adversario_n,
+            # Os DOIS numeros de amostra, que sao de coisas diferentes:
+            # `sample_size` conta os jogos do ADVERSARIO (de onde sai o volume
+            # de chutes no alvo) e `keeper_sample` conta as aparicoes DO
+            # GOLEIRO. Ate' 2026-08-20 so' o primeiro chegava ao modelo, e a
+            # media de defesas de quem tinha uma unica aparicao entrava crua.
+            keeper_sample=info.get("jogos"),
             odd=odd,
             # "N ou mais" = P(X >= N) = prob_over(N - 0.5). Ver docstring.
             line=n_defesas - 0.5,

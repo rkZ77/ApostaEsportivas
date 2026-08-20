@@ -218,8 +218,15 @@ def avaliar(analise: dict, cotacoes: list, config: LiveEngineConfig = DEFAULT_LI
         lam_info = info["lambda"]
 
         linha, direcao, odd = entrada["linha"], entrada["direcao"], entrada["odd"]
+        # A dispersao do que FALTA, derivada da dispersao da partida inteira
+        # medida no pre-jogo (2026-08-20). Escanteio ao vivo aos 15 minutos
+        # carrega quase todo o phi de 1.82; aos 80 ja' voltou pra Poisson,
+        # porque a essa altura a propria partida revelou o ritmo dela.
+        phi = rm.dispersao_residual(
+            familia, lam_info.get("baseline_por_partida"),
+            lam_info.get("lambda_residual"), lam_info.get("minutos_restantes"))
         prob_modelo = rm.probabilidade_da_linha(
-            lam_info["lambda_residual"], linha, direcao, observado)
+            lam_info["lambda_residual"], linha, direcao, observado, phi)
         if prob_modelo is None:
             continue
 

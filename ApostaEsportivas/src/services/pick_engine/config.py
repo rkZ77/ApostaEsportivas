@@ -124,12 +124,42 @@ class PickEngineConfig:
     opponent_weak_weight: float = 0.5
     opponent_unknown_weight: float = 1.0
 
-    # Desacordo entre a taxa empirica e o Poisson (orchestrator). Acima deste
-    # valor o motor passa a trabalhar com a MENOR das duas estimativas, em vez
+    # Desacordo entre a taxa empirica e a estimativa de modelo (orchestrator).
+    # Acima deste valor o motor passa a trabalhar com a MENOR das duas, em vez
     # de publicar a maior. None desliga a regra (motor volta ao de antes de
-    # 2026-08-08). Ver o comentario longo em orchestrator.py -- o numero foi
-    # escolhido medindo contra os picks ja resolvidos, nao por gosto.
-    model_disagreement_threshold: float | None = 0.15
+    # 2026-08-08).
+    #
+    # 0.15 -> 0.12 em 2026-08-20, junto com a troca de Poisson por Binomial
+    # Negativa. Os dois numeros andam juntos e por isso mudaram juntos: o 0.15
+    # tinha sido calibrado contra um modelo que inflava de 3,5 a 5,6 pontos
+    # (ver probability_model._DISPERSAO). Com o modelo mais baixo, a MESMA
+    # distancia passou a significar outra coisa -- o limiar herdou a
+    # calibragem de um modelo que nao existe mais.
+    #
+    # Varrido fora da amostra sobre os jogos FT de PROD, so' na faixa em que o
+    # motor publica (>= 60%):
+    #
+    #     limiar        n      previsto   real     erro    Brier
+    #     0.08       9.104       73.4%   74.6%   -1.2pp   0.1795
+    #     0.12       9.681       74.0%   73.9%    0.0pp   0.1829
+    #     0.15       9.983       74.3%   73.6%    0.8pp   0.1849
+    #     desligado 10.528       74.7%   72.9%    1.9pp   0.1891
+    #
+    # 0.12 DOMINA 0.15: Brier melhor e calibracao melhor nas quatro familias
+    # medidas (gols, escanteios, cartoes, faltas), sem troca. Nao e' escolha de
+    # gosto entre dois pontos de uma curva.
+    #
+    # Nao desceu ate' 0.08 -- ali o Brier ainda melhora, mas a calibracao vira
+    # -1,2pp (o motor passa a subestimar) e o volume cai 9%. Subestimar
+    # descarta pick que era +EV de verdade; 0.12 e' o ponto em que o erro e'
+    # exatamente zero, e trocar isso por Brier seria preferencia, nao medicao.
+    #
+    # Ressalva registrada: a varredura compara a taxa BRUTA com o modelo,
+    # enquanto o motor compara a taxa JA ENCOLHIDA (disagreement_on_raw_rate
+    # abaixo). O encolhimento aproxima as duas, entao no motor a regra dispara
+    # MENOS que aqui -- o que empurraria o otimo pra baixo, nunca pra cima. A
+    # direcao da mudanca esta' certa de qualquer forma.
+    model_disagreement_threshold: float | None = 0.12
 
     # QUAL taxa a regra de desacordo compara contra o Poisson (2026-08-17).
     #
