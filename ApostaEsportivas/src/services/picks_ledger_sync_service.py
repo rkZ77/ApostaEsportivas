@@ -230,6 +230,54 @@ def _formato_do_confronto(cur, fx: dict, leg: dict, league_id, ctx: dict | None)
         return None
 
 
+def _consulta_isolada(cur, sql: str, params: tuple):
+    """Consulta que pode falhar sem derrubar a sincronizacao inteira.
+
+    POR QUE SAVEPOINT E NAO try/except SOZINHO
+    -------------------------------------------
+    `sync()` faz UM commit no fim, depois de percorrer todas as pernas. Isso
+    deixa as duas saidas obvias erradas:
+
+      so' try/except  -- no Postgres, uma consulta que falha ABORTA a
+                         transacao. Toda consulta seguinte morre com "current
+                         transaction is aborted", e a sincronizacao inteira
+                         nao grava nada. E' o mesmo defeito ja' documentado em
+                         main.run_migrations().
+
+      conn.rollback() -- resolve a transacao abortada, mas joga fora TODAS as
+                         pernas ja' processadas nesta rodada, porque o commit
+                         ainda nao aconteceu. Troca uma falha barulhenta por
+                         perda de trabalho silenciosa, que e' pior.
+
+    O savepoint desfaz so' a consulta que falhou. `ROLLBACK TO SAVEPOINT` e'
+    valido mesmo com a transacao abortada -- e' exatamente pra isso que ele
+    existe.
+
+    Nao e' hipotetico: as duas consultas abaixo tocam `closing_odds` e
+    `odds_snapshots`, que sao criadas por run_migrations() -- e run_migrations()
+    nao roda quando o pipeline e' disparado pelo site (ver run_prod.py). Numa
+    instancia onde elas ainda nao existem, a busca de fechamento falha em TODA
+    perna.
+    """
+    try:
+        cur.execute("SAVEPOINT busca_de_fechamento")
+    except Exception:
+        # Sem savepoint disponivel (autocommit, cursor exotico) o certo e' nao
+        # arriscar a transacao: devolve vazio e o CLV daquela perna fica NULL.
+        return None
+    try:
+        cur.execute(sql, params)
+        row = cur.fetchone()
+        cur.execute("RELEASE SAVEPOINT busca_de_fechamento")
+        return row
+    except Exception:
+        try:
+            cur.execute("ROLLBACK TO SAVEPOINT busca_de_fechamento")
+        except Exception:
+            pass
+        return None
+
+
 def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
                      market_id: int | None):
     """Odd de fechamento da MESMA linha do MESMO mercado.
@@ -260,19 +308,15 @@ def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
     """
     if not fixture_id or not market_id:
         return None
-    try:
-        cur.execute("""
-            SELECT closing_odd FROM closing_odds
-            WHERE fixture_id = %s AND market_id = %s
-              AND (%s IS NULL OR line = %s)
-            ORDER BY captured_at DESC NULLS LAST, id DESC
-            LIMIT 1
-        """, (fixture_id, market_id, line, line))
-        row = cur.fetchone()
-        if row and row[0] is not None:
-            return float(row[0])
-    except Exception:
-        cur.connection.rollback()
+    row = _consulta_isolada(cur, """
+        SELECT closing_odd FROM closing_odds
+        WHERE fixture_id = %s AND market_id = %s
+          AND (%s IS NULL OR line = %s)
+        ORDER BY captured_at DESC NULLS LAST, id DESC
+        LIMIT 1
+    """, (fixture_id, market_id, line, line))
+    if row and row[0] is not None:
+        return float(row[0])
 
     # Fallback: ultimo retrato de `odds_snapshots` ANTES do apito inicial.
     #
@@ -288,21 +332,16 @@ def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
     # que e' a definicao pratica de closing line. Quanto mais perto do apito a
     # coleta rodar, melhor a aproximacao -- rodar `main.py odds` uma segunda vez
     # perto dos jogos deixa o CLV bem mais preciso, mas ja' funciona com uma.
-    try:
-        cur.execute("""
-            SELECT odd_value FROM odds_snapshots
-            WHERE fixture_id = %s
-              AND market_id = %s
-              AND value_name = %s
-              AND minutes_to_kickoff >= 0
-            ORDER BY minutes_to_kickoff ASC, captured_at DESC
-            LIMIT 1
-        """, (fixture_id, market_id, line))
-        row = cur.fetchone()
-        return float(row[0]) if row and row[0] is not None else None
-    except Exception:
-        cur.connection.rollback()
-        return None
+    row = _consulta_isolada(cur, """
+        SELECT odd_value FROM odds_snapshots
+        WHERE fixture_id = %s
+          AND market_id = %s
+          AND value_name = %s
+          AND minutes_to_kickoff >= 0
+        ORDER BY minutes_to_kickoff ASC, captured_at DESC
+        LIMIT 1
+    """, (fixture_id, market_id, line))
+    return float(row[0]) if row and row[0] is not None else None
 
 
 def _ai_review_fields(leg: dict) -> dict:

@@ -32,22 +32,41 @@ import pytest
 from services import picks_ledger_sync_service as sync
 
 
-class _CursorFalso:
-    """Devolve linhas por consulta, na ordem em que forem pedidas."""
+_CONTROLE = ("SAVEPOINT", "RELEASE", "ROLLBACK")
 
-    def __init__(self, respostas):
+
+class _CursorFalso:
+    """Devolve linhas por consulta, na ordem em que forem pedidas.
+
+    `explode_em` faz a n-esima consulta de DADOS levantar excecao, pra
+    exercitar o caminho de savepoint sem precisar de banco."""
+
+    def __init__(self, respostas, explode_em=None):
         self.respostas = list(respostas)
         self.consultas = []
+        self.controle = []
+        self.explodiu = False
+        self.rollbacks_de_conexao = 0
+        self.explode_em = explode_em
         self.connection = self
 
     def execute(self, sql, params=None):
-        self.consultas.append((" ".join(sql.split()), params))
+        limpo = " ".join(sql.split())
+        if limpo.split(" ")[0].upper() in _CONTROLE:
+            self.controle.append(limpo)
+            return
+        self.consultas.append((limpo, params))
+        if self.explode_em is not None and len(self.consultas) == self.explode_em:
+            self.explodiu = True
+            raise RuntimeError('relation "closing_odds" does not exist')
 
     def fetchone(self):
         return self.respostas.pop(0) if self.respostas else None
 
     def rollback(self):
-        pass
+        # E' a conexao INTEIRA. Contar e' o teste: chamar isto no meio da
+        # sincronizacao descartaria todas as pernas ja' processadas.
+        self.rollbacks_de_conexao += 1
 
 
 def test_sem_market_id_nao_inventa_fechamento():
@@ -71,7 +90,32 @@ def test_closing_odds_tem_prioridade_sobre_o_snapshot():
     """A tabela dedicada e' captura perto do apito; o snapshot e' aproximacao."""
     cur = _CursorFalso([(1.65,)])
     assert sync._closing_odd_for(cur, 123, "Over 4.5", 45) == 1.65
-    assert len(cur.consultas) == 1
+    assert len(cur.consultas) == 1, "achou na primeira, nao consulta o snapshot"
+
+
+def test_consulta_que_falha_nao_derruba_a_sincronizacao():
+    """O risco real: `sync()` faz UM commit no fim de todas as pernas.
+
+    Sem savepoint restariam duas saidas, as duas ruins -- deixar a transacao
+    abortada (e ai NENHUMA perna e' gravada) ou chamar conn.rollback() (e ai
+    todas as pernas ja' processadas nesta rodada sao perdidas, sem erro).
+
+    Nao e' hipotetico: `closing_odds` e `odds_snapshots` sao criadas por
+    run_migrations(), que NAO roda quando o pipeline e' disparado pelo site."""
+    # so' uma resposta: a consulta que explode nem chega no fetchone, entao o
+    # snapshot (a segunda) e' quem consome ela.
+    cur = _CursorFalso([(1.72,)], explode_em=1)
+    assert sync._closing_odd_for(cur, 123, "Over 4.5", 45) == 1.72
+    assert cur.explodiu, "o teste precisa ter exercitado a falha"
+    assert cur.rollbacks_de_conexao == 0, (
+        "rollback na conexao inteira descartaria as pernas ja' sincronizadas")
+    assert any(c.startswith("ROLLBACK TO SAVEPOINT") for c in cur.controle)
+
+
+def test_falha_nas_duas_consultas_devolve_none_sem_estourar():
+    cur = _CursorFalso([], explode_em=1)
+    assert sync._closing_odd_for(cur, 123, "Over 4.5", 45) is None
+    assert cur.rollbacks_de_conexao == 0
 
 
 def test_fixture_ausente_devolve_none():
