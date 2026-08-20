@@ -90,6 +90,23 @@ class LiveEngineConfig:
     confianca_minima: float = 0.58
     odd_minima: float = 1.40
     odd_maxima: float = 4.00
+    #: PISO DE PROBABILIDADE (2026-08-20). Nao existia, e a ausencia dele e' o
+    #: que deixou passar os dois piores picks dos 7 gravados em DEV:
+    #:
+    #:     #5  goals Under 1.5  @3.50  probabilidade 31,0%  EV +8,6%   RED
+    #:     #6  corners Under 11 @2.62  probabilidade 41,4%  EV +8,4%   -
+    #:
+    #: Os dois passaram por EV, e o EV veio da ODD, nao da leitura do jogo. O
+    #: pre-jogo ja' tinha um piso equivalente (config.min_taxa = 0.60) desde
+    #: sempre; o motor ao vivo nasceu sem, e com selecao por maior EV isso
+    #: significa que quanto pior a probabilidade, mais alta a odd que a
+    #: sustenta, e mais facil o candidato vencer a disputa interna.
+    #:
+    #: 0.55 e' abaixo do piso do pre-jogo de proposito: a estimativa daqui e'
+    #: residual (o tempo que FALTA), entao ela e' legitimamente mais baixa que
+    #: uma taxa historica de jogo inteiro. O que ela nao pode ser e' um
+    #: cara-ou-coroa publicado como pick.
+    probabilidade_minima: float = 0.55
     #: Amostra minima do proprio jogo pra familia analisada. Escanteio: um
     #: jogo com 0 escanteios aos 20 minutos nao sustenta estimativa nenhuma.
     minutos_minimos_observados: int = 15
@@ -195,6 +212,7 @@ class LiveEngineConfig:
             minuto_final=_inteiro("LIVE_MINUTE_END", 80),
             ev_minimo=_decimal("LIVE_MIN_EV", 0.05),
             confianca_minima=_decimal("LIVE_MIN_CONFIDENCE", 0.58),
+            probabilidade_minima=_decimal("LIVE_MIN_PROBABILITY", 0.55),
             odd_minima=_decimal("LIVE_MIN_ODD", 1.40),
             odd_maxima=_decimal("LIVE_MAX_ODD", 4.00),
             max_picks_por_partida=_inteiro("LIVE_MAX_PICKS_PER_FIXTURE", 2),
@@ -213,6 +231,7 @@ class LiveEngineConfig:
             f"max_partidas={self.max_partidas} max_requisicoes={self.max_requisicoes} "
             f"janela={self.minuto_inicial}'-{self.minuto_final}' "
             f"ev_min={self.ev_minimo:+.0%} conf_min={self.confianca_minima:.0%} "
+            f"prob_min={self.probabilidade_minima:.0%} "
             f"odd=[{self.odd_minima}, {self.odd_maxima}]"
         )
 

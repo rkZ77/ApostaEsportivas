@@ -990,9 +990,10 @@ def entrada_ok(**kw):
     return base
 
 
-def gates(entrada, ev=0.10, conf=0.70, observado=7, conv=None, fresh=None, config=CONFIG):
+def gates(entrada, ev=0.10, conf=0.70, observado=7, conv=None, fresh=None, config=CONFIG,
+          prob=0.62):
     return orchestrator._gates(
-        entrada, prob=0.62, valor={"ev": ev, "edge": 0.08},
+        entrada, prob=prob, valor={"ev": ev, "edge": 0.08},
         conf={"confidence": conf},
         conv=conv or {"a_favor": 4, "contra": 0, "score": 0.75},
         observado=observado, linha=entrada["linha"], direcao=entrada["direcao"],
@@ -1041,13 +1042,41 @@ def test_gates_reportam_todos_os_motivos_nao_so_o_primeiro():
     assert len(motivos) >= 4
 
 
-def test_melhor_candidato_escolhe_o_maior_ev_entre_os_aprovados():
+def test_melhor_candidato_nao_escolhe_mais_pelo_maior_ev():
+    """Ate 2026-08-20 esta funcao devolvia o de maior EV, e este teste travava
+    esse comportamento. Ele foi invertido junto com a decisao.
+
+    O motivo esta medido no pre-jogo (pick_engine/config.py, 2026-08-14): nos
+    65 picks resolvidos dele, edge de 10-20% acertou 57,1% e edge abaixo de
+    10% acertou 71,4%. EV maior anuncia pick PIOR contra mercado liquido,
+    porque um EV grande quase sempre e' a probabilidade do modelo otimista, e
+    nao a casa errada. O pre-jogo derrubou o peso do edge de 0.25 pra 0.10; o
+    motor ao vivo ainda decidia 100% por EV.
+
+    Abaixo, `leitura_boa` tem EV menor e leitura da partida melhor
+    (probabilidade e confianca altas, odd baixa = mercado concordando).
+    `odd_alta` tem o maior EV entre os aprovados, e o EV dele vem inteiro da
+    odd 3.40. E' a forma exata do pior pick real gravado em DEV: goals Under
+    1.5 @3.50 com 31% de probabilidade, aprovado por EV, RED."""
     avaliados = [
-        {"aprovado": True, "ev": 0.08, "confidence": 0.90, "id": "a"},
-        {"aprovado": True, "ev": 0.15, "confidence": 0.60, "id": "b"},
-        {"aprovado": False, "ev": 0.90, "confidence": 0.99, "id": "reprovado"},
+        {"aprovado": True, "ev": 0.08, "confidence": 0.90, "probability": 0.78,
+         "odd": 1.55, "id": "leitura_boa"},
+        {"aprovado": True, "ev": 0.15, "confidence": 0.60, "probability": 0.34,
+         "odd": 3.40, "id": "odd_alta"},
+        {"aprovado": False, "ev": 0.90, "confidence": 0.99, "probability": 0.95,
+         "odd": 2.00, "id": "reprovado"},
     ]
-    assert orchestrator.melhor_candidato(avaliados)["id"] == "b"
+    assert orchestrator.melhor_candidato(avaliados)["id"] == "leitura_boa"
+
+
+def test_probabilidade_baixa_nao_vira_pick_por_causa_da_odd():
+    """O piso que nao existia. Os dois picks de DEV que passariam a ser
+    barrados: 31,0% @3.50 e 41,4% @2.62, os dois com EV acima do minimo."""
+    motivos = gates(entrada_ok(odd=3.50), prob=0.31, ev=0.086, conf=0.62)
+    assert any("probabilidade" in m for m in motivos)
+    # E o mesmo candidato com leitura de partida decente segue passando.
+    assert not any("probabilidade" in m
+                   for m in gates(entrada_ok(odd=1.60), prob=0.70, ev=0.12, conf=0.62))
 
 
 def test_sem_aprovado_nao_ha_pick():

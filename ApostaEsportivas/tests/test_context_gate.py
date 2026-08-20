@@ -205,11 +205,20 @@ def test_over_cartoes_no_mesmo_jogo_passa():
     assert context_gate.evaluate(_cand("cards", "over"), ctx)["bloqueado"] is False
 
 
-@pytest.mark.parametrize("familia", ["corners", "shots", "shots_on_target", "goals", "fouls"])
+@pytest.mark.parametrize("familia", ["corners", "shots", "shots_on_target", "goals"])
 def test_gate_vale_para_todas_as_familias_de_volume_nao_so_cartoes(familia):
     """Quem precisa do resultado se abre: sobe escanteio, chute e gol junto."""
     ctx = _contexto_flu_vasco()
     assert context_gate.evaluate(_cand(familia, "under"), ctx)["pressao_total"] > 0
+
+
+def test_faltas_saiu_da_lista_de_volume():
+    """`fouls` estava neste parametrize por mecanismo suposto ("falta tatica
+    sobe quando o jogo abre") e saiu em 2026-08-19 por medicao: nos jogos de
+    volta reais da base, quem precisa reverter comete 2.48 faltas A MENOS por
+    jogo. Ver context_gate.FAMILIAS_DIRECIONAIS e tie_effect._MEDIDO."""
+    ctx = _contexto_flu_vasco()
+    assert context_gate.evaluate(_cand("fouls", "under"), ctx)["pressao_total"] == 0.0
 
 
 def test_jogo_de_campeonato_comum_nao_sofre_nada():

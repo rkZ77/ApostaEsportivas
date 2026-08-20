@@ -213,13 +213,33 @@ _KNOCKOUT_SINGLE_KEYWORDS = (
 )
 
 
-def classify_round_phase(round_str: str | None) -> str | None:
+def classify_round_phase(round_str: str | None, formato: str | None = None) -> str | None:
     """GROUP_STAGE | KNOCKOUT_SINGLE | KNOCKOUT_TWO_LEGS a partir do texto
     round da API-Football (ex.: "Group Stage - 3", "Round of 16", "Semi-
     finals", "Final - 1st Leg"). "leg" e checado ANTES de knockout-single
     pra cobrir finais/semis de ida-e-volta corretamente (ex.: "Final - 1st
     Leg" nao pode cair em KNOCKOUT_SINGLE). None quando o texto nao bate em
-    nenhum padrao conhecido -- nunca advinha."""
+    nenhum padrao conhecido -- nunca advinha.
+
+    `formato` (2026-08-19) e' o formato JA RESOLVIDO da partida, saida de
+    match_context_model.resolver_formato() -- que sabe coisas que o texto do
+    round nao diz. Medido em producao no mesmo dia: a API-Football manda
+    "Round of 16" seco pras oitavas de Libertadores e Sul-Americana, sem
+    "1st leg"/"2nd leg", e essa funcao classificava as 34 picks ja' gravadas
+    no picks_ledger como KNOCKOUT_SINGLE -- nenhuma linha do ledger tinha
+    KNOCKOUT_TWO_LEGS, num universo em que TODAS as oitavas dessas duas
+    competicoes sao de ida e volta. O rotulo errado nao muda so' o relatorio:
+    round_phase e' dimensao de segmentacao em attribution.py, entao jogo unico
+    e volta de mata-mata estavam sendo somados no mesmo balde de calibracao.
+
+    Quando o formato vem resolvido, ele MANDA -- ele saiu de evidencia
+    (rotulo com perna, ou o confronto anterior com o mando invertido), nao de
+    palpite sobre o texto.
+    """
+    if formato == "COPA_IDA_E_VOLTA":
+        return "KNOCKOUT_TWO_LEGS"
+    if formato == "COPA_JOGO_UNICO":
+        return "KNOCKOUT_SINGLE"
     if not round_str:
         return None
     name = round_str.strip().lower()
@@ -230,3 +250,76 @@ def classify_round_phase(round_str: str | None) -> str | None:
     if any(kw in name for kw in _KNOCKOUT_SINGLE_KEYWORDS):
         return "KNOCKOUT_SINGLE"
     return None
+
+
+# ============================================================
+# REGULAMENTO DE MATA-MATA (2026-08-19)
+#
+# "NAO assuma regra de gol fora. A regra deve ser obtida da competicao ou
+# configuracao correspondente." -- e' o pedido, e a estrutura abaixo existe
+# pra tornar impossivel desobedecer: `away_goals` e' um TRI-ESTADO. None
+# significa "nao declarado", nao "nao tem", e nenhum calculo deste motor
+# aplica aritmetica de gol fora a menos que o campo seja True literal.
+#
+# O mesmo vale pro formato: `two_legged_default=None` quer dizer que o
+# regulamento nao esta cadastrado, e nesse caso quem decide se ha ida e volta
+# e' a EVIDENCIA do confronto (ver match_context_model.resolver_formato), nunca
+# o fato de a competicao se chamar copa.
+# ============================================================
+@dataclass(frozen=True)
+class RegrasDeMataMata:
+    #: True/False = regulamento cadastrado. None = nao declarado; o formato
+    #: tem que sair da evidencia do confronto.
+    two_legged_default: bool | None
+    #: Fases que fogem do padrao da competicao (a final unica da CONMEBOL e da
+    #: UEFA num torneio cujo resto e' ida e volta).
+    fases_de_jogo_unico: frozenset
+    #: Tri-estado. So' True autoriza qualquer conta de gol fora.
+    away_goals: bool | None
+    prorrogacao: bool | None
+    penaltis: bool | None
+
+
+_REGRAS_PADRAO = RegrasDeMataMata(
+    two_legged_default=None, fases_de_jogo_unico=frozenset(),
+    away_goals=None, prorrogacao=None, penaltis=None,
+)
+
+# Regulamentos cadastrados. Cada linha e' uma afirmacao sobre o regulamento
+# REAL da competicao -- se ele mudar, muda aqui, e nao espalhado no motor.
+#
+# away_goals=False nas cinco: a UEFA aboliu o criterio a partir de 2021/22 e a
+# CONMEBOL a partir de 2024. Ficam False (declarado que NAO vale), nao None.
+_REGRAS: dict[int, RegrasDeMataMata] = {
+    # CONMEBOL -- mata-mata em ida e volta, final em jogo unico desde 2019.
+    13:  RegrasDeMataMata(True, frozenset({"FINAL"}), False, True, True),
+    11:  RegrasDeMataMata(True, frozenset({"FINAL"}), False, True, True),
+    # UEFA -- mesmo desenho: eliminatorias em duas pernas, final unica.
+    2:   RegrasDeMataMata(True, frozenset({"FINAL"}), False, True, True),
+    3:   RegrasDeMataMata(True, frozenset({"FINAL"}), False, True, True),
+    848: RegrasDeMataMata(True, frozenset({"FINAL"}), False, True, True),
+    # Copa do Brasil -- ida e volta INCLUSIVE na final, e sem prorrogacao:
+    # empate no agregado vai direto pros penaltis.
+    73:  RegrasDeMataMata(True, frozenset(), False, False, True),
+    # Copa do Mundo -- mata-mata inteiro em jogo unico.
+    1:   RegrasDeMataMata(False, frozenset(), False, True, True),
+}
+
+
+def regras_de_mata_mata(league_id) -> RegrasDeMataMata:
+    """Regulamento cadastrado da competicao. Competicao nao cadastrada devolve
+    tudo None -- "nao sei", que e' diferente de "nao tem"."""
+    return _REGRAS.get(league_id, _REGRAS_PADRAO)
+
+
+def formato_declarado(league_id, fase: str | None) -> str | None:
+    """COPA_IDA_E_VOLTA | COPA_JOGO_UNICO pelo REGULAMENTO, ou None quando ele
+    nao esta cadastrado. E' a ultima fonte consultada por
+    match_context_model.resolver_formato -- evidencia do confronto vem antes.
+    """
+    regras = regras_de_mata_mata(league_id)
+    if regras.two_legged_default is None:
+        return None
+    if fase and fase in regras.fases_de_jogo_unico:
+        return "COPA_JOGO_UNICO"
+    return "COPA_IDA_E_VOLTA" if regras.two_legged_default else "COPA_JOGO_UNICO"

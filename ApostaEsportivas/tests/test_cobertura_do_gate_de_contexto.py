@@ -52,7 +52,7 @@ def test_pipeline_sem_gate_nao_publica_under(nome):
 def test_gate_e_direcional_e_ignora_over():
     """A razao de ligar o gate num pipeline so'-Over ser codigo morto."""
     veredito = context_gate.evaluate(
-        {"market_type": "fouls", "value": "over"},
+        {"market_type": "corners", "value": "over"},
         {"stakes": 0.95, "tie": {"precisa_de_resultado": "ambos"}, "rivalidade": {}},
     )
     assert veredito["penalidade"] == 0.0
@@ -62,16 +62,26 @@ def test_gate_e_direcional_e_ignora_over():
 def test_mesmo_contexto_penaliza_o_under():
     """O outro lado da mesma moeda: com Under, aquele contexto age."""
     veredito = context_gate.evaluate(
-        {"market_type": "fouls", "value": "under"},
+        {"market_type": "corners", "value": "under"},
         {"stakes": 0.95, "tie": {"precisa_de_resultado": "ambos"}, "rivalidade": {}},
     )
     assert veredito["pressao_total"] > 0
 
 
-def test_faltas_e_familia_direcional_mesmo_sem_gate_ligado():
-    """`fouls` esta na lista porque falta tatica sobe junto com o resto quando
-    o jogo abre. E' o que fara o gate valer no dia em que houver um Under."""
-    assert "fouls" in context_gate.FAMILIAS_DIRECIONAIS
+def test_faltas_saiu_da_lista_direcional_por_medicao():
+    """A linha anterior deste teste afirmava o oposto: que `fouls` estava na
+    lista "porque falta tatica sobe junto com o resto quando o jogo abre".
+
+    Isso nunca tinha sido medido, e quando foi (2026-08-19, jogos de volta
+    reais da base) saiu invertido: o lado que precisa reverter comete 2.48
+    faltas A MENOS por jogo, o sinal mais forte de toda a medicao. Quem
+    persegue o resultado tem a bola, e quem tem a bola nao comete falta.
+
+    Com `fouls` na lista, este gate e tie_effect empurravam o mesmo Under em
+    sentidos opostos. O teste inverte junto pra a premissa continuar escrita
+    onde ela vale -- e pra que voltar a incluir `fouls` exija desfazer a
+    medicao, nao so' editar uma tupla."""
+    assert "fouls" not in context_gate.FAMILIAS_DIRECIONAIS
 
 
 def test_defesas_de_goleiro_nao_e_familia_direcional():

@@ -5,6 +5,7 @@ etc.) fica so no log/console, nunca no texto salvo. Todo numero aqui vem
 direto do candidato ja calculado -- nenhum numero e inventado nesta
 camada."""
 from services.pick_engine.market_model import implied_prob
+from services.pick_engine import match_context_model, tie_effect
 
 
 def build_explanation(candidate: dict) -> dict:
@@ -121,6 +122,24 @@ def build_explanation(candidate: dict) -> dict:
         venue = ctx.get("venue") or {}
         if venue.get("is_neutral_venue"):
             risks.append("Sede neutra · sem vantagem de mando para nenhum dos times")
+
+    # CONTEXTO DE CONFRONTO NA EXPLICACAO PUBLICADA (2026-08-19). O motor
+    # calculava agregado, quem precisa reverter e quanto isso desloca o
+    # mercado, e nada disso chegava ao usuario: `descrever()` so' era chamado
+    # no texto de REJEICAO do gate, que ninguem le. Um pick de volta de
+    # mata-mata saia explicado como um pick de rodada de campeonato.
+    mc = candidate.get("match_context_raw")
+    tie = (mc or {}).get("tie") or {}
+    if tie.get("is_mata_mata"):
+        frases = match_context_model.descrever(tie)
+        if frases:
+            positive_factors.append("Contexto do confronto: " + "; ".join(frases))
+    ef = candidate.get("tie_effect")
+    for linha in tie_effect.descrever(ef):
+        # Ajuste que SOBE a probabilidade vira fator; ajuste que DESCE vira
+        # risco. O usuario tem que ver o contexto agindo contra o pick tambem
+        # -- so' mostrar quando ajuda seria propaganda, nao explicacao.
+        (positive_factors if (ef.get("delta_prob") or 0) > 0 else risks).append(linha)
 
     matchup = candidate.get("matchup_raw")
     direction = candidate.get("_direction")
