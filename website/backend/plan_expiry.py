@@ -179,3 +179,85 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
         )
 
     return chave
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# FIM DO TESTE GRÁTIS
+# ─────────────────────────────────────────────────────────────────────────────
+#
+# O aviso acima é de plano PERTO de vencer, e ele sai de cena quando o prazo
+# passa ("já vencido não é aviso de vencimento"). O que vem abaixo é a outra
+# conversa que aquele comentário deixou em aberto: o teste ACABOU e a pessoa
+# não assinou.
+#
+# Chave FIXA, sem data: é o que garante o "uma vez só por usuário" que o
+# produto pede. `notifications` tem UNIQUE (user_id, dedupe_key), então a
+# segunda tentativa não cria linha nova · e mesmo que criasse, o rebaixamento
+# de `trial` pra `free` só pode acontecer uma vez na vida da conta (o trial
+# grava `trial_used = TRUE` e nunca mais é reativado, ver
+# routers/auth.py::_ativar_trial_se_elegivel).
+DEDUPE_TRIAL_ENCERRADO = "trial_encerrado"
+
+TITULO_TRIAL_ENCERRADO = "Seu teste grátis acabou"
+CORPO_TRIAL_ENCERRADO = (
+    "Você voltou pro plano free. Os picks VIP, as múltiplas, a alavancagem, "
+    "os mercados de faltas e defesas e o agente de futebol ficaram para trás. "
+    "Assine para destravar tudo de novo."
+)
+
+
+def _avisar_trial_encerrado(cur, user_id: int) -> None:
+    """Notificação de teste encerrado · sino + gatilho do popup de conversão.
+
+    Não commita: quem chama é dono da transação (mesmo contrato de
+    create_notification e de _ativar_trial_se_elegivel).
+
+    Nunca propaga exceção. Esta função roda pendurada no login e no /auth/me;
+    uma falha aqui derrubaria a entrada da pessoa no site por causa de um
+    aviso, que é a troca errada.
+    """
+    try:
+        from routers.notifications import TYPE_TRIAL_ENDED, create_notification
+        create_notification(
+            cur, user_id, TYPE_TRIAL_ENDED,
+            TITULO_TRIAL_ENCERRADO, DEDUPE_TRIAL_ENCERRADO,
+            body=CORPO_TRIAL_ENCERRADO, url="/checkout",
+        )
+    except Exception:
+        pass
+
+
+def expirar_plano_vencido(cur, user: dict, agora: datetime | None = None) -> bool:
+    """Rebaixa pra free quem tem VIP/trial vencido. True quando rebaixou agora.
+
+    REGRA ÚNICA PROS TRÊS CAMINHOS que avaliam isso -- login, refresh e
+    /auth/me. Eram três cópias do mesmo if, e em 2026-08-20 elas ganharam uma
+    responsabilidade a mais (avisar o fim do teste): manter as três em dia na
+    mão é como uma delas fica pra trás em silêncio, e a que ficasse seria
+    justamente a que rebaixa a conta sem nunca oferecer a assinatura.
+
+    Muta `user` no lugar, porque os três chamadores seguem usando o dict
+    depois desta linha pra montar a resposta.
+
+    O aviso só sai pra quem estava em `trial`: VIP vencido é renovação, outra
+    mensagem e outro momento (esse tem o aviso de faixa, mais acima). Quem
+    assinou durante o teste nem chega aqui · o pagamento já trocou o plano pra
+    `vip`, e o CASE WHEN de routers/payments.py cobre exatamente isso.
+    """
+    plan = user.get("plan")
+    if plan not in PLANOS_COM_VALIDADE or not user.get("expires_at"):
+        return False
+
+    exp = user["expires_at"]
+    if exp.tzinfo is None:
+        exp = exp.replace(tzinfo=timezone.utc)
+    if (agora or datetime.now(timezone.utc)) <= exp:
+        return False
+
+    cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (user["id"],))
+    if plan == "trial":
+        _avisar_trial_encerrado(cur, user["id"])
+
+    user["plan"] = "free"
+    user["expires_at"] = None
+    return True

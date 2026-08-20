@@ -382,23 +382,28 @@ export default function Banca() {
               ))}
             </div>
 
-            {/* Aviso alavancagem · a regra mudou e a distinção importa: o que
-                entra aqui é caminho encerrado, não green de degrau.
+            {/* Alavancagem · o que entra nesta banca é caminho ENCERRADO, não
+                green de degrau.
 
-                Virou LINK em 2026-08-19: o aviso dizia o que a alavancagem não
-                é, e não dava onde vê-la. Quem seguia caminho ficava sem tela
-                nenhuma pra acompanhar · agora a frase leva pra /banca/alavancagem,
-                que é a contabilidade separada dela. */}
-            <button
-              onClick={() => navigate('/banca/alavancagem')}
-              className="flex items-center gap-1.5 -mt-2 text-[11px] text-ink-4 hover:text-ink-2 text-left transition-colors"
-            >
-              <Info className="w-3 h-3 shrink-0" />
-              <span>
-                Alavancagem entra nesta banca só quando você encerra o caminho, e o
-                que está rodando fica de fora · <span className="underline">ver separado</span>
-              </span>
-            </button>
+                Virou CARD COM BOTÃO em 2026-08-20 (pedido do usuário). Antes
+                era só uma frase de aviso, e depois uma frase sublinhada: as
+                duas versões diziam o que a alavancagem NÃO é sem dar onde
+                vê-la, e link dentro de texto corrido não lê como destino. O
+                aviso continua, agora com a porta ao lado dele. */}
+            <div className="card p-4 flex items-center gap-3 -mt-2">
+              <Info className="w-4 h-4 text-ink-4 shrink-0 hidden sm:block" />
+              <p className="text-[11px] text-ink-3 leading-relaxed flex-1">
+                Alavancagem entra nesta banca só quando você encerra o caminho.
+                O que está rodando fica de fora.
+              </p>
+              <button
+                onClick={() => navigate('/banca/alavancagem')}
+                className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-ink-1 border border-line-strong hover:border-orange-400/40 px-3 py-2 rounded-md transition-colors shrink-0 min-h-[36px]"
+              >
+                <TrendingUp className="w-3.5 h-3.5 shrink-0 text-orange-400" />
+                Ver alavancagem
+              </button>
+            </div>
 
             {/*
               Painel: gráfico à esquerda, sequência e distribuição à direita.

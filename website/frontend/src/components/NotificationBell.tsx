@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, MinusCircle, Radio, TimerReset, X, XCircle, Zap,
+  Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Lock, MinusCircle, Radio, TimerReset, X, XCircle, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
@@ -30,6 +30,10 @@ function NotificationIcon({ n }: { n: AppNotification }) {
   /* Âmbar e não vermelho: vencimento é prazo, não perda. O vermelho aqui já
      significa RED de pick e confundiria as duas leituras. */
   if (n.type === 'plan_expiring') return <TimerReset className={`${base} text-yellow-400`} />
+  /* Cadeado e nao relogio: o prazo ja passou, o que resta e o acesso fechado.
+     Cinza e nao vermelho pelo mesmo motivo do amarelo acima -- vermelho aqui
+     ja significa RED de pick. */
+  if (n.type === 'trial_ended')   return <Lock className={`${base} text-ink-3`} />
   /* Certo/errado e não seta de tendência: o item já diz GREEN ou RED no título,
      o ícone só precisa confirmar "deu" ou "não deu". Seta pra cima/baixo lia
      como variação de saldo. PUSH fica neutro · anulado não é vitória. */

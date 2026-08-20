@@ -32,6 +32,11 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from database import get_connection
+# Import direto (nao lazy): expirar_plano_vencido roda em tres rotas quentes
+# e plan_expiry nao importa nada de routers, entao nao ha ciclo. O
+# `avisar_plano_expirando` continua importado la embaixo, dentro da funcao,
+# porque aquele caminho passa o `_send_email` deste modulo por injecao.
+from plan_expiry import expirar_plano_vencido
 from sms import SMSNaoEnviado, enviar_sms, sms_configurado
 from auth_utils import (
     hash_password, verify_password,
@@ -756,15 +761,8 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         #
         # Vem ANTES do gate de e-mail de proposito: e' ele quem decide se a
         # conta ainda tem plano, e o gate so' vale pra quem esta' no free.
-        if user["plan"] in ("vip", "trial") and user.get("expires_at"):
-            exp = user["expires_at"]
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp:
-                cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (user["id"],))
-                conn.commit()
-                user["plan"] = "free"
-                user["expires_at"] = None
+        if expirar_plano_vencido(cur, user):
+            conn.commit()
 
         # Passou da carencia sem confirmar o e-mail: barra e reenvia o link.
         #
@@ -1046,15 +1044,8 @@ def refresh_token(request: Request, response: Response):
         user = dict(row)
 
         # Auto-expire: se VIP/trial expirou, baixa para free no banco agora
-        if user["plan"] in ("vip", "trial") and user.get("expires_at"):
-            exp = user["expires_at"]
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp:
-                cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (user["id"],))
-                conn.commit()
-                user["plan"] = "free"
-                user["expires_at"] = None
+        if expirar_plano_vencido(cur, user):
+            conn.commit()
 
     finally:
         cur.close(); conn.close()
@@ -1131,15 +1122,8 @@ def me(current_user: dict = Depends(get_current_user)):
         if d.get("last_login_at"):
             d["last_login_at"] = d["last_login_at"].isoformat()
         # Auto-expire: mesma lógica do login/refresh
-        if d.get("plan") in ("vip", "trial") and d.get("expires_at"):
-            exp = d["expires_at"]
-            if exp.tzinfo is None:
-                exp = exp.replace(tzinfo=timezone.utc)
-            if datetime.now(timezone.utc) > exp:
-                cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (d["id"],))
-                conn.commit()
-                d["plan"] = "free"
-                d["expires_at"] = None
+        if expirar_plano_vencido(cur, d):
+            conn.commit()
         if d.get("expires_at"):
             d["expires_at"] = d["expires_at"].isoformat()
         # A tela do perfil so' oferece verificacao por SMS quando ha provedor

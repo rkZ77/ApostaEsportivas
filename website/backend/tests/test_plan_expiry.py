@@ -133,3 +133,162 @@ def test_trial_tem_rotulo_e_texto_proprios():
     assert "Teste grátis" in assunto
     assert "expira amanhã" in assunto
     assert "volta pro plano free" in corpo
+
+
+# ─────────────────── Fim do teste grátis · 2026-08-20 ───────────────────
+#
+# O aviso de faixa acima cobre o plano PERTO de vencer e sai de cena quando o
+# prazo passa. Estes cobrem a outra ponta: o teste acabou, a pessoa não
+# assinou, e o site precisa avisar UMA vez.
+
+
+class _CurFake:
+    """Cursor de mentira: registra os SQL e finge a tabela de notificações."""
+
+    def __init__(self):
+        self.sqls: list = []
+        self.notificacoes: list = []
+        self._ultimo = None
+
+    def execute(self, sql, params=None):
+        self.sqls.append((" ".join(sql.split()), params))
+        if "INSERT INTO notifications" in sql:
+            self.notificacoes.append(params)
+        self._ultimo = None
+
+    def fetchone(self):
+        return self._ultimo
+
+
+def _conta(plan, dias_de_vencimento):
+    from datetime import timedelta
+    return {
+        "id": 7,
+        "plan": plan,
+        "expires_at": datetime.now(timezone.utc) + timedelta(days=dias_de_vencimento),
+    }
+
+
+def test_trial_vencido_rebaixa_para_free_e_avisa():
+    from plan_expiry import DEDUPE_TRIAL_ENCERRADO, expirar_plano_vencido
+
+    cur = _CurFake()
+    user = _conta("trial", -1)
+
+    assert expirar_plano_vencido(cur, user) is True
+    assert user["plan"] == "free" and user["expires_at"] is None
+    assert any("UPDATE users SET plan='free'" in s for s, _ in cur.sqls)
+    assert len(cur.notificacoes) == 1
+    assert DEDUPE_TRIAL_ENCERRADO in cur.notificacoes[0]
+
+
+def test_trial_dentro_do_prazo_nao_mexe_em_nada():
+    """O aviso é do FIM do teste. Disparar antes seria pedir assinatura de
+    quem ainda está usando o que ganhou."""
+    from plan_expiry import expirar_plano_vencido
+
+    cur = _CurFake()
+    user = _conta("trial", 1)
+
+    assert expirar_plano_vencido(cur, user) is False
+    assert user["plan"] == "trial"
+    assert cur.sqls == [] and cur.notificacoes == []
+
+
+def test_vip_vencido_rebaixa_mas_nao_manda_o_aviso_de_teste():
+    """VIP vencido é renovação, não fim de teste · são mensagens diferentes e
+    a de renovação já existe (aviso de faixa)."""
+    from plan_expiry import expirar_plano_vencido
+
+    cur = _CurFake()
+    user = _conta("vip", -1)
+
+    assert expirar_plano_vencido(cur, user) is True
+    assert user["plan"] == "free"
+    assert cur.notificacoes == [], "VIP recebeu o popup de fim de teste"
+
+
+def test_free_nao_entra_no_rebaixamento():
+    from plan_expiry import expirar_plano_vencido
+
+    cur = _CurFake()
+    user = {"id": 7, "plan": "free", "expires_at": None}
+
+    assert expirar_plano_vencido(cur, user) is False
+    assert cur.sqls == []
+
+
+def test_chave_do_aviso_e_fixa_para_valer_uma_vez_so():
+    """É o que garante o 'uma única vez por usuário' pedido pelo produto:
+    `notifications` tem UNIQUE (user_id, dedupe_key), então uma chave sem data
+    não tem como criar uma segunda linha. Se alguém colocar data/plano aqui,
+    o popup volta a poder aparecer duas vezes."""
+    from plan_expiry import DEDUPE_TRIAL_ENCERRADO
+
+    assert DEDUPE_TRIAL_ENCERRADO == "trial_encerrado"
+    assert ":" not in DEDUPE_TRIAL_ENCERRADO
+
+
+def test_falha_ao_notificar_nao_impede_o_rebaixamento():
+    """Esta função roda pendurada no login. Derrubar a entrada da pessoa por
+    causa de um aviso é a troca errada."""
+    from plan_expiry import expirar_plano_vencido
+
+    class CurQuebrado(_CurFake):
+        def execute(self, sql, params=None):
+            if "INSERT INTO notifications" in sql:
+                raise RuntimeError("banco caiu no meio")
+            super().execute(sql, params)
+
+    cur = CurQuebrado()
+    user = _conta("trial", -1)
+
+    assert expirar_plano_vencido(cur, user) is True
+    assert user["plan"] == "free"
+
+
+def test_as_tres_rotas_usam_a_funcao_unica():
+    """Login, refresh e /auth/me tinham três cópias do mesmo if. A terceira a
+    ganhar responsabilidade nova seria a que ficaria pra trás em silêncio · e
+    a que ficasse rebaixaria a conta sem nunca oferecer a assinatura."""
+    import re
+    from tests.test_home_2026_08 import _fonte
+
+    fonte = _fonte("routers/auth.py")
+    assert len(re.findall(r"expirar_plano_vencido\(cur, ", fonte)) == 3
+    assert "UPDATE users SET plan='free', expires_at=NULL" not in fonte, \
+        "voltou a rebaixar na mão em routers/auth.py"
+
+
+def test_popup_do_fim_do_teste_esta_ligado_no_front():
+    """O aviso precisa CHEGAR na tela, não só existir no banco.
+
+    Três pontas, e cada uma sozinha é silenciosa se faltar: o tipo tem que
+    existir no contexto (senão a notificação nunca vira `pendingTrialEnded`),
+    o GlobalModals tem que renderizar o modal, e fechar tem que marcar como
+    lida (senão ele reabre a cada visita e o "uma vez só" morre no front,
+    mesmo com o servidor certo).
+    """
+    from tests.test_home_2026_08 import _front
+
+    ctx = _front("context/NotificationContext.tsx")
+    assert "'trial_ended'" in ctx, "tipo novo nao entrou na uniao do contexto"
+    assert "pendingTrialEnded" in ctx
+
+    modais = _front("components/GlobalModals.tsx")
+    assert "TrialEndedModal" in modais
+    assert "markRead" in modais, "fechar o modal nao marca a notificacao como lida"
+
+    # Um modal por vez: o fechamento mensal pede AÇÃO (confirmar a banca) e tem
+    # prioridade; este e' convite e espera a vez. Sem isso os dois abrem juntos,
+    # um por cima do outro.
+    assert "!monthlyCloseOpen" in modais
+
+
+def test_icone_do_sino_cobre_o_tipo_novo():
+    """Tipo sem ícone cai no padrão (certo/errado de pick), e o item do sino
+    passaria a dizer 'green' visualmente pra um aviso de plano."""
+    from tests.test_home_2026_08 import _front
+
+    sino = _front("components/NotificationBell.tsx")
+    assert "n.type === 'trial_ended'" in sino
