@@ -3,17 +3,33 @@
 O gate de contexto (context_gate.py) barra pick que contradiz o que a partida
 vai ser: volta de mata-mata abre o jogo, entao "Under" de escanteio/cartao/gol
 passa a ser a aposta perigosa. Ele esta ligado no VIP, na Dica, na Multipla e
-na Alavancagem, e NAO esta em faltas nem em defesas de goleiro.
+na Alavancagem.
 
-Isso parece lacuna e foi investigado como tal em 2026-08-13. Nao e', porque o
-gate e DIRECIONAL: `pressao_contraria` devolve zero pra qualquer coisa que nao
-seja "under" (confirmar nao gera bonus, pra nao contar a mesma evidencia duas
-vezes). Faltas so' publica Over e defesas so' publica "N ou mais" -- ligar o
-gate nos dois seria codigo que nunca executa.
+FALTAS E GOLEIROS: A PREMISSA MUDOU EM 2026-08-20
+--------------------------------------------------
+Ate aqui este arquivo defendia que a ausencia de contexto nos dois era
+correta, porque o GATE e' direcional (so' age em "under") e os dois pipelines
+so' publicam Over -- liga-lo ali seria codigo que nunca executa. Isso continua
+verdade sobre o GATE, e continua testado abaixo.
 
-O que estes testes fazem, entao, nao e' cobrar a ligacao: e' travar a PREMISSA.
-No dia em que faltas ou goleiros ganharem um lado Under, eles falham e obrigam
-a decisao a ser tomada de novo, em vez de o pick sair sem o gate em silencio.
+O que estava errado era a conclusao mais ampla que se tirava disso: que os dois
+nao precisavam de contexto nenhum. Precisavam, e por dois caminhos que o gate
+nao cobre:
+
+  FALTAS   e' a familia com o efeito medido mais forte de todos -- o lado que
+           precisa reverter comete 2.48 faltas A MENOS por jogo (3.9
+           erros-padrao) e o que administra tambem cai. Como o pipeline so'
+           publica Over, o agregado aberto joga direto contra o pick, e o gate
+           (que so' olha Under) nunca veria isso.
+
+  GOLEIROS nao tem efeito de direcao medido (defesas deram +0.79 ep 1.22 e
+           +0.01 ep 0.89, zero nos dois papeis). Mas a media de chutes no alvo
+           do adversario sai dos jogos NORMAIS dele, e uma volta com 5 gols de
+           diferenca no agregado nao pertence aquela distribuicao -- e isso e'
+           incerteza, que custa probabilidade.
+
+Os dois passaram a chamar tie_effect.aplicar_em_analise(), que e' a camada
+certa: ela age nos dois sentidos e nao depende de existir um lado "under".
 """
 import inspect
 
@@ -36,6 +52,15 @@ def test_pipeline_que_publica_under_consulta_o_gate(nome):
     """Foi a ausencia disto que deixou passar o "Under cartoes" num
     Fluminense x Vasco de volta valendo classificacao."""
     assert "context_gate.build_for_fixture" in _fonte(nome)
+
+
+@pytest.mark.parametrize("nome", PIPELINES_SO_OVER)
+def test_pipeline_de_mercado_proprio_consulta_o_contexto(nome):
+    """A lacuna real, fechada em 2026-08-20. Nao e' o gate (aquele so' olha
+    Under e aqui so' ha Over) -- e' o efeito medido do agregado."""
+    fonte = _fonte(nome)
+    assert "context_gate.build_for_fixture" in fonte
+    assert "tie_effect.aplicar_em_analise" in fonte
 
 
 @pytest.mark.parametrize("nome", PIPELINES_SO_OVER)

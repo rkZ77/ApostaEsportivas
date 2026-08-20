@@ -267,6 +267,59 @@ def test_regime_de_mata_mata_cobra_confianca_e_nao_so_probabilidade():
     assert abs(efeito["delta_confianca"]) <= tie_effect.PENALIDADE_DE_REGIME_MAX
 
 
+def test_defesas_recebem_desconto_de_regime_mesmo_sem_efeito_de_direcao():
+    """O caso Botafogo x Cienciano de 20/08: ida 1x6, mandante precisando de 5
+    gols, e um pick de "2 ou mais defesas" do goleiro do mandante.
+
+    A medicao diz que defesas NAO se movem com o agregado (+0.79 ep 1.22 pro
+    lado atras, +0.01 ep 0.89 pro que administra), entao nao ha ajuste de
+    direcao a fazer -- e inventar um seria a narrativa que este modulo existe
+    pra evitar. Mas a media de chutes no alvo do adversario saiu dos jogos
+    NORMAIS dele, e esta partida nao pertence aquela distribuicao. Isso e'
+    incerteza, e tem que custar alguma coisa."""
+    ctx = _contexto(1, 6)
+    analise = {"probability": 0.7059, "odd": 1.55, "edge": 0.0607,
+               "fair_odd": 1.417, "expected_saves": 2.908}
+    novo = tie_effect.aplicar_em_analise(
+        analise, ctx, familia="saves", escopo="home", direcao="over",
+        linha=1.5, lambda_esperado=2.908)
+    assert novo["probability"] < analise["probability"]
+    assert novo["edge"] < analise["edge"]
+    assert novo["tie_effect"]["delta_prob"] == 0.0
+    # O escopo e' o do GOLEIRO; o papel lido tem que ser o do ADVERSARIO, que
+    # e' quem chuta nele.
+    assert novo["tie_effect"]["papel"] == "na_frente"
+
+
+def test_faltas_de_jogo_inteiro_caem_nos_dois_lados():
+    """Em escanteios os lados se cancelam; em faltas os dois caem juntos
+    (-2.48 e -1.14), entao o Over de faltas -- unico lado que aquele pipeline
+    publica -- perde probabilidade num confronto assimetrico."""
+    analise = {"probability": 0.68, "odd": 1.75, "edge": 0.109,
+               "fair_odd": 1.47, "expected_fouls": 26.5}
+    novo = tie_effect.aplicar_em_analise(
+        analise, _contexto(0, 1), familia="fouls", escopo="total",
+        direcao="over", linha=25.5, lambda_esperado=26.5)
+    assert novo["tie_effect"]["delta_prob"] < 0
+    assert novo["probability"] < analise["probability"]
+    # E o texto nao pode dizer "os dois efeitos se cancelando" quando eles
+    # somaram na mesma direcao.
+    texto = " ".join(tie_effect.descrever(novo["tie_effect"]))
+    assert "cancelando" not in texto
+
+
+def test_partida_comum_nao_muda_nada_nos_mercados_proprios():
+    """Compatibilidade: faltas e goleiros em jogo de campeonato seguem
+    exatamente como antes de 2026-08-20."""
+    analise = {"probability": 0.68, "odd": 1.75, "edge": 0.109, "fair_odd": 1.47}
+    for familia, escopo, lam in (("fouls", "total", 26.5), ("saves", "home", 2.9)):
+        novo = tie_effect.aplicar_em_analise(
+            analise, None, familia=familia, escopo=escopo, direcao="over",
+            linha=25.5, lambda_esperado=lam)
+        assert novo["probability"] == analise["probability"]
+        assert novo["edge"] == analise["edge"]
+
+
 def test_explicacao_publica_traz_o_numero_junto_da_afirmacao():
     """Afirmacao de contexto sem o deslocamento que ela produziu e' a
     narrativa que esta camada existe pra nao criar."""
