@@ -41,6 +41,7 @@ from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
 from services.pick_engine import ranking
+from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
     log_decision, log_run, log_skip,
@@ -440,6 +441,11 @@ def _save_pick(cur, legs: tuple, confidence_media: float, odd_combined: float):
 def run_alavancagem_engine():
     conn = get_connection()
     cur = conn.cursor()
+    # Regulamento de mata-mata das competicoes nao cadastradas a mao, do
+    # banco pra memoria, UMA vez por rodada. Sem isto o motor devolve
+    # DESCONHECIDO pro formato dessas competicoes, que e' o comportamento
+    # de antes -- nada quebra, so' se sabe menos.
+    competition_rules_store.carregar(cur)
     _create_table_if_needed(cur)
     conn.commit()
 
