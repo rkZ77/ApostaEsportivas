@@ -430,14 +430,23 @@ def analyze_fixture_markets(
             poisson_linha = None
             if lambda_familia is not None and line_val is not None:
                 poisson_linha = probability_model.poisson_prob_for_line(
-                    lambda_familia, line_val, direcao)
+                    lambda_familia, line_val, direcao,
+                    # A dispersao MEDIDA da familia/escopo. Sem ela a conta
+                    # assume variancia = media, o que so' e' verdade em gols
+                    # (ver probability_model._DISPERSAO).
+                    family=family, scope=scope)
             elif btts_sim is not None:
                 poisson_linha = (btts_sim if direcao in ("yes", "sim")
                                  else round(1 - btts_sim, 4))
             referee_linha = None
             if referee_lambda is not None and line_val is not None:
                 referee_linha = probability_model.poisson_prob_for_line(
-                    referee_lambda, line_val, direcao)
+                    referee_lambda, line_val, direcao,
+                    # scope="total" fixo, nao o do mercado: cards_lambda e' a
+                    # media de pontos de cartao do arbitro na PARTIDA INTEIRA
+                    # (ver referee_model.cards_lambda), e a dispersao do total
+                    # e' quase o dobro da de um lado so'.
+                    family="cards", scope="total")
 
             fit_poisson = probability_model.model_fit(taxa_ajustada, poisson_linha)
             fit_referee = probability_model.model_fit(taxa_ajustada, referee_linha)

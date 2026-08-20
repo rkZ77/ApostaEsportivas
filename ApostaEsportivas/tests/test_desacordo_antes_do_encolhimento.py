@@ -96,17 +96,20 @@ def test_a_regra_continua_nunca_subindo_a_probabilidade():
     """A invariante mais importante: detectar no bruto nao pode virar licenca pra
     INFLAR um pick.
 
-    6 jogos de 8 escanteios e 4 de 4, contra Over 4.5. A contagem direta da' 60%
-    (56.7% depois do encolhimento) e o Poisson, com lambda 6.4, da' ~76.5%. O
-    desacordo bruto (16.5pp) passa do limiar e a DETECCAO dispara -- mas a ACAO
-    exige que a outra estimativa seja mais PESSIMISTA que a publicada, e 76.5%
-    e' mais otimista. Nada pode acontecer.
+    6 jogos de 10 escanteios e 4 de 3, contra Over 4.5. A contagem direta da'
+    60% (56.7% depois do encolhimento) e o modelo, com lambda 7.2, da' ~75.8%.
+    O desacordo bruto (15.8pp) passa do limiar e a DETECCAO dispara -- mas a
+    ACAO exige que a outra estimativa seja mais PESSIMISTA que a publicada, e
+    75.8% e' mais otimista. Nada pode acontecer.
 
     E' por isso que a correcao mudou so' a deteccao e deixou a acao comparando
     contra taxa_ajustada: trocar as duas por taxa_bruta_raw faria a regra subir
-    a probabilidade justamente onde o encolhimento tinha corrigido pra baixo."""
-    hist = ([_jogo(f"2026-07-{i + 1:02d}", 8) for i in range(6)]
-            + [_jogo(f"2026-07-{i + 10:02d}", 4) for i in range(4)])
+    a probabilidade justamente onde o encolhimento tinha corrigido pra baixo.
+
+    O historico era 8 e 4 ate' 2026-08-20; ver a nota gemea em
+    test_mando_prior_desacordo.test_desacordo_nunca_sobe_a_probabilidade."""
+    hist = ([_jogo(f"2026-07-{i + 1:02d}", 10) for i in range(6)]
+            + [_jogo(f"2026-07-{i + 10:02d}", 3) for i in range(4)])
     candidatos = orchestrator.analyze_fixture_markets(
         _odds(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},

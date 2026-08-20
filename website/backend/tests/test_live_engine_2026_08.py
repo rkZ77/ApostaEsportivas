@@ -115,12 +115,19 @@ def test_extractor_de_pernas_mantem_as_colunas_de_cada_tabela():
     from services import pick_legs_extractor as ex
 
     class CursorFalso:
-        def __init__(self):
+        """`tem_market_id` simula a resposta de information_schema: picks_live
+        e' a unica das cinco que nao tem a coluna, e o extractor precisa
+        continuar funcionando nos dois casos."""
+
+        def __init__(self, tem_market_id=True):
             self.sql = ""
+            self.tem_market_id = tem_market_id
         def execute(self, sql, params=None):
             self.sql = sql
         def fetchall(self):
             return []
+        def fetchone(self):
+            return (1,) if self.tem_market_id else None
 
     for tabela, esperado, proibido in (
         ("picks_vip", "home_team_name AS home_team", "prob_real"),
@@ -133,6 +140,15 @@ def test_extractor_de_pernas_mantem_as_colunas_de_cada_tabela():
         ex.fetch_vip_free_legs(cur, tabela)
         assert esperado in cur.sql, f"{tabela} perdeu a coluna certa"
         assert proibido not in cur.sql, f"{tabela} pegou a coluna da outra familia"
+        # Sem market_id a perna nao recebe CLV: casar a odd de fechamento so'
+        # pelo rotulo da linha traz outro mercado (ver tests/test_clv_cruzado.py
+        # no pacote do motor).
+        assert "market_id" in cur.sql, f"{tabela} nao trouxe market_id"
+
+    # Tabela sem a coluna: seleciona NULL em vez de quebrar a extracao inteira.
+    cur = CursorFalso(tem_market_id=False)
+    ex.fetch_vip_free_legs(cur, "picks_live")
+    assert "NULL::int AS market_id" in cur.sql
 
 
 def test_router_do_live_nao_consulta_nenhuma_tabela_do_pre_jogo():

@@ -243,11 +243,17 @@ def test_desacordo_nunca_sobe_a_probabilidade():
     """A regra e' conservadora nos dois sentidos: se o Poisson for MAIOR que a
     taxa empirica, o motor nao aproveita pra inflar o pick.
 
-    6 jogos de 8 escanteios e 4 de 4, contra Over 4.5: a contagem direta da'
-    60% (56.7% depois do encolhimento) e o Poisson, com lambda 6.4, da' 76.5%.
-    Discordam 19.8pp, acima do limiar -- mas pro lado de cima, e ai nada pode
-    acontecer."""
-    hist = _historico_total([8] * 6 + [4] * 4)
+    6 jogos de 10 escanteios e 4 de 3, contra Over 4.5: a contagem direta da'
+    60% (56.7% depois do encolhimento) e o modelo, com lambda 7.2, da' 75.8%.
+    Discordam 19.1pp, acima do limiar -- mas pro lado de cima, e ai nada pode
+    acontecer.
+
+    Os numeros do historico mudaram em 2026-08-20 (era 8 e 4). Sob Poisson
+    aquele par ja' discordava 19.8pp; sob a Binomial Negativa a distancia cai
+    pra 11.3pp e o cenario deixaria de exercitar a regra -- que e' justamente
+    o efeito da correcao, o modelo parou de exagerar. Pra continuar testando
+    "desacordo pra cima nao faz nada" o desacordo tem que existir."""
+    hist = _historico_total([10] * 6 + [3] * 4)
     candidatos = orchestrator.analyze_fixture_markets(
         _odds_over_under(linha="4.5"), hist, hist,
         calibration_data={"by_market": {}, "by_market_league": {}},

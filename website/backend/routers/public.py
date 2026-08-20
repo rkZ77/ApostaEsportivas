@@ -1085,6 +1085,12 @@ def public_market_movement(days: int = Query(30, ge=1, le=365)):
                   JOIN closing_odds co
                     ON co.fixture_id = p.fixture_id
                    AND co.market_id  = p.market_id
+                   -- A linha entra no casamento, nao so' o mercado: um "Over
+                   -- 4.5" e um "Under 4.5" do MESMO mercado sao precos
+                   -- opostos, e casar so' por (fixture, market_id) mostraria
+                   -- um movimento invertido. Mesmo defeito que corrompeu o
+                   -- CLV do ledger ate' 2026-08-20, um nivel abaixo.
+                   AND co.line       = p.line
                  WHERE p.match_date >= CURRENT_DATE - %s::int
                    AND co.closing_odd IS NOT NULL
                    AND co.closing_odd > 0

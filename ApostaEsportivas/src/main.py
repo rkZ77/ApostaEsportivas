@@ -272,6 +272,27 @@ def run_migrations():
         );""",
         "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_goleiros_dia_jogador ON picks_goleiros (match_date, fixture_id, player_id);",
         "CREATE INDEX IF NOT EXISTS idx_picks_goleiros_pendentes ON picks_goleiros (match_date) WHERE result IS NULL;",
+        # ── Reparo do CLV cruzado (2026-08-20) ────────────────────────────
+        # Ate' aqui o fechamento de uma perna era procurado em
+        # `odds_snapshots` so' por (fixture_id, value_name). 'Over 4.5' existe
+        # em ate' 19 mercados DIFERENTES da mesma partida, entao a consulta
+        # trazia a odd de outro mercado -- escanteios Over 4.5 (odd 1.67)
+        # ficava com "fechamento" 10.00, que e' a odd de Over 4.5 GOLS. O CLV
+        # de escanteios saia -83% e a leitura obvia disso ("o mercado andou
+        # contra o motor") era falsa.
+        #
+        # `market_id` e' a chave que faltava. Nulificar o que ja' foi gravado
+        # e' obrigatorio: nao da' pra separar o que casou certo por acaso, e
+        # dado falso alimenta decisao. As linhas voltam corrigidas (ou NULL)
+        # no proximo sync do ledger.
+        #
+        # Idempotente: depois do primeiro sync, market_id fica preenchido nas
+        # pernas que TEM mercado identificado, e a limpeza passa a atingir so'
+        # multipla/alavancagem -- que sob o codigo novo ja' gravam NULL.
+        "ALTER TABLE picks_ledger ADD COLUMN IF NOT EXISTS market_id INTEGER;",
+        """UPDATE picks_ledger SET closing_odd = NULL, clv = NULL
+           WHERE market_id IS NULL
+             AND (closing_odd IS NOT NULL OR clv IS NOT NULL);""",
     ]
     conn = get_connection()
     cur = conn.cursor()
