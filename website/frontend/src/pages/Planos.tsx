@@ -107,15 +107,28 @@ export default function Planos() {
 
   // Cálculos do plano atual
   const subType      = meData?.subscription_type as string | null
-  const totalDays    = isTrial ? 2 : (subType ? (PLAN_DAYS[subType] ?? 30) : 30)
+  const cicloDoPlano = isTrial ? 2 : (subType ? (PLAN_DAYS[subType] ?? 30) : 30)
   const remaining    = daysUntilExpiry ?? 0
+  /*
+   * Dia de indicação soma no `expires_at` (+1 por cadastro, +2 por assinatura)
+   * e passa por cima do ciclo contratado · num mensal com três indicações o
+   * card anunciava "35 / 30 dias" com a barra estourada, e numa conta de
+   * acesso longo chegava a "134 / 30".
+   *
+   * O denominador passa a ser o maior dos dois: a fração continua verdadeira e
+   * a barra nunca promete mais do que 100%.
+   */
+  const totalDays    = Math.max(cicloDoPlano, remaining)
   const pct          = Math.max(0, Math.min(100, daysUntilExpiry !== null ? (remaining / totalDays) * 100 : 100))
   const urgent       = remaining <= (isTrial ? 1 : 5)
   const expiryDate   = user?.expires_at
     ? new Date(user.expires_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null
-  const startDate    = user?.expires_at && daysUntilExpiry !== null
-    ? new Date(Date.now() - (totalDays - remaining) * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
+  /* O início é deduzido do ciclo, não medido · com dias extras de indicação a
+     dedução deixa de valer e a data sai errada, então nesse caso não se afirma
+     nada. */
+  const startDate    = user?.expires_at && daysUntilExpiry !== null && remaining <= cicloDoPlano
+    ? new Date(Date.now() - (cicloDoPlano - remaining) * 86400000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
     : null
   const memberSince  = meData?.created_at
     ? new Date(meData.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
@@ -233,7 +246,11 @@ export default function Planos() {
           </div>
         )}
 
-        {user && !activated && (isVip || isTrial) && (
+        {/* Admin fica de fora: `isVip` inclui admin, então a conta permanente
+            ganhava contagem regressiva e botão "Renovar" logo acima do aviso
+            de que o acesso é irrestrito e permanente · dois cartões dizendo o
+            contrário um do outro na mesma tela. */}
+        {user && !activated && !isAdmin && (isVip || isTrial) && (
           <div className={`relative bg-surface-1 border ${urgent ? 'border-red-500/40' : accentCls.border} rounded-lg p-6 overflow-hidden`}>
             <div className={`absolute top-0 inset-x-0 h-0.5 bg-gradient-to-r from-transparent ${accentCls.line} to-transparent`} />
 

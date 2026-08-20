@@ -6,7 +6,7 @@ import { motion } from 'framer-motion'
 import { X, TrendingUp, Activity, List, MessageCircle, Route, Lock, Share2, Sparkles } from 'lucide-react'
 import { getResultStyle, PICK_TYPE_LABEL } from '../utils/resultStyle'
 import api from '../services/api'
-import { pctProb } from '../utils/format'
+import { pctProb, fmtUnits } from '../utils/format'
 import PickSocial from './PickSocial'
 import { calcVipStake, calcFreeStake, calcMultiplaStake } from '../utils/stakeUtils'
 import { translateMarket, translateLine } from '../utils/marketTranslate'
@@ -357,7 +357,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
                         <div className={`text-xl font-black ${resultStyle.text}`}>{resultStyle.label}</div>
                       </div>
                       <div className={`text-2xl font-black ${s.profit >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        {s.profit >= 0 ? '+' : ''}{Number(s.profit).toFixed(2)}u
+                        {fmtUnits(Number(s.profit), 2)}
                       </div>
                     </div>
                   )}

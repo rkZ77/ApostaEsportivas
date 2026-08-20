@@ -199,7 +199,7 @@ export default function Agente() {
             value={input}
             onChange={e => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Pergunte sobre picks, banca, jogos ao vivo... (Enter para enviar)"
+            placeholder="Pergunte sobre picks, banca, jogos ao vivo..."
             rows={1}
             className="flex-1 bg-surface-1 border border-line-strong rounded-md px-4 py-3 text-sm text-ink-1 placeholder-ink-3 focus:outline-none focus:border-green-500/50 resize-none"
             style={{ minHeight: '48px', maxHeight: '120px' }}

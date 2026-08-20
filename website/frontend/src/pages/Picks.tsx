@@ -40,7 +40,7 @@ import { LIVE_PICKS_ENABLED } from '../config'
 import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, TrendingUp, X as XIcon } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
-import {fmtUnits, pctProb } from '../utils/format'
+import {fmtUnits, pctProb, capitalizarFrase } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
 import { useShareStoryImage } from '../hooks/useShareStoryImage'
@@ -100,7 +100,7 @@ function LeagueLogo({ id, name, size = 18 }: { id?: number; name?: string; size?
  *
  * Links antigos (#aovivo) continuam abrindo Minhas Apostas · ver ALIAS_ABA.
  */
-type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'ao_vivo' | 'minhas_apostas' | 'chat'
+type Tab = 'hoje' | 'pick_seguro' | 'vip' | 'multiplas' | 'alavancagem' | 'mercados' | 'ao_vivo' | 'minhas_apostas'
 
 /** Chave antiga na URL -> aba atual. */
 const ALIAS_ABA: Record<string, Tab> = { aovivo: 'minhas_apostas' }
@@ -144,6 +144,29 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
   /** Aquece os dados da aba antes do clique · ver `prefetchAba` no Picks. */
   onPrefetch?: (t: Tab) => void
 }) {
+  /*
+   * A barra rola no celular e cabem três abas e meia. Quem entra por link
+   * direto (#minhas_apostas, #mercados) ou volta pelo histórico caía numa tela
+   * cuja aba ativa estava fora do campo de visão: o conteúdo mudava e a barra
+   * continuava marcando "Hoje" como se nada tivesse acontecido.
+   *
+   * `nearest` no eixo do bloco pra não arrastar a PÁGINA junto · só a barra
+   * anda, e só quando precisa.
+   */
+  const barraRef = useRef<HTMLDivElement | null>(null)
+  useEffect(() => {
+    const barra = barraRef.current
+    /* Acha o botão pelo `data-aba` em vez de guardar um ref na aba ativa:
+       com um ref só, compartilhado e condicional, o framer mantinha o nó da
+       PRIMEIRA aba e a conta de centralização era sempre a do "Hoje". */
+    const botao = barra?.querySelector<HTMLElement>(`[data-aba="${tab}"]`)
+    if (!barra || !botao) return
+    /* Rola a BARRA, não o elemento: `scrollIntoView` também mexe nos
+       ancestrais roláveis e chegaria a arrastar a página junto · aqui a única
+       coisa que anda é a fita de abas. */
+    barra.scrollTo({ left: Math.max(0, botao.offsetLeft - (barra.clientWidth - botao.clientWidth) / 2), behavior: 'smooth' })
+  }, [tab])
+
   const tabs: { key: Tab; label: string; badge?: string; badgeCls?: string; premiumOnly?: boolean; oculta?: boolean }[] = [
     { key: 'hoje',         label: 'Hoje'            },
     { key: 'pick_seguro',  label: 'Picks Free',      badge: 'FREE', badgeCls: 'bg-green-500/10 text-green-400 border-green-500/20' },
@@ -185,12 +208,13 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
           entao o degrade passaria pelo preto no meio e deixaria uma mancha
           escura na ponta da barra em vez de sumir. */}
       <div className="pointer-events-none absolute right-0 top-0 h-full w-10 bg-gradient-to-l from-surface-0 to-surface-0/0 z-10" />
-      <div className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
+      <div ref={barraRef} className="flex border-b border-line px-4 overflow-x-auto scrollbar-none">
         {tabs.filter(t => !t.oculta).map(t => {
           const count = counts?.[t.key]
           return (
             <motion.button
               key={t.key}
+              data-aba={t.key}
               whileTap={{ scale: 0.95 }}
               onClick={() => setTab(t.key)}
               /* Prefetch por intenção: no celular o `touchstart` chega antes do
@@ -244,7 +268,11 @@ function UserGreeting({ user, isVip, isAdmin, daysUntilExpiry }: {
   user: any; isVip: boolean; isAdmin: boolean; daysUntilExpiry: number | null
 }) {
   if (!user) return null
-  const firstName = user.name.split(' ')[0]
+  /* `user.name` chega do servidor e o guard acima só cobre o objeto inteiro
+     ausente · uma resposta de /auth/me sem o campo derrubava a página INTEIRA
+     de picks no boundary, e não só esta saudação. O primeiro nome é enfeite;
+     não vale a tela. */
+  const firstName = (user.name ?? '').split(' ')[0]
   const isTrial = user.plan === 'trial'
 
   const planBadgeCls = isAdmin ? 'badge-admin' : isTrial ? 'badge-trial' : isVip ? 'badge-vip' : 'badge-free'
@@ -1713,7 +1741,11 @@ export default function Picks() {
     // antigo com #ao_vivo (ou o hash guardado no histórico do navegador)
     // abriria numa aba que não está na barra, e o usuário ficaria numa tela
     // sem como voltar clicando.
-    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','minhas_apostas','chat',
+    // 'chat' saiu desta lista em 2026-08-20: a aba não existe mais na barra
+    // nem tem bloco de conteúdo, então /picks#chat abria a página com NENHUMA
+    // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
+    // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
+    const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','minhas_apostas',
                           ...(LIVE_PICKS_ENABLED ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
   }, [location.hash])
@@ -1976,7 +2008,7 @@ export default function Picks() {
     if (f.date_to)   p.date_to   = f.date_to
     if (f.resultado !== 'all') p.resultado = f.resultado
     api.get('/suggestions/alavancagem', { params: p })
-      .then(r => { setAlavancagem(r.data.items); setAlavHasMore(r.data.has_more); setAlavLoaded(true) })
+      .then(r => { setAlavancagem(r.data.items ?? []); setAlavHasMore(!!r.data.has_more); setAlavLoaded(true) })
       .catch(() => setAlavError(true))
       .finally(() => setAlavLoading(false))
   }
@@ -1989,7 +2021,7 @@ export default function Picks() {
     if (alavFilters.date_to)   p.date_to   = alavFilters.date_to
     if (alavFilters.resultado !== 'all') p.resultado = alavFilters.resultado
     api.get('/suggestions/alavancagem', { params: p })
-      .then(r => { setAlavancagem(prev => [...prev, ...r.data.items]); setAlavHasMore(r.data.has_more) })
+      .then(r => { setAlavancagem(prev => [...prev, ...(r.data.items ?? [])]); setAlavHasMore(!!r.data.has_more) })
       .catch(() => {})
       .finally(() => setAlavLoadingMore(false))
   }
@@ -2018,8 +2050,8 @@ export default function Picks() {
             >
               <ChevronLeft className="w-5 h-5 sm:w-3.5 sm:h-3.5" />
             </button>
-            <span className="text-ink-1 sm:text-ink-2 capitalize font-bold sm:font-medium text-sm sm:text-[11px]">
-              {selectedOffset === 0 ? 'Hoje' : todayLabel}
+            <span className="text-ink-1 sm:text-ink-2 font-bold sm:font-medium text-sm sm:text-[11px]">
+              {selectedOffset === 0 ? 'Hoje' : capitalizarFrase(todayLabel)}
             </span>
             <button
               onClick={() => setSelectedOffset(o => Math.min(0, o + 1))}
@@ -2039,7 +2071,7 @@ export default function Picks() {
             )}
           </span>
         ) : (
-          <span className="capitalize">{todayLabel}</span>
+          <span>{capitalizarFrase(todayLabel)}</span>
         ),
         actions: (
           <>

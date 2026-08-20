@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { TrendingUp, TrendingDown, X, BadgeCheck, Share2, Check, ChevronRight, ArrowLeft } from 'lucide-react'
 import api from '../services/api'
-import { fmtBRL } from '../utils/format'
+import { fmtBRL, fmtUnits } from '../utils/format'
 import { backdropFade, sheetUp, tabFade } from '../lib/motion'
 import { useNotifications } from '../context/NotificationContext'
 import { useAuth } from '../context/AuthContext'
@@ -163,7 +163,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
     const isProfit = d.total_pnl >= 0
     const text = [
       `Fechamento de ${d.month_label} na Pick IA`,
-      `${isProfit ? '+' : '-'}${fmtBRL(Math.abs(d.total_pnl))} (${ganhoU >= 0 ? '+' : ''}${ganhoU.toFixed(1)}u)`,
+      `${isProfit ? '+' : '-'}${fmtBRL(Math.abs(d.total_pnl))} (${fmtUnits(ganhoU)})`,
       `${d.greens}G / ${d.reds}R em ${d.total_resolved} picks`,
       `Banca: ${fmtBRL(d.bankroll_current - d.total_pnl)} -> ${fmtBRL(d.bankroll_current)}`,
       '',

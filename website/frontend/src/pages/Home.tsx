@@ -15,6 +15,7 @@ import PipelineProfitChart from '../components/PipelineProfitChart'
 import { usePlans, fmtPlanPrice, type Plan } from '../hooks/usePlans'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 import { fmtUnits } from '../utils/format'
+import { useAuth } from '../context/AuthContext'
 
 import FreePickHero from '../home/FreePickHero'
 import StatsBand, { type PublicSummary } from '../home/StatsBand'
@@ -229,7 +230,7 @@ function Leaderboard() {
 
   useEffect(() => {
     api.get('/public/leaderboard')
-      .then(r => setLeaders(r.data ?? []))
+      .then(r => setLeaders(Array.isArray(r.data) ? r.data : []))
       .catch(() => {})
       .finally(() => setLoading(false))
   }, [])
@@ -417,14 +418,16 @@ function Plans({ monthly }: { monthly: Plan }) {
 
 /* ── CTA fixo no rodapé, só mobile ──────────────────────────────────────── */
 
-function StickyMobileCTA({ onDismiss }: { onDismiss: () => void }) {
+function StickyMobileCTA({ onDismiss, titulo, sub, acao, destino }: {
+  onDismiss: () => void; titulo: string; sub: string; acao: string; destino: string
+}) {
   return (
     <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex-1 min-w-0">
-        <p className="text-ink-1 text-xs font-bold leading-none">Testar o VIP por 2 dias</p>
-        <p className="text-accent text-[10px] font-semibold mt-1">Grátis</p>
+        <p className="text-ink-1 text-xs font-bold leading-none">{titulo}</p>
+        <p className="text-accent text-[10px] font-semibold mt-1">{sub}</p>
       </div>
-      <Button to="/login?mode=register" size="sm">Criar conta</Button>
+      <Button to={destino} size="sm">{acao}</Button>
       <button
         onClick={onDismiss}
         className="text-ink-4 hover:text-ink-2 p-2 shrink-0"
@@ -444,6 +447,22 @@ export default function Home() {
   const [data, setData] = useState<PublicData | null>(null)
   const [loaded, setLoaded] = useState(false)
   const [ctaDismissed, setCtaDismissed] = useState(false)
+
+  /*
+   * A faixa fixa do rodapé mobile vendia "Criar conta" pra todo mundo, VIP
+   * pagante incluído · a Home nem lia o contexto de autenticação. Quem já
+   * assina não tem conta pra criar nem trial pra testar, e a faixa só ocupava
+   * a barra inferior do celular dele.
+   *
+   * Free e trial continuam vendo uma chamada, mas a que faz sentido pra eles:
+   * o caminho é o plano, não o cadastro que já existe.
+   */
+  const { user } = useAuth()
+  const ctaFaixa = !user
+    ? { titulo: 'Testar o VIP por 2 dias', sub: 'Grátis', acao: 'Criar conta', destino: '/login?mode=register' }
+    : user.plan === 'free' || user.plan === 'trial'
+    ? { titulo: 'Desbloqueie os picks VIP', sub: 'Todos os produtos da IA', acao: 'Ver planos', destino: '/planos' }
+    : null
   const { plans, monthly } = usePlans()
 
   /*
@@ -513,7 +532,7 @@ export default function Home() {
   }
 
   return (
-    <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed ? '' : 'pb-20 sm:pb-0'}`}>
+    <div className={`min-h-screen bg-surface-0 text-ink-1 overflow-x-hidden flex flex-col ${ctaDismissed || !ctaFaixa ? '' : 'pb-20 sm:pb-0'}`}>
       <Helmet>
         <title>Pick IA · Inteligência artificial para apostas de valor no futebol</title>
         <meta
@@ -650,7 +669,7 @@ export default function Home() {
 
       <Footer />
 
-      {!ctaDismissed && <StickyMobileCTA onDismiss={() => setCtaDismissed(true)} />}
+      {!ctaDismissed && ctaFaixa && <StickyMobileCTA onDismiss={() => setCtaDismissed(true)} {...ctaFaixa} />}
     </div>
   )
 }

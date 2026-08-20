@@ -55,7 +55,7 @@ export default function LeagueMarquee({
   useEffect(() => {
     let vivo = true
     fetchLeagues()
-      .then(l => { if (vivo) setLeagues(l) })
+      .then(l => { if (vivo) setLeagues(Array.isArray(l) ? l : []) })
       .catch(() => {})
     return () => { vivo = false }
   }, [])

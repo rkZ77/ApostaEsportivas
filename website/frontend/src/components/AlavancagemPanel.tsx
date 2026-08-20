@@ -5,7 +5,7 @@ import { ArrowUpRight, Flag, Target, TrendingDown } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
 import LucroBarChart from './LucroBarChart'
-import { fmtBRL, fmtSigned } from '../utils/format'
+import { fmtBRL, fmtSigned, fmtUnits } from '../utils/format'
 
 /*
  * Alavancagem · contabilidade e leitura do caminho, num painel só.
@@ -168,7 +168,7 @@ function LinhaCaminho({ c }: { c: CaminhoEncerrado }) {
           {fmtSigned(c.realized)}
         </p>
         <p className="font-mono text-[10px] text-ink-4 tabular-nums">
-          {c.units >= 0 ? '+' : ''}{c.units.toFixed(2)}u
+          {fmtUnits(c.units, 2)}
         </p>
       </div>
     </div>
@@ -249,7 +249,7 @@ export default function AlavancagemPanel() {
           },
           {
             l: 'Em unidades',
-            v: `${unidades >= 0 ? '+' : ''}${unidades.toFixed(2)}u`,
+            v: fmtUnits(unidades, 2),
             sub: 'o caminho arrisca 1u, sempre',
             c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
           },

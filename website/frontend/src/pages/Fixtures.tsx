@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import api from '../services/api'
 import PageShell from '../components/PageShell'
 import { PAGE_WIDTH } from '../lib/pageWidth'
+import { capitalizarFrase } from '../utils/format'
 import FixtureStatsModal from '../components/FixtureStatsModal'
 import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
@@ -311,7 +312,7 @@ export default function Fixtures() {
       bar={{
         back: true,
         title: 'Jogos',
-        sub: <span className="capitalize">{dateLabel}</span>,
+        sub: <span>{capitalizarFrase(dateLabel)}</span>,
         actions: (
           <>
             {pageTab === 'jogos' && pickCount > 0 && (

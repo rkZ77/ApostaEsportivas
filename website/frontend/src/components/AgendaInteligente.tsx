@@ -3,6 +3,7 @@ import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-react'
 import api from '../services/api'
 import { Badge, EmptyState, IconButton, Panel, PanelHead, Spinner, StatTile } from './ui'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
+import { capitalizarFrase } from '../utils/format'
 
 /*
  * Agenda dos jogos por dia, marcando o que a IA já analisou.
@@ -64,7 +65,7 @@ export default function AgendaInteligente() {
       <Panel>
         <PanelHead
           label={<span className="flex items-center gap-2"><CalendarDays className="w-3.5 h-3.5" />Agenda</span>}
-          meta={<span className="capitalize">{label}</span>}
+          meta={<span>{capitalizarFrase(label)}</span>}
         >
           <div className="flex items-center gap-1">
             <IconButton Icon={ChevronLeft} label="Dia anterior" size="sm" onClick={() => setDate(d => shiftDate(d, -1))} />
