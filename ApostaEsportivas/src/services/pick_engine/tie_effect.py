@@ -263,9 +263,14 @@ def efeito(candidate: dict, contexto: dict | None) -> dict:
                 "motivo": "efeito medido nulo para esta familia neste papel; "
                           "resta o desconto de regime"}
 
-    p_base = probability_model.poisson_prob_for_line(lam, linha, direcao)
+    # A MESMA dispersao dos dois lados: o efeito e' a DIFERENCA entre duas
+    # probabilidades, e usar distribuicoes diferentes nas duas pontas mediria
+    # a troca de modelo em vez do efeito do agregado.
+    p_base = probability_model.poisson_prob_for_line(
+        lam, linha, direcao, family=familia, scope=escopo)
     p_novo = probability_model.poisson_prob_for_line(
-        max(0.01, lam + delta_conta), linha, direcao)
+        max(0.01, lam + delta_conta), linha, direcao,
+        family=familia, scope=escopo)
     if p_base is None or p_novo is None:
         return {**vazio, "papel": papel, "escopo": escopo,
                 "motivo": "linha fora do que o modelo Poisson responde"}

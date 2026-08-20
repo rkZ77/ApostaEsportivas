@@ -59,14 +59,29 @@ def test_o_caso_1579_em_numeros():
     lam = referee_model.cards_lambda(_arbitro(3.60, 0.0, games=5))
     assert lam == pytest.approx(3.82, abs=0.01)
     p = referee_model.cards_probability(_arbitro(3.60, 0.0, games=5), 4.5, "over")
-    assert p == pytest.approx(probability_model.poisson_prob_for_line(lam, 4.5, "over"), abs=1e-6)
+    # family/scope obrigatorios desde 2026-08-20: cartao de partida e'
+    # superdisperso (phi 2.28) e a chamada sem eles devolveria Poisson puro,
+    # que e' outra distribuicao.
+    assert p == pytest.approx(
+        probability_model.poisson_prob_for_line(lam, 4.5, "over",
+                                                family="cards", scope="total"),
+        abs=1e-6)
     assert p < 0.40, "o motor publicou 71.8% neste mercado"
 
 
 def test_arbitro_rigoroso_sustenta_over():
-    """A regra nao e' 'sempre desconfiar': arbitro acima da linha concorda."""
+    """A regra nao e' 'sempre desconfiar': arbitro acima da linha concorda.
+
+    O patamar caiu de 0.70 pra 0.60 em 2026-08-20, e a queda E' o ponto: com a
+    dispersao medida de cartao (phi 2.28), um arbitro de ~7 pontos por jogo
+    sustenta 64% em Over 4.5, nao 74%. Os 10pp de diferenca eram o Poisson
+    afirmando variancia = media num mercado em que ela e' o dobro.
+    """
     p = referee_model.cards_probability(_arbitro(6.5, 0.3, games=12), 4.5, "over")
-    assert p > 0.70
+    assert p > 0.60
+    assert p < probability_model.poisson_prob_for_line(
+        referee_model.cards_lambda(_arbitro(6.5, 0.3, games=12)), 4.5, "over"), (
+        "a Binomial Negativa tem que ficar ABAIXO do Poisson nesta faixa")
 
 
 # ─────────────────── dentro do motor ───────────────────
@@ -129,9 +144,18 @@ def test_arbitro_permissivo_rebaixa_o_over_dos_times():
 
 
 def test_arbitro_de_acordo_nao_mexe_em_nada():
-    """Arbitro rigoroso (8 amarelos, lambda 6.7) num jogo de times rigorosos:
-    as tres leituras se sustentam e a probabilidade fica onde estava."""
-    rigoroso = {"games": 8, "avg_yellow": 8.0, "avg_red": 0.0}
+    """Arbitro rigoroso num jogo de times rigorosos: as tres leituras se
+    sustentam e a probabilidade fica onde estava.
+
+    O arbitro deste teste subiu de 8.0 pra 10.0 amarelos em 2026-08-20, e o
+    motivo importa: com a dispersao medida, um arbitro de 6.7 pontos NAO
+    sustenta 83% em Over 4.5 -- ele sustenta 68%, e essa distancia passa do
+    limiar de desacordo. Sob o Poisson ele parecia sustentar 79% e concordar.
+    Ou seja: o cenario nunca foi de concordancia, a distribuicao errada e' que
+    escondia a discordancia. Pra continuar testando "quando concorda, nao
+    mexe", o arbitro precisa concordar de verdade.
+    """
+    rigoroso = {"games": 8, "avg_yellow": 10.0, "avg_red": 0.0}
     c = next(x for x in _rodar(rigoroso) if x["market_type"] == "cards")
     assert c["referee_probability"] is not None
     assert "taxa_real_pre_desacordo" not in c
@@ -141,7 +165,7 @@ def test_arbitro_de_acordo_nao_mexe_em_nada():
 def test_o_rastro_guarda_a_leitura_do_arbitro_mesmo_sem_rebaixar():
     """Sem o numero gravado nao da' pra medir depois se o sinal esta ajudando --
     foi essa falta que atrasou a descoberta do #1579."""
-    rigoroso = {"games": 8, "avg_yellow": 8.0, "avg_red": 0.0}
+    rigoroso = {"games": 8, "avg_yellow": 10.0, "avg_red": 0.0}
     c = next(x for x in _rodar(rigoroso) if x["market_type"] == "cards")
     assert c["referee_lambda"] is not None
     assert c["referee_probability"] is not None
@@ -173,13 +197,19 @@ def _odds_duas_linhas():
     return [
         {"market_id": 9, "market_name": "Cards Over/Under", "line": linha,
          "bookmakers_count": 3, "value": v, "best_odd": 2.00}
-        for linha in ("3.5", "5.5") for v in ("Over", "Under")
+        for linha in ("2.5", "7.5") for v in ("Over", "Under")
     ]
 
 
 def _rodar_duas_linhas(referee_stats):
-    """Times de 5 cartoes por jogo: Over 3.5 e Under 5.5 batem os dois em 100%
-    do historico, entao a taxa empirica sozinha nao sabe escolher entre eles."""
+    """Times de 5 cartoes por jogo: Over 2.5 e Under 7.5 batem os dois em 100%
+    do historico, entao a taxa empirica sozinha nao sabe escolher entre eles.
+
+    As linhas abriram de 3.5/5.5 pra 2.5/7.5 em 2026-08-20. Com a dispersao
+    medida, 3.5 e 5.5 ficam os DOIS com o modelo perto de 62% num lambda de
+    5.0 -- empatados, e o desempate passa a ser ruido em vez do arbitro. O par
+    aberto devolve a folga que o cenario precisa pra mostrar a troca de lado.
+    """
     hist = [_jogo(i, 3, 2) for i in range(10)]
     return orchestrator.analyze_fixture_markets(
         _odds_duas_linhas(), hist, hist,
@@ -199,12 +229,12 @@ def test_arbitro_permissivo_faz_o_motor_escolher_o_outro_lado():
     mercado. Agora as tres leituras sao resolvidas linha por linha, ANTES da
     escolha, e a comparacao acontece entre numeros ja corrigidos."""
     sem_arbitro = next(x for x in _rodar_duas_linhas(None) if x["market_type"] == "cards")
-    assert (sem_arbitro["value"], sem_arbitro["line"]) == ("Over", "3.5")
+    assert (sem_arbitro["value"], sem_arbitro["line"]) == ("Over", "2.5")
 
     permissivo = next(x for x in _rodar_duas_linhas({"games": 8, "avg_yellow": 3.0, "avg_red": 0.0})
                       if x["market_type"] == "cards")
     assert permissivo["value"] == "Under", "ficou no lado que o arbitro contradiz"
-    assert permissivo["line"] == "5.5"
+    assert permissivo["line"] == "7.5"
     # e o que o arbitro diz do lado escolhido nao derruba nada: ele CONCORDA
     assert permissivo["referee_probability"] > permissivo["taxa_real"]
 

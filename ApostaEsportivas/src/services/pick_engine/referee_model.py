@@ -167,7 +167,10 @@ def cards_probability(referee: dict, line: float | None, direction: str | None) 
     lam = cards_lambda(referee)
     if lam is None or line is None:
         return None
-    return probability_model.poisson_prob_for_line(lam, line, direction)
+    # Cartao de partida e' superdisperso (phi 2.28 medido em 2026-08-20):
+    # jogo pegado castiga os dois lados junto, e Poisson nao representa isso.
+    return probability_model.poisson_prob_for_line(
+        lam, line, direction, family="cards", scope="total")
 
 
 def cards_market_eligible(
