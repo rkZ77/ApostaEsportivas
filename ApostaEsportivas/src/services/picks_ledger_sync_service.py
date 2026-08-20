@@ -94,6 +94,10 @@ def _create_table_if_needed(cur):
         ("pick_side",        "TEXT"),      # home | away | neutral -- de que lado a aposta esta'
         ("is_favorite",      "BOOLEAN"),   # a selecao apostada era a favorita do mercado
         ("odd_band",         "TEXT"),      # faixa de odd, pra calibracao por faixa
+        # Qual mercado da casa de apostas a perna aponta. E' a chave que
+        # torna o CLV auditavel: sem ela, casar a perna com a odd de
+        # fechamento so' pelo rotulo da linha pega outro mercado.
+        ("market_id",        "INTEGER"),
         ("closing_odd",      "NUMERIC"),
         ("clv",              "NUMERIC"),   # (odd_entrada / odd_fechamento) - 1
         ("ev_realizado",     "NUMERIC"),   # profit efetivo da perna, alinhado ao ev esperado
@@ -226,30 +230,49 @@ def _formato_do_confronto(cur, fx: dict, leg: dict, league_id, ctx: dict | None)
         return None
 
 
-def _closing_odd_for(cur, fixture_id: int | None, market_type: str | None, line: str | None):
-    """Odd de fechamento ja' capturada por scripts/capture_closing_odds.py.
+def _closing_odd_for(cur, fixture_id: int | None, line: str | None,
+                     market_id: int | None):
+    """Odd de fechamento da MESMA linha do MESMO mercado.
 
-    A tabela `closing_odds` existia e nunca tinha sido lida por ninguem --
-    capturava-se o dado e ele morria ali. E' o insumo do CLV, que e' a unica
-    metrica de vantagem que converge com o volume de picks que a PickIA tem.
+    POR QUE `market_id` E' OBRIGATORIO (defeito medido em 2026-08-20)
+    ----------------------------------------------------------------
+    A versao anterior casava o fallback so' por (fixture_id, value_name). Mas
+    `value_name` e' um rotulo generico: 'Over 4.5' existe em ate' 19 mercados
+    diferentes da MESMA partida (medido em PROD). Sem filtrar o mercado, a
+    consulta devolvia a primeira linha que ordenasse -- e o resultado era
+    sistematicamente o mercado errado:
 
-    Casa por (fixture, market_type, prefixo da linha) porque `line` guarda o
-    rotulo completo ('Under 5.5') e o mesmo mercado pode ter varias linhas."""
-    if not fixture_id or not market_type:
+        pick                       odd pega   "fechamento" gravado
+        Escanteios Over 4.5           1.67           10.00
+        Escanteios Over 5.5           1.80           19.00
+        Fin. no gol Over 6.5          1.30           51.00
+
+    10.00 e 19.00 e 51.00 sao as odds de Over 4.5 / 5.5 / 6.5 GOLS. O CLV saia
+    -83%, -90%, -97% e a leitura obvia ("o mercado andou contra o motor em
+    escanteios") era falsa: o motor estava sendo comparado com outro mercado.
+
+    Gols escapou por coincidencia -- 'Over 1.5' de gols casava com gols -- e foi
+    justamente por isso que o defeito passou despercebido: o mercado de maior
+    volume parecia saudavel.
+
+    Sem `market_id` a funcao devolve None. CLV nulo e' informacao ausente;
+    CLV de outro mercado e' informacao FALSA, e essa alimenta decisao.
+    """
+    if not fixture_id or not market_id:
         return None
     try:
         cur.execute("""
             SELECT closing_odd FROM closing_odds
-            WHERE fixture_id = %s AND market_type = %s
+            WHERE fixture_id = %s AND market_id = %s
               AND (%s IS NULL OR line = %s)
             ORDER BY captured_at DESC NULLS LAST, id DESC
             LIMIT 1
-        """, (fixture_id, market_type, line, line))
+        """, (fixture_id, market_id, line, line))
         row = cur.fetchone()
         if row and row[0] is not None:
             return float(row[0])
     except Exception:
-        pass
+        cur.connection.rollback()
 
     # Fallback: ultimo retrato de `odds_snapshots` ANTES do apito inicial.
     #
@@ -269,14 +292,16 @@ def _closing_odd_for(cur, fixture_id: int | None, market_type: str | None, line:
         cur.execute("""
             SELECT odd_value FROM odds_snapshots
             WHERE fixture_id = %s
+              AND market_id = %s
               AND value_name = %s
               AND minutes_to_kickoff >= 0
             ORDER BY minutes_to_kickoff ASC, captured_at DESC
             LIMIT 1
-        """, (fixture_id, line))
+        """, (fixture_id, market_id, line))
         row = cur.fetchone()
         return float(row[0]) if row and row[0] is not None else None
     except Exception:
+        cur.connection.rollback()
         return None
 
 
@@ -316,7 +341,8 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
     odd = leg.get("odd")
     kickoff = fx["kickoff_at"]
     perfil = competition_profile.get_profile(league_id)
-    fechamento = _closing_odd_for(cur, leg.get("fixture_id"), leg.get("market_type"), leg.get("line"))
+    fechamento = _closing_odd_for(cur, leg.get("fixture_id"), leg.get("line"),
+                                  leg.get("market_id"))
 
     return {
         "season": (ctx or {}).get("season"),
@@ -338,6 +364,7 @@ def _build_dimensions(cur, leg: dict, ctx: dict | None, league_id, result, profi
         "is_favorite": (attribution.selection_role(odd) == "favorito"
                         if attribution.selection_role(odd) else None),
         "odd_band": attribution.odd_band(odd),
+        "market_id": leg.get("market_id"),
         "closing_odd": fechamento,
         "clv": attribution.clv(odd, fechamento),
         "ev_realizado": (float(profit) if profit is not None
@@ -391,15 +418,23 @@ def sync() -> dict:
                     result, profit, created_at,
                     season, competition_type, round_phase, round_label, referee,
                     kickoff_at, kickoff_hour, pick_side, is_favorite, odd_band,
-                    closing_odd, clv, ev_realizado, engine_version,
+                    market_id, closing_odd, clv, ev_realizado, engine_version,
                     ai_provider, ai_model, ai_decision, ai_status, ai_risk
                 ) VALUES (%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,%s,%s,%s, %s,%s,%s,
-                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s, %s,%s,%s,%s,%s)
+                          %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s, %s,%s,%s,%s,%s)
                 ON CONFLICT (source_table, source_id, leg_number) DO UPDATE SET
                     result = EXCLUDED.result,
                     profit = EXCLUDED.profit,
-                    closing_odd = COALESCE(EXCLUDED.closing_odd, picks_ledger.closing_odd),
-                    clv = COALESCE(EXCLUDED.clv, picks_ledger.clv),
+                    market_id = COALESCE(EXCLUDED.market_id, picks_ledger.market_id),
+                    -- SEM COALESCE, diferente de todo o resto: o valor gravado
+                    -- ate' 2026-08-20 vinha de casamento cruzado de mercado e
+                    -- era FALSO. COALESCE preservaria o erro pra sempre, ja'
+                    -- que o caminho corrigido devolve NULL quando nao consegue
+                    -- identificar o mercado. Recalcular sempre tambem e' barato
+                    -- e correto: `odds_snapshots` e' append-only, entao a mesma
+                    -- perna sempre reproduz o mesmo fechamento.
+                    closing_odd = EXCLUDED.closing_odd,
+                    clv = EXCLUDED.clv,
                     ev_realizado = COALESCE(EXCLUDED.ev_realizado, picks_ledger.ev_realizado),
                     season = COALESCE(EXCLUDED.season, picks_ledger.season),
                     competition_type = COALESCE(EXCLUDED.competition_type, picks_ledger.competition_type),
@@ -428,7 +463,8 @@ def sync() -> dict:
                 result, profit, leg.get("created_at"),
                 dim["season"], dim["competition_type"], dim["round_phase"], dim["round_label"],
                 dim["referee"], dim["kickoff_at"], dim["kickoff_hour"], dim["pick_side"],
-                dim["is_favorite"], dim["odd_band"], dim["closing_odd"], dim["clv"],
+                dim["is_favorite"], dim["odd_band"], dim["market_id"],
+                dim["closing_odd"], dim["clv"],
                 dim["ev_realizado"], dim["engine_version"],
                 dim["ai_provider"], dim["ai_model"], dim["ai_decision"],
                 dim["ai_status"], dim["ai_risk"],

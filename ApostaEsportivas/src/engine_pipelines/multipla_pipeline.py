@@ -284,6 +284,12 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
             "home_team_id": fx["home_team_id"],
             "away_team_id": fx["away_team_id"],
             "market": p["market_name"],
+            # Sem market_id nao ha como casar a perna contra a odd de
+            # fechamento: 'Over 4.5' existe em ate' 19 mercados da mesma
+            # partida, e casar so' pelo rotulo trazia a odd de outro mercado
+            # (ver picks_ledger_sync_service._closing_odd_for). Era por isso
+            # que multipla nunca teve CLV confiavel.
+            "market_id": p.get("market_id"),
             "market_type": p["market_type"],
             "line": p["value_label"],
             "odd": p["odd"],

@@ -22,8 +22,16 @@ def fetch_vip_free_legs(cur, table: str) -> list:
     estilo_vip = table in _TABELAS_ESTILO_VIP
     team_cols = ("home_team_name AS home_team, away_team_name AS away_team"
                  if estilo_vip else "home_team, away_team")
+    # market_id e' o que identifica QUAL mercado da casa de apostas a perna
+    # aponta. Sem ele, casar a perna contra `odds_snapshots` so' pelo rotulo da
+    # linha pega um mercado qualquer -- ver o defeito documentado em
+    # picks_ledger_sync_service._closing_odd_for. picks_live nao tem a coluna,
+    # entao a selecao e' condicional.
+    market_id_col = ("market_id" if _tem_coluna(cur, table, "market_id")
+                     else "NULL::int AS market_id")
     cur.execute(f"""
         SELECT id, fixture_id, match_date, home_team_id, away_team_id,
+               {market_id_col},
                {team_cols}, market, market_type, line, odd, bet_house,
                confidence, {"probability" if estilo_vip else "prob_real AS probability"},
                {"ev" if estilo_vip else "edge AS ev"},
@@ -61,6 +69,9 @@ def fetch_multiplas_legs(cur) -> list:
                 "home_team_id": g.get("home_team_id"), "away_team_id": g.get("away_team_id"),
                 "home_team": g.get("home_team"), "away_team": g.get("away_team"),
                 "market": g.get("market", ""), "market_type": g.get("market_type"),
+                # So' existe nas multiplas geradas a partir de 2026-08-20; nas
+                # anteriores fica None e a perna nao recebe CLV.
+                "market_id": g.get("market_id"),
                 "line": g.get("line", ""), "odd": g.get("odd"), "bet_house": g.get("bet_house"),
                 "confidence": g.get("confidence"), "probability": g.get("prob_real"),
                 "ev": None, "reasoning": None, "stake_pct": None, "stake_units": None,
@@ -109,6 +120,10 @@ def fetch_alavancagem_legs(cur) -> list:
                 "home_team_id": None, "away_team_id": None,
                 "home_team": row[f"home_team_{i}"], "away_team": row[f"away_team_{i}"],
                 "market": row[f"market_{i}"] or "", "market_type": row[f"market_type_{i}"],
+                # picks_alavancagem nao guarda market_id em nenhuma das 3
+                # pernas -- sem ele nao ha como saber contra qual mercado
+                # comparar o fechamento, e o CLV fica NULL (que e' o certo).
+                "market_id": None,
                 "line": row[f"line_{i}"] or "", "odd": row[f"odd_{i}"], "bet_house": row[f"bet_house_{i}"],
                 "confidence": row[f"confidence_{i}"], "probability": row[f"prob_real_{i}"],
                 "ev": None, "reasoning": row[f"reasoning_{i}"], "stake_pct": None, "stake_units": None,
