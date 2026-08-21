@@ -4,6 +4,7 @@ import logging
 import mimetypes
 import os
 import pathlib
+import re
 import time
 from collections import defaultdict
 
@@ -545,7 +546,8 @@ def _codificacoes_aceitas(request: Request) -> set[str]:
     return {p.split(";")[0].strip().lower() for p in bruto.split(",") if p.strip()}
 
 
-def _resposta_de_arquivo(request: Request, arquivo: pathlib.Path, cache: dict) -> FileResponse:
+def _resposta_de_arquivo(request: Request, arquivo: pathlib.Path, cache: dict,
+                         status: int = 200) -> FileResponse:
     """Serve o arquivo, preferindo a versao pre-comprimida quando existir.
 
     O `.br`/`.gz` sai do build (frontend/scripts/precomprimir.mjs), nao daqui:
@@ -566,12 +568,19 @@ def _resposta_de_arquivo(request: Request, arquivo: pathlib.Path, cache: dict) -
         if not pronto.is_file():
             continue
         cabecalhos = {**cache, "Content-Encoding": codificacao, "Vary": "Accept-Encoding"}
-        return FileResponse(str(pronto), media_type=tipo, headers=cabecalhos)
+        return FileResponse(str(pronto), media_type=tipo, headers=cabecalhos,
+                            status_code=status)
 
     # GZipMiddleware cuida do caso sem arquivo pronto (ele pula quando ja existe
     # Content-Encoding, entao os dois caminhos nao se atropelam).
-    return FileResponse(str(arquivo), media_type=tipo, headers=cache or None)
+    return FileResponse(str(arquivo), media_type=tipo, headers=cache or None,
+                        status_code=status)
 
+
+#: Extensao curta de arquivo (.php, .env, .zip). Deliberadamente estreita: um
+#: slug com ponto no meio ("versao-2.0-do-motor") tem sufixo longo e com hifen,
+#: entao nao casa e continua sendo tratado como rota.
+_EXTENSAO_DE_ARQUIVO = re.compile(r"^\.[A-Za-z0-9]{1,6}$")
 
 if _dist.exists():
 
@@ -588,4 +597,30 @@ if _dist.exists():
         if candidate.is_relative_to(_dist) and candidate.is_file() and not pedido_comprimido:
             eterno = full_path.startswith("assets/") and candidate.suffix != ".html"
             return _resposta_de_arquivo(request, candidate, _ASSET_CACHE if eterno else {})
-        return _resposta_de_arquivo(request, _dist / "index.html", _HTML_CACHE)
+        # SOFT 404: QUEM PEDE ARQUIVO E NAO ACHA RECEBE 404 DE VERDADE.
+        #
+        # Tudo o que nao e' arquivo real cai aqui e recebia o index.html com
+        # status 200, inclusive /wp-login.php e /.env -- a tela dizia "pagina
+        # nao encontrada" pro humano enquanto o servidor dizia "200 OK" pro
+        # Google. E' o soft 404 classico.
+        #
+        # A regra so' afirma 404 onde da' pra ter certeza: caminho terminado em
+        # extensao curta de arquivo (.php, .env, .sql, .zip) NUNCA e' rota do
+        # SPA, porque as rotas do React nao tem ponto (/picks, /blog/slug,
+        # /p/vip/12). O resto -- inclusive um /pickss digitado errado --
+        # continua 200, porque distinguir rota valida de typo exigiria repetir
+        # aqui a tabela de rotas do App.tsx, e duas copias da mesma regra e'
+        # como elas comecam a divergir. Pra esse caso o `noindex` da pagina ja'
+        # segura a indexacao.
+        #
+        # O corpo continua sendo o index.html: quem chegou por um link velho
+        # ve a pagina de erro do site, com o caminho de volta, em vez de um
+        # texto cru do servidor.
+        # `.env` e `.htaccess` entram pelo nome, e nao pelo sufixo: pathlib
+        # trata nome iniciado por ponto como arquivo oculto SEM extensao, entao
+        # `.suffix` volta vazio e eles escapariam da regra. Rota do SPA nenhuma
+        # comeca com ponto.
+        parece_arquivo = (candidate.name.startswith(".")
+                          or bool(_EXTENSAO_DE_ARQUIVO.match(candidate.suffix)))
+        return _resposta_de_arquivo(request, _dist / "index.html", _HTML_CACHE,
+                                    status=404 if parece_arquivo else 200)
