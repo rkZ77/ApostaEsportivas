@@ -43,7 +43,7 @@ import { stakeDe } from '../utils/stakePlan'
 import {fmtUnits, pctProb, capitalizarFrase } from '../utils/format'
 import InfoTip from '../components/InfoTip'
 import { getResultStyle, PICK_TYPE_CLS, PICK_TYPE_BORDER } from '../utils/resultStyle'
-import { useShareStoryImage } from '../hooks/useShareStoryImage'
+import { useShareStoryImage, useShareAlavancagemImage } from '../hooks/useShareStoryImage'
 import { useOddAtualizada } from '../hooks/useOddAtualizada'
 import { translateMarket, translateLine, translateTeamName, explainMarket } from '../utils/marketTranslate'
 import FilterPanel, { FilterGroup } from '../components/FilterPanel'
@@ -1093,7 +1093,12 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
 }
 
 // Alavancagem card
-function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, isLive = false }: { pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean }) {
+function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, isLive = false, degrau, meta }: {
+  pick: any; onClick?: () => void; userBankroll?: number; onConfigureBanca?: () => void; isLive?: boolean
+  /* Posição deste pick na escada do caminho aberto, quando o usuário tem um.
+     Só serve à imagem de compartilhamento · a tela já mostra a escada inteira. */
+  degrau?: number | null; meta?: number | null
+}) {
   const [showAnalysis, setShowAnalysis] = useState(false)
   const navigate    = useNavigate()
   const isCombo     = pick.tipo === 'dupla' || pick.tipo === 'tripla' || pick.tipo === 'combinacao'
@@ -1114,7 +1119,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   const [modalOdd, setModalOdd] = useState<number | null>(null)
   const [apiError, setApiError] = useState<string | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const { share: shareStory, sharing, shared } = useShareStoryImage()
+  const { share: shareAlav, sharing, shared } = useShareAlavancagemImage()
   const { oddBilhete, buscando: buscandoBilhete } = useOddAtualizada()
 
   const handleFollow = async (e: React.MouseEvent) => {
@@ -1149,19 +1154,29 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
 
   const handleShare = (e: React.MouseEvent) => {
     e.stopPropagation()
-    shareStory({
+    /*
+     * Card próprio, e não o de pick comum.
+     *
+     * O genérico desenha UM confronto: uma tripla saía dele anunciando só a
+     * primeira perna, com a odd combinada das três ao lado · quem via lia uma
+     * aposta simples pagando 3,20 e nem sabia dos outros dois jogos.
+     */
+    shareAlav({
       pickId: pick.id,
-      pickTypeRoute: 'alavancagem',
-      homeTeamName: translateTeamName(legs[0]?.home) || 'Alavancagem',
-      awayTeamName: translateTeamName(legs[0]?.away),
-      homeTeamId: legs[0]?.homeId,
-      awayTeamId: legs[0]?.awayId,
-      pickType: 'alavancagem',
-      market: isCombo ? `${comboLabel} · ${legs.length} jogos` : translateMarket(legs[0]?.market),
-      line: translateLine(legs[0]?.line),
-      odd: oddCombined,
+      tipoLabel: isCombo ? comboLabel : 'Simples',
+      legs: legs.map(l => ({
+        homeTeamName: translateTeamName(l.home) || 'Time',
+        awayTeamName: translateTeamName(l.away),
+        homeTeamId: l.homeId,
+        awayTeamId: l.awayId,
+        market: translateMarket(l.market),
+        line: translateLine(l.line),
+        odd: Number(l.odd) || undefined,
+      })),
+      oddCombined,
       result: pick.result,
-      profit: pick.result === 'GREEN' ? (oddCombined - 1) : pick.result === 'RED' ? -1 : null,
+      degrau,
+      meta,
     })
   }
 
@@ -1798,6 +1813,21 @@ export default function Picks() {
   const [alavHasMore,    setAlavHasMore]    = useState(false)
   const [alavLoadingMore, setAlavLoadingMore] = useState(false)
   const [userAlavSerie, setUserAlavSerie] = useState<AlavSerie | null>(null)
+
+  /*
+   * Em que degrau da escada este pick cai · serve só à imagem compartilhada,
+   * porque a tela já mostra a escada inteira ao lado.
+   *
+   * Pick já resolvido está em `steps`; o de hoje ainda não entrou, e por isso
+   * é o PRÓXIMO degrau. Sem caminho configurado não se afirma degrau nenhum:
+   * o card sai sem a escada em vez de inventar um "1 de 6" que não existe.
+   */
+  const degrauDoPick = useCallback((pickId?: number): number | null => {
+    if (!userAlavSerie?.configured) return null
+    const steps = userAlavSerie.steps ?? []
+    const i = steps.findIndex(st => st.pick_id === pickId)
+    return i >= 0 ? i + 1 : steps.length + 1
+  }, [userAlavSerie])
   const [alavInitInput, setAlavInitInput] = useState('')
   const [alavInitSaving, setAlavInitSaving] = useState(false)
   const [alavInitError, setAlavInitError] = useState('')
@@ -2351,6 +2381,8 @@ export default function Picks() {
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
+                        degrau={degrauDoPick(today.alavancagem?.id)}
+                        meta={userAlavSerie?.meta ?? null}
                       />
                       <button onClick={() => setTab('alavancagem')}
                         className="mt-3 w-full text-center text-xs text-orange-400 hover:text-orange-300 transition-colors py-3 border border-line rounded-md hover:border-line-strong">
@@ -2670,6 +2702,8 @@ export default function Picks() {
                         userBankroll={userAlavSerie?.configured ? userAlavSerie.current_bankroll : undefined}
                         onConfigureBanca={irParaConfigAlavancagem}
                         isLive={isAlavLive(today.alavancagem)}
+                        degrau={degrauDoPick(today.alavancagem?.id)}
+                        meta={userAlavSerie?.meta ?? null}
                       />
                     ) : (
                       <div className="card p-8 text-center border-dashed border-orange-500/20">

@@ -802,3 +802,211 @@ export async function buildLeagueResultsStoryImage(input: LeagueResultsStoryInpu
 
   return toBlobPromise(canvas)
 }
+
+// ── Card: alavancagem ───────────────────────────────────────────────────────
+export interface AlavancagemLeg {
+  homeTeamName: string
+  awayTeamName?: string
+  homeTeamId?: number | null
+  awayTeamId?: number | null
+  market?: string
+  line?: string
+  odd?: number
+}
+
+export interface AlavancagemStoryInput {
+  legs: AlavancagemLeg[]
+  /** "Simples", "Dupla", "Tripla", "Combinada" · como a tela chama. */
+  tipoLabel: string
+  oddCombined: number
+  result?: string | null
+  shareUrl: string
+  /** Degrau deste pick dentro do caminho, quando se sabe. */
+  degrau?: number | null
+  /** Greens que fecham o caminho (ALAV_META_PADRAO no backend). */
+  meta?: number | null
+}
+
+/**
+ * Alavancagem não cabe no card de pick comum.
+ *
+ * O card genérico foi feito pra UM jogo: ele desenha dois escudos, um mercado
+ * e uma odd. Uma tripla compartilhada por ali saía anunciando só a PRIMEIRA
+ * perna, com a odd combinada de três jogos ao lado dela · quem lia via uma
+ * aposta simples pagando 3,20 e nem sabia que existiam outros dois jogos.
+ *
+ * Aqui as pernas são a informação principal (uma linha cada, com mercado e
+ * odd própria), e o composto aparece pelo que ele é: quanto 1 unidade vira se
+ * as três entrarem. Quando o degrau do caminho é conhecido, o card também diz
+ * em que ponto da escada este pick está · é a pergunta que o produto responde
+ * e que nenhum outro tipo de pick tem.
+ */
+export async function buildAlavancagemStoryImage(input: AlavancagemStoryInput): Promise<Blob> {
+  const canvas = document.createElement('canvas')
+  canvas.width = W
+  canvas.height = H
+  const ctx = canvas.getContext('2d')
+  if (!ctx) throw new Error('Canvas 2D não suportado')
+
+  const rs = getResultStyle(input.result)
+  const accentHex = rs?.hex ?? PICK_TYPE_HEX['alavancagem'] ?? '#fb923c'
+  const legs = input.legs.slice(0, 3)
+  const temMeta = input.degrau != null && input.meta != null && input.meta > 0
+
+  await ensureFonts()
+  drawBackground(ctx, accentHex)
+  drawTopAccent(ctx, accentHex)
+
+  const logoImg = await loadImage('/logo.png')
+  // Altura da linha cai quando há três pernas: com 190px cada, três caixas
+  // mais o composto e o selo passavam do rodapé.
+  const rowH = legs.length >= 3 ? 168 : 196
+  const alturaConteudo = (logoImg ? 290 : 170) + 130 + (temMeta ? 118 : 0)
+    + legs.length * rowH + 96 + 122 + 150 + FOOTER_HEIGHT
+
+  ctx.save()
+  ctx.translate(0, computeShiftY(alturaConteudo))
+
+  const brandY = drawBrandHeader(ctx, logoImg)
+  let cursorY = brandY + 56
+
+  // Badge: ALAVANCAGEM · TRIPLA
+  const badgeLabel = `ALAVANCAGEM · ${input.tipoLabel.toUpperCase()}`
+  ctx.font = fontDisplay(800, 30)
+  const badgeW = ctx.measureText(badgeLabel).width + 80
+  drawRoundedRect(ctx, W / 2 - badgeW / 2, cursorY, badgeW, 64, 32)
+  ctx.fillStyle = `${accentHex}22`
+  ctx.fill()
+  ctx.strokeStyle = `${accentHex}66`
+  ctx.lineWidth = 2
+  ctx.stroke()
+  ctx.fillStyle = accentHex
+  ctx.fillText(badgeLabel, W / 2, cursorY + 43)
+  cursorY += 64 + 66
+
+  // Escada até a meta · segmentos discretos, iguais aos da tela: a meta é
+  // contada em greens inteiros, e barra contínua sugeriria meio degrau.
+  if (temMeta) {
+    const meta = input.meta!
+    const feitos = Math.max(0, Math.min(input.degrau! - 1, meta))
+    ctx.font = fontMono(700, 24)
+    ctx.fillStyle = '#71717a'
+    ctx.fillText(`DEGRAU ${input.degrau} DE ${meta}`, W / 2, cursorY)
+    cursorY += 34
+    const larguraTotal = W - 240
+    const gap = 12
+    const segW = (larguraTotal - gap * (meta - 1)) / meta
+    for (let i = 0; i < meta; i++) {
+      const x = W / 2 - larguraTotal / 2 + i * (segW + gap)
+      drawRoundedRect(ctx, x, cursorY, segW, 18, 9)
+      // Cheio = green já dado; o degrau atual pulsa na cor do card; o resto fica apagado.
+      ctx.fillStyle = i < feitos ? accentHex : i === feitos ? `${accentHex}55` : 'rgba(255,255,255,0.08)'
+      ctx.fill()
+    }
+    cursorY += 18 + 66
+  }
+
+  // Pernas · cada jogo com o mercado e a odd DELE
+  const logos = await Promise.all(
+    legs.map(l => Promise.all([
+      l.homeTeamId ? loadImage(`/api/proxy/team/${l.homeTeamId}.png`) : Promise.resolve(null),
+      l.awayTeamId ? loadImage(`/api/proxy/team/${l.awayTeamId}.png`) : Promise.resolve(null),
+    ]))
+  )
+
+  legs.forEach((l, i) => {
+    const rowY = cursorY + i * rowH
+    const boxH = rowH - 18
+    const [homeLogo, awayLogo] = logos[i]
+
+    drawRoundedRect(ctx, 70, rowY, W - 140, boxH, 20)
+    ctx.fillStyle = 'rgba(255,255,255,0.03)'
+    ctx.fill()
+    ctx.strokeStyle = 'rgba(255,255,255,0.07)'
+    ctx.lineWidth = 1.5
+    ctx.stroke()
+
+    // Número do jogo dentro do bilhete, à esquerda: sem ele três caixas
+    // parecidas viram uma lista sem ordem.
+    const midY = rowY + boxH / 2
+    ctx.textAlign = 'left'
+    ctx.font = fontMono(700, 22)
+    ctx.fillStyle = '#52525b'
+    ctx.fillText(`${i + 1}`, 100, midY + 6)
+    drawCircularLogo(ctx, homeLogo, 182, midY - 12, 62)
+    drawCircularLogo(ctx, awayLogo, 258, midY - 12, 62)
+
+    ctx.textAlign = 'left'
+    const textoX = 320
+    // Reserva a coluna da odd (desenhada em W-106, alinhada à direita): sem
+    // essa folga um confronto longo como "Olimpia Asunción x Vasco da Gama"
+    // encostava no número.
+    const largura = W - textoX - 230
+    ctx.font = fontDisplay(800, 34)
+    ctx.fillStyle = '#ffffff'
+    const confronto = l.awayTeamName ? `${l.homeTeamName} x ${l.awayTeamName}` : l.homeTeamName
+    ctx.fillText(fitText(ctx, confronto, largura), textoX, midY - 14)
+
+    const mercado = [l.market, l.line].filter(Boolean).join(' · ')
+    if (mercado) {
+      ctx.font = fontSans(600, 26)
+      ctx.fillStyle = '#a1a1aa'
+      ctx.fillText(fitText(ctx, mercado, largura), textoX, midY + 30)
+    }
+
+    if (l.odd) {
+      ctx.textAlign = 'right'
+      ctx.font = fontMono(900, 38)
+      ctx.fillStyle = accentHex
+      ctx.fillText(l.odd.toFixed(2), W - 106, midY + 2)
+    }
+    ctx.textAlign = 'center'
+  })
+  cursorY += legs.length * rowH + 30
+
+  // Composto: o que o produto promete, em unidade e não em reais · o valor de
+  // entrada é escolha de cada um, então R$ aqui não compara com nada (mesma
+  // regra de _alav_unidades no backend).
+  // A frase muda com o resultado: "vira" promete futuro e ficaria mentindo em
+  // cima de um pick já resolvido, e num RED o valor do composto não é o que
+  // aconteceu · ali o número verdadeiro é a unidade perdida.
+  const perdeu = input.result === 'RED'
+  const rotuloComposto = perdeu ? 'RESULTADO'
+    : input.result === 'GREEN' ? '1 UNIDADE VIROU'
+    : '1 UNIDADE VIRA'
+  const valorComposto = perdeu ? '−1,00u' : `${input.oddCombined.toFixed(2)}u`
+  ctx.font = fontMono(700, 24)
+  ctx.fillStyle = '#71717a'
+  ctx.fillText(rotuloComposto, W / 2, cursorY)
+  ctx.font = fontMono(900, 96)
+  withGlow(ctx, `${accentHex}66`, 22, () => {
+    ctx.fillStyle = accentHex
+    ctx.fillText(valorComposto, W / 2, cursorY + 88)
+  })
+  cursorY += 96 + 60
+
+  // Selo de resultado
+  const resultLabel = rs ? rs.label : 'EM ANDAMENTO'
+  ctx.font = fontDisplay(900, 60)
+  const seloW = ctx.measureText(resultLabel).width + 110
+  const seloGrad = ctx.createLinearGradient(0, cursorY, 0, cursorY + 104)
+  seloGrad.addColorStop(0, `${accentHex}33`)
+  seloGrad.addColorStop(1, `${accentHex}14`)
+  drawRoundedRect(ctx, W / 2 - seloW / 2, cursorY, seloW, 104, 24)
+  ctx.fillStyle = seloGrad
+  ctx.fill()
+  withGlow(ctx, `${accentHex}aa`, 24, () => {
+    ctx.strokeStyle = accentHex
+    ctx.lineWidth = 3
+    ctx.stroke()
+  })
+  ctx.fillStyle = accentHex
+  ctx.fillText(resultLabel, W / 2, cursorY + 72)
+  cursorY += 104 + 80
+
+  drawCtaFooter(ctx, cursorY, input.shareUrl)
+  ctx.restore()
+  drawFooterCredit(ctx)
+
+  return toBlobPromise(canvas)
+}
