@@ -1,7 +1,6 @@
 import os
 import re
 import time
-import base64
 import hashlib
 import logging
 import secrets
@@ -37,6 +36,13 @@ from database import get_connection
 # `avisar_plano_expirando` continua importado la embaixo, dentro da funcao,
 # porque aquele caminho passa o `_send_email` deste modulo por injecao.
 from plan_expiry import expirar_plano_vencido
+from email_templates import (
+    boas_vindas_html,
+    reset_senha_html,
+    troca_senha_html,
+    url_logo,
+    verificacao_html,
+)
 from sms import SMSNaoEnviado, enviar_sms, sms_configurado
 from auth_utils import (
     hash_password, verify_password,
@@ -48,7 +54,6 @@ from auth_utils import (
 )
 
 _AVATARS_DIR = pathlib.Path(__file__).parent.parent / "static" / "avatars"
-_LOGO_PATH   = pathlib.Path(__file__).parent.parent / "static" / "logo.png"
 
 # Lockout por conta (além do lockout por IP em main.py): sem isso, um ataque
 # distribuído por IP contorna o limite por IP mas ainda bate sempre na mesma
@@ -169,19 +174,17 @@ def _verify_captcha(token: str | None, request: Request) -> None:
         raise HTTPException(status_code=400, detail="Verificação de segurança falhou. Tente novamente.")
 
 
+# Validade dos codigos de senha (redefinir e confirmar troca). Vive numa
+# constante porque o mesmo numero aparece no token e no texto do e-mail:
+# separados, um muda e o outro passa a mentir pra quem esta tentando
+# recuperar a conta.
+_CODIGO_SENHA_EXPIRA_MIN = 15
+
+
 def _hash_token(token: str) -> str:
     """SHA-256 hex digest de um token · nunca armazena plaintext no DB."""
     return hashlib.sha256(token.encode()).hexdigest()
 
-def _logo_data_uri() -> str:
-    try:
-        data = _LOGO_PATH.read_bytes()
-        return "data:image/png;base64," + base64.b64encode(data).decode()
-    except Exception:
-        return ""
-
-def _logo_url(site_url: str) -> str:
-    return f"{site_url}/static/logo.png"
 _ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 _MAX_SIZE = 3 * 1024 * 1024  # 3 MB
 
@@ -339,133 +342,6 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
         logger.error("[EMAIL] Falha ao enviar para %s: %s", to, e)
 
 
-def _welcome_html(first_name: str, site_url: str, logo_b64: str = "", logo_url: str = "") -> str:
-    logo_src = logo_url or logo_b64
-    return f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
-
-        <!-- Header verde -->
-        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{logo_src}" alt="Pick IA" width="80" height="80"
-               style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
-          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">
-            Pick<span style="color:#bbf7d0;">IA</span>
-          </h1>
-          <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
-        </td></tr>
-
-        <!-- Corpo -->
-        <tr><td style="padding:36px 40px;">
-          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
-          <h2 style="margin:0 0 20px;color:#fff;font-size:22px;font-weight:800;">{first_name}!</h2>
-          <p style="margin:0 0 28px;color:#a1a1aa;font-size:15px;line-height:1.6;">
-            Sua conta foi criada com sucesso. Você tem <strong style="color:#22c55e;">2 dias de acesso VIP gratuito</strong> para explorar todas as funcionalidades.
-          </p>
-
-          <!-- Features -->
-          <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:28px;">
-            <tr>
-              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
-                <div style="color:#22c55e;font-size:20px;margin-bottom:8px;">&#9679;</div>
-                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Picks VIP com IA</div>
-                <div style="color:#71717a;font-size:12px;line-height:1.5;">Análises diárias geradas por IA com odds e mercados otimizados.</div>
-              </td>
-              <td width="4%"></td>
-              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
-                <div style="color:#3b82f6;font-size:20px;margin-bottom:8px;">&#9632;</div>
-                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Múltiplas e Alavancagem</div>
-                <div style="color:#71717a;font-size:12px;line-height:1.5;">Combinações inteligentes para maximizar o retorno da banca.</div>
-              </td>
-            </tr>
-            <tr><td colspan="3" style="padding-top:12px;"></td></tr>
-            <tr>
-              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
-                <div style="color:#ef4444;font-size:20px;margin-bottom:8px;">&#9679;</div>
-                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Ao Vivo</div>
-                <div style="color:#71717a;font-size:12px;line-height:1.5;">Acompanhe seus picks em tempo real com estatísticas da partida.</div>
-              </td>
-              <td width="4%"></td>
-              <td width="48%" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;padding:16px;vertical-align:top;">
-                <div style="color:#f59e0b;font-size:20px;margin-bottom:8px;">&#9650;</div>
-                <div style="color:#fff;font-size:14px;font-weight:700;margin-bottom:4px;">Gestão de Banca</div>
-                <div style="color:#71717a;font-size:12px;line-height:1.5;">Controle de bankroll, metas e histórico completo de resultados.</div>
-              </td>
-            </tr>
-          </table>
-
-          <!-- CTA -->
-          <table width="100%" cellpadding="0" cellspacing="0">
-            <tr><td align="center">
-              <a href="{site_url}/picks"
-                 style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;letter-spacing:0.3px;">
-                Acessar meus picks
-              </a>
-            </td></tr>
-          </table>
-        </td></tr>
-
-        <!-- Footer -->
-        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
-          <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
-            Siga no Instagram:
-            <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
-          </p>
-          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
-        </td></tr>
-
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
-
-
-def _verification_html(first_name: str, site_url: str, token: str, logo_b64: str = "", logo_url: str = "") -> str:
-    logo_src = logo_url or logo_b64
-    verify_url = f"{site_url}/verify-email?token={token}"
-    return f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
-        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <img src="{logo_src}" alt="Pick IA" width="80" height="80"
-               style="border-radius:50%;margin-bottom:16px;display:block;margin-left:auto;margin-right:auto;" />
-          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">Pick<span style="color:#bbf7d0;">IA</span></h1>
-          <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
-        </td></tr>
-        <tr><td style="padding:36px 40px;text-align:center;">
-          <p style="margin:0 0 8px;color:#71717a;font-size:13px;text-transform:uppercase;letter-spacing:1px;font-weight:600;">Bem-vindo,</p>
-          <h2 style="margin:0 0 16px;color:#fff;font-size:22px;font-weight:800;">{first_name}!</h2>
-          <p style="margin:0 0 8px;color:#a1a1aa;font-size:15px;line-height:1.6;">
-            Sua conta foi criada. Para ativar seu <strong style="color:#22c55e;">acesso VIP gratuito de 2 dias</strong>,<br>confirme seu e-mail clicando no botão abaixo.
-          </p>
-          <p style="margin:0 0 28px;color:#52525b;font-size:12px;">O link expira em 24 horas.</p>
-          <a href="{verify_url}"
-             style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:16px;padding:16px 48px;border-radius:12px;letter-spacing:0.3px;">
-            Confirmar e-mail
-          </a>
-        </td></tr>
-        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
-          <p style="margin:0 0 6px;color:#52525b;font-size:12px;">
-            Siga no Instagram: <a href="https://www.instagram.com/pickia.br/" style="color:#22c55e;text-decoration:none;">@pickia.br</a>
-          </p>
-          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
-
-
 def _send_verification_email(to: str, name: str, token: str, site_url: str) -> None:
     first_name = name.strip().split()[0]
     verify_url = f"{site_url}/verify-email?token={token}"
@@ -479,7 +355,7 @@ def _send_verification_email(to: str, name: str, token: str, site_url: str) -> N
             f"O link expira em 24 horas.\n\n"
             f"Equipe Pick IA"
         ),
-        html=_verification_html(first_name, site_url, token, logo_url=_logo_url(site_url)),
+        html=verificacao_html(first_name, site_url, token, url_logo(site_url)),
     )
 
 
@@ -922,7 +798,7 @@ def _send_welcome_email(to: str, name: str, site_url: str) -> None:
         to,
         subject=f"{first_name}, seus picks estão te esperando",
         body=f"Olá {first_name}, sua conta foi confirmada! Acesse: {site_url}/picks",
-        html=_welcome_html(first_name, site_url, logo_url=_logo_url(site_url)),
+        html=boas_vindas_html(first_name, site_url, url_logo(site_url)),
     )
 
 
@@ -1465,14 +1341,15 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
         _validate_password(body.new_password)
 
         code = str(secrets.randbelow(900000) + 100000)  # 100000–999999
-        expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=_CODIGO_SENHA_EXPIRA_MIN)
         cur.execute(
             "UPDATE users SET reset_token=%s, reset_token_expires_at=%s, pending_password_hash=%s WHERE id=%s",
             (_hash_token(code), expires, hash_password(body.new_password), current_user["sub"]),
         )
         conn.commit()
 
-        first_name = row["name"].strip().split()[0] if row["name"] else ""
+        first_name = row["name"].strip().split()[0] if row["name"] else "tudo bem"
+        site_url   = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         background_tasks.add_task(
             _send_email,
             row["email"],
@@ -1481,9 +1358,13 @@ def request_password_change(body: RequestPasswordChangeBody, background_tasks: B
                 f"Olá {first_name},\n\n"
                 f"Seu código para confirmar a troca de senha é:\n\n"
                 f"  {code}\n\n"
-                f"O código expira em 15 minutos.\n"
-                f"Se não foi você quem pediu, ignore este email e sua senha continua a mesma.\n\n"
+                f"O código expira em {_CODIGO_SENHA_EXPIRA_MIN} minutos.\n"
+                f"Se não foi você quem pediu, ignore este e-mail e sua senha continua a mesma.\n\n"
                 f"Equipe Pick IA"
+            ),
+            troca_senha_html(
+                first_name, code, site_url,
+                minutos=_CODIGO_SENHA_EXPIRA_MIN, logo_url=url_logo(site_url),
             ),
         )
         return {"ok": True}
@@ -1569,24 +1450,29 @@ def forgot_password(body: ForgotPasswordBody):
             return {"ok": True}
 
         code    = str(secrets.randbelow(900000) + 100000)  # 100000–999999
-        expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+        expires = datetime.now(timezone.utc) + timedelta(minutes=_CODIGO_SENHA_EXPIRA_MIN)
         cur.execute(
             "UPDATE users SET reset_token = %s, reset_token_expires_at = %s WHERE id = %s",
             (_hash_token(code), expires, row["id"]),
         )
         conn.commit()
 
-        nome = row["name"]
+        primeiro = (row["name"] or "").strip().split(" ")[0] or "tudo bem"
+        site_url = (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
         _send_email(
             to      = body.email,
-            subject = "Redefinição de senha · Pick IA",
+            subject = "Seu código para redefinir a senha · Pick IA",
             body    = (
-                f"Olá {nome},\n\n"
+                f"Olá {primeiro},\n\n"
                 f"Seu código para redefinir a senha é:\n\n"
                 f"  {code}\n\n"
-                f"O código expira em 15 minutos.\n"
-                f"Se não foi você, ignore este email.\n\n"
+                f"O código expira em {_CODIGO_SENHA_EXPIRA_MIN} minutos.\n"
+                f"Se não foi você, ignore este e-mail · sua senha atual continua valendo.\n\n"
                 f"Equipe Pick IA"
+            ),
+            html    = reset_senha_html(
+                primeiro, code, site_url, email=body.email,
+                minutos=_CODIGO_SENHA_EXPIRA_MIN, logo_url=url_logo(site_url),
             ),
         )
         return {"ok": True}

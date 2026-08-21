@@ -12,6 +12,7 @@ from pydantic import BaseModel
 import mercadopago
 from auth_utils import get_current_user, invalidar_cache_usuario
 from database import get_connection
+from email_templates import url_logo, vip_ativado_html
 
 logger = logging.getLogger(__name__)
 
@@ -43,52 +44,9 @@ def _send_vip_email(to: str, name: str, plan_key: str, expires_at) -> None:
     plan_label  = PLAN_LABELS.get(plan_key, plan_key.capitalize())
     expires_str = expires_at.strftime("%d/%m/%Y") if hasattr(expires_at, "strftime") else str(expires_at)[:10]
 
-    html = f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
-        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:36px 40px;text-align:center;">
-          <h1 style="margin:0;color:#fff;font-size:28px;font-weight:900;letter-spacing:-0.5px;">Pick<span style="color:#bbf7d0;">IA</span></h1>
-          <p style="margin:6px 0 0;color:#dcfce7;font-size:14px;">Tips esportivas por Inteligência Artificial</p>
-        </td></tr>
-        <tr><td style="padding:36px 40px;text-align:center;">
-          <div style="width:64px;height:64px;background:#16a34a22;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 20px;">
-            <span style="font-size:32px;">&#127942;</span>
-          </div>
-          <h2 style="margin:0 0 8px;color:#fff;font-size:22px;font-weight:800;">Acesso ativado, {first_name}!</h2>
-          <p style="margin:0 0 24px;color:#a1a1aa;font-size:15px;line-height:1.6;">
-            Seu pagamento foi confirmado. Você agora tem acesso completo ao Pick IA.
-          </p>
-          <table width="100%" cellpadding="0" cellspacing="0" style="background:#1a1a1a;border:1px solid #262626;border-radius:12px;margin-bottom:28px;">
-            <tr>
-              <td style="padding:16px 20px;border-bottom:1px solid #262626;">
-                <span style="color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Plano</span>
-                <div style="color:#fff;font-size:15px;font-weight:700;margin-top:4px;">{plan_label}</div>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:16px 20px;">
-                <span style="color:#71717a;font-size:12px;text-transform:uppercase;letter-spacing:1px;">Acesso até</span>
-                <div style="color:#22c55e;font-size:15px;font-weight:700;margin-top:4px;">{expires_str}</div>
-              </td>
-            </tr>
-          </table>
-          <a href="{site_url}/picks"
-             style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;font-weight:800;font-size:15px;padding:14px 40px;border-radius:10px;">
-            Acessar meus picks
-          </a>
-        </td></tr>
-        <tr><td style="border-top:1px solid #1f1f1f;padding:20px 40px;text-align:center;">
-          <p style="margin:0;color:#3f3f46;font-size:11px;">Pick IA &mdash; Tips por Inteligência Artificial</p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
+    html = vip_ativado_html(
+        first_name, plan_label, expires_str, site_url, url_logo(site_url)
+    )
 
     try:
         resend.api_key = api_key
