@@ -79,6 +79,12 @@ _ADAPTADOR = (
     ("Shots on Goal",       "home_shots_on",      "away_shots_on"),
     ("Total Shots",         "home_total_shots",   "away_total_shots"),
     ("Offsides",            "home_offsides",      "away_offsides"),
+    # Defesas faltava, e o buraco era exatamente o que o comentario acima
+    # descreve: `_stat_for_market` le "Goalkeeper Saves" (routers/live.py),
+    # as colunas existem em match_statistics e vinham preenchidas, mas a folha
+    # montada aqui nao copiava a chave -- entao todo pick de defesa abria a
+    # secao "Como esse mercado vem se comportando" vazia, sem erro nenhum.
+    ("Goalkeeper Saves",    "home_goalkeeper_saves", "away_goalkeeper_saves"),
 )
 
 
