@@ -30,6 +30,8 @@ interface Match {
   away_fouls: number | null
   home_shots_on: number | null
   away_shots_on: number | null
+  home_possession: number | null
+  away_possession: number | null
   is_home: boolean
   status: string
 }
@@ -486,9 +488,15 @@ export default function FixtureStatsModal({ fixture, onClose, inline = false }: 
                     <StatRow label="Cartões amarelos"
                       home={avgStat(homeMatches, homeId, 'home_yellow_cards', 'away_yellow_cards')}
                       away={avgStat(awayMatches, awayId, 'home_yellow_cards', 'away_yellow_cards')} higherIsBetter={false} />
+                    {/* Posse sai dos MESMOS jogos filtrados que as linhas de
+                        cima, e nao de `team_statistics`.
+                        Lendo dali, esta era a unica linha do bloco que ignorava
+                        o filtro: o contexto na tabela e' fixo (HOME pro
+                        mandante, AWAY pro visitante), entao trocar pra "Fora"
+                        mudava cinco numeros e deixava a posse parada. */}
                     <StatRow label="Posse de bola %"
-                      home={homeStats.avg_possession_for}
-                      away={awayStats.avg_possession_for} />
+                      home={avgStat(homeMatches, homeId, 'home_possession', 'away_possession')}
+                      away={avgStat(awayMatches, awayId, 'home_possession', 'away_possession')} />
                   </div>
                   <div className="pt-4 border-t border-line grid grid-cols-2 gap-4">
                     <FormRow matches={homeMatches} teamId={homeId} name={fixture.home_team} />

@@ -101,7 +101,12 @@ export default function PicksPendingCard() {
   useEffect(() => {
     if (todayCount !== 0) return
     api.get('/public/leagues')
-      .then(r => setLeagueNames((r.data ?? []).map((l: any) => l.name).join(', ')))
+      // `ativa !== false` porque a rota devolve o histórico junto: sem o
+      // filtro, o card diz que está esperando jogo da Copa do Mundo, que
+      // acabou.
+      .then(r => setLeagueNames((r.data ?? [])
+        .filter((l: any) => l.ativa !== false)
+        .map((l: any) => l.name).join(', ')))
       .catch(() => setLeagueNames(''))
     // Sem `date`, a rota já é "daqui pra frente" e atravessa a virada do dia
     // sozinha · dispensa as sete chamadas em paralelo que procuravam, dia a

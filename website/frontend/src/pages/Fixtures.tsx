@@ -10,6 +10,7 @@ import { EstatisticasContent } from './Estatisticas'
 import { useAuth } from '../context/AuthContext'
 import { Badge, LiveDot, Spinner } from '../components/ui'
 import AgendaInteligente from '../components/AgendaInteligente'
+import ExplorarLigas from '../components/ExplorarLigas'
 import { backdropFade, dialogScale, tabFade } from '../lib/motion'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
@@ -154,7 +155,7 @@ interface LiveStats {
   away_possession: number
 }
 
-type PageTab = 'jogos' | 'agenda' | 'estatistica'
+type PageTab = 'jogos' | 'agenda' | 'estatistica' | 'explorar'
 
 export default function Fixtures() {
   const { isVip, isAdmin, user }   = useAuth()
@@ -344,6 +345,12 @@ export default function Fixtures() {
                 { key: 'jogos',       label: 'Jogos' },
                 { key: 'agenda',      label: 'Agenda' },
                 { key: 'estatistica', label: 'Estatísticas' },
+                // Explorar fica DEPOIS de Estatísticas de propósito: as duas
+                // respondem a mesma pergunta, mas Estatísticas fala das ligas
+                // que a IA cobre, que é o que quase todo mundo quer. Explorar é
+                // o passo seguinte, pra quem foi atrás de liga ou ano que o
+                // banco não tem.
+                { key: 'explorar',    label: 'Explorar' },
               ] as { key: PageTab; label: string }[]).map(t => (
                 <motion.button
                   key={t.key}
@@ -374,6 +381,15 @@ export default function Fixtures() {
       {pageTab === 'estatistica' && (
         <motion.div key="estatistica" variants={tabFade} initial="hidden" animate="visible" exit="exit">
           <EstatisticasContent />
+        </motion.div>
+      )}
+
+      {pageTab === 'explorar' && (
+        <motion.div key="explorar" variants={tabFade} initial="hidden" animate="visible" exit="exit">
+          {/* O gate VIP mora dentro do componente, igual ao de
+              EstatisticasContent · assim as duas abas irmãs recusam do mesmo
+              jeito e ninguém precisa lembrar de repetir a checagem aqui. */}
+          <ExplorarLigas />
         </motion.div>
       )}
 

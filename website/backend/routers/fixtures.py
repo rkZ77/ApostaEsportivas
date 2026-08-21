@@ -250,13 +250,21 @@ def get_fixture_stats(fixture_id: int, current_user: dict = Depends(get_current_
                    ms.home_red_cards, ms.away_red_cards, ms.total_red_cards,
                    ms.home_fouls, ms.away_fouls,
                    ms.home_shots_on, ms.away_shots_on,
+                   ms.home_possession, ms.away_possession,
                    ms.status
             FROM match_statistics ms
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.status IN ('FT','AET','PEN')
               AND ms.fixture_id != %s
             ORDER BY ms.match_date DESC
-            LIMIT 15
+            -- 40, e nao 15, POR CAUSA do filtro Casa/Fora da tela.
+            --
+            -- O painel do jogo corta por mando DEPOIS de receber esta lista.
+            -- Com 15 jogos, escolher "Casa" e "15J" devolvia os sete ou oito
+            -- que por acaso foram em casa, e o rotulo "15J" mentia sem nenhum
+            -- sintoma: a media aparecia normal, calculada sobre metade da
+            -- amostra pedida. 40 jogos garantem 15 de cada lado com folga.
+            LIMIT 40
         """, (team_id, team_id, fixture_id))
         rows = [dict(r) for r in cur.fetchall()]
         for r in rows:

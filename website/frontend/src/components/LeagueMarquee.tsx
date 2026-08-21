@@ -18,6 +18,8 @@ export interface LeagueTeaser {
   league_id: number
   name: string
   logo_url: string
+  /** `false` = competição encerrada, só histórico. Fora da fita. */
+  ativa?: boolean
 }
 
 /*
@@ -36,7 +38,10 @@ let _leaguesPromise: Promise<LeagueTeaser[]> | null = null
 function fetchLeagues(): Promise<LeagueTeaser[]> {
   if (!_leaguesPromise) {
     _leaguesPromise = api.get('/public/leagues')
-      .then(r => (r.data ?? []) as LeagueTeaser[])
+      // A rota devolve o histórico junto porque a tela de Estatísticas precisa
+      // dele. Aqui não: a fita é promessa de cobertura, e anunciar a Copa do
+      // Mundo (encerrada em agosto de 2026) é prometer análise que não vem.
+      .then(r => ((r.data ?? []) as LeagueTeaser[]).filter(l => l.ativa !== false))
       .catch(err => { _leaguesPromise = null; throw err })
   }
   return _leaguesPromise
