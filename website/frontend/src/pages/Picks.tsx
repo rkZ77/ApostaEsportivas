@@ -1680,6 +1680,8 @@ function PipelineStatusCard() {
  */
 interface TeaserBloqueado {
   id: number
+  /** Ausente = VIP. Faltas e Defesas mandam o tipo para o badge sair certo. */
+  pick_type?: string | null
   home_team_name?: string | null
   away_team_name?: string | null
   home_team_id?: number | null
@@ -1728,7 +1730,7 @@ function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
     <div className="pick-card border-line">
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
         <div className="flex items-center gap-2 flex-wrap min-w-0">
-          <PickTypeBadge type="vip" />
+          <PickTypeBadge type={p.pick_type ?? 'vip'} />
           {(p.league_id || p.league_name) && (
             <div className="flex items-center gap-1 min-w-0">
               <LeagueLogo id={p.league_id ?? undefined} name={p.league_name ?? undefined} />
@@ -3284,7 +3286,7 @@ export default function Picks() {
             {!canSeeVip ? (
               <div>
                 <SectionHeader color="bg-purple-400" label="Mercados" />
-                <VipLockOverlay color="purple" />
+                <VipLockOverlay color="purple" picks={today?.bloqueados?.mercados} rotulo="mercados" />
               </div>
             ) : (
               <>

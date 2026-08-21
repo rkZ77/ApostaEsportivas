@@ -558,10 +558,39 @@ def get_today_suggestions(
                 LIMIT 1
             """, _d)
 
+            # Faltas e defesas moram em duas tabelas mas viram UMA aba
+            # ("Mercados"), entao viram uma lista so' aqui tambem. `pick_type`
+            # vai junto porque o badge do card e' o que distingue Faltas de
+            # Defesas -- sem ele os dois apareceriam como VIP.
+            #
+            # O nome do goleiro NAO entra, mesmo estando na tabela: ele e' o
+            # sujeito da analise ("defesas do goleiro X"), nao o jogo. Entra o
+            # mesmo conjunto de campos dos outros teasers, nem um a mais.
+            teaser_mercados = []
+            for tipo, tabela in (("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
+                teaser_mercados += [
+                    {**dict(r), "pick_type": tipo}
+                    for r in _safe_query(cur, f"""
+                        SELECT p.id, p.match_date,
+                               p.home_team AS home_team_name,
+                               p.away_team AS away_team_name,
+                               p.home_team_id, p.away_team_id,
+                               p.league_id, p.odd,
+                               f.match_datetime, l.name AS league_name
+                        FROM {tabela} p
+                        LEFT JOIN fixtures f ON f.fixture_id = p.fixture_id
+                        LEFT JOIN leagues  l ON l.league_id  = p.league_id
+                        WHERE ({_merc_where.replace('match_date', 'p.match_date').replace('result IS NULL', 'p.result IS NULL')})
+                          AND p.result IS NULL
+                        ORDER BY p.match_date DESC, p.id DESC
+                    """, _d)
+                ]
+
             result["bloqueados"] = {
                 "vip": [dict(r) for r in teaser_vip],
                 "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
                 "alavancagem": _teaser_de_alavancagem(teaser_alav[0]) if teaser_alav else None,
+                "mercados": teaser_mercados,
             }
 
         # ── is_followed de TODOS os tipos, numa consulta so' ────────────────
