@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
-import { CalendarClock, BrainCircuit } from 'lucide-react'
+import { CalendarClock, BrainCircuit, DatabaseZap } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
@@ -15,6 +15,12 @@ import { TeamLogo, LeagueLogo } from './TeamLogo'
  * O que ficou é o que continua verdadeiro sem depender de horário: quais jogos
  * estão sendo analisados hoje, ou -- se não tem jogo nenhum nas ligas cobertas
  * -- quais são os próximos.
+ *
+ * TRÊS ESTADOS, não dois. O card nasceu com "tem jogo" e "não tem jogo", e
+ * faltava o que mais acontece em começo de temporada: TEM jogo, o motor já
+ * analisou todos e nenhum pode virar pick porque os times não têm histórico.
+ * Nesse caso a tela dizia "sendo analisados" e o usuário esperava um pick já
+ * decidido que não vinha. Agora ela diz que não sai, e diz por quê.
  */
 interface Fixture {
   fixture_id: number
@@ -22,6 +28,11 @@ interface Fixture {
   home_team_id?: number; away_team_id?: number
   league_id?: number; league_name: string
   match_datetime: string
+  /** Partidas de histórico de cada lado e o mínimo que o motor exige.
+   *  `sem_historico` é conclusivo: com menos que o mínimo, não existe amostra
+   *  pra estimar taxa e o jogo não vira pick de jeito nenhum. */
+  jogos_casa?: number; jogos_fora?: number; min_jogos?: number
+  sem_historico?: boolean
 }
 
 /** Hoje em Brasília, "YYYY-MM-DD". en-CA é o locale que devolve nessa ordem. */
@@ -154,36 +165,94 @@ export default function PicksPendingCard() {
     )
   }
 
+  /*
+   * O jogo estar na tela nunca quis dizer que ele podia virar pick.
+   *
+   * O motor exige um mínimo de partidas de histórico por time pra ter amostra;
+   * abaixo disso ele analisa, descarta e segue. Só que a tela dizia "N jogos
+   * sendo analisados hoje" pros dois casos, e no começo de temporada isso vira
+   * mentira em cima de trinta jogos: o usuário fica esperando um pick que já
+   * foi decidido que não vem, sem nada explicando por quê.
+   *
+   * `sem_historico` vem do backend e é conclusivo · a conta de lá é sempre
+   * mais frouxa que a do motor, então quando ela condena, está condenado.
+   */
+  const analisaveis   = todayGames.filter(g => !g.sem_historico)
+  const semHistorico  = todayGames.filter(g => g.sem_historico)
+  const minJogos      = todayGames.find(g => g.min_jogos)?.min_jogos ?? 5
+  const nadaHojePorHistorico = todayGames.length > 0 && analisaveis.length === 0
+
+  const linhaJogo = (g: Fixture, apagado = false) => (
+    <div key={g.fixture_id}
+      className={`flex items-center gap-2.5 border rounded-md px-3 py-2.5 ${
+        apagado ? 'bg-surface-1/30 border-line/60' : 'bg-surface-1/70 border-line'}`}>
+      <span className={`font-mono text-[11px] font-semibold tabular-nums shrink-0 w-9 ${
+        apagado ? 'text-ink-4' : 'text-ink-3'}`}>
+        {horaBR(g.match_datetime)}
+      </span>
+      <div className="flex items-center gap-1.5 flex-1 min-w-0">
+        <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
+        <span className={`text-xs font-medium truncate ${apagado ? 'text-ink-3' : 'text-ink-2'}`}>{g.home_team}</span>
+        <span className="text-ink-4 text-[11px] shrink-0">x</span>
+        <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
+        <span className={`text-xs font-medium truncate ${apagado ? 'text-ink-3' : 'text-ink-2'}`}>{g.away_team}</span>
+      </div>
+      {apagado && (
+        <span className="text-[10px] text-ink-4 shrink-0 tabular-nums hidden xs:inline">
+          {Math.min(g.jogos_casa ?? 0, g.jogos_fora ?? 0)}/{minJogos}
+        </span>
+      )}
+      <LeagueLogo id={g.league_id} name={g.league_name} />
+    </div>
+  )
+
   return (
     <div className="card p-8 text-center border-line">
       <div className="w-11 h-11 rounded-full bg-surface-2/80 flex items-center justify-center mx-auto mb-3">
-        <BrainCircuit className="w-5 h-5 text-ink-2" />
+        {nadaHojePorHistorico
+          ? <DatabaseZap className="w-5 h-5 text-ink-2" />
+          : <BrainCircuit className="w-5 h-5 text-ink-2" />}
       </div>
-      <p className="text-sm text-ink-2 font-bold mb-1">Os picks de hoje ainda não saíram</p>
-      <p className="text-ink-3 text-sm">Assim que forem publicados você recebe um aviso.</p>
-      {todayGames.length > 0 && (
+
+      {nadaHojePorHistorico ? (
+        <>
+          <p className="text-sm text-ink-2 font-bold mb-1">Hoje não sai pick</p>
+          <p className="text-ink-3 text-sm max-w-md mx-auto leading-relaxed">
+            Os {todayGames.length} jogos de hoje já foram analisados e nenhum passou. Os times ainda
+            não têm as <b className="text-ink-2">{minJogos} partidas</b> de histórico que o motor
+            precisa para estimar um mercado · é começo de temporada, e sem amostra ele não inventa
+            número.
+          </p>
+          <p className="text-ink-4 text-xs mt-3">
+            Conforme as rodadas acontecem o histórico enche sozinho e os picks voltam.
+          </p>
+        </>
+      ) : (
+        <>
+          <p className="text-sm text-ink-2 font-bold mb-1">Os picks de hoje ainda não saíram</p>
+          <p className="text-ink-3 text-sm">Assim que forem publicados você recebe um aviso.</p>
+        </>
+      )}
+
+      {analisaveis.length > 0 && (
         <div className="text-left mt-6">
           <p className="text-[10px] text-ink-4 font-semibold mb-2">
-            {todayGames.length} jogo{todayGames.length > 1 ? 's' : ''} sendo analisado{todayGames.length > 1 ? 's' : ''} hoje
+            {analisaveis.length} jogo{analisaveis.length > 1 ? 's' : ''} com histórico
+            {' '}sendo analisado{analisaveis.length > 1 ? 's' : ''} hoje
           </p>
-          <div className="space-y-1.5">
-            {todayGames.map(g => (
-              <div key={g.fixture_id}
-                className="flex items-center gap-2.5 bg-surface-1/70 border border-line rounded-md px-3 py-2.5">
-                <span className="font-mono text-[11px] text-ink-3 font-semibold tabular-nums shrink-0 w-9">
-                  {horaBR(g.match_datetime)}
-                </span>
-                <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                  <TeamLogo id={g.home_team_id} name={g.home_team} size={18} />
-                  <span className="text-xs text-ink-2 font-medium truncate">{g.home_team}</span>
-                  <span className="text-ink-4 text-[11px] shrink-0">x</span>
-                  <TeamLogo id={g.away_team_id} name={g.away_team} size={18} />
-                  <span className="text-xs text-ink-2 font-medium truncate">{g.away_team}</span>
-                </div>
-                <LeagueLogo id={g.league_id} name={g.league_name} />
-              </div>
-            ))}
-          </div>
+          <div className="space-y-1.5">{analisaveis.map(g => linhaJogo(g))}</div>
+        </div>
+      )}
+
+      {semHistorico.length > 0 && (
+        <div className="text-left mt-6">
+          <p className="text-[10px] text-ink-4 font-semibold mb-2">
+            {nadaHojePorHistorico
+              ? 'Jogos de hoje · sem histórico suficiente'
+              : `${semHistorico.length} fora da análise · sem histórico suficiente`}
+            <span className="font-normal"> (partidas do time com menos jogos / mínimo)</span>
+          </p>
+          <div className="space-y-1.5">{semHistorico.map(g => linhaJogo(g, true))}</div>
         </div>
       )}
     </div>

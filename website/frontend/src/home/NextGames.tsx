@@ -43,6 +43,9 @@ interface UpcomingFixture {
   /** Já saiu pick para esta partida. NUNCA vem o mercado junto. */
   has_pick?: boolean
   pick_type?: 'vip' | 'free' | null
+  /** Times sem as partidas de histórico que o motor exige · este jogo não vai
+   *  virar pick, e chamar isso de "na fila da IA" seria promessa falsa. */
+  sem_historico?: boolean
 }
 
 /** Hoje em Brasília, "YYYY-MM-DD". en-CA é o locale que devolve nessa ordem. */
@@ -176,6 +179,17 @@ export default function NextGames({ revelar = true, onCarregou }: {
   // avisando que não tem nada para avisar.
   if (!games || games.length === 0) return null
 
+  /*
+   * "Na fila da IA" é uma promessa, e em começo de temporada ela era falsa: os
+   * times ainda não têm histórico, o motor já sabe que não vai gerar pick pra
+   * nenhum daqueles jogos, e a faixa seguia dizendo que estavam na fila.
+   *
+   * A faixa continua · ela é o presente da Home, entre a Dica do Dia e os
+   * números · mas com o nome do que ela é de fato quando nada ali pode virar
+   * pick. Quem quiser o motivo encontra na aba de picks, que explica.
+   */
+  const naFila = games.some(g => !g.sem_historico)
+
   const hoje = hojeBR()
 
   return (
@@ -187,8 +201,8 @@ export default function NextGames({ revelar = true, onCarregou }: {
     >
       <div className="flex items-center justify-between gap-3 mb-3">
         <h2 id="fila-ia" className="flex items-center gap-2 text-xs font-bold text-ink-2">
-          <LiveDot />
-          Na fila da IA
+          {naFila && <LiveDot />}
+          {naFila ? 'Na fila da IA' : 'Próximos jogos'}
         </h2>
         <span className="text-[10px] text-ink-4 shrink-0">
           {games.length === 1 ? 'próximo jogo' : `próximos ${games.length} jogos`}

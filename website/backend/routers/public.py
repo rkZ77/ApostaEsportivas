@@ -770,6 +770,52 @@ def public_profit_curve(days: int = Query(180, ge=7, le=1095)):
         conn.close()
 
 
+# ─── Histórico mínimo pra existir pick ──────────────────────────────────────
+#
+# O NÚMERO VEM DO MOTOR, não de uma cópia. `settlement_bridge` já põe
+# ApostaEsportivas/src no sys.path (mesma razão: não ter duas implementações da
+# mesma regra), e aqui o import pega `min_amostra` direto da config que o
+# ranking usa pra aprovar candidato. Se alguém subir o mínimo lá, esta tela
+# passa a dizer o número novo sozinha.
+#
+# POR QUE A CONTA AQUI É SEGURA, mesmo sendo mais frouxa que a do motor:
+# o motor conta amostra POR LINHA de mercado, dentro da liga e da temporada.
+# Esta conta é o total de partidas do time em `match_statistics`, sem recorte
+# nenhum · sempre MAIOR ou igual à do motor. Então "menos de N partidas aqui"
+# implica "menos de N amostras lá", e a afirmação da tela ("não vai sair pick
+# deste jogo") é demonstrável, não um palpite. O contrário não vale, e por
+# isso a tela não promete pick quando o histórico existe.
+try:
+    import settlement_bridge  # noqa: F401  (efeito colateral: sys.path)
+    from services.pick_engine.config import DEFAULT_CONFIG as _ENGINE_CONFIG
+
+    MIN_JOGOS_HISTORICO = int(_ENGINE_CONFIG.min_amostra)
+except Exception:  # pragma: no cover
+    # Sem o motor no path (container só do site), a tela perde o aviso em vez
+    # de inventar um número · dizer "sem histórico" com o limiar errado é pior
+    # que não dizer nada.
+    MIN_JOGOS_HISTORICO = 0
+
+
+def _partidas_por_time(cur, team_ids: list) -> dict:
+    """Quantas partidas cada time tem em `match_statistics`.
+
+    Uma query pro conjunto todo, não uma por fixture: são até 30 jogos na tela
+    e duas subconsultas correlacionadas por linha viravam 60 varreduras.
+    """
+    ids = [t for t in team_ids if t]
+    if not ids or not MIN_JOGOS_HISTORICO:
+        return {}
+    cur.execute("""
+        SELECT team_id, COUNT(*) AS n FROM (
+            SELECT home_team_id AS team_id FROM match_statistics WHERE home_team_id = ANY(%s)
+            UNION ALL
+            SELECT away_team_id AS team_id FROM match_statistics WHERE away_team_id = ANY(%s)
+        ) t GROUP BY team_id
+    """, (ids, ids))
+    return {r["team_id"]: r["n"] for r in cur.fetchall()}
+
+
 @router.get("/next-fixtures")
 def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
                          date: Optional[str] = Query(None, description="YYYY-MM-DD · dia inteiro em vez de 'daqui pra frente'")):
@@ -836,11 +882,34 @@ def public_next_fixtures(limit: int = Query(6, ge=1, le=30),
             ORDER BY f.match_datetime
             LIMIT %s
         """, param_janela + (limit,))
+        historico = _partidas_por_time(
+            cur,
+            [r["home_team_id"] for r in rows] + [r["away_team_id"] for r in rows],
+        )
+
         result = []
         for r in rows:
             d = dict(r)
             if d.get("match_datetime") and hasattr(d["match_datetime"], "isoformat"):
                 d["match_datetime"] = d["match_datetime"].isoformat()
+
+            # Quanto histórico cada lado tem, e se isso ja' condena o jogo.
+            #
+            # Existe porque a tela mentia por omissao: com a temporada recem
+            # comecada, `fixtures` enche de jogo e o card dizia "N jogos sendo
+            # analisados hoje" pra partidas que o motor ja tinha analisado e
+            # descartado -- e que ele nunca teria como aprovar, porque nao ha
+            # amostra. O usuario ficava esperando um pick que nao vinha, sem
+            # nada na tela explicando por que.
+            if MIN_JOGOS_HISTORICO:
+                n_casa = historico.get(d.get("home_team_id"), 0)
+                n_fora = historico.get(d.get("away_team_id"), 0)
+                d["jogos_casa"] = n_casa
+                d["jogos_fora"] = n_fora
+                d["min_jogos"]  = MIN_JOGOS_HISTORICO
+                # Basta UM lado sem amostra: o mercado e' do confronto, entao
+                # nao da' pra estimar taxa com metade da conta faltando.
+                d["sem_historico"] = min(n_casa, n_fora) < MIN_JOGOS_HISTORICO
 
             # So' a EXISTENCIA do pick, nunca o mercado.
             #
