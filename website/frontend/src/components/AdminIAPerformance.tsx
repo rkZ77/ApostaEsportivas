@@ -4,7 +4,13 @@ import api from '../services/api'
 import { Badge, EmptyState, Panel, PanelHead, PillGroup, SpinnerBlock, StatTile, Table, type Column } from './ui'
 
 /*
- * Aba "IA" do painel admin: qual modelo está revisando melhor os picks.
+ * Aba "IA" do painel admin.
+ *
+ * ORDEM DA TELA, e por quê. Ela abre no resultado POR MERCADO, não no ranking
+ * de modelos. O ranking respondia uma pergunta que quase não tem resposta hoje
+ * (a amostra de vetos é de 3 a 8 picks por fluxo, e 215 das 353 pernas dos
+ * últimos 60 dias não têm parecer nenhum), enquanto "escanteio está dando
+ * prejuízo há dois meses" é acionável na mesma hora.
  *
  * O que esta tela NÃO é: um ranking de "qual IA gera pick melhor". Nenhuma IA
  * gera pick aqui. O motor é determinístico e escolhe sozinho; o modelo entra
@@ -33,6 +39,10 @@ interface Modelo {
   falhas?: number; taxa_veto?: number | null; pipelines?: string[]
 }
 interface PorPipeline extends Modelo { pick_type: string }
+interface PorMercado {
+  market_type: string; label: string
+  todos: Bucket; aprovados: Bucket; vetados: Bucket
+}
 interface Performance {
   days: number
   migration_pending?: boolean
@@ -41,6 +51,7 @@ interface Performance {
     autor_gravado?: number; autor_inferido?: number; autor_desconhecido?: number
   }
   modelos: Modelo[]
+  por_mercado: PorMercado[]
   por_pipeline: PorPipeline[]
   falhas: Array<{ status: string; n: number }>
 }
@@ -126,7 +137,7 @@ function CardModelo({ m }: { m: Modelo }) {
         </div>
         {m.lift != null && m.vetados.resolvidos >= AMOSTRA_MINIMA && (
           <Badge tone={m.lift > 5 ? 'green' : m.lift < -5 ? 'red' : 'neutral'}>
-            lift {sinal(m.lift)} p.p.
+            {m.lift > 0 ? 'veto útil' : 'veto atrapalha'} {sinal(m.lift)} p.p.
           </Badge>
         )}
       </div>
@@ -240,7 +251,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
       ),
     },
     {
-      key: 'lift', header: 'Lift', align: 'right',
+      key: 'lift', header: 'Veto', align: 'right',
       cell: r => (
         <span className={`font-mono text-xs font-bold tabular-nums ${
           r.lift == null || r.vetados.resolvidos < AMOSTRA_MINIMA ? 'text-ink-4'
@@ -266,12 +277,16 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
         <div className="flex items-start justify-between gap-3 flex-wrap mb-3">
           <div className="min-w-0">
             <h2 className="text-xs font-semibold text-ink-3 flex items-center gap-1.5">
-              <Brain className="w-3.5 h-3.5" /> Qual IA está revisando melhor
+              <Brain className="w-3.5 h-3.5" /> Mercados e revisão da IA
             </h2>
+            {/* A frase mais importante da tela. Sem ela, tudo aqui é lido como
+                "ranking de qual IA gera pick melhor", que é uma pergunta que
+                não existe neste produto. */}
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed max-w-2xl">
-              O pick é escolhido pelo motor determinístico. A IA só aprova ou veta o que ele já
-              decidiu, então o que dá para medir é a qualidade do veto: comparar o que cada modelo
-              aprovou com o que ele quis vetar.
+              <span className="text-ink-2 font-semibold">Nenhuma IA escolhe pick aqui.</span>{' '}
+              Quem decide é o motor estatístico, sozinho. A IA entra depois e só pode vetar o que o
+              motor já escolheu · e hoje nem isso, porque está em modo sombra: o veto é anotado, mas
+              o pick sai do mesmo jeito.
             </p>
           </div>
           <span className={`text-xs font-bold px-2 py-1 rounded shrink-0 ${
@@ -282,6 +297,63 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
         </div>
         <PillGroup options={PERIODOS} value={dias} onChange={setDias} />
       </div>
+
+      {/* ── Mercado por mercado · o que dá e o que não dá dinheiro ───────────
+          Vem PRIMEIRO porque é a única pergunta desta tela que muda o que se
+          faz amanhã de manhã. "Qual modelo revisa melhor" é interessante;
+          "escanteio está sangrando há 60 dias" é acionável. */}
+      {!loading && !erro && !!data?.por_mercado?.length && (
+        <Panel>
+          <PanelHead label="Resultado por mercado" meta={`${data.days} dias · todos os picks`} />
+          <div className="px-4 py-3 border-b border-line">
+            <p className="text-[11px] text-ink-4 leading-relaxed">
+              Todo pick do período, tenha a IA olhado ou não. Do pior pro melhor em unidades ·
+              lucro é o que importa, não taxa de acerto: mercado com 55% de acerto em odd baixa
+              perde dinheiro.
+            </p>
+          </div>
+          <div className="divide-y divide-line">
+            {data.por_mercado.map(m => {
+              const t = m.todos
+              const ganha = t.lucro > 0
+              const relevante = t.resolvidos >= AMOSTRA_MINIMA
+              return (
+                <div key={m.market_type} className="px-4 py-3 flex items-center gap-3">
+                  <div className={`w-1 self-stretch rounded-full shrink-0 ${
+                    !relevante ? 'bg-surface-3' : ganha ? 'bg-green-500' : 'bg-red-500'}`} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-semibold text-ink-1 truncate">{m.label}</p>
+                    <p className="text-[10px] text-ink-4">
+                      {t.resolvidos} resolvido(s) · {t.green}G {t.red}R
+                      {t.pendentes > 0 && ` · ${t.pendentes} pend.`}
+                      {!relevante && ' · amostra pequena'}
+                    </p>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <p className={`font-mono text-sm font-black tabular-nums ${
+                      !relevante ? 'text-ink-3' : ganha ? 'text-green-400' : 'text-red-400'}`}>
+                      {sinal(t.lucro, 2)}u
+                    </p>
+                    <p className="text-[10px] text-ink-4 tabular-nums">
+                      {pct(t.hit)} acerto · ROI {pct(t.roi)}
+                    </p>
+                  </div>
+                  {/* Só aparece onde a IA de fato opinou · em branco não é
+                      zero, é "ela nunca viu este mercado". */}
+                  <div className="hidden sm:block text-right shrink-0 w-24 border-l border-line pl-3">
+                    <p className="text-[10px] text-ink-4">a IA viu</p>
+                    <p className="font-mono text-[11px] text-ink-2 tabular-nums">
+                      {m.aprovados.n + m.vetados.n === 0
+                        ? '·'
+                        : `${m.aprovados.n} ok / ${m.vetados.n} veto`}
+                    </p>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </Panel>
+      )}
 
       {modo === 'enforce' && (
         <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 p-4 flex gap-2.5">
@@ -307,6 +379,19 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
           description="Assim que os pipelines rodarem com o gate ligado, a comparação aparece aqui." />
       ) : (
         <>
+          <div>
+            <h3 className="text-xs font-semibold text-ink-3 mb-1">O veto da IA acerta?</h3>
+            <p className="text-[11px] text-ink-4 leading-relaxed mb-3 max-w-2xl">
+              Como o gate está em sombra, o pick vetado é publicado assim mesmo · dá pra ver no que
+              ele deu. Se o que o modelo quis vetar deu mais red que o que ele aprovou, o veto está
+              separando certo e vale ligar. Se deu menos, ligar derrubaria justamente os melhores.
+              {' '}
+              <span className="text-ink-3">
+                Hoje a amostra de vetos é pequena na maioria dos fluxos · onde estiver escrito
+                &quot;amostra pequena&quot;, o número ainda não decide nada.
+              </span>
+            </p>
+          </div>
           <div className="grid gap-3 lg:grid-cols-2">
             {data.modelos.map(m => <CardModelo key={`${m.provider}-${m.model}`} m={m} />)}
           </div>

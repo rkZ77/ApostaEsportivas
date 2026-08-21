@@ -23,6 +23,8 @@ avisar normalmente, sem precisar limpar nada.
 """
 from datetime import datetime, timezone
 
+from email_templates import plano_expirando_html, url_logo
+
 # Rótulo do plano na mensagem. O nome importa: "seu VIP vence" e "seu teste
 # grátis acaba" pedem ações diferentes de quem lê, e o mesmo texto genérico
 # ("seu plano") faria o trial parecer cobrança.
@@ -78,43 +80,6 @@ def _mensagem(plan: str, dias: int) -> tuple[str, str]:
         corpo = ("Renove para não perder os picks VIP, múltiplas, alavancagem, "
                  "mercados de faltas e defesas e o agente de futebol.")
     return titulo, corpo
-
-
-def _html(nome: str, titulo: str, corpo: str, site_url: str) -> str:
-    """Mesma casca visual dos outros e-mails (fundo escuro, cartão, topo verde)."""
-    primeiro = (nome or "").split(" ")[0] or "tudo bem"
-    return f"""<!DOCTYPE html>
-<html lang="pt-BR">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#0a0a0a;font-family:'Helvetica Neue',Helvetica,Arial,sans-serif;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#0a0a0a;padding:40px 16px;">
-    <tr><td align="center">
-      <table width="560" cellpadding="0" cellspacing="0" style="background:#111;border:1px solid #222;border-radius:16px;overflow:hidden;max-width:560px;width:100%;">
-        <tr><td style="background:linear-gradient(135deg,#16a34a,#15803d);padding:28px 40px;text-align:center;">
-          <h1 style="margin:0;color:#fff;font-size:24px;font-weight:900;letter-spacing:-0.5px;">
-            Pick<span style="color:#bbf7d0;">IA</span>
-          </h1>
-        </td></tr>
-        <tr><td style="padding:32px 40px;">
-          <p style="margin:0 0 6px;color:#71717a;font-size:13px;">Olá, {primeiro}</p>
-          <h2 style="margin:0 0 16px;color:#fff;font-size:20px;font-weight:800;">{titulo}</h2>
-          <p style="margin:0 0 26px;color:#a1a1aa;font-size:15px;line-height:1.6;">{corpo}</p>
-          <a href="{site_url}/checkout"
-             style="display:inline-block;background:#16a34a;color:#fff;text-decoration:none;
-                    padding:13px 26px;border-radius:10px;font-weight:800;font-size:15px;">
-            Renovar agora
-          </a>
-        </td></tr>
-        <tr><td style="padding:0 40px 32px;">
-          <p style="margin:0;color:#52525b;font-size:12px;line-height:1.5;">
-            Você recebeu este aviso porque tem uma assinatura ativa no Pick IA.
-          </p>
-        </td></tr>
-      </table>
-    </td></tr>
-  </table>
-</body>
-</html>"""
 
 
 def avisar_plano_expirando(cur, user: dict, site_url: str,
@@ -175,7 +140,9 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
             user["email"],
             titulo,
             f"{titulo}\n\n{corpo}\n\nRenove em {site_url}/checkout",
-            _html(user.get("name") or "", titulo, corpo, site_url),
+            plano_expirando_html(
+                user.get("name") or "", titulo, corpo, site_url, url_logo(site_url)
+            ),
         )
 
     return chave

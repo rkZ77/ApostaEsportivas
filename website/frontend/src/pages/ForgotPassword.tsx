@@ -1,14 +1,19 @@
 import { useState } from 'react'
 import { Helmet } from 'react-helmet-async'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Eye, EyeOff } from 'lucide-react'
 import api from '../services/api'
 import { getPasswordStrength } from '../utils/passwordStrength'
 
 export default function ForgotPassword() {
   const navigate = useNavigate()
-  const [step, setStep]         = useState<'email' | 'code'>('email')
-  const [email, setEmail]       = useState('')
+  // O link do e-mail chega com ?email=... Sem isso, quem clica cai no passo 1
+  // e o unico jeito de sair dali e' pedir OUTRO codigo · o que acabou de
+  // chegar seria invalidado pelo proprio clique.
+  const [params] = useSearchParams()
+  const emailDoLink = params.get('email') || ''
+  const [step, setStep]         = useState<'email' | 'code'>(emailDoLink ? 'code' : 'email')
+  const [email, setEmail]       = useState(emailDoLink)
   const [code, setCode]         = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm]   = useState('')

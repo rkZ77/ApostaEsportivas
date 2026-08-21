@@ -76,7 +76,7 @@ export default function Footer() {
             </p>
             <div className="flex items-center gap-2 mt-3">
               <a
-                href="https://www.instagram.com/pickia.br/"
+                href="https://www.instagram.com/pickia.app/"
                 target="_blank"
                 rel="noopener noreferrer"
                 aria-label="Instagram do Pick IA"

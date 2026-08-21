@@ -871,6 +871,71 @@ def _calc_result(market: str, line: str, cur_val: float | None,
     return settlement.settle_over_under(cur_val, parsed["value"], parsed["op"])[0]
 
 
+#: Horas depois do apito a partir das quais uma estatistica ausente deixa de
+#: ser "ainda nao publicaram" e passa a ser "nunca vao publicar".
+_HORAS_PARA_ANULAR = int(os.getenv("PICK_VOID_SEM_ESTATISTICA_HORAS", "12"))
+
+
+def _anulacao_sem_estatistica(leg: dict) -> str | None:
+    """PUSH pra perna encerrada que NUNCA vai poder ser liquidada.
+
+    O QUE ESTAVA ACONTECENDO
+    ------------------------
+    Pick de mercado estatistico cujo provedor nao publica a folha do jogo nao
+    tinha estado final nenhum: `_calc_result` devolve None (certissimo -- sem o
+    numero, inventar um resultado e' pior que nao ter), ninguem gravava nada, e
+    o pick ficava "Pendente" pra sempre. Foi o que travou a multipla #137
+    (Macara x Santos, Sudamericana, 20/08): jogo FT 0-0, /fixtures/statistics
+    devolvendo `results: 0`, e o bilhete inteiro preso por causa de uma perna
+    que a outra ponta nunca vai responder. A varredura automatica desiste
+    depois de _SWEEP_MAX_AGE_DAYS, entao o pick nao volta sozinho -- so' fica.
+
+    POR QUE PUSH E NAO RED
+    ----------------------
+    E' o que a casa faz com mercado que nao pode ser conferido: anula a perna,
+    devolve a entrada. Em bilhete combinado `settlement.combine_legs` da' fator
+    1 pra perna anulada, entao a multipla passa a pagar so' as pernas que
+    sobraram -- que e' exatamente o tratamento certo, e nao um RED que puniria
+    o usuario por uma falha do provedor.
+
+    POR QUE SO' DEPOIS DE 24H E SO' COM MOTIVO NOMEADO
+    -------------------------------------------------
+    Anular cedo demais atropela estatistica que so' entra horas depois do
+    apito. E anular QUALQUER pick que nao resolveu transformaria um bug nosso
+    (mapeamento de mercado errado, por exemplo) em PUSH silencioso -- o pior
+    resultado possivel, porque some com a evidencia. Por isso aqui so' entram
+    as duas causas que sabemos ser definitivas:
+
+      a) mercado depende de estatistica e a folha do jogo nao existe;
+      b) jogo foi pra prorrogacao e a folha soma os 120 minutos, sem o recorte
+         de 90 que a casa usa pra liquidar (ver a nota em _calc_result).
+
+    Qualquer outro pick que nao resolveu continua pendente e visivel de
+    proposito: isso e' bug pra investigar, nao pick pra anular.
+    """
+    if leg.get("status") not in FT_STATUSES:
+        return None
+    if not leg.get("precisa_stats"):
+        return None
+
+    if leg.get("current_val") is None:
+        motivo = "provedor nao publicou a estatistica"
+    elif leg.get("went_to_extra_time"):
+        motivo = "prorrogacao sem recorte de 90 minutos"
+    else:
+        return None
+
+    inicio = leg.get("kickoff_ts")
+    if not inicio or (time.time() - float(inicio)) < _HORAS_PARA_ANULAR * 3600:
+        return None
+
+    logger.warning(
+        "[AUTO-RESULT] fixture %s (%s %s) anulada como PUSH: %s",
+        leg.get("fixture_id"), leg.get("market"), leg.get("line"), motivo,
+    )
+    return settlement.PUSH
+
+
 def _locked_leg_result(leg: dict) -> str | None:
     """
     Retorna resultado definitivo de uma leg se já determinado, else None.
@@ -886,7 +951,7 @@ def _locked_leg_result(leg: dict) -> str | None:
             home_team=leg.get("home_team"), away_team=leg.get("away_team"),
             home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
             went_to_extra_time=leg.get("went_to_extra_time", False),
-        )
+        ) or _anulacao_sem_estatistica(leg)
     if leg.get("is_locked"):
         direction, line_val = _extract_line(leg["line"])
         cur = leg.get("current_val")
@@ -1144,6 +1209,7 @@ def _enrich_leg(fid: int, market: str, line: str,
                 market_type: str | None = None) -> dict:
     fix_data   = _fetch_fixture(fid)
     fix        = fix_data.get("fixture", {})
+    kickoff_ts = fix.get("timestamp")
     goals      = fix_data.get("goals", {})
     league_id  = fix_data.get("league", {}).get("id")
     status     = fix.get("status", {}).get("short", "NS")
@@ -1169,8 +1235,9 @@ def _enrich_leg(fid: int, market: str, line: str,
     stats_home_id = home_team_id or (fix_teams.get("home") or {}).get("id")
     stats_away_id = away_team_id or (fix_teams.get("away") or {}).get("id")
 
+    precisa_stats = _leg_needs_stats(market, market_type)
     home_stats, away_stats = {}, {}
-    if (status in LIVE_STATUSES or status in FT_STATUSES) and _leg_needs_stats(market, market_type):
+    if (status in LIVE_STATUSES or status in FT_STATUSES) and precisa_stats:
         home_stats, away_stats = _parse_stats(
             _fetch_stats(fid, status), stats_home_id, stats_away_id)
 
@@ -1227,6 +1294,8 @@ def _enrich_leg(fid: int, market: str, line: str,
         "home_stats":   home_stats,
         "away_stats":   away_stats,
         "went_to_extra_time": went_to_extra_time,
+        "precisa_stats": precisa_stats,
+        "kickoff_ts":    kickoff_ts,
     }
 
 
@@ -2082,6 +2151,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            home_team=p["home_team"], away_team=p["away_team"],
                                            home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
+                        res = res or _anulacao_sem_estatistica(leg)
                         if res:
                             _save_single_result(p["id"], "vip", res, odd, conn)
                             resolved["vip"] += 1
@@ -2116,6 +2186,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            home_team=p["home_team"], away_team=p["away_team"],
                                            home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
+                        res = res or _anulacao_sem_estatistica(leg)
                         if res:
                             _save_single_result(p["id"], "free", res, odd, conn)
                             resolved["free"] += 1
@@ -2303,6 +2374,7 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
                                            home_team=p["home_team"], away_team=p["away_team"],
                                            home_stats=leg.get("home_stats"), away_stats=leg.get("away_stats"),
                                            went_to_extra_time=leg.get("went_to_extra_time", False))
+                        res = res or _anulacao_sem_estatistica(leg)
                         if res:
                             _save_market_pick_result("picks_faltas", p["id"], "faltas", res, odd, conn)
                             resolved["faltas"] += 1
