@@ -285,7 +285,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
             <p className="text-[11px] text-ink-4 mt-1 leading-relaxed max-w-2xl">
               <span className="text-ink-2 font-semibold">Nenhuma IA escolhe pick aqui.</span>{' '}
               Quem decide é o motor estatístico, sozinho. A IA entra depois e só pode vetar o que o
-              motor já escolheu · e hoje nem isso, porque está em modo sombra: o veto é anotado, mas
+              motor já escolheu. E hoje nem isso: está em modo sombra, o veto é anotado, mas
               o pick sai do mesmo jeito.
             </p>
           </div>
@@ -382,12 +382,12 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
           <div>
             <h3 className="text-xs font-semibold text-ink-3 mb-1">O veto da IA acerta?</h3>
             <p className="text-[11px] text-ink-4 leading-relaxed mb-3 max-w-2xl">
-              Como o gate está em sombra, o pick vetado é publicado assim mesmo · dá pra ver no que
+              Como o gate está em sombra, o pick vetado é publicado assim mesmo, então dá pra ver no que
               ele deu. Se o que o modelo quis vetar deu mais red que o que ele aprovou, o veto está
               separando certo e vale ligar. Se deu menos, ligar derrubaria justamente os melhores.
               {' '}
               <span className="text-ink-3">
-                Hoje a amostra de vetos é pequena na maioria dos fluxos · onde estiver escrito
+                Hoje a amostra de vetos é pequena na maioria dos fluxos. Onde estiver escrito
                 &quot;amostra pequena&quot;, o número ainda não decide nada.
               </span>
             </p>

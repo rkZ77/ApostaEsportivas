@@ -1637,7 +1637,7 @@ def admin_descartar_pick(body: DescartarBody, current_user: dict = Depends(requi
         if row["result"] is not None:
             raise HTTPException(400,
                 "Este pick já tem resultado. Descartar é só pra pick que nunca vai "
-                "resolver · pra corrigir um resultado errado, use Alterar resultado.")
+                "resolver. Pra corrigir um resultado errado, use Alterar resultado.")
 
         cur.execute(
             "DELETE FROM user_followed_picks WHERE pick_id = %s AND pick_type = %s",

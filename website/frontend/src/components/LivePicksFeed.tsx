@@ -511,8 +511,8 @@ export default function LivePicksFeed({ isActive }: {
         <p className="text-[13px] text-ink-3 leading-relaxed">
           O motor lê o placar, o ritmo e as estatísticas da partida{' '}
           <span className="font-bold text-ink-2">em andamento</span> e compara com a odd do momento.
-          Ele só publica quando o jogo se afasta do esperado e o preço paga por isso · varredura sem
-          oportunidade não vira pick.
+          Ele só publica quando o jogo se afasta do esperado e o preço paga por isso, então
+          varredura sem oportunidade não vira pick.
         </p>
         <p className="text-[13px] text-ink-3 leading-relaxed mt-2">
           A odd ao vivo muda rápido: o preço mostrado é o do instante da análise.{' '}

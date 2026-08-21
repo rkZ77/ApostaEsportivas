@@ -295,7 +295,7 @@ export default function BancaFechamentos() {
                 <div className="card p-5">
                   <p className="text-xs text-ink-3 font-semibold mb-1">Por liga</p>
                   <p className="text-[11px] text-ink-4 mb-2">
-                    Só picks de um jogo · múltipla e alavancagem não pertencem a uma liga
+                    Só picks de um jogo, porque múltipla e alavancagem não pertencem a uma liga
                   </p>
                   <div className="divide-y divide-line/60">
                     {porLiga.slice(0, 10).map(r => (

@@ -310,7 +310,7 @@ def frase_da_serie(time: str, serie: dict, mando: str | None = None) -> str | No
     elif mando == "away":
         onde = " fora"
 
-    cauda = f" · média de {media:g}" if media is not None else ""
+    cauda = f", com média de {media:g}" if media is not None else ""
 
     # BTTS: o contador e' o placar do time que menos marcou, e falar em
     # "0.5 gols" seria descrever a regua do grafico em vez do mercado.
