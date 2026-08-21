@@ -5,6 +5,7 @@ import {
   buildResultsStoryImage, ResultsStoryInput,
   buildTodayGamesStoryImage, TodayGameItem,
   buildLeagueResultsStoryImage, LeagueResultItem,
+  buildAlavancagemStoryImage, AlavancagemStoryInput,
 } from '../utils/shareStoryImage'
 import { winRate as calcWinRate } from '../utils/format'
 
@@ -174,6 +175,46 @@ export function useShareLeagueResultsImage() {
         ? `${top.leagueName}: ${Math.round(top.winRatePct)}% de acerto na Pick IA. Histórico 100% auditável.`
         : 'Resultados da IA por liga na Pick IA. Histórico 100% auditável.'
       await dispatchShare(blob, 'pick-ia-resultados-liga.png', 'Pick IA · Resultados por liga', text, shareUrl)
+      setShared(true)
+      setTimeout(() => setShared(false), 2500)
+    } catch (err: any) {
+      if (err?.name !== 'AbortError') {
+        setError('Não foi possível gerar a imagem. Tente novamente.')
+      }
+    } finally {
+      setSharing(false)
+    }
+  }
+
+  return { share, sharing, shared, error }
+}
+
+/**
+ * Compartilha um pick de alavancagem com as informações do produto: as pernas
+ * uma a uma, o composto em unidades e o degrau do caminho.
+ *
+ * Existe separado de `useShareStoryImage` porque o card de pick comum desenha
+ * UM confronto · uma tripla saía por ali mostrando só a primeira perna, com a
+ * odd das três ao lado dela.
+ */
+export function useShareAlavancagemImage() {
+  const [sharing, setSharing] = useState(false)
+  const [shared, setShared] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const share = async (
+    input: Omit<AlavancagemStoryInput, 'shareUrl'> & { pickId: number },
+  ) => {
+    setSharing(true)
+    setError(null)
+    try {
+      const refCode = await getReferralCode()
+      const { pickId, ...imgInput } = input
+      const shareUrl = `${window.location.origin}/p/alavancagem/${pickId}${refCode ? `?ref=${refCode}` : ''}`
+      const blob = await buildAlavancagemStoryImage({ ...imgInput, shareUrl })
+      const quantos = imgInput.legs.length
+      const texto = `Alavancagem da Pick IA: ${quantos} ${quantos === 1 ? 'jogo' : 'jogos'}, 1 unidade virando ${imgInput.oddCombined.toFixed(2)}u.`
+      await dispatchShare(blob, 'pick-ia-alavancagem.png', 'Pick IA · Alavancagem', texto, shareUrl)
       setShared(true)
       setTimeout(() => setShared(false), 2500)
     } catch (err: any) {
