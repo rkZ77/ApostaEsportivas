@@ -80,7 +80,7 @@ def require_live_reader(user: dict = Depends(require_vip)) -> dict:
     if os.getenv("LIVE_PICKS_PUBLIC", "").strip().lower() in ("1", "true", "on", "yes", "sim"):
         return user
     if user.get("plan") != "admin":
-        raise HTTPException(403, "Motor Ao Vivo em validação · disponível apenas para admin.")
+        raise HTTPException(403, "Motor Ao Vivo em validação, disponível apenas para admin.")
     return user
 
 

@@ -654,7 +654,7 @@ def login(body: LoginBody, response: Response, request: Request, background_task
                 status_code=403,
                 detail=(
                     "Confirme seu e-mail para continuar. Acabamos de reenviar o link para "
-                    f"{_mascarar_email(user['email'])} · confira também o spam."
+                    f"{_mascarar_email(user['email'])}. Confira também o spam."
                 ),
             )
 
@@ -1467,7 +1467,7 @@ def forgot_password(body: ForgotPasswordBody):
                 f"Seu código para redefinir a senha é:\n\n"
                 f"  {code}\n\n"
                 f"O código expira em {_CODIGO_SENHA_EXPIRA_MIN} minutos.\n"
-                f"Se não foi você, ignore este e-mail · sua senha atual continua valendo.\n\n"
+                f"Se não foi você, ignore este e-mail. Sua senha atual continua valendo.\n\n"
                 f"Equipe Pick IA"
             ),
             html    = reset_senha_html(

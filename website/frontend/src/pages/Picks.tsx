@@ -2844,7 +2844,7 @@ export default function Picks() {
                         </div>
                         <p className="text-[11px] text-ink-4 mt-2 leading-snug">
                           {faltam === 0
-                            ? 'Meta batida · o caminho fecha e o lucro vai pra sua banca.'
+                            ? 'Meta batida. O caminho fecha e o lucro vai pra sua banca.'
                             : `Faltam ${faltam} ${faltam === 1 ? 'green' : 'greens'} pra fechar sozinho. Você pode encerrar antes quando quiser.`}
                         </p>
                       </div>

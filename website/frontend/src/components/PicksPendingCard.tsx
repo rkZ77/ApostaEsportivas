@@ -220,7 +220,7 @@ export default function PicksPendingCard() {
           <p className="text-ink-3 text-sm max-w-md mx-auto leading-relaxed">
             Os {todayGames.length} jogos de hoje já foram analisados e nenhum passou. Os times ainda
             não têm as <b className="text-ink-2">{minJogos} partidas</b> de histórico que o motor
-            precisa para estimar um mercado · é começo de temporada, e sem amostra ele não inventa
+            precisa para estimar um mercado. É começo de temporada, e sem amostra ele não inventa
             número.
           </p>
           <p className="text-ink-4 text-xs mt-3">
@@ -248,8 +248,8 @@ export default function PicksPendingCard() {
         <div className="text-left mt-6">
           <p className="text-[10px] text-ink-4 font-semibold mb-2">
             {nadaHojePorHistorico
-              ? 'Jogos de hoje · sem histórico suficiente'
-              : `${semHistorico.length} fora da análise · sem histórico suficiente`}
+              ? 'Jogos de hoje, sem histórico suficiente'
+              : `${semHistorico.length} fora da análise, sem histórico suficiente`}
             <span className="font-normal"> (partidas do time com menos jogos / mínimo)</span>
           </p>
           <div className="space-y-1.5">{semHistorico.map(g => linhaJogo(g, true))}</div>

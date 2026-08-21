@@ -772,7 +772,7 @@ FERRAMENTAS = [
         "title": "Dica gratuita do dia",
         "description": (
             "O pick gratuito do dia. Sem conta, devolve jogo, liga e odd, com "
-            "o mercado marcado como bloqueado · é a mesma regra da página "
+            "o mercado marcado como bloqueado, a mesma regra da página "
             "pública."
         ),
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},

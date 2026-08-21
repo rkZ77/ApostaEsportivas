@@ -23,13 +23,13 @@ def _serie(op="over", line=26.5, greens=4, resolved=5, average=30.6,
 def test_over_no_mando_de_casa():
     f = frase_da_serie("Internacional", _serie(), "home")
     assert f == ("O Internacional passou de 26.5 chutes em 4 dos últimos "
-                 "5 jogos em casa · média de 30.6.")
+                 "5 jogos em casa, com média de 30.6.")
 
 
 def test_under_no_mando_de_fora():
     f = frase_da_serie("Remo", _serie(op="under", greens=3, average=24.8), "away")
     assert f == ("O Remo ficou abaixo de 26.5 chutes em 3 dos últimos "
-                 "5 jogos fora · média de 24.8.")
+                 "5 jogos fora, com média de 24.8.")
 
 
 def test_a_frase_conta_o_que_contraria_o_pick():

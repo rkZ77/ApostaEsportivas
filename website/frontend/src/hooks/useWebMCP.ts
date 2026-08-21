@@ -70,7 +70,7 @@ export function useWebMCP(navegar: (rota: string) => void) {
       {
         name: 'pickia_dica_gratuita_de_hoje',
         description:
-          'A dica gratuita do dia. Sem conta, o mercado volta bloqueado · é a mesma regra da página pública.',
+          'A dica gratuita do dia. Sem conta, o mercado volta bloqueado, a mesma regra da página pública.',
         inputSchema: SEM_ARGUMENTO,
         execute: async () => texto(await buscar('/api/public/free-pick-today')),
       },

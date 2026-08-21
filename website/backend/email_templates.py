@@ -255,7 +255,7 @@ def reset_senha_html(primeiro_nome: str, codigo: str, site_url: str, email: str 
         minutos=minutos,
         cta_url=destino,
         cta_rotulo="Redefinir minha senha",
-        alerta=("Ignore este e-mail · sua senha atual continua valendo e ninguém "
+        alerta=("Ignore este e-mail. Sua senha atual continua valendo, e ninguém "
                 "troca nada sem este código."),
         logo_url=logo_url,
     )
@@ -271,7 +271,7 @@ def troca_senha_html(primeiro_nome: str, codigo: str, site_url: str,
         minutos=minutos,
         cta_url=f"{site_url}/profile",
         cta_rotulo="Abrir meu perfil",
-        alerta=("Ignore este e-mail e troque sua senha assim que puder · alguém "
+        alerta=("Ignore este e-mail e troque sua senha assim que puder: alguém "
                 "com a sua senha atual pediu esta mudança."),
         logo_url=logo_url,
     )

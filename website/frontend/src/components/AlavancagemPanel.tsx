@@ -204,7 +204,7 @@ export default function AlavancagemPanel() {
         <p className="text-ink-3 text-sm font-semibold mb-2">Você ainda não pegou um caminho</p>
         <p className="text-ink-4 text-xs leading-relaxed max-w-sm mx-auto mb-5">
           A alavancagem reaposta o bolo inteiro a cada green e fecha sozinha ao
-          bater a meta. Um RED custa só o valor da entrada · nunca a banca.
+          bater a meta. Um RED custa só o valor da entrada, nunca a banca.
         </p>
         <button onClick={() => navigate('/picks')} className="btn-primary text-xs">
           Ver o pick de alavancagem

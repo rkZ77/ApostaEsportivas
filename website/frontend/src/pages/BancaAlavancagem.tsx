@@ -19,7 +19,7 @@ export default function BancaAlavancagem() {
       bar={{
         back: '/banca',
         title: 'Alavancagem',
-        sub: 'Contabilizada à parte da banca · só o caminho encerrado vira saldo',
+        sub: 'Contabilizada à parte da banca, só o caminho encerrado vira saldo',
       }}
       mainClassName="space-y-5"
     >

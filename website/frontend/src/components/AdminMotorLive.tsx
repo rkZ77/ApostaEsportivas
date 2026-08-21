@@ -339,7 +339,7 @@ export default function AdminMotorLive() {
             />
             min
           </label>
-          <span className="text-[10px] text-ink-4">mínimo 3 · abaixo disso a estatística do provedor ainda não mudou</span>
+          <span className="text-[10px] text-ink-4">mínimo de 3 minutos, abaixo disso a estatística do provedor ainda não mudou</span>
         </div>
 
         {emLaco ? (
@@ -373,7 +373,7 @@ export default function AdminMotorLive() {
 
         <p className="mt-3 text-[10px] text-ink-4 leading-relaxed">
           O laço vive dentro do processo do site. Um deploy ou um restart do serviço derruba ele,
-          e o painel volta a mostrar &quot;Ligar&quot; · fechar esta página, não.
+          e o painel volta a mostrar &quot;Ligar&quot;. Fechar esta página não desliga nada.
         </p>
       </div>
 

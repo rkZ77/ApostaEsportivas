@@ -199,7 +199,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                 <p className="text-ink-3 text-xs leading-relaxed mb-4">
                   Cada um deles fica registrado com data, mercado e odd, e o resultado é
                   conferido contra a estatística oficial da partida. Você não precisa
-                  acreditar em nós · dá para abrir o histórico e conferir pick por pick,
+                  acreditar em nós: dá para abrir o histórico e conferir pick por pick,
                   sem criar conta.
                 </p>
                 <Button to="/login?mode=register" size="lg" IconRight={ArrowRight}>
