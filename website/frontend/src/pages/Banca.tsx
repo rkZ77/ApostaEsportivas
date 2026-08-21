@@ -282,6 +282,7 @@ export default function Banca() {
               onClick={() => setShowSetup(true)}
               className={data?.can_configure === false ? 'opacity-50' : undefined}
               title={data?.can_configure === false ? 'Já configurada este mês' : undefined}
+              data-tour="banca-configurar"
             >
               Configurar
             </Button>
@@ -340,8 +341,10 @@ export default function Banca() {
               className="mb-5"
             />
 
-            {/* Stats principais */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            {/* Stats principais.
+                `data-tour` é a âncora do passo "Acompanhe sua evolução" do
+                onboarding · ver components/onboarding/steps.tsx. */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4" data-tour="banca-resumo">
               {[
                 {
                   label: 'Banca atual',
@@ -423,7 +426,7 @@ export default function Banca() {
 
               {/* Gráfico de evolução */}
               {temGrafico && (
-                <div className="card p-5 xl:col-span-2">
+                <div className="card p-5 xl:col-span-2" data-tour="banca-evolucao">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
                     <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>

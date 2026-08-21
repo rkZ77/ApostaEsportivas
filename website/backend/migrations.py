@@ -67,6 +67,39 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verification_token VARCHAR(100);")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_ip VARCHAR(45);")
+        # Onboarding interativo. 'pending' e' o unico estado que faz o tour
+        # abrir sozinho; 'completed' e 'skipped' sao iguais pra essa decisao --
+        # a diferenca so' existe pra saber depois quantos chegaram ao fim.
+        #
+        # O bloco DO existe por causa do backfill, e nao por gosto: a coluna
+        # nasce com DEFAULT 'pending', entao a base inteira (contas antigas,
+        # que ja' sabem usar o site) acordaria com o tour na cara no proximo
+        # login. O UPDATE tem que rodar UMA vez, junto do ALTER, e nunca mais.
+        # Solto ao lado de um ADD COLUMN IF NOT EXISTS ele reapagaria o estado
+        # de quem ja' esta' no meio do tour toda vez que o servidor subisse.
+        #
+        # `'users'::regclass` em vez de information_schema: resolve pelo mesmo
+        # search_path que as linhas acima usam, sem chance de achar um `users`
+        # de outro schema.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_attribute
+                     WHERE attrelid = 'users'::regclass
+                       AND attname  = 'tutorial_status'
+                       AND NOT attisdropped
+                ) THEN
+                    ALTER TABLE users ADD COLUMN tutorial_status VARCHAR(12) NOT NULL DEFAULT 'pending';
+                    UPDATE users SET tutorial_status = 'completed';
+                END IF;
+            END $$;
+        """)
+        # Passo em que a pessoa parou. E' o que faz recarregar a pagina (ou
+        # abrir no celular depois de comecar no desktop) continuar de onde
+        # parou em vez de voltar pro "Bem-vindo".
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_step SMALLINT NOT NULL DEFAULT 0;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_finished_at TIMESTAMP;")
         cur.execute("ALTER TABLE picks_alavancagem DROP COLUMN IF EXISTS bankroll_after;")
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")

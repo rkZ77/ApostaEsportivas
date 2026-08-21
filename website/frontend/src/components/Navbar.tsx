@@ -4,10 +4,11 @@ import { useAuth } from '../context/AuthContext'
 import { cn } from '../lib/cn'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
 import { useNotifications } from '../context/NotificationContext'
+import { useOnboarding } from '../context/OnboardingContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X, BookOpen, MessageCircle, History,
+  LogOut, Menu, X, BookOpen, MessageCircle, History, Compass,
 } from 'lucide-react'
 import Avatar from './Avatar'
 import { rotuloDoPlano } from './ui'
@@ -25,6 +26,9 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { hasNew, markSeen } = useNotifications()
+  /* Reabrir o tour quando a pessoa quiser. Sem esta porta, "pulei sem querer"
+     vira "perdi o tutorial para sempre", já que ele só abre sozinho uma vez. */
+  const { abrir: abrirTutorial } = useOnboarding()
   /* E-mail pendente de confirmação vira um ponto de atenção no avatar (que
      leva ao Perfil), não um aviso no topo. `=== false` e não `!`: enquanto o
      usuário não carregou, o campo é undefined e um `!` acenderia o ponto pra
@@ -159,6 +163,17 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                       <p className="text-ink-3 text-xs truncate">{user?.email}</p>
                     </div>
                     <div className="py-1">
+                      {/* Só logado: o tour percorre telas privadas, e para um
+                          visitante ele terminaria no login. */}
+                      {user && (
+                        <button
+                          onClick={() => { setProfileOpen(false); abrirTutorial() }}
+                          className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors text-left"
+                        >
+                          <Compass className="w-4 h-4 text-green-400" />
+                          Ver tutorial
+                        </button>
+                      )}
                       <Link to="/como-funciona" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <BookOpen className="w-4 h-4 text-green-400" />
                         Como funciona
@@ -297,6 +312,15 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
 
         {/* Como funciona + Logout */}
         <div className="border-t border-line p-4 space-y-1">
+          {user && (
+            <button
+              onClick={() => { setSidebarOpen(false); abrirTutorial() }}
+              className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-left"
+            >
+              <Compass className="w-4 h-4 text-green-400" />
+              Ver tutorial
+            </button>
+          )}
           <Link
             to="/como-funciona"
             onClick={() => setSidebarOpen(false)}

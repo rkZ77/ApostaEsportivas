@@ -46,6 +46,10 @@ export function PickCardFooter({
         <button
           onClick={onBet}
           disabled={betState !== 'idle'}
+          /* Âncora do tour: o passo "Registre sua aposta" destaca este botão
+             de verdade, no primeiro card da tela. Ver
+             components/onboarding/steps.tsx. */
+          data-tour="pick-apostar"
           className={cn(
             'text-xs font-bold px-3 py-2 rounded-md border transition-colors duration-1 ease-smooth min-h-[36px]',
             betState === 'done'

@@ -268,3 +268,119 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
         "unlocked": sum(1 for a in out if a["unlocked"]),
         "achievements": out,
     }
+
+
+# ─────────────────────────── Tutorial ─────────────────────────────────
+#
+# Onde mora o "esta pessoa ja' viu o tour?". No BANCO, e nao no localStorage,
+# porque a pergunta e' sobre a CONTA e nao sobre o navegador: sair e entrar de
+# novo, trocar de aparelho ou abrir numa aba anonima nao pode fazer o tour
+# reaparecer pra quem ja' passou por ele.
+#
+# `tutorial_step` guarda o passo em aberto. Sem ele, recarregar a pagina no meio
+# do tour recomecava do "Bem-vindo".
+
+TUTORIAL_TOTAL_STEPS = 7
+TUTORIAL_STATUS = ("pending", "completed", "skipped")
+
+
+class TutorialBody(BaseModel):
+    status: str | None = None
+    # `le` e' TOTAL e nao TOTAL-1 de proposito: o front manda o passo que esta'
+    # aberto, e no fim do tour ele passa uma vez pelo indice seguinte.
+    step: int | None = Field(default=None, ge=0, le=TUTORIAL_TOTAL_STEPS)
+
+
+def _tutorial_payload(status: str, step: int) -> dict:
+    return {
+        "status": status,
+        "step": max(0, min(step, TUTORIAL_TOTAL_STEPS - 1)),
+        "total_steps": TUTORIAL_TOTAL_STEPS,
+        # Quem decide abrir sozinho e' o servidor, nao a tela. Assim a regra
+        # ("so' quem nunca viu") vive num lugar so'.
+        "should_start": status == "pending",
+    }
+
+
+@router.get("/tutorial")
+def get_tutorial(current_user: dict = Depends(get_current_user)):
+    """Estado do onboarding da conta.
+
+    Falha para o lado de NAO mostrar. Se as colunas ainda nao existirem no
+    banco (deploy novo antes da migration de startup rodar, que ja aconteceu
+    aqui), responder 500 quebraria a tela e responder 'pending' abriria o tour
+    na cara da base inteira. 'completed' e' o unico erro barato dos tres.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            "SELECT tutorial_status, tutorial_step FROM users WHERE id = %s",
+            (current_user["id"],),
+        )
+        row = cur.fetchone()
+    except Exception as e:
+        conn.rollback()
+        logger.warning("[TUTORIAL] leitura indisponivel (user %s): %s", current_user["id"], e)
+        return _tutorial_payload("completed", 0)
+    finally:
+        cur.close()
+        conn.close()
+
+    if not row:
+        raise HTTPException(404, "Usuário não encontrado")
+
+    status = row["tutorial_status"] or "pending"
+    if status not in TUTORIAL_STATUS:
+        status = "completed"
+    return _tutorial_payload(status, int(row["tutorial_step"] or 0))
+
+
+@router.put("/tutorial")
+def save_tutorial(body: TutorialBody, current_user: dict = Depends(get_current_user)):
+    """Avanca o passo, conclui ou pula.
+
+    Um PUT so' pros tres casos porque eles gravam nas mesmas duas colunas e a
+    tela chama sempre no mesmo momento (mudou de passo). `status=None` e'
+    "so' guardei onde parei" -- o passo anda sem tirar a conta de 'pending'.
+    """
+    if body.status is not None and body.status not in TUTORIAL_STATUS:
+        raise HTTPException(400, "Estado de tutorial inválido")
+    if body.status is None and body.step is None:
+        raise HTTPException(400, "Nada para salvar")
+
+    campos, valores = [], []
+    if body.status is not None:
+        campos.append("tutorial_status = %s")
+        valores.append(body.status)
+        # Carimba o fim so' quando ele acontece, e so' na primeira vez: reabrir
+        # o tour pelo menu e concluir de novo nao deve reescrever a data em que
+        # a pessoa aprendeu a usar o site.
+        if body.status in ("completed", "skipped"):
+            campos.append("tutorial_finished_at = COALESCE(tutorial_finished_at, NOW())")
+    if body.step is not None:
+        campos.append("tutorial_step = %s")
+        valores.append(min(body.step, TUTORIAL_TOTAL_STEPS - 1))
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(
+            f"UPDATE users SET {', '.join(campos)} WHERE id = %s "
+            "RETURNING tutorial_status, tutorial_step",
+            (*valores, current_user["id"]),
+        )
+        row = cur.fetchone()
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logger.error("[TUTORIAL] erro ao salvar (user %s): %s", current_user["id"], e)
+        raise HTTPException(500, "Não foi possível salvar o tutorial")
+    finally:
+        cur.close()
+        conn.close()
+
+    if not row:
+        raise HTTPException(404, "Usuário não encontrado")
+
+    return _tutorial_payload(row["tutorial_status"] or "pending", int(row["tutorial_step"] or 0))

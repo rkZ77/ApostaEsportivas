@@ -64,6 +64,16 @@ export interface ButtonProps {
   onClick?: (e: React.MouseEvent) => void
   'aria-label'?: string
   title?: string
+  /**
+   * Âncora do tour de onboarding. Só marca o elemento no DOM para o overlay
+   * achar e destacar · ver components/onboarding/steps.tsx.
+   *
+   * Está declarada aqui porque `ButtonProps` não tem índice aberto: sem a
+   * linha, `data-tour="..."` num <Button> não compila, e a alternativa seria
+   * envolver o botão num <span> só para pendurar o atributo, o que mudaria o
+   * retângulo que o destaque desenha.
+   */
+  'data-tour'?: string
 }
 
 const Button = forwardRef<HTMLElement, ButtonProps>(function Button(

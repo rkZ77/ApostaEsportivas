@@ -143,7 +143,10 @@ export default function Login() {
       } else {
         await register(name.trim(), email, password, phone, username.trim(), refCode || undefined, acceptedTerms, captchaToken || undefined)
         localStorage.removeItem('ref_code')
-        navigate(redirectTo ?? '/picks#guia')
+        // `#guia` saiu: não havia âncora com esse id em /picks, e o onboarding
+        // que ele tentava anunciar agora abre sozinho na tela (ver
+        // context/OnboardingContext.tsx).
+        navigate(redirectTo ?? '/picks')
       }
     } catch (err: any) {
       turnstileRef.current?.reset()

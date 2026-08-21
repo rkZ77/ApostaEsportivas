@@ -1,8 +1,10 @@
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X } from 'lucide-react'
+import { Zap, TrendingUp, BarChart2, Wallet, Bot, BookOpen, ArrowRight, Check, X, Compass } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'
+import { useAuth } from '../context/AuthContext'
+import { useOnboarding } from '../context/OnboardingContext'
 import { fadeInUp, staggerContainer } from '../lib/motion'
 
 const features = [
@@ -86,6 +88,11 @@ const features = [
 
 export default function ComoFunciona() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  /* Esta página explica; o tour mostra. Quem cai aqui procurando "como usar" é
+     exatamente quem o tour atende melhor, então a porta para ele fica no topo
+     e não enterrada no fim da leitura. */
+  const { abrir: abrirTutorial } = useOnboarding()
 
   const handleStart = () => {
     navigate('/picks', { replace: true })
@@ -105,9 +112,16 @@ export default function ComoFunciona() {
         title: 'Como funciona',
         sub: 'Um tour por tudo que a plataforma faz',
         actions: (
-          <Button variant="ghost" size="sm" Icon={X} onClick={handleClose}>
-            Fechar
-          </Button>
+          <>
+            {user && (
+              <Button variant="ghost" size="sm" Icon={Compass} onClick={() => abrirTutorial()}>
+                Ver tutorial
+              </Button>
+            )}
+            <Button variant="ghost" size="sm" Icon={X} onClick={handleClose}>
+              Fechar
+            </Button>
+          </>
         ),
       }}
     >
@@ -173,13 +187,24 @@ export default function ComoFunciona() {
           <p className="text-ink-2 text-sm mb-6">
             Os picks de hoje já estão disponíveis. Confira as análises da IA.
           </p>
-          <button
-            onClick={handleStart}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-500 text-ink-1 font-bold px-8 py-3.5 rounded-md transition-colors text-sm"
-          >
-            Ver picks de hoje
-            <ArrowRight className="w-4 h-4" />
-          </button>
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+            <button
+              onClick={handleStart}
+              className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-ink-1 font-bold px-8 py-3.5 rounded-md transition-colors text-sm w-full sm:w-auto"
+            >
+              Ver picks de hoje
+              <ArrowRight className="w-4 h-4" />
+            </button>
+            {user && (
+              <button
+                onClick={() => abrirTutorial()}
+                className="inline-flex items-center justify-center gap-2 border border-line-strong hover:border-ink-4 text-ink-2 hover:text-ink-1 font-medium px-8 py-3.5 rounded-md transition-colors text-sm w-full sm:w-auto"
+              >
+                <Compass className="w-4 h-4" />
+                Ver tutorial na tela
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </PageShell>
