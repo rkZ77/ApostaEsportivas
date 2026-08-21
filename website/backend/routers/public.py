@@ -25,12 +25,24 @@ LOCAL_LOGOS: dict[int, str] = {
 
 @router.get("/leagues")
 def public_leagues():
-    """Ligas ativas cadastradas no sistema · sem autenticação."""
+    """Ligas cadastradas no sistema · sem autenticação.
+
+    Devolve TAMBÉM as encerradas (`ativa = FALSE`), porque quem lê estatística
+    quer poder olhar competição que já acabou · a Copa do Mundo 2026 sozinha
+    sustenta 77% do ledger de calibração. Quem chama é que decide: a vitrine de
+    cobertura filtra, a tela de estatística mantém no seletor.
+
+    A ordem é `ativa` primeiro, e não `league_id`. Ordenar por id colocava a
+    Copa (id 1, encerrada em 2026-08-11) na frente de tudo, e como todo seletor
+    abre no primeiro item, a tela de Estatísticas abria numa competição que só
+    volta em 2030.
+    """
     conn = get_connection()
     cur  = conn.cursor()
     try:
         cur.execute(
-            "SELECT league_id, name, season FROM leagues ORDER BY league_id"
+            "SELECT league_id, name, season, COALESCE(ativa, TRUE) AS ativa "
+            "FROM leagues ORDER BY ativa DESC, name"
         )
         rows = cur.fetchall()
         return [
@@ -38,6 +50,7 @@ def public_leagues():
                 "league_id": r["league_id"],
                 "name":      r["name"],
                 "season":    r["season"],
+                "ativa":     r["ativa"],
                 "logo_url":  LOCAL_LOGOS.get(
                     r["league_id"],
                     # Proxy do backend (main.py:/api/proxy/league) baixa e cacheia em disco --
