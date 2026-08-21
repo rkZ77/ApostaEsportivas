@@ -12,7 +12,7 @@ import FilterPanel from '../components/FilterPanel'
 
 const LEAGUE_LOGO = (id: number) => `/api/proxy/league/${id}.png`
 
-interface League { league_id: number; name: string; season: number; logo_url: string }
+interface League { league_id: number; name: string; season: number; logo_url: string; ativa?: boolean }
 interface Game {
   fixture_id: number; match_date: string
   home_team: string; away_team: string
@@ -161,7 +161,17 @@ export function EstatisticasContent() {
       .then(r => {
         const ls: League[] = r.data
         setLeagues(ls)
-        if (ls.length > 0) setLeagueId(ls[0].league_id)
+        /*
+         * Abre numa liga EM ANDAMENTO, não na primeira da lista.
+         *
+         * A Copa do Mundo é o league_id 1 e a rota vinha ordenada por id, então
+         * a tela abria numa competição encerrada em agosto de 2026 · números
+         * reais, mas de um torneio que só volta em 2030. As encerradas
+         * continuam no seletor (o histórico serve), só não são mais a porta de
+         * entrada.
+         */
+        const emAndamento = ls.find(l => l.ativa !== false)
+        if (ls.length > 0) setLeagueId((emAndamento ?? ls[0]).league_id)
       })
       .catch(() => {})
       .finally(() => setLeaguesLoading(false))
@@ -238,11 +248,15 @@ export function EstatisticasContent() {
               {
                 key: 'league', label: 'Liga',
                 options: leagues.map(l => ({
-                  value: String(l.league_id), label: l.name,
+                  value: String(l.league_id),
+                  // Encerrada fica no seletor, mas dizendo que é histórico:
+                  // sem a marca, "Copa do Mundo" com 104 jogos parece uma
+                  // competição em andamento que ninguém está vendo rolar.
+                  label: l.ativa === false ? `${l.name} (encerrada)` : l.name,
                   icon: <img src={LEAGUE_LOGO(l.league_id)} alt={l.name} width={16} height={16} className="w-4 h-4 object-contain"
                           onError={e => (e.currentTarget.style.display = 'none')} />,
                 })),
-                value: String(leagueId ?? leagues[0]?.league_id ?? ''),
+                value: String(leagueId ?? ''),
                 onChange: v => { setLeagueId(Number(v)); setActiveCard(null) },
               },
               {
