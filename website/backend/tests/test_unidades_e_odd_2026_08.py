@@ -216,30 +216,82 @@ def test_performance_da_ia_so_ganhou_o_tile():
     assert tela.index("Assertividade") < tela.index("Lucro da IA")
 
 
-def test_faixa_de_plano_so_aparece_logada():
-    barra = _front_codigo("components/PlanUpsellBar.tsx")
-    assert "if (!user" in barra, "faixa tem que sumir pra visitante deslogado"
-    assert "isAdmin" in barra, "admin nao recebe convite de assinatura"
+# O convite de plano deixou de ser faixa no topo do PageShell em 21/08 (pedido
+# do usuario: ela custava uma linha inteira do topo em toda tela do app). Virou
+# aviso de rodape + item no sino. As REGRAS abaixo nao mudaram nenhuma, so' o
+# arquivo que as guarda -- por isso os testes seguiram junto em vez de sumir.
 
 
-def test_faixa_de_plano_cobre_free_trial_e_vip_vencendo():
-    barra = _front_codigo("components/PlanUpsellBar.tsx")
-    assert "'free'" in barra
-    assert "'trial'" in barra, "periodo de teste tambem recebe o convite"
-    assert "'vip'" in barra
+def test_convite_de_plano_so_aparece_logado():
+    regra = _front_codigo("lib/planoUpsell.ts")
+    assert "if (!user || isAdmin) return null" in regra, (
+        "visitante deslogado e admin nao recebem convite de assinatura"
+    )
 
 
-def test_faixa_de_plano_nao_alcanca_a_home():
-    """A exclusao e' estrutural, nao um `if` que alguem esquece de atualizar:
-    a faixa mora no PageShell e a Home monta a propria casca."""
-    assert "PlanUpsellBar" in _front_codigo("components/PageShell.tsx")
+def test_convite_de_plano_cobre_free_trial_e_vip_vencendo():
+    regra = _front_codigo("lib/planoUpsell.ts")
+    assert "'free'" in regra
+    assert "'trial'" in regra, "periodo de teste tambem recebe o convite"
+    assert "'vip'" in regra
+
+
+def test_convite_de_plano_nao_alcanca_a_home():
+    """A Home nunca ve o convite, e a exclusao continua ESTRUTURAL.
+
+    Antes era o PageShell (a Home monta a propria casca). Agora e' o
+    PlanUpsellToast montado uma vez em App.tsx, dentro do <Suspense> que so'
+    existe para tela logada -- e a Home segue sem PageShell.
+    """
+    assert "PlanUpsellBar" not in _front_codigo("components/PageShell.tsx"), (
+        "a faixa saiu do PageShell; se voltou, e' regressao"
+    )
+    assert "PlanUpsellToast" in _front_codigo("App.tsx")
     assert "PageShell" not in _front("pages/Home.tsx")
 
 
-def test_faixa_de_plano_nao_aparece_em_checkout_e_planos():
+def test_convite_de_plano_nao_aparece_em_checkout_e_planos():
     """Quem ja' esta' na tela de assinar nao precisa ser convidado a ir."""
-    barra = _front_codigo("components/PlanUpsellBar.tsx")
-    assert "/checkout" in barra and "/planos" in barra
+    aviso = _front_codigo("components/PlanUpsellToast.tsx")
+    assert "/checkout" in aviso and "/planos" in aviso
+
+
+def test_convite_de_plano_espera_o_tour_de_boas_vindas():
+    """z-[9990] contra o z-[80] do tour: sem esperar, ele pula na frente.
+
+    Vender assinatura para quem ainda nao viu o produto funcionar e' o pior
+    momento possivel, e era o que acontecia no primeiro acesso.
+    """
+    aviso = _front_codigo("components/PlanUpsellToast.tsx")
+    assert "useOnboarding" in aviso
+    assert "tourNaFrente" in aviso
+
+
+def test_convite_de_plano_nao_empilha_com_o_de_confirmar_email():
+    """Free que ainda pode ganhar o trial ve o convite do e-mail, nao este.
+
+    Os dois moram na mesma faixa do rodape (bottom-24). Dois avisos pedindo
+    acesso ao VIP por caminhos diferentes, empilhados, e' ruido -- e o do e-mail
+    ganha porque entrega 2 dias de graca.
+    """
+    regra = _front_codigo("lib/planoUpsell.ts")
+    assert "podeGanharTrial" in regra
+    assert "if (podeGanharTrial) return null" in regra
+
+
+def test_convite_de_plano_fica_guardado_no_sino():
+    """Dispensar o aviso nao pode apagar o convite de vez.
+
+    Ele nao vem do servidor (nao e' evento, e' estado permanente da conta),
+    entao o item do sino e' montado no cliente com id negativo -- e o markRead
+    precisa reconhecer esse id em vez de fazer POST em /notifications/-1.
+    """
+    ctx = _front_codigo("context/NotificationContext.tsx")
+    assert "ID_NOTIFICACAO_PLANO" in ctx
+    assert "id === ID_NOTIFICACAO_PLANO" in ctx, (
+        "markRead tem que tratar o item sintetico antes de chamar a API"
+    )
+    assert "'plan_upsell'" in ctx
 
 
 # ─────────────────────── 3. Odd do clique em "Apostei" ───────────────────────

@@ -281,6 +281,42 @@ def _enrich_multipla_legs(cur, rows: list) -> list:
 
 
 
+def _teaser_de_multipla(row) -> dict:
+    """Multipla trancada: quantas selecoes e quais jogos, sem os mercados.
+
+    "3 selecoes, odd 4.20" ja diz se vale a pena olhar. O que cada perna e' --
+    o mercado e a linha -- e' a analise, e essa fica dentro do VIP. Mesmo corte
+    de public.py::pick_meta, que ja faz isso no link compartilhado.
+    """
+    d = dict(row)
+    jogos = d.get("games")
+    if isinstance(jogos, str):
+        try:
+            jogos = json.loads(jogos)
+        except Exception:
+            jogos = []
+    jogos = jogos or []
+    d.pop("games", None)
+    d["total_legs"] = len(jogos)
+    d["teams_preview"] = [
+        f"{g.get('home_team', '?')} x {g.get('away_team', '?')}" for g in jogos[:4]
+    ]
+    return d
+
+
+def _teaser_de_alavancagem(row) -> dict:
+    """Alavancagem trancada: os jogos do caminho e a odd combinada."""
+    d = dict(row)
+    times = []
+    for i in (1, 2, 3):
+        casa, fora = d.pop(f"home_team_{i}", None), d.pop(f"away_team_{i}", None)
+        if casa and fora:
+            times.append(f"{casa} x {fora}")
+    d["total_legs"] = len(times)
+    d["teams_preview"] = times
+    return d
+
+
 @router.get("/today")
 def get_today_suggestions(
     current_user: dict = Depends(get_current_user),
@@ -473,6 +509,60 @@ def get_today_suggestions(
             # precisar checar `undefined` antes de iterar.
             result["faltas"] = []
             result["goleiros"] = []
+
+            # ── Vitrine do que esta' trancado ──────────────────────────────
+            #
+            # Ate' 21/08 a tela de quem nao e' VIP mostrava um retangulo de
+            # cards FALSOS borrados com um cadeado em cima. Nao dizia nada:
+            # nao havia como saber se tinha pick hoje, quantos, ou de que jogo.
+            #
+            # Agora vai o teaser de verdade, com O MESMO CONTRATO DE EXPOSICAO
+            # do link publico de pick compartilhado (ver public.py::pick_meta):
+            # times, liga, horario, odd. NUNCA market, line, reasoning,
+            # confidence, ev, probability ou stake -- e' a analise que se paga,
+            # e ela nao sai daqui. Nao ha' regra nova para divergir da antiga:
+            # e' a mesma lista de colunas.
+            #
+            # `_safe_query` ja engole erro e devolve lista vazia, entao uma
+            # tabela ausente vira "sem teaser", nunca 500 na tela de picks.
+            teaser_vip = _safe_query(cur, f"""
+                SELECT s.id, s.match_date,
+                       s.home_team_name, s.away_team_name,
+                       s.home_team_id, s.away_team_id,
+                       s.odd,
+                       f.league_id, f.match_datetime,
+                       l.name AS league_name
+                FROM picks_vip s
+                LEFT JOIN fixtures f ON f.fixture_id = s.fixture_id
+                LEFT JOIN leagues l ON l.league_id = f.league_id
+                WHERE ({_vip_where}) AND s.result IS NULL
+                ORDER BY s.match_date DESC, s.confidence DESC
+            """, _d)
+
+            teaser_mult = _safe_query(cur, f"""
+                SELECT id, match_date, total_odd AS odd, games
+                FROM picks_multiplas
+                WHERE ({_m_where}) AND result IS NULL
+                ORDER BY match_date DESC, created_at DESC
+                LIMIT 1
+            """, _d)
+
+            teaser_alav = _safe_query(cur, f"""
+                SELECT pa.id, pa.match_date, pa.odd_combined AS odd,
+                       pa.home_team_1, pa.away_team_1,
+                       pa.home_team_2, pa.away_team_2,
+                       pa.home_team_3, pa.away_team_3
+                FROM picks_alavancagem pa
+                WHERE ({_alav_where}) AND pa.result IS NULL
+                ORDER BY pa.match_date DESC, pa.created_at DESC
+                LIMIT 1
+            """, _d)
+
+            result["bloqueados"] = {
+                "vip": [dict(r) for r in teaser_vip],
+                "multipla": _teaser_de_multipla(teaser_mult[0]) if teaser_mult else None,
+                "alavancagem": _teaser_de_alavancagem(teaser_alav[0]) if teaser_alav else None,
+            }
 
         # ── is_followed de TODOS os tipos, numa consulta so' ────────────────
         #

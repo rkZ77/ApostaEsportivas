@@ -38,7 +38,7 @@ const LivePicks     = lazy(() => import('../components/LivePicks'))
 const LivePicksFeed = lazy(() => import('../components/LivePicksFeed'))
 import PicksPendingCard from '../components/PicksPendingCard'
 import { LIVE_PICKS_ENABLED } from '../config'
-import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, TrendingUp, X as XIcon } from 'lucide-react'
+import { UserCircle, Crown, Rocket, Wallet, Clock, ChevronLeft, ChevronRight, BrainCircuit, Share2, Check as CheckIcon, Loader2, SearchX, TrendingUp, X as XIcon, Lock, Ticket } from 'lucide-react'
 import { calcFreeStake, calcMultiplaStake, calcProfitUnits } from '../utils/stakeUtils'
 import { stakeDe } from '../utils/stakePlan'
 import {fmtUnits, pctProb, capitalizarFrase } from '../utils/format'
@@ -1659,51 +1659,192 @@ function PipelineStatusCard() {
 
 
 // VIP Lock Overlay
-function VipLockOverlay({ color = 'yellow' }: { color?: 'yellow' | 'blue' | 'orange' | 'purple' }) {
-  const cls = color === 'blue'
-    ? { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1'    }
-    : color === 'orange'
-    ? { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1' }
-    : color === 'purple'
-    ? { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1' }
-    : { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black' }
+/*
+ * O que um free vê no lugar de um pick VIP.
+ *
+ * Até 21/08 isto era um retângulo de cards FALSOS borrados com um cadeado por
+ * cima. Duas coisas erradas ao mesmo tempo: não dizia nada (não dava para saber
+ * se havia pick hoje, quantos, ou de que jogo) e o bloco de texto centralizado
+ * era `absolute inset-0` sobre uma grade de esqueletos mais BAIXA que ele, então
+ * o "Assinar VIP" saía cortado pelo `overflow-hidden` do pai.
+ *
+ * Agora mostra o pick de verdade, no mesmo contrato de exposição que o link
+ * público compartilhado já usa: times, liga, horário e odd. O que fica trancado
+ * é a ANÁLISE, ou seja mercado, linha, probabilidade, EV e o raciocínio da IA.
+ * É ela que a assinatura paga, e ela não sai do servidor para quem não assina
+ * (ver `result["bloqueados"]` em routers/suggestions.py). A tarja não esconde
+ * nada que tenha chegado ao navegador: o campo simplesmente não veio.
+ *
+ * O convite virou uma faixa DEPOIS da grade, em fluxo normal. Não tem como
+ * cortar o que não está posicionado por cima de nada.
+ */
+interface TeaserBloqueado {
+  id: number
+  home_team_name?: string | null
+  away_team_name?: string | null
+  home_team_id?: number | null
+  away_team_id?: number | null
+  league_id?: number | null
+  league_name?: string | null
+  match_datetime?: string | null
+  odd?: number | string | null
+}
+
+interface ResumoBloqueado {
+  odd?: number | string | null
+  total_legs?: number | null
+  teams_preview?: string[] | null
+}
+
+const LOCK_CLS = {
+  yellow: { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black', borda: 'border-yellow-400/25' },
+  blue:   { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1',     borda: 'border-blue-400/25'   },
+  orange: { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1', borda: 'border-orange-400/25' },
+  purple: { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1', borda: 'border-purple-400/25' },
+} as const
+
+type LockCls = typeof LOCK_CLS[keyof typeof LOCK_CLS]
+
+/** A tarja no lugar do mercado. É o que a assinatura abre. */
+function TarjaDeAnalise({ cls }: { cls: LockCls }) {
   return (
-    <div className="relative rounded-lg overflow-hidden">
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 select-none pointer-events-none" style={{ filter: 'blur(5px)', opacity: 0.35 }}>
-        {[1, 2, 3, 4].map(i => (
-          <div key={i} className="card p-5 space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="h-3 bg-surface-3 rounded w-24" />
-              <div className="h-5 bg-surface-3 rounded w-16" />
+    <div className={`flex items-center gap-2 rounded-md border border-dashed ${cls.borda} bg-surface-2/40 px-3 py-2.5`}>
+      <Lock className={`w-3.5 h-3.5 shrink-0 ${cls.icon}`} aria-hidden="true" />
+      <span className="text-[11px] text-ink-3">Mercado e análise da IA</span>
+      {/* Uma régua, e só. Sugere que existe conteúdo ali sem fingir um conteúdo
+          específico, que era o defeito do card inteiro borrado. */}
+      <span className="ml-auto h-1.5 w-10 rounded-full bg-surface-3" aria-hidden="true" />
+    </div>
+  )
+}
+
+function CardTrancado({ p, cls }: { p: TeaserBloqueado; cls: LockCls }) {
+  /* Horário por fatia de string, nunca `new Date`: `match_datetime` já vem em
+     horário de Brasília sem fuso. Mesma leitura do SuggestionCard. */
+  const kickoff = p.match_datetime ? String(p.match_datetime).slice(11, 16) : null
+  const odd = p.odd != null ? Number(p.odd) : null
+
+  return (
+    <div className="pick-card border-line">
+      <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
+          <PickTypeBadge type="vip" />
+          {(p.league_id || p.league_name) && (
+            <div className="flex items-center gap-1 min-w-0">
+              <LeagueLogo id={p.league_id ?? undefined} name={p.league_name ?? undefined} />
+              {p.league_name && <span className="text-[10px] text-ink-4 truncate max-w-[90px]">{p.league_name}</span>}
             </div>
-            <div className="h-4 bg-surface-3 rounded w-3/4" />
-            <div className="grid grid-cols-3 gap-2">
-              <div className="h-10 bg-surface-2 rounded-lg" />
-              <div className="h-10 bg-surface-2 rounded-lg" />
-              <div className="h-10 bg-surface-2 rounded-lg" />
-            </div>
-            <div className="h-2 bg-surface-2 rounded-full" />
-          </div>
-        ))}
-      </div>
-      <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-sm rounded-lg">
-        <div className="text-center px-6">
-          <div className={`w-12 h-12 border rounded-full flex items-center justify-center mx-auto mb-3 ${cls.ring}`}>
-            <svg className={`w-6 h-6 ${cls.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-          </div>
-          <p className="font-display text-ink-1 font-bold text-base mb-1">Exclusivo para assinantes VIP</p>
-          <p className="text-ink-2 text-xs mb-4 max-w-xs">10 a 20 picks por dia com análise completa da IA e resultados em tempo real.</p>
-          <Link to="/checkout" className={`inline-block font-black px-6 py-2.5 rounded-md transition-colors text-sm ${cls.btn}`}>
-            Assinar VIP
-          </Link>
+          )}
         </div>
+        {kickoff && (
+          <span className="flex items-center gap-1 text-[10px] text-ink-4 shrink-0">
+            <Clock className="w-3 h-3" aria-hidden="true" />
+            {kickoff}
+          </span>
+        )}
+      </div>
+
+      <div className="px-5 py-3 space-y-3">
+        <div className="flex items-center gap-2 min-w-0">
+          <TeamLogo id={p.home_team_id ?? undefined} name={p.home_team_name ?? ''} size={22} />
+          <span className="text-sm font-semibold text-ink-1 truncate">{p.home_team_name}</span>
+          <span className="text-[10px] text-ink-4 shrink-0">vs</span>
+          <TeamLogo id={p.away_team_id ?? undefined} name={p.away_team_name ?? ''} size={22} />
+          <span className="text-sm font-semibold text-ink-1 truncate">{p.away_team_name}</span>
+        </div>
+
+        <TarjaDeAnalise cls={cls} />
+
+        {odd != null && (
+          <div className="flex items-baseline gap-2">
+            <span className="text-[10px] text-ink-4">Odd</span>
+            <span className="font-mono text-lg font-black text-ink-2">{odd.toFixed(2)}</span>
+          </div>
+        )}
       </div>
     </div>
   )
 }
 
+function VipLockOverlay({ color = 'yellow', picks, resumo, rotulo = 'picks' }: {
+  color?: keyof typeof LOCK_CLS
+  /** Teaser vindo do servidor, sem análise. Vazio = não há pick trancado hoje. */
+  picks?: TeaserBloqueado[]
+  /** Múltipla e alavancagem não têm grade: viram uma linha com os jogos. */
+  resumo?: ResumoBloqueado | null
+  rotulo?: string
+}) {
+  const cls = LOCK_CLS[color] ?? LOCK_CLS.yellow
+  const lista = picks ?? []
+  const odd = resumo?.odd != null ? Number(resumo.odd) : null
+  const temTeaser = lista.length > 0 || !!resumo
+
+  const chamada = lista.length
+    ? `${lista.length} ${lista.length === 1 ? 'pick' : rotulo} de hoje, ${lista.length === 1 ? 'trancado' : 'trancados'}`
+    : resumo
+    ? 'Publicado hoje, trancado'
+    : 'Exclusivo para assinantes VIP'
+
+  return (
+    <div className="space-y-3">
+      {lista.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
+          {lista.slice(0, 4).map(p => <CardTrancado key={p.id} p={p} cls={cls} />)}
+        </div>
+      )}
+
+      {/* Múltipla e alavancagem: os jogos do bilhete, sem o mercado de cada perna. */}
+      {lista.length === 0 && resumo && (
+        <div className="card p-5 space-y-3">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-xs text-ink-3">
+              {resumo.total_legs ? `${resumo.total_legs} seleções` : 'Bilhete do dia'}
+            </span>
+            {odd != null && (
+              <span className="flex items-baseline gap-1.5">
+                <span className="text-[10px] text-ink-4">Odd combinada</span>
+                <span className="font-mono text-lg font-black text-ink-2">{odd.toFixed(2)}</span>
+              </span>
+            )}
+          </div>
+          {!!resumo.teams_preview?.length && (
+            <ul className="space-y-1.5">
+              {resumo.teams_preview.map(t => (
+                <li key={t} className="flex items-center gap-2 text-xs text-ink-2">
+                  <Ticket className="w-3.5 h-3.5 shrink-0 text-ink-4" aria-hidden="true" />
+                  <span className="truncate">{t}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+          <TarjaDeAnalise cls={cls} />
+        </div>
+      )}
+
+      {/* O convite. Em FLUXO, depois da grade: era isto que saía cortado quando
+          ele vivia como `absolute inset-0` por cima dos esqueletos. */}
+      <div className={`rounded-lg border ${cls.borda} bg-surface-1 p-5 flex flex-col sm:flex-row sm:items-center gap-4`}>
+        <div className={`w-11 h-11 rounded-full border flex items-center justify-center shrink-0 ${cls.ring}`}>
+          <Lock className={`w-5 h-5 ${cls.icon}`} aria-hidden="true" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="font-display text-ink-1 font-bold text-sm mb-0.5">{chamada}</p>
+          <p className="text-ink-3 text-xs leading-relaxed">
+            {temTeaser
+              ? 'O jogo e a odd você já vê. O mercado, a análise da IA e a sugestão de stake abrem no VIP.'
+              : '10 a 20 picks por dia com análise completa da IA e resultados em tempo real.'}
+          </p>
+        </div>
+        <Link
+          to="/checkout"
+          className={`inline-flex items-center justify-center font-black px-6 py-2.5 rounded-md transition-colors text-sm shrink-0 min-h-[44px] ${cls.btn}`}
+        >
+          Assinar VIP
+        </Link>
+      </div>
+    </div>
+  )
+}
 
 
 /*
@@ -2338,7 +2479,7 @@ export default function Picks() {
                       label="Picks VIP do Dia"
                       badge={canSeeVip && pending.length ? `${pending.length} pendente${pending.length > 1 ? 's' : ''}` : undefined}
                     />
-                    {!canSeeVip ? <VipLockOverlay color="yellow" /> : (
+                    {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : (
                       <>
                         <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
                           {vips.slice(0, 4).map((s: any) => (
@@ -2366,7 +2507,7 @@ export default function Picks() {
                 return (
                   <section>
                     <SectionHeader color="bg-blue-400" label="Múltipla do Dia" />
-                    {!canSeeVip ? <VipLockOverlay color="blue" /> : (
+                    {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : (
                       /* Colunas seguem a quantidade real de múltiplas. O grid
                          fixo de 3-4 colunas foi feito pensando em vitrine cheia,
                          mas o dia normal tem UMA múltipla · ela caía em 1/3 da
@@ -2393,7 +2534,7 @@ export default function Picks() {
               {(canSeeVip ? !!today?.alavancagem : true) && (
                 <section>
                   <SectionHeader color="bg-orange-400" label="Alavancagem" />
-                  {!canSeeVip ? <VipLockOverlay color="orange" /> : (
+                  {!canSeeVip ? <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" /> : (
                     <>
                       <div className="card p-4 border-orange-500/10 bg-orange-500/5 mb-3">
                         <p className="text-xs text-ink-2 leading-relaxed">
@@ -2543,7 +2684,7 @@ export default function Picks() {
                 color="bg-yellow-400"
                 label={`Picks do Dia · ${todayDateStr}`}
               />
-              {!canSeeVip ? <VipLockOverlay color="yellow" /> : todayLoading ? <PickLoading /> : (() => {
+              {!canSeeVip ? <VipLockOverlay color="yellow" picks={today?.bloqueados?.vip} /> : todayLoading ? <PickLoading /> : (() => {
                 const vips = today?.vip ?? []
                 const leagues = Array.from(new Set(vips.map((s: any) => s.league_name).filter(Boolean))) as string[]
                 const byLeague = leagueFilter ? vips.filter((s: any) => s.league_name === leagueFilter) : vips
@@ -2622,7 +2763,7 @@ export default function Picks() {
             {/* Múltiplas de hoje */}
             <div>
               <SectionHeader color="bg-blue-400" label={`Múltiplas do Dia · ${todayDateStr}`} />
-              {!canSeeVip ? <VipLockOverlay color="blue" /> : todayLoading ? <PickLoading /> : (
+              {!canSeeVip ? <VipLockOverlay color="blue" resumo={today?.bloqueados?.multipla} rotulo="múltiplas" /> : todayLoading ? <PickLoading /> : (
                 today?.multiplas?.length > 0 ? (
                   <motion.div variants={staggerContainer} initial="hidden" animate="visible" className="space-y-4">
                     {today.multiplas.map((m: any) => <MultiplaCard key={m.id} m={m} banca={bancaSummary?.has_banca ? bancaSummary : null} isLive={isMultiplaLive(m)} />)}
@@ -2683,7 +2824,7 @@ export default function Picks() {
             {!canSeeVip ? (
               <div>
                 <SectionHeader color="bg-orange-400" label={`Pick do Dia · ${todayDateStr}`} />
-                <VipLockOverlay color="orange" />
+                <VipLockOverlay color="orange" resumo={today?.bloqueados?.alavancagem} rotulo="caminhos" />
               </div>
             ) : (
               <>

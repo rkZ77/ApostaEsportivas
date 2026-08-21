@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Bell, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useOnboarding } from '../context/OnboardingContext'
 import { usePushNotification } from '../hooks/usePushNotification'
 import { toastUp } from '../lib/motion'
 
@@ -20,11 +21,17 @@ function isSnoozed(): boolean {
 export default function PushPromptBanner() {
   const { user } = useAuth()
   const push = usePushNotification()
+  /* Mesmo motivo do VerifyEmailBanner: `z-[9990]` pula na frente do tour, e
+     pedir permissão de notificação no primeiro minuto de quem ainda não
+     entendeu o produto é o jeito mais rápido de levar um "bloquear". */
+  const { aberto: tourAberto, pendente: tourPendente, carregado: tourCarregado } = useOnboarding()
+  const tourNaFrente = tourAberto || !tourCarregado || tourPendente
   const [visible, setVisible] = useState(false)
   const [activating, setActivating] = useState(false)
 
   useEffect(() => {
     if (!user) return
+    if (tourNaFrente) { setVisible(false); return }
     if (!push.supported) return
     if (push.permission === 'denied') return
     if (push.subscribed) return
@@ -35,7 +42,7 @@ export default function PushPromptBanner() {
     if (isSnoozed()) return
     const t = setTimeout(() => setVisible(true), 1500)
     return () => clearTimeout(t)
-  }, [user, push.supported, push.permission, push.subscribed, push.vapidKey])
+  }, [user, push.supported, push.permission, push.subscribed, push.vapidKey, tourNaFrente])
 
   useEffect(() => {
     if (push.subscribed) setVisible(false)

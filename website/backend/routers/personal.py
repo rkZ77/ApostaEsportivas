@@ -280,7 +280,11 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # `tutorial_step` guarda o passo em aberto. Sem ele, recarregar a pagina no meio
 # do tour recomecava do "Bem-vindo".
 
-TUTORIAL_TOTAL_STEPS = 7
+# Maior roteiro possivel. O tour tem 7 passos fixos + o de confirmar e-mail,
+# que so' entra pra quem ainda tem os 2 dias de VIP esperando -- entao o total
+# que a TELA mostra varia entre 7 e 8, e o que o backend valida e' o teto.
+# Espelha MAX_PASSOS em components/onboarding/constantes.ts; ha teste travando.
+TUTORIAL_TOTAL_STEPS = 8
 TUTORIAL_STATUS = ("pending", "completed", "skipped")
 
 
