@@ -1,10 +1,10 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useOnboarding } from '../../context/OnboardingContext'
-import { TOUR_STEPS } from './steps'
+import { passosDoTour } from './steps'
 import { cn } from '../../lib/cn'
 
 /*
@@ -82,11 +82,14 @@ function medir(el: Element): Rect {
 }
 
 export default function OnboardingTour() {
-  const { aberto, passo, total, proximo, voltar, irPara, pular, concluir } = useOnboarding()
+  const { aberto, pausado, passo, total, contexto, proximo, voltar, irPara, pular, concluir } = useOnboarding()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  const step = TOUR_STEPS[passo]
+  /* O roteiro DESTA conta. `contexto` vem congelado do provider, então a lista
+     não muda de tamanho no meio de uma sessão de tour. */
+  const passos = useMemo(() => passosDoTour(contexto), [contexto])
+  const step = passos[passo]
   const primeiro = passo === 0
   const ultimo = passo === total - 1
 
@@ -311,7 +314,12 @@ export default function OnboardingTour() {
     return () => document.removeEventListener('keydown', noTab, true)
   }, [aberto])
 
-  if (!aberto || !step) return null
+  /* `pausado` sai da tela inteirinho: um passo pediu um formulário de verdade
+     (o da banca abre o SetupModal, que é z-50) e o tour, em z-80, ficaria por
+     cima do formulário que ele mesmo mandou abrir. Os efeitos continuam vivos,
+     inclusive a trava de rolagem, então a página de trás não corre embaixo do
+     formulário. */
+  if (!aberto || pausado || !step) return null
 
   /* ── Onde o balão fica ─────────────────────────────────────────────────
      Três geometrias, e a regra de todas é a mesma: não cobrir o que o passo
@@ -551,7 +559,7 @@ export default function OnboardingTour() {
             </button>
 
             <div className="hidden sm:flex items-center gap-1.5 mx-auto" aria-hidden="true">
-              {TOUR_STEPS.map((s, i) => (
+              {passos.map((s, i) => (
                 <button
                   key={s.id}
                   type="button"

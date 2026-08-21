@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, ReactNode } from 'react'
 import api from '../services/api'
 import { useAuth } from './AuthContext'
+import { ID_NOTIFICACAO_PLANO, adiarPlano, convitePlano, planoAdiado } from '../lib/planoUpsell'
 
 const LS_KEY = 'lastSeenPickId'
 // 60s: esse poll roda em TODA página do site pra todo usuário logado (não só
@@ -15,6 +16,12 @@ const POLL_INTERVAL = 60_000
 export type NotificationType =
   | 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result' | 'plan_expiring'
   | 'trial_ended'
+  /* Único tipo que NÃO vem do servidor. O convite de plano é um estado
+     permanente da conta ("você está no free"), não um evento, então não existe
+     linha em `notifications` para ele · criar uma por usuário seria inventar um
+     evento que nunca aconteceu. Ele é montado aqui, no cliente, a partir do
+     plano, e some quando o estado muda. Ver lib/planoUpsell.ts. */
+  | 'plan_upsell'
 
 export interface AppNotification {
   id: number
@@ -92,7 +99,7 @@ function sendBrowserNotification(count: number, teams: string) {
 }
 
 export function NotificationProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth()
+  const { user, isAdmin, daysUntilExpiry } = useAuth()
   const [items, setItems]     = useState<AppNotification[]>([])
   const [unreadCount, setUnread] = useState(0)
   const [loading, setLoading] = useState(false)
@@ -194,7 +201,47 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     }
   }, [user, refresh])
 
+  /*
+   * Convite de plano no sino.
+   *
+   * Ele aparece como aviso de rodapé (PlanUpsellToast) e, dispensado, continua
+   * aqui · era o pedido: não sumir de vez. Como não é evento, não vem do
+   * servidor: é montado do plano da conta e entra no TOPO da lista, sempre não
+   * lido, enquanto o estado valer.
+   *
+   * `planoAdiadoAgora` só serve para a lista reagir na hora em que alguém
+   * dispensa: `planoAdiado()` lê localStorage, que não dispara render.
+   */
+  const [planoAdiadoAgora, setPlanoAdiadoAgora] = useState(() => planoAdiado())
+  const convite = convitePlano(user, daysUntilExpiry, isAdmin)
+
+  useEffect(() => { setPlanoAdiadoAgora(planoAdiado()) }, [user?.id, convite?.titulo])
+
+  const itemDePlano: AppNotification | null = convite && !planoAdiadoAgora
+    ? {
+        id: ID_NOTIFICACAO_PLANO,
+        type: 'plan_upsell',
+        title: convite.titulo,
+        body: convite.texto,
+        url: convite.to,
+        payload: {},
+        read: false,
+        created_at: null,
+      }
+    : null
+
+  const itensComPlano = itemDePlano ? [itemDePlano, ...items] : items
+
   const markRead = useCallback(async (id: number) => {
+    // O convite de plano não tem linha no servidor (ver 'plan_upsell' acima):
+    // marcá-lo como lido é adiar por 24h aqui mesmo. Sem esta saída, o POST
+    // iria para /notifications/-1 e o catch dispararia um refresh a cada
+    // clique.
+    if (id === ID_NOTIFICACAO_PLANO) {
+      adiarPlano()
+      setPlanoAdiadoAgora(true)
+      return
+    }
     setItems(prev => prev.map(n => (n.id === id ? { ...n, read: true } : n)))
     setUnread(prev => Math.max(0, prev - 1))
     try { await api.post(`/notifications/${id}/read`) } catch { await refresh() }
@@ -222,7 +269,8 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
 
   return (
     <NotificationContext.Provider value={{
-      items, unreadCount, loading, refresh, markRead, markAllRead, pendingMonthlyClose,
+      items: itensComPlano, unreadCount: unreadCount + (itemDePlano ? 1 : 0),
+      loading, refresh, markRead, markAllRead, pendingMonthlyClose,
       pendingTrialEnded,
       monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
       hasNew, markSeen, liveCount, hasLive, clearLive,

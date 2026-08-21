@@ -1,25 +1,36 @@
+import { useState } from 'react'
 import type { LucideIcon } from 'lucide-react'
 import {
   ArrowDown, BarChart2, ClipboardCheck, ClipboardList, CircleCheck, ExternalLink,
-  Search, ShieldCheck, Sparkles, Ticket, TrendingUp, Undo2, Wallet, Zap,
+  Mail, Search, ShieldCheck, Sparkles, Ticket, TrendingUp, Wallet, Zap,
 } from 'lucide-react'
-import { TOTAL_PASSOS } from './constantes'
+import { useAuth } from '../../context/AuthContext'
+import { useOnboarding } from '../../context/OnboardingContext'
+import api from '../../services/api'
+import {
+  EVENTO_CONFIGURAR_BANCA, MAX_PASSOS, passoDoEmailEntra, totalDePassos,
+  type ContextoTour,
+} from './constantes'
 
 /*
  * O roteiro do tour.
  *
- * Regra que vale para os sete passos: o destaque aponta para o COMPONENTE REAL
- * da plataforma, nunca para uma reprodução dele. Por isso `alvos` é uma lista
- * de seletores e não um desenho · o passo da banca ilumina o botão Configurar
- * que já existe, o dos picks ilumina o card que já está na tela, o do registro
- * ilumina o botão de apostar do card. Quando nenhum alvo existe (conta nova num
- * dia sem pick publicado, por exemplo), o passo cai para o modo centrado e
- * continua explicando · o que ele não faz é inventar um card de mentira só para
- * ter o que iluminar.
+ * Regra que vale para todos os passos: o destaque aponta para o COMPONENTE
+ * REAL da plataforma, nunca para uma reprodução dele. Por isso `alvos` é uma
+ * lista de seletores e não um desenho · o passo da banca ilumina o botão
+ * Configurar que já existe, o dos picks ilumina o card que já está na tela, o
+ * do registro ilumina o botão de apostar. Quando nenhum alvo existe (conta nova
+ * num dia sem pick publicado), o passo cai para o modo centrado e continua
+ * explicando · o que ele não faz é inventar um card de mentira para iluminar.
  *
  * `alvos` é tentado em ordem e o primeiro seletor que casar no DOM ganha. Os
- * itens seguintes de cada lista são as áreas maiores que contêm o primeiro, que
- * é o que sobra quando ainda não há pick nenhum.
+ * itens seguintes são as áreas maiores que contêm o primeiro, que é o que sobra
+ * quando ainda não há pick nenhum.
+ *
+ * Dois passos fazem mais do que explicar: o do e-mail reenvia o link de
+ * confirmação e o da banca abre o formulário de verdade. Tour que só aponta
+ * deixa a pessoa com a lista de tarefas na cabeça para depois; estes dois
+ * resolvem na hora, que é quando ela está com a atenção aqui.
  */
 
 export interface TourStep {
@@ -35,6 +46,8 @@ export interface TourStep {
   corpo?: React.ReactNode
   /** Rótulo do botão que avança. O padrão é "Próximo". */
   avancar?: string
+  /** Passo que não vale para toda conta. Ausente = todo mundo vê. */
+  mostrar?: (ctx: ContextoTour) => boolean
 }
 
 /* ── Peças de conteúdo ──────────────────────────────────────────────────── */
@@ -117,7 +130,131 @@ function Etiqueta({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-bold uppercase tracking-wide text-ink-4">{children}</p>
 }
 
-/* ── Os sete passos ─────────────────────────────────────────────────────── */
+/** Ação de verdade dentro do balão. Verde cheio, para se separar do "Próximo". */
+function AcaoDoPasso({
+  children, onClick, disabled, feito,
+}: {
+  children: React.ReactNode
+  onClick: () => void
+  disabled?: boolean
+  feito?: boolean
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled || feito}
+      className={`w-full inline-flex items-center justify-center gap-2 text-xs font-bold px-3 py-2.5 rounded-md border transition-colors min-h-[40px] ${
+        feito
+          ? 'border-accent/30 bg-accent/10 text-accent cursor-default'
+          : 'border-accent/40 bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50'
+      }`}
+    >
+      {children}
+    </button>
+  )
+}
+
+/* ── Passos que fazem alguma coisa ──────────────────────────────────────── */
+
+/**
+ * Confirmar o e-mail é o que paga os 2 dias de VIP.
+ *
+ * O aviso de rodapé que dizia isso (VerifyEmailBanner) fica escondido enquanto
+ * o tour está aberto, senão ele pula na frente do tutorial · ele é `z-[9990]`.
+ * Então a mensagem tem que estar AQUI, e com o mesmo botão de reenviar, ou a
+ * troca esconderia o convite do trial sem repor.
+ */
+function PassoConfirmarEmail() {
+  const { user } = useAuth()
+  const [enviando, setEnviando] = useState(false)
+  const [enviado, setEnviado] = useState(false)
+  const [erro, setErro] = useState(false)
+
+  const reenviar = async () => {
+    setEnviando(true)
+    setErro(false)
+    try {
+      await api.post('/auth/resend-verification')
+      setEnviado(true)
+    } catch {
+      setErro(true)
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <Etiqueta>O que você ganha</Etiqueta>
+      <Linhas itens={[['Teste do VIP', '2 dias'], ['Custo', 'R$ 0,00']]} />
+      <p className="text-xs text-ink-2 leading-relaxed">
+        O VIP abre todos os picks do dia, as múltiplas e a alavancagem. Sem confirmar,
+        a conta segue no plano gratuito, com 1 pick por dia.
+      </p>
+      {user?.email && (
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          Enviamos o link para <span className="text-ink-1 font-semibold break-all">{user.email}</span>.
+          Confira também o spam.
+        </p>
+      )}
+      <AcaoDoPasso onClick={reenviar} disabled={enviando} feito={enviado}>
+        {enviado
+          ? <><CircleCheck className="w-3.5 h-3.5" aria-hidden="true" /> E-mail reenviado</>
+          : <><Mail className="w-3.5 h-3.5" aria-hidden="true" /> {enviando ? 'Enviando...' : 'Reenviar o e-mail'}</>}
+      </AcaoDoPasso>
+      {erro && (
+        <p className="text-[11px] text-red-400">
+          Não deu para reenviar agora. O link original continua valendo.
+        </p>
+      )}
+      <p className="text-[11px] text-ink-4 leading-relaxed">
+        Pode confirmar depois e seguir o tutorial. O VIP entra sozinho assim que você
+        clicar no link.
+      </p>
+    </div>
+  )
+}
+
+/**
+ * Configurar a banca sem sair do tour.
+ *
+ * O botão pede à página da Banca que abra o `SetupModal` DE VERDADE (o mesmo do
+ * botão Configurar) e recolhe o tour enquanto o formulário está na tela. Salvou,
+ * o tour volta já no passo seguinte. A alternativa seria desenhar um
+ * mini-formulário aqui dentro, e aí existiriam dois lugares para configurar
+ * banca com duas validações para divergir.
+ */
+function PassoBanca() {
+  const { pausar } = useOnboarding()
+
+  return (
+    <div className="space-y-3">
+      <Etiqueta>Exemplo</Etiqueta>
+      <Linhas itens={[['Banca inicial', 'R$ 1.000,00'], ['Valor de 1 unidade', 'R$ 10,00']]} />
+      <p className="text-xs text-ink-2 leading-relaxed">
+        A banca serve como referência para acompanhar lucro, prejuízo, ROI e a evolução
+        dos seus resultados. A unidade é quanto você aposta por vez.
+      </p>
+      <AcaoDoPasso
+        onClick={() => {
+          pausar()
+          window.dispatchEvent(new CustomEvent(EVENTO_CONFIGURAR_BANCA))
+        }}
+      >
+        <Wallet className="w-3.5 h-3.5" aria-hidden="true" />
+        Configurar minha banca agora
+      </AcaoDoPasso>
+      <Recado>
+        A banca cadastrada aqui não representa dinheiro depositado na plataforma. A
+        PickIA não recebe, não guarda e não movimenta o seu dinheiro. O valor é apenas
+        o número de referência do seu acompanhamento.
+      </Recado>
+    </div>
+  )
+}
+
+/* ── O roteiro ──────────────────────────────────────────────────────────── */
 
 export const TOUR_STEPS: TourStep[] = [
   {
@@ -140,11 +277,19 @@ export const TOUR_STEPS: TourStep[] = [
           ]}
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          São sete passos rápidos. Você pode sair a qualquer momento e reabrir depois
-          pelo menu da sua conta, em Ver tutorial.
+          São poucos passos e dá para sair a qualquer momento. Para rever depois, o
+          menu da sua conta tem Ver tutorial.
         </p>
       </div>
     ),
+  },
+  {
+    id: 'confirmar-email',
+    titulo: 'Confirme seu e-mail e ganhe 2 dias de VIP',
+    Icon: Mail,
+    mostrar: passoDoEmailEntra,
+    resumo: 'A conta já está criada. Falta confirmar o e-mail, e é isso que libera os 2 dias de teste do VIP, sem custo nenhum.',
+    corpo: <PassoConfirmarEmail />,
   },
   {
     id: 'banca',
@@ -153,21 +298,7 @@ export const TOUR_STEPS: TourStep[] = [
     rota: '/banca',
     alvos: ['[data-tour="banca-configurar"]', '[data-tour="banca-resumo"]'],
     resumo: 'Informe o valor que você possui disponível para suas apostas. A PickIA utiliza essa informação para acompanhar sua evolução e calcular seus resultados.',
-    corpo: (
-      <div className="space-y-3">
-        <Etiqueta>Exemplo</Etiqueta>
-        <Linhas itens={[['Banca inicial', 'R$ 1.000,00']]} />
-        <p className="text-xs text-ink-2 leading-relaxed">
-          A banca serve como referência para acompanhar lucro, prejuízo, ROI e a evolução
-          dos seus resultados.
-        </p>
-        <Recado>
-          A banca cadastrada aqui não representa dinheiro depositado na plataforma. A
-          PickIA não recebe, não guarda e não movimenta o seu dinheiro. O valor é apenas
-          o número de referência do seu acompanhamento.
-        </Recado>
-      </div>
-    ),
+    corpo: <PassoBanca />,
   },
   {
     id: 'picks',
@@ -207,8 +338,7 @@ export const TOUR_STEPS: TourStep[] = [
             [Search, 'Você analisa'],
             [ExternalLink, 'Você acessa sua casa de apostas'],
             [Ticket, 'Você realiza a aposta'],
-            [Undo2, 'Você volta para a PickIA'],
-            [ClipboardCheck, 'Você registra o pick'],
+            [ClipboardCheck, 'Você registra o pick na PickIA'],
           ]}
         />
         <Recado>
@@ -243,10 +373,6 @@ export const TOUR_STEPS: TourStep[] = [
           A odd já vem preenchida com a do pick e você ajusta se apostou em outra. As
           unidades viram reais pelo valor de unidade da sua banca, e a IA sugere quantas
           usar.
-        </p>
-        <p className="text-xs text-ink-2 leading-relaxed">
-          Esse registro permite que a PickIA acompanhe o desempenho da sua aposta e
-          atualize seus resultados.
         </p>
       </div>
     ),
@@ -310,13 +436,23 @@ export const TOUR_STEPS: TourStep[] = [
   },
 ]
 
-/* `constantes.ts` existe para o provider saber o total sem importar este
-   arquivo (ver o comentário lá). Os dois números têm que continuar iguais, e
-   `TOUR_STEPS.length` é `number` para o TypeScript, então a conferência só pode
-   ser em tempo de execução. Roda uma vez, no import, e some do build de
-   produção junto com o `if`. */
-if (import.meta.env.DEV && TOUR_STEPS.length !== TOTAL_PASSOS) {
-  console.warn(
-    `[onboarding] TOTAL_PASSOS vale ${TOTAL_PASSOS} mas o roteiro tem ${TOUR_STEPS.length} passos.`,
-  )
+/** O roteiro desta conta. `ctx` vem congelado do provider. */
+export function passosDoTour(ctx: ContextoTour): TourStep[] {
+  return TOUR_STEPS.filter(p => !p.mostrar || p.mostrar(ctx))
+}
+
+/* Os dois arquivos contam os mesmos passos: `constantes.ts` existe para o
+   provider saber o total sem importar este aqui (ver o comentário lá). Se a
+   conta divergir, o "N de M" do balão mente. Roda uma vez, no import, e some do
+   build de produção junto com o `if`. */
+if (import.meta.env.DEV) {
+  const cheio: ContextoTour = { emailPendente: true, trialNaMesa: true }
+  const enxuto: ContextoTour = { emailPendente: false, trialNaMesa: false }
+  if (
+    passosDoTour(cheio).length !== totalDePassos(cheio) ||
+    passosDoTour(enxuto).length !== totalDePassos(enxuto) ||
+    TOUR_STEPS.length !== MAX_PASSOS
+  ) {
+    console.warn('[onboarding] o roteiro e as constantes discordam do total de passos.')
+  }
 }

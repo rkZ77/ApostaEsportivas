@@ -1,7 +1,8 @@
 """Onboarding interativo · o estado do tour mora na conta (21/08/2026).
 
-O tour de sete passos abre sozinho UMA vez, no primeiro acesso depois do
-cadastro, e nunca mais. A pergunta "esta pessoa já viu?" é da conta e não do
+O tour abre sozinho UMA vez, no primeiro acesso depois do cadastro, e nunca
+mais. Sao 7 passos, ou 8 quando a conta ainda tem os 2 dias de VIP esperando a
+confirmacao do e-mail -- por isso o backend valida o TETO, nao um numero fixo. A pergunta "esta pessoa já viu?" é da conta e não do
 navegador, então quem responde é `users.tutorial_status` · com localStorage,
 sair e entrar de novo, trocar de aparelho ou abrir numa aba anônima devolviam o
 tour para quem já tinha passado por ele.
@@ -277,14 +278,42 @@ def test_falha_de_escrita_faz_rollback(monkeypatch, usuario):
 
 
 def test_o_front_e_o_back_contam_os_mesmos_passos():
-    """O roteiro tem sete passos, e o teto do PUT sai daqui."""
+    """O teto do PUT e o maior roteiro possivel tem que ser o mesmo numero.
+
+    O tour tem 7 passos fixos mais o de confirmar e-mail, que so' entra pra quem
+    ainda tem trial na mesa. Se o backend validar 7 e a tela mandar o indice 7
+    (oitavo passo), o PUT volta 422 e a posicao para de ser salva no meio do
+    tour, sem erro visivel na tela.
+    """
     import pathlib
 
     constantes = (
         pathlib.Path(__file__).resolve().parents[2]
         / "frontend" / "src" / "components" / "onboarding" / "constantes.ts"
     ).read_text(encoding="utf-8")
-    assert f"TOTAL_PASSOS = {TUTORIAL_TOTAL_STEPS}" in constantes
+    assert f"MAX_PASSOS = {TUTORIAL_TOTAL_STEPS}" in constantes
+    # E o piso: os passos que TODA conta ve.
+    assert "PASSOS_FIXOS = 7" in constantes
+
+
+def test_o_passo_do_email_so_entra_pra_quem_tem_trial_esperando():
+    """O 8o passo e' condicional, e a condicao mora num lugar so.
+
+    Ele oferece os 2 dias de VIP em troca de confirmar o e-mail. Pra quem ja
+    confirmou, ou ja gastou o trial, seria uma tela pedindo uma coisa que nao
+    muda nada. `passoDoEmailEntra` e' usado pelo roteiro (pra montar a lista) e
+    pelo provider (pra contar) -- duas copias dessa condicao divergem no
+    primeiro ajuste.
+    """
+    import pathlib
+
+    constantes = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "frontend" / "src" / "components" / "onboarding" / "constantes.ts"
+    ).read_text(encoding="utf-8")
+    assert "export function passoDoEmailEntra" in constantes
+    assert "ctx.emailPendente && ctx.trialNaMesa" in constantes
+    assert "PASSOS_FIXOS + (passoDoEmailEntra(ctx) ? 1 : 0)" in constantes
 
 
 def test_estados_possiveis_sao_so_esses_tres():

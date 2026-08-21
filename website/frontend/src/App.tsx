@@ -4,7 +4,7 @@ import Spinner from './components/ui/Spinner'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
-import { OnboardingProvider } from './context/OnboardingContext'
+import { OnboardingProvider, useOnboarding } from './context/OnboardingContext'
 import TopProgressBar from './components/TopProgressBar'
 import { useWebMCP } from './hooks/useWebMCP'
 
@@ -31,12 +31,26 @@ const UpdateBanner     = lazy(() => import('./components/UpdateBanner'))
 const ErrorToast       = lazy(() => import('./components/ErrorToast'))
 const PushPromptBanner = lazy(() => import('./components/PushPromptBanner'))
 const VerifyEmailBanner = lazy(() => import('./components/VerifyEmailBanner'))
+const PlanUpsellToast  = lazy(() => import('./components/PlanUpsellToast'))
 const GlobalModals     = lazy(() => import('./components/GlobalModals'))
-/* Mesmo motivo dos de cima, e mais um: o tour é visto UMA vez na vida da conta.
-   Quem já passou por ele não deve continuar baixando o roteiro dos sete passos
-   em toda visita. O provider (que decide se abre) fica no chunk principal e não
-   custa quase nada; o overlay só desce quando o tour realmente vai abrir. */
+/*
+ * Mesmo motivo dos de cima, e mais um: o tour é visto UMA vez na vida da conta.
+ *
+ * Diferente dos outros, este NÃO é renderizado sempre (ver OnboardingSlot mais
+ * abaixo). `lazy()` só busca o chunk quando o componente é montado de verdade,
+ * então deixá-lo montado o tempo todo faria toda visita, de todo mundo, baixar
+ * o roteiro inteiro para nada. Quem vai ver o tour recebe o chunk antes da hora
+ * mesmo assim: o provider dispara o import assim que sabe que o tour está
+ * pendente.
+ */
 const OnboardingTour   = lazy(() => import('./components/onboarding/OnboardingTour'))
+
+/** Monta o overlay só quando o tour está de fato aberto. */
+function OnboardingSlot() {
+  const { aberto } = useOnboarding()
+  if (!aberto) return null
+  return <OnboardingTour />
+}
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -190,11 +204,12 @@ export default function App() {
             <ErrorToast />
             <PushPromptBanner />
             <VerifyEmailBanner />
+            <PlanUpsellToast />
             <GlobalModals />
             {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os
                 passos (banca, picks, banca de novo) e ali dentro ele seria
                 desmontado junto com a página que sai. */}
-            <OnboardingTour />
+            <OnboardingSlot />
           </Suspense>
 
           <RouteErrorBoundary>

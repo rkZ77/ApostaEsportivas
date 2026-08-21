@@ -5,6 +5,8 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { backdropFade, dialogScale } from '../lib/motion'
 import api from '../services/api'
 import { useAuth } from '../context/AuthContext'
+import { useOnboarding } from '../context/OnboardingContext'
+import { EVENTO_CONFIGURAR_BANCA } from '../components/onboarding/constantes'
 import PageShell from '../components/PageShell'
 import ProfitChart from '../components/ProfitChart'
 import SuggestionDetail from '../components/SuggestionDetail'
@@ -190,6 +192,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
 export default function Banca() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { retomar: retomarTour } = useOnboarding()
 
   const [data,    setData]    = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -222,7 +225,31 @@ export default function Banca() {
     setShowSetup(false)
     setData((d: any) => d ? { ...d, bankroll_start: start, unit_value: unitValue } : d)
     load(period)
+    // Configurou pelo tour: o tour volta já no passo seguinte, porque o passo
+    // da banca acabou de ser cumprido de verdade. Fora do tour não faz nada.
+    retomarTour(true)
   }
+
+  /*
+   * O tour pedindo o formulário DE VERDADE.
+   *
+   * O passo da banca tem um botão "Configurar minha banca agora" que abre este
+   * mesmo SetupModal, em vez de mandar a pessoa anotar mentalmente para fazer
+   * depois. Chega por evento de janela porque quem dispara vive num portal no
+   * body e não enxerga o estado desta página.
+   *
+   * O `retomarTour()` da limpeza cobre o caminho de fuga: se a pessoa sair de
+   * /banca com o tour pausado (voltar do navegador, clicar em outro link), o
+   * tour volta a desenhar em vez de ficar invisível para sempre.
+   */
+  useEffect(() => {
+    const abrir = () => setShowSetup(true)
+    window.addEventListener(EVENTO_CONFIGURAR_BANCA, abrir)
+    return () => {
+      window.removeEventListener(EVENTO_CONFIGURAR_BANCA, abrir)
+      retomarTour()
+    }
+  }, [retomarTour])
 
   const pnlColor = (v: number | null) =>
     v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
@@ -296,7 +323,7 @@ export default function Banca() {
           current={{ start: data?.bankroll_start ?? 100, unitValue: data?.unit_value ?? 1 }}
           locked={data?.can_configure === false}
           onSave={handleSave}
-          onClose={() => setShowSetup(false)}
+          onClose={() => { setShowSetup(false); retomarTour() }}
           onWithdraw={() => navigate('/banca/saque')}
         />
       )}

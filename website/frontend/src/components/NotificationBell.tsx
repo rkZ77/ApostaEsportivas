@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AnimatePresence, motion } from 'framer-motion'
 import {
-  Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Lock, MinusCircle, Radio, TimerReset, X, XCircle, Zap,
+  Bell, BellOff, CalendarCheck, CheckCheck, CheckCircle2, Crown, Lock, MinusCircle, Radio, TimerReset, X, XCircle, Zap,
 } from 'lucide-react'
 import { useNotifications, type AppNotification } from '../context/NotificationContext'
 import { backdropFade, popIn, sheetUp } from '../lib/motion'
@@ -25,6 +25,9 @@ function timeAgo(iso: string | null): string {
 function NotificationIcon({ n }: { n: AppNotification }) {
   const base = 'w-4 h-4 shrink-0'
   if (n.type === 'monthly_close') return <CalendarCheck className={`${base} text-yellow-400`} />
+  /* Mesma coroa da Navbar e do PlanBadge: o convite de plano fala o mesmo
+     vocabulário visual do produto que ele vende. */
+  if (n.type === 'plan_upsell')   return <Crown className={`${base} text-yellow-400`} />
   if (n.type === 'new_picks')     return <Zap className={`${base} text-green-400`} />
   if (n.type === 'pick_live')     return <Radio className={`${base} text-red-400`} />
   /* Âmbar e não vermelho: vencimento é prazo, não perda. O vermelho aqui já

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { Mail, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
+import { useOnboarding } from '../context/OnboardingContext'
 import api from '../services/api'
 import { toastUp } from '../lib/motion'
 
@@ -32,6 +33,17 @@ function isSnoozed(): boolean {
 
 export default function VerifyEmailBanner() {
   const { user } = useAuth()
+  /*
+   * Espera o tour de boas-vindas sair da frente.
+   *
+   * Este aviso é `z-[9990]` e o tour é `z-[80]`, então ele pulava na frente do
+   * tutorial no primeiro acesso · que é exatamente o momento em que os dois
+   * disputam. E não some a mensagem: enquanto o tour está aberto, quem convida
+   * a confirmar o e-mail é o passo "Confirme seu e-mail e ganhe 2 dias de VIP",
+   * com o mesmo botão de reenviar. Fechado o tour, este aviso volta ao normal.
+   */
+  const { aberto: tourAberto, pendente: tourPendente, carregado: tourCarregado } = useOnboarding()
+  const tourNaFrente = tourAberto || !tourCarregado || tourPendente
   const [visible, setVisible] = useState(false)
   const [sending, setSending] = useState(false)
   const [sent, setSent]       = useState(false)
@@ -46,10 +58,11 @@ export default function VerifyEmailBanner() {
     if (!user) { setVisible(false); return }
     if (user.email_verified !== false) { setVisible(false); return }
     if (!trialNaMesa) { setVisible(false); return }
+    if (tourNaFrente) { setVisible(false); return }
     if (isSnoozed()) return
     const t = setTimeout(() => setVisible(true), 1200)
     return () => clearTimeout(t)
-  }, [user?.id, user?.email_verified, trialNaMesa])
+  }, [user?.id, user?.email_verified, trialNaMesa, tourNaFrente])
 
   const reenviar = async () => {
     setSending(true)
