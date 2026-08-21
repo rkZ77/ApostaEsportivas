@@ -10,6 +10,7 @@ from auth_utils import get_current_user, get_current_user_optional, require_vip,
 from routers.banca import _compute_bankroll_current
 from routers.live import _stat_for_market, maybe_resolve_pending
 import market_form
+from settlement_bridge import settlement
 from stake_plan import STAKE_PADRAO
 
 logger = logging.getLogger(__name__)
@@ -2425,8 +2426,15 @@ def _pernas_de_pick_simples(cur, tabela: str, col_casa: str, col_fora: str,
     # O arbitro sai da fixture e, se ela nao existir mais, de match_statistics
     # (registro permanente, sem FK -- mesmo motivo pelo qual routers/public.py
     # le liga de la'). Sem ele o mercado de cartoes perde a serie de quem apita.
+    # `player_id` so existe em picks_goleiros. Vem como NULL nas outras
+    # tabelas pra que _series_da_perna possa decidir a fonte da serie com um
+    # `if` so, em vez de um ramo por tipo de pick.
+    coluna_jogador = ("p.player_id, p.player_name"
+                      if tabela == "picks_goleiros"
+                      else "NULL::int AS player_id, NULL::text AS player_name")
     cur.execute(f"""
         SELECT p.fixture_id, p.market, p.line, p.market_type,
+               {coluna_jogador},
                COALESCE(p.home_team_id, f.home_team_id) AS home_team_id,
                COALESCE(p.away_team_id, f.away_team_id) AS away_team_id,
                p.{col_casa} AS home_team, p.{col_fora} AS away_team,
@@ -2568,7 +2576,8 @@ _COLUNAS_DA_SERIE = """
         ms.home_fouls, ms.away_fouls,
         ms.home_shots_on, ms.away_shots_on,
         ms.home_total_shots, ms.away_total_shots,
-        ms.home_offsides, ms.away_offsides
+        ms.home_offsides, ms.away_offsides,
+        ms.home_goalkeeper_saves, ms.away_goalkeeper_saves
 """
 
 
@@ -2655,6 +2664,103 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
     return [dict(r) for r in cur.fetchall()]
 
 
+def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
+    """Serie de um prop de JOGADOR (hoje so' defesas de goleiro).
+
+    POR QUE NAO DA' PRA REUSAR A SERIE DE TIME AQUI
+    ----------------------------------------------
+    "Defesas do goleiro Warleson · 2 ou mais" e' uma linha sobre UMA pessoa, e
+    a folha de match_statistics guarda o total do TIME (os dois goleiros, se
+    houve substituicao). Medido contra os jogos reais: a serie de time devolvia
+    media 5.17 defesas onde a linha do pick era 1.5, e pintava 6 de 6 verdes.
+    Numero errado numa tela que existe pra ser conferida e' pior que tela sem
+    numero -- e era exatamente pra la que o card ia se a serie de time
+    respondesse por este mercado.
+
+    A fonte certa ja esta no banco: `player_match_stats.saves`, a mesma que a
+    liquidacao do pick usa (routers/live.py, bloco DEFESAS DE GOLEIRO). Serie e
+    resultado passam a ler a mesma coluna, entao o grafico nao pode contradizer
+    o GREEN/RED do proprio pick.
+
+    Nao ha chamada de API aqui: a coleta ja gravou essas linhas.
+    """
+    player_id = perna.get("player_id")
+    if not player_id:
+        return None
+
+    cur.execute("""
+        SELECT fixture_id, match_date, saves, team_name
+          FROM player_match_stats
+         WHERE player_id = %s
+           AND saves IS NOT NULL
+           AND (%s IS NULL OR fixture_id <> %s)
+         ORDER BY match_date DESC
+         LIMIT %s
+    """, (player_id, perna.get("fixture_id"), perna.get("fixture_id"), limit))
+    jogos = [dict(r) for r in cur.fetchall()]
+    if not jogos:
+        return None
+
+    # A linha sai do mesmo parser que grada o pick (settlement.parse_line), nao
+    # de um regex local. "2 ou mais defesas" vira over 1.5 la dentro, e e' esse
+    # numero que precisa atravessar o grafico.
+    parsed = settlement.parse_line(perna.get("line"))
+    linha, op = parsed["value"], (parsed["op"] or "over")
+    if linha is None:
+        return None
+
+    itens = []
+    for j in jogos:
+        valor = float(j["saves"])
+        resultado, _factor = settlement.settle_over_under(valor, linha, op)
+        itens.append({
+            "fixture_id": j["fixture_id"],
+            "match_date": j["match_date"].isoformat() if hasattr(j["match_date"], "isoformat") else j["match_date"],
+            "value": valor,
+            "result": resultado,
+            # Prop de jogador nao tem "mando" que mude a leitura do contador ·
+            # sao as defesas dele, jogue onde jogar.
+            "is_home": None,
+            "opponent": None,
+        })
+
+    # `op` entra porque frase_da_serie conjuga a partir dele ("passou de" vs
+    # "ficou abaixo de"). Sem ele a frase volta None e a serie fica muda.
+    serie = {"label": "Defesas", "line": linha, "op": op, "matches": itens,
+             **market_form.resumo(itens)}
+    if not serie["resolved"]:
+        return None
+    # "goleiro Fulano" e nao so' o nome: frase_da_serie prefixa "O ", e "O
+    # Lucas Arcanjo" soa errado onde "O goleiro Lucas Arcanjo" soa certo.
+    nome = perna.get("player_name") or "goleiro"
+    serie["frase"] = market_form.frase_da_serie(f"goleiro {nome}", serie)
+
+    # MESMO FORMATO da perna de time (`teams` com uma serie dentro). O card nao
+    # ganha um ramo novo pra prop de jogador: o que muda e' de onde o numero
+    # veio, nao como ele e' desenhado.
+    return {
+        "fixture_id": perna.get("fixture_id"),
+        "market": perna.get("market"),
+        "line": perna.get("line"),
+        "home_team": perna.get("home_team"),
+        "away_team": perna.get("away_team"),
+        "label": serie["label"],
+        "line_value": serie["line"],
+        "op": op,
+        "escopo": "jogador",
+        "teams": [{
+            "team_id": None,
+            "team": nome,
+            "side": None,
+            "amostra_curta": len(itens) < limit,
+            "amostra_pedida": limit,
+            **serie,
+        }],
+        # Arbitro nao entra: ele nao e' causa de defesa de goleiro.
+        "referee": None,
+    }
+
+
 def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
     """Uma serie por TIME dentro de uma perna, ou None se nao houver o que ver.
 
@@ -2667,6 +2773,11 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
     jogos que entram na serie -- mandante so' com jogos em casa, visitante so'
     com jogos fora. Ver _jogos_do_time.
     """
+    # Prop de jogador antes de qualquer coisa: a serie dele nao sai da folha
+    # do time, e deixar cair no caminho de baixo mostraria o numero errado.
+    if perna.get("player_id"):
+        return _serie_do_jogador(cur, perna, limit)
+
     escopo = market_form.escopo_do_mercado(perna.get("market"))
     alvos = []
     if escopo == "home":

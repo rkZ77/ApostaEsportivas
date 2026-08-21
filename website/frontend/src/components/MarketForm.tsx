@@ -74,10 +74,13 @@ interface Serie {
 }
 
 interface TeamSerie extends Serie {
-  team_id: number
+  /** null em prop de JOGADOR (defesas de goleiro): a série é da pessoa, não
+   *  de um time, e não há escudo nem mando pra mostrar. */
+  team_id: number | null
   team: string | null
-  /** Mando deste time na partida do pick · e de todos os jogos da série. */
-  side: 'home' | 'away'
+  /** Mando deste time na partida do pick, e de todos os jogos da série.
+   *  null em prop de jogador: as defesas dele são as dele, jogue onde jogar. */
+  side: 'home' | 'away' | null
 }
 
 interface RefereeSerie extends Serie {
@@ -245,11 +248,13 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
 
       {leg.teams.map(t => (
         <Grafico
-          key={`${t.team_id}-${t.side}`}
+          key={`${t.team_id ?? t.team}-${t.side ?? 'jogador'}`}
           titulo={t.team ?? 'Time'}
-          contexto={t.side === 'home' ? 'em casa' : 'fora'}
-          prefixo={t.side === 'home' ? 'x' : 'em'}
-          logoId={t.team_id}
+          /* Sem mando não existe "em casa"/"fora" pra dizer, e inventar um dos
+             dois descreveria a série errado · prop de jogador cai aqui. */
+          contexto={t.side === 'home' ? 'em casa' : t.side === 'away' ? 'fora' : ''}
+          prefixo={t.side === 'home' ? 'x' : t.side === 'away' ? 'em' : ''}
+          logoId={t.team_id ?? undefined}
           serie={t}
           teto={teto}
         />
