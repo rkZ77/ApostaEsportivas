@@ -1,9 +1,10 @@
 import { BrowserRouter, Routes, Route, Navigate, useNavigate, useLocation } from 'react-router-dom'
-import { lazy, Suspense, Component, ReactNode, useEffect, useCallback } from 'react'
+import { lazy, Suspense, Component, ReactNode, useCallback } from 'react'
 import Spinner from './components/ui/Spinner'
 import { HelmetProvider } from 'react-helmet-async'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { NotificationProvider } from './context/NotificationContext'
+import { OnboardingProvider } from './context/OnboardingContext'
 import TopProgressBar from './components/TopProgressBar'
 import { useWebMCP } from './hooks/useWebMCP'
 
@@ -31,6 +32,11 @@ const ErrorToast       = lazy(() => import('./components/ErrorToast'))
 const PushPromptBanner = lazy(() => import('./components/PushPromptBanner'))
 const VerifyEmailBanner = lazy(() => import('./components/VerifyEmailBanner'))
 const GlobalModals     = lazy(() => import('./components/GlobalModals'))
+/* Mesmo motivo dos de cima, e mais um: o tour é visto UMA vez na vida da conta.
+   Quem já passou por ele não deve continuar baixando o roteiro dos sete passos
+   em toda visita. O provider (que decide se abre) fica no chunk principal e não
+   custa quase nada; o overlay só desce quando o tour realmente vai abrir. */
+const OnboardingTour   = lazy(() => import('./components/onboarding/OnboardingTour'))
 
 // Cada página vira chunk separado · só baixa quando o usuário navega para ela
 const Login          = lazy(() => import('./pages/Login'))
@@ -135,19 +141,20 @@ function PublicRoute({ children }: { children: JSX.Element }) {
   return <Navigate to="/picks" replace />
 }
 
-// Redireciona apenas usuários recém-cadastrados para /como-funciona
-function FirstLoginRedirect() {
-  const { user } = useAuth()
-  const navigate = useNavigate()
-  useEffect(() => {
-    if (!user) return
-    if (localStorage.getItem('pickia_just_registered')) {
-      localStorage.removeItem('pickia_just_registered')
-      navigate('/como-funciona', { replace: true })
-    }
-  }, [user?.id])
-  return null
-}
+/*
+ * Recém-cadastrado ia direto para /como-funciona.
+ *
+ * Saiu em 2026-08-21, quando o onboarding interativo entrou: quem acabou de se
+ * cadastrar cai em /picks e o tour abre em cima da tela de verdade, apontando
+ * para os componentes reais. Empurrar a pessoa antes disso para uma página de
+ * texto era um segundo onboarding disputando o mesmo primeiro minuto, e ela
+ * voltava para /picks para receber o tour de qualquer forma.
+ *
+ * A página continua existindo e continua no menu · o que ela deixou de ser é
+ * obrigatória. Quem decide se o tour abre agora é o servidor
+ * (users.tutorial_status), não uma chave de localStorage que sumia ao trocar de
+ * navegador. Ver context/OnboardingContext.tsx.
+ */
 
 /*
  * Ferramentas WebMCP. Importado no topo por ser código pequeno e sem
@@ -166,11 +173,11 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <NotificationProvider>
+        <OnboardingProvider>
           {/* Fora do <Routes> de propósito: precisa sobreviver à troca de rota
               pra conseguir medi-la. Dentro, ela seria desmontada junto com a
               página que está saindo. */}
           <TopProgressBar />
-          <FirstLoginRedirect />
           <FerramentasDeAgente />
 
           {/* Sobreposições · fallback nulo de propósito. Nenhuma delas participa
@@ -184,6 +191,10 @@ export default function App() {
             <PushPromptBanner />
             <VerifyEmailBanner />
             <GlobalModals />
+            {/* Precisa ficar fora do <Routes>: o tour troca de rota entre os
+                passos (banca, picks, banca de novo) e ali dentro ele seria
+                desmontado junto com a página que sai. */}
+            <OnboardingTour />
           </Suspense>
 
           <RouteErrorBoundary>
@@ -220,6 +231,7 @@ export default function App() {
               </Routes>
             </Suspense>
           </RouteErrorBoundary>
+        </OnboardingProvider>
         </NotificationProvider>
       </AuthProvider>
     </BrowserRouter>

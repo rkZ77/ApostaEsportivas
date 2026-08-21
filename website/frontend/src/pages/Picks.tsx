@@ -6,6 +6,7 @@ import api from '../services/api'
 import { sinalizarNavegacao } from '../services/progressBus'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
+import { useOnboarding } from '../context/OnboardingContext'
 import SuggestionCard from '../components/SuggestionCard'
 import ApostaModal from '../components/ApostaModal'
 import PageShell from '../components/PageShell'
@@ -472,6 +473,9 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       className={`pick-card group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
+      /* Mesma âncora do card VIP. Este vem antes na página e aparece para
+         qualquer plano, então é ele que o tour costuma destacar. */
+      data-tour="pick-card"
     >
       {/* Header · MESMA anatomia do card VIP (SuggestionCard).
           Aqui era tudo desenhado a mao: "Pick do Dia" + badge-free em vez do
@@ -1727,6 +1731,9 @@ export default function Picks() {
   const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
   const canSeeVip = isVip || isAdmin
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
+  // Só para não empilhar sobreposição: enquanto o tour de boas-vindas ainda
+  // pode abrir, o convite de configurar banca espera a vez (ver abaixo).
+  const { pendente: tourPendente, carregado: tourCarregado } = useOnboarding()
 
   const [tab, setTab]               = useState<Tab>('hoje')
 
@@ -1836,6 +1843,7 @@ export default function Picks() {
   const [alavCloseMsg, setAlavCloseMsg] = useState('')
   const [bancaSummary, setBancaSummary] = useState<{ has_banca: boolean; bankroll_current: number; unit_value: number } | null>(null)
   const [showBancaModal, setShowBancaModal] = useState(false)
+  const [semBanca, setSemBanca] = useState(false)
 
   const [quickStats, setQuickStats] = useState<any>(null)
   const [quickStatsPronto, setQuickStatsPronto] = useState(false)
@@ -1955,11 +1963,28 @@ export default function Picks() {
   useEffect(() => {
     api.get('/banca/summary').then(r => {
       setBancaSummary(r.data)
-      if (!r.data.has_banca && canSeeVip && !sessionStorage.getItem('pickia_banca_modal_shown')) {
-        setShowBancaModal(true)
-      }
+      setSemBanca(!r.data.has_banca)
     }).catch(() => {})
   }, [])
+
+  /*
+   * Convite de configurar banca · espera o tour.
+   *
+   * O onboarding tem um passo inteiro sobre a banca e abre em cima desta mesma
+   * tela. Os dois juntos eram duas caixas escuras empilhadas no primeiro
+   * minuto de quem acabou de se cadastrar. Este convite fica para a visita
+   * seguinte, que é quando ele volta a ser útil.
+   *
+   * `tourCarregado` é o que impede a corrida: sem ele, o modal abria no
+   * primeiro quadro (quando ainda não se sabe se o tour vai abrir) e o tour
+   * chegava por cima meio segundo depois.
+   */
+  useEffect(() => {
+    if (!semBanca || !canSeeVip) return
+    if (!tourCarregado || tourPendente) return
+    if (sessionStorage.getItem('pickia_banca_modal_shown')) return
+    setShowBancaModal(true)
+  }, [semBanca, canSeeVip, tourCarregado, tourPendente])
 
 
   const prefetchAba = useCallback((t: Tab) => {
@@ -2225,7 +2250,10 @@ export default function Picks() {
 
         <AnimatePresence mode="wait">
         {tab === 'hoje' && (
-          <motion.div key="hoje" variants={tabFade} initial="hidden" animate="visible" exit="exit">
+          /* `data-tour` é o destaque de reserva do onboarding: quando não há
+             card nenhum publicado no dia, o tour ilumina a área onde eles
+             aparecem em vez de desenhar um card de exemplo. */
+          <motion.div key="hoje" data-tour="picks-area" variants={tabFade} initial="hidden" animate="visible" exit="exit">
             {!topoPronto ? <PickLoading /> : todayError ? (
             <div className="card p-10 text-center">
               <p className="text-ink-2 font-semibold mb-1">Erro ao carregar picks</p>

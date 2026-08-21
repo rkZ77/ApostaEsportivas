@@ -51,7 +51,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const register = async (name: string, email: string, password: string, phone: string, username?: string, ref_code?: string, accepted_terms?: boolean, captcha_token?: string): Promise<User> => {
     const { data } = await api.post('/auth/register', { name, email, password, phone, username, ref_code, accepted_terms, captcha_token })
-    localStorage.setItem('pickia_just_registered', '1')
+    // `pickia_just_registered` saiu em 2026-08-21 junto com o redirecionamento
+    // que ela alimentava (ver App.tsx). Quem responde "esta pessoa é nova aqui?"
+    // agora é o servidor, em users.tutorial_status · a chave local perdia a
+    // resposta ao trocar de navegador e mentia ao ser copiada entre abas.
     _save(data.user)
     criouConta()
     return data.user

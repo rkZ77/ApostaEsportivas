@@ -284,6 +284,10 @@ function SuggestionCard({
          Errar o alvo entre eles abria uma tela cheia por engano. */
       className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
+      /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
+         que existir na tela, e não um desenho de card. Ver
+         components/onboarding/steps.tsx. */
+      data-tour="pick-card"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-2 px-5 pt-4 pb-3 border-b border-line/60">
