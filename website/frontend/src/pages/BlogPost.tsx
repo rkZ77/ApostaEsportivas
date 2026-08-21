@@ -1,10 +1,14 @@
 import { lazy, Suspense, useMemo } from 'react'
-import { useParams, Navigate } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import { Helmet } from 'react-helmet-async'
 import { ArrowLeft } from 'lucide-react'
 import PageShell from '../components/PageShell'
 import { Button } from '../components/ui'
 import { getPostMeta, getPostLoader } from '../blog/registry'
+
+/* Mesmo lazy do App.tsx de proposito: assim os dois compartilham um chunk
+   só e o 404 não viaja dentro do bundle do blog. */
+const NotFound = lazy(() => import('./NotFound'))
 
 function formatDate(iso: string): string {
   const [year, month, day] = iso.split('-')
@@ -21,8 +25,25 @@ export default function BlogPost() {
     return lazy(() => loader().then((Component) => ({ default: Component })))
   }, [slug])
 
+  /*
+   * Link de post que não existe mostra a página de erro, e não um empurrão
+   * silencioso para /blog.
+   *
+   * O redirect fazia o leitor cair numa lista sem entender por quê: ele clicou
+   * num artigo, apareceu no índice e ficou procurando o texto que nunca
+   * existiu. Pior no caso mais comum · slug que mudou ou post despublicado,
+   * onde o link vive fora do site (Instagram, WhatsApp) e ninguém pode
+   * corrigir.
+   *
+   * A URL quebrada permanece na barra, de propósito: é ela que a pessoa
+   * precisa ver para saber qual link avisar que está morto.
+   */
   if (!meta || !ArticleComponent) {
-    return <Navigate to="/blog" replace />
+    return (
+      <Suspense fallback={null}>
+        <NotFound />
+      </Suspense>
+    )
   }
 
   const url = `https://pickia.com.br/blog/${meta.slug}`

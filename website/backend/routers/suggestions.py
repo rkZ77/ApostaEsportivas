@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
+from fastapi.concurrency import run_in_threadpool
 from typing import Optional
 import json
 import logging
@@ -1087,17 +1088,35 @@ async def get_standings_for_fixture(
     """Classificação da liga do jogo · direto da API-Football (sem cache)."""
     from futebol_agent.api_football import get_standings
 
-    conn = get_connection()
-    cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
-    try:
-        cur.execute(
-            "SELECT league_id, home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
-            (fixture_id,),
-        )
-        fx = cur.fetchone()
-    finally:
-        cur.close()
-        conn.close()
+    # A CONSULTA VAI PRO THREADPOOL, E NAO E' DETALHE DE ESTILO.
+    #
+    # Esta rota e' `async`, entao o corpo dela roda NO EVENT LOOP. psycopg2 e'
+    # bloqueante: com WEB_CONCURRENCY=1 (ver Dockerfile), o processo inteiro
+    # ficava parado enquanto esta consulta ia e voltava do Supabase. Nao era so'
+    # esta tela ficando lenta -- era o site todo, incluindo rotas que nem tocam
+    # o banco. Medido de fora em 2026-08-20: /api/version, que so' devolve uma
+    # string, chegou a 4,7s, e /public/results a 11,2s; a busca do admin passava
+    # dos 15s do timeout do axios e virava "Sem conexao com o servidor" em
+    # vermelho, culpando a internet do usuario por uma fila do servidor.
+    #
+    # Rota sincrona (`def`) nao tem esse problema: o FastAPI ja' a joga no
+    # threadpool sozinho. Esta aqui precisa continuar `async` por causa do
+    # `await get_standings` logo abaixo, entao quem se muda e' a parte
+    # bloqueante.
+    def _ler_fixture():
+        conn = get_connection()
+        cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+        try:
+            cur.execute(
+                "SELECT league_id, home_team_id, away_team_id FROM fixtures WHERE fixture_id = %s",
+                (fixture_id,),
+            )
+            return cur.fetchone()
+        finally:
+            cur.close()
+            conn.close()
+
+    fx = await run_in_threadpool(_ler_fixture)
 
     if not fx:
         return {"groups": [], "home_team_id": None, "away_team_id": None}

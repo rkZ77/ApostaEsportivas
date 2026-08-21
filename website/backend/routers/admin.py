@@ -7,6 +7,7 @@ from collections import deque
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.concurrency import run_in_threadpool
 from pydantic import BaseModel, field_validator
 from typing import Optional
 from database import get_connection
@@ -2061,23 +2062,33 @@ async def coletar_liga(league_id: int, current_user: dict = Depends(require_admi
     NAO e' o `new_league` do script: aquele faz TRUNCATE em match_statistics/
     teams/fixtures/standings e recoleta tudo do zero.
     """
-    conn = get_connection()
-    cur = conn.cursor()
-    try:
-        cur.execute("SELECT name, temporada_iniciada FROM leagues WHERE league_id = %s",
-                    (league_id,))
-        row = cur.fetchone()
-        if not row:
-            raise HTTPException(404, "Liga nao cadastrada. Cadastre antes de coletar.")
-        nome = row["name"]
-        # So' pula o historico quando alguem marcou EXPLICITAMENTE que a
-        # temporada nao comecou. NULL (ninguem marcou) roda completo, que e' o
-        # seguro: pular por engano deixa o motor sem base pra analisar a liga,
-        # e o unico sintoma seria "essa liga nunca gera pick".
-        com_historico = row["temporada_iniciada"] is not False
-    finally:
-        cur.close()
-        conn.close()
+    # A consulta vai pro threadpool porque esta rota e' `async` e psycopg2 e'
+    # bloqueante: rodando no event loop com WEB_CONCURRENCY=1, ela segurava o
+    # processo inteiro. Ver a nota longa em
+    # suggestions.get_standings_for_fixture. A rota CONTINUA async por causa do
+    # asyncio.create_task() la' embaixo, que precisa de um loop rodando --
+    # transformar isto em `def` moveria a funcao pro threadpool, onde nao ha
+    # loop, e a coleta morreria com RuntimeError em vez de comecar.
+    def _ler_liga():
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT name, temporada_iniciada FROM leagues WHERE league_id = %s",
+                        (league_id,))
+            return cur.fetchone()
+        finally:
+            cur.close()
+            conn.close()
+
+    row = await run_in_threadpool(_ler_liga)
+    if not row:
+        raise HTTPException(404, "Liga nao cadastrada. Cadastre antes de coletar.")
+    nome = row["name"]
+    # So' pula o historico quando alguem marcou EXPLICITAMENTE que a temporada
+    # nao comecou. NULL (ninguem marcou) roda completo, que e' o seguro: pular
+    # por engano deixa o motor sem base pra analisar a liga, e o unico sintoma
+    # seria "essa liga nunca gera pick".
+    com_historico = row["temporada_iniciada"] is not False
 
     if _pipeline_status.get("coletar_liga", {}).get("status") == "running":
         raise HTTPException(409, "Ja ha uma coleta de liga em andamento.")
