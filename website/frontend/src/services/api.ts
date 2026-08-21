@@ -69,8 +69,24 @@ api.interceptors.response.use(
     // Falhas de rede/timeout e erros 5xx muitas vezes são engolidos por
     // `.catch(() => {})` nas telas (polling em background, stats opcionais).
     // Sem isso o usuário não sabia que algo falhou.
+    //
+    // TRÊS CAUSAS DIFERENTES, TRÊS FRASES.
+    //
+    // "Verifique sua internet" era a única resposta para qualquer falha sem
+    // `response`, e a mais comum delas não tem nada a ver com a internet de
+    // quem lê: é o timeout de 15s daqui de cima estourando porque o servidor
+    // demorou. Mandar o usuário conferir o wi-fi quando a fila é nossa faz ele
+    // procurar defeito no lugar errado · e some com o único sinal de que o
+    // site está devagar.
     if (!err.response) {
-      notifyError('Sem conexão com o servidor. Verifique sua internet.')
+      const semRede = typeof navigator !== 'undefined' && navigator.onLine === false
+      notifyError(
+        semRede
+          ? 'Você está sem internet. Reconecte e tente de novo.'
+          : err.code === 'ECONNABORTED' || err.code === 'ETIMEDOUT'
+          ? 'O servidor demorou para responder. Tente de novo em instantes.'
+          : 'Não foi possível falar com o servidor. Tente de novo em instantes.'
+      )
     } else if (err.response.status >= 500) {
       notifyError('Erro no servidor. Tente novamente em instantes.')
     }
