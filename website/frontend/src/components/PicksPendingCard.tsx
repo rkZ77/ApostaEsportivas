@@ -40,6 +40,9 @@ function hojeBR(): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
 }
 
+/** O dia de um jogo, "YYYY-MM-DD", nos dois formatos que o backend usa. */
+const diaDoJogo = (iso: string) => (iso ?? '').slice(0, 10)
+
 /**
  * "21:30" · fatiado da string, nunca por `new Date`.
  *
@@ -98,6 +101,30 @@ export default function PicksPendingCard() {
       .catch(() => setTodayCheckFailed(true))
   }, [])
 
+  /*
+   * DUAS consultas, e é de propósito.
+   *
+   * A de cima pede o DIA INTEIRO, e é dela que sai a explicação ("os N jogos de
+   * hoje já foram analisados e nenhum passou") -- essa conta é sobre o dia,
+   * não sobre a hora.
+   *
+   * Esta aqui pede "daqui pra frente", que é o padrão da rota, e é dela que sai
+   * o que a tela LISTA. Antes a lista saía do dia inteiro e por isso continuava
+   * anunciando às 22h os jogos das 15h como "sendo analisados hoje".
+   *
+   * QUEM CORTA É O SERVIDOR. Dava pra comparar `match_datetime` com o relógio
+   * do navegador, mas aí o corte dependeria do fuso de quem está lendo: o campo
+   * vem em horário de Brasília SEM fuso, e um usuário em Lisboa esconderia
+   * jogo que ainda não começou. A rota já faz esse corte contra o relógio de
+   * Brasília (ver public_next_fixtures), então a resposta dela é a definição de
+   * "ainda vai acontecer".
+   */
+  useEffect(() => {
+    api.get('/public/next-fixtures', { params: { limit: 30 } })
+      .then(r => setNextGames((r.data ?? []) as Fixture[]))
+      .catch(() => setNextGames([]))
+  }, [])
+
   useEffect(() => {
     if (todayCount !== 0) return
     api.get('/public/leagues')
@@ -108,12 +135,6 @@ export default function PicksPendingCard() {
         .filter((l: any) => l.ativa !== false)
         .map((l: any) => l.name).join(', ')))
       .catch(() => setLeagueNames(''))
-    // Sem `date`, a rota já é "daqui pra frente" e atravessa a virada do dia
-    // sozinha · dispensa as sete chamadas em paralelo que procuravam, dia a
-    // dia, o próximo com jogo.
-    api.get('/public/next-fixtures', { params: { limit: 12 } })
-      .then(r => setNextGames((r.data ?? []) as Fixture[]))
-      .catch(() => setNextGames([]))
   }, [todayCount])
 
   // Ainda checando se há jogo hoje (e não falhou) -- mostra nada por um instante,
@@ -182,8 +203,16 @@ export default function PicksPendingCard() {
    * `sem_historico` vem do backend e é conclusivo · a conta de lá é sempre
    * mais frouxa que a do motor, então quando ela condena, está condenado.
    */
-  const analisaveis   = todayGames.filter(g => !g.sem_historico)
-  const semHistorico  = todayGames.filter(g => g.sem_historico)
+  /* O que a rota "daqui pra frente" devolveu, separado por dia. `porComecar`
+     são os de HOJE que ainda não começaram; `outrosDias` é o que vem depois. */
+  const hoje          = hojeBR()
+  const aindaVem      = nextGames ?? []
+  const porComecar    = aindaVem.filter(g => diaDoJogo(g.match_datetime) === hoje)
+  const outrosDias    = aindaVem.filter(g => diaDoJogo(g.match_datetime) !== hoje)
+  const todosJaComecaram = todayGames.length > 0 && nextGames !== null && porComecar.length === 0
+
+  const analisaveis   = porComecar.filter(g => !g.sem_historico)
+  const semHistorico  = porComecar.filter(g => g.sem_historico)
   const minJogos      = todayGames.find(g => g.min_jogos)?.min_jogos ?? 5
   const nadaHojePorHistorico = todayGames.length > 0 && analisaveis.length === 0
 
@@ -253,11 +282,39 @@ export default function PicksPendingCard() {
         <div className="text-left mt-6">
           <p className="text-[10px] text-ink-4 font-semibold mb-2">
             {nadaHojePorHistorico
-              ? 'Jogos de hoje, sem histórico suficiente'
+              ? 'Jogos de hoje que ainda vão começar, sem histórico suficiente'
               : `${semHistorico.length} fora da análise, sem histórico suficiente`}
             <span className="font-normal"> (partidas do time com menos jogos / mínimo)</span>
           </p>
           <div className="space-y-1.5">{semHistorico.map(g => linhaJogo(g, true))}</div>
+        </div>
+      )}
+
+      {/*
+        Acabaram os jogos de hoje · mostra o que vem.
+
+        O rótulo diz "entram na análise no dia" de propósito: a janela do motor
+        é HOJE, então listar os jogos de amanhã como "sendo analisados" seria
+        prometer um pick que não vai sair antes de amanhecer.
+      */}
+      {todosJaComecaram && (
+        <div className="text-left mt-6">
+          <p className="text-[10px] text-ink-4 font-semibold mb-2">
+            Os jogos de hoje já começaram
+            <span className="font-normal"> · estes entram na análise no dia deles</span>
+          </p>
+          {outrosDias.length === 0 ? (
+            <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>
+          ) : (
+            <div className="space-y-3">
+              {groupByDate(outrosDias.slice(0, 8)).map(({ dateLabel, games }) => (
+                <div key={dateLabel}>
+                  <p className="text-[10px] text-ink-4 mb-1.5 capitalize">{dateLabel}</p>
+                  <div className="space-y-1.5">{games.map(g => linhaJogo(g))}</div>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>
