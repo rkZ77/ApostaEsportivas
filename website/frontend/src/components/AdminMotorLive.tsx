@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  Activity, AlertTriangle, CheckCircle2, Gavel, Play, RefreshCw, XCircle,
+  Activity, AlertTriangle, CheckCircle2, Gavel, Play, RefreshCw, Square, XCircle,
 } from 'lucide-react'
 import api from '../services/api'
 import { Spinner } from './ui'
@@ -18,8 +18,19 @@ import { Spinner } from './ui'
  * terminar, porque nada voltava a perguntar. Numa rodada que leva até 3 minutos
  * (o timeout do subprocesso) isso é a diferença entre painel e enfeite.
  *
- * O polling só existe enquanto há rodada em andamento · painel aberto e parado
- * não fica batendo no servidor.
+ * O polling existe enquanto há o que acompanhar · uma rodada avulsa em curso ou
+ * o laço contínuo ligado. Painel aberto com tudo parado não bate no servidor.
+ *
+ * DOIS MODOS, e a ordem na tela reflete qual é o normal:
+ *
+ *   contínuo   liga e fica disparando rodada atrás de rodada até alguém
+ *              desligar. É o modo de operação de verdade · a primeira passada
+ *              sobre uma partida não tem janela de ritmo pra ler (a API só dá
+ *              acumulado), quem constrói isso é a segunda e a terceira.
+ *   avulsa     uma rodada só, geralmente com --fixture, pra testar.
+ *
+ * O laço mora no processo do backend, não aqui: fechar esta página não desliga
+ * nada. Um restart do serviço, sim · e o painel diz isso em vez de fingir.
  */
 
 interface Checagem { item: string; ok: boolean; detalhe: string }
@@ -43,6 +54,13 @@ interface Stats {
   win_rate: number; profit: number; roi: number
   ev_medio: number | null; confianca_media: number | null; minuto_medio: number | null
   por_mercado?: { market_type: string; resolvidos: number; greens: number; profit: number }[]
+}
+/** Laço de rodadas sucessivas · liga e desliga no clique, nunca sozinho. */
+interface Watch {
+  ativo: boolean; iniciado_em: string | null; rodadas: number
+  falhas_seguidas: number; ultima_rodada: string | null
+  proxima_rodada_em: number | null; motivo_parada: string | null
+  intervalo_min: number | null; dry_run: boolean | null
 }
 
 const POLL_MS = 3000
@@ -72,9 +90,11 @@ const diaMes = (d?: string | null) =>
 export default function AdminMotorLive() {
   const [diag, setDiag]       = useState<Diagnostico | null>(null)
   const [run, setRun]         = useState<RunStatus | null>(null)
+  const [watch, setWatch]     = useState<Watch | null>(null)
   const [stats, setStats]     = useState<Stats | null>(null)
   const [picks, setPicks]     = useState<any[]>([])
   const [dryRun, setDryRun]   = useState(true)
+  const [intervalo, setIntervalo] = useState('8')
   const [fixture, setFixture] = useState('')
   const [maxPart, setMaxPart] = useState('')
   const [dias, setDias]       = useState<number>(PERIODOS[1].dias)
@@ -101,12 +121,14 @@ export default function AdminMotorLive() {
 
   const buscarTudo = useCallback(async () => {
     try {
-      const [d, r] = await Promise.allSettled([
+      const [d, r, w] = await Promise.allSettled([
         api.get('/live-picks/diagnostico'),
         api.get('/live-picks/run-status'),
+        api.get('/live-picks/watch-status'),
       ])
       if (d.status === 'fulfilled') setDiag(d.value.data)
       if (r.status === 'fulfilled') setRun(r.value.data)
+      if (w.status === 'fulfilled') setWatch(w.value.data)
       await buscarResultado()
     } finally {
       setCarregando(false)
@@ -115,23 +137,35 @@ export default function AdminMotorLive() {
 
   useEffect(() => { buscarTudo() }, [buscarTudo])
 
-  // Enquanto roda, pergunta de novo. Ao terminar, recarrega o que a rodada
-  // produziu e para o relógio · nenhum intervalo sobra rodando em painel parado.
+  // Pergunta de novo enquanto houver o que acompanhar · uma rodada avulsa em
+  // andamento, ou o laço contínuo ligado. Parado, nenhum intervalo sobra
+  // batendo no servidor.
+  //
+  // O laço mantém o relógio ligado mesmo entre rodadas de propósito: é a
+  // contagem regressiva pra próxima e o contador de rodadas que provam, pra
+  // quem está olhando, que ele continua de pé.
   useEffect(() => {
-    const rodando = run?.status === 'running'
-    if (!rodando) {
+    const acompanhando = run?.status === 'running' || watch?.ativo
+    if (!acompanhando) {
       if (timer.current) { clearInterval(timer.current); timer.current = null }
       return
     }
     timer.current = setInterval(async () => {
       try {
-        const { data } = await api.get('/live-picks/run-status')
-        setRun(data)
-        if (data.status !== 'running') await buscarResultado()
+        const [r, w] = await Promise.allSettled([
+          api.get('/live-picks/run-status'),
+          api.get('/live-picks/watch-status'),
+        ])
+        const rodavaAntes = run?.status === 'running'
+        if (r.status === 'fulfilled') {
+          setRun(r.value.data)
+          if (rodavaAntes && r.value.data.status !== 'running') await buscarResultado()
+        }
+        if (w.status === 'fulfilled') setWatch(w.value.data)
       } catch { /* rodada continua; erro de rede não derruba o painel */ }
     }, POLL_MS)
     return () => { if (timer.current) { clearInterval(timer.current); timer.current = null } }
-  }, [run?.status, buscarResultado])
+  }, [run?.status, watch?.ativo, buscarResultado])
 
   const rodar = async () => {
     setErro('')
@@ -161,9 +195,27 @@ export default function AdminMotorLive() {
     }
   }
 
+  const alternarWatch = async (ligar: boolean) => {
+    setErro('')
+    try {
+      await api.post('/live-picks/watch', {
+        ligar,
+        intervalo_min: Number(intervalo) || 8,
+        dry_run: dryRun,
+        max_partidas: maxPart.trim() ? Number(maxPart.trim()) : null,
+      })
+      const { data } = await api.get('/live-picks/watch-status')
+      setWatch(data)
+      if (!ligar) await buscarResultado()
+    } catch (e: any) {
+      setErro(e.response?.data?.detail || 'Falha ao mudar o acompanhamento contínuo.')
+    }
+  }
+
   if (carregando) return <div className="flex justify-center py-12"><Spinner /></div>
 
   const rodando = run?.status === 'running'
+  const emLaco  = !!watch?.ativo
 
   return (
     <div className="space-y-4">
@@ -244,9 +296,90 @@ export default function AdminMotorLive() {
         </ul>
       </div>
 
+      {/* ── Acompanhamento contínuo ───────────────────────────────────────── */}
+      {/* Vem ANTES do disparo avulso de propósito: com o motor ao vivo, a
+          rodada única é a exceção (serve pra testar um fixture), e o laço é o
+          modo normal de operar · a primeira passada sobre uma partida não tem
+          janela de ritmo pra ler, quem constrói isso é a segunda e a terceira. */}
+      <div className={`rounded-lg border p-4 ${
+        emLaco ? 'border-green-500/40 bg-green-500/[0.06]' : 'bg-surface-1 border-line'}`}>
+        <div className="flex items-start justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <h3 className="text-xs font-semibold text-ink-3 flex items-center gap-1.5">
+              {emLaco && <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />}
+              Acompanhamento contínuo
+            </h3>
+            <p className="text-[11px] text-ink-4 mt-1 leading-relaxed max-w-xl">
+              Dispara uma rodada atrás da outra no intervalo escolhido e não para sozinho ·
+              só quando você desligar. Uma passada só não constrói a janela de ritmo que o
+              motor usa, são a segunda e a terceira que fazem o modelo valer.
+            </p>
+          </div>
+          <button
+            onClick={() => alternarWatch(!emLaco)}
+            disabled={rodando && !emLaco}
+            className={`shrink-0 text-[11px] font-semibold px-4 py-2 rounded-md border transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5 ${
+              emLaco
+                ? 'border-red-500/40 text-red-300 hover:bg-red-500/10'
+                : 'border-green-500/40 text-green-300 hover:bg-green-500/10'}`}
+          >
+            {emLaco ? <><Square className="w-3 h-3" /> Desligar</> : <><Play className="w-3 h-3" /> Ligar</>}
+          </button>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2 mt-3">
+          <label className="flex items-center gap-1.5 text-[11px] text-ink-2">
+            rodar a cada
+            <input
+              value={intervalo}
+              onChange={e => setIntervalo(e.target.value.replace(/\D/g, ''))}
+              disabled={emLaco}
+              inputMode="numeric"
+              className="w-14 bg-surface-2 border border-line rounded-md px-2 py-1 text-[11px] text-ink-1 text-center disabled:opacity-40"
+            />
+            min
+          </label>
+          <span className="text-[10px] text-ink-4">mínimo 3 · abaixo disso a estatística do provedor ainda não mudou</span>
+        </div>
+
+        {emLaco ? (
+          <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {[
+              { l: 'Rodadas', v: String(watch?.rodadas ?? 0) },
+              { l: 'Desde',   v: watch?.iniciado_em ?? '·' },
+              { l: 'Última',  v: watch?.ultima_rodada ?? 'primeira em curso' },
+              {
+                l: 'Próxima em',
+                v: watch?.proxima_rodada_em == null ? 'rodando'
+                   : watch.proxima_rodada_em <= 0 ? 'agora'
+                   : `${Math.ceil(watch.proxima_rodada_em / 60)} min`,
+              },
+            ].map(x => (
+              <div key={x.l} className="bg-surface-0 rounded-md px-3 py-2 border border-line">
+                <div className="font-mono text-sm font-bold text-ink-1 truncate">{x.v}</div>
+                <div className="text-[10px] text-ink-4">{x.l}</div>
+              </div>
+            ))}
+          </div>
+        ) : watch?.motivo_parada ? (
+          /* Um laço que parou sem ninguém mandar parar é a informação mais
+             importante desta tela · sem isto, o painel só voltava a mostrar o
+             botão "Ligar" e a queda passava como se nunca tivesse acontecido. */
+          <p className="mt-3 text-[11px] text-amber-300 leading-relaxed flex items-start gap-1.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-px" />
+            Parou depois de {watch.rodadas} rodada(s) · {watch.motivo_parada}
+          </p>
+        ) : null}
+
+        <p className="mt-3 text-[10px] text-ink-4 leading-relaxed">
+          O laço vive dentro do processo do site. Um deploy ou um restart do serviço derruba ele,
+          e o painel volta a mostrar &quot;Ligar&quot; · fechar esta página, não.
+        </p>
+      </div>
+
       {/* ── Disparo ───────────────────────────────────────────────────────── */}
       <div className="bg-surface-1 border border-line rounded-lg p-4">
-        <h3 className="text-xs font-semibold text-ink-3 mb-3">Rodada</h3>
+        <h3 className="text-xs font-semibold text-ink-3 mb-3">Rodada avulsa</h3>
         <div className="flex flex-wrap items-center gap-2">
           <label className="flex items-center gap-1.5 text-[11px] text-ink-2 cursor-pointer">
             <input type="checkbox" checked={dryRun} onChange={e => setDryRun(e.target.checked)}
@@ -269,7 +402,7 @@ export default function AdminMotorLive() {
           />
           <button
             onClick={rodar}
-            disabled={rodando}
+            disabled={rodando || emLaco}
             className="text-[11px] px-3 py-1.5 rounded-md border border-line-strong text-ink-2 hover:border-ink-4 hover:text-ink-1 transition-colors disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1.5"
           >
             {rodando

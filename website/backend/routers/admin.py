@@ -626,6 +626,23 @@ _PIPELINE_POR_PICK_TYPE = {
     "alavancagem": "alavancagem", "faltas": "faltas", "goleiros": "goleiros",
 }
 
+#: Nome do mercado em portugues. `market_type` e' a chave estavel do motor
+#: (o texto de `market` varia: "Escanteios Mais/Menos", "Total de Escanteios
+#: Casa"...), entao a agregacao usa o tipo e a tela mostra este rotulo.
+MERCADO_LABEL = {
+    "corners": "Escanteios", "cards": "Cartões", "goals": "Gols",
+    "shots": "Finalizações",
+    "fouls": "Faltas", "saves": "Defesas de goleiro",
+    "offsides": "Impedimentos", "result": "Resultado",
+    "btts": "Ambas marcam", "handicap": "Handicap",
+    "corner_race": "Corrida de escanteios", "possession": "Posse de bola",
+    "shots_on_target": "Chutes no gol", "shots_on_goal": "Chutes no gol",
+    "handicap_goals": "Handicap de gols", "handicap_cards": "Handicap de cartões",
+    "handicap_corners": "Handicap de escanteios", "double_chance": "Dupla chance",
+    "outcome": "Resultado", "unknown": "Sem tipo gravado", "outros": "Sem tipo gravado",
+}
+
+
 # Status em que um modelo de fato emitiu parecer. Fora desta lista, o gate
 # falhou aberto (unavailable), nao rodou (disabled) ou bateu no teto do dia
 # (daily_limit_reached) -- o pick foi publicado sem nenhuma IA ter olhado pra
@@ -707,6 +724,7 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
 
         cur.execute("""
             SELECT pick_type, ai_provider, ai_model, ai_decision, ai_status,
+                   market, market_type, odd,
                    result, profit, clv, created_at::date AS dia
             FROM picks_ledger
             WHERE created_at >= NOW() - (%s * INTERVAL '1 day')
@@ -754,11 +772,26 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
 
         por_modelo: dict = {}
         por_pipeline: dict = {}
+        # Por MERCADO, e nao por modelo · e' a pergunta que o painel nao
+        # respondia. "Qual IA e' melhor" so' tem resposta marginal aqui (a IA
+        # nao escolhe pick, so' veta), mas "escanteio esta' dando prejuizo?"
+        # decide o que fazer com o motor amanha de manha.
+        #
+        # `todos` conta TODA perna do periodo, com parecer ou sem: e' o
+        # desempenho real do mercado. `aprovados`/`vetados` so' contam onde
+        # houve parecer, e servem pra ver se o veto acerta naquele mercado.
+        por_mercado: dict = {}
         falhas_por_status: dict = {}
         cobertura = {"pernas": len(legs), "com_parecer": 0, "sem_parecer": 0,
                      "autor_gravado": 0, "autor_inferido": 0, "autor_desconhecido": 0}
 
         for leg in legs:
+            mercado = por_mercado.setdefault(
+                leg.get("market_type") or "outros",
+                {"todos": _bucket(), "aprovados": _bucket(), "vetados": _bucket()},
+            )
+            _add(mercado["todos"], leg)
+
             status = leg.get("ai_status")
             if status and status not in _STATUS_COM_PARECER:
                 falhas_por_status[status] = falhas_por_status.get(status, 0) + 1
@@ -780,6 +813,7 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
                 cobertura["autor_inferido"] += 1
 
             lado = "vetados" if leg.get("ai_decision") == "reject" else "aprovados"
+            _add(mercado[lado], leg)
 
             modelo = por_modelo.setdefault(chave, {"aprovados": _bucket(), "vetados": _bucket()})
             _add(modelo[lado], leg)
@@ -823,10 +857,26 @@ def ai_performance(days: int = 60, current_user: dict = Depends(require_admin)):
             pipelines.append({"pick_type": pick_type, **item})
         pipelines.sort(key=lambda p: (p["pick_type"], -p["aprovados"]["resolvidos"]))
 
+        mercados = [
+            {
+                "market_type": mtype,
+                "label": MERCADO_LABEL.get(mtype, mtype),
+                "todos": _fechar(dados["todos"]),
+                "aprovados": _fechar(dados["aprovados"]),
+                "vetados": _fechar(dados["vetados"]),
+            }
+            for mtype, dados in por_mercado.items()
+        ]
+        # Ordena pelo que mais pesa no bolso, do pior pro melhor: quem abre a
+        # tela precisa ver primeiro o mercado que esta' sangrando, nao o que
+        # tem mais volume.
+        mercados.sort(key=lambda m: m["todos"]["lucro"])
+
         return {
             "days": days,
             "cobertura": cobertura,
             "modelos": modelos,
+            "por_mercado": mercados,
             "por_pipeline": pipelines,
             "falhas": [{"status": s, "n": n} for s, n in
                        sorted(falhas_por_status.items(), key=lambda kv: -kv[1])],
@@ -1477,10 +1527,11 @@ def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(requ
     try:
         # Profit em unidades, a partir da odd da tabela certa (ver _ODD_COL).
         odd_col = _ODD_COL[body.pick_type]
-        cur.execute(f"SELECT {odd_col} AS odd FROM {table} WHERE id = %s", (body.pick_id,))
+        cur.execute(f"SELECT {odd_col} AS odd, result FROM {table} WHERE id = %s", (body.pick_id,))
         row = cur.fetchone()
         if not row:
             raise HTTPException(404, "Pick não encontrado")
+        resultado_anterior = row.get("result")
 
         odd = float(row["odd"]) if row.get("odd") else None
         profit = None
@@ -1506,6 +1557,35 @@ def admin_set_pick_result(body: SetResultBody, current_user: dict = Depends(requ
             "UPDATE user_followed_picks SET result=%s WHERE pick_id=%s AND pick_type=%s",
             (result_val, body.pick_id, body.pick_type),
         )
+
+        # Sino de quem seguiu o pick · faltava exatamente aqui.
+        #
+        # A resolução automática avisa por um ponto único
+        # (routers.live::_sync_followed_result, que chama notify_pick_result),
+        # mas o carimbo manual desta rota escrevia direto no banco e pulava
+        # esse ponto. O efeito pro usuário era o pior possível: o dinheiro
+        # mudava na banca dele sem nenhum aviso de que o pick tinha sido
+        # resolvido -- e como o /admin é justamente onde se resolve o que a
+        # automação não deu conta, era o caso mais comum de todos.
+        #
+        # Voltar pra "pending" não avisa nada: não há resultado a anunciar.
+        if result_val is not None:
+            from routers.notifications import notify_pick_result
+
+            notify_pick_result(cur, body.pick_id, body.pick_type, result_val)
+
+            # CORREÇÃO de um resultado já anunciado precisa piscar de novo.
+            # create_notification preserva `read_at` de propósito (resultado
+            # revisado pelo provedor não deve reaparecer como não lido pra quem
+            # já viu), mas aqui a premissa é outra: alguém trocou GREEN por RED
+            # na mão, o saldo de quem seguiu mudou junto, e deixar isso passar
+            # em silêncio é esconder a única parte que importa.
+            if resultado_anterior and resultado_anterior != result_val:
+                cur.execute(
+                    "UPDATE notifications SET read_at = NULL WHERE dedupe_key = %s",
+                    (f"pick_result:{body.pick_type}:{body.pick_id}",),
+                )
+
         conn.commit()
         return dict(updated)
     finally:

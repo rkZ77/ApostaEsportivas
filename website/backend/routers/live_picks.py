@@ -633,6 +633,143 @@ async def _rodar(body: RunBody) -> None:
                             "returncode": -1, "error": str(e)})
 
 
+# ─── Acompanhamento contínuo ────────────────────────────────────────────────
+#
+# POR QUE ISTO EXISTE, DEPOIS DE O SCHEDULER TER SIDO DELETADO
+# ------------------------------------------------------------
+# Uma rodada sozinha não é o motor ao vivo funcionando. /fixtures/statistics
+# devolve só acumulado, então "escanteios nos últimos 10 minutos" não existe no
+# feed · existe na diferença entre duas leituras nossas. Na primeira passada
+# sobre uma partida o motor não tem janela nem tendência, e não finge ter. São
+# a segunda e a terceira que fazem o modelo de ritmo valer alguma coisa.
+#
+# `engine_pipelines/live_watch.py` já resolvia isso na linha de comando, mas só
+# em DEV e só enquanto o terminal ficasse aberto. Este laço é o mesmo conceito
+# dentro do serviço, ligado e desligado por quem opera.
+#
+# A DIFERENÇA PRO SCHEDULER QUE FOI REMOVIDO em 2026-08-01 é inteira:
+#
+#   · nada sobe ligado. O laço só existe depois de alguém clicar em ligar;
+#   · não sobrevive a restart do serviço. Deploy do Railway derruba o laço, e o
+#     painel diz isso em vez de fingir que continua rodando;
+#   · o intervalo é declarado no clique, não escondido em código;
+#   · o contador de rodadas fica na cara de quem ligou.
+#
+# O que ele NÃO faz é desligar sozinho por tempo · foi pedido explicitamente
+# que só pare quando mandarem parar. O único freio automático é o disjuntor de
+# falhas consecutivas abaixo, que não é "cansou": é o motor quebrado parando de
+# bater na API-Football de graça, com o motivo escrito no painel.
+
+#: Falhas seguidas que derrubam o laço. Uma rodada que erra por rede volta na
+#: seguinte; cinco seguidas é problema que dormir mais não conserta.
+_MAX_FALHAS_SEGUIDAS = 5
+
+#: Piso do intervalo. Abaixo disso a rodada seguinte começa antes de a
+#: estatística da anterior ter mudado no provedor · gasta cota pra reler o
+#: mesmo número.
+_INTERVALO_MIN_MINUTOS = 3
+
+_watch_state: dict = {
+    "ativo": False, "iniciado_em": None, "rodadas": 0, "falhas_seguidas": 0,
+    "ultima_rodada": None, "proxima_rodada_em": None, "motivo_parada": None,
+    "intervalo_min": None, "dry_run": None, "max_partidas": None,
+}
+
+#: Referência forte pra tarefa. Sem isto o event loop pode coletar o laço no
+#: meio de uma espera (asyncio guarda só weakrefs das tasks).
+_watch_task: asyncio.Task | None = None
+
+
+class WatchBody(BaseModel):
+    ligar: bool = True
+    intervalo_min: int = 8
+    dry_run: bool = True
+    max_partidas: int | None = None
+
+
+async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
+                                  max_partidas: int | None) -> None:
+    """Roda rodadas sucessivas até alguém desligar."""
+    intervalo = max(_INTERVALO_MIN_MINUTOS, int(intervalo_min)) * 60
+    body = RunBody(dry_run=dry_run, max_partidas=max_partidas)
+    agora = lambda: datetime.now(timezone.utc).strftime("%H:%M:%S")
+
+    try:
+        while _watch_state["ativo"]:
+            await _rodar(body)
+            _watch_state["rodadas"] += 1
+            _watch_state["ultima_rodada"] = agora()
+
+            if _run_status.get("status") == "error":
+                _watch_state["falhas_seguidas"] += 1
+                if _watch_state["falhas_seguidas"] >= _MAX_FALHAS_SEGUIDAS:
+                    _watch_state["motivo_parada"] = (
+                        f"{_MAX_FALHAS_SEGUIDAS} rodadas seguidas falharam · "
+                        f"último erro: {(_run_status.get('error') or '')[:200]}"
+                    )
+                    break
+            else:
+                _watch_state["falhas_seguidas"] = 0
+
+            # Espera fatiada: desligar não precisa esperar o intervalo inteiro.
+            restante = intervalo
+            while restante > 0 and _watch_state["ativo"]:
+                _watch_state["proxima_rodada_em"] = restante
+                await asyncio.sleep(min(5, restante))
+                restante -= 5
+            _watch_state["proxima_rodada_em"] = 0
+    except asyncio.CancelledError:
+        _watch_state["motivo_parada"] = "laço cancelado"
+        raise
+    except Exception as e:
+        _watch_state["motivo_parada"] = f"erro inesperado no laço: {e}"
+        logger.exception("[LIVE-WATCH] laço morreu")
+    finally:
+        _watch_state["ativo"] = False
+        _watch_state["proxima_rodada_em"] = None
+        logger.info("[LIVE-WATCH] encerrado após %s rodadas (%s)",
+                    _watch_state["rodadas"], _watch_state["motivo_parada"] or "desligado no painel")
+
+
+@router.post("/watch")
+async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(require_admin)):
+    """Liga/desliga o laço de rodadas sucessivas do Motor Live."""
+    global _watch_task
+
+    if not body.ligar:
+        _watch_state["ativo"] = False
+        _watch_state["motivo_parada"] = "desligado no painel"
+        return {"ok": True, "ativo": False}
+
+    autorizado, motivo = _pode_disparar()
+    if not autorizado:
+        raise HTTPException(403, motivo)
+    faltando = _dev_configurado()
+    if faltando:
+        raise HTTPException(400, f"Faltam variaveis de banco de dev: {', '.join(faltando)}.")
+    if not _pipeline_dir():
+        raise HTTPException(500, "Diretorio do motor nao encontrado (PIPELINE_SRC_PATH).")
+    if _watch_state["ativo"]:
+        raise HTTPException(409, "O acompanhamento continuo ja esta ligado.")
+
+    _watch_state.update({
+        "ativo": True,
+        "iniciado_em": datetime.now(timezone.utc).strftime("%H:%M:%S"),
+        "rodadas": 0, "falhas_seguidas": 0, "motivo_parada": None,
+        "ultima_rodada": None, "proxima_rodada_em": None,
+        "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(body.intervalo_min)),
+        "dry_run": body.dry_run, "max_partidas": body.max_partidas,
+    })
+    _watch_task = asyncio.create_task(_laco_de_acompanhamento(
+        body.intervalo_min, body.dry_run, body.max_partidas))
+    return {"ok": True, "ativo": True, "intervalo_min": _watch_state["intervalo_min"]}
+
+
+@router.get("/watch-status")
+def status_do_acompanhamento(current_user: dict = Depends(require_admin)):
+    return dict(_watch_state)
+
+
 @router.post("/run")
 async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)):
     """Dispara UMA rodada do Motor Live. Admin, e so' onde for autorizado.
@@ -654,6 +791,11 @@ async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)
         ))
     if _run_status["status"] == "running":
         raise HTTPException(409, "Ja existe uma rodada em andamento.")
+    if _watch_state["ativo"]:
+        raise HTTPException(409, (
+            "O acompanhamento continuo esta ligado e ja dispara rodadas sozinho. "
+            "Desligue antes de disparar uma rodada avulsa."
+        ))
     if not _pipeline_dir():
         raise HTTPException(500, "Diretorio do motor nao encontrado (PIPELINE_SRC_PATH).")
     asyncio.create_task(_rodar(body))

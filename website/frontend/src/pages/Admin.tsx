@@ -94,11 +94,20 @@ const PICK_LABEL: Record<string, string> = {
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
 }
 
-// Sub-paginas do /admin. "visao" primeiro por ser o resumo; "usuarios" logo
-// depois por ser o bloco mais usado no dia a dia -- antes ficava no fim de
-// uma coluna unica, a varias telas de rolagem no celular.
+// Sub-paginas do /admin.
+//
+// A "Visão geral" foi dissolvida, e nao por gosto de arrumacao. Ela era um
+// resumo de numeros que moram em outras abas, e o custo disso aparecia toda
+// vez que algum deles estava errado: a cota da API ficava la', mas quem ia
+// segurar a mao no pipeline estava na aba Pipeline; a contagem de picks do dia
+// ficava la', mas quem ia resolver pendencia estava na aba Picks. Duas telas
+// pra mesma pergunta, e a de resumo sempre um passo atras da de acao.
+//
+// Agora cada numero vive na aba onde se age sobre ele: cota e coleta no
+// Pipeline, contagem do dia em Picks, receita em Financeiro. O cartao de
+// "ultimo pipeline" nao mudou de casa, foi apagado -- a aba Pipeline ja diz
+// isso por step, com log.
 const ABAS = [
-  { key: 'visao',      label: 'Visão geral' },
   { key: 'usuarios',   label: 'Usuários'    },
   { key: 'pipeline',   label: 'Pipeline'    },
   { key: 'live',       label: 'Ao Vivo'     },
@@ -186,10 +195,11 @@ export default function Admin() {
     rodada_atual?: string | null; nome?: string | null; aviso?: string
   } | null>(null)
   // Hash da URL manda na aba inicial, pra dar pra abrir/recarregar direto em
-  // /admin#usuarios. Hash invalido cai na visao geral em vez de tela vazia.
+  // /admin#usuarios. Hash invalido (inclusive o #visao dos favoritos antigos)
+  // cai no Pipeline, que e' de onde se opera o dia.
   const [aba, setAba] = useState<AdminAba>(() => {
     const h = window.location.hash.replace('#', '') as AdminAba
-    return ABAS.some(a => a.key === h) ? h : 'visao'
+    return ABAS.some(a => a.key === h) ? h : 'pipeline'
   })
   const USERS_PER_PAGE = 15
   const PAYMENTS_PER_PAGE = 10
@@ -508,6 +518,76 @@ export default function Admin() {
 
 
         {aba === 'pipeline' && (<>
+        {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
+            que ja parou o site inteiro por estouro, e o unico numero aqui
+            que vem de fora e nao da' pra descobrir olhando o banco. */}
+        {overview?.api_football && (
+          <div className="card p-4 mb-4">
+            <div className="flex items-center justify-between mb-2 gap-3">
+              <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
+              <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
+                overview.api_football.ativo
+                  ? 'text-green-400 bg-green-500/10 border-green-500/30'
+                  : 'text-red-400 bg-red-500/10 border-red-500/30'
+              }`}>
+                {overview.api_football.plano ?? 'desconhecido'}
+              </span>
+            </div>
+            <div className="flex items-baseline gap-2 font-mono">
+              <span className={`text-3xl font-black ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
+              }`}>{overview.api_football.usado ?? '·'}</span>
+              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
+            </div>
+            <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${
+                (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
+                  : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
+              }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
+            </div>
+            {overview.api_football.expira_em && (
+              <p className="text-[11px] text-ink-4 mt-2">
+                Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Saúde da coleta. Sem isso, "não saiu pick hoje" fica
+            indistinguível de "a coleta nem rodou". */}
+        {overview?.coleta && (
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">Coleta</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {[
+                { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
+                { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
+                { label: 'Jogos com odds',  value: overview.coleta.jogos_com_odds },
+                { label: 'Ligas',           value: overview.coleta.ligas },
+                { label: 'Times',           value: overview.coleta.times },
+                { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
+              ].map(({ label, value }) => (
+                <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
+                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
+                  <div className="text-[10px] text-ink-3 mt-0.5">{label}</div>
+                </div>
+              ))}
+            </div>
+            {overview.coleta.ultimo_jogo_coletado && (
+              <p className="text-[11px] text-ink-4 mt-3">
+                Último jogo com estatística coletada:{' '}
+                {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
+              </p>
+            )}
+            {overview.coleta.estatisticas_jogador === 0 && (
+              <p className="text-[11px] text-orange-400 mt-1">
+                Sem estatística por jogador, o pipeline de defesas de goleiro não gera pick até rodar a coleta.
+              </p>
+            )}
+          </div>
+        )}
+
         {/* Pipeline */}
         <div className="card p-4 mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -706,143 +786,16 @@ export default function Admin() {
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
-        {aba === 'visao' && (<>
-
-        {/* Cota da API-Football. Primeiro bloco de proposito: e' o recurso
-            que ja parou o site inteiro por estouro, e o unico numero aqui
-            que vem de fora e nao da' pra descobrir olhando o banco. */}
-        {overview?.api_football && (
-          <div className="card p-4 mb-4">
-            <div className="flex items-center justify-between mb-2 gap-3">
-              <h2 className="text-xs font-semibold text-ink-3">Cota da API-Football</h2>
-              <span className={`text-[10px] font-black border px-1.5 py-0.5 rounded ${
-                overview.api_football.ativo
-                  ? 'text-green-400 bg-green-500/10 border-green-500/30'
-                  : 'text-red-400 bg-red-500/10 border-red-500/30'
-              }`}>
-                {overview.api_football.plano ?? 'desconhecido'}
-              </span>
-            </div>
-            <div className="flex items-baseline gap-2 font-mono">
-              <span className={`text-3xl font-black ${
-                (overview.api_football.pct ?? 0) >= 90 ? 'text-red-400'
-                  : (overview.api_football.pct ?? 0) >= 70 ? 'text-orange-400' : 'text-green-400'
-              }`}>{overview.api_football.usado ?? '·'}</span>
-              <span className="text-ink-4 text-sm">/ {overview.api_football.limite ?? '·'} hoje</span>
-            </div>
-            <div className="mt-2 h-1.5 bg-surface-2 rounded-full overflow-hidden">
-              <div className={`h-full rounded-full ${
-                (overview.api_football.pct ?? 0) >= 90 ? 'bg-red-500'
-                  : (overview.api_football.pct ?? 0) >= 70 ? 'bg-orange-500' : 'bg-green-500'
-              }`} style={{ width: `${Math.min(100, overview.api_football.pct ?? 0)}%` }} />
-            </div>
-            {overview.api_football.expira_em && (
-              <p className="text-[11px] text-ink-4 mt-2">
-                Plano válido até {new Date(overview.api_football.expira_em).toLocaleDateString('pt-BR')}
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Saúde da coleta. Sem isso, "não saiu pick hoje" fica
-            indistinguível de "a coleta nem rodou". */}
-        {overview?.coleta && (
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">Coleta</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {[
-                { label: 'Jogos hoje',      value: overview.coleta.jogos_hoje },
-                { label: 'Por começar',     value: overview.coleta.jogos_por_comecar },
-                { label: 'Jogos com odds',  value: overview.coleta.jogos_com_odds },
-                { label: 'Ligas',           value: overview.coleta.ligas },
-                { label: 'Times',           value: overview.coleta.times },
-                { label: 'Stats jogador',   value: overview.coleta.estatisticas_jogador },
-              ].map(({ label, value }) => (
-                <div key={label} className="bg-surface-1 rounded-md px-3 py-2.5 text-center">
-                  <div className={`font-mono text-xl font-black ${value > 0 ? 'text-ink-1' : 'text-ink-4'}`}>{value}</div>
-                  <div className="text-[10px] text-ink-3 mt-0.5">{label}</div>
-                </div>
-              ))}
-            </div>
-            {overview.coleta.ultimo_jogo_coletado && (
-              <p className="text-[11px] text-ink-4 mt-3">
-                Último jogo com estatística coletada:{' '}
-                {new Date(overview.coleta.ultimo_jogo_coletado).toLocaleDateString('pt-BR')}
-              </p>
-            )}
-            {overview.coleta.estatisticas_jogador === 0 && (
-              <p className="text-[11px] text-orange-400 mt-1">
-                Sem estatística por jogador, o pipeline de defesas de goleiro não gera pick até rodar a coleta.
-              </p>
-            )}
-          </div>
-        )}
-
-        {/* Picks de hoje, os 6 tipos */}
-        {overview?.picks_hoje && (
-          <div className="card p-4 mb-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              {Object.entries(overview.picks_hoje).map(([chave, c]) => (
-                <div key={chave} className="flex items-center gap-3 bg-surface-1 rounded-md px-3 py-2.5">
-                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.n > 0 ? 'bg-green-500' : 'bg-surface-3'}`} />
-                  <div className="min-w-0">
-                    <div className="font-mono text-ink-1 font-bold text-lg leading-none">{c.n}</div>
-                    <div className="text-ink-3 text-[11px] mt-0.5 truncate">{PICK_LABEL[chave] ?? chave}</div>
-                    {c.pendentes > 0 && (
-                      <div className="text-[10px] text-orange-400 mt-0.5">{c.pendentes} pendente{c.pendentes > 1 ? 's' : ''}</div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* Receita do mês + último pipeline */}
-        <div className="grid gap-4 sm:grid-cols-2 mb-4">
-          {overview?.financeiro && (
-            <div className="card p-4">
-              <h2 className="text-xs font-semibold text-ink-3 mb-2">Receita do mês</h2>
-              <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
-              <p className="text-[11px] text-ink-4 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
-            </div>
-          )}
-          <div className="card p-4">
-            <h2 className="text-xs font-semibold text-ink-3 mb-2">Último pipeline</h2>
-            {overview?.pipeline?.status ? (
-              <>
-                <div className={`font-mono text-lg font-black ${
-                  overview.pipeline.status === 'ok' ? 'text-green-400'
-                    : overview.pipeline.status === 'running' ? 'text-blue-400' : 'text-red-400'
-                }`}>{overview.pipeline.status}</div>
-                <p className="text-[11px] text-ink-4 mt-1">
-                  {overview.pipeline.finished_at ? `terminou às ${overview.pipeline.finished_at}` : 'em andamento'}
-                </p>
-                {overview.pipeline.error && (
-                  <p className="text-[11px] text-red-400 mt-1 break-words">{overview.pipeline.error}</p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-ink-4">
-                Nada rodou nesta instância ainda. Nada é agendado, dispare pela aba Pipeline.
-              </p>
-            )}
-          </div>
-        </div>
-
-        {/* Stats · usuários */}
-        {stats && (
-          <>
-            {/* O card antigo de "Picks de hoje" saiu daqui: virou o bloco
-                acima, alimentado por /admin/overview, que cobre os 6 tipos
-                (faltas e goleiros nao existiam quando este foi escrito). */}
-            <AdminShareResults />
-          </>
-        )}
-        </>)}
-
         {aba === 'financeiro' && (<>
+        {/* Receita do mês · era o único número financeiro que morava fora
+            desta aba. */}
+        {overview?.financeiro && (
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-ink-3 mb-2">Receita do mês</h2>
+            <div className="font-mono text-3xl font-black text-green-400">{fmtBRL(overview.financeiro.receita_mes)}</div>
+            <p className="text-[11px] text-ink-4 mt-1">{overview.financeiro.pagamentos_mes} pagamento(s) aprovado(s)</p>
+          </div>
+        )}
         {/* Financeiro */}
         {revenue && (
           <div className="mb-6">
@@ -1145,6 +1098,28 @@ export default function Admin() {
         </>)}
 
         {aba === 'picks' && (<>
+        {/* Picks de hoje, os 6 tipos */}
+        {overview?.picks_hoje && (
+          <div className="card p-4 mb-4">
+            <h2 className="text-xs font-semibold text-ink-3 mb-3">Picks de hoje</h2>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              {Object.entries(overview.picks_hoje).map(([chave, c]) => (
+                <div key={chave} className="flex items-center gap-3 bg-surface-1 rounded-md px-3 py-2.5">
+                  <div className={`w-2 h-2 rounded-full flex-shrink-0 ${c.n > 0 ? 'bg-green-500' : 'bg-surface-3'}`} />
+                  <div className="min-w-0">
+                    <div className="font-mono text-ink-1 font-bold text-lg leading-none">{c.n}</div>
+                    <div className="text-ink-3 text-[11px] mt-0.5 truncate">{PICK_LABEL[chave] ?? chave}</div>
+                    {c.pendentes > 0 && (
+                      <div className="text-[10px] text-orange-400 mt-0.5">{c.pendentes} pendente{c.pendentes > 1 ? 's' : ''}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <AdminShareResults />
         <AdminPendencias />
         {/* Ações de resultado. Os dois endpoints já existiam no backend desde
             que o scheduler foi removido, mas não tinham botão nenhum -- só
