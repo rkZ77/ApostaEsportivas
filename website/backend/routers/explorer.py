@@ -282,6 +282,12 @@ def _recorte_vazio() -> dict:
         "gols_pro": 0, "gols_contra": 0,
         "clean_sheet": 0, "sem_marcar": 0,
         "btts": 0, "over15": 0, "over25": 0, "over35": 0,
+        "sem_gols": 0,
+        # Primeiro tempo vem do `score.halftime`, que a mesma resposta ja'
+        # traz. `jogos_ht` e' contado separado porque o intervalo vem nulo em
+        # jogo antigo: dividir os gols de 1T pelo total de jogos faria a media
+        # despencar em temporada mal coberta, sem sintoma nenhum.
+        "jogos_ht": 0, "gols_1t": 0, "gols_2t": 0, "gol_no_1t": 0,
         "_resultados": [],
     }
 
@@ -294,8 +300,10 @@ def _fechar_recorte(r: dict) -> dict:
     justamente no recorte em que a pessoa foi olhar.
     """
     n = r["jogos"]
+    nht = r["jogos_ht"]
     pct = lambda v: round(v / n * 100, 1) if n else 0.0
     media = lambda v: round(v / n, 2) if n else 0.0
+    media_ht = lambda v: round(v / nht, 2) if nht else 0.0
     # Forma na ordem em que os jogos aconteceram, últimos cinco.
     forma = "".join(r["_resultados"][-5:])
     return {
@@ -316,11 +324,20 @@ def _fechar_recorte(r: dict) -> dict:
         "over15_pct":         pct(r["over15"]),
         "over25_pct":         pct(r["over25"]),
         "over35_pct":         pct(r["over35"]),
+        "sem_gols_pct":       pct(r["sem_gols"]),
+        # 1T e 2T do jogo inteiro (os dois lados somados), que e' a leitura de
+        # quem olha mercado de tempo. O 2T sai por subtracao: a fonte da' o
+        # placar do intervalo e o final, nunca o segundo tempo isolado.
+        "media_gols_1t":      media_ht(r["gols_1t"]),
+        "media_gols_2t":      media_ht(r["gols_2t"]),
+        "gol_no_1t_pct":      round(r["gol_no_1t"] / nht * 100, 1) if nht else 0.0,
+        "jogos_com_1t":       nht,
         "forma":              forma,
     }
 
 
-def _contar(r: dict, gols_pro: int, gols_contra: int) -> None:
+def _contar(r: dict, gols_pro: int, gols_contra: int,
+            ht_pro: Optional[int] = None, ht_contra: Optional[int] = None) -> None:
     r["jogos"] += 1
     r["gols_pro"] += gols_pro
     r["gols_contra"] += gols_contra
@@ -337,9 +354,20 @@ def _contar(r: dict, gols_pro: int, gols_contra: int) -> None:
     if gols_pro > 0 and gols_contra > 0:
         r["btts"] += 1
     total = gols_pro + gols_contra
+    if total == 0:
+        r["sem_gols"] += 1
     if total >= 2: r["over15"] += 1
     if total >= 3: r["over25"] += 1
     if total >= 4: r["over35"] += 1
+    if ht_pro is not None and ht_contra is not None:
+        no_1t = ht_pro + ht_contra
+        r["jogos_ht"] += 1
+        r["gols_1t"] += no_1t
+        # Segundo tempo por subtracao: a fonte da' o placar do INTERVALO e o
+        # FINAL, nunca o segundo tempo isolado.
+        r["gols_2t"] += total - no_1t
+        if no_1t > 0:
+            r["gol_no_1t"] += 1
 
 
 @router.get("/ligas/{league_id}/temporadas/{season}")
@@ -365,8 +393,10 @@ def detalhe_temporada(league_id: int, season: int, current_user: dict = Depends(
     total_jogos = len(jogos)
     finalizados = 0
     gols_casa = gols_fora = 0
-    btts = over25 = 0
+    btts = over15 = over25 = over35 = sem_gols = 0
     vit_casa = empates = vit_fora = 0
+    jogos_ht = gols_1t = gols_2t = gol_no_1t = 0
+    placares: dict[str, int] = {}
 
     # Ordem cronológica antes de somar: a "forma" é os últimos cinco jogos, e a
     # API não garante ordem nenhuma na resposta.
@@ -387,18 +417,34 @@ def detalhe_temporada(league_id: int, season: int, current_user: dict = Depends(
         if gc is None or gf is None or casa.get("id") is None or fora.get("id") is None:
             continue
 
+        intervalo = (j.get("score") or {}).get("halftime") or {}
+        hc, hf = intervalo.get("home"), intervalo.get("away")
+        tem_ht = hc is not None and hf is not None
+
         finalizados += 1
         gols_casa += gc
         gols_fora += gf
+        total_do_jogo = gc + gf
         if gc > 0 and gf > 0: btts += 1
-        if gc + gf >= 3: over25 += 1
+        if total_do_jogo == 0: sem_gols += 1
+        if total_do_jogo >= 2: over15 += 1
+        if total_do_jogo >= 3: over25 += 1
+        if total_do_jogo >= 4: over35 += 1
         if gc > gf: vit_casa += 1
         elif gc == gf: empates += 1
         else: vit_fora += 1
+        if tem_ht:
+            jogos_ht += 1
+            gols_1t += hc + hf
+            gols_2t += total_do_jogo - (hc + hf)
+            if hc + hf > 0: gol_no_1t += 1
+        # Placar visto do MANDANTE sempre ("2-1" e "1-2" sao coisas
+        # diferentes), que e' como quem aposta le resultado exato.
+        placares[f"{gc}-{gf}"] = placares.get(f"{gc}-{gf}", 0) + 1
 
-        for time_info, recorte, pro, contra in (
-            (casa, "casa", gc, gf),
-            (fora, "fora", gf, gc),
+        for time_info, recorte, pro, contra, ht_pro, ht_contra in (
+            (casa, "casa", gc, gf, hc if tem_ht else None, hf if tem_ht else None),
+            (fora, "fora", gf, gc, hf if tem_ht else None, hc if tem_ht else None),
         ):
             tid = time_info["id"]
             if tid not in times:
@@ -410,8 +456,8 @@ def detalhe_temporada(league_id: int, season: int, current_user: dict = Depends(
                     "casa":    _recorte_vazio(),
                     "fora":    _recorte_vazio(),
                 }
-            _contar(times[tid][recorte], pro, contra)
-            _contar(times[tid]["todos"], pro, contra)
+            _contar(times[tid][recorte], pro, contra, ht_pro, ht_contra)
+            _contar(times[tid]["todos"], pro, contra, ht_pro, ht_contra)
 
     n = finalizados
     pct = lambda v: round(v / n * 100, 1) if n else 0.0
@@ -430,10 +476,24 @@ def detalhe_temporada(league_id: int, season: int, current_user: dict = Depends(
             "media_gols_casa":    round(gols_casa / n, 2) if n else 0.0,
             "media_gols_fora":    round(gols_fora / n, 2) if n else 0.0,
             "btts_pct":           pct(btts),
+            "over15_pct":         pct(over15),
             "over25_pct":         pct(over25),
+            "over35_pct":         pct(over35),
+            "sem_gols_pct":       pct(sem_gols),
             "vitoria_casa_pct":   pct(vit_casa),
             "empate_pct":         pct(empates),
             "vitoria_fora_pct":   pct(vit_fora),
+            # Divididos por `jogos_ht`, nunca pelo total: temporada antiga vem
+            # com o intervalo nulo em parte dos jogos, e dividir pelo total
+            # afundaria a media sem ninguem perceber.
+            "jogos_com_1t":       jogos_ht,
+            "media_gols_1t":      round(gols_1t / jogos_ht, 2) if jogos_ht else 0.0,
+            "media_gols_2t":      round(gols_2t / jogos_ht, 2) if jogos_ht else 0.0,
+            "gol_no_1t_pct":      round(gol_no_1t / jogos_ht * 100, 1) if jogos_ht else 0.0,
+            "placares_comuns":    [
+                {"placar": p, "jogos": q, "pct": round(q / n * 100, 1)}
+                for p, q in sorted(placares.items(), key=lambda kv: -kv[1])[:5]
+            ] if n else [],
         },
         "times": sorted(
             [{
@@ -503,6 +563,25 @@ def detalhe_time(
             "faixas":   linhas,
         }
 
+    def gols_por_faixa(lado: str) -> list:
+        """Em que altura do jogo o time marca (ou leva).
+
+        Mesma resposta, campo diferente · nao custa requisicao nenhuma. Diz
+        coisa que a media nao diz: dois times de 1.7 gol por jogo, um que
+        resolve cedo e outro que decide no fim, sao apostas diferentes.
+        """
+        bruto = ((dados.get("goals") or {}).get(lado) or {}).get("minute") or {}
+        linhas = []
+        for faixa, valores in bruto.items():
+            if not faixa or not isinstance(valores, dict):
+                continue
+            linhas.append({"faixa": faixa, "total": valores.get("total") or 0})
+        return linhas
+
+    maiores = dados.get("biggest") or {}
+    sequencia = maiores.get("streak") or {}
+    penaltis = dados.get("penalty") or {}
+
     resultado = {
         "team_id": time_info.get("id", team_id),
         "nome":    time_info.get("name"),
@@ -516,6 +595,26 @@ def detalhe_time(
         "cartoes": {
             "amarelo":  faixas("yellow"),
             "vermelho": faixas("red"),
+        },
+        "gols_por_faixa": {
+            "marcados": gols_por_faixa("for"),
+            "sofridos": gols_por_faixa("against"),
+        },
+        "sequencias": {
+            "vitorias": sequencia.get("wins") or 0,
+            "empates":  sequencia.get("draws") or 0,
+            "derrotas": sequencia.get("loses") or 0,
+        },
+        "maiores": {
+            "vitoria_casa": (maiores.get("wins") or {}).get("home"),
+            "vitoria_fora": (maiores.get("wins") or {}).get("away"),
+            "derrota_casa": (maiores.get("loses") or {}).get("home"),
+            "derrota_fora": (maiores.get("loses") or {}).get("away"),
+        },
+        "penaltis": {
+            "cobrados":     penaltis.get("total") or 0,
+            "convertidos":  ((penaltis.get("scored") or {}).get("total")) or 0,
+            "perdidos":     ((penaltis.get("missed") or {}).get("total")) or 0,
         },
     }
     return _set_cache(chave, resultado)
