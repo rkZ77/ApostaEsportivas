@@ -72,6 +72,87 @@ class TestOrchestratorConviveComFamiliaAusente:
         assert analise["familias"]["goals"]["observado"] == 1
 
 
+class TestCartaoSaiDoEventoQuandoAFolhaNaoVem:
+    """A folha de estatistica nao vem ao vivo · o evento vem, as vezes.
+
+    Medido em 2026-08-22 nas ligas acompanhadas: /fixtures/statistics devolveu
+    ZERO bloco em todas as partidas ao vivo, inclusive Serie A, enquanto
+    /fixtures/events trazia gol e cartao em parte delas. Cartao e' o unico
+    numero de familia que sobra ao vivo, e estava sendo descartado.
+    """
+
+    EVENTOS = [
+        {"type": "Card", "detail": "Yellow Card", "time": {"elapsed": 20},
+         "team": {"id": 10}, "player": {"name": "A"}},
+        {"type": "Card", "detail": "Yellow Card", "time": {"elapsed": 33},
+         "team": {"id": 20}, "player": {"name": "B"}},
+        {"type": "Card", "detail": "Red Card", "time": {"elapsed": 47},
+         "team": {"id": 20}, "player": {"name": "C"}},
+        {"type": "Goal", "detail": "Normal Goal", "time": {"elapsed": 12},
+         "team": {"id": 10}, "player": {"name": "D"}},
+    ]
+
+    def _estado(self, home_stats=None, away_stats=None, com_eventos=True):
+        bruto = {
+            "fixture": {"id": 1, "timestamp": 1,
+                        "status": {"short": "2H", "elapsed": 52, "extra": None}},
+            "goals": {"home": 1, "away": 1},
+            "teams": {"home": {"id": 10, "name": "Casa"}, "away": {"id": 20, "name": "Fora"}},
+            "league": {"id": 72, "name": "Serie B"},
+        }
+        eventos = live_state.ler_eventos(self.EVENTOS, 52) if com_eventos else []
+        return live_state.montar_estado(bruto, home_stats or {}, away_stats or {}, eventos)
+
+    def test_folha_vazia_com_eventos_preenche_o_cartao(self):
+        e = self._estado()
+        assert (e["yellow_home"], e["yellow_away"]) == (1, 1)
+        assert (e["red_home"], e["red_away"], e["red_cards_total"]) == (0, 1, 1)
+
+    def test_sem_evento_nenhum_continua_ausente_e_nao_vira_zero(self):
+        """Lista vazia responde igual pra "sem cobertura" e "nada aconteceu".
+
+        Escolher zero seria inventar evidencia · e' a invariante 1 de
+        services/settlement.py. Foi exatamente o caso da Serie A na medicao:
+        statistics=0 E events=0.
+        """
+        e = self._estado(com_eventos=False)
+        assert e["yellow_home"] is None and e["yellow_away"] is None
+        assert e["red_home"] is None and e["red_cards_total"] is None
+
+    def test_a_folha_ganha_quando_publica(self):
+        """Duas fontes discordando no mesmo campo e' pior que uma fonte so'."""
+        e = self._estado({"Yellow Cards": 5, "Red Cards": 0},
+                         {"Yellow Cards": 1, "Red Cards": 0})
+        assert (e["yellow_home"], e["yellow_away"]) == (5, 1)
+        assert (e["red_home"], e["red_away"]) == (0, 0)
+
+    def test_folha_parcial_e_completada_campo_a_campo(self):
+        """Uma partida pode ter amarelo publicado e vermelho nao."""
+        e = self._estado({"Yellow Cards": 5}, {"Yellow Cards": 1})
+        assert (e["yellow_home"], e["yellow_away"]) == (5, 1)
+        assert (e["red_home"], e["red_away"]) == (0, 1)
+
+    def test_evento_de_time_desconhecido_nao_entra_na_conta(self):
+        """Cartao sem dono identificado nao pode ser somado a um dos lados.
+
+        Chutar o lado inventaria pressao onde nao houve · o modelo de residual
+        le' vermelho como mudanca de regime, entao errar o time inverte o sinal.
+        """
+        eventos = live_state.ler_eventos(self.EVENTOS + [
+            {"type": "Card", "detail": "Red Card", "time": {"elapsed": 50},
+             "team": {"id": 999}, "player": {"name": "Z"}},
+        ], 52)
+        bruto = {
+            "fixture": {"id": 1, "timestamp": 1,
+                        "status": {"short": "2H", "elapsed": 52, "extra": None}},
+            "goals": {"home": 1, "away": 1},
+            "teams": {"home": {"id": 10, "name": "Casa"}, "away": {"id": 20, "name": "Fora"}},
+            "league": {"id": 72, "name": "Serie B"},
+        }
+        e = live_state.montar_estado(bruto, {}, {}, eventos)
+        assert (e["red_home"], e["red_away"]) == (0, 1)
+
+
 class TestPipelineNaoDescartaAPartidaInteira:
     """Le o codigo do pipeline · a decisao mora num `if`, nao numa funcao.
 

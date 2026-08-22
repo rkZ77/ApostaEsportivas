@@ -52,6 +52,43 @@ def _agora_epoch() -> float:
     return datetime.now(timezone.utc).timestamp()
 
 
+def _cartoes_por_evento(eventos: list, home_id, away_id) -> dict:
+    """Conta cartao a partir de /fixtures/events.
+
+    EXISTE PORQUE A FOLHA DE ESTATISTICA COSTUMA NAO VIR AO VIVO. Medido em
+    2026-08-22: das partidas ao vivo das ligas acompanhadas, /fixtures/statistics
+    devolveu ZERO bloco em todas -- inclusive Serie A -- enquanto /fixtures/events
+    trazia gol e cartao normalmente em parte delas. Cartao e' o unico numero
+    de familia que os dois lados publicam, e ele estava sendo descartado.
+
+    SO' CONTA SE HOUVER PELO MENOS UM EVENTO. Lista vazia responde igual pras
+    duas perguntas diferentes -- "esta partida nao tem cobertura de eventos" e
+    "ainda nao aconteceu nada" -- e transformar a primeira em zero quebraria a
+    invariante 1 de services/settlement.py, que e' a que impede ausencia de
+    virar numero. Sem evidencia, devolve None e a familia sai da analise.
+
+    A FOLHA SEMPRE GANHA quando publica: e' a contagem do proprio provedor, e
+    duas fontes discordando num mesmo campo e' pior que uma fonte so'.
+    """
+    if not eventos:
+        return {"yellow_home": None, "yellow_away": None,
+                "red_home": None, "red_away": None}
+
+    contagem = {"yellow_home": 0, "yellow_away": 0, "red_home": 0, "red_away": 0}
+    for e in eventos:
+        if e.get("tipo") != "Card":
+            continue
+        tid = e.get("team_id")
+        if tid == home_id:
+            lado = "home"
+        elif tid == away_id:
+            lado = "away"
+        else:
+            continue
+        contagem[f"{'red' if e.get('vermelho') else 'yellow'}_{lado}"] += 1
+    return contagem
+
+
 def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
                   eventos: list | None = None) -> dict:
     """Retrato normalizado e COMPLETO da partida neste instante.
@@ -83,6 +120,18 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
     y_casa, y_fora, _ = par("Yellow Cards")
     r_casa, r_fora, r_total = par("Red Cards")
 
+    # Folha muda, evento preenche. Campo a campo, nunca em bloco: uma partida
+    # pode ter amarelo publicado e vermelho nao.
+    home_id = (times.get("home") or {}).get("id")
+    away_id = (times.get("away") or {}).get("id")
+    if None in (y_casa, y_fora, r_casa, r_fora):
+        do_evento = _cartoes_por_evento(eventos, home_id, away_id)
+        y_casa = y_casa if y_casa is not None else do_evento["yellow_home"]
+        y_fora = y_fora if y_fora is not None else do_evento["yellow_away"]
+        r_casa = r_casa if r_casa is not None else do_evento["red_home"]
+        r_fora = r_fora if r_fora is not None else do_evento["red_away"]
+        r_total = None if (r_casa is None or r_fora is None) else r_casa + r_fora
+
     return {
         "fixture_id": fixture.get("id"),
         "kickoff_epoch": fixture.get("timestamp"),
@@ -95,8 +144,8 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         "league_name": liga.get("name"),
         "home_team": (times.get("home") or {}).get("name"),
         "away_team": (times.get("away") or {}).get("name"),
-        "home_team_id": (times.get("home") or {}).get("id"),
-        "away_team_id": (times.get("away") or {}).get("id"),
+        "home_team_id": home_id,
+        "away_team_id": away_id,
 
         "home_goals": home_goals,
         "away_goals": away_goals,
