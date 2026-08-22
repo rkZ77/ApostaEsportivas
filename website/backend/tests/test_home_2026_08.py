@@ -244,17 +244,48 @@ def test_fita_usa_padding_e_nao_gap_entre_itens():
     assert "gap-8" not in src
 
 
-def test_proximos_jogos_ficam_parados_na_tela():
-    """A faixa da Home nao anda sozinha, e cada jogo aparece UMA vez.
+def test_proximos_jogos_sao_uma_fita_horizontal():
+    """A faixa da Home e' fita, nao grade empilhada.
 
-    Ja' foi fita rolando (components/ui/Marquee). O movimento custava caro: um
-    jogo especifico so' aparecia quando a fita chegasse nele, e quem estava
-    lendo um card via ele sair da tela no meio da leitura. Virou grade parada.
+    Passou por uma grade no meio do caminho, e ela resolvia o problema errado:
+    com a lista inteira a mostra, uma rodada cheia virava quinze linhas de card
+    no celular e empurrava o resto da Home pra baixo. A fita gasta a altura de
+    um card so'.
     """
     src = _front_codigo("home/NextGames.tsx")
-    assert "Marquee" not in src, "o carrossel voltou pra faixa de jogos da Home"
-    assert "grid" in src
-    assert "porVir.map(" in src
+    assert "Marquee" in src
+    assert "porVir.map(" in src, "a fita voltou a listar jogo ja' comecado"
+    assert "grid-cols" not in src, "a faixa de jogos voltou a empilhar"
+
+
+def test_a_fita_pode_ser_empurrada_com_o_dedo():
+    """Andar sozinha nao pode ser via de mao unica.
+
+    Enquanto o movimento era `animation` de translateX, o trilho nao era
+    rolavel: procurar um jogo especifico virava ESPERAR ele chegar, e com card
+    grande isso e' vários segundos. Quem move agora e' a rolagem nativa, entao
+    dedo, trackpad e barra funcionam · e o arrasto de MOUSE, que numa caixa
+    rolavel nao existiria, vem dos handlers de ponteiro.
+    """
+    src = _front_codigo("components/ui/Marquee.tsx")
+    assert "overflow-x-auto" in src
+    assert "onPointerDown" in src and "setPointerCapture" in src
+    assert "animate-marquee" not in src, "voltou a mover por CSS, que nao deixa arrastar"
+
+    # `touch-pan-x` e' o que impede o arrasto em diagonal de travar a rolagem
+    # vertical da pagina inteira no celular.
+    assert "touch-pan-x" in src
+
+
+def test_arrastar_a_fita_nao_conta_como_clique():
+    """Soltar o dedo em cima de um card nao pode abrir o card.
+
+    Sem isso, todo arrasto que terminasse sobre um item disparava o clique
+    dele · e a fita e' feita justamente pra ser arrastada por cima dos itens.
+    """
+    src = _front_codigo("components/ui/Marquee.tsx")
+    assert "onClickCapture" in src
+    assert "LIMIAR_ARRASTO" in src
 
 
 def test_a_fila_da_home_encolhe_conforme_os_jogos_comecam():
