@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Spinner } from './ui'
-import { CalendarClock, BrainCircuit, DatabaseZap } from 'lucide-react'
+import { CalendarClock, BrainCircuit, DatabaseZap, CircleCheck, CircleSlash } from 'lucide-react'
 import api from '../services/api'
 import { TeamLogo, LeagueLogo } from './TeamLogo'
 
@@ -211,10 +211,24 @@ export default function PicksPendingCard() {
   const outrosDias    = aindaVem.filter(g => diaDoJogo(g.match_datetime) !== hoje)
   const todosJaComecaram = todayGames.length > 0 && nextGames !== null && porComecar.length === 0
 
+  /*
+   * Duas perguntas diferentes, duas contas diferentes.
+   *
+   * O TÍTULO ("hoje não sai pick") é sobre o DIA: ele só vale se nenhum jogo do
+   * dia tinha histórico, tendo começado ou não. Contar só o que falta começar
+   * fazia a tela virar "hoje não sai pick" no meio da tarde só porque os jogos
+   * com amostra já tinham entrado em campo.
+   *
+   * As LISTAS são sobre o que ainda vai acontecer, que é onde a pessoa ainda
+   * pode agir.
+   */
+  const comHistoricoHoje = todayGames.filter(g => !g.sem_historico)
   const analisaveis   = porComecar.filter(g => !g.sem_historico)
   const semHistorico  = porComecar.filter(g => g.sem_historico)
   const minJogos      = todayGames.find(g => g.min_jogos)?.min_jogos ?? 5
-  const nadaHojePorHistorico = todayGames.length > 0 && analisaveis.length === 0
+  const nadaHojePorHistorico = todayGames.length > 0 && comHistoricoHoje.length === 0
+  /** Tinha candidato hoje, mas todos já entraram em campo. */
+  const candidatosJaComecaram = comHistoricoHoje.length > 0 && analisaveis.length === 0
 
   const linhaJogo = (g: Fixture, apagado = false) => (
     <div key={g.fixture_id}
@@ -268,23 +282,57 @@ export default function PicksPendingCard() {
         </>
       )}
 
+      {/*
+        DE ONDE PODE SAIR PICK, e de onde não pode.
+
+        Os dois grupos já existiam, mas os rótulos falavam de processo ("sendo
+        analisados") em vez de resultado, e a única diferença visual era o tom
+        apagado do segundo. Quem olhava a tela não conseguia responder a única
+        pergunta que interessa ali: destes jogos, quais ainda podem virar pick
+        hoje?
+
+        Agora o rótulo responde isso em palavras, e o ícone repete a resposta
+        sem depender de cor · o grupo de baixo continua apagado, mas não é o
+        apagamento que carrega o significado.
+      */}
       {analisaveis.length > 0 && (
         <div className="text-left mt-6">
-          <p className="text-[10px] text-ink-4 font-semibold mb-2">
-            {analisaveis.length} jogo{analisaveis.length > 1 ? 's' : ''} com histórico
-            {' '}sendo analisado{analisaveis.length > 1 ? 's' : ''} hoje
+          {/* Título e legenda em LINHAS separadas, não lado a lado: num
+              celular de 390px os dois na mesma linha viravam duas colunas
+              estreitas, cada uma quebrando no meio da frase. */}
+          <p className="text-[11px] text-accent font-semibold flex items-center gap-1.5">
+            <CircleCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+            {analisaveis.length === 1
+              ? '1 jogo pode virar pick hoje'
+              : `${analisaveis.length} jogos podem virar pick hoje`}
+          </p>
+          <p className="text-[10px] text-ink-4 mt-0.5 mb-2 ml-5">
+            Têm o histórico que o motor precisa.
           </p>
           <div className="space-y-1.5">{analisaveis.map(g => linhaJogo(g))}</div>
         </div>
       )}
 
+      {/* Tinha candidato hoje e todos já entraram em campo. Dizer isso evita a
+          leitura de que o dia inteiro estava condenado desde cedo. */}
+      {candidatosJaComecaram && !nadaHojePorHistorico && (
+        <p className="text-[11px] text-ink-4 mt-6 text-left">
+          {comHistoricoHoje.length === 1
+            ? 'O jogo com histórico de hoje já começou.'
+            : `Os ${comHistoricoHoje.length} jogos com histórico de hoje já começaram.`}
+        </p>
+      )}
+
       {semHistorico.length > 0 && (
         <div className="text-left mt-6">
-          <p className="text-[10px] text-ink-4 font-semibold mb-2">
-            {nadaHojePorHistorico
-              ? 'Jogos de hoje que ainda vão começar, sem histórico suficiente'
-              : `${semHistorico.length} fora da análise, sem histórico suficiente`}
-            <span className="font-normal"> (partidas do time com menos jogos / mínimo)</span>
+          <p className="text-[11px] text-ink-3 font-semibold flex items-center gap-1.5">
+            <CircleSlash className="w-3.5 h-3.5 shrink-0 text-ink-4" aria-hidden="true" />
+            {semHistorico.length === 1
+              ? '1 jogo não vira pick hoje'
+              : `${semHistorico.length} jogos não viram pick hoje`}
+          </p>
+          <p className="text-[10px] text-ink-4 mt-0.5 mb-2 ml-5">
+            O número à direita é do time com menos jogos, sobre as {minJogos} exigidas.
           </p>
           <div className="space-y-1.5">{semHistorico.map(g => linhaJogo(g, true))}</div>
         </div>
@@ -300,8 +348,8 @@ export default function PicksPendingCard() {
       {todosJaComecaram && (
         <div className="text-left mt-6">
           <p className="text-[10px] text-ink-4 font-semibold mb-2">
-            Os jogos de hoje já começaram
-            <span className="font-normal"> · estes entram na análise no dia deles</span>
+            Os jogos de hoje já começaram.
+            <span className="font-normal"> Estes entram na análise no dia deles.</span>
           </p>
           {outrosDias.length === 0 ? (
             <p className="text-ink-4 text-xs">Nenhum próximo jogo agendado ainda.</p>
