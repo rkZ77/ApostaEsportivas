@@ -108,8 +108,12 @@ def test_fila_e_daqui_pra_frente_e_nao_do_dia():
     assert "match_datetime >=" in padrao
     assert "::date" not in padrao, "a janela padrao voltou a travar num dia"
 
-    # A Home nao passa `date` (o card da tela de Picks passa).
-    assert "params: { limit: 8 }" in _front("home/NextGames.tsx")
+    # A Home nao passa `date` (o card da tela de Picks passa). A asserção e'
+    # sobre isso, e nao sobre o numero do `limit`: presa ao literal, ela
+    # quebrava so' por a Home passar a pedir mais jogos.
+    chamada = _front_codigo("home/NextGames.tsx")
+    assert "'/public/next-fixtures'" in chamada
+    assert "date" not in chamada[chamada.index("next-fixtures"):][:200],         "a Home passou a pedir um dia inteiro em vez de 'daqui pra frente'"
 
 
 def test_fila_tem_indice_pra_nao_varrer_a_tabela():
@@ -240,10 +244,48 @@ def test_fita_usa_padding_e_nao_gap_entre_itens():
     assert "gap-8" not in src
 
 
-def test_carrossel_de_jogos_nao_repete_jogo():
-    src = _front("home/NextGames.tsx")
-    assert "games.map(" in src
-    assert "Marquee" in src
+def test_proximos_jogos_ficam_parados_na_tela():
+    """A faixa da Home nao anda sozinha, e cada jogo aparece UMA vez.
+
+    Ja' foi fita rolando (components/ui/Marquee). O movimento custava caro: um
+    jogo especifico so' aparecia quando a fita chegasse nele, e quem estava
+    lendo um card via ele sair da tela no meio da leitura. Virou grade parada.
+    """
+    src = _front_codigo("home/NextGames.tsx")
+    assert "Marquee" not in src, "o carrossel voltou pra faixa de jogos da Home"
+    assert "grid" in src
+    assert "porVir.map(" in src
+
+
+def test_a_fila_da_home_encolhe_conforme_os_jogos_comecam():
+    """Numa aba deixada aberta, jogo que ja' comecou tem que sair da lista.
+
+    O corte do servidor so' vale no instante da resposta. Sem um relogio local,
+    a Home seguia anunciando como "na fila" partida que tinha comecado horas
+    antes · era o que acontecia com quem deixava a pagina aberta.
+    """
+    src = _front_codigo("home/NextGames.tsx")
+
+    # Corte estritamente MAIOR: o jogo sai no minuto do apito, nao um minuto
+    # depois.
+    assert "quando(g.match_datetime) > agora" in src
+
+    # E o relogio precisa andar sozinho, senao o corte congela no carregamento.
+    assert "setAgora(agoraBR())" in src
+
+
+def test_o_corte_por_horario_compara_TEXTO_e_nao_Date():
+    """`match_datetime` chega em horario de Brasilia SEM fuso.
+
+    Passar isso por `new Date` faz o navegador aplicar o fuso DELE num valor
+    que ja' esta em Brasilia, e o corte erra por horas pra quem esta fora do
+    pais · a mesma armadilha que ja' mordeu o horario exibido no card.
+    """
+    src = _front_codigo("home/NextGames.tsx")
+    corte = src[src.index("function agoraBR"):src.index("function GameCard")]
+    assert "toLocaleDateString('en-CA'" in corte
+    assert "America/Sao_Paulo" in corte
+    assert "new Date(g." not in src, "voltou a converter match_datetime em Date"
 
 
 # ──────────────────────── Largura de aplicativo ────────────────────────

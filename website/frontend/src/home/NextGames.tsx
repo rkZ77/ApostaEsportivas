@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import api from '../services/api'
 import { Check } from 'lucide-react'
-import { LiveDot, Marquee, Skeleton } from '../components/ui'
+import { LiveDot, Skeleton } from '../components/ui'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 
 /*
@@ -20,14 +20,25 @@ import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
  *    o corte é por horário e a lista atravessa a virada do dia sozinha · por
  *    isso cada card carrega o dia dele.
  *
- * 2. Virou carrossel horizontal. A lista vertical de cinco linhas empurrava os
- *    indicadores para fora da primeira tela no celular, e cada linha só cabia
- *    horário e nomes espremidos. Deitada, o mesmo espaço leva escudo, os dois
- *    times em linhas próprias e a liga.
+ * 2. É uma GRADE PARADA, não um carrossel.
  *
- * Ela anda sozinha (components/ui/Marquee), e cada jogo entra UMA vez · quem
- * encostar o cursor ou o dedo pausa. Se os jogos couberem na largura, a fita
- * não anda: fica parada e centralizada, sem repetir card para fingir volume.
+ *    Já foi fita rolando (components/ui/Marquee). O problema não era o
+ *    movimento em si, era o que ele custava: um jogo específico só aparecia
+ *    quando a fita chegasse nele, então procurar o horário de uma partida
+ *    virava esperar. E como a fita andava sozinha, quem estava lendo um card
+ *    via ele sair da tela no meio da leitura.
+ *
+ *    Parada, os jogos ficam todos visíveis de uma vez e a vista é a mesma dois
+ *    segundos depois. A grade é de duas colunas no celular, o que cabe mais
+ *    jogo por tela do que a fita cabia.
+ *
+ * 3. A lista ENCOLHE sozinha conforme os jogos começam.
+ *
+ *    O corte do servidor só vale no instante da resposta. Numa aba deixada
+ *    aberta, a faixa continuava anunciando como "na fila" partida que já tinha
+ *    começado há horas. Agora um relógio local tira cada jogo no minuto do
+ *    apito, e uma rebuscada a cada 5 minutos traz os que entraram na janela.
+ *    Quando não sobra nenhum, a seção some inteira.
  */
 
 interface UpcomingFixture {
@@ -80,12 +91,33 @@ function rotuloDia(iso: string, hoje: string): { texto: string; ehHoje: boolean 
 /** "21:30". Fatiado da string, não formatado por Date · ver rotuloDia. */
 const horaBR = (iso: string) => iso.slice(11, 16)
 
+/**
+ * Agora em Brasília, "YYYY-MM-DDTHH:mm", para comparar com `match_datetime`.
+ *
+ * Comparação de TEXTO, e não de Date, pelo mesmo motivo de `rotuloDia`:
+ * `match_datetime` chega em horário de Brasília SEM fuso, então virar Date faz
+ * o navegador aplicar o fuso DELE num valor que já está em Brasília, e o corte
+ * erra por horas para quem não está no Brasil. Nesse formato o texto ordena
+ * igual à data, então `<` já responde "esse jogo já começou?".
+ */
+function agoraBR(): string {
+  const d = new Date()
+  const dia = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  const hora = d.toLocaleTimeString('pt-BR', {
+    timeZone: 'America/Sao_Paulo', hour12: false, hour: '2-digit', minute: '2-digit',
+  })
+  return `${dia}T${hora}`
+}
+
+/** "2026-08-22 16:00:00" e "2026-08-22T16:00:00" viram a mesma chave. */
+const quando = (iso: string) => (iso ?? '').replace(' ', 'T').slice(0, 16)
+
 function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
   const dia = rotuloDia(game.match_datetime, hoje)
 
   return (
     <article
-      className="shrink-0 w-[196px] sm:w-[212px] bg-surface-0 border border-line rounded-lg p-3
+      className="bg-surface-0 border border-line rounded-lg p-3
                  hover:border-line-strong transition-colors duration-1 ease-smooth"
     >
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -155,29 +187,72 @@ export default function NextGames({ revelar = true, onCarregou }: {
 }) {
   const [games, setGames] = useState<UpcomingFixture[] | null>(null)
   const [loading, setLoading] = useState(true)
+  /* Relógio de Brasília, redesenhado de minuto em minuto. É ele que tira o
+     jogo da lista no apito · ver `porVir` abaixo. */
+  const [agora, setAgora] = useState(agoraBR)
 
+  /*
+   * 30 é o teto da rota, e é o que a janela dela comporta: o coletor mantém
+   * hoje + 2 dias (fixture_collector_service.DIAS_BR = 3). Pedir "os
+   * próximos 8" cortava jogo que ia acontecer hoje mesmo.
+   */
   useEffect(() => {
-    api.get('/public/next-fixtures', { params: { limit: 8 } })
-      .then(r => setGames(Array.isArray(r.data) ? r.data : []))
-      .catch(() => setGames([]))
-      .finally(() => { setLoading(false); onCarregou?.() })
+    let vivo = true
+    const buscar = (primeira: boolean) => {
+      api.get('/public/next-fixtures', { params: { limit: 30 } })
+        .then(r => { if (vivo) setGames(Array.isArray(r.data) ? r.data : []) })
+        .catch(() => { if (vivo && primeira) setGames([]) })
+        .finally(() => { if (vivo && primeira) { setLoading(false); onCarregou?.() } })
+    }
+    buscar(true)
+
+    /* Duas cadências, com papéis diferentes.
+     *
+     * O relógio (1 min) só TIRA, e não custa rede nenhuma: é o que faz a lista
+     * encolher no apito de cada jogo. A rebuscada (5 min) é a única que pode
+     * ACRESCENTAR · jogo que entrou na janela, pick que saiu · e é rara de
+     * propósito, porque a Home é a página mais visitada do site.
+     *
+     * Aba escondida não pesquisa: Home aberta num pano de fundo a tarde
+     * inteira somaria dezenas de consultas que ninguém leu. */
+    const relogio = setInterval(() => setAgora(agoraBR()), 60_000)
+    const rebusca = setInterval(() => { if (!document.hidden) buscar(false) }, 300_000)
+    const aoVoltar = () => { if (!document.hidden) { setAgora(agoraBR()); buscar(false) } }
+    document.addEventListener('visibilitychange', aoVoltar)
+    return () => {
+      vivo = false
+      clearInterval(relogio); clearInterval(rebusca)
+      document.removeEventListener('visibilitychange', aoVoltar)
+    }
   }, [])
 
   if (loading || !revelar) {
     return (
-      <div className="-mx-4 sm:mx-0">
-        <div className="flex gap-3 overflow-hidden px-4 sm:px-0">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-[148px] w-[196px] sm:w-[212px] shrink-0" />
-          ))}
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <Skeleton key={i} className="h-[148px]" />
+        ))}
       </div>
     )
   }
 
+  /*
+   * Só o que ainda não começou.
+   *
+   * O servidor corta com 10 minutos de tolerância (ver public_next_fixtures) e
+   * esse corte vale no instante da resposta. Aqui o corte é no apito e é
+   * refeito a cada minuto: quem deixou a aba aberta vê a lista encolher em vez
+   * de continuar lendo "análise na fila" sobre um jogo do primeiro tempo.
+   *
+   * `>` e não `>=`: o jogo sai no minuto em que começa. Com `>=` ele ficava
+   * pendurado o minuto inteiro do apito, que é justamente quando "na fila" já
+   * virou mentira.
+   */
+  const porVir = (games ?? []).filter(g => quando(g.match_datetime) > agora)
+
   // Sem jogo na janela, some inteira · a Home não ganha um painel vazio
   // avisando que não tem nada para avisar.
-  if (!games || games.length === 0) return null
+  if (porVir.length === 0) return null
 
   /*
    * "Na fila da IA" é uma promessa, e em começo de temporada ela era falsa: os
@@ -188,7 +263,7 @@ export default function NextGames({ revelar = true, onCarregou }: {
    * números · mas com o nome do que ela é de fato quando nada ali pode virar
    * pick. Quem quiser o motivo encontra na aba de picks, que explica.
    */
-  const naFila = games.some(g => !g.sem_historico)
+  const naFila = porVir.some(g => !g.sem_historico)
 
   const hoje = hojeBR()
 
@@ -205,24 +280,17 @@ export default function NextGames({ revelar = true, onCarregou }: {
           {naFila ? 'Na fila da IA' : 'Próximos jogos'}
         </h2>
         <span className="text-[10px] text-ink-4 shrink-0">
-          {games.length === 1 ? 'próximo jogo' : `próximos ${games.length} jogos`}
+          {porVir.length === 1 ? 'próximo jogo' : `próximos ${porVir.length} jogos`}
         </span>
       </div>
 
-      {/* Sangria até a borda da tela no celular: o esmaecido das pontas é do
-          próprio Marquee, e com a fita parando 16px antes da borda ele
-          deixaria um naco de card nítido do lado de fora do degradê. */}
-      <div className="-mx-4 sm:mx-0">
-        <Marquee
-          spacing="pr-3"
-          /* Devagar de propósito: o card tem cinco informações e some da
-             tela em ~6s neste ritmo. Na velocidade da fita de ligas · que
-             são duas palavras e um escudo · não daria para ler nenhuma. */
-          speed={28}
-          items={games.map(g => (
-            <GameCard key={g.fixture_id} game={g} hoje={hoje} />
-          ))}
-        />
+      {/* Grade, e a largura do card sai dela · o `w-[196px]` fixo era da época
+          da fita, onde cada card era uma peça solta numa linha infinita. Aqui
+          ele ocupa a coluna, senão sobraria buraco à direita em telas largas. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {porVir.map(g => (
+          <GameCard key={g.fixture_id} game={g} hoje={hoje} />
+        ))}
       </div>
     </motion.section>
   )
