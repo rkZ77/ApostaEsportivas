@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  Globe, Home, Plane, Search, Database, Radio, Info, X, ChevronRight, Lock,
+  Globe, Home, Plane, Search, Database, Radio, X, ChevronRight, Lock,
 } from 'lucide-react'
 import api from '../services/api'
+import { sinalizarNavegacao } from '../services/progressBus'
 import { useAuth } from '../context/AuthContext'
 import { SpinnerBlock, EmptyState, ErrorState, Modal, PillGroup, StatTile, Badge } from './ui'
 
@@ -50,6 +51,9 @@ interface Corte {
   clean_sheet_pct: number; sem_marcar_pct: number
   btts_pct: number
   over15_pct: number; over25_pct: number; over35_pct: number
+  sem_gols_pct: number
+  media_gols_1t: number; media_gols_2t: number
+  gol_no_1t_pct: number; jogos_com_1t: number
   forma: string
 }
 
@@ -61,8 +65,13 @@ interface TimeLinha {
 interface Resumo {
   jogos_total: number; jogos_finalizados: number
   media_gols: number; media_gols_casa: number; media_gols_fora: number
-  btts_pct: number; over25_pct: number
+  btts_pct: number
+  over15_pct: number; over25_pct: number; over35_pct: number
+  sem_gols_pct: number
   vitoria_casa_pct: number; empate_pct: number; vitoria_fora_pct: number
+  jogos_com_1t: number
+  media_gols_1t: number; media_gols_2t: number; gol_no_1t_pct: number
+  placares_comuns: { placar: string; jogos: number; pct: number }[]
 }
 
 interface DetalheTemporada {
@@ -77,10 +86,19 @@ interface DetalheTime {
   forma: string | null
   jogos: { todos: number; casa: number; fora: number }
   cartoes: {
-    amarelo: { total: number; por_jogo: number; faixas: { faixa: string; total: number }[] }
-    vermelho: { total: number; por_jogo: number; faixas: { faixa: string; total: number }[] }
+    amarelo: { total: number; por_jogo: number; faixas: Faixa[] }
+    vermelho: { total: number; por_jogo: number; faixas: Faixa[] }
   }
+  gols_por_faixa: { marcados: Faixa[]; sofridos: Faixa[] }
+  sequencias: { vitorias: number; empates: number; derrotas: number }
+  maiores: {
+    vitoria_casa: string | null; vitoria_fora: string | null
+    derrota_casa: string | null; derrota_fora: string | null
+  }
+  penaltis: { cobrados: number; convertidos: number; perdidos: number }
 }
+
+interface Faixa { faixa: string; total: number }
 
 /*
  * As métricas ordenáveis, e o que cada uma significa no recorte escolhido.
@@ -93,9 +111,16 @@ const METRICAS = [
   { key: 'media_gols_pro',     label: 'Gols marcados',  sufixo: '',   casas: 2, melhorAlto: true },
   { key: 'media_gols_contra',  label: 'Gols sofridos',  sufixo: '',   casas: 2, melhorAlto: false },
   { key: 'media_gols_total',   label: 'Gols no jogo',   sufixo: '',   casas: 2, melhorAlto: true },
+  { key: 'media_gols_1t',      label: 'Gols no 1T',     sufixo: '',   casas: 2, melhorAlto: true },
+  { key: 'media_gols_2t',      label: 'Gols no 2T',     sufixo: '',   casas: 2, melhorAlto: true },
+  { key: 'over15_pct',         label: 'Over 1.5',       sufixo: '%',  casas: 1, melhorAlto: true },
   { key: 'over25_pct',         label: 'Over 2.5',       sufixo: '%',  casas: 1, melhorAlto: true },
+  { key: 'over35_pct',         label: 'Over 3.5',       sufixo: '%',  casas: 1, melhorAlto: true },
   { key: 'btts_pct',           label: 'Ambos marcam',   sufixo: '%',  casas: 1, melhorAlto: true },
+  { key: 'gol_no_1t_pct',      label: 'Gol no 1T',      sufixo: '%',  casas: 1, melhorAlto: true },
   { key: 'clean_sheet_pct',    label: 'Sem sofrer gol', sufixo: '%',  casas: 1, melhorAlto: true },
+  { key: 'sem_marcar_pct',     label: 'Não marcou',     sufixo: '%',  casas: 1, melhorAlto: false },
+  { key: 'sem_gols_pct',       label: 'Jogo sem gol',   sufixo: '%',  casas: 1, melhorAlto: false },
 ] as const
 
 type MetricaKey = typeof METRICAS[number]['key']
@@ -208,6 +233,10 @@ export default function ExplorarLigas() {
 
   useEffect(() => {
     if (!isVip || !liga || !temporada) return
+    /* Acende a barra verde do topo. Esta e' a espera mais longa da tela · a
+       fonte devolve a temporada inteira, 380 jogos, numa resposta so' · e a
+       troca de liga nao muda de rota, entao a barra nao perceberia sozinha. */
+    sinalizarNavegacao()
     setCarregando(true); setErro(null)
     api.get(`/explorer/ligas/${liga.league_id}/temporadas/${temporada}`)
       .then(r => setDados(r.data))
@@ -290,19 +319,6 @@ export default function ExplorarLigas() {
 
   return (
     <div className="space-y-5">
-
-      {/* Aviso do que esta aba é. Sem ele, a ausência de escanteios lê como
-          defeito em vez de limite da fonte. */}
-      <div className="flex items-start gap-3 bg-surface-1 border border-line rounded-lg px-4 py-3">
-        <Info className="w-4 h-4 text-ink-3 mt-0.5 shrink-0" />
-        <p className="text-ink-2 text-xs leading-relaxed">
-          Consulta direto na fonte de dados, <span className="text-ink-1 font-semibold">sem passar pelo banco</span>:
-          dá pra abrir qualquer liga e qualquer temporada, inclusive as que a IA não cobre.
-          Aqui só entram números tirados do placar · gols, aproveitamento, forma e cartões.
-          Escanteios e faltas continuam na aba <span className="text-ink-1 font-semibold">Estatísticas</span>,
-          que lê o histórico coletado.
-        </p>
-      </div>
 
       {/* Seletor de liga */}
       <div className="space-y-3">
@@ -404,15 +420,56 @@ export default function ExplorarLigas() {
             <>
               {/* Resumo da temporada */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                <StatTile label="Gols por jogo"   value={dados.resumo.media_gols.toFixed(2)} tone="green" />
-                <StatTile label="Ambos marcam"    value={`${dados.resumo.btts_pct}%`} />
-                <StatTile label="Over 2.5"        value={`${dados.resumo.over25_pct}%`} />
+                <StatTile label="Gols por jogo" value={dados.resumo.media_gols.toFixed(2)} tone="green"
+                  hint={`casa ${dados.resumo.media_gols_casa.toFixed(2)} · fora ${dados.resumo.media_gols_fora.toFixed(2)}`} />
+                <StatTile label="Ambos marcam" value={`${dados.resumo.btts_pct}%`} />
+                <StatTile label="Over 2.5"     value={`${dados.resumo.over25_pct}%`}
+                  hint={`1.5: ${dados.resumo.over15_pct}% · 3.5: ${dados.resumo.over35_pct}%`} />
                 <StatTile
                   label="Mando de campo"
                   value={`${dados.resumo.vitoria_casa_pct}%`}
                   hint={`empate ${dados.resumo.empate_pct}% · fora ${dados.resumo.vitoria_fora_pct}%`}
                 />
+                {/* Tempo do gol. Só entra quando a temporada tem placar de
+                    intervalo: nas antigas a fonte devolve nulo, e uma média de
+                    0.00 pareceria "nunca sai gol no primeiro tempo". */}
+                {dados.resumo.jogos_com_1t > 0 && (
+                  <>
+                    <StatTile label="Gols no 1º tempo" value={dados.resumo.media_gols_1t.toFixed(2)} />
+                    <StatTile label="Gols no 2º tempo" value={dados.resumo.media_gols_2t.toFixed(2)} />
+                    <StatTile label="Sai gol antes do intervalo" value={`${dados.resumo.gol_no_1t_pct}%`} />
+                  </>
+                )}
+                <StatTile label="Jogo sem gol" value={`${dados.resumo.sem_gols_pct}%`}
+                  tone={dados.resumo.sem_gols_pct >= 10 ? 'red' : 'default'} />
               </div>
+
+              {/* Placares mais comuns. É a leitura que média nenhuma dá: uma
+                  liga de 2.5 gols por jogo pode ser cheia de 2-1 ou cheia de
+                  0-0 e 4-1, e as duas coisas jogam diferente. Sempre pelo
+                  lado do mandante, que é como resultado exato é cotado. */}
+              {dados.resumo.placares_comuns.length > 0 && (
+                <div className="card p-0 overflow-hidden">
+                  <div className="px-4 py-3 border-b border-line">
+                    <h3 className="text-sm font-bold text-ink-1">Placares mais comuns</h3>
+                    <p className="text-[11px] text-ink-4 mt-0.5">Mandante primeiro, em {dados.resumo.jogos_finalizados} jogos.</p>
+                  </div>
+                  <div className="p-4 space-y-1.5">
+                    {dados.resumo.placares_comuns.map(pl => {
+                      const maior = dados.resumo.placares_comuns[0].jogos || 1
+                      return (
+                        <div key={pl.placar} className="flex items-center gap-2">
+                          <span className="font-mono text-xs font-bold text-ink-2 w-10 shrink-0">{pl.placar}</span>
+                          <div className="flex-1 h-2 bg-surface-2 rounded-full overflow-hidden">
+                            <div className="h-full bg-accent/70 rounded-full" style={{ width: `${(pl.jogos / maior) * 100}%` }} />
+                          </div>
+                          <span className="font-mono text-[11px] text-ink-4 w-14 text-right shrink-0">{pl.pct}%</span>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
 
               {/* Recorte e ordenação */}
               <div className="space-y-3">
@@ -488,8 +545,7 @@ export default function ExplorarLigas() {
                 <p className="px-4 py-2.5 text-[10px] text-ink-4 border-t border-line/60 leading-relaxed">
                   Aproveitamento é ponto ganho sobre ponto disputado. Time com menos da metade dos jogos
                   da mediana da liga fica no fim marcado como amostra curta, porque média de dois jogos
-                  não se compara com média de trinta e oito. Toque num time pra ver os cartões, que
-                  custam uma consulta extra e por isso não vêm na lista.
+                  não se compara com média de trinta e oito. Toque num time pra ver os cartões.
                 </p>
               </div>
             </>
@@ -535,12 +591,22 @@ export default function ExplorarLigas() {
                     <div className="font-mono text-[11px] text-ink-2">
                       {c.media_gols_contra.toFixed(2)} <span className="text-ink-4">sofridos</span>
                     </div>
+                    {c.jogos_com_1t > 0 && (
+                      <div className="mt-1 pt-1 border-t border-line/60 font-mono text-[10px] text-ink-4">
+                        {c.media_gols_1t.toFixed(2)} / {c.media_gols_2t.toFixed(2)}
+                        <span className="block text-[9px]">1T / 2T</span>
+                      </div>
+                    )}
                   </div>
                 )
               })}
             </div>
 
-            <div className="grid grid-cols-3 gap-2">
+            {/* Três numa linha em 390px é apertado pro `text-2xl` do stat-tile:
+                "47.4%" estourava a caixa em 8px e ficava cortado. Aqui o valor
+                desce um degrau em vez de a linha virar duas colunas · manter os
+                três lado a lado é o que faz eles se lerem como um conjunto. */}
+            <div className="grid grid-cols-3 gap-2 [&_.stat-tile]:p-3 [&_.stat-value]:text-xl">
               <StatTile label="Ambos marcam"  value={`${timeAberto[recorte].btts_pct}%`} />
               <StatTile label="Over 2.5"      value={`${timeAberto[recorte].over25_pct}%`} />
               <StatTile label="Sem sofrer"    value={`${timeAberto[recorte].clean_sheet_pct}%`} />
@@ -553,6 +619,86 @@ export default function ExplorarLigas() {
                 A fonte não tem o detalhe de cartões desse time nessa temporada.
               </p>
             ) : (
+              <>
+              {/* Em que altura do jogo o time marca e leva.
+                  Duas equipes de 1.7 gol por jogo, uma que resolve cedo e
+                  outra que decide no fim, são apostas diferentes · e isso não
+                  aparece em média nenhuma. */}
+              <div className="card p-0 overflow-hidden">
+                <div className="px-4 py-3 border-b border-line">
+                  <h4 className="text-sm font-bold text-ink-1">Quando os gols saem</h4>
+                  <p className="text-[11px] text-ink-4 mt-0.5">
+                    <span className="text-green-400 font-semibold">marcados</span> e
+                    {' '}<span className="text-red-400 font-semibold">sofridos</span> por faixa de minuto
+                  </p>
+                </div>
+                <div className="p-4 space-y-2">
+                  {(() => {
+                    const marc = detalheTime.gols_por_faixa.marcados
+                    const sofr = detalheTime.gols_por_faixa.sofridos
+                    const maior = Math.max(1, ...marc.map(f => f.total), ...sofr.map(f => f.total))
+                    return marc.map((f, i) => {
+                      const contra = sofr[i]?.total ?? 0
+                      return (
+                        <div key={f.faixa} className="flex items-center gap-2">
+                          <span className="font-mono text-[10px] text-ink-4 w-14 shrink-0">{f.faixa}'</span>
+                          <div className="flex-1 space-y-1">
+                            <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                              <div className="h-full bg-green-500/70 rounded-full" style={{ width: `${(f.total / maior) * 100}%` }} />
+                            </div>
+                            <div className="h-2 bg-surface-2 rounded-full overflow-hidden">
+                              <div className="h-full bg-red-500/60 rounded-full" style={{ width: `${(contra / maior) * 100}%` }} />
+                            </div>
+                          </div>
+                          <span className="font-mono text-[11px] w-10 text-right shrink-0">
+                            <span className="text-green-400">{f.total}</span>
+                            <span className="text-ink-4">/</span>
+                            <span className="text-red-400">{contra}</span>
+                          </span>
+                        </div>
+                      )
+                    })
+                  })()}
+                </div>
+              </div>
+
+              {/* Sequências e extremos. Média esconde os dois. */}
+              <div className="grid grid-cols-3 gap-2">
+                <StatTile label="Sequência de vitórias" value={detalheTime.sequencias.vitorias}
+                  tone={detalheTime.sequencias.vitorias >= 3 ? 'green' : 'default'} />
+                <StatTile label="Sequência de empates"  value={detalheTime.sequencias.empates} />
+                <StatTile label="Sequência de derrotas" value={detalheTime.sequencias.derrotas}
+                  tone={detalheTime.sequencias.derrotas >= 3 ? 'red' : 'default'} />
+              </div>
+
+              <div className="card p-4">
+                <h4 className="text-sm font-bold text-ink-1 mb-3">Extremos da temporada</h4>
+                {/* Uma coluna no celular. Em duas, "Maior derrota em casa"
+                    não cabe em 390px e virava "Maior derrota em ca...", que é
+                    ambíguo justamente entre casa e fora. */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-2 text-[11px]">
+                  {([
+                    ['Maior vitória em casa', detalheTime.maiores.vitoria_casa, 'text-green-400'],
+                    ['Maior vitória fora',    detalheTime.maiores.vitoria_fora, 'text-green-400'],
+                    ['Maior derrota em casa', detalheTime.maiores.derrota_casa, 'text-red-400'],
+                    ['Maior derrota fora',    detalheTime.maiores.derrota_fora, 'text-red-400'],
+                  ] as [string, string | null, string][]).map(([rotulo, placar, cor]) => (
+                    <div key={rotulo} className="flex items-center justify-between gap-2">
+                      <span className="text-ink-4 truncate">{rotulo}</span>
+                      <span className={`font-mono font-bold shrink-0 ${placar ? cor : 'text-ink-4'}`}>
+                        {placar ?? '-'}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                {detalheTime.penaltis.cobrados > 0 && (
+                  <p className="mt-3 pt-3 border-t border-line/60 text-[11px] text-ink-4">
+                    Pênaltis: <span className="font-mono text-ink-2 font-semibold">{detalheTime.penaltis.convertidos}</span> convertidos
+                    de <span className="font-mono text-ink-2 font-semibold">{detalheTime.penaltis.cobrados}</span> cobrados.
+                  </p>
+                )}
+              </div>
+
               <div className="card p-0 overflow-hidden">
                 <div className="px-4 py-3 border-b border-line">
                   <h4 className="text-sm font-bold text-ink-1">Cartões na temporada</h4>
@@ -582,6 +728,7 @@ export default function ExplorarLigas() {
                   só quando o jogo aperta no fim.
                 </p>
               </div>
+              </>
             )}
           </div>
         </Modal>

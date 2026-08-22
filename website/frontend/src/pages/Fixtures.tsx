@@ -11,6 +11,7 @@ import { useAuth } from '../context/AuthContext'
 import { Badge, LiveDot, Spinner } from '../components/ui'
 import AgendaInteligente from '../components/AgendaInteligente'
 import ExplorarLigas from '../components/ExplorarLigas'
+import { sinalizarNavegacao } from '../services/progressBus'
 import { backdropFade, dialogScale, tabFade } from '../lib/motion'
 
 // Data de hoje no fuso de Brasília (toISOString retorna UTC e quebraria de madrugada)
@@ -355,7 +356,15 @@ export default function Fixtures() {
                 <motion.button
                   key={t.key}
                   whileTap={{ scale: 0.95 }}
-                  onClick={() => setPageTab(t.key)}
+                  onClick={() => {
+                    /* A barra verde do topo fecha quando a tela nova para de
+                       buscar dados, mas ela só COMEÇA na troca de rota · e
+                       estas abas são estado, não rota. Sem o aviso, trocar pra
+                       Estatísticas ou Explorar ficava alguns segundos sem sinal
+                       nenhum de que algo estava vindo. */
+                    if (t.key !== pageTab) sinalizarNavegacao()
+                    setPageTab(t.key)
+                  }}
                   className={`relative px-4 py-2.5 text-sm font-semibold transition-colors ${
                     pageTab === t.key ? 'text-ink-1' : 'text-ink-3 hover:text-ink-2'
                   }`}
