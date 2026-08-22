@@ -172,6 +172,17 @@ def montar_estado(fixture_bruto: dict, home_stats: dict, away_stats: dict,
         "blocked_shots_total": b_total,
         "yellow_home": y_casa, "yellow_away": y_fora,
         "red_home": r_casa, "red_away": r_fora, "red_cards_total": r_total,
+        # PONTOS de cartao, nao contagem: amarelo=1, vermelho=2. Mesma
+        # convencao de stats_model._cards_points e do pre-jogo, e ela existe
+        # porque um vermelho nao equivale a um amarelo em nada -- nem no jogo,
+        # nem na linha do mercado. Ausente se qualquer lado nao publicou.
+        "cards_points_total": (None if (y_casa is None or y_fora is None
+                                        or r_total is None)
+                               else (y_casa + y_fora) + 2 * r_total),
+        # Quem apita. Vem no proprio feed de fixtures ao vivo ("Nome, Pais"),
+        # no mesmo formato que match_statistics.referee guarda -- e' o que
+        # permite ao motor ao vivo olhar o arbitro igual o pre-jogo faz.
+        "referee": fixture.get("referee"),
         "possession_home": home_stats.get("Ball Possession"),
         "possession_away": away_stats.get("Ball Possession"),
         "xg_home": home_stats.get("expected_goals"),

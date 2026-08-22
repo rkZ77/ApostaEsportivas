@@ -44,6 +44,8 @@ def observado_da_familia(estado: dict, familia: str) -> int | None:
         return estado.get("corners_total")
     if familia == "goals":
         return estado.get("goals_total")
+    if familia == "cards":
+        return estado.get("cards_points_total")
     return None
 
 

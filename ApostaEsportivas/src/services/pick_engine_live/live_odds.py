@@ -38,11 +38,18 @@ NOMES_POR_FAMILIA = {
     "goals": {"match goals", "over/under line", "goals over/under", "over/under"},
     "corners": {"total corners", "match corners", "corners over/under",
                 "asian corners", "corners"},
+    "cards": {"total cards", "match cards", "cards over/under", "cards",
+              "asian cards", "bookings over/under", "bookings"},
 }
 
-#: Familias que a V1 cota. Cartoes, chutes e o resto entram quando o modelo
-#: residual estiver medido nestas duas.
-FAMILIAS_V1 = ("corners", "goals")
+#: Familias que a V1 cota.
+#:
+#: Cartoes entrou depois das duas primeiras, e por um motivo proprio: e' a
+#: unica familia cujo numero ainda chega ao vivo quando a folha de estatistica
+#: nao vem (o feed de eventos publica cartao), e a unica que tem uma terceira
+#: estimativa independente do jogo em si -- a media de quem apita. Chutes e o
+#: resto continuam fora ate' o residual estar medido.
+FAMILIAS_V1 = ("corners", "goals", "cards")
 
 #: Rotulo em portugues do mercado, gravado na coluna `market` do pick. Mesmo
 #: vocabulario que o pre-jogo ja usa (BET_ID_PT_MAP em
@@ -51,6 +58,7 @@ FAMILIAS_V1 = ("corners", "goals")
 ROTULO_PT = {
     "goals": "Gols Mais/Menos",
     "corners": "Escanteios Mais/Menos",
+    "cards": "Cartoes Mais/Menos",
 }
 
 

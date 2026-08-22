@@ -67,12 +67,21 @@ MINUTOS_REGULAMENTARES = 90
 #: Numero de partida declarado, pra calibrar contra resultado medido.
 MEIA_CONFIANCA = 45.0
 
+# O ponto neutro de cartao mora no pre-jogo (referee_model): e' o mesmo
+# conceito nos dois motores, e duas constantes divergiriam no primeiro ajuste.
+from services.pick_engine import referee_model
+
 #: Media por partida quando nao ha baseline medido. Sao os numeros tipicos de
 #: futebol de clubes; o pipeline sobrescreve com a media real da liga vinda de
 #: `match_statistics` (custo zero de API) sempre que houver amostra.
 BASELINE_PADRAO = {
     "corners": 10.2,
     "goals": 2.72,
+    # Pontos de cartao por partida (amarelo=1, vermelho=2). O numero vem do
+    # pre-jogo em vez de ser escolhido aqui: e' o MESMO ponto neutro que
+    # referee_model usa pra encolher a media do arbitro, e duas constantes
+    # diferentes pro mesmo conceito divergiriam no primeiro ajuste.
+    "cards": referee_model._REFEREE_CARD_POINTS_BASELINE,
 }
 
 
