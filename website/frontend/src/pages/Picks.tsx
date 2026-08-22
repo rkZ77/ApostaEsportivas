@@ -26,9 +26,9 @@ import {
  *
  * Juntas são 68 KB de código-fonte, e o usuário cai sempre na aba "Hoje" ·
  * nenhuma das duas participa da primeira tela. O caso do feed é pior ainda:
- * ele só renderiza com LIVE_PICKS_ENABLED, que está DESLIGADA em produção,
- * então eram 24 KB embarcados em todo carregamento de Picks para código que
- * ninguém executa.
+ * enquanto o produto não abre, ele só renderiza para admin (ver
+ * `podeVerAoVivo`), então eram 24 KB embarcados em todo carregamento de Picks
+ * para código que quase ninguém executa.
  *
  * `lazy()` aqui é seguro porque as duas já são montadas condicionalmente e
  * fazem o próprio polling · elas não guardam estado que a página precise antes
@@ -138,8 +138,10 @@ interface AlavSerie {
 const defaultAlavFilters: AlavFilters = { date_from: '', date_to: TODAY, resultado: 'all' }
 
 // Tab bar
-function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
+function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefetch }: {
   tab: Tab; setTab: (t: Tab) => void; canSeeVip: boolean
+  /** Ver `podeVerAoVivo` no Picks · admin enxerga antes do produto abrir. */
+  verAoVivo: boolean
   counts?: Partial<Record<Tab, number>>
   liveCount?: number
   /** Aquece os dados da aba antes do clique · ver `prefetchAba` no Picks. */
@@ -188,10 +190,10 @@ function TabBar({ tab, setTab, canSeeVip, counts, liveCount, onPrefetch }: {
       key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
       premiumOnly: true,
       /* Fora da barra enquanto o Motor Live não roda em produção · ver
-         LIVE_PICKS_ENABLED em config.ts. Filtrada logo abaixo em vez de
-         removida daqui pra a aba voltar virando uma variável de ambiente, sem
-         mexer no código. */
-      oculta: !LIVE_PICKS_ENABLED,
+         LIVE_PICKS_ENABLED em config.ts e `podeVerAoVivo` no Picks. Filtrada
+         logo abaixo em vez de removida daqui pra a aba voltar virando uma
+         variável de ambiente, sem mexer no código. */
+      oculta: !verAoVivo,
     },
     {
       /* O que o usuário decidiu seguir. O contador pulsante continua aqui,
@@ -1872,6 +1874,21 @@ export default function Picks() {
   const navigate = useNavigate()
   const location = useLocation()
   const { user, isVip, isAdmin, daysUntilExpiry } = useAuth()
+
+  /*
+   * Quem enxerga a aba "Picks Ao Vivo".
+   *
+   * `VITE_LIVE_PICKS_ENABLED` continua sendo o interruptor do PRODUTO: quando
+   * ele abrir pro assinante, é aquela variável que liga a aba pra todo mundo,
+   * sem deploy. O que muda aqui é que admin não precisa esperar por isso ·
+   * enquanto o motor está sendo medido, quem opera precisa ver a mesma tela
+   * que o assinante vai ver, no mesmo lugar dos outros picks, e não só o
+   * painel de diagnóstico do /admin.
+   *
+   * O backend já recusa o feed pra quem não pode (LIVE_PICKS_PUBLIC em
+   * live_picks.py), então isto é sobre a aba aparecer, não sobre liberar dado.
+   */
+  const podeVerAoVivo = LIVE_PICKS_ENABLED || isAdmin
   const canSeeVip = isVip || isAdmin
   const { hasNew, markSeen, liveCount, hasLive, clearLive } = useNotifications()
   // Só para não empilhar sobreposição: enquanto o tour de boas-vindas ainda
@@ -1911,9 +1928,9 @@ export default function Picks() {
     // aba ativa e a área vazia -- exatamente o sintoma que o comentário acima
     // descreve pro #ao_vivo. O chat vive no botão do Agente e em /agente.
     const valid: Tab[] = ['hoje','pick_seguro','vip','multiplas','alavancagem','mercados','minhas_apostas',
-                          ...(LIVE_PICKS_ENABLED ? ['ao_vivo' as Tab] : [])]
+                          ...(podeVerAoVivo ? ['ao_vivo' as Tab] : [])]
     setTab(valid.includes(hash) ? hash : 'hoje')
-  }, [location.hash])
+  }, [location.hash, podeVerAoVivo])
 
   /*
    * O painel lateral de detalhe saiu daqui em 2026-08-14, a pedido do usuário.
@@ -2368,6 +2385,7 @@ export default function Picks() {
         <UserGreeting user={user} isVip={isVip} isAdmin={isAdmin} daysUntilExpiry={daysUntilExpiry} />
 
         <TabBar
+          verAoVivo={podeVerAoVivo}
           tab={tab}
           setTab={(t) => {
             if (t === 'minhas_apostas') clearLive()
@@ -3388,7 +3406,7 @@ export default function Picks() {
         {/* O chunk só é buscado na primeira vez que a aba abre. Depois disso a
             aba continua montada com `hidden`, como era antes · ela tem polling
             próprio e estado que não pode ser perdido a cada troca de aba. */}
-        {LIVE_PICKS_ENABLED && jaAbriuAoVivo.current && (
+        {podeVerAoVivo && jaAbriuAoVivo.current && (
           <div className={tab !== 'ao_vivo' ? 'hidden' : ''}>
             <Suspense fallback={<PickLoading />}>
               <LivePicksFeed isActive={tab === 'ao_vivo'} />

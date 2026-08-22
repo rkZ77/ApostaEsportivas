@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import api from '../services/api'
 import { Check } from 'lucide-react'
-import { LiveDot, Skeleton } from '../components/ui'
+import { LiveDot, Marquee, Skeleton } from '../components/ui'
 import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
 
 /*
@@ -20,17 +20,16 @@ import { TeamLogo, LeagueLogo } from '../components/TeamLogo'
  *    o corte é por horário e a lista atravessa a virada do dia sozinha · por
  *    isso cada card carrega o dia dele.
  *
- * 2. É uma GRADE PARADA, não um carrossel.
+ * 2. É uma fita horizontal que anda E se deixa empurrar.
  *
- *    Já foi fita rolando (components/ui/Marquee). O problema não era o
- *    movimento em si, era o que ele custava: um jogo específico só aparecia
- *    quando a fita chegasse nele, então procurar o horário de uma partida
- *    virava esperar. E como a fita andava sozinha, quem estava lendo um card
- *    via ele sair da tela no meio da leitura.
+ *    Passou por uma grade empilhada no meio do caminho, e ela resolvia o
+ *    problema errado: com a lista inteira à mostra, uma rodada cheia virava
+ *    quinze linhas de card no celular e empurrava o resto da Home pra baixo.
  *
- *    Parada, os jogos ficam todos visíveis de uma vez e a vista é a mesma dois
- *    segundos depois. A grade é de duas colunas no celular, o que cabe mais
- *    jogo por tela do que a fita cabia.
+ *    De volta à fita, com o que faltava nela: dá pra arrastar. O motivo da
+ *    grade era não precisar ESPERAR o jogo chegar; empurrar com o dedo resolve
+ *    isso sem custar altura de página. A mecânica mora em components/ui/Marquee
+ *    e vale também para a fita de ligas.
  *
  * 3. A lista ENCOLHE sozinha conforme os jogos começam.
  *
@@ -103,8 +102,13 @@ const horaBR = (iso: string) => iso.slice(11, 16)
 function agoraBR(): string {
   const d = new Date()
   const dia = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  /* `hourCycle: 'h23'` e não `hour12: false`. Os dois pedem relógio de 24
+     horas, mas `hour12: false` deixa a escolha entre h23 e h24 pro motor, e o
+     WebKit já devolveu "24:30" pra meia-noite e meia. Nesse formato de texto,
+     "24:30" é maior que QUALQUER horário de jogo · a faixa inteira sumiria da
+     Home entre 00h e 01h no iPhone, sem erro nenhum no console. */
   const hora = d.toLocaleTimeString('pt-BR', {
-    timeZone: 'America/Sao_Paulo', hour12: false, hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo', hourCycle: 'h23', hour: '2-digit', minute: '2-digit',
   })
   return `${dia}T${hora}`
 }
@@ -117,7 +121,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
 
   return (
     <article
-      className="bg-surface-0 border border-line rounded-lg p-3
+      className="shrink-0 w-[196px] sm:w-[212px] bg-surface-0 border border-line rounded-lg p-3
                  hover:border-line-strong transition-colors duration-1 ease-smooth"
     >
       <div className="flex items-center justify-between gap-2 mb-3">
@@ -228,10 +232,12 @@ export default function NextGames({ revelar = true, onCarregou }: {
 
   if (loading || !revelar) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <Skeleton key={i} className="h-[148px]" />
-        ))}
+      <div className="-mx-4 sm:mx-0">
+        <div className="flex gap-3 overflow-hidden px-4 sm:px-0">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <Skeleton key={i} className="h-[148px] w-[196px] sm:w-[212px] shrink-0" />
+          ))}
+        </div>
       </div>
     )
   }
@@ -284,13 +290,20 @@ export default function NextGames({ revelar = true, onCarregou }: {
         </span>
       </div>
 
-      {/* Grade, e a largura do card sai dela · o `w-[196px]` fixo era da época
-          da fita, onde cada card era uma peça solta numa linha infinita. Aqui
-          ele ocupa a coluna, senão sobraria buraco à direita em telas largas. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-        {porVir.map(g => (
-          <GameCard key={g.fixture_id} game={g} hoje={hoje} />
-        ))}
+      {/* Sangria até a borda da tela no celular: o esmaecido das pontas é do
+          próprio Marquee, e com a fita parando 16px antes da borda ele
+          deixaria um naco de card nítido do lado de fora do degradê. */}
+      <div className="-mx-4 sm:mx-0">
+        <Marquee
+          spacing="pr-3"
+          /* Um pouco abaixo da fita de ligas (50), e não os 28 de antes: o
+             card tem cinco informações, mas naquele ritmo ele levava seis
+             segundos pra atravessar e a fita parecia travada. */
+          speed={44}
+          items={porVir.map(g => (
+            <GameCard key={g.fixture_id} game={g} hoje={hoje} />
+          ))}
+        />
       </div>
     </motion.section>
   )

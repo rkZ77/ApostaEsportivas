@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { cn } from '../../lib/cn'
 
 /*
- * Fita que passa sozinha.
+ * Fita que passa sozinha · e que também aceita ser empurrada com o dedo.
  *
  * A fita SEMPRE anda. Para isso o trilho precisa ser mais largo que a tela, e
  * é aí que mora a única decisão difícil deste arquivo: quando a lista real não
@@ -20,18 +20,39 @@ import { cn } from '../../lib/cn'
  * repete duas vezes em vez de quatro. A conta é `ceil(largura da caixa /
  * largura da lista)`, e ela se refaz sozinha quando a tela muda de tamanho.
  *
- * Duas armadilhas que já custaram caro aqui:
+ * POR QUE O MOVIMENTO SAIU DO CSS
+ * -------------------------------
+ * Antes era uma `animation` de `translateX(-50%)`. Anda liso e não custa nada,
+ * mas é uma via de mão única: o trilho não é rolável, então não havia como
+ * empurrar a fita para procurar um item específico. Na prática isso obrigava a
+ * ESPERAR o item chegar · e com card grande, como o dos próximos jogos, a
+ * espera é de vários segundos.
  *
- * · A emenda saltava a cada volta. Os dois trilhos eram irmãos num flex com
- *   `gap`, e cada um animava -50% da PRÓPRIA largura · um quarto do conjunto,
- *   e ainda sem contar o vão entre eles. O espaçamento é `padding-right` em
- *   cada item justamente por isso: assim a largura total é exatamente duas
- *   cópias e o -50% cai no ponto certo. Com `gap`, o último item de cada cópia
- *   não ganha vão depois dele e a conta fecha meio espaçamento errada.
+ * Agora quem move é a rolagem nativa, empurrada quadro a quadro. Com isso o
+ * dedo, o trackpad e a barra de rolagem funcionam de graça, e o laço só
+ * precisa devolver a posição pro começo quando passa de uma cópia · a emenda
+ * é invisível porque a segunda cópia é idêntica à primeira.
+ *
+ * Três armadilhas que já custaram caro aqui:
+ *
+ * · A emenda saltava a cada volta. O espaçamento é `padding-right` em cada
+ *   item, e não `gap` no flex, justamente por isso: assim a largura de uma
+ *   cópia é exata e o ponto de retorno cai certo. Com `gap`, o último item de
+ *   cada cópia não ganha vão depois dele e a conta fecha meio espaçamento
+ *   errada.
  *
  * · A velocidade dependia da quantidade · eram 28s para dar a volta, fossem 5
- *   itens ou 30. O parâmetro é pixel por segundo e a duração sai da medida.
+ *   itens ou 30. O parâmetro é pixel por segundo, e não duração.
+ *
+ * · Arrastar não pode virar clique. Depois de 6px de movimento o ponteiro está
+ *   navegando, não escolhendo, e o clique que vem no fim do arrasto é
+ *   engolido · senão soltar o dedo em cima de um card abriria o card.
  */
+
+/** Movimento em px a partir do qual o gesto é arrasto, e não clique. */
+const LIMIAR_ARRASTO = 6
+/** Silêncio depois do dedo sair antes de a fita voltar a andar. */
+const RETOMADA_MS = 1200
 
 export default function Marquee({
   items,
@@ -51,8 +72,25 @@ export default function Marquee({
   const caixa = useRef<HTMLDivElement>(null)
   const copia = useRef<HTMLDivElement>(null)
   const [vezes, setVezes] = useState(1)
-  const [duracao, setDuracao] = useState(0)
   const [semMovimento, setSemMovimento] = useState(false)
+  const [arrastando, setArrastando] = useState(false)
+
+  /* Largura de UMA cópia do trilho · o ponto onde a rolagem volta pro começo.
+     Fica em ref, e não em estado, porque quem lê é o laço de animação: passar
+     por estado faria o laço remontar a cada medida. */
+  const larguraCopia = useRef(0)
+  const pausado = useRef(false)
+  /*
+   * Cursor em cima. Separado de `pausado` de propósito.
+   *
+   * Os dois motivos de parar têm durações diferentes: o arrasto acaba num
+   * instante e libera por temporizador, o cursor parado em cima dura o tempo
+   * que a pessoa quiser. Com uma variável só, terminar um arrasto religava a
+   * fita 1,2s depois mesmo com o cursor ainda parado ali · e quem estava lendo
+   * via o card sair de baixo do próprio ponteiro.
+   */
+  const sobMouse = useRef(false)
+  const retomada = useRef<number | undefined>(undefined)
 
   useEffect(() => {
     const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
@@ -77,7 +115,7 @@ export default function Marquee({
       if (copiaLarga === 0) return
       const umaLista = copiaLarga / vezes
       const precisa = Math.max(1, Math.ceil((c.clientWidth + 1) / umaLista))
-      setDuracao((umaLista * precisa) / speed)
+      larguraCopia.current = umaLista * precisa
       setVezes(v => (v === precisa ? v : precisa))
     }
 
@@ -86,9 +124,100 @@ export default function Marquee({
     ro.observe(c)
     ro.observe(um)
     return () => ro.disconnect()
-  }, [items.length, speed, vezes])
+  }, [items.length, vezes])
 
-  const andando = !semMovimento && duracao > 0
+  const andando = !semMovimento && items.length > 0
+
+  /* Devolve a rolagem pra dentro da primeira cópia. Vale pro laço e pro dedo:
+     quem arrasta até o fim do trilho reencontra o começo sem esbarrar numa
+     parede. */
+  const normalizar = useCallback(() => {
+    const c = caixa.current
+    const w = larguraCopia.current
+    if (!c || w <= 0) return
+    if (c.scrollLeft >= w) c.scrollLeft -= w
+    else if (c.scrollLeft < 0) c.scrollLeft += w
+  }, [])
+
+  // Laço de animação. Empurra a rolagem em px/s, respeitando o relógio real ·
+  // `deltaTempo` em vez de um passo fixo por quadro, senão a fita anda mais
+  // devagar em tela de 60Hz que em 120Hz.
+  useEffect(() => {
+    if (!andando) return
+    const c = caixa.current
+    if (!c) return
+
+    // Em `reverse` a fita nasce no fim da primeira cópia: sem isso ela
+    // encostaria no zero no primeiro quadro e não teria pra onde voltar.
+    if (reverse && c.scrollLeft === 0 && larguraCopia.current > 0) {
+      c.scrollLeft = larguraCopia.current
+    }
+
+    let quadro = 0
+    let anterior = performance.now()
+    const passo = (agora: number) => {
+      const dt = Math.min((agora - anterior) / 1000, 0.1)  // aba escondida volta com salto
+      anterior = agora
+      if (!pausado.current && !sobMouse.current && !document.hidden && larguraCopia.current > 0) {
+        c.scrollLeft += (reverse ? -1 : 1) * speed * dt
+        normalizar()
+      }
+      quadro = requestAnimationFrame(passo)
+    }
+    quadro = requestAnimationFrame(passo)
+    return () => cancelAnimationFrame(quadro)
+  }, [andando, reverse, speed, normalizar])
+
+  useEffect(() => () => window.clearTimeout(retomada.current), [])
+
+  const pausar = () => { pausado.current = true; window.clearTimeout(retomada.current) }
+  const soltar = (atraso = 0) => {
+    window.clearTimeout(retomada.current)
+    retomada.current = window.setTimeout(() => { pausado.current = false }, atraso)
+  }
+
+  /*
+   * Arrasto com o ponteiro.
+   *
+   * O toque e o trackpad já rolam sozinhos (é `overflow-x-auto`), então isto
+   * existe pro MOUSE, que numa caixa rolável só teria a barra. `setPointerCapture`
+   * mantém o gesto vivo mesmo se o cursor sair da fita no meio do arrasto.
+   */
+  const inicio = useRef({ x: 0, scroll: 0, moveu: false })
+
+  const aoPressionar = (ev: React.PointerEvent<HTMLDivElement>) => {
+    if (ev.pointerType === 'mouse' && ev.button !== 0) return
+    pausar()
+    inicio.current = { x: ev.clientX, scroll: caixa.current?.scrollLeft ?? 0, moveu: false }
+    if (ev.pointerType === 'mouse') {
+      setArrastando(true)
+      caixa.current?.setPointerCapture(ev.pointerId)
+    }
+  }
+
+  const aoMover = (ev: React.PointerEvent<HTMLDivElement>) => {
+    const c = caixa.current
+    if (!c || !c.hasPointerCapture?.(ev.pointerId)) return
+    const andou = ev.clientX - inicio.current.x
+    if (Math.abs(andou) > LIMIAR_ARRASTO) inicio.current.moveu = true
+    c.scrollLeft = inicio.current.scroll - andou
+    normalizar()
+  }
+
+  const aoSoltar = (ev: React.PointerEvent<HTMLDivElement>) => {
+    setArrastando(false)
+    caixa.current?.releasePointerCapture?.(ev.pointerId)
+    soltar(RETOMADA_MS)
+  }
+
+  // Clique que fecha um arrasto não é escolha, é o fim do gesto.
+  const aoClicar = (ev: React.MouseEvent<HTMLDivElement>) => {
+    if (!inicio.current.moveu) return
+    ev.preventDefault()
+    ev.stopPropagation()
+    inicio.current.moveu = false
+  }
+
   const linha = 'flex w-max items-center'
 
   // A lista repetida `vezes`. O que passa de uma volta é enfeite de largura,
@@ -112,25 +241,31 @@ export default function Marquee({
   return (
     <div
       ref={caixa}
+      onPointerDown={aoPressionar}
+      onPointerMove={aoMover}
+      onPointerUp={aoSoltar}
+      onPointerCancel={aoSoltar}
+      onClickCapture={aoClicar}
+      /* Só o dedo pausa e retoma sozinho. O mouse usa pointerdown/up porque no
+         desktop passar por cima sem querer não deveria travar a fita para
+         sempre · quem quer ler para em cima, e é o `group-hover` que resolve. */
+      onMouseEnter={() => { sobMouse.current = true }}
+      onMouseLeave={() => { sobMouse.current = false }}
+      onTouchStart={pausar}
+      onTouchEnd={() => soltar(RETOMADA_MS)}
+      onScroll={normalizar}
       className={cn(
-        'group relative flex overflow-hidden',
-        // Movimento reduzido no sistema: fica parada e arrastável com o dedo.
-        !andando && 'overflow-x-auto scrollbar-none',
+        'group relative flex overflow-x-auto overscroll-x-contain scrollbar-none',
+        // `touch-pan-x`: o gesto horizontal é da fita, o vertical continua
+        // rolando a página · sem isso, arrastar em diagonal no celular trava a
+        // rolagem da página inteira.
+        'touch-pan-x select-none',
+        arrastando ? 'cursor-grabbing' : 'cursor-grab',
         andando && '[mask-image:linear-gradient(90deg,transparent,black_6%,black_94%,transparent)]',
         className,
       )}
     >
-      <div
-        className={cn(
-          linha,
-          andando && 'animate-marquee',
-          reverse && andando && '[animation-direction:reverse]',
-          // Pausa sob o cursor e sob o dedo: no toque o :hover gruda, que aqui
-          // é justamente o comportamento útil · quem encostou quer ler.
-          andando && 'group-hover:[animation-play-state:paused]',
-        )}
-        style={andando ? { animationDuration: `${duracao}s` } : undefined}
-      >
+      <div className={linha}>
         {umaCopia('a', false, copia)}
         {andando && umaCopia('b', true)}
       </div>
