@@ -973,14 +973,39 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     print(f"Minuto: {estado.get('minuto')}   Placar: "
           f"{estado.get('home_goals')}x{estado.get('away_goals')}")
 
+    # FAMILIA QUE FALTA SAI SOZINHA · nao leva a partida junto.
+    #
+    # Isto era tudo-ou-nada: bastava UMA familia sem dado e o jogo inteiro era
+    # descartado. Era desperdicio puro, porque o orchestrator ja' e' construido
+    # pra conviver com familia ausente -- ele marca `disponivel: False` com o
+    # motivo e a triagem simplesmente nao considera aquela familia.
+    #
+    # E o custo era concreto: `goals_total` NAO sai de /fixtures/statistics, sai
+    # do placar no feed de fixtures. Ou seja, mesmo com o provedor publicando
+    # ZERO estatistica, gols continua sendo um numero real -- e o gate antigo
+    # jogava fora a partida por causa de escanteio, levando gols junto.
     faltando = [f for f in config.familias
                 if orchestrator.observado_da_familia(estado, f) is None]
+    disponiveis = [f for f in config.familias if f not in faltando]
+
     if faltando:
-        print(f"Dados insuficientes ({', '.join(faltando)} nao publicado)")
+        # "Nao publicou NADA" e "faltou uma familia" sao problemas diferentes: o
+        # primeiro e' cobertura da partida no provedor, o segundo e' buraco de
+        # mercado. Dizer sempre "corners nao publicado" escondia o primeiro
+        # caso, que e' o que realmente derruba a rodada.
+        folha_vazia = not home_stats and not away_stats
+        motivo = ("o provedor nao publicou estatistica nenhuma desta partida"
+                  if folha_vazia else f"{', '.join(faltando)} sem numero publicado")
+        print(f"Sem {', '.join(faltando)}: {motivo}")
+
+    if not disponiveis:
         print("DECISAO: SKIP")
         resumo["motivo"] = f"estatistica ausente: {', '.join(faltando)}"
         _observar(cur, conn, estado)
         return resumo
+
+    if faltando:
+        print(f"Analisando so' {', '.join(disponiveis)}")
 
     observacoes = observacoes_anteriores(cur, fid)
     fresh = live_state.freshness(estado, observacoes, config)
