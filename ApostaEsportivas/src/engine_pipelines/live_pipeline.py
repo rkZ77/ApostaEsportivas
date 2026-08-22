@@ -34,6 +34,7 @@ import os
 import sys
 import textwrap
 import traceback
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
@@ -1066,12 +1067,33 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     print(f"Dados: {fresh['nivel']}"
           + (f" ({'; '.join(fresh['motivos'])})" if fresh.get("motivos") else ""))
 
+    do_arbitro = baseline_do_arbitro(cur, estado, config)
     baselines = {**baselines_por_liga(cur, estado.get("league_id")),
                  **baseline_do_confronto(cur, estado),
                  # Por ultimo de proposito: em cartao, quem apita manda mais
                  # que a media da liga e a dos times. Nas outras familias esta
                  # chamada devolve vazio e nao sobrescreve nada.
-                 **baseline_do_arbitro(cur, estado, config)}
+                 **do_arbitro}
+
+    # CARTAO SO' COM ARBITRO CONHECIDO · a outra metade da regra do pre-jogo.
+    #
+    # referee_model.cards_market_eligible reprova o mercado de cartoes quando
+    # nao ha arbitro confiavel, e o motivo nao e' zelo: sem quem apita, a conta
+    # cai no ponto neutro (4.1) e vira "o cartao medio do futebol", que nao
+    # descreve partida nenhuma. Foi assim que o pre-jogo produziu o pick #1579
+    # -- e la' o arbitro ate' existia, so' nao entrava na probabilidade.
+    #
+    # Ao vivo o buraco seria maior: parte das ligas nem publica `referee` no
+    # feed (medido em 2026-08-22: 4 de 10 partidas ao vivo tinham o campo), e
+    # sem esta porta o motor cotaria cartao sem ideia nenhuma de quem esta com
+    # o apito. A familia sai desta partida, e so' dela -- escanteios e gols
+    # seguem normalmente.
+    if "cards" in config.familias and "cards" not in do_arbitro:
+        config = replace(config, familias=tuple(
+            f for f in config.familias if f != "cards"))
+        arbitro = (estado.get("referee") or "").strip()
+        print("Cartoes fora: " + ("arbitro sem amostra minima nesta liga"
+                                  if arbitro else "a partida nao publicou o arbitro"))
     pre_jogo = contexto_pre_jogo(cur, estado)
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
                                     contexto_pre_jogo=pre_jogo)

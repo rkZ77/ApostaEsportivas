@@ -151,6 +151,35 @@ class TestBaselineDoArbitro:
         assert set(saida) == {"cards"}
 
 
+class TestCartaoSoSaiComArbitroConhecido:
+    """A outra metade da regra do pre-jogo (referee_model.cards_market_eligible).
+
+    Sem quem apita, a conta cai no ponto neutro e vira "o cartao medio do
+    futebol", que nao descreve partida nenhuma. Ao vivo o buraco e' maior que
+    no pre-jogo: parte das ligas nem publica `referee` no feed -- medido em
+    2026-08-22, 4 de 10 partidas ao vivo tinham o campo.
+    """
+
+    @property
+    def fonte(self) -> str:
+        import inspect
+        return inspect.getsource(lp._processar_partida)
+
+    def test_a_familia_sai_quando_o_arbitro_nao_rende_baseline(self):
+        assert 'if "cards" in config.familias and "cards" not in do_arbitro:' in self.fonte
+
+    def test_so_a_familia_de_cartoes_e_removida(self):
+        """Escanteios e gols nao podem cair junto · o filtro e' por nome."""
+        assert 'f for f in config.familias if f != "cards"' in self.fonte
+
+    def test_o_motivo_separa_sem_arbitro_de_amostra_curta(self):
+        """Sao acoes diferentes: uma e' cobertura do feed, a outra e' historico
+        que ainda vai encher."""
+        fonte = self.fonte
+        assert "nao publicou o arbitro" in fonte
+        assert "sem amostra minima" in fonte
+
+
 class TestFamiliaLigadaNoMotor:
     def test_cards_entrou_nas_familias_analisadas(self):
         assert "cards" in CONFIG.familias
