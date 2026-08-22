@@ -102,8 +102,13 @@ const horaBR = (iso: string) => iso.slice(11, 16)
 function agoraBR(): string {
   const d = new Date()
   const dia = d.toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' })
+  /* `hourCycle: 'h23'` e não `hour12: false`. Os dois pedem relógio de 24
+     horas, mas `hour12: false` deixa a escolha entre h23 e h24 pro motor, e o
+     WebKit já devolveu "24:30" pra meia-noite e meia. Nesse formato de texto,
+     "24:30" é maior que QUALQUER horário de jogo · a faixa inteira sumiria da
+     Home entre 00h e 01h no iPhone, sem erro nenhum no console. */
   const hora = d.toLocaleTimeString('pt-BR', {
-    timeZone: 'America/Sao_Paulo', hour12: false, hour: '2-digit', minute: '2-digit',
+    timeZone: 'America/Sao_Paulo', hourCycle: 'h23', hour: '2-digit', minute: '2-digit',
   })
   return `${dia}T${hora}`
 }
