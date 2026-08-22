@@ -30,6 +30,7 @@ from services.pick_engine_live.config import DEFAULT_LIVE_CONFIG, LiveEngineConf
 #: declarado, nao medida deste projeto.
 REFERENCIA_PARTIDA_POR_90 = {
     "corners": 10.2,
+    "cards": 4.1,
     "shots": 24.0,
     "shots_on_target": 8.6,
     "goals": 2.72,
@@ -105,6 +106,7 @@ def ritmo(estado: dict, minuto: int) -> dict:
         ("shots", estado.get("shots_total")),
         ("shots_on_target", estado.get("shots_on_target_total")),
         ("goals", estado.get("goals_total")),
+        ("cards", estado.get("cards_points_total")),
         ("dangerous_attacks", estado.get("dangerous_attacks_total")),
     ):
         if observado is None:

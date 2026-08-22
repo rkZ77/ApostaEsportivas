@@ -125,9 +125,20 @@ class LiveEngineConfig:
     validade_odd_segundos: int = 180
 
     # ── Mercados da V1 ───────────────────────────────────────────────────
-    #: Escanteios e gols. Cartoes, chutes e o resto entram depois, quando o
-    #: modelo residual estiver medido nestes dois.
-    familias: tuple = ("corners", "goals")
+    #: Escanteios, gols e cartoes. Chutes e o resto entram depois, quando o
+    #: modelo residual estiver medido nestes tres.
+    #:
+    #: Cartoes entrou por ultimo e por dois motivos proprios: e' a unica
+    #: familia cujo numero ainda chega ao vivo quando a folha de estatistica
+    #: nao vem (o feed de eventos publica cartao), e a unica com uma terceira
+    #: estimativa independente do jogo -- a media de quem apita.
+    familias: tuple = ("corners", "goals", "cards")
+
+    #: Jogos apitados na liga pra media do arbitro valer de baseline. Mesmo
+    #: numero de cards_referee_min_games no pre-jogo, e o mesmo motivo: abaixo
+    #: disso a media e' ruido, e a alternativa nao e' "usar assim mesmo", e'
+    #: cair na constante -- que e' o que baseline_do_arbitro faz.
+    cards_arbitro_min_jogos: int = 3
 
     # ── Ligas ────────────────────────────────────────────────────────────
     #: Vazio = qualquer liga cadastrada em `leagues`. Preencher restringe

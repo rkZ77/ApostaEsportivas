@@ -916,10 +916,28 @@ def test_mercado_de_primeiro_tempo_fica_de_fora():
 
 
 def test_familia_fora_da_v1_e_ignorada():
+    """Chutes continua fora ate' o residual estar medido nas familias atuais.
+
+    O exemplo aqui era "Total Cards", que entrou na V1 em 2026-08-22 · cartao
+    e' a unica familia cujo numero ainda chega ao vivo quando a folha de
+    estatistica nao vem, e a unica com uma terceira estimativa independente do
+    jogo (a media de quem apita). Trocar o exemplo mantem a regra que este
+    teste existe pra proteger: familia nao declarada nao vira linha cotada.
+    """
+    bruto = [mercado("Total Shots", [
+        {"value": "Over", "odd": "1.90", "handicap": "22.5", "suspended": False},
+        {"value": "Under", "odd": "1.90", "handicap": "22.5", "suspended": False}])]
+    assert live_odds.extrair_linhas(bruto) == []
+
+
+def test_cartao_entrou_na_v1_e_vira_linha():
+    """Contrapartida do teste acima · sem ele, tirar cartao da V1 por engano
+    passaria despercebido."""
     bruto = [mercado("Total Cards", [
         {"value": "Over", "odd": "1.90", "handicap": "3.5", "suspended": False},
         {"value": "Under", "odd": "1.90", "handicap": "3.5", "suspended": False}])]
-    assert live_odds.extrair_linhas(bruto) == []
+    linhas = live_odds.extrair_linhas(bruto)
+    assert [l["familia"] for l in linhas] == ["cards", "cards"]
 
 
 def test_melhor_odd_vence_quando_a_linha_aparece_duas_vezes():

@@ -49,7 +49,7 @@ if _SRC not in sys.path:
 from utils.db_utils import get_connection  # noqa: E402
 from services.match_stats_service import MatchStatsService
 from services.standings_service import StandingsService
-from services.pick_engine import context_gate
+from services.pick_engine import context_gate, referee_model, stats_model
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine_live import live_odds, live_state, orchestrator
 from services.pick_engine_live.config import (
@@ -254,6 +254,60 @@ def baselines_por_liga(cur, league_id: int | None) -> dict:
     if linha[1]:
         saida["goals"] = float(linha[1])
     return saida
+
+
+def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
+    """Pontos de cartao que ESTE arbitro costuma dar, pra usar de baseline.
+
+    E' a mesma ideia que o pre-jogo ja' aplica em referee_model: a media da
+    liga descreve a liga, a dos times descreve os times, e nenhuma das duas
+    sabe quem vai apitar -- e cartao e' o mercado onde isso pesa mais. O caso
+    que motivou o modelo la' (pick VIP #1579, "Cartoes Over 4.5" a 71.8%, RED
+    com 4 cartoes) foi exatamente esse: o arbitro estava em 3.60 pontos por
+    jogo, ABAIXO da linha, e o numero nunca chegava na conta.
+
+    O nome vem do proprio feed ao vivo ("Nome, Pais") e e' o MESMO formato que
+    match_statistics.referee guarda, entao a busca e' por igualdade -- sem
+    normalizar, sem LIKE. Normalizar aqui e la' de jeitos diferentes ja' foi
+    fonte de junta que nao junta neste projeto.
+
+    Agrega de match_statistics e nao de referee_stats, pela mesma razao que a
+    tela de Estatisticas: referee_stats e' por temporada e mistura competicoes,
+    e o mesmo arbitro apita liga e estadual com media diferente.
+
+    AMOSTRA CURTA NAO ENTRA INTEIRA. `shrink_to_baseline` e o minimo de jogos
+    sao os mesmos do pre-jogo: com 3 jogos apitados a media crua e' ruido, mas
+    tambem nao e' desprezivel -- puxar pro ponto neutro e' o meio termo que o
+    resto do motor ja' usa. Sem amostra, devolve vazio e a familia cai na
+    constante, com o rastro dizendo qual das duas foi usada.
+    """
+    arbitro = (estado.get("referee") or "").strip()
+    league_id = estado.get("league_id")
+    if not arbitro or not league_id:
+        return {}
+    try:
+        cur.execute("""
+            SELECT AVG(COALESCE(total_yellow_cards, 0))::float AS amarelo,
+                   AVG(COALESCE(total_red_cards, 0))::float    AS vermelho,
+                   COUNT(*)                                    AS n
+            FROM match_statistics
+            WHERE referee = %s
+              AND league_id = %s
+              AND status IN ('FT', 'AET', 'PEN')
+              AND total_yellow_cards IS NOT NULL
+              AND match_date >= NOW() - INTERVAL '400 days'
+        """, (arbitro, league_id))
+        linha = cur.fetchone()
+    except Exception:
+        return {}
+    if not linha or not linha[2]:
+        return {}
+    jogos = int(linha[2])
+    if jogos < config.cards_arbitro_min_jogos:
+        return {}
+    pontos = float(linha[0] or 0) + 2 * float(linha[1] or 0)
+    return {"cards": stats_model.shrink_to_baseline(
+        pontos, jogos, referee_model._REFEREE_CARD_POINTS_BASELINE)}
 
 
 def baseline_do_confronto(cur, estado: dict) -> dict:
@@ -1013,7 +1067,11 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
           + (f" ({'; '.join(fresh['motivos'])})" if fresh.get("motivos") else ""))
 
     baselines = {**baselines_por_liga(cur, estado.get("league_id")),
-                 **baseline_do_confronto(cur, estado)}
+                 **baseline_do_confronto(cur, estado),
+                 # Por ultimo de proposito: em cartao, quem apita manda mais
+                 # que a media da liga e a dos times. Nas outras familias esta
+                 # chamada devolve vazio e nao sobrescreve nada.
+                 **baseline_do_arbitro(cur, estado, config)}
     pre_jogo = contexto_pre_jogo(cur, estado)
     analise = orchestrator.analisar(estado, observacoes, config, baselines, eventos, fresh,
                                     contexto_pre_jogo=pre_jogo)
