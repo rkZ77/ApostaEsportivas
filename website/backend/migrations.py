@@ -407,6 +407,35 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             )
         """)
         cur.execute("CREATE INDEX IF NOT EXISTS idx_banca_withdrawals_user ON banca_withdrawals(user_id, created_at DESC);")
+        # Estado do acompanhamento continuo do Motor Ao Vivo.
+        #
+        # POR QUE PRECISA DE TABELA. O estado vivia so' na memoria do processo.
+        # Toda morte DENTRO do processo grava um motivo (disjuntor de falhas,
+        # cancelamento, desligar no painel), mas o processo morrer inteiro nao
+        # grava nada: o modulo recarrega zerado e o painel volta dizendo
+        # "desligado, 0 rodadas, sem motivo". O Railway recicla container por
+        # conta propria, entao o operador ligava e via cair "sozinho", sem
+        # bilhete. Uma linha no banco e' o que sobrevive ao restart.
+        #
+        # `boot_id` e' quem responde a pergunta: se o dono da linha nao e' este
+        # processo, o laco morreu com o anterior. Sem ele nao da' pra separar
+        # "reiniciou" de "alguem desligou".
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS live_watch_state (
+                id             SMALLINT PRIMARY KEY DEFAULT 1,
+                ativo          BOOLEAN   NOT NULL DEFAULT FALSE,
+                boot_id        VARCHAR(40),
+                iniciado_em    TIMESTAMP,
+                ultimo_sinal   TIMESTAMP,
+                rodadas        INTEGER   NOT NULL DEFAULT 0,
+                intervalo_min  INTEGER,
+                dry_run        BOOLEAN,
+                max_partidas   INTEGER,
+                motivo_parada  TEXT,
+                CONSTRAINT live_watch_state_uma_linha CHECK (id = 1)
+            );
+        """)
+
         # Central de notificacoes in-app (o sino da navbar). dedupe_key e' o que
         # impede o mesmo evento de virar duas linhas quando o gerador roda de
         # novo -- resultado corrigido por revisao tardia do provedor, poll de

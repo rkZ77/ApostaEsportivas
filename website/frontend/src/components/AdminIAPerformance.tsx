@@ -217,7 +217,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
       .finally(() => setLoading(false))
   }, [dias])
 
-  const modo = status?.config.mode ?? 'off'
+  const modo = status?.config?.mode ?? 'off'
   const cobertura = data?.cobertura ?? {}
   const semAutor = cobertura.autor_desconhecido ?? 0
 
@@ -450,7 +450,7 @@ export default function AdminIAPerformance({ status }: { status: AIReviewStatus 
       )}
 
       <Panel>
-        <PanelHead label="Últimas revisões" meta={`limite ${status?.config.daily_limit ?? 0}/dia`} />
+        <PanelHead label="Últimas revisões" meta={`limite ${status?.config?.daily_limit ?? 0}/dia`} />
         <div className="divide-y divide-line max-h-72 overflow-y-auto">
           {(status?.events ?? []).map((event, index) => (
             <div key={`${event.created_at}-${index}`} className="px-4 py-2 text-[11px] flex gap-2 text-ink-2 items-baseline">

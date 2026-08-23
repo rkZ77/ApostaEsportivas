@@ -9,6 +9,7 @@ import { Button, Modal, Spinner, SpinnerBlock } from '../components/ui'
 import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
+import AdminDados from '../components/AdminDados'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminEngajamento from '../components/AdminEngajamento'
 import { fmtBRL } from '../utils/format'
@@ -115,6 +116,9 @@ const ABAS = [
   { key: 'financeiro', label: 'Financeiro'  },
   { key: 'picks',      label: 'Picks'       },
   { key: 'ligas',      label: 'Ligas'       },
+  // Depois de Ligas de proposito: a pergunta "o motor esta enxergando?" quase
+  // sempre termina em "qual liga nao coletou", que e' a aba ao lado.
+  { key: 'dados',      label: 'Dados'       },
   { key: 'casas',      label: 'Casas'       },
 ] as const
 type AdminAba = typeof ABAS[number]['key']
@@ -754,7 +758,7 @@ export default function Admin() {
               <h2 className="text-xs font-semibold text-ink-3">Revisão por IA</h2>
               <p className="text-[11px] text-ink-4 mt-1">
                 {aiReviewStatus?.migration_pending ? 'Aguardando a primeira migração do pipeline.' :
-                  `${aiReviewStatus?.config.mode ?? 'off'} · ${aiReviewStatus?.config.environment ?? 'prod'} · limite ${aiReviewStatus?.config.daily_limit ?? 0}/dia`}
+                  `${aiReviewStatus?.config?.mode ?? 'off'} · ${aiReviewStatus?.config?.environment ?? 'prod'} · limite ${aiReviewStatus?.config?.daily_limit ?? 0}/dia`}
               </p>
             </div>
             <div className="flex items-center gap-2 shrink-0">
@@ -764,17 +768,17 @@ export default function Admin() {
               >
                 analisar por modelo
               </button>
-              <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
-                {aiReviewStatus?.config.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
+              <span className={`text-xs font-bold px-2 py-1 rounded ${aiReviewStatus?.config?.mode === 'enforce' ? 'bg-orange-500/15 text-orange-300' : 'bg-blue-500/15 text-blue-300'}`}>
+                {aiReviewStatus?.config?.mode === 'enforce' ? 'VETO ATIVO' : 'SOMBRA'}
               </span>
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {[
-              ['Hoje', aiReviewStatus?.summary.reviews_today ?? 0],
-              ['24h', aiReviewStatus?.summary.reviews_24h ?? 0],
-              ['Vetos 24h', aiReviewStatus?.summary.rejected_24h ?? 0],
-              ['Cache 24h', aiReviewStatus?.summary.cache_hits_24h ?? 0],
+              ['Hoje', aiReviewStatus?.summary?.reviews_today ?? 0],
+              ['24h', aiReviewStatus?.summary?.reviews_24h ?? 0],
+              ['Vetos 24h', aiReviewStatus?.summary?.rejected_24h ?? 0],
+              ['Cache 24h', aiReviewStatus?.summary?.cache_hits_24h ?? 0],
             ].map(([label, value]) => <div key={String(label)} className="rounded bg-surface-1 px-3 py-2">
               <p className="text-[10px] text-ink-4">{label}</p><p className="text-lg font-bold text-ink-1">{value}</p>
             </div>)}
@@ -783,6 +787,8 @@ export default function Admin() {
         </>)}
 
         {aba === 'live' && <AdminMotorLive />}
+
+        {aba === 'dados' && <AdminDados />}
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
