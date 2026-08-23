@@ -257,6 +257,66 @@ def baselines_por_liga(cur, league_id: int | None) -> dict:
     return saida
 
 
+def baseline_do_h2h(cur, estado: dict, baseline_atual: dict) -> dict:
+    """O que acontece quando ESTES DOIS times se enfrentam.
+
+    `baselines_por_liga` descreve a liga e `baseline_do_confronto` descreve os
+    dois times pelas medias DELES -- nenhuma das duas sabe o que a combinacao
+    produz. E' a mesma lacuna que o rivalry_model fechou no pre-jogo, com o caso
+    que o originou: "Under cartoes" aprovado num Fluminense x Vasco de volta
+    valendo classificacao, porque a media dos 15 jogos de cada time e' de
+    campeonato normal e nada no calculo sabia que aquele jogo nao era normal.
+
+    RIVALIDADE MEDIDA, NAO LISTADA. Nao existe cadastro de classico aqui: se o
+    par produz 13 escanteios por confronto enquanto a liga promedia 10.2, o
+    excesso e' o que aconteceu, nao opiniao sobre rivalidade. Par sem historico
+    mede excesso zero e nao sofre ajuste, sem ninguem decidir se "conta como
+    classico".
+
+    O ENCOLHIMENTO NAO TEM CONSTANTE NOVA. `shrink_to_baseline` e' a mesma
+    funcao que o resto do motor usa pra media de amostra curta: com 2
+    confrontos o numero quase nao sai do baseline, com 8 ele manda. Inventar
+    aqui um teto de excesso proprio seria escolher um parametro onde ja' existe
+    a formula que o projeto usa pra exatamente esta pergunta.
+
+    CARTAO FICA DE FORA de proposito: naquela familia quem manda e' o arbitro
+    (baseline_do_arbitro), que roda depois desta e sobrescreveria o valor de
+    qualquer jeito. Duas correcoes empilhadas na mesma familia tambem seriam
+    dois ajustes pro mesmo fenomeno.
+    """
+    home_id, away_id = estado.get("home_team_id"), estado.get("away_team_id")
+    if not (home_id and away_id):
+        return {}
+    try:
+        cur.execute("""
+            SELECT AVG(NULLIF(total_corners, 0))::float AS corners,
+                   AVG(total_goals)::float             AS goals,
+                   COUNT(*)                            AS n
+            FROM match_statistics
+            WHERE status IN ('FT', 'AET', 'PEN')
+              AND ((home_team_id = %s AND away_team_id = %s)
+                OR (home_team_id = %s AND away_team_id = %s))
+              AND match_date >= NOW() - INTERVAL '1095 days'
+        """, (home_id, away_id, away_id, home_id))
+        linha = cur.fetchone()
+    except Exception:
+        return {}
+    if not linha or not linha[2]:
+        return {}
+
+    confrontos = int(linha[2])
+    saida = {}
+    for indice, familia in ((0, "corners"), (1, "goals")):
+        media = linha[indice]
+        referencia = baseline_atual.get(familia)
+        if media is None or referencia is None:
+            continue
+        encolhido = stats_model.shrink_to_baseline(float(media), confrontos, referencia)
+        if encolhido is not None:
+            saida[familia] = encolhido
+    return saida
+
+
 def baseline_do_arbitro(cur, estado: dict, config: LiveEngineConfig) -> dict:
     """Pontos de cartao que ESTE arbitro costuma dar, pra usar de baseline.
 
@@ -1074,6 +1134,9 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
                  # que a media da liga e a dos times. Nas outras familias esta
                  # chamada devolve vazio e nao sobrescreve nada.
                  **do_arbitro}
+    # O confronto direto refina o que sobrou · precisa do baseline ja' montado
+    # como referencia do encolhimento, por isso vem depois e nao no literal.
+    baselines.update(baseline_do_h2h(cur, estado, baselines))
 
     # CARTAO SO' COM ARBITRO CONHECIDO · a outra metade da regra do pre-jogo.
     #
