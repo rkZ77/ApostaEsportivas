@@ -129,6 +129,10 @@ export default function AgenteButton() {
           >
             <div
               ref={containerRef}
+              /* Âncora do tour do VIP: o agente completo é exclusivo de
+                 assinante (ver routers/chat.py), então o passo aponta para o
+                 botão de verdade. */
+              data-tour="agente"
               className="flex flex-col items-end gap-1.5 touch-none select-none cursor-grab active:cursor-grabbing"
               onPointerDown={onPointerDown}
               onPointerMove={onPointerMove}

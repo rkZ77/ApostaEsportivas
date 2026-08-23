@@ -17,7 +17,7 @@ token, nunca de parâmetro. Sem isso um id na URL vira leitura da conta alheia.
 import logging
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from auth_utils import get_current_user
@@ -270,36 +270,74 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
     }
 
 
-# ─────────────────────────── Tutorial ─────────────────────────────────
+# ──────────────────────── Tours guiados ───────────────────────────────
 #
-# Onde mora o "esta pessoa ja' viu o tour?". No BANCO, e nao no localStorage,
+# Onde mora o "esta pessoa ja' viu este tour?". No BANCO, e nao no localStorage,
 # porque a pergunta e' sobre a CONTA e nao sobre o navegador: sair e entrar de
 # novo, trocar de aparelho ou abrir numa aba anonima nao pode fazer o tour
 # reaparecer pra quem ja' passou por ele.
 #
-# `tutorial_step` guarda o passo em aberto. Sem ele, recarregar a pagina no meio
-# do tour recomecava do "Bem-vindo".
+# `step` guarda o passo em aberto. Sem ele, recarregar a pagina no meio do tour
+# recomecava do primeiro passo.
 
-# Maior roteiro possivel. O tour tem 7 passos fixos + o de confirmar e-mail,
-# que so' entra pra quem ainda tem os 2 dias de VIP esperando -- entao o total
-# que a TELA mostra varia entre 7 e 8, e o que o backend valida e' o teto.
-# Espelha MAX_PASSOS em components/onboarding/constantes.ts; ha teste travando.
+# Teto do roteiro de boas-vindas: 7 passos fixos + o de confirmar e-mail, que
+# so' entra pra quem ainda tem os 2 dias de VIP esperando. O total que a TELA
+# mostra varia entre 7 e 8, entao o que o backend valida e' o maximo.
 TUTORIAL_TOTAL_STEPS = 8
+# Roteiro do VIP: o que a assinatura abriu.
+VIP_TOUR_TOTAL_STEPS = 5
+
 TUTORIAL_STATUS = ("pending", "completed", "skipped")
+
+# Os roteiros, e onde cada um guarda o estado.
+#
+# Duas colunas por roteiro na propria `users`, e nao uma tabela `user_tours`.
+# Com DOIS tours a tabela seria mais cerimonia do que ajuda: uma linha por
+# usuario por tour, um JOIN a mais em toda leitura, e uma migration movendo
+# estado que ja esta em producao. Aparecendo um terceiro roteiro a conta vira,
+# e aí este dicionario e' o unico lugar que precisa mudar.
+#
+# Os nomes espelham TOURS em components/onboarding/constantes.ts. Ha teste
+# travando os dois lados.
+TOURS: dict[str, dict] = {
+    "boas-vindas": {
+        "status": "tutorial_status",
+        "step":   "tutorial_step",
+        "fim":    "tutorial_finished_at",
+        "total":  TUTORIAL_TOTAL_STEPS,
+    },
+    "vip": {
+        "status": "vip_tour_status",
+        "step":   "vip_tour_step",
+        "fim":    "vip_tour_finished_at",
+        "total":  VIP_TOUR_TOTAL_STEPS,
+    },
+}
+
+# O que responder quando o banco nao coopera. Ver a docstring de get_tutorial.
+TOUR_PADRAO = "boas-vindas"
 
 
 class TutorialBody(BaseModel):
     status: str | None = None
-    # `le` e' TOTAL e nao TOTAL-1 de proposito: o front manda o passo que esta'
-    # aberto, e no fim do tour ele passa uma vez pelo indice seguinte.
-    step: int | None = Field(default=None, ge=0, le=TUTORIAL_TOTAL_STEPS)
+    # `le` e' o maior teto entre os roteiros; o clamp por roteiro acontece
+    # depois, ja com o `tour` em maos.
+    step: int | None = Field(default=None, ge=0, le=max(t["total"] for t in TOURS.values()))
 
 
-def _tutorial_payload(status: str, step: int) -> dict:
+def _colunas_do_tour(tour: str) -> dict:
+    cfg = TOURS.get(tour)
+    if not cfg:
+        raise HTTPException(400, "Tour desconhecido")
+    return cfg
+
+
+def _tutorial_payload(status: str, step: int, total: int, tour: str) -> dict:
     return {
+        "tour": tour,
         "status": status,
-        "step": max(0, min(step, TUTORIAL_TOTAL_STEPS - 1)),
-        "total_steps": TUTORIAL_TOTAL_STEPS,
+        "step": max(0, min(step, total - 1)),
+        "total_steps": total,
         # Quem decide abrir sozinho e' o servidor, nao a tela. Assim a regra
         # ("so' quem nunca viu") vive num lugar so'.
         "should_start": status == "pending",
@@ -307,26 +345,38 @@ def _tutorial_payload(status: str, step: int) -> dict:
 
 
 @router.get("/tutorial")
-def get_tutorial(current_user: dict = Depends(get_current_user)):
-    """Estado do onboarding da conta.
+def get_tutorial(
+    # Escalar com default simples, e nao `Query(...)`: o FastAPI infere query
+    # param do mesmo jeito, e assim a funcao continua CHAMAVEL direto pelos
+    # testes. Com `Query(...)` no default, quem chama fora do framework recebe
+    # o objeto Query no lugar da string e cai no 400 de tour desconhecido.
+    tour: str = TOUR_PADRAO,
+    current_user: dict = Depends(get_current_user),
+):
+    """Estado de um tour na conta. `tour` e' "boas-vindas" ou "vip".
 
     Falha para o lado de NAO mostrar. Se as colunas ainda nao existirem no
     banco (deploy novo antes da migration de startup rodar, que ja aconteceu
     aqui), responder 500 quebraria a tela e responder 'pending' abriria o tour
     na cara da base inteira. 'completed' e' o unico erro barato dos tres.
     """
+    cfg = _colunas_do_tour(tour)
+
     conn = get_connection()
     cur = conn.cursor()
     try:
+        # Nomes de coluna vem do dicionario acima, nunca da query string: o
+        # `tour` ja foi validado em _colunas_do_tour e o que entra no SQL sao
+        # constantes deste modulo.
         cur.execute(
-            "SELECT tutorial_status, tutorial_step FROM users WHERE id = %s",
+            f"SELECT {cfg['status']} AS status, {cfg['step']} AS step FROM users WHERE id = %s",
             (current_user["id"],),
         )
         row = cur.fetchone()
     except Exception as e:
         conn.rollback()
-        logger.warning("[TUTORIAL] leitura indisponivel (user %s): %s", current_user["id"], e)
-        return _tutorial_payload("completed", 0)
+        logger.warning("[TOUR] leitura indisponivel (%s, user %s): %s", tour, current_user["id"], e)
+        return _tutorial_payload("completed", 0, cfg["total"], tour)
     finally:
         cur.close()
         conn.close()
@@ -334,20 +384,26 @@ def get_tutorial(current_user: dict = Depends(get_current_user)):
     if not row:
         raise HTTPException(404, "Usuário não encontrado")
 
-    status = row["tutorial_status"] or "pending"
+    status = row["status"] or "pending"
     if status not in TUTORIAL_STATUS:
         status = "completed"
-    return _tutorial_payload(status, int(row["tutorial_step"] or 0))
+    return _tutorial_payload(status, int(row["step"] or 0), cfg["total"], tour)
 
 
 @router.put("/tutorial")
-def save_tutorial(body: TutorialBody, current_user: dict = Depends(get_current_user)):
+def save_tutorial(
+    body: TutorialBody,
+    tour: str = TOUR_PADRAO,  # ver o comentario em get_tutorial
+    current_user: dict = Depends(get_current_user),
+):
     """Avanca o passo, conclui ou pula.
 
     Um PUT so' pros tres casos porque eles gravam nas mesmas duas colunas e a
     tela chama sempre no mesmo momento (mudou de passo). `status=None` e'
     "so' guardei onde parei" -- o passo anda sem tirar a conta de 'pending'.
     """
+    cfg = _colunas_do_tour(tour)
+
     if body.status is not None and body.status not in TUTORIAL_STATUS:
         raise HTTPException(400, "Estado de tutorial inválido")
     if body.status is None and body.step is None:
@@ -355,30 +411,30 @@ def save_tutorial(body: TutorialBody, current_user: dict = Depends(get_current_u
 
     campos, valores = [], []
     if body.status is not None:
-        campos.append("tutorial_status = %s")
+        campos.append(f"{cfg['status']} = %s")
         valores.append(body.status)
         # Carimba o fim so' quando ele acontece, e so' na primeira vez: reabrir
         # o tour pelo menu e concluir de novo nao deve reescrever a data em que
         # a pessoa aprendeu a usar o site.
         if body.status in ("completed", "skipped"):
-            campos.append("tutorial_finished_at = COALESCE(tutorial_finished_at, NOW())")
+            campos.append(f"{cfg['fim']} = COALESCE({cfg['fim']}, NOW())")
     if body.step is not None:
-        campos.append("tutorial_step = %s")
-        valores.append(min(body.step, TUTORIAL_TOTAL_STEPS - 1))
+        campos.append(f"{cfg['step']} = %s")
+        valores.append(min(body.step, cfg["total"] - 1))
 
     conn = get_connection()
     cur = conn.cursor()
     try:
         cur.execute(
             f"UPDATE users SET {', '.join(campos)} WHERE id = %s "
-            "RETURNING tutorial_status, tutorial_step",
+            f"RETURNING {cfg['status']} AS status, {cfg['step']} AS step",
             (*valores, current_user["id"]),
         )
         row = cur.fetchone()
         conn.commit()
     except Exception as e:
         conn.rollback()
-        logger.error("[TUTORIAL] erro ao salvar (user %s): %s", current_user["id"], e)
+        logger.error("[TOUR] erro ao salvar (%s, user %s): %s", tour, current_user["id"], e)
         raise HTTPException(500, "Não foi possível salvar o tutorial")
     finally:
         cur.close()
@@ -387,4 +443,4 @@ def save_tutorial(body: TutorialBody, current_user: dict = Depends(get_current_u
     if not row:
         raise HTTPException(404, "Usuário não encontrado")
 
-    return _tutorial_payload(row["tutorial_status"] or "pending", int(row["tutorial_step"] or 0))
+    return _tutorial_payload(row["status"] or "pending", int(row["step"] or 0), cfg["total"], tour)

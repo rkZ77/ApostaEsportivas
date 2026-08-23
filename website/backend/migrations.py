@@ -100,6 +100,32 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # parou em vez de voltar pro "Bem-vindo".
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_step SMALLINT NOT NULL DEFAULT 0;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorial_finished_at TIMESTAMP;")
+        # Segundo roteiro: o tour de boas-vindas ao VIP, que mostra o que a
+        # assinatura abriu. Mesmo desenho do de cima -- estado, passo e carimbo.
+        #
+        # O BACKFILL AQUI E' DIFERENTE, e a diferenca importa. La em cima todo
+        # mundo virou 'completed', porque ninguem devia receber o tour de
+        # boas-vindas retroativamente. Aqui so' quem JA' TEM VIP e' marcado como
+        # visto: free e trial ficam 'pending' de proposito, e e' isso que faz o
+        # tour aparecer no dia em que eles assinarem. Marcar a base inteira como
+        # 'completed' entregaria a assinatura sem nenhuma tela explicando o que
+        # mudou, que e' exatamente o buraco que este tour veio tapar.
+        cur.execute("""
+            DO $$
+            BEGIN
+                IF NOT EXISTS (
+                    SELECT 1 FROM pg_attribute
+                     WHERE attrelid = 'users'::regclass
+                       AND attname  = 'vip_tour_status'
+                       AND NOT attisdropped
+                ) THEN
+                    ALTER TABLE users ADD COLUMN vip_tour_status VARCHAR(12) NOT NULL DEFAULT 'pending';
+                    UPDATE users SET vip_tour_status = 'completed' WHERE plan IN ('vip', 'admin');
+                END IF;
+            END $$;
+        """)
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_tour_step SMALLINT NOT NULL DEFAULT 0;")
+        cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS vip_tour_finished_at TIMESTAMP;")
         cur.execute("ALTER TABLE picks_alavancagem DROP COLUMN IF EXISTS bankroll_after;")
         cur.execute("ALTER TABLE chat_messages ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMP;")
         cur.execute("ALTER TABLE user_followed_picks ADD COLUMN IF NOT EXISTS actual_odd DECIMAL(6,2);")
