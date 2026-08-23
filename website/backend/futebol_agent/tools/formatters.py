@@ -219,7 +219,7 @@ def fmt_player_stats(data: list[dict]) -> str:
         for p in team_data["players"]:
             rating = p["rating"] or "-"
             cap    = "© " if p["captain"] else "  "
-            cards  = ("🟨" if p["yellow"] else "") + ("🟥" if p["red"] else "")
+            cards  = ("A" if p["yellow"] else "") + ("V" if p["red"] else "")
             lines.append(f"  {cap}{p['name']:<20} {p['pos']:>3} {p['minutes']:>3} {str(rating):>4} {p['goals']:>2} {p['assists']:>2} {p['shots']:>4} {p['key_passes']:>4} {p['tackles']:>3} {cards}")
         parts.append("\n".join(lines))
     return "\n\n".join(parts)
@@ -260,7 +260,7 @@ def fmt_team_historical_stats_any(data: dict) -> str:
     def r(d: dict, k: str) -> str: return str(d.get(k, "?"))
     lines = [
         f"Stats reais {data['team']} | qualquer competição ({leagues}) | {venue_label} | {data['games_analyzed']} jogos",
-        f"⚠️ Dados de múltiplas competições. Use como referência.",
+        f"ATENÇÃO: dados de múltiplas competições. Use como referência.",
         f"{'':20} Total   1ºT   2ºT",
         f"{'Escanteios':<20} {r(t,'corners'):>5} {r(h1,'corners'):>5} {r(h2,'corners'):>5}",
         f"{'Chutes total':<20} {r(t,'shots'):>5} {r(h1,'shots'):>5} {r(h2,'shots'):>5}",

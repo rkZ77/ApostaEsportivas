@@ -71,15 +71,49 @@ def test_serie_de_total_continua_olhando_os_dois_times():
     assert "team_id=team_id" in corpo
 
 
-def test_a_serie_traz_so_o_mando_que_o_time_vai_jogar():
-    """Se o Goias joga em casa, a serie do Goias e' de jogos em casa. Os jogos
-    dele como visitante medem outra coisa (+27% de diferenca em escanteios na
-    Serie A) e diluiriam a media que o card mostra."""
+def test_a_serie_traz_os_jogos_do_time_nos_dois_mandos():
+    """Casa E fora (2026-08-22, pedido do usuario).
+
+    Ate' 22/08 a consulta filtrava pelo mando que o time vai jogar nesta
+    partida. O preco era amostra pequena: ~7 jogos em casa numa fase inteira, e
+    2 no comeco de temporada -- cinco barras viravam duas.
+
+    O que sustentava o filtro (a diferenca de +27% em escanteios entre mandos)
+    nao sumiu: deixou de ser filtro e virou informacao, ver o teste do `is_home`
+    logo abaixo. A protecao contra ler o numero do ADVERSARIO -- o bug do pick
+    #1573 -- nunca esteve aqui: ela mora em `perspectiva_do_time`, e tem teste
+    proprio (test_time_vai_pro_lado_que_o_mercado_nomeia).
+    """
     corpo = _codigo("routers/suggestions.py", "_jogos_do_time")
-    assert 'coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"' in corpo
-    assert "WHERE {coluna_mando} = %s" in corpo
-    # o mando de cada serie e' o lado do time NESTA partida
-    assert "lado, perna.get(\"league_id\")" in _codigo("routers/suggestions.py", "_series_da_perna")
+    assert "(ms.home_team_id = %s OR ms.away_team_id = %s)" in corpo
+    assert "coluna_mando" not in corpo, "o filtro de mando voltou"
+    # o adversario passa a depender do lado em que o time jogou NAQUELA partida
+    assert "CASE WHEN ms.home_team_id = %s" in corpo
+
+
+def test_cada_barra_sabe_de_que_mando_foi():
+    """O que era filtro virou informacao.
+
+    Com casa e fora na mesma fileira, esconder o mando faria a media juntar duas
+    populacoes sem avisar -- exatamente a critica de 2026-08-08. `is_home` por
+    item e' o que deixa o grafico separar as duas.
+    """
+    assert '"is_home": em_casa' in _fonte("market_form.py")
+
+
+def test_a_serie_pede_dez_jogos_por_padrao():
+    """"Ultimos 10" e' o recorte que o apostador reconhece, e a amostra so'
+    comporta esse tamanho porque os dois mandos entram."""
+    corpo = _codigo("routers/suggestions.py", "get_market_form")
+    assert "limit: int = Query(10" in corpo
+
+
+def test_a_frase_nao_fala_mais_de_mando():
+    """A frase dizia "nos ultimos 5 jogos EM CASA". A serie deixou de ser de um
+    mando so', entao o complemento viraria mentira."""
+    corpo = _codigo("routers/suggestions.py", "_series_da_perna")
+    assert "market_form.frase_da_serie(nome, serie)" in corpo
+    assert "frase_da_serie(nome, serie, lado)" not in corpo
 
 
 def test_o_time_ainda_vai_pro_lado_que_o_mercado_nomeia():
