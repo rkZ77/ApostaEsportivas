@@ -291,7 +291,13 @@ async def chat(body: ChatRequest, current_user: dict = Depends(get_current_user)
         yield f"data: {json.dumps({'type': 'status', 'text': 'Buscando dados...'})}\n\n"
 
         try:
-            response_text, _ = await run_agent(full_message, history)
+            # Quem esta perguntando viaja por PARAMETRO, nunca no texto.
+            # As ferramentas de banco escopam por este `user_id`, entao pedir
+            # "os picks do usuario 42" na conversa continua devolvendo os
+            # proprios · o texto do usuario nao alcanca este dicionario.
+            response_text, _ = await run_agent(
+                full_message, history,
+                {"user_id": current_user["id"], "plano": current_user.get("plan")})
             async for evt in _stream_text(response_text):
                 yield evt
 

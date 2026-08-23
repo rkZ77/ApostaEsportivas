@@ -13,6 +13,9 @@ from futebol_agent.tools.match_stats import (
 )
 from futebol_agent.tools.odds import get_prematch_odds, get_live_match_odds
 from futebol_agent.tools.standings import get_league_standings
+from futebol_agent.tools.pickia_db import (
+    desempenho_da_ia, ligas_cobertas, meus_picks, picks_publicados,
+)
 from futebol_agent.tools.head_to_head import (
     get_h2h, get_team_recent_form, get_team_stats_season,
     get_team_historical_stats, get_team_historical_stats_any,
@@ -38,7 +41,76 @@ def get_client() -> anthropic.Anthropic:
     return _client
 
 
+#: Ferramentas que leem o BANCO DO SITE. As demais falam com a API-Football.
+#:
+#: A separacao importa na hora de ler o codigo: as de API respondem sobre
+#: futebol, estas respondem sobre o Pick IA. Sem elas o agente sabia tudo de
+#: jogo e nada de pick, que e' justamente o que a pessoa foi perguntar.
+FERRAMENTAS_DO_SITE = frozenset({
+    "get_picks_publicados", "get_desempenho_da_ia", "get_meus_picks",
+    "get_ligas_cobertas",
+})
+
 TOOLS: list[dict] = [
+    {
+        "name": "get_picks_publicados",
+        "description": (
+            "Picks do Pick IA publicados num dia, VIP e gratuitos, com o "
+            "resultado quando ja' resolvido. Use para 'que picks sairam hoje', "
+            "'teve pick ontem', 'qual foi o pick de sexta'. Nao confunda com "
+            "jogos: isto e' o que a IA ESCOLHEU, nao a agenda."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "dia": {"type": "string",
+                        "description": "YYYY-MM-DD. Omitido, usa hoje."},
+            },
+        },
+    },
+    {
+        "name": "get_desempenho_da_ia",
+        "description": (
+            "Acerto, lucro em unidades e contagem de green/red dos picks ja' "
+            "resolvidos. Use para 'como a IA foi este mes', 'qual o acerto', "
+            "'quanto lucrou em julho'. So' conta pick com resultado fechado."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "mes": {"type": "string",
+                        "description": "YYYY-MM. Omitido, historico inteiro."},
+                "tipo": {"type": "string", "enum": ["vip", "free"],
+                         "description": "Omitido, devolve os dois."},
+            },
+        },
+    },
+    {
+        "name": "get_meus_picks",
+        "description": (
+            "Os picks que ESTE usuario seguiu, com resultado. Use para 'quais "
+            "picks eu segui', 'como estou indo', 'tenho pick em aberto'. O "
+            "usuario e' sempre o da sessao."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "apenas_pendentes": {
+                    "type": "boolean",
+                    "description": "true devolve so' os que ainda nao resolveram.",
+                },
+            },
+        },
+    },
+    {
+        "name": "get_ligas_cobertas",
+        "description": (
+            "Ligas que a IA analisa hoje, e quais estao no banco so' como "
+            "historico. Use para 'voces cobrem a Premier League', 'que "
+            "campeonatos entram'."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
     {
         "name": "get_live_matches",
         "description": "Lista todas as partidas de futebol ao vivo agora. Retorna fixture_id, times, placar, minuto e liga.",
@@ -181,7 +253,34 @@ TOOLS: list[dict] = [
 ]
 
 
-async def _execute_tool(tool_name: str, tool_input: dict) -> Any:
+async def _execute_tool(tool_name: str, tool_input: dict,
+                        contexto: dict | None = None) -> Any:
+    """Executa uma ferramenta. `contexto` traz quem esta perguntando.
+
+    O `user_id` e o `plano` vem do TOKEN, em chat.py, e atravessam ate' aqui
+    por parametro -- nunca pelo texto da conversa. E' o que faz "me mostre os
+    picks do usuario 42" continuar devolvendo os do proprio.
+
+    As de banco sao sincronas (psycopg2 bloqueia), entao vao pro threadpool:
+    rodar no event loop com WEB_CONCURRENCY=1 seguraria o processo inteiro.
+    """
+    ctx = contexto or {}
+
+    if tool_name in FERRAMENTAS_DO_SITE:
+        plano = ctx.get("plano")
+        if tool_name == "get_picks_publicados":
+            return await asyncio.to_thread(
+                picks_publicados, tool_input.get("dia"), plano)
+        if tool_name == "get_desempenho_da_ia":
+            return await asyncio.to_thread(
+                desempenho_da_ia, tool_input.get("mes"), tool_input.get("tipo"))
+        if tool_name == "get_meus_picks":
+            return await asyncio.to_thread(
+                meus_picks, ctx.get("user_id"),
+                bool(tool_input.get("apenas_pendentes")), plano)
+        if tool_name == "get_ligas_cobertas":
+            return await asyncio.to_thread(ligas_cobertas)
+
     if tool_name == "get_live_matches":
         return fmt_live_matches(await get_live_matches(tool_input.get("only_featured", True)))
     elif tool_name == "get_today_matches":
@@ -249,7 +348,14 @@ def _clean_history(messages: list[dict]) -> list[dict]:
     return result
 
 
-async def run_agent(user_message: str, history: list[dict]) -> tuple[str, list[dict]]:
+async def run_agent(user_message: str, history: list[dict],
+                    contexto: dict | None = None) -> tuple[str, list[dict]]:
+    """`contexto`: {"user_id": int, "plano": str} de quem esta perguntando.
+
+    Opcional pra nao quebrar quem ja' chama sem ele · sem contexto, as
+    ferramentas pessoais respondem que nao ha sessao em vez de vazar dado de
+    outra conta.
+    """
     history  = history[-MAX_HISTORY_MESSAGES:]
     messages = history + [{"role": "user", "content": user_message}]
     client   = get_client()
@@ -284,7 +390,7 @@ async def run_agent(user_message: str, history: list[dict]) -> tuple[str, list[d
         if response.stop_reason == "tool_use":
             tool_calls = [b for b in response.content if b.type == "tool_use"]
             results    = await asyncio.gather(
-                *[_execute_tool(tc.name, tc.input) for tc in tool_calls],
+                *[_execute_tool(tc.name, tc.input, contexto) for tc in tool_calls],
                 return_exceptions=True,
             )
             tool_results = []
