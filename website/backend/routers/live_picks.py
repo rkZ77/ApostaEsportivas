@@ -27,6 +27,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import uuid
 import sys
 from datetime import datetime, timezone
 
@@ -669,6 +670,92 @@ _MAX_FALHAS_SEGUIDAS = 5
 #: mesmo número.
 _INTERVALO_MIN_MINUTOS = 3
 
+#: Identidade DESTE processo. Se a linha no banco tem outro dono, o laco que a
+#: escreveu morreu junto com o processo anterior · e' o que separa "o servico
+#: reiniciou" de "alguem desligou no painel".
+_BOOT_ID = uuid.uuid4().hex
+
+#: Religar sozinho depois de um restart. DESLIGADO por padrao, e o padrao e' a
+#: decisao: "nada sobe ligado" foi o que se estabeleceu quando o scheduler foi
+#: removido, em 2026-08-01, depois de a cota da API estourar. Ligar isto e' um
+#: pedido explicito de quem opera, feito numa variavel do Railway, nao um
+#: efeito colateral de um deploy.
+def _rearmar_apos_restart() -> bool:
+    return os.getenv("LIVE_WATCH_REARM", "").strip().lower() in ("1", "true", "on", "yes", "sim")
+
+
+def _salvar_watch(motivo: str | None = None) -> None:
+    """Grava o estado do laco. Falhar aqui NAO pode derrubar a rodada.
+
+    A tabela pode nao existir ainda -- `run_migrations()` nao roda sozinha
+    depois de um merge (ver o historico de `engine_debug` em 2026-07-23). Sem
+    ela o painel volta a se comportar como antes, que e' ruim mas conhecido;
+    estourar no meio de uma rodada seria pior.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                INSERT INTO live_watch_state
+                    (id, ativo, boot_id, iniciado_em, ultimo_sinal, rodadas,
+                     intervalo_min, dry_run, max_partidas, motivo_parada)
+                VALUES (1, %s, %s, NOW(), NOW(), %s, %s, %s, %s, %s)
+                ON CONFLICT (id) DO UPDATE SET
+                    ativo         = EXCLUDED.ativo,
+                    boot_id       = EXCLUDED.boot_id,
+                    ultimo_sinal  = NOW(),
+                    rodadas       = EXCLUDED.rodadas,
+                    intervalo_min = EXCLUDED.intervalo_min,
+                    dry_run       = EXCLUDED.dry_run,
+                    max_partidas  = EXCLUDED.max_partidas,
+                    motivo_parada = EXCLUDED.motivo_parada
+            """, (bool(_watch_state["ativo"]), _BOOT_ID, _watch_state["rodadas"],
+                  _watch_state["intervalo_min"], _watch_state["dry_run"],
+                  _watch_state["max_partidas"],
+                  motivo if motivo is not None else _watch_state["motivo_parada"]))
+            conn.commit()
+        finally:
+            cur.close(); conn.close()
+    except Exception as e:
+        logger.warning("[LIVE-WATCH] nao consegui gravar o estado: %s", e)
+
+
+def reconciliar_watch_no_boot() -> dict | None:
+    """Chamado uma vez na subida do servico. Devolve o que achou, ou None.
+
+    Se a linha diz `ativo` e o dono e' OUTRO processo, o laco morreu com ele.
+    Nao ha o que "recuperar" -- ha o que CONTAR: quantas rodadas deu, quando
+    foi o ultimo sinal, e que a queda foi restart e nao decisao.
+    """
+    try:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("SELECT * FROM live_watch_state WHERE id = 1")
+            linha = cur.fetchone()
+        finally:
+            cur.close(); conn.close()
+    except Exception as e:
+        logger.info("[LIVE-WATCH] sem estado persistido (%s)", e)
+        return None
+
+    if not linha or not linha["ativo"] or linha["boot_id"] == _BOOT_ID:
+        return None
+
+    quando = linha["ultimo_sinal"].strftime("%d/%m %H:%M") if linha["ultimo_sinal"] else "?"
+    motivo = (f"o servico reiniciou · estava rodando ate' {quando}, "
+              f"{linha['rodadas']} rodada(s)")
+    _watch_state.update({
+        "ativo": False, "rodadas": linha["rodadas"] or 0,
+        "intervalo_min": linha["intervalo_min"], "dry_run": linha["dry_run"],
+        "max_partidas": linha["max_partidas"], "motivo_parada": motivo,
+    })
+    _salvar_watch(motivo)
+    logger.warning("[LIVE-WATCH] %s", motivo)
+    return dict(linha)
+
+
 _watch_state: dict = {
     "ativo": False, "iniciado_em": None, "rodadas": 0, "falhas_seguidas": 0,
     "ultima_rodada": None, "proxima_rodada_em": None, "motivo_parada": None,
@@ -699,6 +786,9 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
             await _rodar(body)
             _watch_state["rodadas"] += 1
             _watch_state["ultima_rodada"] = agora()
+            # Sinal de vida. E' o que permite dizer DEPOIS "estava rodando ate'
+            # as 14:32" em vez de "desligado, sem motivo".
+            _salvar_watch()
 
             if _run_status.get("status") == "error":
                 _watch_state["falhas_seguidas"] += 1
@@ -727,6 +817,10 @@ async def _laco_de_acompanhamento(intervalo_min: int, dry_run: bool,
     finally:
         _watch_state["ativo"] = False
         _watch_state["proxima_rodada_em"] = None
+        # Grava o fim COM o motivo. Morte dentro do processo sempre deixa
+        # bilhete · so' o restart nao deixava, e e' o que a linha do banco
+        # passa a cobrir.
+        _salvar_watch()
         logger.info("[LIVE-WATCH] encerrado após %s rodadas (%s)",
                     _watch_state["rodadas"], _watch_state["motivo_parada"] or "desligado no painel")
 
@@ -739,6 +833,7 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
     if not body.ligar:
         _watch_state["ativo"] = False
         _watch_state["motivo_parada"] = "desligado no painel"
+        _salvar_watch()
         return {"ok": True, "ativo": False}
 
     autorizado, motivo = _pode_disparar()
@@ -760,6 +855,7 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
         "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(body.intervalo_min)),
         "dry_run": body.dry_run, "max_partidas": body.max_partidas,
     })
+    _salvar_watch()
     _watch_task = asyncio.create_task(_laco_de_acompanhamento(
         body.intervalo_min, body.dry_run, body.max_partidas))
     return {"ok": True, "ativo": True, "intervalo_min": _watch_state["intervalo_min"]}

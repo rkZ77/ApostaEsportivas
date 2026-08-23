@@ -442,6 +442,49 @@ def run_startup_migrations_hook():
     run_startup_migrations(logger)
 
 
+@app.on_event("startup")
+def reconciliar_motor_ao_vivo():
+    """O laco do Motor Ao Vivo nao sobrevive a restart · aqui ele CONTA isso.
+
+    O estado vivia so' na memoria do processo, entao um restart (deploy, ou o
+    Railway reciclando o container) apagava tudo e o painel voltava dizendo
+    "desligado, 0 rodadas, sem motivo". Quem tinha ligado via cair sozinho, sem
+    bilhete. Agora a linha no banco sobrevive e a subida le' o que ficou.
+
+    Roda DEPOIS das migrations de proposito: a tabela pode ter acabado de
+    nascer.
+
+    O rearme automatico e' opcional e desligado por padrao (LIVE_WATCH_REARM).
+    "Nada sobe ligado" foi o que se estabeleceu quando o scheduler foi removido
+    em 2026-08-01, depois de a cota da API estourar -- religar sozinho tem que
+    ser pedido de quem opera, nunca efeito colateral de um deploy.
+    """
+    try:
+        from routers.live_picks import (
+            _rearmar_apos_restart, reconciliar_watch_no_boot,
+        )
+        anterior = reconciliar_watch_no_boot()
+        if not anterior:
+            return
+        if not _rearmar_apos_restart():
+            logger.warning(
+                "[STARTUP] Motor Ao Vivo estava ligado e caiu no restart. "
+                "Religar e' manual (ou LIVE_WATCH_REARM=true).")
+            return
+        logger.warning("[STARTUP] LIVE_WATCH_REARM ligado · religando o Motor Ao Vivo.")
+        from routers.live_picks import WatchBody, acompanhar_continuo
+        asyncio.create_task(acompanhar_continuo(
+            WatchBody(ligar=True,
+                      intervalo_min=anterior.get("intervalo_min") or 8,
+                      dry_run=anterior.get("dry_run", True),
+                      max_partidas=anterior.get("max_partidas")),
+            current_user={"id": 0, "plan": "admin", "email": "startup"},
+        ))
+    except Exception as e:
+        # Nunca pode impedir a API de subir · e' diagnostico, nao requisito.
+        logger.warning("[STARTUP] reconciliacao do Motor Ao Vivo falhou: %s", e)
+
+
 @app.on_event("shutdown")
 def fechar_pool_hook():
     """Devolve as conexoes ao Postgres no encerramento.

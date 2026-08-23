@@ -365,6 +365,16 @@ def public_results(
     except Exception:
         logger.warning("[AUTO-RESULT] gatilho em /results falhou", exc_info=True)
 
+    # Mesma carona, outra varredura: a estatistica das partidas encerradas.
+    # `match_statistics` so' enchia no clique do /admin, e e' dela que saem os
+    # baselines do motor -- jogo que aconteceu e nao foi lido deixa a media
+    # velha sem parecer defeito de nada. Freios proprios em stats_sweep.py.
+    try:
+        from stats_sweep import maybe_sync_finished_stats
+        maybe_sync_finished_stats()
+    except Exception:
+        logger.warning("[STATS-SWEEP] gatilho em /results falhou", exc_info=True)
+
     conn = get_connection()
     cur  = conn.cursor()
     try:

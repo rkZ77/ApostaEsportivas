@@ -2252,6 +2252,96 @@ class BookmakerBody(BaseModel):
     ativo: bool = True
 
 
+@router.get("/dados")
+def dados_do_banco(current_user: dict = Depends(require_admin)):
+    """O que o motor tem pra ler, e onde estao os buracos.
+
+    O /overview responde "o sistema esta de pe". Esta rota responde outra
+    coisa: "o motor esta enxergando?". Sao perguntas diferentes e a segunda nao
+    tinha tela -- jogo encerrado sem estatistica nao quebra nada, so' deixa a
+    media velha, e media velha nao parece defeito de coisa nenhuma.
+
+    Tres blocos:
+      contagem  quanto tem em cada tabela que o motor le'
+      buracos   jogo encerrado sem estatistica, e ha quantos dias
+      varredura o estado da coleta automatica (stats_sweep)
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+
+    def um(sql: str, params: tuple = ()):
+        # Uma consulta que falha nao pode levar a tela junto: o painel serve
+        # justamente pra quando alguma coisa esta errada.
+        try:
+            cur.execute(sql, params)
+            linha = cur.fetchone()
+            return dict(linha) if linha else {}
+        except Exception as e:
+            logging.getLogger(__name__).warning("[ADMIN/DADOS] %s", e)
+            conn.rollback()
+            return {}
+
+    try:
+        contagem = {}
+        for rotulo, tabela in (
+            ("fixtures", "fixtures"), ("match_statistics", "match_statistics"),
+            ("team_statistics", "team_statistics"), ("teams", "teams"),
+            ("leagues", "leagues"), ("league_standings", "league_standings"),
+            ("picks_vip", "picks_vip"), ("picks_free", "picks_free"),
+        ):
+            contagem[rotulo] = (um(f"SELECT COUNT(*) AS n FROM {tabela}") or {}).get("n")
+
+        frescor = um("""
+            SELECT MAX(match_date)::text                       AS ultima_partida,
+                   COUNT(*) FILTER (WHERE match_date >= CURRENT_DATE - 7) AS ultimos_7_dias
+              FROM match_statistics
+        """)
+
+        # O buraco que importa: encerrado no banco de jogos e ausente no de
+        # estatistica. E' exatamente o que a varredura automatica persegue.
+        buracos = um("""
+            SELECT COUNT(*)                                        AS total,
+                   MIN(f.match_datetime)::text                     AS mais_antigo
+              FROM fixtures f
+         LEFT JOIN match_statistics ms ON ms.fixture_id = f.fixture_id
+             WHERE f.status IN ('FT','AET','PEN')
+               AND ms.fixture_id IS NULL
+        """)
+
+        por_liga = []
+        try:
+            cur.execute("""
+                SELECT l.league_id, l.name, COALESCE(l.ativa, TRUE) AS ativa,
+                       COUNT(ms.fixture_id)                      AS com_estatistica,
+                       MAX(ms.match_date)::text                  AS ultima
+                  FROM leagues l
+             LEFT JOIN match_statistics ms ON ms.league_id = l.league_id
+              GROUP BY l.league_id, l.name, l.ativa
+              ORDER BY ativa DESC, l.name
+            """)
+            por_liga = [dict(r) for r in cur.fetchall()]
+        except Exception as e:
+            logging.getLogger(__name__).warning("[ADMIN/DADOS] por_liga: %s", e)
+            conn.rollback()
+    finally:
+        cur.close()
+        conn.close()
+
+    try:
+        from stats_sweep import estado_da_varredura
+        varredura = estado_da_varredura()
+    except Exception as e:
+        varredura = {"erro": str(e)[:200]}
+
+    return {
+        "contagem": contagem,
+        "frescor": frescor,
+        "buracos": buracos,
+        "por_liga": por_liga,
+        "varredura": varredura,
+    }
+
+
 @router.get("/bookmakers")
 def listar_bookmakers(current_user: dict = Depends(require_admin)):
     """Casas de aposta cadastradas e seus volumes de coleta."""
