@@ -27,6 +27,11 @@ import {
  * itens seguintes são as áreas maiores que contêm o primeiro, que é o que sobra
  * quando ainda não há pick nenhum.
  *
+ * `Lista`, `Linhas` e `Etiqueta` são exportadas porque o roteiro do VIP
+ * (stepsVip.tsx) monta os passos dele com as mesmas peças · dois vocabulários
+ * visuais para a mesma caixa seria a forma mais rápida de os dois tours
+ * pararem de parecer o mesmo produto.
+ *
  * Dois passos fazem mais do que explicar: o do e-mail reenvia o link de
  * confirmação e o da banca abre o formulário de verdade. Tour que só aponta
  * deixa a pessoa com a lista de tarefas na cabeça para depois; estes dois
@@ -52,7 +57,7 @@ export interface TourStep {
 
 /* ── Peças de conteúdo ──────────────────────────────────────────────────── */
 
-function Lista({ itens }: { itens: [LucideIcon, string][] }) {
+export function Lista({ itens }: { itens: [LucideIcon, string][] }) {
   return (
     <ul className="grid gap-2 sm:grid-cols-2">
       {itens.map(([Icone, texto]) => (
@@ -66,7 +71,7 @@ function Lista({ itens }: { itens: [LucideIcon, string][] }) {
 }
 
 /** Linha rótulo/valor. Usada nos exemplos numéricos e na lista de campos. */
-function Linhas({ itens }: { itens: [string, string][] }) {
+export function Linhas({ itens }: { itens: [string, string][] }) {
   return (
     <dl className="rounded-md border border-line bg-surface-2/60 divide-y divide-line">
       {itens.map(([rotulo, valor]) => (
@@ -126,7 +131,7 @@ function Recado({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Etiqueta({ children }: { children: React.ReactNode }) {
+export function Etiqueta({ children }: { children: React.ReactNode }) {
   return <p className="text-[10px] font-bold uppercase tracking-wide text-ink-4">{children}</p>
 }
 

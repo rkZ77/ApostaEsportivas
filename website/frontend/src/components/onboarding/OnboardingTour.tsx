@@ -5,6 +5,8 @@ import { motion } from 'framer-motion'
 import { ChevronLeft, ChevronRight, X } from 'lucide-react'
 import { useOnboarding } from '../../context/OnboardingContext'
 import { passosDoTour } from './steps'
+import { TOUR_STEPS_VIP } from './stepsVip'
+import { TOUR_VIP } from './constantes'
 import { cn } from '../../lib/cn'
 
 /*
@@ -82,13 +84,18 @@ function medir(el: Element): Rect {
 }
 
 export default function OnboardingTour() {
-  const { aberto, pausado, passo, total, contexto, proximo, voltar, irPara, pular, concluir } = useOnboarding()
+  const { aberto, tour, pausado, passo, total, contexto, proximo, voltar, irPara, pular, concluir } = useOnboarding()
   const navigate = useNavigate()
   const { pathname } = useLocation()
 
-  /* O roteiro DESTA conta. `contexto` vem congelado do provider, então a lista
-     não muda de tamanho no meio de uma sessão de tour. */
-  const passos = useMemo(() => passosDoTour(contexto), [contexto])
+  /* O roteiro aberto. O de boas-vindas depende da conta (o passo do e-mail é
+     condicional) e `contexto` vem congelado do provider, então a lista não muda
+     de tamanho no meio de uma sessão. O do VIP é fixo: quem o vê acabou de
+     ganhar acesso a tudo que ele mostra. */
+  const passos = useMemo(
+    () => (tour === TOUR_VIP ? TOUR_STEPS_VIP : passosDoTour(contexto)),
+    [tour, contexto],
+  )
   const step = passos[passo]
   const primeiro = passo === 0
   const ultimo = passo === total - 1

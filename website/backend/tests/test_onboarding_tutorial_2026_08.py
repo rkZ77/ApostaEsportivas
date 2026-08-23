@@ -26,8 +26,10 @@ import pytest
 
 from routers import personal
 from routers.personal import (
+    TOURS,
     TUTORIAL_STATUS,
     TUTORIAL_TOTAL_STEPS,
+    VIP_TOUR_TOTAL_STEPS,
     TutorialBody,
     _tutorial_payload,
     get_tutorial,
@@ -140,7 +142,7 @@ def test_passo_salvo_tem_coluna_propria():
 
 
 def test_conta_nova_deve_abrir_o_tour(monkeypatch, usuario):
-    _liga(monkeypatch, CursorFalso({"tutorial_status": "pending", "tutorial_step": 0}))
+    _liga(monkeypatch, CursorFalso({"status": "pending", "step": 0}))
     r = get_tutorial(current_user=usuario)
     assert r["should_start"] is True
     assert r["step"] == 0
@@ -150,7 +152,7 @@ def test_conta_nova_deve_abrir_o_tour(monkeypatch, usuario):
 @pytest.mark.parametrize("estado", ["completed", "skipped"])
 def test_quem_concluiu_ou_pulou_nao_ve_de_novo(monkeypatch, usuario, estado):
     """Pular e concluir valem igual: o tour não volta sozinho nos dois casos."""
-    _liga(monkeypatch, CursorFalso({"tutorial_status": estado, "tutorial_step": 4}))
+    _liga(monkeypatch, CursorFalso({"status": estado, "step": 4}))
     r = get_tutorial(current_user=usuario)
     assert r["should_start"] is False
     assert r["status"] == estado
@@ -158,13 +160,13 @@ def test_quem_concluiu_ou_pulou_nao_ve_de_novo(monkeypatch, usuario, estado):
 
 def test_retoma_do_passo_em_que_parou(monkeypatch, usuario):
     """Recarregar a página, ou abrir no celular, continua de onde parou."""
-    _liga(monkeypatch, CursorFalso({"tutorial_status": "pending", "tutorial_step": 3}))
+    _liga(monkeypatch, CursorFalso({"status": "pending", "step": 3}))
     assert get_tutorial(current_user=usuario)["step"] == 3
 
 
 def test_passo_fora_da_faixa_nao_estoura_a_tela(monkeypatch, usuario):
     """Roteiro encurtado depois de alguém parar no passo 9 não pode virar tela branca."""
-    _liga(monkeypatch, CursorFalso({"tutorial_status": "pending", "tutorial_step": 99}))
+    _liga(monkeypatch, CursorFalso({"status": "pending", "step": 99}))
     assert get_tutorial(current_user=usuario)["step"] == TUTORIAL_TOTAL_STEPS - 1
 
 
@@ -182,7 +184,7 @@ def test_coluna_ausente_no_banco_nao_abre_o_tour(monkeypatch, usuario):
 
 
 def test_estado_estranho_no_banco_nao_abre_o_tour(monkeypatch, usuario):
-    _liga(monkeypatch, CursorFalso({"tutorial_status": "seila", "tutorial_step": 0}))
+    _liga(monkeypatch, CursorFalso({"status": "seila", "step": 0}))
     assert get_tutorial(current_user=usuario)["should_start"] is False
 
 
@@ -191,7 +193,7 @@ def test_estado_estranho_no_banco_nao_abre_o_tour(monkeypatch, usuario):
 
 def test_avancar_passo_nao_tira_a_conta_de_pendente(monkeypatch, usuario):
     """Guardar onde parou é diferente de concluir."""
-    cur = CursorFalso({"tutorial_status": "pending", "tutorial_step": 2})
+    cur = CursorFalso({"status": "pending", "step": 2})
     _liga(monkeypatch, cur)
     r = save_tutorial(TutorialBody(step=2), current_user=usuario)
     assert r["should_start"] is True
@@ -207,7 +209,7 @@ def test_avancar_passo_nao_tira_a_conta_de_pendente(monkeypatch, usuario):
 
 @pytest.mark.parametrize("estado", ["completed", "skipped"])
 def test_concluir_e_pular_carimbam_a_data(monkeypatch, usuario, estado):
-    cur = CursorFalso({"tutorial_status": estado, "tutorial_step": 6})
+    cur = CursorFalso({"status": estado, "step": 6})
     _liga(monkeypatch, cur)
     save_tutorial(TutorialBody(status=estado), current_user=usuario)
 
@@ -222,7 +224,7 @@ def test_reabrir_pelo_menu_nao_reescreve_a_data_do_fim(monkeypatch, usuario):
     Quem reabre o tour por "Ver tutorial" e conclui de novo mandaria um segundo
     'completed'. A data em que a pessoa aprendeu a usar o site é a primeira.
     """
-    cur = CursorFalso({"tutorial_status": "completed", "tutorial_step": 6})
+    cur = CursorFalso({"status": "completed", "step": 6})
     _liga(monkeypatch, cur)
     save_tutorial(TutorialBody(status="completed"), current_user=usuario)
 
@@ -257,7 +259,7 @@ def test_passo_negativo_e_recusado():
 
 def test_passo_no_limite_e_guardado_dentro_da_faixa(monkeypatch, usuario):
     """O front manda o índice seguinte ao fechar o último passo."""
-    cur = CursorFalso({"tutorial_status": "pending", "tutorial_step": TUTORIAL_TOTAL_STEPS - 1})
+    cur = CursorFalso({"status": "pending", "step": TUTORIAL_TOTAL_STEPS - 1})
     _liga(monkeypatch, cur)
     save_tutorial(TutorialBody(step=TUTORIAL_TOTAL_STEPS), current_user=usuario)
 
@@ -321,5 +323,94 @@ def test_estados_possiveis_sao_so_esses_tres():
 
 
 def test_payload_traz_tudo_que_a_tela_precisa():
-    r = _tutorial_payload("pending", 2)
-    assert set(r) == {"status", "step", "total_steps", "should_start"}
+    r = _tutorial_payload("pending", 2, TUTORIAL_TOTAL_STEPS, "boas-vindas")
+    assert set(r) == {"tour", "status", "step", "total_steps", "should_start"}
+
+
+# ───────────────────── o roteiro do VIP ────────────────────────────────
+
+
+def test_os_dois_roteiros_existem_e_apontam_pra_colunas_diferentes():
+    """Um estado por roteiro. Compartilhando coluna, concluir um fecharia o outro."""
+    assert set(TOURS) == {"boas-vindas", "vip"}
+    colunas = [c["status"] for c in TOURS.values()]
+    assert len(set(colunas)) == 2, "os dois roteiros nao podem dividir a mesma coluna"
+    assert TOURS["vip"]["total"] == VIP_TOUR_TOTAL_STEPS
+
+
+def test_tour_desconhecido_e_recusado(usuario):
+    """O nome do tour vira NOME DE COLUNA no SQL. Recusar o que nao esta no
+    dicionario e' o que impede a query string de escolher coluna."""
+    with pytest.raises(Exception) as e:
+        get_tutorial(tour="'; DROP TABLE users; --", current_user=usuario)
+    assert e.value.status_code == 400
+
+
+def test_vip_pendente_abre_o_tour_do_vip(monkeypatch, usuario):
+    cur = CursorFalso({"status": "pending", "step": 0})
+    _liga(monkeypatch, cur)
+    r = get_tutorial(tour="vip", current_user=usuario)
+    assert r["should_start"] is True
+    assert r["tour"] == "vip"
+    assert r["total_steps"] == VIP_TOUR_TOTAL_STEPS
+
+    sql, _ = cur.executados[0]
+    assert "vip_tour_status" in sql and "vip_tour_step" in sql
+    assert "tutorial_status" not in sql, "o roteiro do VIP nao pode ler a coluna do outro"
+
+
+def test_vip_grava_na_coluna_do_vip(monkeypatch, usuario):
+    cur = CursorFalso({"status": "completed", "step": 4})
+    _liga(monkeypatch, cur)
+    save_tutorial(TutorialBody(status="completed"), tour="vip", current_user=usuario)
+
+    sql, _ = cur.executados[0]
+    assert "vip_tour_status = %s" in sql
+    assert "vip_tour_finished_at = COALESCE(vip_tour_finished_at, NOW())" in sql
+    assert "tutorial_status" not in sql
+
+
+def test_passo_do_vip_e_limitado_ao_roteiro_do_vip(monkeypatch, usuario):
+    """O teto do PUT e' o maior entre os roteiros; o clamp por roteiro vem
+    depois. Sem ele, o passo 7 (valido no de boas-vindas) entraria no do VIP,
+    que tem 5, e a tela abriria num passo que nao existe."""
+    cur = CursorFalso({"status": "pending", "step": VIP_TOUR_TOTAL_STEPS - 1})
+    _liga(monkeypatch, cur)
+    save_tutorial(TutorialBody(step=7), tour="vip", current_user=usuario)
+
+    _, params = cur.executados[0]
+    assert params[0] == VIP_TOUR_TOTAL_STEPS - 1
+
+
+def test_backfill_do_vip_poupa_so_quem_ja_e_assinante():
+    """A diferenca em relacao ao outro backfill e' o ponto do recurso.
+
+    La todo mundo virou 'completed'. Aqui free e trial precisam ficar
+    'pending', porque e' isso que faz o tour aparecer no dia em que eles
+    assinarem. Marcar a base inteira entregaria a assinatura sem nenhuma tela
+    dizendo o que mudou.
+    """
+    fonte = _fonte_da_migration()
+    assert "vip_tour_status VARCHAR(12) NOT NULL DEFAULT 'pending'" in fonte
+    assert (
+        "UPDATE users SET vip_tour_status = 'completed' WHERE plan IN ('vip', 'admin')"
+        in fonte
+    )
+    # E preso ao nascimento da coluna, como o outro.
+    bloco = re.search(
+        r"AND attname  = 'vip_tour_status'.*?END \$\$;", fonte, re.S,
+    )
+    assert bloco and "UPDATE users SET vip_tour_status" in bloco.group(0)
+
+
+def test_o_front_e_o_back_contam_os_mesmos_passos_do_vip():
+    import pathlib
+
+    constantes = (
+        pathlib.Path(__file__).resolve().parents[2]
+        / "frontend" / "src" / "components" / "onboarding" / "constantes.ts"
+    ).read_text(encoding="utf-8")
+    assert f"TOTAL_PASSOS_VIP = {VIP_TOUR_TOTAL_STEPS}" in constantes
+    # E os nomes dos roteiros tem que bater dos dois lados.
+    for nome in TOURS:
+        assert f"'{nome}'" in constantes, f"o front nao conhece o roteiro {nome}"
