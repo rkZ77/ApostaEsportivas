@@ -269,6 +269,21 @@ class Estudio:
         except Exception:
             pass
 
+        # Some com o selo ADMIN do topo. A gravação roda numa conta admin, mas
+        # o vídeo é sobre o que o ASSINANTE vê · deixar "ADMIN" na tela mostra
+        # uma interface que nenhum cliente tem.
+        try:
+            self.page.evaluate("""() => {
+                for (const el of document.querySelectorAll('span,div,small,b')) {
+                    if (el.children.length === 0 &&
+                        el.textContent.trim().toUpperCase() === 'ADMIN') {
+                        el.style.display = 'none';
+                    }
+                }
+            }""")
+        except Exception:
+            pass
+
     def pausa(self, segundos: float) -> None:
         self.page.wait_for_timeout(int(segundos * 1000))
 
@@ -397,6 +412,38 @@ class Estudio:
 
         for p in padroes:
             self._ctx.route(p, porteiro)
+
+    def logar(self, identificador: str, senha: str) -> bool:
+        """
+        Login pelo formulário do site.
+
+        Só funciona onde o Turnstile está desligado (`TURNSTILE_SECRET_KEY`
+        ausente no servidor). Em produção, com o captcha ligado, ele detecta o
+        navegador instrumentado e nenhum token é emitido · nesse caso o
+        caminho é o cookie do navegador comum, via `sessao.py`.
+        """
+        self.ir("/login", espera=1.6)
+        campo = self.page.locator("#login-identifier")
+        if not campo.count():
+            print("  [erro] campo de login não encontrado")
+            return False
+        campo.fill(identificador)
+        self.page.locator("#password").fill(senha)
+        self.page.keyboard.press("Enter")
+        try:
+            self.page.wait_for_url(lambda u: "/login" not in u, timeout=20000)
+        except Exception:
+            erro = self.page.locator("text=/senha|inválid|incorret|seguran/i")
+            detalhe = ""
+            try:
+                if erro.count():
+                    detalhe = f" · o site disse: {erro.first.inner_text()[:90]}"
+            except Exception:
+                pass
+            print(f"  [erro] login não completou{detalhe}")
+            return False
+        self.pausa(1.6)
+        return True
 
     def sessao_valida(self) -> bool:
         """

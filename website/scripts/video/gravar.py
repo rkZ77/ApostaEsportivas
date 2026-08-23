@@ -79,6 +79,9 @@ def main() -> int:
     p.add_argument("--saida", default=str(AQUI / "saida"), help="pasta de saída")
     p.add_argument("--voz", default=str(AQUI / "voz"),
                    help="pasta da narração gerada por narracao.py")
+    p.add_argument("--usuario", default=os.getenv("PICKIA_DEMO_USER", ""),
+                   help="email, usuário ou CPF · só onde o captcha está off")
+    p.add_argument("--senha", default=os.getenv("PICKIA_DEMO_SENHA", ""))
     p.add_argument("--login-manual", action="store_true",
                    help="abre o navegador pra você logar e salva a sessão")
     p.add_argument("--sessao", default=str(AQUI / "sessao.json"),
@@ -115,14 +118,17 @@ def main() -> int:
         return 2
 
     sessao = Path(args.sessao)
+    # Duas formas de entrar: usuário/senha (onde o captcha está desligado) ou
+    # o cookie do navegador comum trazido por `sessao.py`.
+    por_senha = bool(args.usuario and args.senha)
     precisa_login = any(CENAS[c][2] for c in escolhidas)
-    if precisa_login and not sessao.exists():
+    if precisa_login and not por_senha and not sessao.exists():
         faltando = [c for c in escolhidas if CENAS[c][2]]
-        print(f"erro: as cenas {', '.join(faltando)} exigem estar logado,",
+        print(f"erro: as cenas {', '.join(faltando)} exigem estar logado.",
               file=sys.stderr)
-        print(f"      e não achei a sessão em {sessao}.", file=sys.stderr)
-        print("      rode uma vez:  python gravar.py --url … --login-manual",
+        print("      passe --usuario e --senha, ou traga o cookie do seu",
               file=sys.stderr)
+        print("      navegador com sessao.py (veja o README).", file=sys.stderr)
         return 2
 
     saida = Path(args.saida)
@@ -145,14 +151,16 @@ def main() -> int:
         desc, funcao, com_login = CENAS[nome]
         print(f"\n[{nome}] {desc}")
         try:
+            usar_sessao = sessao if (com_login and not por_senha) else None
             with Estudio(args.url, saida, nome, headless=not args.ver,
-                         tempos=tempos,
-                         sessao=sessao if com_login else None) as e:
-                if com_login and not e.sessao_valida():
-                    print(f"  [erro] sessão expirada ou derrubada · {nome} pulada")
-                    print("         rode de novo: gravar.py --url … --login-manual")
-                    falhas.append(nome)
-                    continue
+                         tempos=tempos, sessao=usar_sessao) as e:
+                if com_login:
+                    entrou = (e.logar(args.usuario, args.senha) if por_senha
+                              else e.sessao_valida())
+                    if not entrou:
+                        print(f"  [erro] não consegui entrar · {nome} pulada")
+                        falhas.append(nome)
+                        continue
                 funcao(e, ctx)
         except Exception:
             print(f"  [erro] cena {nome} quebrou:")

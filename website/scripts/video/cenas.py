@@ -152,6 +152,19 @@ NARRACAO: dict[str, tuple[str, str]] = {
     "saque-03": ("É isso que impede você de sacar o lucro e continuar apostando como se ele estivesse lá.",
                  "Sem apostar dinheiro que saiu"),
     "saque-fecho": ("Organiza a sua. Link na bio.", ""),
+
+    # ── 14. O que é o Pick IA ────────────────────────────────────────────
+    # A pergunta que vem antes de "como funciona". Muita gente chega achando
+    # que é casa de aposta · o terceiro trecho existe só pra desfazer isso.
+    "o-que-e-01": ("Que site é esse?",
+                   "Que site é esse?"),
+    "o-que-e-02": ("O Pick IA analisa os jogos do dia e mostra onde tem valor.",
+                   "Analisa os jogos do dia"),
+    "o-que-e-03": ("Não somos casa de aposta. Aqui é onde você decide no que apostar.",
+                   "Não somos casa de aposta"),
+    "o-que-e-04": ("Tem pick grátis todo dia, histórico aberto e controle de banca.",
+                   "Grátis, aberto, com banca"),
+    "o-que-e-fecho": ("Dá uma olhada. O link tá na bio.", ""),
 }
 
 # Sufixo das falas que tocam sobre o cartão de fecho.
@@ -201,6 +214,14 @@ CARTOES: dict[str, dict[str, str]] = {
     "saque":          {"gancho": "Tirou o lucro.\nE a banca?",
                        "titulo": "Sacar sem bagunçar a contabilidade",
                        "fecho": "Organize a sua banca", "cta": "pickia.com.br"},
+    "o-que-e":        {"gancho": "Que site\né esse?",
+                       "titulo": "O Pick IA em 30 segundos",
+                       "fecho": "Conheça o Pick IA", "cta": "pickia.com.br"},
+    # Cena muda: sem legenda e sem narração, estes dois cartões são o ÚNICO
+    # texto do vídeo. Por isso a abertura carrega a pergunta inteira.
+    "picks-de-hoje":  {"gancho": "O que é\no Pick IA?",
+                       "titulo": "Os picks de hoje, direto no site",
+                       "fecho": "Veja os picks de hoje", "cta": "pickia.com.br"},
 }
 
 # Endpoints que gravam. Bloqueados em toda cena, sem exceção.
@@ -238,7 +259,37 @@ def _aviso(ok: bool, o_que: str) -> None:
         print(f"  [aviso] não encontrei: {o_que}")
 
 
+def _abrir_aba(e: Estudio, rotulo: str) -> None:
+    """
+    Abre uma aba de /picks pelo clique, não pelo hash da URL.
+
+    Carregar `/picks#vip` direto não funciona: a lista de abas válidas depende
+    do plano do usuário, que chega numa requisição posterior, então na hora em
+    que o app lê o hash a aba ainda não é válida e ele cai em "Hoje" · que é
+    justamente a aba sem card nenhum.
+    """
+    aba = e.page.locator(f"button:has-text('{rotulo}')").first
+    if aba.count():
+        try:
+            aba.click(timeout=4000)
+            e.pausa(2.4)
+            return
+        except Exception:
+            pass
+    print(f"  [aviso] não consegui abrir a aba {rotulo}")
+
+
 def _sem_picks(e: Estudio) -> bool:
+    # Espera em vez de decidir na primeira olhada: a aba troca na hora, mas os
+    # cards vêm de uma requisição própria e chegam depois. Sem isto a cena
+    # concluía "não tem pick" com a lista ainda carregando.
+    try:
+        e.page.locator("button:has-text('Entenda esta análise')").first.wait_for(
+            state="visible", timeout=12000
+        )
+        return False
+    except Exception:
+        pass
     if e.page.locator("button:has-text('Entenda esta análise')").count():
         return False
     print("  [aviso] nenhum pick na tela · a janela do motor é só HOJE, "
@@ -323,7 +374,8 @@ def banca_config(e: Estudio, ctx: dict) -> None:
 def pick_abrir(e: Estudio, ctx: dict) -> None:
     e.bloquear_escrita(*ESCRITA)
     e.mockar(ROTA_BANCA, fixtures.banca())
-    e.ir("/picks", espera=3.0)
+    e.ir("/picks", espera=2.6)
+    _abrir_aba(e, "Picks VIP")
     if _sem_picks(e):
         return
     fala(e, "pick-abrir-01")
@@ -341,7 +393,8 @@ def pick_abrir(e: Estudio, ctx: dict) -> None:
 def pick_registrar(e: Estudio, ctx: dict) -> None:
     e.bloquear_escrita(*ESCRITA)
     e.mockar(ROTA_BANCA, fixtures.banca())
-    e.ir("/picks", espera=3.0)
+    e.ir("/picks", espera=2.6)
+    _abrir_aba(e, "Picks VIP")
     if _sem_picks(e):
         return
     fala(e, "pick-registrar-01")
@@ -393,6 +446,77 @@ def agente(e: Estudio, ctx: dict) -> None:
     e.legenda(None)
 
 
+def picks_de_hoje(e: Estudio, ctx: dict) -> None:
+    """
+    Vídeo mudo: os picks reais do dia rolando, e só.
+
+    Sem legenda e sem narração de propósito · o produto é a imagem. Como
+    nenhuma fala é registrada, `montar.py` não encontra marca nenhuma e monta
+    o vídeo sem faixa de voz automaticamente. Trilha por fora, com
+    `montar.py --musica`.
+
+    Por não ter texto na tela, o ritmo é tudo: rolagem lenta e contínua, com
+    pausa em cima de cada card em vez de varrer a página de ponta a ponta.
+    """
+    e.bloquear_escrita(*ESCRITA)
+    e.mockar(ROTA_BANCA, fixtures.banca())
+    e.ir("/picks", espera=2.6)
+    _abrir_aba(e, "Picks VIP")
+    if _sem_picks(e):
+        return
+
+    # 1. Os picks do dia passando.
+    e.pausa(1.4)
+    for _ in range(3):
+        e.rolar(300, ms=1400)
+        e.pausa(1.0)
+
+    # 2. Abrir a análise de um deles · mostra que tem conteúdo atrás do card.
+    if e.tocar("button:has-text('Entenda esta análise')", depois=2.0):
+        e.rolar(280, ms=1300)
+        e.pausa(1.6)
+        e.rolar(280, ms=1300)
+        e.pausa(1.4)
+        e.page.keyboard.press("Escape")
+        e.pausa(1.2)
+
+    # 3. Pegar o pick. É o miolo do vídeo: sem narração, a ação na tela é a
+    # única coisa contando a história, então cada passo precisa de pausa pra
+    # ser lido. O POST está bloqueado em ESCRITA · nada disso chega no banco.
+    if e.tocar("button:has-text('Apostar')", depois=2.0):
+        e.pausa(1.2)
+        for _ in range(2):
+            if not e.tocar("[aria-label='Aumentar unidades']", antes=0.5, depois=1.0):
+                break
+        e.pausa(1.6)
+        e.apontar("button:has-text('Registrar aposta')")
+        e.pausa(1.8)
+        e.page.keyboard.press("Escape")
+        e.pausa(1.0)
+
+    e.rolar(320, ms=1400)
+    e.pausa(1.2)
+
+
+def o_que_e(e: Estudio, ctx: dict) -> None:
+    """Apresentação do produto. Roda inteira na home, sem login."""
+    e.bloquear_escrita(*ESCRITA)
+    e.ir("/", espera=1.8)
+    fala(e, "o-que-e-01")
+    fala(e, "o-que-e-02")
+
+    # O pick livre do dia é a prova mais concreta na home, e cai bem embaixo
+    # da fala que separa o Pick IA de uma casa de aposta.
+    if not e.rolar_ate("text=Dica do dia", ms=900, folga=130):
+        e.rolar(520, ms=900)
+    fala(e, "o-que-e-03")
+
+    e.rolar(540, ms=900)
+    fala(e, "o-que-e-04")
+    e.rolar(420, ms=900)
+    e.legenda(None)
+
+
 def ranking(e: Estudio, ctx: dict) -> None:
     # `/public/leaderboard` é público, então esta cena não precisa de sessão.
     e.bloquear_escrita(*ESCRITA)
@@ -415,7 +539,8 @@ def multipla(e: Estudio, ctx: dict) -> None:
     e.bloquear_escrita(*ESCRITA)
     e.mockar(ROTA_BANCA, fixtures.banca())
     # A aba é escolhida pelo hash da URL · ver o efeito de `setTab` em Picks.tsx.
-    e.ir("/picks#multiplas", espera=3.0)
+    e.ir("/picks", espera=2.6)
+    _abrir_aba(e, "Múltiplas")
     fala(e, "multipla-01")
     e.rolar(240, ms=850)
     fala(e, "multipla-02")
@@ -438,6 +563,8 @@ def saque(e: Estudio, ctx: dict) -> None:
 
 # nome -> (descrição, função, precisa de login)
 CENAS: dict[str, tuple[str, callable, bool]] = {
+    "picks-de-hoje":  ("MUDO: os picks reais de hoje rolando", picks_de_hoje, True),
+    "o-que-e":        ("Que site é esse: o Pick IA em 30s", o_que_e, False),
     "convite":        ("Chamada: você aposta no escuro?", convite, False),
     "cadastro":       ("Criar conta grátis em 1 minuto", cadastro, False),
     "como-funciona":  ("De onde vem o pick", como_funciona, False),
