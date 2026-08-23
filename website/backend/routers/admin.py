@@ -2308,21 +2308,6 @@ def dados_do_banco(current_user: dict = Depends(require_admin)):
                AND ms.fixture_id IS NULL
         """)
 
-        por_liga = []
-        try:
-            cur.execute("""
-                SELECT l.league_id, l.name, COALESCE(l.ativa, TRUE) AS ativa,
-                       COUNT(ms.fixture_id)                      AS com_estatistica,
-                       MAX(ms.match_date)::text                  AS ultima
-                  FROM leagues l
-             LEFT JOIN match_statistics ms ON ms.league_id = l.league_id
-              GROUP BY l.league_id, l.name, l.ativa
-              ORDER BY ativa DESC, l.name
-            """)
-            por_liga = [dict(r) for r in cur.fetchall()]
-        except Exception as e:
-            logging.getLogger(__name__).warning("[ADMIN/DADOS] por_liga: %s", e)
-            conn.rollback()
     finally:
         cur.close()
         conn.close()
@@ -2337,8 +2322,103 @@ def dados_do_banco(current_user: dict = Depends(require_admin)):
         "contagem": contagem,
         "frescor": frescor,
         "buracos": buracos,
-        "por_liga": por_liga,
         "varredura": varredura,
+    }
+
+
+# Historico POR PARTIDA -- 40 e' teto do banco, nao tamanho de pagina.
+#
+# A tela listava LIGA, com "partidas com estatistica" agregado. Agregado nao
+# responde a pergunta que se faz olhando esta aba ("o motor enxergou o jogo de
+# ontem?"): uma liga com 3.000 jogos e uma com 4 apareciam iguais, uma linha
+# cada, e nenhuma das duas dizia QUAL jogo entrou.
+#
+# O corte de 40 acontece no SQL, antes do OFFSET. E' o que mantem a pagina 4 do
+# mesmo custo da pagina 1 e deixa `match_statistics` crescer sem que esta rota
+# fique mais cara -- o contrario (paginar a tabela inteira e cortar na tela)
+# ficaria mais lento a cada coleta.
+HISTORICO_TETO = 40
+HISTORICO_POR_PAGINA_MAX = 20
+
+
+@router.get("/dados/partidas")
+def partidas_coletadas(
+    pagina: int = 0,
+    por_pagina: int = 10,
+    current_user: dict = Depends(require_admin),
+):
+    """As ultimas partidas que entraram em `match_statistics`, paginadas.
+
+    Sem filtro de status de proposito: "coletada" aqui e' literalmente ter
+    linha na tabela. Jogo adiado ou interrompido que tenha estatistica gravada
+    PRECISA aparecer -- ele conta nas medias do motor igual aos outros, e
+    esconder da tela justo a linha esquisita e' esconder o problema.
+    """
+    pagina     = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), HISTORICO_POR_PAGINA_MAX)
+    offset     = pagina * por_pagina
+    limite     = max(0, min(por_pagina, HISTORICO_TETO - offset))
+
+    conn = get_connection()
+    cur  = conn.cursor()
+    try:
+        # COUNT na tabela inteira seria varredura completa a cada troca de
+        # pagina pra devolver, no maximo, 40. O LIMIT no subselect faz o
+        # Postgres parar de contar no quadragesimo.
+        cur.execute(
+            f"SELECT COUNT(*) AS n FROM (SELECT 1 FROM match_statistics LIMIT {HISTORICO_TETO}) t"
+        )
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        partidas = []
+        if limite:
+            # LATERAL, e nao JOIN direto em `teams`: a tabela tem UMA LINHA POR
+            # TEMPORADA por time, entao o join simples multiplicaria a partida
+            # por quantas temporadas o time tiver cadastradas.
+            cur.execute("""
+                SELECT ms.fixture_id,
+                       ms.match_date::text                  AS data,
+                       ms.status,
+                       l.name                               AS liga,
+                       casa.name                            AS mandante,
+                       fora.name                            AS visitante,
+                       ms.home_goals, ms.away_goals,
+                       ms.total_corners                     AS escanteios,
+                       ms.total_yellow_cards                AS cartoes,
+                       ms.home_fouls + ms.away_fouls        AS faltas
+                  FROM match_statistics ms
+             LEFT JOIN leagues l ON l.league_id = ms.league_id
+             LEFT JOIN LATERAL (
+                       SELECT name FROM teams
+                        WHERE team_id = ms.home_team_id
+                        ORDER BY season DESC LIMIT 1
+                   ) casa ON TRUE
+             LEFT JOIN LATERAL (
+                       SELECT name FROM teams
+                        WHERE team_id = ms.away_team_id
+                        ORDER BY season DESC LIMIT 1
+                   ) fora ON TRUE
+              ORDER BY ms.match_date DESC, ms.fixture_id DESC
+                 LIMIT %s OFFSET %s
+            """, (limite, offset))
+            partidas = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        # Mesma postura do /dados: consulta que falha nao pode levar a aba
+        # junto, ela serve justamente pra quando algo esta errado.
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] partidas: %s", e)
+        conn.rollback()
+        return {"total": 0, "pagina": pagina, "por_pagina": por_pagina,
+                "teto": HISTORICO_TETO, "partidas": [], "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "teto": HISTORICO_TETO,
+        "partidas": partidas,
     }
 
 
