@@ -254,6 +254,9 @@ TYPE_PICK_LIVE     = "pick_live"
 TYPE_PICK_RESULT   = "pick_result"
 TYPE_PLAN_EXPIRING = "plan_expiring"
 TYPE_TRIAL_ENDED   = "trial_ended"
+# Um tipo por plano encerrado, e não um "access_ended" só: o ícone e a
+# cópia do popup mudam (assinar x renovar), e o sino escolhe pelo tipo.
+TYPE_VIP_ENDED     = "vip_ended"
 
 LIST_LIMIT   = 40
 PURGE_DAYS   = 60   # notificações lidas mais velhas que isso são descartadas

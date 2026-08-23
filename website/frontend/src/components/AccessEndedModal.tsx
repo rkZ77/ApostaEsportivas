@@ -4,7 +4,7 @@ import { Lock, Sparkles, X } from 'lucide-react'
 import { backdropFade, sheetUp } from '../lib/motion'
 
 /*
- * Fim do teste grátis · o único popup de conversão do site.
+ * Fim do acesso · o único popup de conversão do site.
  *
  * POR QUE INTERROMPE, se a regra da casa é o sino
  * -----------------------------------------------
@@ -15,18 +15,32 @@ import { backdropFade, sheetUp } from '../lib/motion'
  * interrupção que deixar descobrir errando. É o mesmo critério que manteve o
  * popup do fechamento mensal de pé: momento de decisão, não recado.
  *
+ * DOIS FINAIS, UM COMPONENTE
+ * --------------------------
+ * Nasceu só pro teste grátis (era TrialEndedModal). O VIP vencido ganhou a
+ * mesma tela em 23/08/2026, e não uma cópia: o esqueleto é idêntico e o que
+ * muda é o verbo · quem testou ASSINA, quem assinou RENOVA. Duas versões desse
+ * arquivo só garantiriam que uma envelhecesse, e a que envelheceria seria a do
+ * VIP, que aparece menos.
+ *
  * UMA VEZ SÓ, POR CONTA (não por navegador)
  * -----------------------------------------
- * O gatilho é a notificação `trial_ended` ainda não lida. Fechar aqui marca
- * como lida, e a notificação nasce com `dedupe_key` fixa em cima de um UNIQUE
- * (user_id, dedupe_key) · não existe segunda linha pra criar. Acima disso, o
- * rebaixamento de trial pra free só acontece uma vez na vida da conta, porque
- * o trial grava `trial_used = TRUE` e nunca é reativado.
+ * O gatilho é a notificação `trial_ended` / `vip_ended` ainda não lida. Fechar
+ * aqui marca como lida, e a notificação tem `dedupe_key` em cima de um UNIQUE
+ * (user_id, dedupe_key). No teste a chave é fixa · não existe segunda linha pra
+ * criar, e acima disso o rebaixamento de trial pra free só acontece uma vez na
+ * vida da conta (`trial_used = TRUE`, nunca reativado). No VIP a chave carrega
+ * a data do vencimento, então cada ciclo de assinatura avisa uma vez · é o
+ * comportamento certo: quem assinou de novo e deixou vencer de novo perdeu o
+ * acesso de novo.
  *
  * Fechar não perde nada: o item continua no sino, com o mesmo link.
  */
 
-/** O que a pessoa tinha até ontem · a lista é o argumento. */
+export type FimDeAcesso = 'trial' | 'vip'
+
+/** O que a pessoa tinha até ontem · a lista é o argumento, e é a mesma nos
+    dois casos porque o acesso perdido é o mesmo. */
 const PERDIDOS = [
   'Picks VIP do dia',
   'Múltiplas e alavancagem',
@@ -34,8 +48,28 @@ const PERDIDOS = [
   'Agente de futebol com IA',
 ]
 
-export default function TrialEndedModal({ onClose }: { onClose: () => void }) {
+const COPY: Record<FimDeAcesso, {
+  rotulo: string; titulo: string; intro: string; cta: string
+}> = {
+  trial: {
+    rotulo: 'Teste grátis',
+    titulo: 'Seus 2 dias acabaram',
+    intro: 'Sua conta voltou pro plano free. O que estava liberado até agora:',
+    cta: 'Assinar o VIP',
+  },
+  vip: {
+    rotulo: 'Assinatura VIP',
+    titulo: 'Seu VIP acabou',
+    intro: 'Sua assinatura venceu e a conta voltou pro plano free. O que sai do ar:',
+    cta: 'Renovar o VIP',
+  },
+}
+
+export default function AccessEndedModal(
+  { tipo, onClose }: { tipo: FimDeAcesso; onClose: () => void },
+) {
   const navigate = useNavigate()
+  const copy = COPY[tipo]
 
   const assinar = () => {
     onClose()
@@ -53,8 +87,8 @@ export default function TrialEndedModal({ onClose }: { onClose: () => void }) {
       >
         <div className="px-5 pt-5 pb-2 flex items-start justify-between gap-3">
           <div>
-            <p className="text-[10px] font-black text-ink-3 mb-0.5">Teste grátis</p>
-            <h2 className="text-ink-1 font-bold text-xl">Seus 2 dias acabaram</h2>
+            <p className="text-[10px] font-black text-ink-3 mb-0.5">{copy.rotulo}</p>
+            <h2 className="text-ink-1 font-bold text-xl">{copy.titulo}</h2>
           </div>
           <button
             onClick={onClose}
@@ -66,9 +100,7 @@ export default function TrialEndedModal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="px-5 pb-5">
-          <p className="text-sm text-ink-2 leading-relaxed mb-4">
-            Sua conta voltou pro plano free. O que estava liberado até agora:
-          </p>
+          <p className="text-sm text-ink-2 leading-relaxed mb-4">{copy.intro}</p>
 
           <ul className="space-y-2 mb-5">
             {PERDIDOS.map(item => (
@@ -85,7 +117,7 @@ export default function TrialEndedModal({ onClose }: { onClose: () => void }) {
             className="w-full py-3 rounded-lg bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-black transition-colors flex items-center justify-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
-            Assinar o VIP
+            {copy.cta}
           </motion.button>
 
           {/* A saída fica explícita e sem peso. Popup de conversão sem porta de

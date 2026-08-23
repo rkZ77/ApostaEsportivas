@@ -1,12 +1,20 @@
-"""Aviso de plano perto de vencer · sino + e-mail, disparado no login.
+"""Avisos de plano · sino + e-mail, pendurados no login e no /auth/me.
 
-POR QUE NO LOGIN E NÃO NUM JOB
-------------------------------
+POR QUE NA REQUISIÇÃO E NÃO NUM JOB
+-----------------------------------
 Este backend não tem mais scheduler: ele foi removido em 2026-08-01 por decisão
 do usuário e nada roda sozinho aqui, em ambiente nenhum (ver o comentário longo
 em main.py). Um aviso de vencimento não precisa de job: quem precisa ver é
 justamente quem voltou a usar o site, e o login é o momento em que a pessoa
 está olhando. Quem não entra também não renova.
+
+O login sozinho não bastava: o cookie de sessão dura 30 dias e o uso é
+mobile-first, então o assinante mensal que deixa o app aberto pode atravessar
+o ciclo inteiro sem digitar a senha de novo · e atravessava sem receber um
+único e-mail de renovação. Por isso o aviso também roda no /auth/me, que é a
+rota que toda visita chama. A `dedupe_key` já garantia um aviso por faixa,
+então repetir o gatilho em outra rota não repete a mensagem: só amplia o
+alcance.
 
 O efeito colateral bom disso é que o aviso nunca chega para uma conta
 abandonada · não gastamos e-mail com quem sumiu.
@@ -23,7 +31,7 @@ avisar normalmente, sem precisar limpar nada.
 """
 from datetime import datetime, timezone
 
-from email_templates import plano_expirando_html, url_logo
+from email_templates import NOTA_PLANO_ENCERRADO, aviso_de_plano_html, url_logo
 
 # Rótulo do plano na mensagem. O nome importa: "seu VIP vence" e "seu teste
 # grátis acaba" pedem ações diferentes de quem lê, e o mesmo texto genérico
@@ -140,7 +148,7 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
             user["email"],
             titulo,
             f"{titulo}\n\n{corpo}\n\nRenove em {site_url}/checkout",
-            plano_expirando_html(
+            aviso_de_plano_html(
                 user.get("name") or "", titulo, corpo, site_url, url_logo(site_url)
             ),
         )
@@ -149,67 +157,134 @@ def avisar_plano_expirando(cur, user: dict, site_url: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# FIM DO TESTE GRÁTIS
+# ACESSO ENCERRADO · o teste acabou, ou a assinatura venceu
 # ─────────────────────────────────────────────────────────────────────────────
 #
 # O aviso acima é de plano PERTO de vencer, e ele sai de cena quando o prazo
 # passa ("já vencido não é aviso de vencimento"). O que vem abaixo é a outra
-# conversa que aquele comentário deixou em aberto: o teste ACABOU e a pessoa
-# não assinou.
+# conversa que aquele comentário deixou em aberto: acabou, e a pessoa está de
+# volta no free sem ter decidido nada.
 #
-# Chave FIXA, sem data: é o que garante o "uma vez só por usuário" que o
-# produto pede. `notifications` tem UNIQUE (user_id, dedupe_key), então a
-# segunda tentativa não cria linha nova · e mesmo que criasse, o rebaixamento
-# de `trial` pra `free` só pode acontecer uma vez na vida da conta (o trial
-# grava `trial_used = TRUE` e nunca mais é reativado, ver
-# routers/auth.py::_ativar_trial_se_elegivel).
+# Até 23/08/2026 só o teste grátis avisava. O VIP era rebaixado em silêncio,
+# com o argumento de que renovação já tinha o aviso de faixa · mas aquele aviso
+# é de ANTES, e quem não entrou no site naqueles três dias não leu nenhum dos
+# dois. O assinante que some por uma semana voltava pro free sem nunca ver uma
+# frase sobre isso, e o único texto que sobrava pra ele era o convite genérico
+# de quem nunca assinou ("você está no plano gratuito"). Perder um assinante
+# não é a mesma coisa que nunca ter tido um, e a tela não pode falar como se
+# fosse.
+#
+# A CHAVE DO TESTE É FIXA, A DO VIP TEM DATA
+# ------------------------------------------
+# Regras diferentes porque os fatos são diferentes. O teste acontece uma vez na
+# vida da conta (grava `trial_used = TRUE` e nunca é reativado, ver
+# routers/auth.py::_ativar_trial_se_elegivel), então a chave fixa entrega o
+# "uma vez só" de graça. VIP vence a cada ciclo: com chave fixa, a segunda
+# expiração cairia no ON CONFLICT DO UPDATE de create_notification, que
+# preserva `read_at` de propósito · a notificação voltaria já marcada como
+# lida, e o popup nunca mais abriria pra quem assinou de novo e deixou vencer
+# de novo. Com a data do vencimento na chave, cada ciclo é um evento próprio.
 DEDUPE_TRIAL_ENCERRADO = "trial_encerrado"
 
-TITULO_TRIAL_ENCERRADO = "Seu teste grátis acabou"
-CORPO_TRIAL_ENCERRADO = (
-    "Você voltou pro plano free. Os picks VIP, as múltiplas, a alavancagem, "
-    "os mercados de faltas e defesas e o agente de futebol ficaram para trás. "
-    "Assine para destravar tudo de novo."
-)
+
+def dedupe_vip_encerrado(data_exp) -> str:
+    """Chave do aviso de VIP vencido · uma por ciclo de assinatura."""
+    return f"vip_encerrado:{data_exp}"
 
 
-def _avisar_trial_encerrado(cur, user_id: int) -> None:
-    """Notificação de teste encerrado · sino + gatilho do popup de conversão.
+# (título, corpo, rótulo do botão) de cada encerramento. A lista de perdas é a
+# mesma nos dois porque o acesso perdido é o mesmo · o que muda é o verbo:
+# quem testou ASSINA, quem assinou RENOVA.
+_PERDAS = ("os picks VIP, as múltiplas, a alavancagem, os mercados de faltas "
+           "e defesas e o agente de futebol")
 
-    Não commita: quem chama é dono da transação (mesmo contrato de
-    create_notification e de _ativar_trial_se_elegivel).
+ENCERRAMENTO = {
+    "trial": (
+        "Seu teste grátis acabou",
+        f"Você voltou pro plano free e {_PERDAS} ficaram para trás. "
+        "Assine para destravar tudo de novo.",
+        "Assinar o VIP",
+    ),
+    "vip": (
+        "Seu VIP acabou",
+        f"Sua assinatura venceu e a conta voltou pro plano free: {_PERDAS} "
+        "ficaram para trás. Renove para destravar tudo de novo.",
+        "Renovar o VIP",
+    ),
+}
 
-    Nunca propaga exceção. Esta função roda pendurada no login e no /auth/me;
-    uma falha aqui derrubaria a entrada da pessoa no site por causa de um
-    aviso, que é a troca errada.
+
+def _avisar_acesso_encerrado(cur, user: dict, plan: str, chave: str,
+                             enviar_email=None, site_url: str = "") -> None:
+    """Sino + e-mail + gatilho do popup de conversão. Não commita: quem chama
+    é dono da transação (mesmo contrato de create_notification).
+
+    Nunca propaga exceção. Esta função roda pendurada no login, no refresh e no
+    /auth/me; uma falha aqui derrubaria a entrada da pessoa no site por causa
+    de um aviso, que é a troca errada.
+
+    O e-mail sai só quando a notificação é NOVA. create_notification faz upsert
+    e sozinho não distingue "criei agora" de "já existia" · sem a checagem, uma
+    corrida entre duas requisições da mesma conta (o front chama /auth/me ao
+    montar e ao voltar pra aba) mandaria o mesmo e-mail duas vezes.
     """
+    titulo, corpo, cta = ENCERRAMENTO[plan]
+
     try:
-        from routers.notifications import TYPE_TRIAL_ENDED, create_notification
+        cur.execute(
+            "SELECT 1 FROM notifications WHERE user_id = %s AND dedupe_key = %s",
+            (user["id"], chave),
+        )
+        if cur.fetchone():
+            return
+
+        from routers.notifications import (TYPE_TRIAL_ENDED, TYPE_VIP_ENDED,
+                                           create_notification)
         create_notification(
-            cur, user_id, TYPE_TRIAL_ENDED,
-            TITULO_TRIAL_ENCERRADO, DEDUPE_TRIAL_ENCERRADO,
-            body=CORPO_TRIAL_ENCERRADO, url="/checkout",
+            cur, user["id"],
+            TYPE_TRIAL_ENDED if plan == "trial" else TYPE_VIP_ENDED,
+            titulo, chave, body=corpo, url="/checkout",
+        )
+    except Exception:
+        # Sem linha no sino não se manda e-mail: o dedupe mora na tabela, e um
+        # e-mail sem ela é um e-mail que pode repetir na próxima requisição.
+        return
+
+    if not enviar_email or not user.get("email"):
+        return
+    try:
+        enviar_email(
+            user["email"],
+            titulo,
+            f"{titulo}\n\n{corpo}\n\nDestrave em {site_url}/checkout",
+            aviso_de_plano_html(user.get("name") or "", titulo, corpo, site_url,
+                                url_logo(site_url), cta=cta,
+                                nota=NOTA_PLANO_ENCERRADO),
         )
     except Exception:
         pass
 
 
-def expirar_plano_vencido(cur, user: dict, agora: datetime | None = None) -> bool:
+def expirar_plano_vencido(cur, user: dict, agora: datetime | None = None,
+                          enviar_email=None, site_url: str = "") -> bool:
     """Rebaixa pra free quem tem VIP/trial vencido. True quando rebaixou agora.
 
     REGRA ÚNICA PROS TRÊS CAMINHOS que avaliam isso -- login, refresh e
     /auth/me. Eram três cópias do mesmo if, e em 2026-08-20 elas ganharam uma
-    responsabilidade a mais (avisar o fim do teste): manter as três em dia na
+    responsabilidade a mais (avisar o fim do acesso): manter as três em dia na
     mão é como uma delas fica pra trás em silêncio, e a que ficasse seria
     justamente a que rebaixa a conta sem nunca oferecer a assinatura.
 
     Muta `user` no lugar, porque os três chamadores seguem usando o dict
     depois desta linha pra montar a resposta.
 
-    O aviso só sai pra quem estava em `trial`: VIP vencido é renovação, outra
-    mensagem e outro momento (esse tem o aviso de faixa, mais acima). Quem
-    assinou durante o teste nem chega aqui · o pagamento já trocou o plano pra
-    `vip`, e o CASE WHEN de routers/payments.py cobre exatamente isso.
+    `enviar_email` é injetado em vez de importado pra não criar ciclo com
+    routers/auth.py, que é quem tem o `_send_email`. Passar None manda só a
+    notificação · é o que o staging faz, pra não mandar e-mail de verdade para
+    o usuário real do banco de produção.
+
+    Quem assinou durante o teste nem chega aqui · o pagamento já trocou o plano
+    pra `vip`, e o CASE WHEN de routers/payments.py cobre exatamente isso.
     """
     plan = user.get("plan")
     if plan not in PLANOS_COM_VALIDADE or not user.get("expires_at"):
@@ -222,8 +297,11 @@ def expirar_plano_vencido(cur, user: dict, agora: datetime | None = None) -> boo
         return False
 
     cur.execute("UPDATE users SET plan='free', expires_at=NULL WHERE id=%s", (user["id"],))
-    if plan == "trial":
-        _avisar_trial_encerrado(cur, user["id"])
+    _avisar_acesso_encerrado(
+        cur, user, plan,
+        DEDUPE_TRIAL_ENCERRADO if plan == "trial" else dedupe_vip_encerrado(exp.date()),
+        enviar_email=enviar_email, site_url=site_url,
+    )
 
     user["plan"] = "free"
     user["expires_at"] = None

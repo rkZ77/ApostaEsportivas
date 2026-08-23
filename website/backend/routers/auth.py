@@ -31,11 +31,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel, EmailStr
 from typing import Optional
 from database import get_connection
-# Import direto (nao lazy): expirar_plano_vencido roda em tres rotas quentes
-# e plan_expiry nao importa nada de routers, entao nao ha ciclo. O
-# `avisar_plano_expirando` continua importado la embaixo, dentro da funcao,
-# porque aquele caminho passa o `_send_email` deste modulo por injecao.
-from plan_expiry import expirar_plano_vencido
+# Import direto (nao lazy): estes dois rodam nas rotas mais quentes do site e
+# plan_expiry nao importa nada de routers no topo (o acesso a
+# routers.notifications e' lazy, dentro das funcoes), entao nao ha ciclo.
+# Os dois recebem o `_send_email` deste modulo por injecao no momento da
+# chamada -- injecao nao e' motivo pra import tardio.
+from plan_expiry import avisar_plano_expirando, expirar_plano_vencido
 from email_templates import (
     boas_vindas_html,
     reset_senha_html,
@@ -342,6 +343,27 @@ def _send_email(to: str, subject: str, body: str, html: str | None = None):
         logger.error("[EMAIL] Falha ao enviar para %s: %s", to, e)
 
 
+def _site_url() -> str:
+    return (os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/")
+
+
+def _avisos_de_plano() -> dict:
+    """kwargs de e-mail dos avisos de plano (expirando e encerrado).
+
+    Num helper porque sao TRES rotas passando o mesmo par, e o par tem uma
+    regra que nao pode ficar so' numa delas: o staging (noprod) aponta pro
+    banco de PRODUCAO, entao sem o freio de `side_effects_enabled` um teste
+    ali mandaria e-mail de renovacao de verdade pro assinante real. A
+    notificacao do sino continua saindo nos dois ambientes -- ela e'
+    idempotente e fica na conta da propria pessoa.
+    """
+    from runtime_env import side_effects_enabled
+    return {
+        "enviar_email": _send_email if side_effects_enabled() else None,
+        "site_url": _site_url(),
+    }
+
+
 def _send_verification_email(to: str, name: str, token: str, site_url: str) -> None:
     first_name = name.strip().split()[0]
     verify_url = f"{site_url}/verify-email?token={token}"
@@ -637,7 +659,7 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         #
         # Vem ANTES do gate de e-mail de proposito: e' ele quem decide se a
         # conta ainda tem plano, e o gate so' vale pra quem esta' no free.
-        if expirar_plano_vencido(cur, user):
+        if expirar_plano_vencido(cur, user, **_avisos_de_plano()):
             conn.commit()
 
         # Passou da carencia sem confirmar o e-mail: barra e reenvia o link.
@@ -671,24 +693,16 @@ def login(body: LoginBody, response: Response, request: Request, background_task
         invalidar_cache_usuario(user["id"])
 
         # Aviso de plano perto de vencer · sino + e-mail, uma vez por faixa
-        # (ver plan_expiry.py). Fica no login porque este backend nao tem mais
-        # scheduler, e porque e' aqui que a pessoa esta olhando.
+        # (ver plan_expiry.py). Roda aqui e no /auth/me porque este backend nao
+        # tem mais scheduler: o aviso precisa pegar carona numa requisicao, e
+        # essas duas sao os momentos em que a pessoa esta olhando.
         #
         # Envolto em try/except de proposito: nem notificacao nem e-mail podem
         # derrubar um login. Se isto falhar, o usuario entra do mesmo jeito e
-        # o proximo login tenta de novo (a faixa so' e' marcada quando o
+        # a proxima requisicao tenta de novo (a faixa so' e' marcada quando o
         # INSERT da notificacao passa).
         try:
-            from plan_expiry import avisar_plano_expirando
-            from runtime_env import side_effects_enabled
-            avisar_plano_expirando(
-                cur, user,
-                site_url=(os.getenv("SITE_URL") or "https://pickia.com.br").rstrip("/"),
-                # Staging aponta pro banco de PRODUCAO: sem esse freio, um
-                # login de teste no noprod mandaria e-mail de renovacao de
-                # verdade. A notificacao no sino continua (idempotente).
-                enviar_email=_send_email if side_effects_enabled() else None,
-            )
+            avisar_plano_expirando(cur, user, **_avisos_de_plano())
             conn.commit()
         except Exception as e:
             conn.rollback()
@@ -920,7 +934,7 @@ def refresh_token(request: Request, response: Response):
         user = dict(row)
 
         # Auto-expire: se VIP/trial expirou, baixa para free no banco agora
-        if expirar_plano_vencido(cur, user):
+        if expirar_plano_vencido(cur, user, **_avisos_de_plano()):
             conn.commit()
 
     finally:
@@ -998,8 +1012,30 @@ def me(current_user: dict = Depends(get_current_user)):
         if d.get("last_login_at"):
             d["last_login_at"] = d["last_login_at"].isoformat()
         # Auto-expire: mesma lógica do login/refresh
-        if expirar_plano_vencido(cur, d):
+        if expirar_plano_vencido(cur, d, **_avisos_de_plano()):
             conn.commit()
+
+        # Aviso de plano perto de vencer, o mesmo do login.
+        #
+        # POR QUE TAMBEM AQUI: o login sozinho nao alcancava quem importa. O
+        # cookie de sessao dura 30 dias e o uso e' mobile-first, entao o
+        # assinante mensal que deixa o app aberto atravessa o ciclo inteiro sem
+        # digitar a senha de novo -- e atravessava sem receber um unico e-mail
+        # de renovacao, inclusive a faixa 0 ("expira hoje"). /auth/me e' a rota
+        # que TODA visita chama (montagem do app e volta pra aba), entao e' ela
+        # que fecha esse buraco.
+        #
+        # Nao vira aviso repetido: a `dedupe_key` e' por faixa, e a checagem de
+        # existencia dentro de avisar_plano_expirando decide o e-mail. Fora da
+        # janela de 3 dias a funcao sai antes de tocar no banco, entao o custo
+        # numa rota quente e' zero pra maioria das contas.
+        try:
+            if avisar_plano_expirando(cur, d, **_avisos_de_plano()):
+                conn.commit()
+        except Exception as e:
+            conn.rollback()
+            logger.warning("[ME] Falha ao avisar plano expirando (user %s): %s", d["id"], e)
+
         if d.get("expires_at"):
             d["expires_at"] = d["expires_at"].isoformat()
         # A tela do perfil so' oferece verificacao por SMS quando ha provedor

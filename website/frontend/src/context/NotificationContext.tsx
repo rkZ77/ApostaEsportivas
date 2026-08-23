@@ -15,7 +15,7 @@ const POLL_INTERVAL = 60_000
    que não é resultado nenhum. */
 export type NotificationType =
   | 'monthly_close' | 'new_picks' | 'pick_live' | 'pick_result' | 'plan_expiring'
-  | 'trial_ended'
+  | 'trial_ended' | 'vip_ended'
   /* Único tipo que NÃO vem do servidor. O convite de plano é um estado
      permanente da conta ("você está no free"), não um evento, então não existe
      linha em `notifications` para ele · criar uma por usuário seria inventar um
@@ -44,9 +44,11 @@ interface NotificationCtx {
   markAllRead: () => Promise<void>
   /** Fechamento do mês passado ainda não visto · é o que dispara o popup automático. */
   pendingMonthlyClose: AppNotification | null
-  /** Teste grátis que acabou e ainda não foi visto · dispara o popup de conversão,
-      uma vez só por conta (a notificação tem dedupe_key fixa no servidor). */
-  pendingTrialEnded: AppNotification | null
+  /** Acesso que acabou e ainda não foi visto · dispara o popup de conversão.
+      Vale pro teste grátis e pro VIP vencido: o `type` do item é o que decide a
+      cópia do modal. O "uma vez só" é do servidor (dedupe_key), e a regra muda
+      entre os dois de propósito · fixa no teste, por ciclo no VIP. */
+  pendingAccessEnded: AppNotification | null
   /** Abertura do fechamento mensal · usada pelo sino e pelo card da Banca. */
   monthlyCloseOpen: boolean
   openMonthlyClose: () => void
@@ -68,7 +70,7 @@ const NotificationContext = createContext<NotificationCtx>({
   markRead: async () => {},
   markAllRead: async () => {},
   pendingMonthlyClose: null,
-  pendingTrialEnded: null,
+  pendingAccessEnded: null,
   monthlyCloseOpen: false,
   openMonthlyClose: () => {},
   closeMonthlyClose: () => {},
@@ -261,7 +263,12 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
   const clearLive = () => setHasLive(false)
 
   const pendingMonthlyClose = items.find(n => n.type === 'monthly_close' && !n.read) ?? null
-  const pendingTrialEnded   = items.find(n => n.type === 'trial_ended'   && !n.read) ?? null
+  /* Os dois finais concorrem pelo mesmo popup, mas nunca coexistem numa conta
+     no mesmo instante: o teste acaba uma vez na vida, e depois dele a pessoa
+     só volta a perder acesso como VIP. `find` pega o primeiro não lido de
+     qualquer um dos dois e o modal lê o `type` pra saber o que dizer. */
+  const pendingAccessEnded  = items.find(
+    n => (n.type === 'trial_ended' || n.type === 'vip_ended') && !n.read) ?? null
 
   const [monthlyCloseOpen, setMonthlyCloseOpen] = useState(false)
   const openMonthlyClose  = useCallback(() => setMonthlyCloseOpen(true), [])
@@ -271,7 +278,7 @@ export function NotificationProvider({ children }: { children: ReactNode }) {
     <NotificationContext.Provider value={{
       items: itensComPlano, unreadCount: unreadCount + (itemDePlano ? 1 : 0),
       loading, refresh, markRead, markAllRead, pendingMonthlyClose,
-      pendingTrialEnded,
+      pendingAccessEnded,
       monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
       hasNew, markSeen, liveCount, hasLive, clearLive,
     }}>
