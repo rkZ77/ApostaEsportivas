@@ -30,87 +30,65 @@ LARGURA, ALTURA = 1080, 1350
 # Slide de conteúdo bom tem UMA ideia. Se precisou de dois parágrafos, era dois
 # slides.
 CARROSSEIS: dict[str, dict] = {
-    "como-funciona": {
-        "capa": ("De onde vem\num pick?", "O método, em 5 telas"),
+    # Versão enxuta: UMA frase por slide. Parágrafo de três linhas ninguém lê
+    # passando o dedo no feed · o slide tem que ser lido de relance.
+    "o-que-e": {
+        "capa": ("O que é\no Pick IA?", "Em 5 telas"),
         "slides": [
-            ("1. Lê o jogo",
-             "O motor puxa a estatística real de cada time: finalização, "
-             "escanteio, falta, ritmo. Não é achismo de tabela."),
-            ("2. Calcula a chance",
-             "Com esses números, estima a probabilidade de cada mercado "
-             "acontecer naquele jogo específico."),
-            ("3. Compara com a odd",
-             "A odd da casa é uma probabilidade disfarçada. Se a nossa conta "
-             "dá mais chance do que a odd paga, existe valor."),
-            ("4. Só então vira pick",
-             "Sem valor, o jogo não entra. Tem dia que sai um pick. Tem dia "
-             "que não sai nenhum, e tá tudo bem."),
-            ("5. Fica registrado",
-             "Green ou red, o resultado entra no histórico público. Dá pra "
-             "conferir por liga, por dia e por mercado."),
+            ("Achamos onde a odd está errada",
+             "Todo dia, nos jogos das ligas em temporada."),
+            ("Não somos casa de aposta",
+             "Você aposta onde já aposta. Aqui você decide no quê."),
+            ("Tem pick grátis todo dia",
+             "Sem conta, sem cartão."),
+            ("O histórico é público",
+             "Green e red. Os dois."),
+            ("E cuidamos da sua banca",
+             "A parte que quase ninguém faz."),
         ],
-        "cta": ("Confira o histórico", "O placar completo está aberto no site."),
+        "cta": ("Conheça o Pick IA", "Conta grátis, com 2 dias de VIP."),
+    },
+    "como-funciona": {
+        "capa": ("De onde vem\num pick?", "Em 5 telas"),
+        "slides": [
+            ("1. Lê o jogo", "Finalização, escanteio, falta, ritmo. Estatística real."),
+            ("2. Calcula a chance", "A probabilidade de cada mercado naquele jogo."),
+            ("3. Compara com a odd", "Odd é probabilidade disfarçada."),
+            ("4. Só então vira pick", "Sem valor, o jogo não entra."),
+            ("5. Fica registrado", "Green ou red, vai pro histórico público."),
+        ],
+        "cta": ("Confira o histórico", "O placar completo está aberto."),
     },
     "banca": {
         "capa": ("Apostar sem banca\né torcer.", "Como montar a sua"),
         "slides": [
-            ("O que é banca",
-             "É quanto você separou pra apostar. Dinheiro que, se sumir, não "
-             "muda a sua vida. Só isso, e nada além disso."),
-            ("O que é unidade",
-             "É o tamanho padrão da sua entrada. Em vez de apostar “uns 50 "
-             "reais”, você aposta 1 unidade, 2 unidades."),
-            ("Quanto vale a unidade",
-             "Entre 1% e 5% da banca. Com R$ 500, uma unidade de R$ 25 é 5%: "
-             "agressivo, mas ainda dentro do razoável."),
-            ("Por que isso importa",
-             "Unidade grande demais quebra você numa sequência ruim, e "
-             "sequência ruim acontece com todo mundo."),
-            ("O site avisa",
-             "Ao configurar, a tela classifica o risco na hora e trava se a "
-             "unidade for grande demais pra sua banca."),
+            ("O que é banca", "O dinheiro que você separou pra apostar."),
+            ("O que é unidade", "O tamanho padrão da sua entrada."),
+            ("Quanto vale a unidade", "Entre 1% e 5% da banca. Nem mais."),
+            ("Por que isso importa", "Unidade grande quebra você na primeira má fase."),
+            ("O site avisa", "Ele trava se a unidade for grande demais."),
         ],
-        "cta": ("Configure a sua", "Leva 30 segundos e muda o resto."),
+        "cta": ("Configure a sua", "Leva 30 segundos."),
     },
     "pegar-pick": {
         "capa": ("Por que ESSE\nmercado?", "Lendo um pick de verdade"),
         "slides": [
-            ("O card mostra o essencial",
-             "Times, mercado, linha, odd e a probabilidade que o motor "
-             "calculou pra aquele jogo."),
-            ("Entenda esta análise",
-             "Um toque abre o raciocínio inteiro: quais números pesaram e por "
-             "que aquele mercado, e não outro."),
-            ("Os números na mesa",
-             "Você não precisa acreditar. Dá pra discordar e não entrar. A "
-             "decisão continua sendo sua."),
-            ("Registre a aposta",
-             "Escolheu entrar? Informe a casa, a odd que você pegou e quantas "
-             "unidades. A odd sua pode ser diferente da nossa."),
-            ("O stake já vem pronto",
-             "A sugestão de unidades sai da banca que você configurou, não de "
-             "chute nem de empolgação."),
+            ("O card diz o essencial", "Times, mercado, odd e a chance calculada."),
+            ("Entenda esta análise", "Um toque abre o raciocínio inteiro."),
+            ("Os números na mesa", "Dá pra discordar e não entrar."),
+            ("Registre a aposta", "A casa, a odd que você pegou, as unidades."),
+            ("O stake vem pronto", "Sai da sua banca, não de chute."),
         ],
         "cta": ("Veja os picks de hoje", "Publicados direto no site."),
     },
     "erros-de-banca": {
-        "capa": ("5 erros que\nquebram a banca", "E nenhum é escolher mal o jogo"),
+        "capa": ("5 erros que\nquebram a banca", "Nenhum é escolher mal o jogo"),
         "slides": [
-            ("1. Unidade grande demais",
-             "Com unidade de 20% da banca, cinco reds seguidos zeram você. "
-             "E cinco reds seguidos acontecem com todo mundo."),
-            ("2. Dobrar depois do red",
-             "Martingale parece matemática e é armadilha. A banca acaba antes "
-             "da sequência virar, sempre."),
-            ("3. Apostar pra recuperar",
-             "Entrar num jogo que você não entraria, só porque perdeu o "
-             "anterior. É a perda decidindo por você."),
-            ("4. Aumentar a unidade no lucro",
-             "Subiu a banca e você dobra a entrada. O primeiro red devolve "
-             "duas semanas de trabalho."),
-            ("5. Não registrar",
-             "Sem anotar, você lembra dos greens e esquece dos reds. Aí acha "
-             "que está no lucro quando não está."),
+            ("1. Unidade grande demais", "Cinco reds seguidos zeram você. E acontecem."),
+            ("2. Dobrar depois do red", "Martingale parece conta. É armadilha."),
+            ("3. Apostar pra recuperar", "É a perda decidindo por você."),
+            ("4. Subir a unidade no lucro", "O primeiro red devolve duas semanas."),
+            ("5. Não registrar", "Você lembra dos greens e esquece dos reds."),
         ],
         "cta": ("Configure sua banca", "O site calcula a unidade e avisa o risco."),
     },
@@ -144,8 +122,10 @@ body::before {{
 .capa-titulo {{ font-size:104px; font-weight:900; line-height:1.02; letter-spacing:-.035em; white-space:pre-line; }}
 .capa-sub {{ font-size:40px; font-weight:600; color:{TINTA_3}; margin-top:36px; }}
 .num {{ font-size:34px; font-weight:900; color:{ACENTO}; letter-spacing:.06em; margin-bottom:20px; }}
-.titulo {{ font-size:68px; font-weight:900; line-height:1.08; letter-spacing:-.028em; }}
-.texto {{ font-size:40px; font-weight:500; line-height:1.44; color:#c7c7cf; margin-top:32px; }}
+.titulo {{ font-size:76px; font-weight:900; line-height:1.06; letter-spacing:-.03em; }}
+/* Corpo grande porque agora é uma frase, não um parágrafo · slide de feed é
+   lido de relance, com o dedo já a caminho do próximo. */
+.texto {{ font-size:46px; font-weight:500; line-height:1.4; color:#c7c7cf; margin-top:34px; }}
 .cta {{
   display:inline-block; margin-top:48px; padding:26px 48px; background:{ACENTO};
   color:#04140a; border-radius:20px; font-size:38px; font-weight:900;

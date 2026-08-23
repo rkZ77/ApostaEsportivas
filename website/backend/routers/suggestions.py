@@ -3039,7 +3039,12 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
 def get_market_form(
     suggestion_id: int,
     pick_type: str = Query("vip"),
-    limit: int = Query(5, ge=3, le=15),
+    # 10, e nao 5 (2026-08-23). O recorte por MANDO continua -- pick do
+    # Flamengo fora traz so' os jogos dele fora --, o que dobrou foi a
+    # profundidade. Cinco jogos de um mando so' e' amostra curta demais pra
+    # sustentar a frase e a media que o card mostra; dez ja se defende. Quem
+    # tiver menos mostra o que tem, e `amostra_curta` avisa na tela.
+    limit: int = Query(10, ge=3, le=20),
     current_user: dict = Depends(get_current_user),
 ):
     """Ultimos jogos de CADA time, NO MANDO DO JOGO, medidos pelo MERCADO do pick.

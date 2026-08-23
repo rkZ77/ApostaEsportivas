@@ -45,7 +45,7 @@ export const MAX_PASSOS = 8
  * então todas as áreas do roteiro valem para todo mundo que o vê. Espelha
  * `VIP_TOUR_TOTAL_STEPS` no backend.
  */
-export const TOTAL_PASSOS_VIP = 5
+export const TOTAL_PASSOS_VIP = 6
 
 /**
  * O passo "Confirme seu e-mail" entra?

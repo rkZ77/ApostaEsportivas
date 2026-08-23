@@ -1,6 +1,7 @@
 import type { LucideIcon } from 'lucide-react'
 import {
-  BarChart2, Bot, CircleCheck, Crown, Layers, ShieldQuestion, Sparkles, TrendingUp, Zap,
+  BarChart2, Bot, CircleCheck, Crown, Layers, ShieldQuestion, Sparkles, Trophy,
+  TrendingUp, Zap,
 } from 'lucide-react'
 import type { TourStep } from './steps'
 import { Etiqueta, Lista, Linhas } from './steps'
@@ -20,9 +21,18 @@ import { TOTAL_PASSOS_VIP } from './constantes'
  * manter quando renomear uma aba.
  *
  * TUDO AQUI TEM QUE SER VERDADE. Cada área citada é gated de fato: as quatro
- * abas por `canSeeVip` em Picks.tsx, e o Agente por `is_vip_active` em
- * routers/chat.py. Prometer no tour de boas-vindas uma coisa que a assinatura
- * não abre é a pior hora possível para quebrar confiança.
+ * abas por `canSeeVip` em Picks.tsx, as estatísticas de partida por
+ * `canSeeStats` em Fixtures.tsx e o Agente por VIP em routers/chat.py.
+ * Prometer no tour de boas-vindas uma coisa que a assinatura não abre é a pior
+ * hora possível para quebrar confiança.
+ *
+ * DUAS COISAS FICARAM DE FORA por essa mesma régua, mesmo sendo VIP no papel:
+ *
+ *   - a aba Picks Ao Vivo é `verAoVivo`, que hoje só é verdadeiro para ADMIN
+ *     (o produto ainda não abriu). Citá-la mandaria o assinante procurar uma
+ *     aba que ele não tem.
+ *   - a página /estatisticas exige VIP, mas não tem link em lugar nenhum do
+ *     site. Anunciar uma tela que não se alcança é pior que o silêncio.
  */
 
 const AVISO_ATRASO = (
@@ -48,13 +58,13 @@ export const TOUR_STEPS_VIP: TourStep[] = [
             [Layers, 'Múltiplas'],
             [TrendingUp, 'Alavancagem'],
             [ShieldQuestion, 'Faltas e defesas'],
+            [Trophy, 'Estatísticas de cada jogo'],
             [Bot, 'Agente IA'],
-            [BarChart2, 'Análise completa de cada pick'],
           ]}
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          São quatro telas e um assistente. Leva menos de um minuto para ver onde fica cada
-          coisa.
+          Leva menos de um minuto para ver onde fica cada coisa. Este tour aparece uma
+          vez, agora.
         </p>
       </div>
     ),
@@ -123,6 +133,26 @@ export const TOUR_STEPS_VIP: TourStep[] = [
     ),
   },
   {
+    id: 'vip-jogos',
+    titulo: 'Estatísticas de cada jogo',
+    Icon: Trophy,
+    rota: '/picks',
+    alvos: ['[data-tour="nav-jogos"]'],
+    resumo: 'Na aba Jogos, clicar numa partida passa a abrir os números dela em vez do convite para assinar.',
+    corpo: (
+      <div className="space-y-3">
+        <p className="text-xs text-ink-2 leading-relaxed">
+          São os mesmos números que o motor lê para decidir os picks · escanteios, faltas,
+          cartões e chutes, jogo a jogo. Serve tanto para conferir um pick quanto para
+          olhar uma partida que a IA não escolheu.
+        </p>
+        <p className="text-[11px] text-ink-3 leading-relaxed">
+          O cadeado que aparecia ao clicar num jogo não aparece mais.
+        </p>
+      </div>
+    ),
+  },
+  {
     id: 'vip-agente',
     titulo: 'Agente IA',
     Icon: Bot,
@@ -142,8 +172,7 @@ export const TOUR_STEPS_VIP: TourStep[] = [
           ]}
         />
         <p className="text-[11px] text-ink-3 leading-relaxed">
-          Ele fica neste botão, em qualquer tela. Para rever este tour, o menu da sua conta
-          tem Tour do VIP.
+          Ele fica neste botão, em qualquer tela.
         </p>
       </div>
     ),

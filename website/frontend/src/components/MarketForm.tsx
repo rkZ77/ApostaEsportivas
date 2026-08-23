@@ -115,17 +115,13 @@ function corDaTaxa(taxa: number) {
 }
 
 function Grafico({
-  titulo, contexto, prefixo, serie, teto, logoId, Icone, comMando,
+  titulo, contexto, prefixo, serie, teto, logoId, Icone,
 }: {
   titulo: string
-  /** Completa "últimos N jogos ___". Só o árbitro usa ("apitados").
-   *  Time não completa nada desde 22/08: a série passou a trazer casa E fora,
-   *  então "em casa" ali seria mentira. O mando virou marca por barra. */
+  /** Completa "últimos N jogos ___" · "em casa", "fora", "apitados". */
   contexto: string
-  /** Tooltip do árbitro, que não tem mando ("" nos times · ver `mandoDoJogo`). */
+  /** Liga a barra ao adversário no tooltip · "x Vasco", "em Vasco", "" no árbitro. */
   prefixo: string
-  /** Marcar C/F embaixo de cada barra. Falso no árbitro, que não tem mando. */
-  comMando?: boolean
   serie: Serie
   teto: number
   logoId?: number
@@ -185,11 +181,7 @@ function Grafico({
         {jogos.map(m => {
           const altura = m.value != null ? Math.max((m.value / teto) * 100, 4) : 100
           const quando = m.match_date ?? ''
-          /* "x Vasco" quando o time jogou em casa, "em Vasco" quando foi
-             visitante. Antes saía do lado fixo da série; agora cada jogo tem o
-             seu, porque a série mistura os dois mandos. */
-          const liga = comMando ? (m.is_home ? 'x' : m.is_home === false ? 'em' : '') : prefixo
-          const contra = m.opponent ? ` · ${liga ? `${liga} ` : ''}${m.opponent}` : ''
+          const contra = m.opponent ? ` · ${prefixo ? `${prefixo} ` : ''}${m.opponent}` : ''
           const titulo = m.value == null
             ? `${quando}${contra} · sem estatística publicada`
             : `${quando}${contra} · ${m.value}`
@@ -209,42 +201,12 @@ function Grafico({
       </div>
 
       {/*
-        De que mando foi cada barra.
-
-        A série mistura casa e fora desde 22/08, e a diferença entre os dois é
-        grande de verdade (mandante faz 5.62 escanteios contra 4.41 do visitante
-        na Série A 2026). Juntar as duas populações numa média só, sem dizer que
-        são duas, é exatamente a crítica que motivou a correção de 08/08 · a
-        diferença deixou de ser um filtro, então precisa aparecer.
-
-        Letra, e não cor: a paleta das barras já significa GREEN, RED e PUSH, e
-        um segundo eixo de cor no mesmo desenho seria ilegível.
-      */}
-      {comMando && jogos.some(m => m.is_home != null) && (
-        <div className="flex gap-1 mt-1" aria-hidden="true">
-          {jogos.map(m => (
-            <span
-              key={`mando-${m.fixture_id}`}
-              className={`flex-1 text-center font-mono text-[9px] leading-none ${
-                m.is_home ? 'text-ink-3' : 'text-ink-4'
-              }`}
-            >
-              {m.is_home === true ? 'C' : m.is_home === false ? 'F' : ''}
-            </span>
-          ))}
-        </div>
-      )}
-      {comMando && jogos.some(m => m.is_home != null) && (
-        <p className="text-[9px] text-ink-4 mt-1">C = em casa · F = fora</p>
-      )}
-
-      {/*
         Amostra curta, dita com todas as letras.
 
-        Acontece no começo de temporada, quando o time ainda não jogou 10 na
-        competição. Três barras verdes lidas como "100%" são muito menos do que
-        parecem, e quem lê o card não tem como saber disso sozinho · a régua e
-        as cores são idênticas.
+        O recorte por mando deixa isso comum: um time tem ~7 jogos em casa numa
+        fase inteira, e no começo de temporada tem 2. Três barras verdes lidas
+        como "100%" são muito menos do que parecem, e quem lê o card não tem
+        como saber disso sozinho · a régua e as cores são idênticas.
       */}
       {serie.amostra_curta && (
         <p className="flex items-start gap-1.5 mt-2 text-[10px] text-yellow-500/90 leading-snug">
@@ -288,12 +250,10 @@ function BlocoDaPerna({ leg, numero }: { leg: Leg; numero: number | null }) {
         <Grafico
           key={`${t.team_id ?? t.team}-${t.side ?? 'jogador'}`}
           titulo={t.team ?? 'Time'}
-          /* Nada a completar: "últimos 10 jogos" e ponto. O mando de cada
-             jogo vira a marca C/F embaixo da barra. */
-          contexto=""
-          prefixo=""
-          /* Prop de jogador (`side` nulo) não tem mando por jogo pra marcar. */
-          comMando={t.side != null}
+          /* Sem mando não existe "em casa"/"fora" pra dizer, e inventar um dos
+             dois descreveria a série errado · prop de jogador cai aqui. */
+          contexto={t.side === 'home' ? 'em casa' : t.side === 'away' ? 'fora' : ''}
+          prefixo={t.side === 'home' ? 'x' : t.side === 'away' ? 'em' : ''}
           logoId={t.team_id ?? undefined}
           serie={t}
           teto={teto}
