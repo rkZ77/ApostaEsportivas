@@ -285,7 +285,7 @@ def list_achievements(current_user: dict = Depends(get_current_user)):
 # mostra varia entre 7 e 8, entao o que o backend valida e' o maximo.
 TUTORIAL_TOTAL_STEPS = 8
 # Roteiro do VIP: o que a assinatura abriu.
-VIP_TOUR_TOTAL_STEPS = 5
+VIP_TOUR_TOTAL_STEPS = 6
 
 TUTORIAL_STATUS = ("pending", "completed", "skipped")
 

@@ -8,7 +8,7 @@ import { useOnboarding } from '../context/OnboardingContext'
 import { useState, useEffect } from 'react'
 import {
   Zap, Trophy, BarChart2, Bot, Wallet, ListChecks, ShieldCheck, Crown,
-  LogOut, Menu, X, BookOpen, MessageCircle, History, Compass, Crown as CrownIcon,
+  LogOut, Menu, X, BookOpen, MessageCircle, History, Compass,
 } from 'lucide-react'
 import Avatar from './Avatar'
 import { rotuloDoPlano } from './ui'
@@ -22,16 +22,13 @@ const planBadge: Record<string, string> = {
 }
 
 export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
-  const { user, logout, isAdmin, isVip } = useAuth()
+  const { user, logout, isAdmin } = useAuth()
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const { hasNew, markSeen } = useNotifications()
   /* Reabrir o tour quando a pessoa quiser. Sem esta porta, "pulei sem querer"
      vira "perdi o tutorial para sempre", já que ele só abre sozinho uma vez. */
   const { abrir: abrirTutorial } = useOnboarding()
-  /* O tour do VIP mostra o que a assinatura abriu. Só faz sentido para quem
-     tem o acesso: para um free ele seria um catálogo de telas trancadas. */
-  const podeVerTourVip = isVip
   /* E-mail pendente de confirmação vira um ponto de atenção no avatar (que
      leva ao Perfil), não um aviso no topo. `=== false` e não `!`: enquanto o
      usuário não carregou, o campo é undefined e um `!` acenderia o ponto pra
@@ -105,6 +102,11 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                 key={to}
                 to={to}
                 onClick={onClick}
+                /* Âncora do tour do VIP: o passo da aba Jogos aponta para o
+                   link de verdade. Só o de desktop leva marcação · no celular
+                   este menu vive dentro da gaveta fechada, e o tour não abre
+                   gaveta. Ver components/onboarding/stepsVip.tsx. */
+                data-tour={to === '/fixtures' ? 'nav-jogos' : undefined}
                 className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors ${
                   highlight === 'yellow'
                     ? pathname === to ? 'text-yellow-400 font-semibold' : 'text-yellow-400 hover:text-yellow-300'
@@ -177,15 +179,11 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                           Ver tutorial
                         </button>
                       )}
-                      {podeVerTourVip && (
-                        <button
-                          onClick={() => { setProfileOpen(false); abrirTutorial('vip') }}
-                          className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors text-left"
-                        >
-                          <CrownIcon className="w-4 h-4 text-yellow-400" />
-                          Tour do VIP
-                        </button>
-                      )}
+                      {/* O tour do VIP NÃO tem porta fixa aqui (decisão do
+                          usuário, 22/08). Ele é do momento em que o acesso
+                          abre · assinou, renovou ou entrou no teste. Item
+                          permanente no menu transformaria uma comemoração de
+                          uma vez só em mais uma linha para ignorar todo dia. */}
                       <Link to="/como-funciona" className="flex items-center gap-3 px-4 py-2.5 text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-2 transition-colors">
                         <BookOpen className="w-4 h-4 text-green-400" />
                         Como funciona
@@ -331,15 +329,6 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             >
               <Compass className="w-4 h-4 text-green-400" />
               Ver tutorial
-            </button>
-          )}
-          {podeVerTourVip && (
-            <button
-              onClick={() => { setSidebarOpen(false); abrirTutorial('vip') }}
-              className="flex items-center gap-3 w-full px-3 py-3 rounded-lg text-sm text-ink-2 hover:text-ink-1 hover:bg-surface-1 transition-colors text-left"
-            >
-              <CrownIcon className="w-4 h-4 text-yellow-400" />
-              Tour do VIP
             </button>
           )}
           <Link
