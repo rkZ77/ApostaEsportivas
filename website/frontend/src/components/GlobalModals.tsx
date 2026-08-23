@@ -5,7 +5,7 @@ import { AnimatePresence } from 'framer-motion'
 import { useAuth } from '../context/AuthContext'
 import { useNotifications } from '../context/NotificationContext'
 import MonthlyCloseModal from './MonthlyCloseModal'
-import TrialEndedModal from './TrialEndedModal'
+import AccessEndedModal, { FimDeAcesso } from './AccessEndedModal'
 
 /*
  * Modais que vivem fora do <Routes>.
@@ -36,9 +36,9 @@ export default function GlobalModals() {
   // e printar um fechamento de +R$ 187,50 que nunca existiu.
   const isPreview = isAdmin && new URLSearchParams(window.location.search).get('preview') === 'monthly'
   const { pendingMonthlyClose, monthlyCloseOpen, openMonthlyClose, closeMonthlyClose,
-          pendingTrialEnded, markRead } = useNotifications()
-  const [trialEndedOpen, setTrialEndedOpen] = useState(false)
-  const [trialEndedVisto, setTrialEndedVisto] = useState(false)
+          pendingAccessEnded, markRead } = useNotifications()
+  const [acessoEncerradoOpen, setAcessoEncerradoOpen] = useState(false)
+  const [acessoEncerradoVisto, setAcessoEncerradoVisto] = useState(false)
 
   const inAppRoute = MONTHLY_CLOSE_ROUTES.some(r => pathname === r || pathname.startsWith(`${r}/`))
 
@@ -52,35 +52,41 @@ export default function GlobalModals() {
   }, [user?.id, pendingMonthlyClose?.id, inAppRoute, isPreview, openMonthlyClose])
 
   /*
-   * Fim do teste grátis · abre uma vez e nunca mais.
+   * Fim do acesso · teste grátis que acabou, ou VIP que venceu.
    *
-   * `trialEndedVisto` é só a trava DESTA sessão de página, pra o modal não
+   * `acessoEncerradoVisto` é só a trava DESTA sessão de página, pra o modal não
    * reabrir enquanto o markRead não volta do servidor (o poll de 60s traria a
    * notificação ainda como não lida nesse intervalo). A garantia de verdade é
-   * do servidor: dedupe_key fixa + UNIQUE (user_id, dedupe_key), e o
-   * rebaixamento de trial pra free só acontece uma vez na vida da conta.
+   * do servidor: dedupe_key + UNIQUE (user_id, dedupe_key). No teste a chave é
+   * fixa e o rebaixamento só acontece uma vez na vida da conta; no VIP a chave
+   * carrega a data do vencimento, então cada ciclo de assinatura abre o modal
+   * uma vez · quem renovou e deixou vencer de novo perdeu o acesso de novo.
    *
    * Não concorre com o fechamento mensal: dois modais na mesma tela é um em
    * cima do outro. O fechamento tem prioridade por ser o que pede AÇÃO (a
    * pessoa confirma a banca do mês); este aqui é convite, e espera a vez.
    */
-  const podeAbrirTrial = pendingTrialEnded && inAppRoute && !monthlyCloseOpen && !pendingMonthlyClose
+  const podeAbrirAcesso = pendingAccessEnded && inAppRoute && !monthlyCloseOpen && !pendingMonthlyClose
 
   useEffect(() => {
-    if (!user || trialEndedVisto) return
-    if (podeAbrirTrial) setTrialEndedOpen(true)
-  }, [user?.id, podeAbrirTrial, trialEndedVisto])
+    if (!user || acessoEncerradoVisto) return
+    if (podeAbrirAcesso) setAcessoEncerradoOpen(true)
+  }, [user?.id, podeAbrirAcesso, acessoEncerradoVisto])
 
-  const fecharTrialEnded = () => {
-    setTrialEndedOpen(false)
-    setTrialEndedVisto(true)
-    if (pendingTrialEnded) markRead(pendingTrialEnded.id)
+  const fecharAcessoEncerrado = () => {
+    setAcessoEncerradoOpen(false)
+    setAcessoEncerradoVisto(true)
+    if (pendingAccessEnded) markRead(pendingAccessEnded.id)
   }
+
+  const tipoDeFim: FimDeAcesso = pendingAccessEnded?.type === 'vip_ended' ? 'vip' : 'trial'
 
   return (
     <AnimatePresence>
       {monthlyCloseOpen && <MonthlyCloseModal onClose={closeMonthlyClose} />}
-      {trialEndedOpen && !monthlyCloseOpen && <TrialEndedModal onClose={fecharTrialEnded} />}
+      {acessoEncerradoOpen && !monthlyCloseOpen && (
+        <AccessEndedModal tipo={tipoDeFim} onClose={fecharAcessoEncerrado} />
+      )}
     </AnimatePresence>
   )
 }

@@ -35,8 +35,11 @@ function NotificationIcon({ n }: { n: AppNotification }) {
   if (n.type === 'plan_expiring') return <TimerReset className={`${base} text-yellow-400`} />
   /* Cadeado e nao relogio: o prazo ja passou, o que resta e o acesso fechado.
      Cinza e nao vermelho pelo mesmo motivo do amarelo acima -- vermelho aqui
-     ja significa RED de pick. */
-  if (n.type === 'trial_ended')   return <Lock className={`${base} text-ink-3`} />
+     ja significa RED de pick. O mesmo icone pros dois finais (teste e VIP):
+     do lado de fora do cadeado a diferenca nao existe, e o titulo do item ja
+     diz qual dos dois acabou. */
+  if (n.type === 'trial_ended' || n.type === 'vip_ended')
+    return <Lock className={`${base} text-ink-3`} />
   /* Certo/errado e não seta de tendência: o item já diz GREEN ou RED no título,
      o ícone só precisa confirmar "deu" ou "não deu". Seta pra cima/baixo lia
      como variação de saldo. PUSH fica neutro · anulado não é vitória. */

@@ -312,19 +312,28 @@ def vip_ativado_html(primeiro_nome: str, plano: str, vence_em: str,
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 5. PLANO PERTO DE VENCER
+# 5. AVISOS DE PLANO · perto de vencer e já encerrado
 # ─────────────────────────────────────────────────────────────────────────────
+#
+# Um layout só para os dois momentos. O que muda entre "faltam 3 dias" e
+# "acabou" é a frase, o rótulo do botão e a nota do rodapé · nada de estrutura.
+# Duas funções aqui só garantiriam que uma delas ficasse velha: a nota de
+# rodapé já era prova disso, dizendo "porque tem um plano ativo" para quem
+# acabou de perder o acesso.
 
-def plano_expirando_html(nome: str, titulo: str, corpo: str,
-                         site_url: str, logo_url: str = "") -> str:
+NOTA_PLANO_ATIVO    = "Você recebeu este aviso porque tem um plano ativo no Pick IA."
+NOTA_PLANO_ENCERRADO = "Você recebeu este aviso porque seu acesso no Pick IA acabou de encerrar."
+
+
+def aviso_de_plano_html(nome: str, titulo: str, corpo: str,
+                        site_url: str, logo_url: str = "",
+                        cta: str = "Renovar agora",
+                        nota: str = NOTA_PLANO_ATIVO) -> str:
     primeiro = (nome or "").split(" ")[0] or "tudo bem"
     conteudo = f"""        <tr><td style="background:{CARTAO};padding:32px 40px;">
           <p style="margin:0 0 6px;color:{TEXTO_3};font-size:13px;">Olá, {primeiro}</p>
           <h2 style="margin:0 0 16px;color:{TEXTO};font-size:20px;font-weight:800;">{titulo}</h2>
           <p style="margin:0 0 26px;color:{TEXTO_2};font-size:15px;line-height:1.6;">{corpo}</p>
-          {_botao(f"{site_url}/checkout", "Renovar agora")}
+          {_botao(f"{site_url}/checkout", cta)}
         </td></tr>"""
-    return casca(
-        conteudo, logo_url,
-        nota_rodape="Você recebeu este aviso porque tem um plano ativo no Pick IA.",
-    )
+    return casca(conteudo, logo_url, nota_rodape=nota)
