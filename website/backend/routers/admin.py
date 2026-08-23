@@ -2297,6 +2297,16 @@ def dados_do_banco(current_user: dict = Depends(require_admin)):
               FROM match_statistics
         """)
 
+        # Quando a MEDIA foi recalculada, nao quando a PARTIDA entrou.
+        #
+        # Sao dois relogios diferentes e o motor le' o segundo: `match_statistics`
+        # pode estar em dia e `team_statistics` parada em semana passada, que e'
+        # media velha sem nenhum sintoma na tela. A distancia entre as duas datas
+        # e' o defeito.
+        frescor["medias_atualizadas_em"] = um("""
+            SELECT MAX(last_updated)::text AS em FROM team_statistics
+        """).get("em")
+
         # O buraco que importa: encerrado no banco de jogos e ausente no de
         # estatistica. E' exatamente o que a varredura automatica persegue.
         buracos = um("""
@@ -2340,6 +2350,47 @@ def dados_do_banco(current_user: dict = Depends(require_admin)):
 HISTORICO_TETO = 40
 HISTORICO_POR_PAGINA_MAX = 20
 
+# Tudo que `match_statistics` guarda por partida, na ordem em que faz sentido
+# ler. Uma fonte so' pra tres coisas: as colunas do SELECT, os rotulos da tela
+# e as contas do resumo -- adicionar familia nova e' mexer aqui e mais nada.
+#
+#   modo "soma"  o numero da PARTIDA e' casa + fora (escanteio, falta, chute)
+#   modo "lado"  somar nao significa nada (posse da 100% sempre), entao a media
+#                e' por lado. E' um detector: posse media por lado longe de 50
+#                ou precisao de passe longe de ~80 e' coleta torta, nao jogo
+#                estranho.
+STATS_DA_PARTIDA = [
+    ("gols",         "Gols",                  "home_goals",             "away_goals",             "soma"),
+    ("gols_ht",      "Gols no 1ºT",           "home_goals_ht",          "away_goals_ht",          "soma"),
+    ("gols_90",      "Gols nos 90",           "home_goals_90",          "away_goals_90",          "soma"),
+    ("escanteios",   "Escanteios",            "home_corners",           "away_corners",           "soma"),
+    ("chutes",       "Chutes",                "home_total_shots",       "away_total_shots",       "soma"),
+    ("chutes_gol",   "Chutes a gol",          "home_shots_on",          "away_shots_on",          "soma"),
+    ("chutes_fora",  "Chutes para fora",      "home_shots_off",         "away_shots_off",         "soma"),
+    ("bloqueados",   "Chutes bloqueados",     "home_blocked_shots",     "away_blocked_shots",     "soma"),
+    ("defesas",      "Defesas do goleiro",    "home_goalkeeper_saves",  "away_goalkeeper_saves",  "soma"),
+    ("faltas",       "Faltas",                "home_fouls",             "away_fouls",             "soma"),
+    ("amarelos",     "Cartões amarelos",      "home_yellow_cards",      "away_yellow_cards",      "soma"),
+    ("vermelhos",    "Cartões vermelhos",     "home_red_cards",         "away_red_cards",         "soma"),
+    ("impedimentos", "Impedimentos",          "home_offsides",          "away_offsides",          "soma"),
+    ("posse",        "Posse de bola (%)",     "home_possession",        "away_possession",        "lado"),
+    ("passes",       "Passes",                "home_passes",            "away_passes",            "soma"),
+    ("precisao",     "Precisão de passe (%)", "home_passes_accuracy",   "away_passes_accuracy",   "lado"),
+]
+
+# A assinatura do jogo "coletado vazio": FT com escanteio, chute e falta todos
+# em ZERO. Nao e' hipotese -- `extract_stat` devolvia 0 pra ausencia ate' ser
+# corrigido, e o banco ficou com 99 partidas assim, 94 delas COM GOL (ver o
+# docstring de collectors/match_statistics_sync_service.py::extract_stat).
+#
+# Zero nao e' NULL, entao a contagem de "quantas vieram preenchidas" passa
+# batido nessas linhas. So' olhando o valor da' pra ver.
+_SQL_SUSPEITA = """
+    COALESCE(home_corners, 0) + COALESCE(away_corners, 0) = 0
+AND COALESCE(home_total_shots, 0) + COALESCE(away_total_shots, 0) = 0
+AND COALESCE(home_fouls, 0) + COALESCE(away_fouls, 0) = 0
+"""
+
 
 @router.get("/dados/partidas")
 def partidas_coletadas(
@@ -2370,22 +2421,53 @@ def partidas_coletadas(
         )
         total = (cur.fetchone() or {}).get("n") or 0
 
+        # Cobertura e media das MESMAS 40 que a lista pagina, num passe so'.
+        #
+        # As duas juntas e' que acham erro. Cobertura sozinha nao ve' o jogo
+        # coletado zerado (zero nao e' NULL); media sozinha nao diz se o numero
+        # saiu de 40 partidas ou de 3. Defesa de goleiro, por exemplo, aparece
+        # em menos de 1% dos jogos -- media alta ali com n=2 nao e' tendencia,
+        # e' amostra.
+        colunas_resumo = []
+        for chave, _rot, casa, fora, modo in STATS_DA_PARTIDA:
+            valor = f"({casa} + {fora})" if modo == "soma" else f"(({casa} + {fora}) / 2.0)"
+            colunas_resumo.append(f"COUNT({valor}) AS {chave}_n")
+            colunas_resumo.append(f"ROUND(AVG({valor})::numeric, 2) AS {chave}_m")
+        cur.execute(f"""
+            SELECT {', '.join(colunas_resumo)},
+                   COUNT(*) FILTER (WHERE {_SQL_SUSPEITA}) AS zeradas
+              FROM (SELECT * FROM match_statistics
+                     ORDER BY match_date DESC, fixture_id DESC
+                     LIMIT {HISTORICO_TETO}) t
+        """)
+        bruto = dict(cur.fetchone() or {})
+        resumo = [
+            {"chave": chave, "rotulo": rotulo, "modo": modo,
+             "com_dado": bruto.get(f"{chave}_n") or 0,
+             "media": float(bruto[f"{chave}_m"]) if bruto.get(f"{chave}_m") is not None else None}
+            for chave, rotulo, _c, _f, modo in STATS_DA_PARTIDA
+        ]
+        zeradas = bruto.get("zeradas") or 0
+
         partidas = []
         if limite:
+            colunas = ", ".join(
+                f"ms.{casa}, ms.{fora}" for _k, _r, casa, fora, _m in STATS_DA_PARTIDA
+            )
             # LATERAL, e nao JOIN direto em `teams`: a tabela tem UMA LINHA POR
             # TEMPORADA por time, entao o join simples multiplicaria a partida
             # por quantas temporadas o time tiver cadastradas.
-            cur.execute("""
+            cur.execute(f"""
                 SELECT ms.fixture_id,
                        ms.match_date::text                  AS data,
                        ms.status,
+                       ms.referee,
+                       ms.last_updated::text                AS coletada_em,
                        l.name                               AS liga,
                        casa.name                            AS mandante,
                        fora.name                            AS visitante,
-                       ms.home_goals, ms.away_goals,
-                       ms.total_corners                     AS escanteios,
-                       ms.total_yellow_cards                AS cartoes,
-                       ms.home_fouls + ms.away_fouls        AS faltas
+                       ({_SQL_SUSPEITA})                    AS zerada,
+                       {colunas}
                   FROM match_statistics ms
              LEFT JOIN leagues l ON l.league_id = ms.league_id
              LEFT JOIN LATERAL (
@@ -2401,14 +2483,27 @@ def partidas_coletadas(
               ORDER BY ms.match_date DESC, ms.fixture_id DESC
                  LIMIT %s OFFSET %s
             """, (limite, offset))
-            partidas = [dict(r) for r in cur.fetchall()]
+            for r in cur.fetchall():
+                linha = dict(r)
+                # Achatar os 32 campos crus em par por familia: a tela desenha
+                # "casa | fora" e nao precisa conhecer nome de coluna.
+                stats = {
+                    chave: [linha.pop(casa, None), linha.pop(fora, None)]
+                    for chave, _rot, casa, fora, _modo in STATS_DA_PARTIDA
+                }
+                linha["stats"] = stats
+                linha["completas"] = sum(
+                    1 for par in stats.values() if par[0] is not None and par[1] is not None
+                )
+                partidas.append(linha)
     except Exception as e:
         # Mesma postura do /dados: consulta que falha nao pode levar a aba
         # junto, ela serve justamente pra quando algo esta errado.
         logging.getLogger(__name__).warning("[ADMIN/DADOS] partidas: %s", e)
         conn.rollback()
         return {"total": 0, "pagina": pagina, "por_pagina": por_pagina,
-                "teto": HISTORICO_TETO, "partidas": [], "erro": str(e)[:200]}
+                "teto": HISTORICO_TETO, "partidas": [], "resumo": [],
+                "zeradas": 0, "erro": str(e)[:200]}
     finally:
         cur.close()
         conn.close()
@@ -2418,6 +2513,9 @@ def partidas_coletadas(
         "pagina": pagina,
         "por_pagina": por_pagina,
         "teto": HISTORICO_TETO,
+        "familias": len(STATS_DA_PARTIDA),
+        "resumo": resumo,
+        "zeradas": zeradas,
         "partidas": partidas,
     }
 
