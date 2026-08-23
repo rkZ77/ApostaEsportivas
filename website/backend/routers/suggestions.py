@@ -2723,36 +2723,58 @@ def _nome_do_time(lado: str, alias: str = "ms") -> str:
 
 def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
                    excluir_fixture, limit: int) -> list:
-    """Ultimos `limit` jogos do time NO MANDO pedido, com o nome do adversario.
+    """Ultimos `limit` jogos do time na liga/temporada do pick, com o adversario.
 
-    O filtro de mando e' a regra inteira desta consulta. Se o Goias joga em casa
-    na partida do pick, o que responde a pergunta e' o Goias EM CASA -- os jogos
-    dele como visitante medem outra coisa (+27% de diferenca em escanteios na
-    Serie A 2026) e diluem a media que o card mostra. Mesma correcao de
-    2026-08-08 no motor, agora tambem no que o usuario le.
+    CASA E FORA, os dois (2026-08-22, pedido do usuario). Ate' aqui a consulta
+    trazia so' o mando que o time vai jogar nesta partida, e o preco disso era
+    amostra pequena: um time tem ~7 jogos em casa numa fase inteira, e no comeco
+    de temporada tem 2. Cinco barras viravam duas, e a media que sustentava a
+    frase saia de uma amostra que ninguem chamaria de amostra.
+
+    O QUE NAO SE PERDEU. A correcao de mando de 2026-08-08 continua inteira, e
+    ela nunca foi sobre QUAIS jogos entram: e' sobre qual LADO da folha de cada
+    jogo e' lido. `market_form.perspectiva_do_time` gira a folha pra que o time
+    caia sempre no slot que o mercado nomeia -- num jogo em que ele foi
+    visitante, o "Escanteios Casa" dele continua saindo dos escanteios DELE, e
+    nao do mandante daquela partida. Sem esse giro, misturar mandos aqui
+    reintroduziria o bug do pick #1573; com ele, nao.
+
+    A diferenca de mando (+27% em escanteios na Serie A 2026) nao desapareceu
+    por isso -- ela deixou de ser um FILTRO e virou uma INFORMACAO: cada item da
+    serie carrega `is_home`, e o grafico marca de que mando foi cada barra.
+    Esconder metade dos jogos era uma forma de nao ter que explicar a diferenca.
 
     Mesma liga/temporada que o motor leu (MatchStatsService.get_all_matches_full)
     -- serie e pick contando historias diferentes sobre o mesmo numero e' pior
     que nao mostrar serie nenhuma. Sem fixture na tabela (pick antigo) o filtro
-    sai e a serie fica um pouco mais larga."""
+    sai e a serie fica um pouco mais larga.
+
+    `mando` sobrou na assinatura porque o CHAMADOR ainda precisa dele pro escopo
+    do mercado (ver _series_da_perna); a consulta em si nao o usa mais.
+    """
     filtro_liga, params_liga = "", []
     if league_id and season:
         filtro_liga = "AND ms.league_id = %s AND ms.season = %s"
         params_liga = [league_id, season]
 
-    coluna_mando = "ms.home_team_id" if mando == "home" else "ms.away_team_id"
-    adversario = _nome_do_time("away" if mando == "home" else "home")
+    # O adversario depende do lado em que o time jogou NAQUELA partida, entao
+    # ele vira CASE em vez de um lado fixo. Com o mando filtrado dava pra saber
+    # de antemao; sem filtro, nao.
+    adversario = (
+        f"CASE WHEN ms.home_team_id = %s THEN {_nome_do_time('away')} "
+        f"ELSE {_nome_do_time('home')} END"
+    )
 
     cur.execute(f"""
         SELECT {_COLUNAS_DA_SERIE}, {adversario} AS opponent
           FROM match_statistics ms
-         WHERE {coluna_mando} = %s
+         WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
            AND ms.status IN ('FT','AET','PEN')
            AND ms.fixture_id <> COALESCE(%s, -1)
            {filtro_liga}
       ORDER BY ms.match_date DESC
          LIMIT %s
-    """, (team_id, excluir_fixture, *params_liga, limit))
+    """, (team_id, team_id, team_id, excluir_fixture, *params_liga, limit))
     return [dict(r) for r in cur.fetchall()]
 
 
@@ -2933,22 +2955,24 @@ def _series_da_perna(cur, perna: dict, limit: int) -> dict | None:
         series.append({
             "team_id": team_id,
             "team": nome,
-            # Mando NESTE jogo, que e' tambem o mando de todos os jogos da
-            # serie -- o card usa pra dizer "ultimos N em casa"/"fora".
+            # Mando NESTA partida. Nao e' mais o mando de todos os jogos da
+            # serie (ela traz casa e fora desde 2026-08-22) -- serve pro escopo
+            # do mercado e pra tela saber de quem e' a fileira.
             "side": lado,
-            # Menos jogos do que a serie pediu. Filtrar por mando (2026-08-10)
-            # tornou isso comum no comeco de temporada: um time tem ~7 jogos em
-            # casa numa fase inteira, e no comeco tem 2. A barra existe, mas
-            # dizer "ultimos 5" quando sao 2 e' o tipo de silencio que faz o
-            # numero parecer mais solido do que e'. Regra no servidor pra a tela
-            # nao precisar saber quantos jogos foram pedidos.
+            # Menos jogos do que a serie pediu. Continua acontecendo no comeco
+            # de temporada, quando o time ainda nao jogou 10 na competicao. A
+            # barra existe, mas dizer "ultimos 10" quando sao 3 e' o tipo de
+            # silencio que faz o numero parecer mais solido do que e'. Regra no
+            # servidor pra a tela nao precisar saber quantos foram pedidos.
             "amostra_curta": len(jogos) < limit,
             "amostra_pedida": limit,
             # Frase de fato, no formato que o apostador reconhece das casas.
             # Vem do MESMO `serie` que desenha as barras, entao numero e texto
             # nao tem como divergir -- e ela conta os jogos em que a linha
             # bateu mesmo quando isso contraria o pick. Ver market_form.
-            "frase": market_form.frase_da_serie(nome, serie, lado),
+            # Sem `lado`: a frase dizia "nos ultimos 5 jogos EM CASA", e a
+            # serie deixou de ser de um mando so'.
+            "frase": market_form.frase_da_serie(nome, serie),
             **serie,
         })
 
@@ -3032,7 +3056,11 @@ def _serie_do_arbitro(cur, perna: dict, escopo: str, limit: int) -> dict | None:
 def get_market_form(
     suggestion_id: int,
     pick_type: str = Query("vip"),
-    limit: int = Query(5, ge=3, le=15),
+    # 10, e nao 5 (2026-08-22). Com a serie olhando casa E fora a amostra
+    # comporta o dobro sem ficar rala, e "ultimos 10" e' o recorte que o
+    # apostador reconhece. Quem tiver menos jogos na liga/temporada mostra o que
+    # tem -- `amostra_curta` avisa a tela.
+    limit: int = Query(10, ge=3, le=20),
     current_user: dict = Depends(get_current_user),
 ):
     """Ultimos jogos de CADA time, NO MANDO DO JOGO, medidos pelo MERCADO do pick.
