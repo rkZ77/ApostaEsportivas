@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle, CheckCircle2, Database, RefreshCw } from 'lucide-react'
 import api from '../services/api'
-import { Button, SpinnerBlock, StatTile } from './ui'
+import { Button, EmptyState, Pagination, SpinnerBlock, StatTile } from './ui'
 
 /*
  * O que o motor tem pra ler, e onde estão os buracos.
@@ -19,16 +19,35 @@ interface Dados {
   contagem: Record<string, number | null>
   frescor: { ultima_partida?: string | null; ultimos_7_dias?: number | null }
   buracos: { total?: number | null; mais_antigo?: string | null }
-  por_liga: {
-    league_id: number; name: string; ativa: boolean
-    com_estatistica: number; ultima: string | null
-  }[]
   varredura: {
     habilitada?: boolean; intervalo_s?: number; janela_dias?: number
     rodando?: boolean; ultima_passada_ha_s?: number | null
     ultimo_resultado?: unknown; erro?: string
   }
 }
+
+interface Partida {
+  fixture_id: number
+  data: string | null
+  status: string | null
+  liga: string | null
+  mandante: string | null
+  visitante: string | null
+  home_goals: number | null
+  away_goals: number | null
+  escanteios: number | null
+  cartoes: number | null
+  faltas: number | null
+}
+
+interface Historico {
+  total: number
+  teto: number
+  partidas: Partida[]
+  erro?: string
+}
+
+const POR_PAGINA = 10
 
 const numero = (v: number | null | undefined) =>
   v == null ? '·' : v.toLocaleString('pt-BR')
@@ -46,6 +65,18 @@ export default function AdminDados() {
   const [carregando, setCarregando] = useState(true)
   const [erro, setErro] = useState('')
 
+  const [historico, setHistorico] = useState<Historico | null>(null)
+  const [pagina, setPagina] = useState(0)
+  const [trocandoPagina, setTrocandoPagina] = useState(false)
+
+  const buscarHistorico = useCallback((p: number) => {
+    setTrocandoPagina(true)
+    api.get('/admin/dados/partidas', { params: { pagina: p, por_pagina: POR_PAGINA } })
+      .then(r => setHistorico(r.data))
+      .catch(() => setHistorico({ total: 0, teto: 40, partidas: [], erro: 'Não deu pra ler as partidas.' }))
+      .finally(() => setTrocandoPagina(false))
+  }, [])
+
   const buscar = () => {
     setCarregando(true)
     setErro('')
@@ -53,9 +84,18 @@ export default function AdminDados() {
       .then(r => setDados(r.data))
       .catch(e => setErro(e?.response?.data?.detail ?? 'Não deu pra ler o estado do banco.'))
       .finally(() => setCarregando(false))
+    // Volta pra primeira página: "Atualizar" com a página 3 na tela mostraria
+    // a terceira dezena de uma lista que acabou de mudar embaixo.
+    setPagina(0)
+    buscarHistorico(0)
   }
 
   useEffect(buscar, [])
+
+  const irPara = (p: number) => {
+    setPagina(p)
+    buscarHistorico(p)
+  }
 
   if (carregando && !dados) return <SpinnerBlock className="py-20" />
   if (erro) return <p className="text-red-400 text-sm py-8">{erro}</p>
@@ -146,36 +186,66 @@ export default function AdminDados() {
         )}
       </div>
 
-      {/* Por liga · onde o buraco mora, quando existe. */}
+      {/* Partida a partida · o que o motor leu, e o que veio vazio na linha. */}
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-line">
-          <h3 className="text-sm font-bold text-ink-1">Histórico por liga</h3>
+          <h3 className="text-sm font-bold text-ink-1">Últimas partidas coletadas</h3>
           <p className="text-[11px] text-ink-4 mt-0.5">
-            Liga encerrada continua aqui de propósito: o histórico dela sustenta a calibração,
-            mesmo sem gerar pick.
+            As {historico?.teto ?? 40} mais recentes que entraram em{' '}
+            <span className="font-mono">match_statistics</span>. Número faltando na linha é
+            estatística que o provedor não devolveu para aquele jogo.
           </p>
         </div>
-        <div className="divide-y divide-line/60">
-          {(dados.por_liga ?? []).map(l => (
-            <div key={l.league_id} className="flex items-center gap-3 px-4 py-2.5">
-              <span className="flex-1 min-w-0">
-                <span className="block text-sm text-ink-2 font-semibold truncate">{l.name}</span>
-                {!l.ativa && <span className="text-[10px] text-ink-4">só histórico</span>}
-              </span>
-              <span className="font-mono text-[11px] text-ink-4 shrink-0">
-                última {diaMes(l.ultima)}
-              </span>
-              <span className={`font-mono text-sm font-black shrink-0 w-16 text-right ${
-                l.com_estatistica > 0 ? 'text-ink-2' : 'text-red-400'}`}>
-                {numero(l.com_estatistica)}
-              </span>
+
+        {historico?.erro ? (
+          <p className="px-4 py-6 text-[11px] text-red-400">{historico.erro}</p>
+        ) : !historico ? (
+          <SpinnerBlock className="py-10" />
+        ) : historico.partidas.length === 0 ? (
+          <EmptyState
+            compact
+            Icon={Database}
+            title="Nenhuma partida coletada"
+            description="Sem linha em match_statistics não há baseline de liga, média de time nem confronto direto."
+          />
+        ) : (
+          <>
+            <div className={`divide-y divide-line/60 ${trocandoPagina ? 'opacity-50' : ''} transition-opacity duration-1`}>
+              {historico.partidas.map(p => (
+                <div key={p.fixture_id} className="px-4 py-2.5">
+                  <div className="flex items-baseline gap-2">
+                    <span className="font-mono text-[11px] text-ink-4 shrink-0 w-9 tabular-nums">
+                      {diaMes(p.data)}
+                    </span>
+                    <span className="flex-1 min-w-0 text-sm text-ink-2 truncate">
+                      {p.mandante ?? 'Time ?'}
+                      <span className="font-mono font-bold text-ink-1 mx-1.5 tabular-nums">
+                        {numero(p.home_goals)}x{numero(p.away_goals)}
+                      </span>
+                      {p.visitante ?? 'Time ?'}
+                    </span>
+                    {p.status && p.status !== 'FT' && (
+                      <span className="font-mono text-[10px] text-yellow-400 shrink-0">{p.status}</span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 pl-11 mt-0.5 text-[10px] text-ink-4">
+                    <span className="truncate max-w-[45%]">{p.liga ?? 'liga ?'}</span>
+                    <span className="font-mono tabular-nums">{numero(p.escanteios)} esc</span>
+                    <span className="font-mono tabular-nums">{numero(p.cartoes)} cart</span>
+                    <span className="font-mono tabular-nums">{numero(p.faltas)} faltas</span>
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
-        </div>
-        <p className="px-4 py-2.5 text-[10px] text-ink-4 border-t border-line/60">
-          O número é de partidas com estatística gravada. Liga cadastrada com zero é liga que
-          nunca coletou · quase sempre falta rodar "Coletar" na aba Ligas.
-        </p>
+            <Pagination
+              page={pagina}
+              pageSize={POR_PAGINA}
+              total={historico.total}
+              onChange={irPara}
+              unit="partidas"
+            />
+          </>
+        )}
       </div>
     </div>
   )
