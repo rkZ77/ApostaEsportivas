@@ -506,8 +506,39 @@ _run_status: dict = {"status": "idle", "started_at": None, "finished_at": None,
 
 class RunBody(BaseModel):
     fixture_id: int | None = None
-    dry_run: bool = True
+    #: None = seguir `LIVE_ENGINE_DRY_RUN`. Ver `_resolver_dry_run`.
+    dry_run: bool | None = None
     max_partidas: int | None = None
+
+
+def _dry_run_do_ambiente() -> bool:
+    """`LIVE_ENGINE_DRY_RUN`, com o mesmo default seguro do motor (TRUE).
+
+    Le a variavel do jeito que `pick_engine_live/config.py::_flag` le, e nao
+    com um `== "true"` proprio: as duas leituras divergirem seria o painel
+    dizendo uma coisa e o motor fazendo outra.
+    """
+    return (os.getenv("LIVE_ENGINE_DRY_RUN") or "true").strip().lower() in (
+        "1", "true", "on", "yes", "sim")
+
+
+def _resolver_dry_run(valor: bool | None) -> bool:
+    """O dry run que a rodada VAI usar.
+
+    POR QUE O CAMPO PASSOU A ACEITAR None (2026-08-24)
+    --------------------------------------------------
+    O campo nascia `True` fixo, e o valor era sempre repassado ao pipeline como
+    `--dry-run`/`--gravar` -- que SOBRESCREVE a config de ambiente em
+    `run_live_engine`. O efeito pratico: `LIVE_ENGINE_DRY_RUN=false` no Railway
+    nao ligava a gravacao, porque o corpo da requisicao chegava depois e dizia
+    `true`. Trocar a variavel e continuar sem pick, sem mensagem de erro
+    nenhuma, e' o pior tipo de falha que este painel pode ter.
+
+    Agora ausente significa "segue o ambiente" e presente significa "eu decidi
+    nesta rodada". O valor resolvido continua indo explicito pra linha de
+    comando, pra o que o painel mostra e o que o motor faz nunca divergirem.
+    """
+    return _dry_run_do_ambiente() if valor is None else bool(valor)
 
 
 def _pipeline_dir() -> str:
@@ -593,7 +624,7 @@ async def _rodar(body: RunBody) -> None:
     argumentos: list[str] = []
     if body.fixture_id:
         argumentos += ["--fixture", str(body.fixture_id)]
-    argumentos.append("--dry-run" if body.dry_run else "--gravar")
+    argumentos.append("--dry-run" if _resolver_dry_run(body.dry_run) else "--gravar")
     if body.max_partidas:
         argumentos += ["--max", str(body.max_partidas)]
 
@@ -770,7 +801,8 @@ _watch_task: asyncio.Task | None = None
 class WatchBody(BaseModel):
     ligar: bool = True
     intervalo_min: int = 8
-    dry_run: bool = True
+    #: None = seguir `LIVE_ENGINE_DRY_RUN`. Ver `_resolver_dry_run`.
+    dry_run: bool | None = None
     max_partidas: int | None = None
 
 
@@ -847,18 +879,23 @@ async def acompanhar_continuo(body: WatchBody, current_user: dict = Depends(requ
     if _watch_state["ativo"]:
         raise HTTPException(409, "O acompanhamento continuo ja esta ligado.")
 
+    # Resolvido UMA vez, no clique: o laco pode durar horas, e reler a variavel
+    # a cada rodada faria um deploy no meio da noite trocar o comportamento sem
+    # ninguem ter pedido.
+    dry_run = _resolver_dry_run(body.dry_run)
     _watch_state.update({
         "ativo": True,
         "iniciado_em": datetime.now(timezone.utc).strftime("%H:%M:%S"),
         "rodadas": 0, "falhas_seguidas": 0, "motivo_parada": None,
         "ultima_rodada": None, "proxima_rodada_em": None,
         "intervalo_min": max(_INTERVALO_MIN_MINUTOS, int(body.intervalo_min)),
-        "dry_run": body.dry_run, "max_partidas": body.max_partidas,
+        "dry_run": dry_run, "max_partidas": body.max_partidas,
     })
     _salvar_watch()
     _watch_task = asyncio.create_task(_laco_de_acompanhamento(
-        body.intervalo_min, body.dry_run, body.max_partidas))
-    return {"ok": True, "ativo": True, "intervalo_min": _watch_state["intervalo_min"]}
+        body.intervalo_min, dry_run, body.max_partidas))
+    return {"ok": True, "ativo": True, "dry_run": dry_run,
+            "intervalo_min": _watch_state["intervalo_min"]}
 
 
 @router.get("/watch-status")
@@ -895,7 +932,7 @@ async def rodar_motor(body: RunBody, current_user: dict = Depends(require_admin)
     if not _pipeline_dir():
         raise HTTPException(500, "Diretorio do motor nao encontrado (PIPELINE_SRC_PATH).")
     asyncio.create_task(_rodar(body))
-    return {"ok": True, "iniciado": True, "dry_run": body.dry_run}
+    return {"ok": True, "iniciado": True, "dry_run": _resolver_dry_run(body.dry_run)}
 
 
 @router.get("/run-status")
@@ -943,6 +980,11 @@ def diagnostico(current_user: dict = Depends(require_admin)):
         "pronto": all(c["ok"] for c in checagens),
         "checagens": checagens,
         "dry_run_padrao": os.getenv("LIVE_ENGINE_DRY_RUN", "true"),
+        # O MESMO texto ja' interpretado. O painel precisa do booleano, e nao
+        # do texto cru: "off", "0" e "nao" sao valores validos que uma leitura
+        # ingenua no frontend (`=== 'false'`) entenderia ao contrario -- que e'
+        # exatamente a divergencia que este campo existe pra fechar.
+        "dry_run_padrao_ativo": _dry_run_do_ambiente(),
         # Onde o pick vai parar · e' a informacao que decide se a rodada e'
         # teste ou producao, e ela nao pode ficar implicita num painel.
         "grava_em": "produção" if em_prod else "desenvolvimento",

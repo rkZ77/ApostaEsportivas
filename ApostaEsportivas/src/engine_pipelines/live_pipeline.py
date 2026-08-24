@@ -60,6 +60,11 @@ from services.pick_engine import competition_rules_store
 from services.pick_engine_live.live_feed import (
     LiveFeed, OrcamentoEsgotado, ler_estatisticas,
 )
+from engine_pipelines import decision_log
+from engine_pipelines.decision_log import (
+    LIVE_DUPLICATA, LIVE_NENHUM_APROVADO, LIVE_REPROVOU_TRIAGEM,
+    LIVE_SEM_ESTATISTICA, LIVE_SEM_LINHA, LIVE_SEM_ORCAMENTO, PIPELINE_LIVE,
+)
 
 TZ_BR = ZoneInfo("America/Sao_Paulo")
 
@@ -1049,6 +1054,39 @@ def run_live_engine(fixture_id: int | None = None,
         cur.close()
         conn.close()
 
+    # RETRATO DA RODADA, uma linha por passada que nao gerou nada.
+    #
+    # As linhas `avaliado` acima explicam a PARTIDA; esta explica a RODADA, e
+    # e' a unica que responde as duas perguntas de orcamento: quantas
+    # requisicoes a passada custou, e onde as partidas morreram por categoria.
+    # Sem ela, uma rodada em que nenhum jogo chegou a ser elegivel nao deixa
+    # rastro nenhum -- que era o caso mais comum das 91 rodadas de 23/08.
+    #
+    # So' e' gravada quando a rodada TERMINA SEM PICK, que e' a semantica de
+    # `log_run` nos outros seis pipelines. Rodada com pick ja' esta' contada
+    # nas linhas `avaliado` e em picks_live.
+    if not relatorio["picks_criados"]:
+        if relatorio.get("motivo"):
+            motivo_rodada = relatorio["motivo"]
+        elif relatorio["orcamento_esgotado"]:
+            motivo_rodada = "orcamento de API esgotado no meio da rodada"
+        elif not relatorio["fixtures_elegiveis"]:
+            motivo_rodada = "nenhuma partida elegivel nesta passada"
+        else:
+            motivo_rodada = "rodou e nenhuma partida virou pick"
+        decision_log.log_run(PIPELINE_LIVE, motivo_rodada, {
+            "dry_run": relatorio["dry_run"],
+            "engine_version": relatorio["engine_version"],
+            "fixtures_encontradas": relatorio["fixtures_encontradas"],
+            "fixtures_elegiveis": relatorio["fixtures_elegiveis"],
+            "fixtures_no_radar": relatorio["fixtures_no_radar"],
+            "descartes": (relatorio.get("descartes") or {}).get("por_categoria"),
+            "requisicoes": relatorio["requisicoes"],
+            "limite_requisicoes": relatorio["limite_requisicoes"],
+            "erros": relatorio["erros"],
+            "partidas": relatorio["partidas"],
+        })
+
     print("\n" + "-" * 62)
     print(f"Requisicoes usadas: {feed.usadas}/{config.max_requisicoes}")
     print(f"Picks criados:      {len(relatorio['picks_criados'])}"
@@ -1057,6 +1095,48 @@ def run_live_engine(fixture_id: int | None = None,
         print(f"Erros:              {len(relatorio['erros'])}")
     print("-" * 62 + "\n")
     return relatorio
+
+
+def _fixture_do_log(estado: dict, nome: str) -> dict:
+    """A partida no formato que `decision_log` espera (mesmo dos outros seis
+    pipelines), pra a consulta "o que aconteceu com este jogo" nao precisar de
+    um SELECT diferente por causa do motor ao vivo."""
+    casa, _, fora = nome.partition(" x ")
+    return {"fixture_id": estado.get("fixture_id"),
+            "home_team": casa or None, "away_team": fora or None}
+
+
+def _contexto_do_log(estado: dict, fresh: dict | None = None,
+                     analise: dict | None = None, **extra) -> dict:
+    """O que muda de uma rodada pra outra na MESMA partida.
+
+    Sem isto o log ao vivo seria ilegivel: a mesma partida aparece 20 vezes
+    numa noite, e duas linhas identicas aos 20' e aos 70' descrevem decisoes
+    completamente diferentes. Minuto e placar sao o que separa uma da outra.
+    """
+    ctx = {
+        "minuto": estado.get("minuto"),
+        "status": estado.get("status"),
+        "placar": f"{estado.get('home_goals')}x{estado.get('away_goals')}",
+        "league_id": estado.get("league_id"),
+    }
+    if fresh:
+        ctx["freshness"] = fresh.get("nivel")
+    if analise:
+        ritmo = analise.get("ritmo") or {}
+        pressao = analise.get("pressao") or {}
+        ctx["ritmo"] = ritmo.get("nivel")
+        ctx["ritmo_score"] = ritmo.get("score")
+        ctx["pressao_total"] = pressao.get("total")
+        # Observado e projecao por familia: e' o que responde "o jogo estava
+        # acelerando?" sem abrir os candidatos.
+        ctx["familias"] = {
+            f: {"observado": i.get("observado"), "projecao": i.get("projecao_total"),
+                "baseline": i.get("baseline")}
+            for f, i in (analise.get("familias") or {}).items() if i.get("disponivel")
+        }
+    ctx.update(extra)
+    return ctx
 
 
 def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
@@ -1103,12 +1183,14 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
                 if orchestrator.observado_da_familia(estado, f) is None]
     disponiveis = [f for f in config.familias if f not in faltando]
 
+    # Fora do `if` de proposito: o log de descarte precisa dizer QUAL dos dois
+    # casos foi, e a variavel so' existia dentro do ramo que imprime.
+    folha_vazia = not home_stats and not away_stats
     if faltando:
         # "Nao publicou NADA" e "faltou uma familia" sao problemas diferentes: o
         # primeiro e' cobertura da partida no provedor, o segundo e' buraco de
         # mercado. Dizer sempre "corners nao publicado" escondia o primeiro
         # caso, que e' o que realmente derruba a rodada.
-        folha_vazia = not home_stats and not away_stats
         motivo = ("o provedor nao publicou estatistica nenhuma desta partida"
                   if folha_vazia else f"{', '.join(faltando)} sem numero publicado")
         print(f"Sem {', '.join(faltando)}: {motivo}")
@@ -1117,6 +1199,9 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         print("DECISAO: SKIP")
         resumo["motivo"] = f"estatistica ausente: {', '.join(faltando)}"
         _observar(cur, conn, estado)
+        decision_log.log_skip(
+            PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_SEM_ESTATISTICA,
+            _contexto_do_log(estado, faltando=faltando, folha_vazia=folha_vazia))
         return resumo
 
     if faltando:
@@ -1201,12 +1286,23 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
         print(f"Odd consultada: NAO ({tri['motivo']})")
         print("DECISAO: NO PICK")
         resumo.update({"decisao": "NO PICK", "motivo": tri["motivo"]})
+        # A triagem e' o freio de API: aqui a partida morre SEM a odd ter sido
+        # consultada. Registrar o `detalhe` (desvio por familia) e' o que
+        # permite depois medir se DESVIO_MINIMO_TRIAGEM esta' frouxo ou
+        # apertado, que e' a pergunta de orcamento do motor ao vivo.
+        decision_log.log_skip(
+            PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_REPROVOU_TRIAGEM,
+            _contexto_do_log(estado, fresh, analise, motivo_triagem=tri["motivo"],
+                             triagem=tri.get("detalhes")))
         return resumo
 
     if not feed.tem_orcamento():
         print("Odd consultada: NAO (orcamento esgotado)")
         print("DECISAO: NO PICK")
         resumo.update({"decisao": "NO PICK", "motivo": "orcamento esgotado antes da odd"})
+        decision_log.log_skip(
+            PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_SEM_ORCAMENTO,
+            _contexto_do_log(estado, fresh, analise, requisicoes=feed.usadas))
         return resumo
 
     odds_brutas = feed.odds_ao_vivo(fid)
@@ -1216,6 +1312,13 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
     if not cotacoes:
         print("DECISAO: NO PICK (mercado suspenso ou nao cotado)")
         resumo.update({"decisao": "NO PICK", "motivo": "sem linha ativa nas familias triadas"})
+        # Este descarte custou uma requisicao de odd. E' o unico que gasta cota
+        # sem produzir candidato, entao separa-lo dos outros e' o que diz se a
+        # perda vem do modelo ou do provedor.
+        decision_log.log_skip(
+            PIPELINE_LIVE, _fixture_do_log(estado, nome), LIVE_SEM_LINHA,
+            _contexto_do_log(estado, fresh, analise,
+                             familias_triadas=list(tri["familias"])))
         return resumo
 
     avaliados = orchestrator.avaliar(analise, cotacoes, config)
@@ -1232,12 +1335,37 @@ def _processar_partida(indice: int, bruto: dict, cur, conn, feed: LiveFeed,
               f"conf={c['confidence']*100:.0f}% sinal={(c['live_signal_score'] or 0)*100:.0f}%{motivo}")
 
     melhor = orchestrator.melhor_candidato(avaliados, config)
+    # Antes de `melhor` existir a consulta seria desperdicio; depois dela o
+    # resultado e' necessario pro log saber o desfecho.
+    repetido = (ja_existe_pick_equivalente(picks_da_partida(cur, fid), melhor, config)
+                if melhor else None)
+
+    if not melhor:
+        desfecho = LIVE_NENHUM_APROVADO
+    elif repetido:
+        desfecho = LIVE_DUPLICATA
+    else:
+        desfecho = "pick (dry run)" if config.dry_run else "pick gravado"
+
+    # UMA linha por partida avaliada, com TODOS os candidatos e o motivo de
+    # reprovacao de cada um. Gravada aqui, antes dos returns, pra valer igual
+    # nos quatro desfechos -- e em DRY RUN e' a unica prova de que o motor
+    # teria gerado alguma coisa, porque `picks_live` fica vazia por construcao
+    # e a tabela de picks nao distingue "nao achou nada" de "achou e nao podia
+    # gravar".
+    decision_log.log_live_decision(
+        _fixture_do_log(estado, nome), avaliados,
+        _contexto_do_log(estado, fresh, analise, dry_run=config.dry_run,
+                         desfecho=desfecho, duplicata=repetido,
+                         aprovados=len([c for c in avaliados if c["aprovado"]]),
+                         requisicoes=feed.usadas),
+        escolhido=melhor)
+
     if not melhor:
         print("DECISAO: NO PICK")
         resumo["decisao"] = "NO PICK"
         return resumo
 
-    repetido = ja_existe_pick_equivalente(picks_da_partida(cur, fid), melhor, config)
     if repetido:
         print(f"DECISAO: NO PICK ({repetido})")
         resumo.update({"decisao": "NO PICK", "motivo": repetido})

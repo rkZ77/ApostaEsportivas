@@ -36,6 +36,12 @@ import { Spinner } from './ui'
 interface Checagem { item: string; ok: boolean; detalhe: string }
 interface Diagnostico {
   pronto: boolean; checagens: Checagem[]; dry_run_padrao: string
+  /**
+   * `LIVE_ENGINE_DRY_RUN` já interpretado pelo backend. Vem daí e não de uma
+   * leitura do texto aqui porque "off", "0" e "não" são valores válidos que um
+   * `=== 'false'` entenderia ao contrário.
+   */
+  dry_run_padrao_ativo?: boolean
   /** "produção" | "desenvolvimento" · onde a rodada grava. */
   grava_em?: string
 }
@@ -94,6 +100,8 @@ export default function AdminMotorLive() {
   const [stats, setStats]     = useState<Stats | null>(null)
   const [picks, setPicks]     = useState<any[]>([])
   const [dryRun, setDryRun]   = useState(true)
+  /** O checkbox já foi semeado com `LIVE_ENGINE_DRY_RUN`? Só uma vez. */
+  const dryRunSemeado = useRef(false)
   const [intervalo, setIntervalo] = useState('8')
   const [fixture, setFixture] = useState('')
   const [maxPart, setMaxPart] = useState('')
@@ -126,7 +134,21 @@ export default function AdminMotorLive() {
         api.get('/live-picks/run-status'),
         api.get('/live-picks/watch-status'),
       ])
-      if (d.status === 'fulfilled') setDiag(d.value.data)
+      if (d.status === 'fulfilled') {
+        setDiag(d.value.data)
+        // O checkbox nascia `true` cravado, e o valor dele SOBRESCREVE a
+        // variável de ambiente lá no motor. O efeito era mudar
+        // LIVE_ENGINE_DRY_RUN=false no Railway e continuar sem pick nenhum,
+        // sem mensagem de erro. Aqui ele passa a nascer no que a variável diz.
+        //
+        // Uma vez só: trocar o período recarrega o diagnóstico, e re-semear
+        // desfaria a escolha de quem já marcou o checkbox na mão.
+        if (!dryRunSemeado.current
+            && typeof d.value.data?.dry_run_padrao_ativo === 'boolean') {
+          setDryRun(d.value.data.dry_run_padrao_ativo)
+          dryRunSemeado.current = true
+        }
+      }
       if (r.status === 'fulfilled') setRun(r.value.data)
       if (w.status === 'fulfilled') setWatch(w.value.data)
       await buscarResultado()
