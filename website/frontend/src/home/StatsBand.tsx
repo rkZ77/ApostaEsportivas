@@ -77,7 +77,7 @@ export default function StatsBand({
   const mediaVip  = media(summary.vip_profit, summary.vip_total)
   const mediaFree = media(summary.free_profit, summary.free_total)
 
-  const tom = (v: number) => (v >= 0 ? 'text-accent' : 'text-red-400')
+  const tom = (v: number) => (v >= 0 ? 'text-accent-ink' : 'text-red-400')
   const plano = stakeLabel ?? STAKE_LABEL_PADRAO
 
   const roi = Number(summary.roi ?? 0)
@@ -95,7 +95,7 @@ export default function StatsBand({
     {
       label: 'Assertividade',
       value: <NumberTicker value={wr} suffix="%" />,
-      tone: wr >= 55 ? 'text-accent' : 'text-ink-1',
+      tone: wr >= 55 ? 'text-accent-ink' : 'text-ink-1',
     },
     {
       label: 'ROI acumulado',

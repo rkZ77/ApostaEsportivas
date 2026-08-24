@@ -108,7 +108,7 @@ function ClvSection({ data, loading }: { data: ClvData | null; loading: boolean 
     {
       key: 'clv', header: 'CLV', align: 'right',
       cell: r => (
-        <span className={`font-mono text-xs font-bold tabular-nums ${(r.clv ?? 0) > 0 ? 'text-accent' : 'text-ink-3'}`}>
+        <span className={`font-mono text-xs font-bold tabular-nums ${(r.clv ?? 0) > 0 ? 'text-accent-ink' : 'text-ink-3'}`}>
           {r.clv == null ? '·' : `${r.clv > 0 ? '+' : ''}${r.clv.toFixed(1)}%`}
         </span>
       ),

@@ -149,7 +149,7 @@ export default function Products() {
             >
               <div className="flex items-start justify-between gap-2 mb-4">
                 <div className="w-10 h-10 rounded-lg border border-line flex items-center justify-center">
-                  <Icon className="w-4 h-4 text-accent" />
+                  <Icon className="w-4 h-4 text-accent-ink" />
                 </div>
                 {tag && <Badge tone={tag.tone}>{tag.label}</Badge>}
               </div>

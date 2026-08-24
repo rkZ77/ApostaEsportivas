@@ -68,7 +68,7 @@ export default function ResetMonthModal({
               </li>
               <li className="flex items-center justify-between gap-3">
                 <span>Saldo do mês</span>
-                <span className={`font-mono font-bold tabular-nums ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>
+                <span className={`font-mono font-bold tabular-nums ${pnl > 0 ? 'text-accent-ink' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>
                   {pnl === 0 ? 'R$ 0' : fmtSigned(pnl)}
                 </span>
               </li>

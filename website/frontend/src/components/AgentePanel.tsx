@@ -94,7 +94,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                 <p className="text-ink-2 text-xs leading-relaxed mb-5">
                   Disponível apenas para assinantes VIP. Analisa picks, banca, alavancagem e jogos ao vivo em tempo real.
                 </p>
-                <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-5 py-2.5 rounded-md text-xs transition-colors">
+                <Link to="/checkout" onClick={onClose} className="inline-block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-5 py-2.5 rounded-md text-xs transition-colors">
                   Assinar VIP
                 </Link>
               </>
@@ -140,7 +140,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
                   )}
                   <div className={`max-w-[82%] rounded-md px-3 py-2 text-xs leading-relaxed
                     ${msg.role === 'user'
-                      ? 'bg-green-600 text-ink-1 rounded-tr-sm'
+                      ? 'bg-green-600 text-white rounded-tr-sm'
                       : 'bg-surface-1 border border-line rounded-tl-sm'}`}>
                     {msg.role === 'user' ? (
                       <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -182,7 +182,7 @@ export default function AgentePanel({ onClose }: { onClose: () => void }) {
               onClick={() => sendMessage()}
               disabled={!input.trim() || loading}
               aria-label="Enviar"
-              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-ink-1 shrink-0"
+              className="w-9 h-9 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

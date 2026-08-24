@@ -62,7 +62,7 @@ export function Lista({ itens }: { itens: [LucideIcon, string][] }) {
     <ul className="grid gap-2 sm:grid-cols-2">
       {itens.map(([Icone, texto]) => (
         <li key={texto} className="flex items-center gap-2 text-xs text-ink-2">
-          <Icone className="w-3.5 h-3.5 shrink-0 text-accent" aria-hidden="true" />
+          <Icone className="w-3.5 h-3.5 shrink-0 text-accent-ink" aria-hidden="true" />
           {texto}
         </li>
       ))}
@@ -104,7 +104,7 @@ function Fluxo({ etapas, destacar }: { etapas: [LucideIcon, string][]; destacar?
               }`}
             >
               <Icone
-                className={`w-4 h-4 shrink-0 ${forte ? 'text-accent' : 'text-ink-3'}`}
+                className={`w-4 h-4 shrink-0 ${forte ? 'text-accent-ink' : 'text-ink-3'}`}
                 aria-hidden="true"
               />
               <span className={`text-xs ${forte ? 'text-ink-1 font-semibold' : 'text-ink-2'}`}>
@@ -151,8 +151,8 @@ function AcaoDoPasso({
       disabled={disabled || feito}
       className={`w-full inline-flex items-center justify-center gap-2 text-xs font-bold px-3 py-2.5 rounded-md border transition-colors min-h-[40px] ${
         feito
-          ? 'border-accent/30 bg-accent/10 text-accent cursor-default'
-          : 'border-accent/40 bg-accent/15 text-accent hover:bg-accent/25 disabled:opacity-50'
+          ? 'border-accent/30 bg-accent/10 text-accent-ink cursor-default'
+          : 'border-accent/40 bg-accent/15 text-accent-ink hover:bg-accent/25 disabled:opacity-50'
       }`}
     >
       {children}

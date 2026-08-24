@@ -492,7 +492,7 @@ export default function Admin() {
       }}
     >
       {toast && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-elev text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-ink-1' : 'bg-red-600 text-ink-1'}`}>
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 z-[9999] px-5 py-3 rounded-md shadow-elev text-sm font-semibold whitespace-nowrap transition-all ${toast.ok ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
           {toast.msg}
         </div>
       )}
@@ -1318,7 +1318,7 @@ export default function Admin() {
               { label: 'VIP',           value: stats.vip,            color: 'text-yellow-400' },
               { label: 'Teste',         value: stats.trial,          color: 'text-blue-400' },
               { label: 'Free',          value: stats.free,           color: 'text-ink-2' },
-              { label: 'Ativos',        value: stats.ativos,         color: 'text-green-500' },
+              { label: 'Ativos',        value: stats.ativos,         color: 'text-accent-ink' },
               { label: 'VIP expirando', value: stats.vip_expirando,  color: stats.vip_expirando > 0 ? 'text-orange-400' : 'text-ink-4' },
             ].map(({ label, value, color }) => (
               <div key={label} className="stat-card text-center py-3">
@@ -1648,7 +1648,7 @@ export default function Admin() {
                   onClick={() => setNovaLiga(v => ({ ...v, temporada_iniciada: valor }))}
                   className={`text-[11px] px-2.5 py-1.5 rounded border transition-colors ${
                     novaLiga.temporada_iniciada === valor
-                      ? 'border-accent/50 bg-accent/10 text-accent font-semibold'
+                      ? 'border-accent/50 bg-accent/10 text-accent-ink font-semibold'
                       : 'border-line text-ink-3 hover:text-ink-1'}`}>
                   {rotulo}
                 </button>
@@ -1683,7 +1683,7 @@ export default function Admin() {
                     <div className="flex items-center gap-2 flex-wrap mb-1.5">
                       <span className="text-sm font-bold text-ink-1">{previaLiga.nome}</span>
                       <span className={`text-[10px] font-black px-1.5 py-0.5 rounded ${
-                        previaLiga.iniciada ? 'bg-accent/15 text-accent'
+                        previaLiga.iniciada ? 'bg-accent/15 text-accent-ink'
                                             : 'bg-yellow-500/15 text-yellow-400'}`}>
                         {previaLiga.iniciada ? 'TEMPORADA EM ANDAMENTO' : 'AINDA NÃO COMEÇOU'}
                       </span>
@@ -1767,13 +1767,13 @@ export default function Admin() {
                         botão que o disparou.
                       */}
                       {ehEstaLiga && coletaAtual?.status === 'running' && (
-                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-accent">
+                        <div className="flex items-center gap-1.5 mt-1 text-[11px] text-accent-ink">
                           <Spinner className="w-3 h-3" />
                           <span>Coletando desde {coletaAtual.started_at}, pode levar alguns minutos.</span>
                         </div>
                       )}
                       {ehEstaLiga && coletaAtual?.status === 'ok' && (
-                        <div className="text-[11px] text-accent mt-1">
+                        <div className="text-[11px] text-accent-ink mt-1">
                           Coleta concluída às {coletaAtual.finished_at}.
                         </div>
                       )}

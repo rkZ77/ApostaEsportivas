@@ -123,8 +123,11 @@ export default function ProfitChart({
 
   const last     = points[points.length - 1]
   const isGreen  = last >= 0
-  const color    = isGreen ? '#22c55e' : '#ef4444'
-  const fillClr  = isGreen ? 'rgba(34,197,94,0.09)' : 'rgba(239,68,68,0.09)'
+  /* Tokens e não hexadecimais · o mesmo verde de #22c55e sobre papel branco
+     dá 2,3:1 e a linha some. Vão por `style` porque `var()` em atributo de
+     apresentação (stroke=, fill=) não resolve em todo navegador. */
+  const color    = isGreen ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))'
+  const fillClr  = isGreen ? 'rgb(var(--c-green-400) / 0.09)' : 'rgb(var(--c-red-400) / 0.09)'
 
   const hv = hoverIdx !== null ? points[hoverIdx] : null
 
@@ -146,11 +149,11 @@ export default function ProfitChart({
             <g key={i}>
               <line
                 x1={PL} y1={yPos} x2={W - PR} y2={yPos}
-                stroke={isZero ? '#3f3f46' : '#1f1f23'}
+                className={isZero ? 'stroke-line-strong' : 'stroke-line'}
                 strokeWidth={isZero ? 1 : 0.8}
                 strokeDasharray={isZero ? '4,4' : 'none'}
               />
-              <text x={PL - 6} y={yPos + 3.5} fill="#52525b" fontSize="9" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fontVariantNumeric: 'tabular-nums' }}>
+              <text x={PL - 6} y={yPos + 3.5} className="fill-ink-4" fontSize="9" textAnchor="end" fontFamily="Inter, -apple-system, sans-serif" style={{ fontVariantNumeric: 'tabular-nums' }}>
                 {fmtY(v)}
               </text>
             </g>
@@ -159,13 +162,13 @@ export default function ProfitChart({
 
         {/* fill area */}
         <motion.path
-          d={fillPath} fill={fillClr}
+          d={fillPath} style={{ fill: fillClr }}
           initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.4 }}
         />
 
         {/* line */}
         <motion.path
-          d={linePath} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
+          d={linePath} fill="none" style={{ stroke: color }} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round"
           initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.8, ease: [0.16, 1, 0.3, 1] }}
         />
 
@@ -197,7 +200,7 @@ export default function ProfitChart({
         {/* last dot (always) */}
         {hoverIdx === null && (
           <motion.circle
-            cx={px(points.length - 1)} cy={py(last)} r="3.5" fill={color}
+            cx={px(points.length - 1)} cy={py(last)} r="3.5" style={{ fill: color }}
             initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ delay: 0.9, type: 'spring', stiffness: 400, damping: 15 }}
           />
         )}
@@ -230,9 +233,9 @@ export default function ProfitChart({
           style={{
             left: `${(px(hoverIdx) / W) * 100}%`,
             transform: hoverIdx > points.length * 0.7 ? 'translateX(-110%)' : 'translateX(8px)',
-            background: '#111',
-            borderColor: hv >= 0 ? '#22c55e40' : '#ef444440',
-            color: hv >= 0 ? '#22c55e' : '#ef4444',
+            background: 'rgb(var(--surface-1))',
+            borderColor: hv >= 0 ? 'rgb(var(--c-green-400) / 0.25)' : 'rgb(var(--c-red-400) / 0.25)',
+            color: hv >= 0 ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))',
           }}
         >
           {fmtDate(dates[hoverIdx])} · {fmtVal(hv)}

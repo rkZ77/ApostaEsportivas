@@ -509,7 +509,7 @@ export default function OnboardingTour() {
 
           <div className="flex items-start gap-3 px-4 pt-4 pb-3 shrink-0">
             <div className="w-9 h-9 rounded-md bg-accent/10 border border-accent/25 flex items-center justify-center shrink-0">
-              <Icone className="w-4.5 h-4.5 text-accent" aria-hidden="true" />
+              <Icone className="w-4.5 h-4.5 text-accent-ink" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[10px] font-bold text-ink-4 tracking-wide">

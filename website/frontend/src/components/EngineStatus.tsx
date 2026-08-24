@@ -30,7 +30,7 @@ interface Status {
 const POLL_MS = 8000
 
 function StepIcon({ status }: { status: Step['status'] }) {
-  if (status === 'done')    return <CheckCircle2 className="w-3.5 h-3.5 text-accent shrink-0" />
+  if (status === 'done')    return <CheckCircle2 className="w-3.5 h-3.5 text-accent-ink shrink-0" />
   if (status === 'running') return <Loader2 className="w-3.5 h-3.5 text-amber-400 animate-spin shrink-0" />
   if (status === 'error')   return <XCircle className="w-3.5 h-3.5 text-red-400 shrink-0" />
   return <CircleDashed className="w-3.5 h-3.5 text-ink-4 shrink-0" />

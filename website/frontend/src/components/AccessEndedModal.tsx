@@ -114,7 +114,7 @@ export default function AccessEndedModal(
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={assinar}
-            className="w-full py-3 rounded-lg bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-black transition-colors flex items-center justify-center gap-2"
+            className="w-full py-3 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-black transition-colors flex items-center justify-center gap-2"
           >
             <Sparkles className="w-4 h-4" />
             {copy.cta}

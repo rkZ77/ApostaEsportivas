@@ -127,7 +127,7 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
       <div className="flex items-center justify-between gap-2 mb-3">
         <span
           className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${
-            dia.ehHoje ? 'bg-accent/15 text-accent' : 'bg-surface-2 text-ink-3'
+            dia.ehHoje ? 'bg-accent/15 text-accent-ink' : 'bg-surface-2 text-ink-3'
           }`}
         >
           {dia.texto}
@@ -168,8 +168,8 @@ function GameCard({ game, hoje }: { game: UpcomingFixture; hoje: string }) {
       <div className="mt-2 flex items-center gap-1.5">
         {game.has_pick ? (
           <>
-            <Check className="w-3 h-3 text-accent shrink-0" />
-            <span className="text-[10px] font-semibold text-accent">
+            <Check className="w-3 h-3 text-accent-ink shrink-0" />
+            <span className="text-[10px] font-semibold text-accent-ink">
               {game.pick_type === 'free' ? 'Pick grátis publicado' : 'Pick publicado'}
             </span>
           </>

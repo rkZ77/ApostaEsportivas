@@ -92,7 +92,7 @@ function Metric({
   tone?: 'default' | 'good' | 'muted'
   hint?: string
 }) {
-  const color = { default: 'text-ink-1', good: 'text-accent', muted: 'text-ink-3' }[tone]
+  const color = { default: 'text-ink-1', good: 'text-accent-ink', muted: 'text-ink-3' }[tone]
   return (
     <div className="bg-surface-0 border border-line rounded-lg p-3">
       <div className="flex items-center gap-1.5 mb-1.5">
@@ -161,7 +161,7 @@ export default function AnalysisModal({
         {(regra || regraTexto) && (
           <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2.5">
-              <BookOpen className="w-3.5 h-3.5 text-accent" />
+              <BookOpen className="w-3.5 h-3.5 text-accent-ink" />
               <span className="panel-label">Como este mercado funciona</span>
             </div>
 
@@ -170,7 +170,7 @@ export default function AnalysisModal({
                 <p className="text-xs text-ink-2 leading-relaxed mb-3">{regra.oQueE}</p>
                 <dl className="space-y-1.5">
                   <div className="flex items-start gap-2">
-                    <dt className="text-[10px] font-black text-accent w-12 shrink-0 pt-0.5">GREEN</dt>
+                    <dt className="text-[10px] font-black text-accent-ink w-12 shrink-0 pt-0.5">GREEN</dt>
                     <dd className="text-xs text-ink-1">{regra.green}</dd>
                   </div>
                   {regra.red && (
@@ -243,7 +243,7 @@ export default function AnalysisModal({
               {edge > 0 ? (
                 <>
                   {' '}A diferença de{' '}
-                  <span className="font-mono text-accent">{edge.toFixed(1)} pontos</span>{' '}
+                  <span className="font-mono text-accent-ink">{edge.toFixed(1)} pontos</span>{' '}
                   a nosso favor é o valor que o pick busca capturar.
                 </>
               ) : (
@@ -259,7 +259,7 @@ export default function AnalysisModal({
         {(data.legs?.length ?? 0) > 0 && (
           <div className="bg-accent/5 border border-accent/25 rounded-lg p-4">
             <div className="flex items-center gap-2 mb-3">
-              <BookOpen className="w-3.5 h-3.5 text-accent" />
+              <BookOpen className="w-3.5 h-3.5 text-accent-ink" />
               <span className="panel-label">O que precisa acontecer em cada jogo</span>
             </div>
             <ol className="space-y-3">

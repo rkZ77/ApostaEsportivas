@@ -81,7 +81,7 @@ export default function UpdateBanner() {
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => window.location.reload()}
-            className="w-full py-2 rounded-lg bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-bold transition-colors"
+            className="w-full py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors"
           >
             Atualizar
           </motion.button>

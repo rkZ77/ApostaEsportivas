@@ -161,7 +161,7 @@ export default function NotificationBell() {
       >
         <Bell className="w-5 h-5" />
         {unreadCount > 0 && (
-          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-green-500 text-[9px] font-black text-surface-0 border border-surface-0">
+          <span className="absolute top-0.5 right-0.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full bg-green-500 text-[9px] font-black text-black border border-surface-0">
             {badge}
           </span>
         )}

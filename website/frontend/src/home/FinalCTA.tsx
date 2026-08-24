@@ -60,7 +60,7 @@ export default function FinalCTA() {
             <ul className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2">
               {POINTS.map(p => (
                 <li key={p} className="flex items-center gap-1.5 text-xs text-ink-3">
-                  <Check className="w-3.5 h-3.5 text-accent shrink-0" />
+                  <Check className="w-3.5 h-3.5 text-accent-ink shrink-0" />
                   {p}
                 </li>
               ))}

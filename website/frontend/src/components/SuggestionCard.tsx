@@ -271,7 +271,11 @@ function SuggestionCard({
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileHover={onClick ? { y: -3 } : undefined}
+      /* A sombra da levantada saiu daqui e virou `.hover-elev` (index.css):
+         era um preto fixo em 50%, que no tema claro pesava como borrao. O
+         framer nao consegue interpolar `var()`, entao quem anima a sombra
+         agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
       /* Casca comum dos 6 tipos de card (ver .pick-card em index.css). A cor da
@@ -282,7 +286,7 @@ function SuggestionCard({
          querer o tempo todo: dentro dele já moram "Apostar", "Compartilhar",
          "Entenda esta análise", o coração de favorito e o ícone de informação.
          Errar o alvo entre eles abria uma tela cheia por engano. */
-      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER[pickType] ?? PICK_TYPE_BORDER.vip}`}
       onClick={onClick}
       /* Âncora do tour: o passo "Encontre seus picks" destaca o PRIMEIRO card
          que existir na tela, e não um desenho de card. Ver
@@ -534,7 +538,7 @@ function SuggestionCard({
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-lg shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-lg shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>

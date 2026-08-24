@@ -470,10 +470,14 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileHover={onClick ? { y: -3 } : undefined}
+      /* A sombra da levantada saiu daqui e virou `.hover-elev` (index.css):
+         era um preto fixo em 50%, que no tema claro pesava como borrao. O
+         framer nao consegue interpolar `var()`, entao quem anima a sombra
+         agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
+      className={`pick-card hover-elev group ${isCopa ? 'border-yellow-500/20' + (onClick ? ' hover:border-yellow-500/40' : '') : PICK_TYPE_BORDER.free} ${onClick ? 'cursor-pointer' : ''}`}
       onClick={onClick}
       /* Mesma âncora do card VIP. Este vem antes na página e aparece para
          qualquer plano, então é ele que o tour costuma destacar. */
@@ -700,7 +704,7 @@ function PickSeguroCardBase({ dica, compact = false, onClick, banca, isLive = fa
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -826,10 +830,14 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileHover={onClick ? { y: -3 } : undefined}
+      /* A sombra da levantada saiu daqui e virou `.hover-elev` (index.css):
+         era um preto fixo em 50%, que no tema claro pesava como borrao. O
+         framer nao consegue interpolar `var()`, entao quem anima a sombra
+         agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.multipla}`}
       onClick={onClick}
     >
       {/* Accent bar */}
@@ -1088,7 +1096,7 @@ function MultiplaCardBase({ m, onClick, banca, isLive = false }: { m: any; onCli
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1192,10 +1200,14 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
   <>
     <motion.div
       variants={fadeInUp}
-      whileHover={onClick ? { y: -3, boxShadow: '0 12px 24px -8px rgba(0,0,0,0.5)' } : undefined}
+      whileHover={onClick ? { y: -3 } : undefined}
+      /* A sombra da levantada saiu daqui e virou `.hover-elev` (index.css):
+         era um preto fixo em 50%, que no tema claro pesava como borrao. O
+         framer nao consegue interpolar `var()`, entao quem anima a sombra
+         agora e' o CSS · o `y` continua com a mola daqui. */
       whileTap={onClick ? { scale: 0.985 } : undefined}
       transition={{ type: 'spring', stiffness: 400, damping: 28 }}
-      className={`pick-card group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
+      className={`pick-card hover-elev group ${onClick ? 'cursor-pointer' : ''} ${PICK_TYPE_BORDER.alavancagem}`}
       onClick={onClick}
     >
       <div className="absolute top-0 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-orange-500 to-transparent" />
@@ -1387,7 +1399,7 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
     {showSuccess && (
       <motion.div
         variants={toastUp} initial="hidden" animate="visible" exit="exit"
-        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+        className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-green-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
       >
         Pick registrado com sucesso!
       </motion.div>
@@ -1701,7 +1713,7 @@ interface ResumoBloqueado {
 }
 
 const LOCK_CLS = {
-  yellow: { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-black', borda: 'border-yellow-400/25' },
+  yellow: { icon: 'text-yellow-400', ring: 'bg-yellow-400/10 border-yellow-400/20', btn: 'bg-yellow-400 hover:bg-yellow-300 text-on-fill', borda: 'border-yellow-400/25' },
   blue:   { icon: 'text-blue-400',   ring: 'bg-blue-400/10 border-blue-400/20',     btn: 'bg-blue-500 hover:bg-blue-400 text-ink-1',     borda: 'border-blue-400/25'   },
   orange: { icon: 'text-orange-400', ring: 'bg-orange-400/10 border-orange-400/20', btn: 'bg-orange-500 hover:bg-orange-400 text-ink-1', borda: 'border-orange-400/25' },
   purple: { icon: 'text-purple-400', ring: 'bg-purple-400/10 border-purple-400/20', btn: 'bg-purple-500 hover:bg-purple-400 text-ink-1', borda: 'border-purple-400/25' },
@@ -2279,7 +2291,7 @@ export default function Picks() {
             {selectedOffset < 0 && (
               <button
                 onClick={() => setSelectedOffset(0)}
-                className="ml-1 text-[10px] text-accent hover:text-accent-hover font-bold transition-colors"
+                className="ml-1 text-[10px] text-accent-ink hover:text-accent-hover font-bold transition-colors"
               >
                 · Hoje
               </button>
@@ -2293,11 +2305,11 @@ export default function Picks() {
             {topoPronto && quickStats && (
               <span className="hidden sm:flex items-center gap-2 text-xs">
                 <span className="text-ink-4">Lucro geral</span>
-                <span className={`font-mono font-bold text-sm tabular-nums ${lucroUnidades >= 0 ? 'text-accent' : 'text-red-400'}`}>
+                <span className={`font-mono font-bold text-sm tabular-nums ${lucroUnidades >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                   {fmtUnits(lucroUnidades, 1)}
                 </span>
                 <span className="text-ink-4">· Win rate</span>
-                <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent' : 'text-ink-2'}`}>
+                <span className={`font-mono font-bold text-sm ${(quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2'}`}>
                   {quickStats.win_rate ?? 0}%
                 </span>
               </span>
@@ -2340,7 +2352,7 @@ export default function Picks() {
                   setShowBancaModal(false)
                   navigate('/banca')
                 }}
-                className="w-full bg-yellow-400 hover:bg-yellow-300 text-black font-black text-sm py-3 rounded-md transition-colors"
+                className="w-full bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-sm py-3 rounded-md transition-colors"
               >
                 Configurar banca agora
               </button>
@@ -2441,10 +2453,10 @@ export default function Picks() {
                   <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     {[
                       { label: 'Picks', value: String(quickStats.total ?? 0), color: 'text-ink-1' },
-                      { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-green-500' },
+                      { label: 'Green',  value: String(quickStats.greens ?? 0), color: 'text-accent-ink' },
                       { label: 'Red',    value: String(quickStats.reds ?? 0),   color: 'text-red-400' },
-                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
-                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-green-500' : 'text-red-400' },
+                      { label: 'Win %',  value: `${quickStats.win_rate ?? 0}%`, color: (quickStats.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
+                      { label: 'Lucro',  value: fmtUnits(lucroUnidades, 1), color: lucroUnidades >= 0 ? 'text-accent-ink' : 'text-red-400' },
                     ].map(({ label, value, color }) => (
                       <div key={label} className="bg-surface-1 border border-line rounded-md p-3 text-center">
                         <div className={`font-mono text-xl font-black tabular-nums ${color}`}>{value}</div>
@@ -2509,7 +2521,7 @@ export default function Picks() {
                         {vips.length > 4 && (
                           <button
                             onClick={() => setTab('vip')}
-                            className="mt-4 w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong"
+                            className="mt-4 w-full text-center text-xs text-accent-ink hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong"
                           >
                             Ver todos os {vips.length} picks
                           </button>
@@ -2662,7 +2674,7 @@ export default function Picks() {
 
 
             <button onClick={() => navigate('/resultados')}
-              className="w-full text-center text-xs text-green-500 hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
+              className="w-full text-center text-xs text-accent-ink hover:text-green-400 transition-colors py-3 border border-line rounded-md hover:border-line-strong font-semibold">
               Ver todos os resultados
             </button>
           </motion.div>
@@ -2978,7 +2990,7 @@ export default function Picks() {
                             <button
                               onClick={encerrarCaminho}
                               disabled={alavEncerrando}
-                              className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-surface-0 font-black px-3 py-2 rounded-md text-xs transition-colors"
+                              className="bg-green-500 hover:bg-green-400 disabled:opacity-50 text-black font-black px-3 py-2 rounded-md text-xs transition-colors"
                             >
                               {alavEncerrando ? 'Encerrando...' : 'Confirmar e sacar'}
                             </button>
@@ -3192,7 +3204,7 @@ export default function Picks() {
                               sub: userBankroll != null && userBankroll > initialBankroll ? `+R$${(userBankroll - initialBankroll).toFixed(2)}` : userAlavSerie?.configured ? 'Início da série' : 'Cadastre sua banca',
                             },
                             { label: 'Resets (RED)', value: String(resets), color: resets > 0 ? 'text-red-400' : 'text-ink-3', sub: resets === 0 ? 'Nenhum ainda' : `${resets} reinício${resets > 1 ? 's' : ''}` },
-                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-green-500' : 'text-ink-3', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
+                            { label: 'Série Atual', value: currentStreak > 0 ? `${currentStreak} green${currentStreak > 1 ? 's' : ''}` : '', color: currentStreak >= 3 ? 'text-green-400' : currentStreak > 0 ? 'text-accent-ink' : 'text-ink-3', sub: currentStreak > 0 ? 'seguidos' : 'Aguardando' },
                             { label: 'Melhor Série', value: bestStreak > 0 ? `${bestStreak} green${bestStreak > 1 ? 's' : ''}` : '', color: 'text-yellow-400', sub: bestStreak > 0 ? 'recorde da série' : 'Ainda sem greens' },
                           ].map(({ label, value, color, sub }) => (
                             <div key={label} className="card p-4 text-center">
@@ -3234,7 +3246,7 @@ export default function Picks() {
                             <div className="flex flex-col items-center w-8 shrink-0">
                               <div className={`w-7 h-7 rounded-full flex items-center justify-center text-xs font-black border ${
                                 !res
-                                  ? 'bg-orange-500 border-orange-400 text-black'
+                                  ? 'bg-orange-500 border-orange-400 text-on-fill'
                                   : res === 'GREEN' ? 'bg-green-500/20 border-green-500/40 text-green-400'
                                   : 'bg-red-500/20 border-red-500/40 text-red-400'
                               }`}>

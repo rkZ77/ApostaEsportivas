@@ -34,7 +34,7 @@ function RealWinRate({ className = 'mt-5' }: { className?: string }) {
   return (
     <p className={`text-xs text-ink-4 ${className}`}>
       Win rate real auditável:{' '}
-      <Link to="/resultados" className="text-green-500 font-bold hover:text-green-400 transition-colors">
+      <Link to="/resultados" className="text-accent-ink font-bold hover:text-green-400 transition-colors">
         {pct}% <span className="text-ink-4 font-normal">· ver histórico</span>
       </Link>
     </p>
@@ -211,7 +211,7 @@ export default function Login() {
           <Link to="/" aria-label="Voltar para a página inicial">
             <img src="/logo.png" alt="Pick IA" width={160} height={160} className="w-40 h-40 mx-auto mb-6 drop-shadow-[0_0_30px_rgba(0,204,0,0.3)]" />
           </Link>
-          <p className="font-display text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-accent">IA</span></p>
+          <p className="font-display text-4xl font-bold text-ink-1 tracking-tight mb-2">Pick<span className="text-accent-ink">IA</span></p>
           <p className="text-ink-2 text-lg mb-8">Tips esportivas geradas por Inteligência Artificial</p>
 
           {mode === 'register' ? (
@@ -263,7 +263,7 @@ export default function Login() {
               lado e menor, o formulário começa acima da dobra. */}
           <Link to="/" className="flex lg:hidden items-center gap-2.5 mb-5">
             <img src="/logo.png" alt="Pick IA" width={40} height={40} className="w-10 h-10 shrink-0" />
-            <p className="font-display text-xl font-bold text-ink-1">Pick<span className="text-accent">IA</span></p>
+            <p className="font-display text-xl font-bold text-ink-1">Pick<span className="text-accent-ink">IA</span></p>
           </Link>
 
           {/* Este e o <h1> da pagina. A marca acima e logotipo, e aparecia
@@ -433,7 +433,7 @@ export default function Login() {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                         {checks.map(c => (
                           <div key={c.label} className="flex items-center gap-1.5">
-                            <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                            <span className={`text-[10px] ${c.ok ? 'text-accent-ink' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
                             <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                           </div>
                         ))}
@@ -478,9 +478,9 @@ export default function Login() {
                 />
                 <span className="text-xs text-ink-2 leading-relaxed">
                   Li e concordo com os{' '}
-                  <Link to="/termos" target="_blank" className="text-green-500 hover:underline font-semibold">Termos de Uso</Link>
+                  <Link to="/termos" target="_blank" className="text-accent-ink hover:underline font-semibold">Termos de Uso</Link>
                   {' '}e a{' '}
-                  <Link to="/privacidade" target="_blank" className="text-green-500 hover:underline font-semibold">Política de Privacidade</Link>
+                  <Link to="/privacidade" target="_blank" className="text-accent-ink hover:underline font-semibold">Política de Privacidade</Link>
                   , incluindo o tratamento dos meus dados conforme a LGPD.
                 </span>
               </label>
@@ -512,7 +512,7 @@ export default function Login() {
           <div className="mt-5 text-center space-y-3">
             {mode === 'login' && (
               <Link to="/forgot-password" className="block text-ink-3 text-sm hover:text-ink-2 transition-colors">
-                Esqueceu sua senha? <span className="text-green-500 font-semibold">Clique aqui</span>
+                Esqueceu sua senha? <span className="text-accent-ink font-semibold">Clique aqui</span>
               </Link>
             )}
             <div>
@@ -521,7 +521,7 @@ export default function Login() {
               </span>
               <button
                 onClick={switchMode}
-                className="text-green-500 text-sm font-semibold hover:text-green-400 transition-colors"
+                className="text-accent-ink text-sm font-semibold hover:text-green-400 transition-colors"
               >
                 {mode === 'login' ? 'Criar conta grátis' : 'Entrar'}
               </button>

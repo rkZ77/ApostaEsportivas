@@ -53,9 +53,9 @@ export function PickCardFooter({
           className={cn(
             'text-xs font-bold px-3 py-2 rounded-md border transition-colors duration-1 ease-smooth min-h-[36px]',
             betState === 'done'
-              ? 'border-accent/30 text-accent bg-accent/10 cursor-default'
+              ? 'border-accent/30 text-accent-ink bg-accent/10 cursor-default'
               : hasBanca
-              ? 'border-accent/30 text-accent bg-accent/10 hover:bg-accent/20'
+              ? 'border-accent/30 text-accent-ink bg-accent/10 hover:bg-accent/20'
               : 'border-yellow-500/30 text-yellow-400 hover:border-yellow-500/60 hover:bg-yellow-500/5',
           )}
         >
@@ -69,12 +69,12 @@ export function PickCardFooter({
             onClick={onShare}
             disabled={shareState === 'loading'}
             title="Compartilhar pick"
-            className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-accent border border-line-strong hover:border-accent/50 px-3 py-2 rounded-md transition-colors duration-1 ease-smooth disabled:opacity-60 min-h-[36px]"
+            className="flex items-center gap-1.5 text-xs font-semibold text-ink-2 hover:text-accent-ink border border-line-strong hover:border-accent/50 px-3 py-2 rounded-md transition-colors duration-1 ease-smooth disabled:opacity-60 min-h-[36px]"
           >
             {shareState === 'loading'
               ? <Loader2 className="w-3.5 h-3.5 animate-spin shrink-0" />
               : shareState === 'done'
-              ? <CheckIcon className="w-3.5 h-3.5 text-accent shrink-0" />
+              ? <CheckIcon className="w-3.5 h-3.5 text-accent-ink shrink-0" />
               : <Share2 className="w-3.5 h-3.5 shrink-0" />}
             <span className="hidden sm:inline">
               {shareState === 'loading' ? 'Gerando...' : shareState === 'done' ? 'Pronto' : 'Compartilhar'}
@@ -162,7 +162,7 @@ export function PickProbability({
         <span className="text-ink-4">
           {label}{aproximado && <span className="text-ink-4"> estimada</span>}
         </span>
-        <span className={cn('font-mono', pct >= 75 ? 'text-accent font-bold' : 'text-ink-3')}>
+        <span className={cn('font-mono', pct >= 75 ? 'text-accent-ink font-bold' : 'text-ink-3')}>
           {pct}%
         </span>
       </div>

@@ -132,7 +132,7 @@ export default function ComoFunciona() {
         </div>
         <h1 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
           Como a plataforma<br />
-          <span className="text-green-500">funciona</span>
+          <span className="text-accent-ink">funciona</span>
         </h1>
         <p className="text-ink-2 text-sm max-w-lg mx-auto leading-relaxed">
           O PickIA usa inteligência artificial para gerar picks diários com base em dados estatísticos reais.
@@ -190,7 +190,7 @@ export default function ComoFunciona() {
           <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
             <button
               onClick={handleStart}
-              className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-ink-1 font-bold px-8 py-3.5 rounded-md transition-colors text-sm w-full sm:w-auto"
+              className="inline-flex items-center justify-center gap-2 bg-green-600 hover:bg-green-500 text-white font-bold px-8 py-3.5 rounded-md transition-colors text-sm w-full sm:w-auto"
             >
               Ver picks de hoje
               <ArrowRight className="w-4 h-4" />

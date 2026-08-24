@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { Button } from './ui'
 import { PAGE_WIDTH, type PageWidth } from '../lib/pageWidth'
+import ThemeToggle from './ThemeToggle'
 
 /*
  * Barra do visitante deslogado nas páginas públicas.
@@ -22,11 +23,12 @@ export default function PublicNav({ width = 'full' }: { width?: PageWidth }) {
         <Link to="/" className="flex items-center gap-2 min-w-0" aria-label="Ir para a página inicial">
           <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 shrink-0" />
           <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">
-            Pick<span className="text-accent">IA</span>
+            Pick<span className="text-accent-ink">IA</span>
           </span>
         </Link>
 
         <div className="flex items-center gap-2 shrink-0">
+          <ThemeToggle className="-ml-1" />
           <Button to="/login" size="sm">Entrar</Button>
           <Button to="/login?mode=register" variant="ghost" size="sm" className="hidden sm:inline-flex">
             Criar conta

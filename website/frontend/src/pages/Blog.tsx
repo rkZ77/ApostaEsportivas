@@ -26,7 +26,7 @@ export default function Blog() {
           </div>
           <h1 className="text-3xl sm:text-4xl font-bold mb-4 leading-tight">
             Gestão de banca e estratégia<br />
-            <span className="text-green-500">para apostas esportivas</span>
+            <span className="text-accent-ink">para apostas esportivas</span>
           </h1>
           <p className="text-ink-2 text-sm max-w-lg mx-auto leading-relaxed">
             Conteúdo prático sobre Kelly Criterion, valor esperado, odds e como interpretar

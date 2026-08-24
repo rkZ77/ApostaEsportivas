@@ -300,7 +300,7 @@ export default function PicksPendingCard() {
           {/* Título e legenda em LINHAS separadas, não lado a lado: num
               celular de 390px os dois na mesma linha viravam duas colunas
               estreitas, cada uma quebrando no meio da frase. */}
-          <p className="text-[11px] text-accent font-semibold flex items-center gap-1.5">
+          <p className="text-[11px] text-accent-ink font-semibold flex items-center gap-1.5">
             <CircleCheck className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
             {analisaveis.length === 1
               ? '1 jogo pode virar pick hoje'

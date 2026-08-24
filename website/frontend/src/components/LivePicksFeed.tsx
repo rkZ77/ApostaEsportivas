@@ -307,7 +307,7 @@ const CardLive = forwardRef<HTMLDivElement, {
         </div>
         <div className="text-right shrink-0">
           <p className="text-[10px] text-ink-4 uppercase tracking-wide font-bold">Odd</p>
-          <p className="text-xl font-black text-accent tabular-nums leading-tight">
+          <p className="text-xl font-black text-accent-ink tabular-nums leading-tight">
             {Number(pick.odd).toFixed(2)}
           </p>
         </div>

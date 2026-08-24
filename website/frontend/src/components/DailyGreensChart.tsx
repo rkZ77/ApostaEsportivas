@@ -108,7 +108,7 @@ export default function DailyGreensChart({
                 x={tx}
                 width={barW}
                 rx="2"
-                fill={isHov ? '#3f3f46' : '#27272a'}
+                className={isHov ? 'fill-line-strong' : 'fill-surface-3'}
                 initial={{ height: 0, y: PT + innerH }}
                 animate={{ height: totalH, y: barY(d.total) }}
                 transition={{ duration: 0.4, delay: i * 0.015, ease: [0.16, 1, 0.3, 1] }}
@@ -119,7 +119,7 @@ export default function DailyGreensChart({
                   x={tx}
                   width={barW}
                   rx="2"
-                  fill={isHov ? '#4ade80' : '#22c55e'}
+                  className={isHov ? 'fill-green-300' : 'fill-green-400'}
                   opacity={isHov ? 1 : 0.85}
                   initial={{ height: 0, y: PT + innerH }}
                   animate={{ height: greenH, y: barY(d.greens) }}
@@ -143,7 +143,7 @@ export default function DailyGreensChart({
             key={i}
             x={barX(idx) + barW / 2}
             y={H - 6}
-            fill="#52525b" fontSize="9"
+            className="fill-ink-4" fontSize="9"
             textAnchor={i === 0 ? 'start' : i === xTicks.length - 1 ? 'end' : 'middle'}
             fontFamily="Inter, -apple-system, sans-serif"
             style={{ fontVariantNumeric: 'tabular-nums' }}
