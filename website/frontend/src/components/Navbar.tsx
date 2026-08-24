@@ -13,6 +13,7 @@ import {
 import Avatar from './Avatar'
 import { rotuloDoPlano } from './ui'
 import NotificationBell from './NotificationBell'
+import ThemeToggle from './ThemeToggle'
 
 const planBadge: Record<string, string> = {
   free:  'badge-free',
@@ -49,7 +50,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
   }, [sidebarOpen])
 
   const isActive = (path: string) =>
-    pathname === path ? 'text-green-500 font-semibold' : 'text-ink-2 hover:text-ink-1'
+    pathname === path ? 'text-accent-ink font-semibold' : 'text-ink-2 hover:text-ink-1'
 
   const navLinks = [
     { to: '/picks',      label: 'Picks',           Icon: Zap,      badge: hasNew, onClick: markSeen },
@@ -91,7 +92,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
             <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
             <span className="font-display font-semibold text-lg tracking-tight leading-none">
               <span className="text-ink-1">Pick</span>
-              <span className="text-green-500">IA</span>
+              <span className="text-accent-ink">IA</span>
             </span>
           </Link>
 
@@ -124,6 +125,14 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
 
           {/* Right side */}
           <div className="flex items-center gap-2">
+            {/* Tema · antes do sino, e sem depender de estar logado. É a única
+                coisa aqui que um visitante também usa, e ela precisa caber no
+                celular: no estreito o menu do avatar nem existe (ele é
+                `hidden sm:block`), então dentro dele a troca de tema ficaria a
+                dois toques atrás da gaveta. Aqui é um toque em qualquer
+                largura. */}
+            <ThemeToggle />
+
             {/* Sino · qualquer largura, mas só logado (Navbar também roda em
                 páginas públicas como Blog e Resultados) */}
             {user && <NotificationBell />}
@@ -273,7 +282,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
         <div className="flex items-center justify-between px-5 h-16 border-b border-line">
           <div className="flex items-center gap-2">
             <span className="font-display text-ink-1 font-semibold text-lg tracking-tight">Pick</span>
-            <span className="font-display text-green-500 font-semibold text-lg">IA</span>
+            <span className="font-display text-accent-ink font-semibold text-lg">IA</span>
           </div>
           <button onClick={() => setSidebarOpen(false)} aria-label="Fechar menu" className="text-ink-2 hover:text-ink-1 p-1">
             <X className="w-5 h-5" />
@@ -307,7 +316,7 @@ export default function Navbar({ width = 'full' }: { width?: PageWidth }) {
                 highlight === 'yellow'
                   ? pathname === to ? 'text-yellow-400 bg-yellow-400/5' : 'text-yellow-400 hover:bg-surface-1'
                   : pathname === to
-                    ? 'text-green-500 bg-green-500/5'
+                    ? 'text-accent-ink bg-green-500/5'
                     : 'text-ink-2 hover:text-ink-1 hover:bg-surface-1'
               }`}
             >

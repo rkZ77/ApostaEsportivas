@@ -45,7 +45,7 @@ function LinhaRecorte({ nome, r }: { nome: string; r: Recorte }) {
         </p>
       </div>
       <div className="text-right shrink-0">
-        <p className={`font-mono text-sm font-black tabular-nums ${r.pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+        <p className={`font-mono text-sm font-black tabular-nums ${r.pnl >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
           {fmtSigned(r.pnl)}
         </p>
         <p className="font-mono text-[10px] text-ink-4 tabular-nums">
@@ -73,9 +73,9 @@ interface CloseRow {
 
 function Composicao({ h }: { h: CloseRow }) {
   const partes: Array<[number, string, string]> = [
-    [h.greens,     'G',  'text-green-500'],
+    [h.greens,     'G',  'text-accent-ink'],
     [h.reds,       'R',  'text-red-400'],
-    [h.half_wins,  '½G', 'text-green-500/70'],
+    [h.half_wins,  '½G', 'text-accent-ink/70'],
     [h.half_loss,  '½R', 'text-red-400/70'],
     [h.push,       'D',  'text-ink-4'],
   ]
@@ -180,19 +180,19 @@ export default function BancaFechamentos() {
                 l: 'Somando os meses fechados',
                 v: total === 0 ? 'R$ 0' : fmtSigned(total),
                 sub: rows.length === 1 ? '1 mês registrado' : `${rows.length} meses registrados`,
-                c: total > 0 ? 'text-green-500' : total < 0 ? 'text-red-400' : 'text-ink-2',
+                c: total > 0 ? 'text-accent-ink' : total < 0 ? 'text-red-400' : 'text-ink-2',
               },
               {
                 l: 'Em unidades',
                 v: fmtUnits(unidades),
                 sub: 'independe do valor da sua unidade',
-                c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
+                c: unidades >= 0 ? 'text-accent-ink' : 'text-red-400',
               },
               {
                 l: 'Meses no azul',
                 v: `${positivos} de ${rows.length}`,
                 sub: 'consistência, não sorte de um mês',
-                c: positivos * 2 >= rows.length ? 'text-green-500' : 'text-ink-1',
+                c: positivos * 2 >= rows.length ? 'text-accent-ink' : 'text-ink-1',
               },
               {
                 l: 'Melhor mês',
@@ -214,7 +214,7 @@ export default function BancaFechamentos() {
               <div className="flex items-baseline justify-between gap-3 mb-4">
                 <p className="text-xs text-ink-3 font-semibold">Resultado mês a mês</p>
                 <p className="text-[11px] text-ink-4">
-                  média de <span className={`font-mono font-bold ${media >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                  média de <span className={`font-mono font-bold ${media >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                     {fmtSigned(media)}
                   </span> por mês fechado
                 </p>
@@ -234,7 +234,7 @@ export default function BancaFechamentos() {
               return (
                 <div key={h.month_key} className="px-4 py-4 flex items-start gap-3">
                   {positivo
-                    ? <TrendingUp className="w-4 h-4 shrink-0 text-green-500 mt-0.5" />
+                    ? <TrendingUp className="w-4 h-4 shrink-0 text-accent-ink mt-0.5" />
                     : <TrendingDown className="w-4 h-4 shrink-0 text-red-400 mt-0.5" />}
 
                   <div className="flex-1 min-w-0">
@@ -250,7 +250,7 @@ export default function BancaFechamentos() {
                   </div>
 
                   <div className="text-right shrink-0">
-                    <p className={`font-mono text-base font-black tabular-nums ${positivo ? 'text-green-500' : 'text-red-400'}`}>
+                    <p className={`font-mono text-base font-black tabular-nums ${positivo ? 'text-accent-ink' : 'text-red-400'}`}>
                       {fmtSigned(h.total_pnl)}
                     </p>
                     {h.profit_units != null && (
@@ -262,7 +262,7 @@ export default function BancaFechamentos() {
                         leitura ("esse mes foi acima ou abaixo do meu normal"). */}
                     {filtradas.length > 1 && (
                       <p className={`text-[10px] tabular-nums ${
-                        Number(h.total_pnl) >= media ? 'text-green-500/70' : 'text-red-400/70'
+                        Number(h.total_pnl) >= media ? 'text-accent-ink/70' : 'text-red-400/70'
                       }`}>
                         {Number(h.total_pnl) >= media ? 'acima' : 'abaixo'} da média
                       </p>

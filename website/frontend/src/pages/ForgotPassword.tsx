@@ -81,7 +81,7 @@ export default function ForgotPassword() {
         {done ? (
           <div className="card p-6 text-center space-y-4">
             <div className="w-12 h-12 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-              <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg className="w-6 h-6 text-accent-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -165,7 +165,7 @@ export default function ForgotPassword() {
                     <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                       {checks.map(c => (
                         <div key={c.label} className="flex items-center gap-1.5">
-                          <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                          <span className={`text-[10px] ${c.ok ? 'text-accent-ink' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
                           <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                         </div>
                       ))}

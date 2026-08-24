@@ -113,10 +113,10 @@ export default function Agente() {
         <div className="max-w-3xl mx-auto px-4 py-4 flex items-center gap-3">
           <BackButton />
           <div className="w-9 h-9 rounded-full bg-accent/10 border border-accent/30 flex items-center justify-center shrink-0">
-            <span className="text-accent text-sm font-bold">AI</span>
+            <span className="text-accent-ink text-sm font-bold">AI</span>
           </div>
           <div>
-            <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent">IA</span> Agent</h1>
+            <h1 className="font-display text-base font-semibold text-ink-1">Pick<span className="text-accent-ink">IA</span> Agent</h1>
             <p className="text-ink-3 text-xs mt-0.5">Picks · Banca · Alavancagem · Jogos ao vivo</p>
           </div>
           <div className="ml-auto flex items-center gap-1.5">
@@ -170,7 +170,7 @@ export default function Agente() {
               )}
               <div className={`max-w-[80%] sm:max-w-[75%] rounded-md px-4 py-3 text-sm leading-relaxed
                 ${msg.role === 'user'
-                  ? 'bg-green-600 text-ink-1 rounded-tr-sm'
+                  ? 'bg-green-600 text-white rounded-tr-sm'
                   : 'bg-surface-1 border border-line rounded-tl-sm'}`}>
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -208,7 +208,7 @@ export default function Agente() {
           <button
             onClick={() => sendMessage()}
             disabled={!input.trim() || loading}
-            className="w-12 h-12 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-ink-1 shrink-0"
+            className="w-12 h-12 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex items-center justify-center text-white shrink-0"
           >
             {loading ? (
               <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">

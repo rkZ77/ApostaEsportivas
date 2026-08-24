@@ -38,7 +38,7 @@ const ABAS = [
 type Aba = typeof ABAS[number]['key']
 
 const pnlColor = (v: number | null) =>
-  v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
+  v == null ? 'text-ink-4' : v > 0 ? 'text-accent-ink' : v < 0 ? 'text-red-400' : 'text-ink-2'
 
 export default function MeusPicks() {
   const navigate = useNavigate()
@@ -359,13 +359,13 @@ export default function MeusPicks() {
                     <div className="text-[10px] text-ink-3 mt-1">Apostas</div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-green-500' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
+                    <div className={`text-lg sm:text-xl font-black ${pnl > 0 ? 'text-accent-ink' : pnl < 0 ? 'text-red-400' : 'text-ink-2'}`}>{pnlStr}</div>
                     <div className="text-[10px] text-ink-3 mt-1">
                       {daysBack === 'tudo' ? 'Total' : PERIODOS.find(p => p.key === daysBack)?.label}
                     </div>
                   </div>
                   <div className="card p-3 text-center">
-                    <div className={`text-2xl font-black ${wr >= 55 ? 'text-green-500' : 'text-ink-2'}`}>{wr}%</div>
+                    <div className={`text-2xl font-black ${wr >= 55 ? 'text-accent-ink' : 'text-ink-2'}`}>{wr}%</div>
                     <div className="text-[10px] text-ink-3 mt-1">Win rate</div>
                   </div>
                   <div className="card p-3 text-center border-green-500/20">
@@ -412,7 +412,7 @@ export default function MeusPicks() {
                   <div className="card p-4 xl:col-span-2">
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-xs font-semibold text-ink-3">Evolução da Banca</h3>
-                      <span className={`text-sm font-black ${pnl >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                      <span className={`text-sm font-black ${pnl >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                         {fmtSigned(pnl)}
                       </span>
                     </div>
@@ -429,7 +429,7 @@ export default function MeusPicks() {
                         <dt className="text-[11px] text-ink-3 mt-0.5">Dias no positivo</dt>
                       </div>
                       <div>
-                        <dd className="font-mono text-lg font-black text-green-500">
+                        <dd className="font-mono text-lg font-black text-accent-ink">
                           {fmtSigned(Number(melhor.profit) || 0)}
                         </dd>
                         <dt className="text-[11px] text-ink-3 mt-0.5">
@@ -651,7 +651,7 @@ export default function MeusPicks() {
       {showRemoved && (
         <motion.div
           variants={toastUp} initial="hidden" animate="visible" exit="exit"
-          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-ink-1 text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
+          className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-red-600 text-white text-sm font-semibold px-5 py-3 rounded-md shadow-lg whitespace-nowrap"
         >
           Pick removido da sua banca
         </motion.div>

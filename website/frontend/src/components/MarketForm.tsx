@@ -111,7 +111,7 @@ const COR: Record<string, string> = {
 }
 
 function corDaTaxa(taxa: number) {
-  return taxa >= 60 ? 'text-accent' : taxa >= 40 ? 'text-ink-2' : 'text-red-400'
+  return taxa >= 60 ? 'text-accent-ink' : taxa >= 40 ? 'text-ink-2' : 'text-red-400'
 }
 
 function Grafico({

@@ -199,7 +199,7 @@ export default function ApostaModal({
                 className={`flex-1 py-2.5 rounded-md font-bold text-sm transition-colors disabled:opacity-50 ${
                   exceedsSuggested
                     ? 'bg-yellow-600 hover:bg-yellow-500 text-ink-1'
-                    : 'bg-green-600 hover:bg-green-500 text-ink-1'
+                    : 'bg-green-600 hover:bg-green-500 text-white'
                 }`}
               >
                 {loading ? '...' : exceedsSuggested ? `Apostar ${units}u` : 'Registrar aposta'}

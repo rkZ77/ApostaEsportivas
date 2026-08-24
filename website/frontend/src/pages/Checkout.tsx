@@ -246,7 +246,7 @@ export default function Checkout() {
               'Notificações de novos picks',
             ].map(benefit => (
               <div key={benefit} className="flex items-center gap-2 text-sm text-ink-2">
-                <Check className="w-4 h-4 text-green-500 shrink-0" />
+                <Check className="w-4 h-4 text-accent-ink shrink-0" />
                 {benefit}
               </div>
             ))}
@@ -270,12 +270,12 @@ export default function Checkout() {
                     : 'border-line bg-surface-1 hover:border-line-strong'}`}
               >
                 {plan.id === POPULAR_PLAN && (
-                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-ink-1 px-2 py-0.5 rounded-sm font-semibold">
+                  <span className="absolute -top-2.5 left-3 font-mono text-xs bg-green-600 text-white px-2 py-0.5 rounded-sm font-semibold">
                     Popular
                   </span>
                 )}
                 {plan.save_pct > 0 && (
-                  <span className="absolute -top-2.5 right-3 font-mono text-xs bg-yellow-500 text-black px-2 py-0.5 rounded-sm font-semibold">
+                  <span className="absolute -top-2.5 right-3 font-mono text-xs bg-yellow-500 text-on-fill px-2 py-0.5 rounded-sm font-semibold">
                     Economize {plan.save_pct}%
                   </span>
                 )}
@@ -305,7 +305,7 @@ export default function Checkout() {
           </div>
           <div className="flex justify-between text-sm pt-2 border-t border-line">
             <span className="text-ink-1 font-bold">Total</span>
-            <span className="font-mono text-accent font-bold text-lg">
+            <span className="font-mono text-accent-ink font-bold text-lg">
               {fmtPlanPrice(selected.price)}
             </span>
           </div>

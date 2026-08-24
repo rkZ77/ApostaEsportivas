@@ -79,7 +79,7 @@ function DateStrip({ date, onChange }: { date: string; onChange: (d: string) => 
       </button>
       {date !== TODAY && (
         <button onClick={goToday}
-          className="text-[10px] font-bold px-2 py-1 rounded-lg border border-green-500/40 text-green-500 hover:bg-green-500/10 transition-colors shrink-0 ml-0.5">
+          className="text-[10px] font-bold px-2 py-1 rounded-lg border border-green-500/40 text-accent-ink hover:bg-green-500/10 transition-colors shrink-0 ml-0.5">
           Hoje
         </button>
       )}
@@ -323,7 +323,7 @@ export default function Fixtures() {
             {pageTab === 'jogos' && liveCount > 0 && (
               <span className="flex items-center gap-2">
                 <LiveDot />
-                <span className="text-accent text-xs font-bold">{liveCount} ao vivo</span>
+                <span className="text-accent-ink text-xs font-bold">{liveCount} ao vivo</span>
               </span>
             )}
           </>
@@ -662,7 +662,7 @@ export default function Fixtures() {
               Médias de gols, escanteios, cartões, histórico H2H e estatísticas completas por time. Disponível para assinantes VIP.
             </p>
             <Link to="/checkout"
-              className="block bg-yellow-400 hover:bg-yellow-300 text-black font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">
+              className="block bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black px-6 py-3 rounded-md transition-colors text-sm mb-3">
               Assinar VIP
             </Link>
             <button onClick={() => setLockPrompt(false)}

@@ -6,8 +6,11 @@
  * do Tailwind continue funcionando: bg-surface-2/60, border-line/40 etc.
  *
  * As cores semanticas (green/red/teal/orange do resultado, yellow/blue/purple
- * do tipo de pick) NAO sao tokens de tema: elas carregam significado que o
- * usuario ja aprendeu, entao seguem sendo a escala do Tailwind.
+ * do tipo de pick) tambem passaram a ser tokens, mas por outro motivo: o
+ * SIGNIFICADO delas nao muda com o tema, o TOM muda. #4ade80 se le sobre
+ * #0a0a0c e some sobre #ffffff. Os nomes de classe continuam os do Tailwind
+ * (text-green-400, bg-yellow-400/10) de proposito, pra que a troca de tema
+ * nao obrigasse a reescrever 900 lugares.
  */
 const token = (name) => `rgb(var(--${name}) / <alpha-value>)`
 
@@ -38,12 +41,75 @@ export default {
           DEFAULT: token('accent'),
           hover: token('accent-hover'),
           press: token('accent-press'),
+          // o verde da marca quando ele e' TEXTO · ver --accent-ink
+          ink: token('accent-ink'),
         },
-        // preservado: green-400 e o GREEN de resultado, green-500 o acento legado
+        // texto por cima de preenchimento semantico solido · ver --on-fill
+        'on-fill': token('on-fill'),
+
+        /*
+         * Escala semantica. Cada tom vira variavel; o que nao esta aqui segue
+         * sendo a escala fixa do Tailwind (tons ja escuros o bastante pra
+         * funcionarem nos dois temas, e os usados uma vez so').
+         *
+         * green-500/600/700 NAO entram: e' o verde da marca, e ele e'
+         * preenchimento nos dois temas. Verde como palavra usa text-accent-ink.
+         */
         green: {
-          400: '#4ade80',
+          300: token('c-green-300'),
+          400: token('c-green-400'),
           500: '#00CC00',
           600: '#00AA00',
+        },
+        red: {
+          300: token('c-red-300'),
+          400: token('c-red-400'),
+          500: token('c-red-500'),
+          600: token('c-red-600'),
+        },
+        yellow: {
+          300: token('c-yellow-300'),
+          400: token('c-yellow-400'),
+          500: token('c-yellow-500'),
+          600: token('c-yellow-600'),
+        },
+        amber: {
+          300: token('c-amber-300'),
+          400: token('c-amber-400'),
+          500: token('c-amber-500'),
+        },
+        orange: {
+          300: token('c-orange-300'),
+          400: token('c-orange-400'),
+          500: token('c-orange-500'),
+        },
+        blue: {
+          300: token('c-blue-300'),
+          400: token('c-blue-400'),
+          500: token('c-blue-500'),
+        },
+        purple: {
+          300: token('c-purple-300'),
+          400: token('c-purple-400'),
+          500: token('c-purple-500'),
+        },
+        teal: {
+          400: token('c-teal-400'),
+          500: token('c-teal-500'),
+        },
+        sky: {
+          400: token('c-sky-400'),
+        },
+        rose: {
+          400: token('c-rose-400'),
+          500: token('c-rose-500'),
+        },
+        cyan: {
+          400: token('c-cyan-400'),
+          500: token('c-cyan-500'),
+        },
+        emerald: {
+          400: token('c-emerald-400'),
         },
       },
       /*
@@ -86,13 +152,16 @@ export default {
         1: '150ms',
         2: '240ms',
       },
+      /* Poco de preto no tema escuro, veu no claro · ver --shadow-elev */
       boxShadow: {
-        elev: '0 12px 32px rgba(0, 0, 0, 0.5)',
-        'elev-sm': '0 4px 12px rgba(0, 0, 0, 0.4)',
+        elev: 'var(--shadow-elev)',
+        'elev-sm': 'var(--shadow-elev-sm)',
       },
+      /* Grades decorativas. O alpha vem de --grid-alpha porque verde a 5% se ve
+         sobre #0a0a0c e some sobre #ffffff · ver index.css. */
       backgroundImage: {
-        'field-pattern': "repeating-linear-gradient(0deg, transparent, transparent 40px, rgba(0,204,0,0.03) 40px, rgba(0,204,0,0.03) 41px)",
-        'data-grid': "linear-gradient(rgba(0,204,0,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(0,204,0,0.05) 1px, transparent 1px)",
+        'field-pattern': "repeating-linear-gradient(0deg, transparent, transparent 40px, rgb(var(--accent) / calc(var(--grid-alpha) * 0.6)) 40px, rgb(var(--accent) / calc(var(--grid-alpha) * 0.6)) 41px)",
+        'data-grid': "linear-gradient(rgb(var(--accent) / var(--grid-alpha)) 1px, transparent 1px), linear-gradient(90deg, rgb(var(--accent) / var(--grid-alpha)) 1px, transparent 1px)",
       },
       animation: {
         'pulse-slow': 'pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite',

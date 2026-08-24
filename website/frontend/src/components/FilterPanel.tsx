@@ -38,8 +38,8 @@ export interface FilterGroup {
 
 const ACCENTS: Record<string, { chip: string; active: string; badge: string }> = {
   green:  { chip: 'border-green-500/40 text-green-400 bg-green-500/10',   active: 'bg-green-500/15 border-green-500/40 text-green-400',   badge: 'bg-green-500 text-black' },
-  yellow: { chip: 'border-yellow-400/40 text-yellow-400 bg-yellow-400/10', active: 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400', badge: 'bg-yellow-400 text-black' },
-  blue:   { chip: 'border-blue-400/40 text-blue-400 bg-blue-400/10',       active: 'bg-blue-400/15 border-blue-400/40 text-blue-400',       badge: 'bg-blue-400 text-black' },
+  yellow: { chip: 'border-yellow-400/40 text-yellow-400 bg-yellow-400/10', active: 'bg-yellow-400/15 border-yellow-400/40 text-yellow-400', badge: 'bg-yellow-400 text-on-fill' },
+  blue:   { chip: 'border-blue-400/40 text-blue-400 bg-blue-400/10',       active: 'bg-blue-400/15 border-blue-400/40 text-blue-400',       badge: 'bg-blue-400 text-on-fill' },
 }
 
 export default function FilterPanel({

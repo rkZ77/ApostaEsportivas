@@ -32,12 +32,12 @@ export function H3({ children }: { children: string }) {
 }
 
 export function UL({ children }: { children: ReactNode }) {
-  return <ul className="space-y-2 mb-5 pl-5 list-disc list-outside marker:text-green-500">{children}</ul>
+  return <ul className="space-y-2 mb-5 pl-5 list-disc list-outside marker:text-accent-ink">{children}</ul>
 }
 
 export function OL({ children }: { children: ReactNode }) {
   return (
-    <ol className="space-y-2 mb-5 pl-5 list-decimal list-outside marker:text-green-500 marker:font-bold">
+    <ol className="space-y-2 mb-5 pl-5 list-decimal list-outside marker:text-accent-ink marker:font-bold">
       {children}
     </ol>
   )

@@ -156,7 +156,7 @@ export default function FreePickHero({ revelar = true, onCarregou }: {
         <div className="grid grid-cols-2 divide-x divide-line border-y border-line">
           <div className="px-4 py-4 text-center">
             <div className="stat-label !mt-0 mb-1">Odd</div>
-            <div className="font-mono text-2xl font-bold text-accent tabular-nums">
+            <div className="font-mono text-2xl font-bold text-accent-ink tabular-nums">
               {Number(pick.odd).toFixed(2)}
             </div>
           </div>

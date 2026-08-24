@@ -5,6 +5,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
     <!--
+      Tema. Este script tem que ser SINCRONO e vir antes do CSS.
+
+      O tema escolhido mora no localStorage, que so' pode ser lido por JS. Se
+      quem escolheu o claro tivesse que esperar o React montar pra saber disso,
+      toda visita comecaria com um flash de tela preta antes de virar branca ·
+      e um flash de tela preta e' pior do que nao ter tema claro.
+
+      Ele nao le prefers-color-scheme de proposito: o padrao do site e' o
+      escuro, e seguir o sistema viraria o produto do avesso sozinho pra quem
+      usa o celular no modo claro. Ver src/lib/theme.ts (mesma chave).
+    -->
+    <script>
+      (function () {
+        try {
+          if (localStorage.getItem('pickia_theme') === 'light') {
+            document.documentElement.dataset.theme = 'light'
+          }
+        } catch (e) {}
+      })()
+    </script>
+
+    <!--
       Fontes. Estavam num @import dentro do index.css, o que serializa o
       download: o navegador só descobria o Google Fonts depois de baixar e
       parsear o CSS inteiro. Aqui elas entram já no HTML, com preconnect,
@@ -23,6 +45,7 @@
     <meta name="keywords" content="picks futebol, apostas esportivas IA, inteligência artificial apostas, palpites futebol hoje, picks brasileirão, picks champions league, pick ia, apostas com IA" />
     <meta name="robots" content="index, follow" />
     <meta name="author" content="Pick IA" />
+    <!-- Reescrita em tempo de execucao pela troca de tema · ver src/lib/theme.ts -->
     <meta name="theme-color" content="#0a0a0c" />
 
     <!-- Canonical -->

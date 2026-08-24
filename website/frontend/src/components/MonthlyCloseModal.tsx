@@ -384,7 +384,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
               {readOnly ? (
                 <>
                   <div className="flex items-center gap-2 justify-center text-ink-3 text-xs font-semibold py-1">
-                    <Check className="w-4 h-4 shrink-0 text-green-500" />
+                    <Check className="w-4 h-4 shrink-0 text-accent-ink" />
                     Banca já atualizada para esse fechamento
                   </div>
                   <button onClick={handleClose} className="btn-ghost w-full py-3 text-sm">

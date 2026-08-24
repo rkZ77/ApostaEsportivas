@@ -335,7 +335,7 @@ export default function Profile() {
 
           <div className="flex-1 min-w-0">
             <p className="text-ink-1 font-bold truncate">{user?.name}</p>
-            {meData?.username && <p className="text-green-500 text-xs font-semibold">@{meData.username}</p>}
+            {meData?.username && <p className="text-accent-ink text-xs font-semibold">@{meData.username}</p>}
             <p className="text-ink-3 text-xs truncate mt-0.5">{user?.email}</p>
             <p className="text-ink-4 text-xs mt-1.5 flex items-center gap-1">
               <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -385,7 +385,7 @@ export default function Profile() {
                 <button
                   type="button"
                   onClick={() => navigate('/planos')}
-                  className="shrink-0 bg-green-600 hover:bg-green-500 text-ink-1 font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
+                  className="shrink-0 bg-green-600 hover:bg-green-500 text-white font-bold text-sm px-5 py-2.5 rounded-md transition-colors"
                 >
                   Assinar
                 </button>
@@ -420,7 +420,7 @@ export default function Profile() {
             </div>
 
             {user?.plan === 'free' && !meData?.trial_used && !user?.email_verified && (
-              <p className="text-xs text-green-500">
+              <p className="text-xs text-accent-ink">
                 Confirme seu e-mail para liberar 2 dias de VIP grátis.
               </p>
             )}
@@ -497,7 +497,7 @@ export default function Profile() {
                       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
                         {checks.map(c => (
                           <div key={c.label} className="flex items-center gap-1.5">
-                            <span className={`text-[10px] ${c.ok ? 'text-green-500' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
+                            <span className={`text-[10px] ${c.ok ? 'text-accent-ink' : 'text-ink-4'}`}>{c.ok ? '✓' : '○'}</span>
                             <span className={`text-[11px] ${c.ok ? 'text-ink-2' : 'text-ink-4'}`}>{c.label}</span>
                           </div>
                         ))}
@@ -518,7 +518,7 @@ export default function Profile() {
                 {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
                 <div className="flex gap-2">
                   <button type="button" onClick={handleRequestPasswordChange} disabled={passwordChanging}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
+                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                     {passwordChanging ? 'Enviando…' : 'Enviar código de confirmação'}
                   </button>
                   <button type="button" onClick={resetPasswordChangeState}
@@ -552,7 +552,7 @@ export default function Profile() {
                 {passwordChangeErr && <p className="text-red-400 text-xs">{passwordChangeErr}</p>}
                 <div className="flex gap-2">
                   <button type="button" onClick={handleConfirmPasswordChange} disabled={passwordChanging || pwCode.length !== 6}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
+                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                     {passwordChanging ? 'Confirmando…' : 'Confirmar troca de senha'}
                   </button>
                   <button type="button" onClick={resetPasswordChangeState}
@@ -643,7 +643,7 @@ export default function Profile() {
                     {emailChangeErr && <p className="text-red-400 text-xs">{emailChangeErr}</p>}
                     <div className="flex gap-2">
                       <button type="submit" disabled={emailChanging}
-                        className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
+                        className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                         {emailChanging ? 'Salvando…' : 'Salvar e reenviar'}
                       </button>
                       <button type="button" onClick={() => { setShowEmailChange(false); setEmailChangeErr(''); setEmailPassword('') }}
@@ -708,7 +708,7 @@ export default function Profile() {
                     <button
                       type="submit"
                       disabled={smsVerificando || smsCodigo.length < 6}
-                      className="w-full py-2.5 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
+                      className="w-full py-2.5 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
                     >
                       {smsVerificando ? 'Verificando…' : 'Confirmar código'}
                     </button>

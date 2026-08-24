@@ -257,7 +257,7 @@ function StatBar({ currentVal, lineVal, direction }: {
   const linePos = Math.min((lineVal / maxVal) * 100, 98)
   const fillPos = Math.min((currentVal / maxVal) * 100, 100)
   const winning = direction === 'over' ? currentVal > lineVal : currentVal < lineVal
-  const fillColor = winning ? '#22c55e' : '#ef4444'
+  const fillColor = winning ? 'rgb(var(--c-green-400))' : 'rgb(var(--c-red-400))'
   /* Só o rótulo da LINHA fica sobre a barra.
    *
    * O valor atual também tinha um rótulo, pendurado abaixo do preenchimento:
@@ -270,7 +270,7 @@ function StatBar({ currentVal, lineVal, direction }: {
     <div className="relative h-2 bg-surface-3/60 rounded-full mt-6 mb-3">
       <div className="absolute left-0 top-0 h-full rounded-full transition-all duration-700"
         style={{ width: `${fillPos}%`, backgroundColor: fillColor }} />
-      <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-white/50 rounded"
+      <div className="absolute top-1/2 -translate-y-1/2 w-px h-3 bg-ink-1/50 rounded"
         style={{ left: `${linePos}%` }} />
       <div className="absolute -top-5 text-[10px] font-black text-ink-1/70 tabular-nums"
         style={{ left: `${Math.max(linePos, 4)}%`, transform: 'translateX(-50%)' }}>
@@ -741,7 +741,7 @@ function PickCard({ pick, unitValue, onRefresh, syncedAt }: {
               <div className="flex sm:justify-end mt-1">
                 <button
                   onClick={() => setShowCashout(true)}
-                  className="w-full sm:w-auto sm:px-6 text-sm font-bold text-ink-1 bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
+                  className="w-full sm:w-auto sm:px-6 text-sm font-bold text-white bg-green-700 hover:bg-green-600 border border-green-600/40 rounded-md py-2.5 transition-colors"
                 >
                   Registrar Cash Out
                 </button>
@@ -986,13 +986,13 @@ export default function LivePicks({ isActive = true, unitValue }: { isActive?: b
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {refreshing && (
-            <span className="flex items-center gap-1 text-[10px] text-green-500">
+            <span className="flex items-center gap-1 text-[10px] text-accent-ink">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-ping shrink-0" />
               Atualizando...
             </span>
           )}
           <button onClick={load} aria-label="Atualizar" disabled={refreshing}
-            className="flex items-center justify-center text-green-500 hover:text-green-400 border border-green-500/20 hover:border-green-500/40 w-9 h-9 rounded-lg transition-colors disabled:opacity-50">
+            className="flex items-center justify-center text-accent-ink hover:text-green-400 border border-green-500/20 hover:border-green-500/40 w-9 h-9 rounded-lg transition-colors disabled:opacity-50">
             <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
           </button>
         </div>

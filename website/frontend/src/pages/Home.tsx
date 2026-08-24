@@ -132,7 +132,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
                     <span>
                       {new Date(latestDate + 'T12:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })}
                       {': '}
-                      <span className="text-accent font-bold">{todayGreens}G</span>
+                      <span className="text-accent-ink font-bold">{todayGreens}G</span>
                       {' · '}
                       <span className="text-red-400 font-bold">{todayReds}R</span>
                     </span>
@@ -178,7 +178,7 @@ function RecentResults({ data, loading }: { data: PublicData | null; loading: bo
               <div className="px-5 py-4 border-t border-line flex items-center justify-center gap-4 flex-wrap">
                 <Button to="/resultados" variant="link" size="sm">Ver histórico completo</Button>
                 <span className="text-ink-4">·</span>
-                <Button to="/login?mode=register" variant="link" size="sm" className="text-accent hover:text-accent-hover">
+                <Button to="/login?mode=register" variant="link" size="sm" className="text-accent-ink hover:text-accent-hover">
                   Criar conta grátis
                 </Button>
               </div>
@@ -237,7 +237,7 @@ function Leaderboard() {
 
   if (!loading && leaders.length === 0) return null
 
-  const rankCls = ['bg-yellow-400 text-black', 'bg-ink-2 text-black', 'bg-orange-400 text-black']
+  const rankCls = ['bg-yellow-400 text-on-fill', 'bg-ink-2 text-on-fill', 'bg-orange-400 text-on-fill']
 
   // Esqueleto com a MESMA altura das três linhas finais. Antes era um spinner
   // solto num `py-8`: a seção crescia quando os dados chegavam e empurrava o
@@ -286,7 +286,7 @@ function Leaderboard() {
                   <p className="text-[11px] text-ink-3">{l.total} picks · {l.greens} greens</p>
                 </div>
                 <div className="text-right shrink-0">
-                  <p className={`font-mono text-base font-bold tabular-nums ${l.yield_roi >= 0 ? 'text-accent' : 'text-red-400'}`}>
+                  <p className={`font-mono text-base font-bold tabular-nums ${l.yield_roi >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                     {l.yield_roi >= 0 ? '+' : ''}{l.yield_roi.toFixed(1)}%
                   </p>
                   <p className="stat-label !mt-0">Yield</p>
@@ -361,7 +361,7 @@ function Plans({ monthly }: { monthly: Plan }) {
               {FREE_ITEMS.map(([ok, t]) => (
                 <li key={t} className="flex items-start gap-2.5">
                   {ok
-                    ? <Check className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                    ? <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
                     : <XIcon className="w-4 h-4 text-ink-4 shrink-0 mt-0.5" />}
                   <span className={`text-sm leading-snug ${ok ? 'text-ink-2' : 'text-ink-4'}`}>{t}</span>
                 </li>
@@ -382,7 +382,7 @@ function Plans({ monthly }: { monthly: Plan }) {
             <ul className="space-y-2.5 mb-7">
               {TRIAL_ITEMS.map(t => (
                 <li key={t} className="flex items-start gap-2.5">
-                  <Check className="w-4 h-4 text-accent shrink-0 mt-0.5" />
+                  <Check className="w-4 h-4 text-accent-ink shrink-0 mt-0.5" />
                   <span className="text-sm text-ink-2 leading-snug">{t}</span>
                 </li>
               ))}
@@ -425,7 +425,7 @@ function StickyMobileCTA({ onDismiss, titulo, sub, acao, destino }: {
     <div className="fixed bottom-0 inset-x-0 z-40 sm:hidden bg-surface-0/95 backdrop-blur-md border-t border-line px-4 py-3 flex items-center gap-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
       <div className="flex-1 min-w-0">
         <p className="text-ink-1 text-xs font-bold leading-none">{titulo}</p>
-        <p className="text-accent text-[10px] font-semibold mt-1">{sub}</p>
+        <p className="text-accent-ink text-[10px] font-semibold mt-1">{sub}</p>
       </div>
       <Button to={destino} size="sm">{acao}</Button>
       <button
@@ -582,7 +582,7 @@ export default function Home() {
                 {HEADLINE.map((line, i) => (
                   <motion.span
                     key={line}
-                    className={`block ${i === 1 ? 'text-accent' : ''}`}
+                    className={`block ${i === 1 ? 'text-accent-ink' : ''}`}
                     initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5, delay: i * 0.08, ease: 'easeOut' }}

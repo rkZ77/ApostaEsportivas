@@ -69,7 +69,7 @@ export default function HowItWorks() {
               className="relative flex gap-4 md:flex-col md:gap-3"
             >
               <div className="relative z-10 w-10 h-10 rounded-lg bg-surface-0 border border-line-strong flex items-center justify-center shrink-0">
-                <Icon className="w-4 h-4 text-accent" />
+                <Icon className="w-4 h-4 text-accent-ink" />
               </div>
 
               <div className="min-w-0 pb-2 md:pb-0">

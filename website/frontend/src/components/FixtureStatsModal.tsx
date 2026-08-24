@@ -437,7 +437,7 @@ export default function FixtureStatsModal({ fixture, onClose, inline = false }: 
             {(['all', 'home', 'away'] as Ctx[]).map((c, i) => (
               <button key={c} onClick={() => setCtx(c)}
                 className={`px-2.5 py-1 rounded text-xs font-medium transition-colors ${
-                  ctx === c ? 'bg-blue-600 text-ink-1' : 'bg-surface-2 text-ink-2 hover:text-ink-2'
+                  ctx === c ? 'bg-blue-600 text-white' : 'bg-surface-2 text-ink-2 hover:text-ink-2'
                 }`}>
                 {['Todos', 'Casa', 'Fora'][i]}
               </button>
@@ -447,7 +447,7 @@ export default function FixtureStatsModal({ fixture, onClose, inline = false }: 
             {[5, 10, 15].map(count => (
               <button key={count} onClick={() => setN(count)}
                 className={`px-2 py-1 rounded text-xs font-medium transition-colors ${
-                  n === count ? 'bg-blue-600 text-ink-1' : 'bg-surface-2 text-ink-2 hover:text-ink-2'
+                  n === count ? 'bg-blue-600 text-white' : 'bg-surface-2 text-ink-2 hover:text-ink-2'
                 }`}>
                 {count}J
               </button>

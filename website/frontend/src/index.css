@@ -14,6 +14,14 @@
  * apertado o bastante pra parecer um sistema, aberto o bastante pra o olho ver
  * a pilha. Rampa de tinta validada em WCAG sobre surface-1.
  */
+/*
+ * O TEMA PADRAO E O ESCURO, e ele fica em `:root` puro.
+ *
+ * O claro nao entra por `prefers-color-scheme`: quem ja usa o site conhece ele
+ * escuro, e seguir o sistema viraria o produto do avesso, sozinho, pra todo
+ * mundo que usa o celular no modo claro. Ele so' vale quando a pessoa escolhe,
+ * e a escolha vira `data-theme="light"` no <html> (ver lib/theme.ts).
+ */
 :root {
   color-scheme: dark;
 
@@ -33,10 +41,145 @@
   --accent:        0 204   0; /* #00CC00 · a marca, intocada         */
   --accent-hover: 26 224  26;
   --accent-press:  0 170   0;
+  /*
+   * O verde da marca quando ele e' TEXTO, nao preenchimento.
+   *
+   * No escuro e' o mesmo #00CC00. No claro nao pode ser: verde neon sobre
+   * branco da' 2:1 de contraste e some. O botao continua #00CC00 nos dois
+   * temas (a marca nao muda); o que muda e' so' a palavra escrita em verde.
+   */
+  --accent-ink: 0 204 0;
+
+  /* Texto por cima de preenchimento semantico (amarelo do VIP, laranja da
+     alavancagem...). Preto sobre o tom claro do tema escuro; branco sobre o
+     tom fechado do tema claro. Ver `text-on-fill`. */
+  --on-fill: 0 0 0;
+
+  /* Sombra. No escuro ela e' um poco de preto; no claro, um veu. */
+  --shadow-elev:    0 12px 32px rgba(0, 0, 0, 0.5);
+  --shadow-elev-sm: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-hover:   0 12px 24px -8px rgba(0, 0, 0, 0.5);
+
+  /* Alpha das linhas da grade decorativa (bg-data-grid, bg-field-pattern).
+     Verde a 5% se ve sobre #0a0a0c e desaparece sobre #ffffff. */
+  --grid-alpha: 0.05;
+
+  /*
+   * Cores semanticas. Nao sao decorativas: verde e' GREEN, vermelho e' RED,
+   * amarelo e' VIP, laranja e' alavancagem, azul e' multipla, roxo e' faltas.
+   * O significado nao muda com o tema · o TOM muda, porque o tom que se le
+   * sobre #0a0a0c e' invisivel sobre #ffffff.
+   *
+   * Elas entram no Tailwind pelos mesmos nomes de sempre (text-green-400,
+   * bg-yellow-400/10), entao nenhuma tela precisou ser reescrita.
+   */
+  --c-green-300: 134 239 172;
+  --c-green-400:  74 222 128;
+  --c-red-300:   252 165 165;
+  --c-red-400:   248 113 113;
+  --c-red-500:   239  68  68;
+  --c-red-600:   220  38  38;
+  --c-yellow-300: 253 224  71;
+  --c-yellow-400: 250 204  21;
+  --c-yellow-500: 234 179   8;
+  --c-yellow-600: 202 138   4;
+  --c-amber-300: 252 211  77;
+  --c-amber-400: 251 191  36;
+  --c-amber-500: 245 158  11;
+  --c-orange-300: 253 186 116;
+  --c-orange-400: 251 146  60;
+  --c-orange-500: 249 115  22;
+  --c-blue-300:  147 197 253;
+  --c-blue-400:   96 165 250;
+  --c-blue-500:   59 130 246;
+  --c-purple-300: 216 180 254;
+  --c-purple-400: 192 132 252;
+  --c-purple-500: 168  85 247;
+  --c-teal-400:   45 212 191;
+  --c-teal-500:   20 184 166;
+  --c-sky-400:    56 189 248;
+  --c-rose-400:  251 113 133;
+  --c-rose-500:  244  63  94;
+  --c-cyan-400:   34 211 238;
+  --c-cyan-500:    6 182 212;
+  --c-emerald-400: 52 211 153;
 
   --ease:  cubic-bezier(0.2, 0, 0, 1);
   --dur-1: 150ms;
   --dur-2: 240ms;
+}
+
+/*
+ * TEMA CLARO.
+ *
+ * A rampa de superficie inverte a ordem, nao a logica: surface-0 continua
+ * sendo a PAGINA (e o fundo do .panel e do .pick-card, que se definem pela
+ * borda) e surface-1 continua sendo o card que se destaca dela. No escuro o
+ * card e' mais claro que a pagina; aqui e' mais escuro. A relacao e' a mesma.
+ *
+ * A rampa de tinta foi medida em WCAG sobre surface-0, como a do escuro:
+ * 18.3:1 / 10.4:1 / 5.9:1 / 4.2:1.
+ */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --surface-0: 255 255 255;   /* #ffffff · fundo de pagina           */
+  --surface-1: 245 245 247;   /* #f5f5f7 · card                      */
+  --surface-2: 236 236 239;   /* #ececef · card elevado, input       */
+  --surface-3: 224 224 229;   /* #e0e0e5 · hover, estado ativo       */
+
+  --line:        227 227 232; /* #e3e3e8 · borda padrao              */
+  --line-strong: 203 203 211; /* #cbcbd3 · borda em foco/destaque    */
+
+  --ink-1:  22  22  26;       /* #16161a · 18.3:1 · titulo, numero   */
+  --ink-2:  63  63  71;       /* #3f3f47 · 10.4:1 · corpo            */
+  --ink-3: 100 100 110;       /* #64646e ·  5.9:1 · apoio, rotulo    */
+  --ink-4: 124 124 134;       /* #7c7c86 ·  4.2:1 · so' texto grande */
+
+  /* O botao da marca nao muda de cor entre os temas · so' o verde escrito. */
+  --accent-ink: 6 122 26;     /* #067a1a ·  5.6:1 sobre branco       */
+
+  --on-fill: 255 255 255;
+
+  --shadow-elev:    0 12px 32px rgba(15, 15, 20, 0.12);
+  --shadow-elev-sm: 0 4px 12px rgba(15, 15, 20, 0.08);
+  --shadow-hover:   0 12px 24px -8px rgba(15, 15, 20, 0.16);
+
+  --grid-alpha: 0.10;
+
+  /* Um a dois degraus abaixo na escala do Tailwind: o tom que se le sobre
+     branco. Preenchimento solido (bg-yellow-400 num botao) continua legivel
+     porque o texto por cima dele vira branco via --on-fill. */
+  --c-green-300:  22 163  74;
+  --c-green-400:  21 128  61;
+  --c-red-300:   220  38  38;
+  --c-red-400:   200  30  30;
+  --c-red-500:   220  38  38;
+  --c-red-600:   185  28  28;
+  --c-yellow-300: 180  83   9;
+  --c-yellow-400: 161  98   7;
+  --c-yellow-500: 161  98   7;
+  --c-yellow-600: 133  77  14;
+  --c-amber-300: 180  83   9;
+  --c-amber-400: 180  83   9;
+  --c-amber-500: 146  64  14;
+  --c-orange-300: 234  88  12;
+  --c-orange-400: 194  65  12;
+  --c-orange-500: 234  88  12;
+  --c-blue-300:   37  99 235;
+  --c-blue-400:   29  78 216;
+  --c-blue-500:   37  99 235;
+  --c-purple-300: 147  51 234;
+  --c-purple-400: 126  34 206;
+  --c-purple-500: 147  51 234;
+  --c-teal-400:   15 118 110;
+  --c-teal-500:   13 148 136;
+  --c-sky-400:     3 105 161;
+  --c-rose-400:  190  18  60;
+  --c-rose-500:  225  29  72;
+  --c-cyan-400:   14 116 144;
+  --c-cyan-500:    8 145 178;
+  --c-emerald-400: 5 150 105;
 }
 
 @layer utilities {
@@ -260,6 +403,24 @@
     @apply relative overflow-hidden bg-surface-0 border rounded-lg
            flex flex-col h-full
            transition-colors duration-1 ease-smooth;
+  }
+
+  /*
+   * A levantada do card no hover.
+   *
+   * A sombra vinha do `whileHover` do framer-motion, em preto fixo a 50% · o
+   * que e' o certo sobre #0a0a0c e um borrao sobre #ffffff. Aqui ela e' token,
+   * e o framer continua cuidando so' do deslocamento em Y.
+   *
+   * O `.cursor-pointer` na regra nao e' enfeite: e' ele que reproduz a
+   * condicao que existia antes. Nos quatro cards que usam isto, `cursor-pointer`
+   * so' entra quando ha `onClick` · card que nao clica nao levanta.
+   */
+  .hover-elev.cursor-pointer {
+    transition: box-shadow var(--dur-2) var(--ease), border-color var(--dur-1) var(--ease);
+  }
+  .hover-elev.cursor-pointer:hover {
+    box-shadow: var(--shadow-hover);
   }
 
   /* Ladrilho de numero: valor em mono grande, rotulo minusculo em versalete. */

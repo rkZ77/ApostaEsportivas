@@ -125,7 +125,7 @@ export default function VerifyEmail() {
             )}
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-ink-1 font-bold text-sm transition-colors"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-bold text-sm transition-colors"
             >
               {trialAtivado ? 'Ver os picks do VIP' : 'Acessar picks'}
             </button>
@@ -145,7 +145,7 @@ export default function VerifyEmail() {
               <button
                 onClick={handleResend}
                 disabled={resending || resent}
-                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors"
+                className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white font-bold text-sm transition-colors"
               >
                 {resent ? 'E-mail reenviado!' : resending ? 'Enviando…' : 'Reenviar e-mail de verificação'}
               </button>
@@ -174,7 +174,7 @@ export default function VerifyEmail() {
             {/* CTA principal · acessar o site sem verificar */}
             <button
               onClick={() => navigate('/picks')}
-              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-ink-1 font-black text-sm transition-colors mb-3"
+              className="w-full py-3 rounded-md bg-green-600 hover:bg-green-500 text-white font-black text-sm transition-colors mb-3"
             >
               Acessar os Picks agora
             </button>
@@ -212,7 +212,7 @@ export default function VerifyEmail() {
                 {changeEmailErr && <p className="text-red-400 text-xs">{changeEmailErr}</p>}
                 <div className="flex gap-2">
                   <button type="submit" disabled={changingEmail}
-                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-ink-1 font-bold text-sm transition-colors">
+                    className="flex-1 py-2.5 rounded-md bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white font-bold text-sm transition-colors">
                     {changingEmail ? 'Salvando…' : 'Salvar e reenviar'}
                   </button>
                   <button type="button" onClick={() => { setShowChangeEmail(false); setChangeEmailErr('') }}

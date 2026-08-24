@@ -215,7 +215,7 @@ export default function Planos() {
                       {fmtPlanPrice(pl.price_per_month)}/mês
                     </p>
                     {pl.save_pct > 0 && (
-                      <p className="text-[10px] text-accent font-semibold mt-0.5">
+                      <p className="text-[10px] text-accent-ink font-semibold mt-0.5">
                         economiza {pl.save_pct}%
                       </p>
                     )}
@@ -233,7 +233,7 @@ export default function Planos() {
         {activated && (
           <div className="bg-green-500/10 border border-green-500/40 rounded-lg p-6 text-center">
             <div className="w-14 h-14 bg-green-500/20 border border-green-500/30 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg className="w-7 h-7 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <svg className="w-7 h-7 text-accent-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
@@ -283,7 +283,7 @@ export default function Planos() {
                 </p>
               </div>
               <button onClick={() => navigate('/checkout')}
-                className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2.5 rounded-md transition-colors">
+                className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-4 py-2.5 rounded-md transition-colors">
                 {isTrial ? 'Assinar VIP' : 'Renovar'}
               </button>
             </div>
@@ -338,7 +338,7 @@ export default function Planos() {
             <div className="grid grid-cols-2 gap-2">
               {['Picks VIP (10–20/dia)', 'Múltiplas por IA', 'Alavancagem de risco calculado', 'Agente IA de futebol', 'Histórico com ROI', 'Análise detalhada'].map(f => (
                 <div key={f} className="flex items-center gap-1.5 text-xs text-ink-2">
-                  <svg className="w-3.5 h-3.5 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                  <svg className="w-3.5 h-3.5 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                     <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                   </svg>
                   {f}
@@ -357,7 +357,7 @@ export default function Planos() {
               {memberSince && <p className="text-ink-4 text-xs mt-0.5">Membro desde {memberSince}</p>}
             </div>
             <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-4 py-2 rounded-md transition-colors">
+              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-4 py-2 rounded-md transition-colors">
               Upgrade VIP
             </button>
           </div>
@@ -378,18 +378,18 @@ export default function Planos() {
             </div>
             <div className="flex items-start gap-4">
               <div className="w-12 h-12 bg-green-500/10 border border-green-500/30 rounded-md flex items-center justify-center shrink-0 mt-0.5">
-                <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <svg className="w-6 h-6 text-accent-ink" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v13m0-13V6a2 2 0 112 2h-2zm0 0V5.5A2.5 2.5 0 109.5 8H12zm-7 4h14M5 12a2 2 0 110-4h14a2 2 0 110 4M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7" />
                 </svg>
               </div>
               <div className="flex-1">
-                <p className="text-sm text-green-500 font-bold mb-1">Disponível para você</p>
+                <p className="text-sm text-accent-ink font-bold mb-1">Disponível para você</p>
                 <h2 className="text-xl font-bold text-ink-1 mb-1">2 dias de VIP grátis</h2>
                 <p className="text-ink-2 text-sm mb-4">Acesse todos os picks VIP, Múltiplas, Alavancagem e Agente IA por 2 dias.</p>
                 <ul className="space-y-1.5 mb-5">
                   {['Picks VIP completos (10–20/dia)', 'Múltiplas e Alavancagem', 'Agente IA de futebol', 'Histórico completo com ROI'].map(f => (
                     <li key={f} className="flex items-center gap-2 text-sm text-ink-2">
-                      <svg className="w-4 h-4 text-green-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                      <svg className="w-4 h-4 text-accent-ink shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
                         <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                       </svg>
                       {f}
@@ -421,7 +421,7 @@ export default function Planos() {
                   className="relative p-4 rounded-md border border-line-strong hover:border-yellow-400/50 hover:bg-yellow-400/5 transition-all text-left group">
                   <p className="text-ink-1 font-black text-sm group-hover:text-yellow-400 transition-colors">{opt.label}</p>
                   <p className="font-mono text-ink-3 text-xs mt-0.5">{fmtPlanPrice(opt.price_per_month)}/mês</p>
-                  <p className="text-accent text-xs font-bold mt-2">Economize {fmtPlanPrice(opt.savings)} · {opt.save_pct}%</p>
+                  <p className="text-accent-ink text-xs font-bold mt-2">Economize {fmtPlanPrice(opt.savings)} · {opt.save_pct}%</p>
                 </button>
               ))}
             </div>
@@ -598,7 +598,7 @@ export default function Planos() {
               <p className="text-ink-3 text-xs mt-0.5">Picks VIP, Múltiplas, Alavancagem e Agente IA, a partir de {fmtPlanPrice(monthly.price)}/mês</p>
             </div>
             <button onClick={() => navigate('/checkout')}
-              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-black font-black text-xs px-5 py-2.5 rounded-md transition-colors">
+              className="shrink-0 bg-yellow-400 hover:bg-yellow-300 text-on-fill font-black text-xs px-5 py-2.5 rounded-md transition-colors">
               Assinar VIP
             </button>
           </div>

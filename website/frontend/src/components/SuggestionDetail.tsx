@@ -292,7 +292,7 @@ export default function SuggestionDetail({ id, onClose, pickType = 'vip', banca 
               </p>
               <Link
                 to="/planos"
-                className="mt-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-ink-1 text-sm font-bold transition-colors"
+                className="mt-1 px-4 py-2 rounded-lg bg-green-600 hover:bg-green-500 text-white text-sm font-bold transition-colors"
               >
                 Assinar VIP
               </Link>

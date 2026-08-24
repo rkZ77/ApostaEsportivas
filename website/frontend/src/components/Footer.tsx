@@ -67,7 +67,7 @@ export default function Footer() {
             <Link to="/" className="inline-flex items-center gap-2.5 mb-2 py-1" aria-label="Pick IA, início">
               <img src="/logo.png" alt="" width={28} height={28} className="w-7 h-7 rounded-full object-cover" />
               <span className="font-display text-base font-semibold text-ink-1">
-                Pick<span className="text-accent">IA</span>
+                Pick<span className="text-accent-ink">IA</span>
               </span>
             </Link>
             <p className="text-xs text-ink-3 leading-relaxed max-w-[38ch]">

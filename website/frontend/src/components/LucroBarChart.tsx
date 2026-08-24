@@ -159,7 +159,7 @@ export default function LucroBarChart({
         })}
 
         {data.map((d, i) => (
-          <text key={d.label} x={x(i) + barW / 2} y={H - 10} fill="#52525b" fontSize="8"
+          <text key={d.label} x={x(i) + barW / 2} y={H - 10} className="fill-ink-4" fontSize="8"
                 textAnchor="middle" fontFamily="Inter, -apple-system, sans-serif">
             {d.label}
           </text>

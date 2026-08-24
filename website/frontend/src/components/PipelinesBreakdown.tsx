@@ -60,7 +60,7 @@ function CardPipeline({ p, volumeTotal }: { p: Pipeline; volumeTotal: number }) 
           </p>
         </div>
         <div className="text-right shrink-0">
-          <p className={`font-mono text-lg font-black tabular-nums ${positivo ? 'text-green-500' : 'text-red-400'}`}>
+          <p className={`font-mono text-lg font-black tabular-nums ${positivo ? 'text-accent-ink' : 'text-red-400'}`}>
             {fmtSigned(p.pnl)}
           </p>
           <p className="font-mono text-[10px] text-ink-4 tabular-nums">
@@ -122,19 +122,19 @@ export default function PipelinesBreakdown({ pipelines }: { pipelines: Pipeline[
             l: 'Total no período',
             v: pnlTotal === 0 ? 'R$ 0' : fmtSigned(pnlTotal),
             sub: 'sem alavancagem',
-            c: pnlTotal > 0 ? 'text-green-500' : pnlTotal < 0 ? 'text-red-400' : 'text-ink-2',
+            c: pnlTotal > 0 ? 'text-accent-ink' : pnlTotal < 0 ? 'text-red-400' : 'text-ink-2',
           },
           {
             l: 'Em unidades',
             v: fmtUnits(unidades),
             sub: 'independe do valor da sua unidade',
-            c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
+            c: unidades >= 0 ? 'text-accent-ink' : 'text-red-400',
           },
           {
             l: 'Pipelines no azul',
             v: `${noAzul} de ${pipelines.length}`,
             sub: 'onde o lucro está concentrado',
-            c: noAzul * 2 >= pipelines.length ? 'text-green-500' : 'text-ink-1',
+            c: noAzul * 2 >= pipelines.length ? 'text-accent-ink' : 'text-ink-1',
           },
           {
             l: 'Mais lucro',

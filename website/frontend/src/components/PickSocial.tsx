@@ -208,7 +208,7 @@ export default function PickSocial({ pickId, pickType }: { pickId: number; pickT
             <button
               onClick={submitComment}
               disabled={!newComment.trim() || submitting}
-              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-ink-1 text-sm font-bold transition-colors shrink-0"
+              className="px-4 py-2 bg-green-600 hover:bg-green-500 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg text-white text-sm font-bold transition-colors shrink-0"
             >
               {submitting ? '...' : 'Enviar'}
             </button>

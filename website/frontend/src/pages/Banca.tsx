@@ -124,7 +124,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
             {startNum > 0 && (
               <p className="text-ink-4 text-xs mt-1">
                 Sugerido: <button type="button" onClick={() => setUnitValue(suggested)}
-                  className="text-green-500 underline hover:text-green-400">
+                  className="text-accent-ink underline hover:text-green-400">
                   {fmtBRL(parseFloat(suggested) || 0)}
                 </button>
                 {' '}(1% da banca, gestão conservadora)
@@ -159,7 +159,7 @@ function SetupModal({ current, locked, onSave, onClose, onWithdraw }: {
               </div>
             )}
             {bancaStatus === 'ok' && totalUnits !== null && (
-              <div className="mt-2 flex items-center gap-1.5 text-xs text-green-500">
+              <div className="mt-2 flex items-center gap-1.5 text-xs text-accent-ink">
                 <span className="font-bold">Banca saudável</span>
                 <span className="text-ink-4">·</span>
                 <span className="text-ink-2">{Math.floor(totalUnits)} unidades totais</span>
@@ -252,7 +252,7 @@ export default function Banca() {
   }, [retomarTour])
 
   const pnlColor = (v: number | null) =>
-    v == null ? 'text-ink-4' : v > 0 ? 'text-green-500' : v < 0 ? 'text-red-400' : 'text-ink-2'
+    v == null ? 'text-ink-4' : v > 0 ? 'text-accent-ink' : v < 0 ? 'text-red-400' : 'text-ink-2'
 
   const temGrafico = (data?.chart?.length ?? 0) >= 2
   const chartData = (data?.chart ?? []).map((p: any, i: number, arr: any[]) => ({
@@ -377,7 +377,7 @@ export default function Banca() {
                   label: 'Banca atual',
                   value: data?.total_pnl ?? 0,
                   formatter: (v: number) => fmtSigned(v),
-                  color: (data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400',
+                  color: (data?.total_pnl ?? 0) >= 0 ? 'text-accent-ink' : 'text-red-400',
                   sub: `${fmtBRL(current)} banca total`,
                 },
                 {
@@ -393,7 +393,7 @@ export default function Banca() {
                   label: 'Win rate',
                   value: data?.win_rate ?? 0,
                   formatter: (v: number) => `${Math.round(v)}%`,
-                  color: (data?.win_rate ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2',
+                  color: (data?.win_rate ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2',
                   sub: `${data?.greens ?? 0}G / ${data?.reds ?? 0}R de ${data?.total_resolved ?? 0}`,
                 },
                 {
@@ -402,7 +402,7 @@ export default function Banca() {
                   // fmtUnits e não toFixed: o resto da tela escreve 1.229,22
                   // e este tile respondia 122.9u, com ponto decimal de inglês.
                   formatter: (v: number) => fmtUnits(v),
-                  color: ganhoUnidades >= 0 ? 'text-green-500' : 'text-red-400',
+                  color: ganhoUnidades >= 0 ? 'text-accent-ink' : 'text-red-400',
                   sub: 'excl. alavancagem',
                 },
               ].map(({ label, value, formatter, color, sub }) => (
@@ -456,7 +456,7 @@ export default function Banca() {
                 <div className="card p-5 xl:col-span-2" data-tour="banca-evolucao">
                   <div className="flex items-center justify-between mb-4">
                     <p className="text-xs text-ink-3 font-semibold">Evolução da banca</p>
-                    <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    <span className={`text-sm font-black ${(data?.total_pnl ?? 0) >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                       {fmtSigned(data?.total_pnl ?? 0)}
                     </span>
                   </div>
@@ -477,7 +477,7 @@ export default function Banca() {
                 <p className="text-xs text-ink-3 font-semibold mb-4">Sequência pessoal</p>
                 <div className="flex items-center justify-around">
                   <div className="text-center">
-                    <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-green-500' : data?.streak_type === 'red' ? 'text-red-400' : 'text-ink-4'}`}>
+                    <div className={`text-4xl font-black ${data?.streak_type === 'green' ? 'text-accent-ink' : data?.streak_type === 'red' ? 'text-red-400' : 'text-ink-4'}`}>
                       {data?.streak > 0 ? data.streak : 0}
                     </div>
                     <div className="text-xs text-ink-3 mt-1">
@@ -524,7 +524,7 @@ export default function Banca() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {data?.best_pick && (
                   <div className="card p-4 border-green-500/20 bg-green-500/5">
-                    <p className="text-xs text-green-500 font-black mb-2">Melhor pick apostado</p>
+                    <p className="text-xs text-accent-ink font-black mb-2">Melhor pick apostado</p>
                     <div className="flex items-center justify-between">
                       <div>
                         <div className="flex items-center gap-1.5 mb-0.5">
@@ -536,7 +536,7 @@ export default function Banca() {
                           {SOURCE_LBL[data.best_pick.pick_type] ?? data.best_pick.pick_type}
                         </span>
                       </div>
-                      <span className="font-mono text-2xl font-black text-green-500">
+                      <span className="font-mono text-2xl font-black text-accent-ink">
                         +{fmtBRL(data.best_pick.pnl)}
                       </span>
                     </div>
@@ -585,7 +585,7 @@ export default function Banca() {
                     <div className="text-[10px] text-ink-4 mt-0.5">{data.total_resolved} picks</div>
                   </div>
                   <div className="text-center">
-                    <div className={`text-xl sm:text-2xl font-black ${data.ia_roi >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+                    <div className={`text-xl sm:text-2xl font-black ${data.ia_roi >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
                       {data.ia_roi >= 0 ? '+' : ''}{data.ia_roi}%
                     </div>
                     <div className="text-xs text-ink-3 mt-1 font-semibold">Yield da IA</div>
@@ -685,7 +685,7 @@ export default function Banca() {
                     <p className="text-xs text-ink-3 font-semibold">
                       Últimos picks apostados
                     </p>
-                    <Link to="/meus-picks" className="text-xs text-green-500 hover:text-green-400 transition-colors font-semibold">
+                    <Link to="/meus-picks" className="text-xs text-accent-ink hover:text-green-400 transition-colors font-semibold">
                       Ver todos
                     </Link>
                   </div>

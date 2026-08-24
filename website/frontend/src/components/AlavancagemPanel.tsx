@@ -66,8 +66,8 @@ interface Serie {
 }
 
 const MOTIVO: Record<string, { label: string; cor: string; Icone: typeof Flag }> = {
-  manual: { label: 'Encerrado por você', cor: 'text-green-500', Icone: Flag },
-  meta:   { label: 'Bateu a meta',       cor: 'text-green-500', Icone: Target },
+  manual: { label: 'Encerrado por você', cor: 'text-accent-ink', Icone: Flag },
+  meta:   { label: 'Bateu a meta',       cor: 'text-accent-ink', Icone: Target },
   red:    { label: 'Caiu num RED',       cor: 'text-red-400',   Icone: TrendingDown },
 }
 
@@ -164,7 +164,7 @@ function LinhaCaminho({ c }: { c: CaminhoEncerrado }) {
         </p>
       </div>
       <div className="text-right shrink-0">
-        <p className={`font-mono text-sm font-black tabular-nums ${c.realized >= 0 ? 'text-green-500' : 'text-red-400'}`}>
+        <p className={`font-mono text-sm font-black tabular-nums ${c.realized >= 0 ? 'text-accent-ink' : 'text-red-400'}`}>
           {fmtSigned(c.realized)}
         </p>
         <p className="font-mono text-[10px] text-ink-4 tabular-nums">
@@ -245,13 +245,13 @@ export default function AlavancagemPanel() {
             l: 'Já realizado',
             v: realizado === 0 ? 'R$ 0' : fmtSigned(realizado),
             sub: 'isto sim entrou na sua banca',
-            c: realizado > 0 ? 'text-green-500' : realizado < 0 ? 'text-red-400' : 'text-ink-2',
+            c: realizado > 0 ? 'text-accent-ink' : realizado < 0 ? 'text-red-400' : 'text-ink-2',
           },
           {
             l: 'Em unidades',
             v: fmtUnits(unidades, 2),
             sub: 'o caminho arrisca 1u, sempre',
-            c: unidades >= 0 ? 'text-green-500' : 'text-red-400',
+            c: unidades >= 0 ? 'text-accent-ink' : 'text-red-400',
           },
           {
             l: 'Melhor sequência',
@@ -294,7 +294,7 @@ export default function AlavancagemPanel() {
             <div className="text-xs text-ink-4 mt-1">
               entrada: {fmtBRL(serie.initial_bankroll)}
               {emAberto > 0 && (
-                <span className="text-green-500 font-semibold"> · {fmtSigned(emAberto)} em jogo</span>
+                <span className="text-accent-ink font-semibold"> · {fmtSigned(emAberto)} em jogo</span>
               )}
             </div>
           </div>

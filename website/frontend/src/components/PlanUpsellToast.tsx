@@ -57,8 +57,8 @@ export default function PlanUpsellToast() {
   }
 
   const cor = convite?.tone === 'amber'
-    ? { icone: 'text-amber-400', bolha: 'bg-amber-400/10', botao: 'bg-amber-400 hover:bg-amber-300 text-black' }
-    : { icone: 'text-yellow-400', bolha: 'bg-yellow-400/10', botao: 'bg-yellow-400 hover:bg-yellow-300 text-black' }
+    ? { icone: 'text-amber-400', bolha: 'bg-amber-400/10', botao: 'bg-amber-400 hover:bg-amber-300 text-on-fill' }
+    : { icone: 'text-yellow-400', bolha: 'bg-yellow-400/10', botao: 'bg-yellow-400 hover:bg-yellow-300 text-on-fill' }
 
   return (
     <AnimatePresence>

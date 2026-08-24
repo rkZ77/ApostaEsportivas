@@ -5,6 +5,7 @@ import { Menu, X } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 import { Button } from './ui'
 import { cn } from '../lib/cn'
+import ThemeToggle from './ThemeToggle'
 
 /*
  * Cabeçalho das páginas públicas (Home).
@@ -58,7 +59,7 @@ export default function SiteHeader() {
         <Link to="/" className="flex items-center gap-2.5 shrink-0" aria-label="Pick IA, início">
           <img src="/logo.png" alt="" width={32} height={32} className="w-8 h-8 rounded-full object-cover" />
           <span className="font-display font-semibold text-lg tracking-tight text-ink-1">
-            Pick<span className="text-accent">IA</span>
+            Pick<span className="text-accent-ink">IA</span>
           </span>
         </Link>
 
@@ -75,6 +76,10 @@ export default function SiteHeader() {
         </nav>
 
         <div className="flex items-center gap-2 shrink-0">
+          {/* -ml-1 pra compensar o padding interno do botão: o alvo de toque
+              continua com 36px, mas o ícone alinha com o texto do menu. */}
+          <ThemeToggle className="-ml-1" />
+
           {user ? (
             <Button to="/picks" size="sm">Ver meus picks</Button>
           ) : (

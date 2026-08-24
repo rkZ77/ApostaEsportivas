@@ -407,7 +407,7 @@ export default function ResultadosPublicos() {
                   <div className="text-[10px] text-ink-4 mt-0.5">unidades</div>
                 </div>
                 {[
-                  { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-green-500' : 'text-ink-2' },
+                  { label: 'Win Rate', value: `${winRatePct}%`,   color: (winRatePct ?? 0) >= 55 ? 'text-accent-ink' : 'text-ink-2' },
                   { label: 'Picks',    value: String(s.total),    color: 'text-ink-1' },
                   { label: 'Greens',   value: String(s.greens),   color: 'text-green-400' },
                   { label: 'Reds',     value: String(s.reds),     color: 'text-red-400' },
@@ -808,7 +808,7 @@ export default function ResultadosPublicos() {
                           <tr key={m.month} className="border-b border-line/50 hover:bg-surface-1/50 transition-colors">
                             <td className="px-3 sm:px-5 py-3 text-ink-1 font-semibold capitalize font-sans">{label}</td>
                             <td className="px-3 sm:px-5 py-3 text-ink-2">{m.total}</td>
-                            <td className="px-3 sm:px-5 py-3 text-green-500 font-semibold">{m.greens}</td>
+                            <td className="px-3 sm:px-5 py-3 text-accent-ink font-semibold">{m.greens}</td>
                             <td className="px-3 sm:px-5 py-3 text-red-400 font-semibold">{reds}</td>
                             <td className="px-3 sm:px-5 py-3">
                               <div className="flex items-center gap-2">

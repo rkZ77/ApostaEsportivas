@@ -29,14 +29,20 @@ interface Ponto {
 
 /* Uma cor por pipeline. VIP fica com o verde da marca por ser o carro-chefe;
    o resto se distingue por matiz, nunca só por luminosidade (duas linhas de
-   verdes diferentes viram a mesma linha para quem não distingue tons). */
+   verdes diferentes viram a mesma linha para quem não distingue tons).
+
+   São os mesmos tokens semânticos do resto do site, e não hexadecimais: no
+   tema claro os tons pastéis de antes viravam risco quase branco sobre branco.
+   Entram por `style` e não por atributo de apresentação porque `var()` só é
+   garantido em propriedade CSS · atributo `stroke=` com var() não resolve em
+   todos os navegadores. */
 const COR: Record<string, string> = {
-  vip:         '#22c55e',
-  free:        '#38bdf8',
-  multiplas:   '#a78bfa',
-  alavancagem: '#fbbf24',
-  faltas:      '#fb7185',
-  goleiros:    '#2dd4bf',
+  vip:         'rgb(var(--c-green-400))',
+  free:        'rgb(var(--c-sky-400))',
+  multiplas:   'rgb(var(--c-purple-400))',
+  alavancagem: 'rgb(var(--c-amber-400))',
+  faltas:      'rgb(var(--c-rose-400))',
+  goleiros:    'rgb(var(--c-teal-400))',
 }
 const NOME: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
@@ -143,11 +149,11 @@ export default function PipelineProfitChart({
             <g key={i}>
               <line
                 x1={PL} y1={py} x2={W - PR} y2={py}
-                stroke={ehZero ? '#3f3f46' : '#1f1f23'}
+                className={ehZero ? 'stroke-line-strong' : 'stroke-line'}
                 strokeWidth={ehZero ? 1 : 0.8}
               />
               <text
-                x={PL - 5} y={py + 3} fill="#52525b" fontSize="8" textAnchor="end"
+                x={PL - 5} y={py + 3} className="fill-ink-4" fontSize="8" textAnchor="end"
                 fontFamily="Inter, -apple-system, sans-serif"
                 style={{ fontVariantNumeric: 'tabular-nums' }}
               >
@@ -160,12 +166,12 @@ export default function PipelineProfitChart({
         {/* Zero destacado quando a escala cruza o zero: é a linha que separa
             produto que paga de produto que custa. */}
         {minV < 0 && maxV > 0 && (
-          <line x1={PL} y1={y(0)} x2={W - PR} y2={y(0)} stroke="#52525b" strokeWidth="1" strokeDasharray="3 3" />
+          <line x1={PL} y1={y(0)} x2={W - PR} y2={y(0)} className="stroke-ink-4" strokeWidth="1" strokeDasharray="3 3" />
         )}
 
         {ticksX.map(i => (
           <text
-            key={i} x={x(i)} y={H - 8} fill="#52525b" fontSize="8" textAnchor="middle"
+            key={i} x={x(i)} y={H - 8} className="fill-ink-4" fontSize="8" textAnchor="middle"
             fontFamily="Inter, -apple-system, sans-serif"
           >
             {fmtDia(dias[i])}
@@ -173,7 +179,7 @@ export default function PipelineProfitChart({
         ))}
 
         {hoverIdx !== null && (
-          <line x1={x(hoverIdx)} y1={PT} x2={x(hoverIdx)} y2={PT + innerH} stroke="#3f3f46" strokeWidth="1" />
+          <line x1={x(hoverIdx)} y1={PT} x2={x(hoverIdx)} y2={PT + innerH} className="stroke-line-strong" strokeWidth="1" />
         )}
 
         {visiveis.map(f => (
@@ -181,7 +187,7 @@ export default function PipelineProfitChart({
             key={f}
             d={linha(porFonte[f])}
             fill="none"
-            stroke={COR[f]}
+            style={{ stroke: COR[f] }}
             strokeWidth="1.8"
             strokeLinejoin="round"
             strokeLinecap="round"
@@ -189,7 +195,7 @@ export default function PipelineProfitChart({
         ))}
 
         {hoverIdx !== null && visiveis.map(f => (
-          <circle key={f} cx={x(hoverIdx)} cy={y(porFonte[f][hoverIdx])} r="3" fill={COR[f]} />
+          <circle key={f} cx={x(hoverIdx)} cy={y(porFonte[f][hoverIdx])} r="3" style={{ fill: COR[f] }} />
         ))}
 
         {/* Faixas de captura do mouse · uma por dia, largura toda do gráfico */}
@@ -220,7 +226,7 @@ export default function PipelineProfitChart({
               <span className="text-ink-3">{NOME[f]}</span>
               <span
                 className="font-mono font-bold tabular-nums"
-                style={{ color: total >= 0 ? COR[f] : '#f87171' }}
+                style={{ color: total >= 0 ? COR[f] : 'rgb(var(--c-red-400))' }}
               >
                 {fmtUnits(total, 1)}
               </span>
