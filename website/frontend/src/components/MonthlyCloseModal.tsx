@@ -292,7 +292,7 @@ export default function MonthlyCloseModal({ onClose }: Props) {
                 {ganhoU >= 0 ? '+' : ''}{ganhoU.toFixed(1)} unidades
                 <span className="text-ink-4 font-normal ml-1">(1u = {fmtBRL(data.unit_value)})</span>
               </p>
-              <div className="flex items-center justify-between pt-2 border-t border-white/5">
+              <div className="flex items-center justify-between pt-2 border-t border-line">
                 <span className="text-[11px] text-ink-3">
                   {data.greens}G · {data.reds}R
                   {data.half_wins > 0 ? ` · ${data.half_wins}½W` : ''}

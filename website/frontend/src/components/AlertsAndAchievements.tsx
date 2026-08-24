@@ -70,7 +70,10 @@ function AlertRow({ alert, onToggle, onThreshold }: {
         }`}
       >
         <span
-          className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-transform duration-1 ease-smooth ${
+          /* O anel nao e' enfeite: no tema claro o trilho desligado e'
+             surface-3 (#e0e0e5) e a bolinha branca sumia dentro dele. No
+             escuro o anel preto a 10% e' invisivel sobre o mesmo trilho. */
+          className={`absolute top-1 w-4 h-4 rounded-full bg-white ring-1 ring-black/10 transition-transform duration-1 ease-smooth ${
             alert.enabled ? 'translate-x-5' : 'translate-x-1'
           }`}
         />

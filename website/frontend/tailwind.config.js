@@ -60,6 +60,8 @@ export default {
           400: token('c-green-400'),
           500: '#00CC00',
           600: '#00AA00',
+          900: token('c-green-900'),
+          950: token('c-green-950'),
         },
         red: {
           300: token('c-red-300'),
@@ -68,10 +70,14 @@ export default {
           600: token('c-red-600'),
         },
         yellow: {
+          100: token('c-yellow-100'),
+          200: token('c-yellow-200'),
           300: token('c-yellow-300'),
           400: token('c-yellow-400'),
           500: token('c-yellow-500'),
           600: token('c-yellow-600'),
+          700: token('c-yellow-700'),
+          950: token('c-yellow-950'),
         },
         amber: {
           300: token('c-amber-300'),

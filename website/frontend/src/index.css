@@ -103,6 +103,17 @@
   --c-cyan-400:   34 211 238;
   --c-cyan-500:    6 182 212;
   --c-emerald-400: 52 211 153;
+  /* Tons de ponta, usados em um lugar so' cada: tinta clarissima dentro de
+     caixa de aviso (yellow-100/200) e lavagem escura de fundo (yellow-950,
+     green-900/950). Precisam de token porque os DOIS extremos invertem no
+     tema claro · tinta clara vira tinta escura, e fundo escuro vira lavagem
+     clara. */
+  --c-yellow-100: 254 249 195;
+  --c-yellow-200: 254 240 138;
+  --c-yellow-700: 161  98   7;
+  --c-yellow-950:  66  32   6;
+  --c-green-900:  20  83  45;
+  --c-green-950:   5  46  22;
 
   --ease:  cubic-bezier(0.2, 0, 0, 1);
   --dur-1: 150ms;
@@ -136,10 +147,24 @@
   --ink-3: 100 100 110;       /* #64646e ·  5.9:1 · apoio, rotulo    */
   --ink-4: 124 124 134;       /* #7c7c86 ·  4.2:1 · so' texto grande */
 
-  /* O botao da marca nao muda de cor entre os temas · so' o verde escrito. */
-  --accent-ink: 6 122 26;     /* #067a1a ·  5.6:1 sobre branco       */
+  /* O botao da marca nao muda de cor entre os temas · so' o verde escrito.
+     #009a00 e' o #00CC00 escurecido NA MESMA MATIZ (120 graus), nao um verde
+     de outra familia: continua sendo o verde do PickIA, so' que legivel sobre
+     branco. Era #067a1a, que puxava pro azul e lia como verde-garrafa. */
+  --accent-ink: 0 154 0;      /* #009a00 ·  3.7:1 sobre branco       */
 
-  --on-fill: 255 255 255;
+  /*
+   * Preto nos DOIS temas, de proposito · nao e' descuido.
+   *
+   * A primeira versao do tema claro fechava as cores semanticas em tons -600/
+   * -700, e ai o texto por cima delas tinha que ser branco. So' que aquela
+   * paleta ficou de verde-musgo e dourado-marrom, e o dono do site reprovou:
+   * o verde tem que continuar parecendo verde. Com a paleta viva de agora,
+   * todo preenchimento semantico esta' entre 5:1 e 9:1 contra o PRETO, e
+   * abaixo de 4:1 contra o branco. O token fica porque documenta o papel e
+   * porque, se a paleta girar de novo, muda-se um lugar so'.
+   */
+  --on-fill: 0 0 0;
 
   --shadow-elev:    0 12px 32px rgba(15, 15, 20, 0.12);
   --shadow-elev-sm: 0 4px 12px rgba(15, 15, 20, 0.08);
@@ -147,39 +172,62 @@
 
   --grid-alpha: 0.10;
 
-  /* Um a dois degraus abaixo na escala do Tailwind: o tom que se le sobre
-     branco. Preenchimento solido (bg-yellow-400 num botao) continua legivel
-     porque o texto por cima dele vira branco via --on-fill. */
-  --c-green-300:  22 163  74;
-  --c-green-400:  21 128  61;
-  --c-red-300:   220  38  38;
-  --c-red-400:   200  30  30;
-  --c-red-500:   220  38  38;
-  --c-red-600:   185  28  28;
-  --c-yellow-300: 180  83   9;
-  --c-yellow-400: 161  98   7;
-  --c-yellow-500: 161  98   7;
-  --c-yellow-600: 133  77  14;
-  --c-amber-300: 180  83   9;
-  --c-amber-400: 180  83   9;
-  --c-amber-500: 146  64  14;
-  --c-orange-300: 234  88  12;
-  --c-orange-400: 194  65  12;
-  --c-orange-500: 234  88  12;
-  --c-blue-300:   37  99 235;
-  --c-blue-400:   29  78 216;
-  --c-blue-500:   37  99 235;
-  --c-purple-300: 147  51 234;
-  --c-purple-400: 126  34 206;
-  --c-purple-500: 147  51 234;
-  --c-teal-400:   15 118 110;
-  --c-teal-500:   13 148 136;
-  --c-sky-400:     3 105 161;
-  --c-rose-400:  190  18  60;
-  --c-rose-500:  225  29  72;
-  --c-cyan-400:   14 116 144;
-  --c-cyan-500:    8 145 178;
-  --c-emerald-400: 5 150 105;
+  /*
+   * A cor tem que continuar sendo A COR.
+   *
+   * A primeira tentativa desceu tudo pra -600/-700 atras de 4,5:1 de contraste
+   * e o resultado foi um site de verde-musgo, dourado-marrom e vermelho-tijolo
+   * · o dono reprovou na hora, e com razao: o usuario reconhece o produto pela
+   * cor, e GREEN em verde-musgo nao e' GREEN.
+   *
+   * A regra agora e' a luminancia relativa entre 0,20 e 0,30. Nessa faixa a
+   * cor fica VIVA (mesma familia do tema escuro), da' 5:1 a 9:1 contra o preto
+   * escrito por cima dela, e 3,1:1 a 4,8:1 sobre o branco da pagina. Os 3:1
+   * sao o piso de WCAG pra texto grande, e todo texto colorido aqui e' negrito
+   * (selo, numero, rotulo) · texto corrido do site e --ink-2, que da' 10:1.
+   *
+   * O -300 fica MAIS ESCURO que o -400 aqui, invertendo o tema escuro de
+   * proposito: la' o -300 e o degrau de MAIS contraste (mais claro sobre
+   * fundo escuro), entao aqui o degrau de mais contraste e' pra baixo.
+   */
+  --c-green-300:  21 128  61;  /* #15803d */
+  --c-green-400:  15 157  64;  /* #0f9d40 · 3.5:1 */
+  --c-red-300:   185  28  28;  /* #b91c1c */
+  --c-red-400:   220  38  38;  /* #dc2626 · 4.8:1 */
+  --c-red-500:   239  68  68;  /* #ef4444 */
+  --c-red-600:   185  28  28;  /* #b91c1c */
+  --c-yellow-300: 161  98   7; /* #a16207 */
+  --c-yellow-400: 198 138   0; /* #c68a00 · 3.1:1 · ouro, nao marrom */
+  --c-yellow-500: 214 152   3; /* #d69803 */
+  --c-yellow-600: 180 118   4; /* #b47604 */
+  --c-amber-300: 180  83   9;  /* #b45309 */
+  --c-amber-400: 217 119   6;  /* #d97706 · 3.2:1 */
+  --c-amber-500: 245 158  11;  /* #f59e0b */
+  --c-orange-300: 194  65  12; /* #c2410c */
+  --c-orange-400: 234  88  12; /* #ea580c · 3.5:1 */
+  --c-orange-500: 249 115  22; /* #f97316 */
+  --c-blue-300:   29  78 216;  /* #1d4ed8 */
+  --c-blue-400:   59 130 246;  /* #3b82f6 · 3.7:1 */
+  --c-blue-500:   37  99 235;  /* #2563eb */
+  --c-purple-300: 126  34 206; /* #7e22ce */
+  --c-purple-400: 168  85 247; /* #a855f7 · 4.0:1 */
+  --c-purple-500: 147  51 234; /* #9333ea */
+  --c-teal-400:   13 148 136;  /* #0d9488 · 3.7:1 */
+  --c-teal-500:   20 184 166;  /* #14b8a6 */
+  --c-sky-400:     2 132 199;  /* #0284c7 · 4.1:1 */
+  --c-rose-400:  225  29  72;  /* #e11d48 */
+  --c-rose-500:  244  63  94;  /* #f43f5e */
+  --c-cyan-400:    8 145 178;  /* #0891b2 */
+  --c-cyan-500:    6 182 212;  /* #06b6d4 */
+  --c-emerald-400: 5 150 105;  /* #059669 */
+  /* Os dois extremos invertem: tinta clarissima de caixa de aviso vira tinta
+     escura, e lavagem de fundo escura vira lavagem clara. */
+  --c-yellow-100: 133  77  14; /* #854d0e */
+  --c-yellow-200: 113  63  18; /* #713f12 */
+  --c-yellow-700: 133  77  14; /* #854d0e */
+  --c-yellow-950: 254 249 195; /* #fef9c3 */
+  --c-green-900: 187 247 208;  /* #bbf7d0 */
+  --c-green-950: 240 253 244;  /* #f0fdf4 */
 }
 
 @layer utilities {
