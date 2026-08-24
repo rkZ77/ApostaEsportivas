@@ -237,7 +237,7 @@ function Leaderboard() {
 
   if (!loading && leaders.length === 0) return null
 
-  const rankCls = ['bg-yellow-400 text-on-fill', 'bg-ink-2 text-on-fill', 'bg-orange-400 text-on-fill']
+  const rankCls = ['bg-yellow-400 text-on-fill', 'bg-ink-2 text-surface-0', 'bg-orange-400 text-on-fill']
 
   // Esqueleto com a MESMA altura das três linhas finais. Antes era um spinner
   // solto num `py-8`: a seção crescia quando os dados chegavam e empurrava o

@@ -196,7 +196,8 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
         print(f"[DECISION_LOG] Aviso: log gravado, falha só ao imprimir o resumo: {e}")
 
 
-def log_skip(pipeline: str, fixture: dict, reason: str) -> None:
+def log_skip(pipeline: str, fixture: dict, reason: str,
+             context_data: dict | None = None) -> None:
     """Fixture descartado ANTES de rodar o motor.
 
     Todo `continue` mudo do pipeline passa a ter uma linha aqui. Sem isso, o
@@ -207,7 +208,7 @@ def log_skip(pipeline: str, fixture: dict, reason: str) -> None:
     `reason` e' texto curto e estavel (vira filtro em SQL depois): use as
     constantes MOTIVO_* abaixo em vez de escrever a frase na mao.
     """
-    _gravar(pipeline, fixture, STATUS_DESCARTADO, reason, [], None, None)
+    _gravar(pipeline, fixture, STATUS_DESCARTADO, reason, [], None, context_data)
     _gravar_arquivo({
         "logged_at": datetime.now().isoformat(),
         "pipeline": pipeline,
@@ -216,12 +217,14 @@ def log_skip(pipeline: str, fixture: dict, reason: str) -> None:
         "home_team": fixture.get("home_team"),
         "away_team": fixture.get("away_team"),
         "reason": reason,
+        "context": context_data,
     })
     print(f"[DECISION_LOG] {pipeline} | {fixture.get('home_team')} x {fixture.get('away_team')} "
           f"(fixture {fixture.get('fixture_id')}) DESCARTADO: {reason}")
 
 
-def log_run(pipeline: str, reason: str) -> None:
+def log_run(pipeline: str, reason: str,
+            context_data: dict | None = None) -> None:
     """Pipeline terminou sem candidato nenhum (fixture_id NULL).
 
     Faltas e goleiros precisam disso mais que os outros: os dois so' chamavam
@@ -230,12 +233,13 @@ def log_run(pipeline: str, reason: str) -> None:
     de "nem rodou" -- especialmente em goleiros, onde defesa aparece em 0.86%
     das atuacoes e o dia vazio e' o caso NORMAL, nao a excecao.
     """
-    _gravar(pipeline, None, STATUS_SEM_PICK, reason, [], None, None)
+    _gravar(pipeline, None, STATUS_SEM_PICK, reason, [], None, context_data)
     _gravar_arquivo({
         "logged_at": datetime.now().isoformat(),
         "pipeline": pipeline,
         "status": STATUS_SEM_PICK,
         "reason": reason,
+        "context": context_data,
     })
 
 
@@ -247,6 +251,123 @@ MOTIVO_SEM_HISTORICO = "sem historico coletado para um dos times"
 MOTIVO_HISTORICO_REPROVADO = "historico reprovado na validacao (amostra curta ou inconsistente)"
 MOTIVO_SEM_CANDIDATO = "nenhum candidato passou nos criterios do modelo"
 MOTIVO_ERRO = "erro ao avaliar o fixture"
+
+
+# ─────────────────────────────────────────────────────────────────────────
+# MOTOR AO VIVO
+# ─────────────────────────────────────────────────────────────────────────
+#
+# POR QUE O LIVE PRECISAVA ENTRAR AQUI (2026-08-24)
+# -------------------------------------------------
+# Os seis pipelines de pre-jogo gravam em `engine_decisions` desde 07/08. O
+# motor ao vivo era o unico que nao gravava -- e e' justamente o que mais
+# precisa, por tres motivos que os outros nao tem:
+#
+#   1. ele roda em laco. Uma noite de 23/08 deu 91 rodadas; a unica coisa que
+#      sobrevivia delas era o stdout da ULTIMA, guardado em memoria no
+#      processo do site (`routers/live_picks.py::_run_status`, 6000 chars) e
+#      perdido no primeiro deploy. 90 rodadas sem rastro nenhum;
+#   2. a decisao dele depende do MINUTO. A mesma partida aos 20' e aos 70' e'
+#      outra decisao, e "por que nao saiu pick" nao tem resposta sem saber em
+#      que minuto cada leg morreu;
+#   3. ele nasceu em dry run. Em dry run `picks_live` fica vazia POR
+#      CONSTRUCAO, entao a tabela de picks nao distingue "o motor nao achou
+#      nada" de "o motor achou e nao tinha permissao de gravar". Este log
+#      distingue: o candidato aprovado aparece aqui mesmo quando o pick nao e'
+#      gravado.
+#
+# O `context` carrega o minuto e o retrato da rodada, e nao uma coluna nova:
+# `engine_decisions` ja' existe em PROD com dados dos outros pipelines, e
+# acrescentar coluna a uma tabela viva por causa de um consumidor novo custa
+# mais que um campo JSONB que ja' esta' la'.
+PIPELINE_LIVE = "LIVE_ENGINE"
+
+#: Motivos de descarte do ao vivo. Curtos e estaveis, mesma regra dos MOTIVO_*
+#: de cima: viram GROUP BY depois ("onde as partidas estao morrendo?").
+LIVE_SEM_ESTATISTICA = "provedor nao publicou estatistica das familias"
+LIVE_REPROVOU_TRIAGEM = "triagem: projecao colada no esperado"
+LIVE_SEM_ORCAMENTO = "orcamento de API esgotado antes da odd"
+LIVE_SEM_LINHA = "sem linha ativa nas familias triadas"
+LIVE_NENHUM_APROVADO = "nenhum candidato passou nos gates"
+LIVE_DUPLICATA = "pick equivalente ja' existe nesta partida"
+
+
+def _live_candidate_summary(c: dict) -> dict:
+    """Candidato do motor ao vivo, no formato dele.
+
+    Nao reusa `_candidate_summary` de proposito: ao vivo nao existe
+    `final_score` nem `taxa_real`. Existe uma probabilidade RESIDUAL (do tempo
+    que falta), o quanto ela foi encolhida contra o mercado, e a lista de
+    gates que reprovaram. Passar isso pelo molde do pre-jogo produziria um log
+    de campos nulos sem a unica coluna que responde a pergunta -- que e'
+    `motivos_reprovacao`.
+
+    `prob_modelo_puro` e `probability` ficam os dois no log de proposito: a
+    subtracao entre eles e' a medida do encolhimento contra o mercado, e sem
+    as duas ela exige reproduzir a rodada.
+    """
+    return {
+        "market_type": c.get("market") or c.get("familia"),
+        "line": c.get("line"),
+        "direcao": c.get("direcao"),
+        "odd": c.get("odd"),
+        "probability": c.get("probability"),
+        "prob_modelo_puro": c.get("prob_modelo_puro"),
+        "peso_modelo": c.get("peso_modelo"),
+        "prob_mercado": c.get("prob_mercado"),
+        "origem_prob_mercado": c.get("origem_prob_mercado"),
+        "ev": c.get("ev"),
+        "edge": c.get("edge"),
+        "confidence": c.get("confidence"),
+        "live_signal_score": c.get("live_signal_score"),
+        "observado_na_criacao": c.get("observado_na_criacao"),
+        "projecao_total": c.get("projecao_total"),
+        "distancia_da_linha": c.get("distancia_da_linha"),
+        "eligible": bool(c.get("aprovado")),
+        # A razao inteira deste log existir. `avaliar()` devolve TODOS os
+        # motivos, sem short-circuit -- um candidato pode cair por EV e por
+        # convergencia, e saber os dois e' o que diz qual limiar mexer.
+        "motivos_reprovacao": c.get("motivos_reprovacao") or [],
+        "is_best_pick": bool(c.get("is_best_pick")),
+    }
+
+
+def log_live_decision(fixture: dict, avaliados: list,
+                      context_data: dict | None = None,
+                      escolhido: dict | None = None) -> None:
+    """Uma linha por partida AVALIADA numa rodada do motor ao vivo.
+
+    Chamar depois de `orchestrator.avaliar()`, com a lista inteira -- aprovados
+    e reprovados. Nao imprime nada: `live_pipeline._processar_partida` ja'
+    imprime o resumo da partida, e duplicar isso no stdout de um laco que roda
+    de 3 em 3 minutos so' torna o log ao vivo ilegivel.
+    """
+    try:
+        chave = None
+        if escolhido:
+            chave = (escolhido.get("market"), escolhido.get("line"),
+                     escolhido.get("direcao"))
+        resumo = []
+        for c in avaliados:
+            item = _live_candidate_summary(c)
+            if chave and (c.get("market"), c.get("line"), c.get("direcao")) == chave:
+                item["is_best_pick"] = True
+            resumo.append(item)
+    except Exception as e:
+        print(f"[DECISION_LOG] Aviso: falha ao montar resumo do live (não afeta o pick): {e}")
+        return
+
+    _gravar(PIPELINE_LIVE, fixture, STATUS_AVALIADO, None, resumo, None, context_data)
+    _gravar_arquivo({
+        "logged_at": datetime.now().isoformat(),
+        "pipeline": PIPELINE_LIVE,
+        "status": STATUS_AVALIADO,
+        "fixture_id": fixture.get("fixture_id"),
+        "home_team": fixture.get("home_team"),
+        "away_team": fixture.get("away_team"),
+        "context": context_data,
+        "candidates": resumo,
+    })
 
 
 def _pct(v) -> str:
