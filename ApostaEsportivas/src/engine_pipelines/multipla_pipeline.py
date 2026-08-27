@@ -37,6 +37,7 @@ from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
     log_decision, log_run, log_skip,
 )
+from services.engine_audit import auditar
 
 
 ODD_TOTAL_MIN = 2.00
@@ -376,6 +377,11 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
     ))
 
 
+# AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
+# Live esta' congelado. O decorador abre a execucao (run_id, contagens,
+# status) e o decision_log carimba esse run_id sozinho nas linhas que ja'
+# gravava -- ver services/engine_audit/audit.py::auditar.
+@auditar("PRE_LIVE", "multipla")
 def run_multipla_engine():
     conn = get_connection()
     cur = conn.cursor()

@@ -22,6 +22,11 @@ export const STAKE_PADRAO: Record<string, number> = {
   free:        3,
   faltas:      3,
   goleiros:    3,
+  // Player Stats herda o peso de goleiros · é o mesmo produto, o mesmo formato
+  // de entrada e o mesmo lugar na vitrine. Ver o comentário no Python.
+  player_stats: 3,
+  // Pick Boost está fora do placar público na fase 1 (só Admin).
+  boost:       0,
   multiplas:   1,
   // O front usa a forma de rota ('multipla'); o backend, o nome da tabela
   // ('multiplas'). As duas chaves apontam pro mesmo peso pra que nenhum

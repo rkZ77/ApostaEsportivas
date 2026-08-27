@@ -62,6 +62,16 @@ STAKE_PADRAO: dict[str, int] = {
     "free":        3,
     "faltas":      3,
     "goleiros":    3,
+    # Player Stats (27/08) herda o peso de `goleiros`: e' o mesmo produto, o
+    # mesmo formato de entrada (um jogo, um mercado, uma odd) e o mesmo lugar
+    # na vitrine. Peso diferente pro sucessor faria o placar dar um degrau no
+    # dia da troca, sem nada ter mudado na aposta.
+    "player_stats": 3,
+    # Pick Boost nasce fora do placar publico (fase 1 = so' Admin, decisao do
+    # usuario em 27/08). Zero e' explicito de proposito: sem a chave ele cairia
+    # no STAKE_FALLBACK de 1u no dia em que alguem o incluisse numa consulta, e
+    # entraria no placar por descuido em vez de por decisao.
+    "boost":       0,
     "multiplas":   1,
     # Zero = fora do placar de unidades. Ver o bloco no topo deste arquivo.
     "alavancagem": 0,

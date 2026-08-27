@@ -32,6 +32,7 @@ from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
     log_decision, log_run, log_skip,
 )
+from services.engine_audit import amostra, auditar
 
 
 WC_LEAGUE_ID = 1
@@ -359,7 +360,16 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
             chave = (nivel, -p["final_score"])
             if melhor is None or chave < melhor[0]:
                 melhor = (chave, fixture, {**p, "data_quality_score": quality["score"],
-                                           "_nivel_repeticao": nivel}, quality["score"])
+                                           "_nivel_repeticao": nivel,
+                                           "amostra": amostra.build(
+                                               home_team_id=fixture["home_team_id"],
+                                               away_team_id=fixture["away_team_id"],
+                                               historico_home=last10_home,
+                                               historico_away=last10_away,
+                                               home_team=fixture.get("home_team"),
+                                               away_team=fixture.get("away_team"),
+                                               match_context=match_context)},
+                          quality["score"])
 
         if aceitos == 0:
             print(f"[DICA_ENGINE] Fixture {fixture['fixture_id']}: os {len(picks)} candidato(s) "
@@ -388,6 +398,15 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     # services/pick_engine/red_analysis.py + calibration.py.
     engine_debug_data = homologation.build_score_breakdown_section(pick, data_quality_score)
     engine_debug_data["ai_review"] = pick.get("ai_review")
+    # A AMOSTRA (2026-08-27): quais jogos o motor leu, ate' 10 por time, com o
+    # contexto do confronto (classico, jogo de volta, placar da ida). Puramente
+    # ADITIVO -- nenhum calculo le esta chave; ela existe pra o "Entenda esta
+    # analise" poder mostrar a amostra que DECIDIU, em vez de reconsultar o
+    # banco e arriscar exibir um recorte diferente (que e' o que acontecia em
+    # jogo de copa, onde o motor le todas as competicoes e a tela lia so' a
+    # liga). Ver services/engine_audit/amostra.py.
+    if pick.get("amostra"):
+        engine_debug_data["amostra"] = pick["amostra"]
     # Em que degrau da escada esta pick nasceu (ver _nivel_repeticao). Sem
     # isso nao da' pra medir depois se o reaproveitamento de jogo do VIP virou
     # regra em vez de excecao -- que e' o sinal de que o dia esta curto demais
@@ -479,6 +498,11 @@ def _save_pick(cur, fixture: dict, pick: dict, data_quality_score: float | None)
     return True
 
 
+# AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
+# Live esta' congelado. O decorador abre a execucao (run_id, contagens,
+# status) e o decision_log carimba esse run_id sozinho nas linhas que ja'
+# gravava -- ver services/engine_audit/audit.py::auditar.
+@auditar("PRE_LIVE", "dica")
 def run_dica_engine():
     conn = get_connection()
     cur = conn.cursor()

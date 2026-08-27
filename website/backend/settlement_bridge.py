@@ -44,4 +44,20 @@ if _DIR and _DIR not in sys.path:
 from services import settlement          # noqa: E402
 from utils import stat_sheet             # noqa: E402
 
-__all__ = ["settlement", "stat_sheet"]
+# Catalogo de motores e metodos (2026-08-27). Viaja pelo mesmo caminho e pelo
+# mesmo motivo dos dois acima: a aba Auditoria dos Motores precisa dizer QUAL
+# motor, QUAL metodo e QUAL versao gerou cada decisao, e essa lista tem que ser
+# a MESMA que o motor usa pra gravar. Uma copia no backend divergiria no
+# primeiro metodo novo -- que e' exatamente o que aconteceu com
+# `_PIPELINES_DO_MOTOR`, mantida a mao neste backend e que ja' nasceu
+# precisando de um ramo "pipeline que a lista nao conhece".
+#
+# Import isolado do resto: se o motor nao estiver no caminho (ambiente antigo,
+# imagem sem /app/pipeline), o painel cai pra rotulos crus em vez de a API
+# inteira recusar subir. Liquidacao errada e' inaceitavel; rotulo cru nao e'.
+try:
+    from services.engine_audit import registry as engine_registry  # noqa: E402
+except Exception:                                                  # pragma: no cover
+    engine_registry = None
+
+__all__ = ["settlement", "stat_sheet", "engine_registry"]

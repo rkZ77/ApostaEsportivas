@@ -11,6 +11,14 @@ from routers.banca import _compute_bankroll_current
 from routers.live import _stat_for_market, maybe_resolve_pending
 import market_form
 from settlement_bridge import settlement
+# Perfil de competicao do MOTOR. E' quem sabe se uma liga usa historico de
+# TODAS as competicoes (copa de clube e selecao) -- ver o comentario em
+# _jogos_do_time. Import tolerante: sem o pipeline no caminho a serie volta ao
+# recorte de liga, que e' o comportamento de antes.
+try:
+    from services.pick_engine import competition_profile as _competicao
+except Exception:  # pragma: no cover
+    _competicao = None
 from stake_plan import STAKE_PADRAO
 
 logger = logging.getLogger(__name__)
@@ -1715,14 +1723,22 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
             LEFT JOIN fixtures f ON f.fixture_id = pf.fixture_id
             WHERE pf.result {result_null_cond} {date_cond}
         """
-    if source in ("faltas", "goleiros"):
+    if source in ("faltas", "goleiros", "player_stats"):
         # Mesma forma de picks_free (um jogo, um mercado, uma odd), então o
         # SELECT é o mesmo com a tabela trocada. Os dois mercados já contavam
         # no ROI público e no histórico de /public/results desde 01/08; só esta
         # aba não os enxergava, e um pick de faltas resolvido simplesmente não
         # existia aqui.
-        tabela = "picks_faltas" if source == "faltas" else "picks_goleiros"
-        rotulo = "Faltas" if source == "faltas" else "Defesas"
+        #
+        # `player_stats` entrou em 27/08 com a MESMA forma: é o sucessor de
+        # `goleiros` como destino de prop de jogador. As duas fontes coexistem
+        # porque o histórico de picks_goleiros não migrou · ela parou de
+        # crescer, não de existir, e apagá-la daqui apagaria o passado do
+        # produto.
+        tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
+                  "player_stats": "picks_player_stats"}[source]
+        rotulo = {"faltas": "Faltas", "goleiros": "Defesas",
+                  "player_stats": "Player Stats"}[source]
         return f"""
             SELECT p.id, '{source}' AS pick_type, p.match_date,
                    p.home_team AS home_team_name, p.away_team AS away_team_name,
@@ -2543,6 +2559,10 @@ _PICK_FONTE = {
     "free":     ("picks_free",     "home_team",      "away_team"),
     "faltas":   ("picks_faltas",   "home_team",      "away_team"),
     "goleiros": ("picks_goleiros", "home_team",      "away_team"),
+    # Player Stats (27/08) -- a tabela que substitui picks_goleiros como
+    # destino de prop de jogador. picks_goleiros continua aqui porque o
+    # historico dela nao migrou: ela parou de CRESCER, nao de existir.
+    "player_stats": ("picks_player_stats", "home_team", "away_team"),
 }
 
 
@@ -2555,9 +2575,19 @@ def _pernas_de_pick_simples(cur, tabela: str, col_casa: str, col_fora: str,
     # `player_id` so existe em picks_goleiros. Vem como NULL nas outras
     # tabelas pra que _series_da_perna possa decidir a fonte da serie com um
     # `if` so, em vez de um ramo por tipo de pick.
-    coluna_jogador = ("p.player_id, p.player_name"
-                      if tabela == "picks_goleiros"
-                      else "NULL::int AS player_id, NULL::text AS player_name")
+    # `stat_column` diz qual contador de player_match_stats liquida o pick.
+    # picks_goleiros nao tem a coluna (nasceu so' pra defesas), entao ela e'
+    # sintetizada como 'saves' -- que e' literalmente o unico valor que aquela
+    # tabela sempre teve. Assim `_serie_do_jogador` fica com UM caminho, e nao
+    # com um ramo por tabela.
+    if tabela == "picks_goleiros":
+        coluna_jogador = ("p.player_id, p.player_name, "
+                          "'saves'::text AS stat_column")
+    elif tabela == "picks_player_stats":
+        coluna_jogador = "p.player_id, p.player_name, p.stat_column"
+    else:
+        coluna_jogador = ("NULL::int AS player_id, NULL::text AS player_name, "
+                          "NULL::text AS stat_column")
     cur.execute(f"""
         SELECT p.fixture_id, p.market, p.line, p.market_type,
                {coluna_jogador},
@@ -2741,9 +2771,29 @@ def _jogos_do_time(cur, team_id: int, mando: str, league_id, season,
     Mesma liga/temporada que o motor leu (MatchStatsService.get_all_matches_full)
     -- serie e pick contando historias diferentes sobre o mesmo numero e' pior
     que nao mostrar serie nenhuma. Sem fixture na tabela (pick antigo) o filtro
-    sai e a serie fica um pouco mais larga."""
+    sai e a serie fica um pouco mais larga.
+
+    COPA E SELECAO LEEM TODAS AS COMPETICOES (corrigido 2026-08-27). O motor
+    nao usa o mesmo recorte pra toda competicao: em copa de clube e em selecao
+    ele le o historico do time em TODAS as competicoes
+    (competition_profile.uses_all_competitions_history), porque a propria
+    competicao nao acumula jogo suficiente -- travar nela reprova a partida
+    inteira em silencio.
+
+    Esta funcao filtrava por liga SEMPRE. O resultado, em jogo de copa, era a
+    tela mostrando uma amostra que o motor nunca olhou -- as vezes duas ou tres
+    barras onde a decisao usou quinze, as vezes nenhuma. E' o mesmo defeito de
+    08/08 (card e motor contando historias diferentes), so' que na outra ponta:
+    la' a serie era LARGA demais, aqui era estreita demais.
+
+    A regra passa a ser derivada da MESMA funcao que o motor consulta, e nao de
+    uma lista de ligas repetida aqui."""
+    todas_competicoes = bool(
+        _competicao is not None and league_id
+        and _competicao.uses_all_competitions_history(league_id))
+
     filtro_liga, params_liga = "", []
-    if league_id and season:
+    if league_id and season and not todas_competicoes:
         filtro_liga = "AND ms.league_id = %s AND ms.season = %s"
         params_liga = [league_id, season]
 
@@ -2790,8 +2840,24 @@ def _jogos_do_arbitro(cur, referee: str, season, excluir_fixture, limit: int) ->
     return [dict(r) for r in cur.fetchall()]
 
 
+#: Contadores de `player_match_stats` que a serie de jogador sabe ler, e o
+#: rotulo de cada um. Lista fechada porque o nome da coluna entra em SQL por
+#: f-string -- vir do banco (`picks_player_stats.stat_column`) nao e' desculpa
+#: pra confiar nele. Espelha services/player_stats_engine/methods.py: metodo
+#: novo la' precisa de uma linha aqui, e ate' la' a serie some em vez de
+#: mostrar numero errado.
+_CONTADOR_DO_JOGADOR = {
+    "saves":           "Defesas",
+    "shots_on":        "Chutes no alvo",
+    "shots_total":     "Chutes",
+    "fouls_committed": "Faltas cometidas",
+    "tackles_total":   "Desarmes",
+    "passes_total":    "Passes",
+}
+
+
 def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
-    """Serie de um prop de JOGADOR (hoje so' defesas de goleiro).
+    """Serie de um prop de JOGADOR, no contador que o proprio pick nomeia.
 
     POR QUE NAO DA' PRA REUSAR A SERIE DE TIME AQUI
     ----------------------------------------------
@@ -2814,11 +2880,20 @@ def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
     if not player_id:
         return None
 
-    cur.execute("""
-        SELECT fixture_id, match_date, saves, team_name
+    # GENERALIZADO EM 2026-08-27. Ate' aqui a consulta lia `saves` escrito na
+    # mao, porque defesas era o unico prop que existia. Com o Player Stats a
+    # coluna vem do PROPRIO pick (`stat_column`), entao chutes, faltas e
+    # desarmes ganham a serie sem um ramo novo -- e um metodo que a lista
+    # branca ainda nao conhece devolve None em vez de quebrar a consulta.
+    coluna = perna.get("stat_column") or "saves"
+    if coluna not in _CONTADOR_DO_JOGADOR:
+        return None
+
+    cur.execute(f"""
+        SELECT fixture_id, match_date, {coluna} AS valor, team_name
           FROM player_match_stats
          WHERE player_id = %s
-           AND saves IS NOT NULL
+           AND {coluna} IS NOT NULL
            AND (%s IS NULL OR fixture_id <> %s)
          ORDER BY match_date DESC
          LIMIT %s
@@ -2837,7 +2912,7 @@ def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
 
     itens = []
     for j in jogos:
-        valor = float(j["saves"])
+        valor = float(j["valor"])
         resultado, _factor = settlement.settle_over_under(valor, linha, op)
         itens.append({
             "fixture_id": j["fixture_id"],
@@ -2852,14 +2927,19 @@ def _serie_do_jogador(cur, perna: dict, limit: int) -> dict | None:
 
     # `op` entra porque frase_da_serie conjuga a partir dele ("passou de" vs
     # "ficou abaixo de"). Sem ele a frase volta None e a serie fica muda.
-    serie = {"label": "Defesas", "line": linha, "op": op, "matches": itens,
-             **market_form.resumo(itens)}
+    serie = {"label": _CONTADOR_DO_JOGADOR[coluna], "line": linha, "op": op,
+             "matches": itens, **market_form.resumo(itens)}
     if not serie["resolved"]:
         return None
     # "goleiro Fulano" e nao so' o nome: frase_da_serie prefixa "O ", e "O
     # Lucas Arcanjo" soa errado onde "O goleiro Lucas Arcanjo" soa certo.
-    nome = perna.get("player_name") or "goleiro"
-    serie["frase"] = market_form.frase_da_serie(f"goleiro {nome}", serie)
+    # "goleiro Fulano" so' vale pro metodo de defesas -- frase_da_serie
+    # prefixa "O ", e "O Lucas Arcanjo" soa errado onde "O goleiro Lucas
+    # Arcanjo" soa certo. Nos outros contadores o cargo nao e' relevante (nem
+    # sempre correto), entao entra so' o nome.
+    nome = perna.get("player_name") or "o jogador"
+    sujeito = f"goleiro {nome}" if coluna == "saves" else nome
+    serie["frase"] = market_form.frase_da_serie(sujeito, serie)
 
     # MESMO FORMATO da perna de time (`teams` com uma serie dentro). O card nao
     # ganha um ramo novo pra prop de jogador: o que muda e' de onde o numero
@@ -3123,3 +3203,97 @@ def get_market_form(
     finally:
         cur.close()
         conn.close()
+
+#: Onde mora o `engine_debug` de cada tipo de pick. Lista fechada: `pick_type`
+#: vem da query string e o nome da tabela entra em SQL por f-string.
+_TABELA_ENGINE_DEBUG = {
+    "vip":          "picks_vip",
+    "free":         "picks_free",
+    "faltas":       "picks_faltas",
+    "goleiros":     "picks_goleiros",
+    "player_stats": "picks_player_stats",
+    "boost":        "picks_boost",
+}
+
+#: Teto de jogos exibidos. O motor grava ate' 10 por time (pedido do usuario em
+#: 27/08); o corte aqui e' a segunda trava, pra um pick gravado por uma versao
+#: futura mais generosa nao despejar trinta linhas num modal de celular.
+_AMOSTRA_MAX_EXIBIDA = 10
+
+
+@router.get("/{suggestion_id}/amostra")
+def get_amostra(
+    suggestion_id: int,
+    pick_type: str = Query("vip"),
+    current_user: dict = Depends(get_current_user),
+):
+    """Os jogos que o motor REALMENTE leu para decidir este pick.
+
+    POR QUE ISTO NAO E' A MESMA COISA QUE /market-form
+    -------------------------------------------------
+    `market-form` reconsulta o banco e monta uma serie pelo contador do
+    mercado. E' util (mostra GREEN/RED barra a barra), mas e' uma SEGUNDA
+    leitura: ela pode divergir do que decidiu, e ja' divergiu duas vezes em
+    producao -- por mando em 08/08, e por competicao em jogo de copa, onde o
+    motor le todas as competicoes e a consulta lia so' a liga.
+
+    Este endpoint nao consulta historico nenhum. Ele devolve o retrato que o
+    proprio motor gravou em `engine_debug.amostra` no instante da escolha
+    (services/engine_audit/amostra.py). Por construcao nao tem como divergir:
+    e' o mesmo objeto que entrou na conta.
+
+    Vem junto o CONTEXTO DO CONFRONTO, que o motor ja' calculava e que nunca
+    chegava a lugar nenhum: se e' classico (excesso de cartao medido no
+    confronto direto), se e' jogo de volta de mata-mata, o placar da ida e o
+    agregado. Era a outra metade do pedido -- entender o JOGO, nao so' a media.
+
+    Pick anterior a 27/08 nao tem amostra gravada. Responde
+    `available: false` com motivo, e a tela nao mostra a secao · melhor que
+    inventar uma amostra reconsultada que talvez nao seja a que decidiu.
+    """
+    tabela = _TABELA_ENGINE_DEBUG.get(pick_type)
+    if not tabela:
+        return {"available": False, "reason": "tipo de pick sem amostra"}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT engine_debug FROM {tabela} WHERE id = %s", (suggestion_id,))
+        row = cur.fetchone()
+        if not row:
+            raise HTTPException(404, "Pick nao encontrado")
+
+        debug = row["engine_debug"] or {}
+        if isinstance(debug, str):
+            try:
+                debug = json.loads(debug)
+            except Exception:
+                debug = {}
+        amostra = (debug or {}).get("amostra")
+        if not amostra:
+            return {"available": False,
+                    "reason": "pick anterior ao registro de amostra"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[AMOSTRA] %s#%s: %s", tabela, suggestion_id, e)
+        return {"available": False, "reason": "nao foi possivel ler a amostra"}
+    finally:
+        cur.close()
+        conn.close()
+
+    # Prop de JOGADOR guarda outra forma (uma lista de valores por atuacao, nao
+    # dois times). Devolvida como esta': quem desenha decide, e achatar as duas
+    # num formato so' produziria campos vazios dos dois lados.
+    if "valores" in amostra and "mandante" not in amostra:
+        return {"available": True, "tipo": "jogador",
+                "amostra": {**amostra,
+                            "valores": (amostra.get("valores") or [])[:_AMOSTRA_MAX_EXIBIDA]}}
+
+    for lado in ("mandante", "visitante"):
+        bloco = amostra.get(lado) or {}
+        if bloco.get("jogos"):
+            bloco["jogos"] = bloco["jogos"][:_AMOSTRA_MAX_EXIBIDA]
+    return {"available": True, "tipo": "time", "amostra": amostra}
+

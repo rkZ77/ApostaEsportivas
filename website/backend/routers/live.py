@@ -2105,7 +2105,11 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
     conn = get_connection()
     cur  = conn.cursor()
     resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
-                      "faltas": 0, "goleiros": 0}
+                      "faltas": 0, "goleiros": 0,
+                      # Motores de 27/08. `goleiros` continua no dicionario
+                      # porque picks_goleiros ainda tem pendencia historica pra
+                      # resolver -- a tabela parou de CRESCER, nao de existir.
+                      "player_stats": 0, "boost": 0}
     today_br = datetime.now(_BR_TZ).date()
     agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)
     desde = today_br - timedelta(days=max_age_days) if max_age_days is not None else None
@@ -2420,6 +2424,112 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
         except Exception as e:
             logger.error("[AUTO-RESULT] goleiros query erro: %s", e)
 
+        # ── PLAYER STATS ─────────────────────────────────────────────────────
+        # Generalizacao do bloco de defesas logo acima. A diferenca e' que a
+        # coluna que liquida o pick NAO esta escrita aqui: ela vem no proprio
+        # pick, em `stat_column`, gravada pelo motor a partir do catalogo de
+        # metodos. E' o que faz um metodo novo (cruzamentos, impedimentos) nao
+        # exigir um ramo novo neste arquivo.
+        #
+        # A lista de colunas aceitas e' fechada mesmo assim: `stat_column` vai
+        # pra SQL por f-string, e um valor vindo do banco nao e' desculpa pra
+        # confiar nele.
+        #
+        # FORA da janela de `max_age_days` pelo mesmo motivo do bloco de
+        # defesas: nao ha' chamada de API aqui, entao nao ha' cota pra
+        # economizar, e a estatistica de jogador as vezes so' entra horas
+        # depois do apito.
+        _COLUNAS_PLAYER_STATS = {
+            "saves", "shots_on", "shots_total", "fouls_committed",
+            "tackles_total", "passes_total",
+        }
+        try:
+            cur.execute("""
+                SELECT DISTINCT stat_column
+                  FROM picks_player_stats
+                 WHERE result IS NULL AND stat_column IS NOT NULL
+            """)
+            colunas = [r["stat_column"] for r in cur.fetchall()
+                       if r["stat_column"] in _COLUNAS_PLAYER_STATS]
+            for coluna in colunas:
+                cur.execute(f"""
+                    SELECT pp.id, pp.line_value, pp.odd, pp.player_name, pp.method,
+                           pms.{coluna} AS valor
+                    FROM picks_player_stats pp
+                    JOIN player_match_stats pms
+                      ON pms.fixture_id = pp.fixture_id
+                     AND pms.player_id  = pp.player_id
+                    WHERE pp.result IS NULL
+                      AND pp.stat_column = %s
+                      AND pp.match_date <= %s
+                      AND pms.{coluna} IS NOT NULL
+                """, (coluna, today_br))
+                for p in cur.fetchall():
+                    try:
+                        linha = int(p["line_value"] or 0)
+                        # "N ou mais": GREEN quando valor >= N. Nunca empata --
+                        # a linha e' inteira e o mercado e' "ou mais", entao
+                        # nao existe PUSH aqui (mesma regra do pick de defesas).
+                        res = "GREEN" if int(p["valor"]) >= linha else "RED"
+                        _save_market_pick_result(
+                            "picks_player_stats", p["id"], "player_stats", res,
+                            float(p["odd"] or 1), conn)
+                        resolved["player_stats"] += 1
+                    except Exception as e:
+                        logger.error("[AUTO-RESULT] player_stats #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RESULT] player_stats query erro: %s", e)
+
+        # ── PICK BOOST ───────────────────────────────────────────────────────
+        # Duas pernas na MESMA partida: Over 1.5 no jogo inteiro e Under 2.5 no
+        # primeiro tempo. As duas precisam pagar; uma verde e uma vermelha e'
+        # RED, nao "meio verde".
+        #
+        # As duas colunas de resultado por perna existem pra responder a unica
+        # pergunta util depois de um RED: QUAL perna quebrou. Sem elas, um mes
+        # de picks vermelhos nao diria se o problema e' o modelo de gols do
+        # jogo ou o de primeiro tempo -- que sao modelos diferentes, com
+        # amostras diferentes.
+        #
+        # Estatistica ausente nunca vira zero: se `total_goals` ou o placar do
+        # intervalo nao estiverem publicados, o pick fica pendente. E' a
+        # primeira invariante do settlement, e foi violar ela que gravou RED
+        # num pick GREEN em 05/08.
+        try:
+            cur.execute("""
+                SELECT pb.id, pb.odd,
+                       ms.total_goals,
+                       ms.home_goals_ht, ms.away_goals_ht
+                  FROM picks_boost pb
+                  JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id
+                 WHERE pb.result IS NULL
+                   AND pb.match_date <= %s
+                   AND ms.status IN ('FT','AET','PEN')
+                   AND ms.total_goals   IS NOT NULL
+                   AND ms.home_goals_ht IS NOT NULL
+                   AND ms.away_goals_ht IS NOT NULL
+            """, (today_br,))
+            for p in cur.fetchall():
+                try:
+                    gols_ft = int(p["total_goals"])
+                    gols_ht = int(p["home_goals_ht"]) + int(p["away_goals_ht"])
+                    res_ft = "GREEN" if gols_ft > 1.5 else "RED"
+                    res_ht = "GREEN" if gols_ht < 2.5 else "RED"
+                    res = "GREEN" if (res_ft == "GREEN" and res_ht == "GREEN") else "RED"
+                    c = conn.cursor()
+                    c.execute("""UPDATE picks_boost
+                                    SET result_ft = %s, result_ht = %s
+                                  WHERE id = %s AND result IS NULL""",
+                              (res_ft, res_ht, p["id"]))
+                    c.close()
+                    _save_market_pick_result(
+                        "picks_boost", p["id"], "boost", res, float(p["odd"] or 1), conn)
+                    resolved["boost"] += 1
+                except Exception as e:
+                    logger.error("[AUTO-RESULT] boost #%s erro: %s", p["id"], e)
+        except Exception as e:
+            logger.error("[AUTO-RESULT] boost query erro: %s", e)
+
     finally:
         cur.close()
         conn.close()
@@ -2542,6 +2652,30 @@ def _ha_pendente_em_jogo() -> bool:
                 JOIN player_match_stats pms
                   ON pms.fixture_id = pg.fixture_id AND pms.player_id = pg.player_id
                 WHERE pg.result IS NULL AND pms.saves IS NOT NULL
+                LIMIT 1
+            """)
+            if cur.fetchone():
+                return True
+            # Motores de 27/08. Sem estas duas perguntas a varredura nunca
+            # disparava por causa deles: `maybe_resolve_pending` so' gasta uma
+            # thread quando ha' o que resolver, e "o que resolver" era uma
+            # lista escrita a mao que nao conhecia as tabelas novas -- os picks
+            # ficariam pendentes ate' alguem abrir outra pendencia por acaso.
+            cur.execute("""
+                SELECT 1 FROM picks_player_stats pp
+                JOIN player_match_stats pms
+                  ON pms.fixture_id = pp.fixture_id AND pms.player_id = pp.player_id
+                WHERE pp.result IS NULL
+                LIMIT 1
+            """)
+            if cur.fetchone():
+                return True
+            cur.execute("""
+                SELECT 1 FROM picks_boost pb
+                JOIN match_statistics ms ON ms.fixture_id = pb.fixture_id
+                WHERE pb.result IS NULL
+                  AND ms.status IN ('FT','AET','PEN')
+                  AND ms.total_goals IS NOT NULL
                 LIMIT 1
             """)
             return cur.fetchone() is not None

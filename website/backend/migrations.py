@@ -569,6 +569,171 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
             ON CONFLICT (bookmaker_id) DO NOTHING
         """)
 
+        # ── Arquitetura de motores · Engine Audit (2026-08-27) ───────────────
+        #
+        # POR QUE ESTAS TABELAS ESTAO AQUI E NAO SO' NO MOTOR
+        #
+        # Elas sao criadas pelo motor (main.py::run_migrations e
+        # services/engine_audit/audit.py) -- mas o SITE as LE, e o motor roda
+        # na mao. A aba Auditoria dos Motores nao pode depender de alguem ter
+        # rodado um pipeline pra existir: sem isto, um deploy num banco novo
+        # abre a aba em erro em vez de abrir vazia.
+        #
+        # E' a mesma assimetria que ja' mordeu em `engine_decisions`: o painel
+        # precisou de um `_sem_tabela()` pra nao devolver 500 num ambiente que
+        # nunca rodou pipeline. Criar aqui e' resolver a causa, e o
+        # `_sem_tabela` continua como rede.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS engine_runs (
+                run_id          TEXT PRIMARY KEY,
+                engine          TEXT NOT NULL,
+                method          TEXT NOT NULL,
+                engine_version  TEXT NOT NULL,
+                match_date      DATE NOT NULL,
+                started_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+                finished_at     TIMESTAMP,
+                status          TEXT NOT NULL,
+                analisados      INTEGER NOT NULL DEFAULT 0,
+                selecionados    INTEGER NOT NULL DEFAULT 0,
+                descartados     INTEGER NOT NULL DEFAULT 0,
+                erros           INTEGER NOT NULL DEFAULT 0,
+                resumo          JSONB
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_runs_recentes ON engine_runs (started_at DESC);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_runs_motor ON engine_runs (engine, method, match_date DESC);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS engine_errors (
+                id          BIGSERIAL PRIMARY KEY,
+                run_id      TEXT,
+                engine      TEXT,
+                method      TEXT,
+                fixture_id  INTEGER,
+                contexto    TEXT,
+                erro        TEXT NOT NULL,
+                traceback   TEXT,
+                created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_errors_run ON engine_errors (run_id, created_at DESC);")
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS engine_decisions (
+                id          BIGSERIAL PRIMARY KEY,
+                match_date  DATE NOT NULL,
+                pipeline    TEXT NOT NULL,
+                fixture_id  INTEGER,
+                home_team   TEXT,
+                away_team   TEXT,
+                status      TEXT NOT NULL,
+                reason      TEXT,
+                candidates  JSONB NOT NULL DEFAULT '[]'::jsonb,
+                matchup     JSONB,
+                context     JSONB,
+                created_at  TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        # As colunas que promovem engine_decisions de "log de decisao" a camada
+        # de analise da auditoria. Uma por ALTER, mesma razao do resto deste
+        # arquivo: um IF NOT EXISTS que falhe nao pode arrastar os seguintes.
+        for _coluna, _tipo in (
+            ("run_id", "TEXT"), ("engine", "TEXT"), ("method", "TEXT"),
+            ("engine_version", "TEXT"), ("score", "NUMERIC"),
+            ("probability", "NUMERIC"), ("odd", "NUMERIC"),
+            ("pick_table", "TEXT"), ("pick_id", "BIGINT"),
+        ):
+            cur.execute(f"ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS {_coluna} {_tipo}")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_run ON engine_decisions (run_id);")
+
+        # ── Picks dos motores novos ─────────────────────────────────────────
+        # Mesma DDL de main.py::run_migrations, pelo mesmo motivo das tabelas
+        # de auditoria acima: o site le, e o site nao pode esperar o motor.
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS picks_boost (
+                id            SERIAL PRIMARY KEY,
+                fixture_id    INTEGER,
+                match_date    DATE,
+                home_team     TEXT,
+                away_team     TEXT,
+                home_team_id  INTEGER,
+                away_team_id  INTEGER,
+                league_id     INTEGER,
+                league_name   TEXT,
+                market        TEXT,
+                market_type   VARCHAR(40) DEFAULT 'boost_over15_under25ht',
+                line          TEXT,
+                odd           NUMERIC,
+                odd_ft        NUMERIC,
+                odd_ht        NUMERIC,
+                bet_house_ft  TEXT,
+                bet_house_ht  TEXT,
+                market_id_ft  INTEGER,
+                market_id_ht  INTEGER,
+                score         NUMERIC,
+                confidence    NUMERIC,
+                prob_real     NUMERIC,
+                prob_ft       NUMERIC,
+                prob_ht       NUMERIC,
+                fair_odd      NUMERIC,
+                ev            NUMERIC,
+                edge          NUMERIC,
+                reasoning     TEXT,
+                stake_pct     NUMERIC,
+                stake_units   INTEGER,
+                engine_debug  JSONB,
+                result_ft     TEXT,
+                result_ht     TEXT,
+                result        TEXT,
+                profit        NUMERIC,
+                created_at    TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_boost_dia_jogo ON picks_boost (match_date, fixture_id);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_boost_pendentes ON picks_boost (match_date) WHERE result IS NULL;")
+
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS picks_player_stats (
+                id            SERIAL PRIMARY KEY,
+                fixture_id    INTEGER,
+                match_date    DATE,
+                home_team     TEXT,
+                away_team     TEXT,
+                home_team_id  INTEGER,
+                away_team_id  INTEGER,
+                league_id     INTEGER,
+                league_name   TEXT,
+                player_id     BIGINT,
+                player_name   TEXT,
+                team_id       INTEGER,
+                team_name     TEXT,
+                position      TEXT,
+                method        VARCHAR(40),
+                stat_column   VARCHAR(40),
+                market        TEXT,
+                market_type   VARCHAR(40),
+                line          TEXT,
+                line_value    NUMERIC,
+                odd           NUMERIC,
+                bet_house     TEXT,
+                market_id     INTEGER,
+                score         NUMERIC,
+                confidence    NUMERIC,
+                prob_real     NUMERIC,
+                fair_odd      NUMERIC,
+                edge          NUMERIC,
+                ev            NUMERIC,
+                reasoning     TEXT,
+                stake_pct     NUMERIC,
+                stake_units   INTEGER,
+                engine_debug  JSONB,
+                result        TEXT,
+                profit        NUMERIC,
+                created_at    TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        cur.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_player_stats_unico ON picks_player_stats (match_date, fixture_id, player_id, method);")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_pendentes ON picks_player_stats (match_date) WHERE result IS NULL;")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_picks_player_stats_metodo ON picks_player_stats (method, match_date DESC);")
+
         conn.commit()
         return True
     except Exception as e:

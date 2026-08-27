@@ -46,6 +46,7 @@ from engine_pipelines.decision_log import (
     MOTIVO_ERRO, MOTIVO_SEM_CANDIDATO,
     log_decision, log_run, log_skip,
 )
+from services.engine_audit import amostra, auditar
 
 # FAIXA DE ODD [1.10, 2.00], reposta em 2026-08-16 a pedido do usuario.
 #
@@ -350,6 +351,16 @@ def _avaliar_fixture(fixture: dict, match_stats: MatchStatsService,
         "n_casa": n_casa, "n_fora": n_fora,
         "media_casa": media_casa, "media_fora": media_fora,
         "media_arbitro": media_arbitro, "n_arbitro": n_arbitro,
+        # A AMOSTRA (2026-08-27): os jogos que o motor leu, ate' 10 por time,
+        # mais o contexto do confronto que ele ja' montou logo acima. Nao
+        # entra em nenhum calculo -- e' o que a tela "Entenda esta analise"
+        # exibe, lendo o MESMO objeto que decidiu.
+        "amostra": amostra.build(
+            home_team_id=fixture["home_team_id"],
+            away_team_id=fixture["away_team_id"],
+            historico_home=hist_casa, historico_away=hist_fora,
+            home_team=fixture.get("home_team"), away_team=fixture.get("away_team"),
+            match_context=contexto),
     }
 
 
@@ -401,6 +412,7 @@ def _salvar(cur, c: dict) -> None:
         # resumo que identifica a versao da tabela.
         "calibragem": {k: v for k, v in (c.get("calibragem") or {}).items()
                        if k != "mudancas"},
+        "amostra": c.get("amostra"),
         "ai_review": c.get("ai_review"),
     }, default=str, ensure_ascii=False)
 
@@ -423,6 +435,11 @@ def _salvar(cur, c: dict) -> None:
     ))
 
 
+# AUDITORIA (2026-08-27). Duas linhas, e nenhuma no corpo da funcao: o Pre
+# Live esta' congelado. O decorador abre a execucao (run_id, contagens,
+# status) e o decision_log carimba esse run_id sozinho nas linhas que ja'
+# gravava -- ver services/engine_audit/audit.py::auditar.
+@auditar("PRE_LIVE", "faltas")
 def run_faltas_engine():
     conn = get_connection()
     cur = conn.cursor()

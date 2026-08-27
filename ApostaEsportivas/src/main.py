@@ -9,6 +9,19 @@ A lista de comandos NÃO é repetida aqui de propósito: ela sai do registro
 COMANDOS (mais abaixo), que também alimenta o HELP, o `tudo` e os menus de
 run_dev.py / run_prod.py. Esta docstring já ficou desatualizada uma vez --
 listava `ligas` e ignorava faltas, goleiros, player_stats e live.
+
+ARQUITETURA DE MOTORES (2026-08-27) -- quatro motores, nao sete pipelines:
+
+    PRE_LIVE      vip, dica, multiplas, alavancagem, faltas
+    LIVE          live
+    PICK_BOOST    pickboost
+    PLAYER_STATS  playerstats (saves, shots_on, shots, fouls, tackles, passes)
+
+`goleiros` saiu do registro: virou o metodo `saves` do Player Stats, com o
+mesmo goalkeeper_model. O arquivo goleiros_pipeline.py fica no disco pra
+rollback. `player_stats` (o comando) e' o COLETOR de estatistica de jogador na
+API, e continua sendo outra coisa que `playerstats` (o motor) -- os nomes sao
+proximos demais, e a diferenca e' que um gasta cota e o outro gera pick.
 """
 
 import sys
@@ -293,6 +306,186 @@ def run_migrations():
         """UPDATE picks_ledger SET closing_odd = NULL, clv = NULL
            WHERE market_id IS NULL
              AND (closing_odd IS NOT NULL OR clv IS NOT NULL);""",
+
+        # ── Arquitetura de motores (2026-08-27) ───────────────────────────
+        #
+        # PICK BOOST -- combinacao FIXA de dois mercados (Over 1.5 FT + Under
+        # 2.5 HT). Uma linha por partida escolhida, com as duas pernas
+        # abertas: `odd` e' o produto, e odd_ft/odd_ht sao as pernas, porque
+        # cada uma e' apostada numa casa possivelmente diferente e cada uma
+        # liquida por conta propria.
+        #
+        # `score` e' coluna, e nao so' um campo dentro de engine_debug: e' o
+        # criterio de ORDENACAO deste motor, e criterio de ordenacao dentro de
+        # JSONB nao se indexa nem se agrega direito.
+        """CREATE TABLE IF NOT EXISTS picks_boost (
+            id            SERIAL PRIMARY KEY,
+            fixture_id    INTEGER,
+            match_date    DATE,
+            home_team     TEXT,
+            away_team     TEXT,
+            home_team_id  INTEGER,
+            away_team_id  INTEGER,
+            league_id     INTEGER,
+            league_name   TEXT,
+            market        TEXT,
+            market_type   VARCHAR(40) DEFAULT 'boost_over15_under25ht',
+            line          TEXT,
+            odd           NUMERIC,
+            odd_ft        NUMERIC,
+            odd_ht        NUMERIC,
+            bet_house_ft  TEXT,
+            bet_house_ht  TEXT,
+            market_id_ft  INTEGER,
+            market_id_ht  INTEGER,
+            score         NUMERIC,
+            confidence    NUMERIC,
+            prob_real     NUMERIC,
+            prob_ft       NUMERIC,
+            prob_ht       NUMERIC,
+            fair_odd      NUMERIC,
+            ev            NUMERIC,
+            edge          NUMERIC,
+            reasoning     TEXT,
+            stake_pct     NUMERIC,
+            stake_units   INTEGER,
+            engine_debug  JSONB,
+            -- Resultado das duas pernas separado do resultado do bilhete: uma
+            -- perna GREEN e outra RED nao e' "meio verde", e' RED -- mas sem
+            -- as duas colunas nao da' pra saber QUAL perna quebrou, que e' a
+            -- unica pergunta util depois de um RED.
+            result_ft     TEXT,
+            result_ht     TEXT,
+            result        TEXT,
+            profit        NUMERIC,
+            created_at    TIMESTAMP DEFAULT NOW()
+        );""",
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_boost_dia_jogo ON picks_boost (match_date, fixture_id);",
+        "CREATE INDEX IF NOT EXISTS idx_picks_boost_pendentes ON picks_boost (match_date) WHERE result IS NULL;",
+
+        # PLAYER STATS -- props de jogador, um metodo por estatistica.
+        #
+        # Tabela nova e nao reuso de picks_goleiros: aquela nasceu pra UM
+        # contador e o nome dela diz isso em todo lugar que a le. `method` e
+        # `stat_column` sao o que a torna generica -- a liquidacao le a coluna
+        # que o proprio pick nomeia, entao um metodo novo nao exige um ramo
+        # novo em quem resolve resultado.
+        #
+        # picks_goleiros fica intacta, com o historico dela. Ela para de
+        # crescer (o pipeline antigo sai do registro de comandos), e quem le
+        # defesas passa a ler daqui.
+        """CREATE TABLE IF NOT EXISTS picks_player_stats (
+            id            SERIAL PRIMARY KEY,
+            fixture_id    INTEGER,
+            match_date    DATE,
+            home_team     TEXT,
+            away_team     TEXT,
+            home_team_id  INTEGER,
+            away_team_id  INTEGER,
+            league_id     INTEGER,
+            league_name   TEXT,
+            player_id     BIGINT,
+            player_name   TEXT,
+            team_id       INTEGER,
+            team_name     TEXT,
+            position      TEXT,
+            -- O metodo do motor ("saves", "shots_on", ...) e a coluna de
+            -- player_match_stats que o liquida. As duas: o metodo e' o nome
+            -- de produto, a coluna e' o contrato com o dado.
+            method        VARCHAR(40),
+            stat_column   VARCHAR(40),
+            market        TEXT,
+            market_type   VARCHAR(40),
+            line          TEXT,
+            line_value    NUMERIC,
+            odd           NUMERIC,
+            bet_house     TEXT,
+            market_id     INTEGER,
+            score         NUMERIC,
+            confidence    NUMERIC,
+            prob_real     NUMERIC,
+            fair_odd      NUMERIC,
+            edge          NUMERIC,
+            ev            NUMERIC,
+            reasoning     TEXT,
+            stake_pct     NUMERIC,
+            stake_units   INTEGER,
+            engine_debug  JSONB,
+            result        TEXT,
+            profit        NUMERIC,
+            created_at    TIMESTAMP DEFAULT NOW()
+        );""",
+        # `method` entra na chave: o mesmo jogador pode ter pick de chutes e de
+        # faltas no mesmo jogo -- sao apostas diferentes, nao duplicata.
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_picks_player_stats_unico ON picks_player_stats (match_date, fixture_id, player_id, method);",
+        "CREATE INDEX IF NOT EXISTS idx_picks_player_stats_pendentes ON picks_player_stats (match_date) WHERE result IS NULL;",
+        "CREATE INDEX IF NOT EXISTS idx_picks_player_stats_metodo ON picks_player_stats (method, match_date DESC);",
+
+        # AUDITORIA -- as tabelas sao criadas pelo proprio Engine Audit na
+        # primeira execucao (services/engine_audit/audit.py::_ensure_tables).
+        # Ficam aqui tambem porque `python main.py setup` tem que deixar o
+        # banco pronto SEM precisar rodar um motor antes -- e porque o painel
+        # do site le estas tabelas e nao pode depender de o motor ter rodado.
+        """CREATE TABLE IF NOT EXISTS engine_runs (
+            run_id          TEXT PRIMARY KEY,
+            engine          TEXT NOT NULL,
+            method          TEXT NOT NULL,
+            engine_version  TEXT NOT NULL,
+            match_date      DATE NOT NULL,
+            started_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+            finished_at     TIMESTAMP,
+            status          TEXT NOT NULL,
+            analisados      INTEGER NOT NULL DEFAULT 0,
+            selecionados    INTEGER NOT NULL DEFAULT 0,
+            descartados     INTEGER NOT NULL DEFAULT 0,
+            erros           INTEGER NOT NULL DEFAULT 0,
+            resumo          JSONB
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_engine_runs_recentes ON engine_runs (started_at DESC);",
+        "CREATE INDEX IF NOT EXISTS idx_engine_runs_motor ON engine_runs (engine, method, match_date DESC);",
+        """CREATE TABLE IF NOT EXISTS engine_errors (
+            id          BIGSERIAL PRIMARY KEY,
+            run_id      TEXT,
+            engine      TEXT,
+            method      TEXT,
+            fixture_id  INTEGER,
+            contexto    TEXT,
+            erro        TEXT NOT NULL,
+            traceback   TEXT,
+            created_at  TIMESTAMP NOT NULL DEFAULT NOW()
+        );""",
+        "CREATE INDEX IF NOT EXISTS idx_engine_errors_run ON engine_errors (run_id, created_at DESC);",
+        # engine_decisions ja' existe desde 07/08 (criada pelo decision_log).
+        # O CREATE aqui e' pra `setup` num banco novo: sem ele os ALTER abaixo
+        # falhariam um a um num banco que ainda nao rodou pipeline nenhum --
+        # nao quebraria nada (cada migracao tem rollback proprio), mas
+        # imprimiria nove ERRO que nao sao erro.
+        """CREATE TABLE IF NOT EXISTS engine_decisions (
+            id          BIGSERIAL PRIMARY KEY,
+            match_date  DATE NOT NULL,
+            pipeline    TEXT NOT NULL,
+            fixture_id  INTEGER,
+            home_team   TEXT,
+            away_team   TEXT,
+            status      TEXT NOT NULL,
+            reason      TEXT,
+            candidates  JSONB NOT NULL DEFAULT '[]'::jsonb,
+            matchup     JSONB,
+            context     JSONB,
+            created_at  TIMESTAMP DEFAULT NOW()
+        );""",
+        # Estas colunas sao o que a promove de "log de decisao" a camada de
+        # analise da auditoria, sem uma tabela paralela com a mesma linha.
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS run_id TEXT;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS engine TEXT;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS method TEXT;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS engine_version TEXT;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS score NUMERIC;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS probability NUMERIC;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS odd NUMERIC;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS pick_table TEXT;",
+        "ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS pick_id BIGINT;",
+        "CREATE INDEX IF NOT EXISTS idx_engine_decisions_run ON engine_decisions (run_id);",
     ]
     conn = get_connection()
     cur = conn.cursor()
@@ -401,9 +594,41 @@ def cmd_faltas():
     run_faltas_engine()
 
 
-def cmd_goleiros():
-    from engine_pipelines.goleiros_pipeline import run_goleiros_engine
-    run_goleiros_engine()
+def cmd_pick_boost():
+    """Pick Boost -- Over 1.5 FT + Under 2.5 HT, escolhendo JOGOS.
+
+    Fase 1 (27/08): grava em picks_boost e aparece na aba Auditoria dos
+    Motores, mas nao publica no site. Decisao do usuario: medir alguns dias
+    antes de expor.
+    """
+    from engine_pipelines.pick_boost_pipeline import run_pick_boost_engine
+    run_pick_boost_engine()
+
+
+def cmd_playerstats(*args):
+    """Player Stats -- props de jogador (saves, chutes, faltas, desarmes...).
+
+    Sem argumento roda os seis metodos, cada um com o proprio run_id. Com
+    argumento roda so' os metodos citados: `playerstats saves shots_on`.
+
+    ABSORVEU O MOTOR DE GOLEIROS (27/08). `cmd_goleiros` saiu do registro; o
+    metodo `saves` daqui usa o MESMO goalkeeper_model, sem alteracao. O
+    pipeline antigo continua no disco pra rollback.
+    """
+    from engine_pipelines.player_stats_pipeline import run_player_stats_engine
+    from services.player_stats_engine import methods as _cat
+
+    pedidos = [a.lower() for a in args if a]
+    if not pedidos:
+        run_player_stats_engine()
+        return
+    alvos = tuple(m for m in _cat.METODOS if m.slug in pedidos)
+    desconhecidos = [p for p in pedidos if p not in _cat.POR_SLUG]
+    if desconhecidos:
+        print(f"[PLAYER_STATS] Metodo(s) desconhecido(s): {', '.join(desconhecidos)}. "
+              f"Disponiveis: {', '.join(m.slug for m in _cat.METODOS)}")
+    if alvos:
+        run_player_stats_engine(alvos)
 
 
 def cmd_live(*args):
@@ -570,12 +795,22 @@ COMANDOS: tuple = (
     Comando("alavancagem", "Gerar alavancagem (motor)",
             "Gera pick de alavancagem",
             lambda *a: cmd_alavancagem(), etapa="ALAVANCAGEM"),
-    Comando("faltas", "Gerar picks de faltas (motor)",
-            "Gera picks de faltas (Over 22.5 total do jogo)",
-            lambda *a: cmd_faltas(), etapa="FALTAS"),
-    Comando("goleiros", "Gerar defesas de goleiro (motor)",
-            "Gera picks de defesas por goleiro (prop de jogador)",
-            lambda *a: cmd_goleiros(), etapa="DEFESAS DE GOLEIRO"),
+    # Faltas e' METODO do Pre Live desde 27/08, nao motor independente. O
+    # pipeline continua sendo um arquivo proprio por razao tecnica (o
+    # fouls_model nao e' parametrico e nao cabe no ranking generico -- ver a
+    # docstring dele), e o rotulo aqui reflete a taxonomia nova.
+    Comando("faltas", "Pré Live · mercado de faltas",
+            "Gera picks de faltas (método do Pré Live)",
+            lambda *a: cmd_faltas(), etapa="PRÉ LIVE · FALTAS"),
+    Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
+            "Escolhe os melhores JOGOS do dia para a combinação fixa",
+            lambda *a: cmd_pick_boost(), etapa="PICK BOOST"),
+    Comando("playerstats", "Player Stats · props de jogador",
+            "Gera props de jogador (saves, chutes, faltas, desarmes, passes)",
+            lambda *a: cmd_playerstats(*a), etapa="PLAYER STATS",
+            uso="playerstats [metodo ...]",
+            detalhe="playerstats             roda os seis métodos\n"
+                    "playerstats saves       roda só defesas de goleiro"),
     Comando("resultados", "Atualizar resultados (VIP+Free+Mult+Alav)",
             "Atualiza resultados de todos os picks",
             lambda *a: cmd_resultados(), etapa="RESULTADOS"),

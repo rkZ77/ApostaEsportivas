@@ -70,15 +70,59 @@ def _ensure_table() -> None:
         context     JSONB,
         created_at  TIMESTAMP DEFAULT NOW()
     )""")
+    # Colunas da auditoria (2026-08-27). Ficam aqui e nao so' em
+    # services/engine_audit porque QUEM CHEGA PRIMEIRO no banco cria: um
+    # pipeline de pre-jogo rodando sozinho comeca por este modulo, e o INSERT
+    # logo abaixo ja' escreve run_id/engine/method. Sem os ALTER aqui, um banco
+    # com a tabela antiga quebraria em toda linha de log ate' alguem rodar um
+    # motor novo.
+    for coluna, tipo in (
+        ("run_id", "TEXT"), ("engine", "TEXT"), ("method", "TEXT"),
+        ("engine_version", "TEXT"), ("score", "NUMERIC"),
+        ("probability", "NUMERIC"), ("odd", "NUMERIC"),
+        ("pick_table", "TEXT"), ("pick_id", "BIGINT"),
+    ):
+        cur.execute(f"ALTER TABLE engine_decisions ADD COLUMN IF NOT EXISTS {coluna} {tipo}")
     # A consulta real e' sempre "o que aconteceu no dia X no pipeline Y".
     cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_dia "
                 "ON engine_decisions (match_date DESC, pipeline)")
+    cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_run "
+                "ON engine_decisions (run_id)")
     cur.execute("CREATE INDEX IF NOT EXISTS idx_engine_decisions_fixture "
                 "ON engine_decisions (fixture_id)")
     conn.commit()
     cur.close()
     conn.close()
     _tabela_pronta = True
+
+
+def _carimbo_da_execucao(pipeline: str) -> tuple:
+    """(run_id, engine, method, engine_version) da execucao em andamento.
+
+    ACRESCENTADO EM 2026-08-27, e de proposito ninguem precisa passar nada.
+    O Engine Audit mantem a execucao corrente num ContextVar, entao embrulhar
+    `run_vip_engine()` num `with EngineRun(...)` basta pra TODAS as linhas que
+    este modulo ja' gravava passarem a ter run_id -- sem tocar em nenhuma das
+    chamadas de log_skip/log_decision espalhadas pelo fundo dos pipelines.
+
+    Fora de uma execucao auditada (rodar o pipeline direto, backtest, teste),
+    devolve o motor/metodo resolvidos pelo nome do pipeline e run_id None. A
+    linha continua sendo gravada: o log e' anterior a auditoria e nao pode
+    passar a depender dela.
+    """
+    try:
+        from services.engine_audit import audit as _audit
+        from services.engine_audit import registry as _registry
+
+        run = _audit.run_atual()
+        if run is not None and run.pipeline == pipeline:
+            return (run.run_id, run.motor, run.metodo, run.versao)
+        motor, metodo, versao = _registry.resolver_pipeline(pipeline)
+        return (run.run_id if run is not None else None, motor, metodo, versao)
+    except Exception:
+        # Auditoria indisponivel nao pode impedir o log de decisao, que
+        # funciona sozinho desde 07/08.
+        return (None, None, None, None)
 
 
 def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None,
@@ -88,6 +132,7 @@ def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None
     (_best_candidate_across_fixtures, _gather_leg_candidates), e passar cursor
     por parametro ate' la' acoplaria o motor ao log."""
     fixture = fixture or {}
+    run_id, engine, method, versao = _carimbo_da_execucao(pipeline)
     try:
         _ensure_table()
         conn = get_connection()
@@ -95,13 +140,15 @@ def _gravar(pipeline: str, fixture: dict | None, status: str, reason: str | None
         cur.execute(
             f"""INSERT INTO engine_decisions
             (match_date, pipeline, fixture_id, home_team, away_team, status, reason,
-             candidates, matchup, context)
-            VALUES ({HOJE_BR}, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb)""",
+             candidates, matchup, context, run_id, engine, method, engine_version)
+            VALUES ({HOJE_BR}, %s, %s, %s, %s, %s, %s, %s::jsonb, %s::jsonb, %s::jsonb,
+                    %s, %s, %s, %s)""",
             (pipeline, fixture.get("fixture_id"), fixture.get("home_team"),
              fixture.get("away_team"), status, reason,
              json.dumps(candidates, ensure_ascii=False, default=str),
              json.dumps(matchup, ensure_ascii=False, default=str) if matchup else None,
-             json.dumps(context_data, ensure_ascii=False, default=str) if context_data else None),
+             json.dumps(context_data, ensure_ascii=False, default=str) if context_data else None,
+             run_id, engine, method, versao),
         )
         conn.commit()
         cur.close()

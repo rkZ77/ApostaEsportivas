@@ -14,6 +14,10 @@ from typing import Optional
 from database import get_connection
 from data_br import HOJE_BR, data_br
 from auth_utils import require_admin, hash_password, get_current_user, invalidar_cache_usuario
+# Catalogo de motores/metodos do MOTOR, nao uma copia daqui -- ver o comentario
+# em settlement_bridge.py. Alimenta a aba Auditoria dos Motores com os rotulos
+# e as versoes que o proprio motor grava.
+from settlement_bridge import engine_registry
 
 _pipeline_status: dict = {}  # command -> {status, started_at, finished_at, returncode}
 
@@ -3939,6 +3943,376 @@ def motor_decisoes_linhas(
 
     return {"total": total, "pagina": pagina, "por_pagina": por_pagina,
             "linhas": linhas, "virou_pick": virou_pick}
+
+
+# ─── Auditoria dos Motores ──────────────────────────────────────────────────
+#
+# A aba Motor respondia "o que o motor olhou HOJE". Faltava a camada de cima:
+# QUAIS EXECUÇÕES aconteceram, de qual motor, em que versão, com que status, e
+# o que cada uma decidiu.
+#
+# A diferença entre as duas é a pergunta que cada uma responde. "Por que não
+# saiu pick de faltas hoje?" tem três respostas possíveis e só a execução as
+# separa: o motor não rodou · rodou e falhou · rodou, olhou 14 jogos e nenhum
+# passou. Sem `engine_runs`, as três eram indistinguíveis de fora, porque as
+# três produzem a mesma coisa: nenhuma linha em picks_faltas.
+#
+# A fonte é o Engine Audit (ApostaEsportivas/src/services/engine_audit), que
+# grava DURANTE a execução do motor. Nada aqui recalcula nada: se um número
+# desta tela discordasse do motor, a tela estaria errada por construção.
+#
+# Nada aqui escreve. Auditoria que a tela altera deixa de ser auditoria.
+
+_EXECUCOES_POR_PAGINA_MAX = 50
+
+#: Ordem em que os motores aparecem. Sai do registro do motor quando ele está
+#: no caminho (ver settlement_bridge.engine_registry) · a lista literal é só o
+#: fallback de ambiente sem o pipeline montado.
+_ORDEM_MOTORES = ("PRE_LIVE", "LIVE", "PICK_BOOST", "PLAYER_STATS")
+
+
+def _catalogo_de_motores() -> list:
+    """[{slug, label, prefixo, metodos:[{slug,label,versao}]}] pro painel.
+
+    Vem do registro do MOTOR, não de uma cópia aqui. Foi manter uma cópia à
+    mão (`_PIPELINES_DO_MOTOR`, logo acima) que fez esta tela precisar de um
+    ramo "pipeline que a lista não conhece".
+    """
+    if engine_registry is None:
+        return [{"slug": s, "label": s, "prefixo": s[:2], "metodos": []}
+                for s in _ORDEM_MOTORES]
+    return [
+        {"slug": m.slug, "label": m.label, "prefixo": m.prefixo,
+         "metodos": [{"slug": met.slug, "label": met.label, "versao": met.versao,
+                      "tabela_picks": met.tabela_picks}
+                     for met in m.metodos]}
+        for m in engine_registry.MOTORES
+    ]
+
+
+def _rotulo_do_metodo(motor: str | None, metodo: str | None) -> str:
+    if engine_registry is None or not motor or not metodo:
+        return metodo or motor or "?"
+    met = engine_registry.metodo(motor, metodo)
+    return met.label if met else (metodo or "?")
+
+
+def _sem_auditoria(e: Exception) -> bool:
+    """`engine_runs` ausente não é defeito do painel · ver `_sem_tabela`."""
+    texto = str(e).lower()
+    return ("engine_runs" in texto or "engine_errors" in texto) and "exist" in texto
+
+
+@router.get("/motor/execucoes")
+def motor_execucoes(
+    motor: str | None = None,
+    metodo: str | None = None,
+    status: str | None = None,
+    data: str | None = None,
+    pagina: int = 0,
+    por_pagina: int = 20,
+    current_user: dict = Depends(require_admin),
+):
+    """Execuções recentes dos motores · a lista de cima da aba.
+
+    Ordenada por início decrescente, não por data do jogo: a pergunta desta
+    tela é sempre "o que rodou por último", e o motor ao vivo roda várias vezes
+    pelo mesmo `match_date`.
+    """
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), _EXECUCOES_POR_PAGINA_MAX)
+
+    filtros, params = [], []
+    if motor:
+        filtros.append("engine = %s")
+        params.append(motor)
+    if metodo:
+        filtros.append("method = %s")
+        params.append(metodo)
+    if status:
+        filtros.append("status = %s")
+        params.append(status)
+    if data:
+        filtros.append("match_date = %s")
+        params.append(data)
+    onde = ("WHERE " + " AND ".join(filtros)) if filtros else ""
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT COUNT(*) AS n FROM engine_runs {onde}", tuple(params))
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        cur.execute(f"""
+            SELECT r.run_id, r.engine, r.method, r.engine_version,
+                   r.match_date::text AS dia,
+                   r.started_at::text  AS iniciada_em,
+                   r.finished_at::text AS terminada_em,
+                   -- Duração em segundos. Execução aberta (RUNNING) mede
+                   -- contra AGORA: é assim que se vê uma que travou, em vez
+                   -- de ela aparecer sem duração e parecer instantânea.
+                   EXTRACT(EPOCH FROM (COALESCE(r.finished_at, NOW()) - r.started_at))::int AS duracao_s,
+                   r.status, r.analisados, r.selecionados, r.descartados, r.erros,
+                   r.resumo
+              FROM engine_runs r
+              {onde}
+             ORDER BY r.started_at DESC
+             LIMIT %s OFFSET %s
+        """, tuple(params) + (por_pagina, pagina * por_pagina))
+        execucoes = [dict(r) for r in cur.fetchall()]
+        for e in execucoes:
+            e["metodo_label"] = _rotulo_do_metodo(e.get("engine"), e.get("method"))
+
+        # Retrato do dia por motor+método, pra a tela ter o topo antes da
+        # lista. Últimas 24h e não `match_date`: execução é evento de relógio.
+        cur.execute("""
+            SELECT engine, method,
+                   COUNT(*)                                   AS execucoes,
+                   COUNT(*) FILTER (WHERE status = 'FAILED')   AS falhas,
+                   COUNT(*) FILTER (WHERE status = 'PARTIAL')  AS parciais,
+                   COUNT(*) FILTER (WHERE status = 'RUNNING')  AS rodando,
+                   SUM(analisados)                             AS analisados,
+                   SUM(selecionados)                           AS selecionados,
+                   SUM(erros)                                  AS erros,
+                   MAX(started_at)::text                       AS ultima
+              FROM engine_runs
+             WHERE started_at >= NOW() - INTERVAL '24 hours'
+             GROUP BY engine, method
+        """)
+        resumo_24h = [dict(r) for r in cur.fetchall()]
+        for r in resumo_24h:
+            r["metodo_label"] = _rotulo_do_metodo(r.get("engine"), r.get("method"))
+    except Exception as e:
+        conn.rollback()
+        if _sem_auditoria(e) or _sem_tabela(e):
+            return {"disponivel": False, "total": 0, "execucoes": [],
+                    "resumo_24h": [], "motores": _catalogo_de_motores(),
+                    "erro": "Nenhum motor registrou execução neste banco ainda."}
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] execucoes: %s", e)
+        return {"disponivel": False, "total": 0, "execucoes": [], "resumo_24h": [],
+                "motores": _catalogo_de_motores(), "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"disponivel": True, "total": total, "pagina": pagina,
+            "por_pagina": por_pagina, "execucoes": execucoes,
+            "resumo_24h": resumo_24h, "motores": _catalogo_de_motores()}
+
+
+@router.get("/motor/execucoes/{run_id}")
+def motor_execucao(
+    run_id: str,
+    filtro: str = "todos",
+    pagina: int = 0,
+    por_pagina: int = 20,
+    current_user: dict = Depends(require_admin),
+):
+    """Uma execução por dentro: os jogos analisados e os erros.
+
+    `filtro` é `todos` | `selecionados` | `descartados` | `erros`. Selecionado
+    primeiro na ordenação padrão porque é a linha com conteúdo · ler trinta
+    descartes antes do primeiro jogo escolhido é o mesmo que não ter a tela
+    (mesma decisão de `motor_decisoes_linhas`).
+    """
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), _DECISOES_POR_PAGINA_MAX)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT run_id, engine, method, engine_version,
+                   match_date::text AS dia,
+                   started_at::text AS iniciada_em, finished_at::text AS terminada_em,
+                   status, analisados, selecionados, descartados, erros, resumo
+              FROM engine_runs WHERE run_id = %s
+        """, (run_id,))
+        execucao = cur.fetchone()
+        if not execucao:
+            raise HTTPException(404, "Execução não encontrada")
+        execucao = dict(execucao)
+        execucao["metodo_label"] = _rotulo_do_metodo(execucao.get("engine"),
+                                                     execucao.get("method"))
+
+        erros = []
+        if filtro in ("todos", "erros"):
+            cur.execute("""
+                SELECT id, fixture_id, contexto, erro, traceback,
+                       created_at::text AS quando
+                  FROM engine_errors WHERE run_id = %s
+                 ORDER BY created_at
+                 LIMIT 50
+            """, (run_id,))
+            erros = [dict(r) for r in cur.fetchall()]
+
+        jogos, total = [], 0
+        if filtro != "erros":
+            filtros, params = ["run_id = %s"], [run_id]
+            if filtro == "selecionados":
+                filtros.append("status = 'selecionado'")
+            elif filtro == "descartados":
+                filtros.append("status <> 'selecionado'")
+            onde = " AND ".join(filtros)
+
+            cur.execute(f"SELECT COUNT(*) AS n FROM engine_decisions WHERE {onde}",
+                        tuple(params))
+            total = (cur.fetchone() or {}).get("n") or 0
+
+            cur.execute(f"""
+                SELECT id, fixture_id, home_team, away_team, status, reason,
+                       score, probability, odd, pick_table, pick_id,
+                       candidates, context, created_at::text AS gravada_em
+                  FROM engine_decisions
+                 WHERE {onde}
+                 ORDER BY (status = 'selecionado') DESC,
+                          score DESC NULLS LAST, id
+                 LIMIT %s OFFSET %s
+            """, tuple(params) + (por_pagina, pagina * por_pagina))
+            jogos = [dict(r) for r in cur.fetchall()]
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        if _sem_auditoria(e) or _sem_tabela(e):
+            return {"disponivel": False, "erro": "Auditoria ainda não existe neste banco."}
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] execucao %s: %s", run_id, e)
+        return {"disponivel": False, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"disponivel": True, "execucao": execucao, "jogos": jogos,
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
+            "erros": erros, "filtro": filtro}
+
+
+#: Tabelas de pick que a tela "Por que essa pick?" sabe abrir, e a coluna que
+#: identifica o autor da linha. Lista fechada de propósito: `tabela` vem da
+#: query string e entra em SQL por f-string · aceitar qualquer nome seria
+#: injeção. Mesma trava que `_PICK_FONTE` usa em suggestions.py.
+_TABELAS_EXPLICAVEIS = {
+    "picks_vip":          "VIP",
+    "picks_free":         "Free",
+    "picks_faltas":       "Faltas",
+    "picks_goleiros":     "Defesas (histórico)",
+    "picks_player_stats": "Player Stats",
+    "picks_boost":        "Pick Boost",
+    "picks_live":         "Ao vivo",
+}
+
+
+@router.get("/motor/pick/porque")
+def motor_pick_porque(
+    tabela: str,
+    pick_id: int,
+    current_user: dict = Depends(require_admin),
+):
+    """"Por que essa pick?" · os indicadores que sustentaram a decisão.
+
+    Monta a resposta de duas fontes, e nenhuma delas é um recálculo:
+
+      · `engine_debug` do próprio pick · o retrato do candidato no instante da
+        escolha, incluindo a AMOSTRA (quais jogos o motor leu);
+      · a linha de `engine_decisions` daquela partida · o run_id, a versão do
+        motor, o score, e o resumo estruturado que o motor gravou.
+
+    A segunda é o que amarra o pick à execução: com ela, "qual versão do motor
+    gerou este pick" e "quais outros jogos ele olhou naquele momento" deixam de
+    exigir arqueologia de log.
+    """
+    if tabela not in _TABELAS_EXPLICAVEIS:
+        raise HTTPException(400, "Tabela de pick desconhecida")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT id, fixture_id, match_date::text AS dia,
+                   home_team, away_team, market, line, odd,
+                   reasoning, engine_debug, result,
+                   created_at::text AS criada_em
+              FROM {tabela} WHERE id = %s
+        """, (pick_id,))
+        pick = cur.fetchone()
+        if not pick:
+            raise HTTPException(404, "Pick não encontrado")
+        pick = dict(pick)
+
+        # A decisão que gerou ESTE pick. Primeiro pelo vínculo direto
+        # (pick_table + pick_id, gravado pelos motores novos); depois pela
+        # partida, que é o que existe para os picks anteriores à auditoria.
+        cur.execute("""
+            SELECT run_id, engine, method, engine_version, status, reason,
+                   score, probability, odd, context, candidates,
+                   created_at::text AS gravada_em
+              FROM engine_decisions
+             WHERE (pick_table = %s AND pick_id = %s)
+                OR (fixture_id = %s AND match_date = %s::date
+                    AND status IN ('selecionado', 'avaliado'))
+             ORDER BY (pick_table = %s AND pick_id = %s) DESC, id DESC
+             LIMIT 1
+        """, (tabela, pick_id, pick.get("fixture_id"), pick.get("dia"),
+              tabela, pick_id))
+        decisao = cur.fetchone()
+        decisao = dict(decisao) if decisao else None
+
+        execucao = None
+        if decisao and decisao.get("run_id"):
+            cur.execute("""
+                SELECT run_id, engine, method, engine_version,
+                       started_at::text AS iniciada_em, status,
+                       analisados, selecionados, descartados, erros
+                  FROM engine_runs WHERE run_id = %s
+            """, (decisao["run_id"],))
+            linha = cur.fetchone()
+            execucao = dict(linha) if linha else None
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] porque %s#%s: %s",
+                                            tabela, pick_id, e)
+        return {"disponivel": False, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    debug = pick.get("engine_debug") or {}
+    if isinstance(debug, str):
+        try:
+            debug = json.loads(debug)
+        except Exception:
+            debug = {}
+
+    contexto = (decisao or {}).get("context") or {}
+    if isinstance(contexto, str):
+        try:
+            contexto = json.loads(contexto)
+        except Exception:
+            contexto = {}
+
+    return {
+        "disponivel": True,
+        "fonte": _TABELAS_EXPLICAVEIS[tabela],
+        "pick": {k: v for k, v in pick.items() if k != "engine_debug"},
+        # O resumo estruturado que o motor gravou · é ele que a tela lista
+        # ("Over 1.5: 9 de 10 jogos"). Vem pronto do motor de propósito:
+        # montá-lo aqui seria escrever a explicação uma segunda vez, e as duas
+        # versões acabariam divergindo.
+        "resumo": contexto.get("resumo"),
+        "conclusao": contexto.get("conclusao"),
+        "parcelas": contexto.get("parcelas") or debug.get("parcelas"),
+        "pontos_fracos": contexto.get("pontos_fracos") or debug.get("pontos_fracos"),
+        # A AMOSTRA · quais jogos entraram na conta. `engine_debug` primeiro
+        # porque é o retrato do pick; o contexto da decisão é a reserva para
+        # picks gravados antes de a amostra existir no engine_debug.
+        "amostra": debug.get("amostra") or contexto.get("amostra"),
+        "engine_debug": debug,
+        "decisao": {k: v for k, v in (decisao or {}).items()
+                    if k not in ("context",)} if decisao else None,
+        "execucao": execucao,
+    }
 
 
 @router.get("/bookmakers")

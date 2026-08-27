@@ -60,6 +60,7 @@ from services.pick_engine import competition_rules_store
 from services.pick_engine_live.live_feed import (
     LiveFeed, OrcamentoEsgotado, ler_estatisticas,
 )
+from services.engine_audit import auditar
 from engine_pipelines import decision_log
 from engine_pipelines.decision_log import (
     LIVE_DUPLICATA, LIVE_NENHUM_APROVADO, LIVE_REPROVOU_TRIAGEM,
@@ -952,6 +953,11 @@ def salvar_pick(cur, analise: dict, candidato: dict, config: LiveEngineConfig,
 # ─────────────────────────────────────────────────────────────────────────
 # RODADA
 # ─────────────────────────────────────────────────────────────────────────
+# AUDITORIA (2026-08-27). Uma execucao POR RODADA, e isso e' o ponto: o motor
+# ao vivo roda em laco (uma noite de 23/08 deu 91 rodadas) e ate' aqui so' a
+# ULTIMA sobrevivia, em memoria no processo do site. Com um run_id por rodada,
+# "em que minuto a partida morreu" passa a ter resposta em SQL.
+@auditar("LIVE", "live")
 def run_live_engine(fixture_id: int | None = None,
                     dry_run: bool | None = None,
                     max_partidas: int | None = None,
