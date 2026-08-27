@@ -25,6 +25,35 @@ FIM_DE_JOGO = "('FT', 'AET', 'PEN')"
 # API · não custa requisição.
 DEFAULT_LIMIT_MULTI = 30
 
+# Quantos jogos ler no histórico DE LIGA (pontos corridos).
+#
+# Aqui o recorte já é a própria liga e a própria temporada · o campeonato tem
+# começo e fim, e o time joga entre 38 e 46 partidas nele. O teto existe só pra
+# a consulta não virar varredura se aparecer temporada com dado sujo; na
+# prática ele quer dizer "a temporada inteira".
+#
+# ERA 15, E ESSE 15 FICOU PARA TRÁS.
+#
+# O limite do caminho multi-competição subiu de 15 para 30 em 2026-08-13, com a
+# razão escrita na constante acima: `stats_model.pool_and_field` fica só com os
+# jogos do MANDO que o mercado descreve, e isso corta o pool a aproximadamente
+# metade · com 15 o time chegava a ~7 e não alcançava `sample_rich_n=8` quase
+# nunca. A razão vale igual aqui, e ninguém subiu este lado.
+#
+# O efeito era o motor enxergar bem o que é raro (copa, mata-mata, seleção, que
+# passam pelo caminho multi) e enxergar pouco justamente o que é comum: liga de
+# pontos corridos, que é a origem da maioria esmagadora dos jogos analisados.
+# Depois do filtro de mando e do descarte por família, sobrava algo em torno de
+# cinco jogos por mercado.
+#
+# Ampliar não afrouxa a análise: `temporal_decay_weight` já pesa jogo velho
+# menos (0,50 acima de 60 dias, contra 1,0 nos últimos 14). O LIMIT era um
+# corte duro, de tudo ou nada, em cima de um sistema que já tinha amortecimento
+# suave · e o corte duro estava chegando antes do amortecimento.
+#
+# É leitura de banco, não de API: não custa requisição.
+DEFAULT_LIMIT_LEAGUE = 60
+
 
 ###############################################################################
 # Sanitização universal (garante compatibilidade com JSON)
@@ -64,11 +93,17 @@ class MatchStatsService:
         return clean_list(rows)
 
     ##########################################################################
-    # Últimos 10 jogos EM CASA da liga + temporada
+    # Jogos EM CASA da liga + temporada (a temporada inteira)
     # Inclui opponent_name e opponent_rank via join com league_standings
     ##########################################################################
     def get_home_matches(self, team_id, season, league_id):
-        return self._query("""
+        """Jogos EM CASA daquele time na liga e temporada · a temporada toda.
+
+        Mesmo corte de DEFAULT_LIMIT_LEAGUE do histórico completo, e pelo mesmo
+        motivo: aqui o pool já nasce de um mando só, então cortar em 15 é
+        cortar quase metade de um returno inteiro.
+        """
+        return self._query(f"""
             SELECT
                 ms.match_date,
                 ms.home_team_id, ms.away_team_id,
@@ -94,16 +129,18 @@ class MatchStatsService:
             WHERE ms.home_team_id = %s
               AND ms.season = %s
               AND ms.league_id = %s
+              AND ms.status IN {FIM_DE_JOGO}
             ORDER BY ms.match_date DESC
-            LIMIT 15;
+            LIMIT {DEFAULT_LIMIT_LEAGUE};
         """, (team_id, season, league_id))
 
     ##########################################################################
-    # Últimos 10 jogos FORA da liga + temporada
+    # Jogos FORA da liga + temporada (a temporada inteira)
     # Inclui opponent_name e opponent_rank via join com league_standings
     ##########################################################################
     def get_away_matches(self, team_id, season, league_id):
-        return self._query("""
+        """Jogos FORA daquele time na liga e temporada · ver get_home_matches."""
+        return self._query(f"""
             SELECT
                 ms.match_date,
                 ms.home_team_id, ms.away_team_id,
@@ -129,12 +166,13 @@ class MatchStatsService:
             WHERE ms.away_team_id = %s
               AND ms.season = %s
               AND ms.league_id = %s
+              AND ms.status IN {FIM_DE_JOGO}
             ORDER BY ms.match_date DESC
-            LIMIT 15;
+            LIMIT {DEFAULT_LIMIT_LEAGUE};
         """, (team_id, season, league_id))
 
     ##########################################################################
-    # Últimos 10 jogos (CASA + FORA) da liga + temporada
+    # Jogos (CASA + FORA) da liga + temporada (a temporada inteira)
     # Inclui opponent_name e opponent_rank via join com league_standings
     ##########################################################################
     def get_all_matches_full(self, team_id, season, league_id, before_date=None, since_date=None):
@@ -146,7 +184,8 @@ class MatchStatsService:
         técnico/elenco relevante, ver teams.structural_change_date) pra não
         deixar jogos de ANTES da mudança contaminar a taxa histórica. Os
         dois filtros são independentes e podem coexistir. None (padrão)
-        preserva o comportamento atual (últimos 15 jogos existentes)."""
+        lê a temporada inteira daquela liga · ver DEFAULT_LIMIT_LEAGUE, e o
+        porquê de não serem mais os 15 de antes."""
         date_filter = "AND ms.match_date < %s" if before_date else ""
         since_filter = "AND ms.match_date >= %s" if since_date else ""
         params = (
@@ -186,10 +225,16 @@ class MatchStatsService:
             WHERE (ms.home_team_id = %s OR ms.away_team_id = %s)
               AND ms.season = %s
               AND ms.league_id = %s
+              -- Status entra em 2026-08-27. O caminho multi-competição sempre
+              -- filtrou (FIM_DE_JOGO); este não, e jogo adiado ou interrompido
+              -- com linha gravada entrava no histórico com o que estivesse na
+              -- folha. Quem decide se um AET serve pra família de mercado em
+              -- questão continua sendo stats_model.pool_and_field.
+              AND ms.status IN {FIM_DE_JOGO}
               {date_filter}
               {since_filter}
             ORDER BY ms.match_date DESC
-            LIMIT 15;
+            LIMIT {DEFAULT_LIMIT_LEAGUE};
         """, params)
 
     ##########################################################################
