@@ -35,7 +35,7 @@ export type AlvoAmostra =
    * que mostrava só os jogos em casa daria dois números diferentes na mesma
    * tela sem explicação. */
   | { tipo: 'jogador'; playerId: number; season?: number | null; nome?: string | null
-      mando?: 'todos' | 'casa' | 'fora' }
+      mando?: 'todos' | 'casa' | 'fora'; leagueId?: number | null }
 
 interface JogoTime {
   fixture_id: number
@@ -74,6 +74,8 @@ interface Atuacao {
   home_goals: number | null
   away_goals: number | null
   rating: number | string | null
+  liga: string | null
+  league_id: number | null
   [k: string]: unknown
 }
 
@@ -127,6 +129,7 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
     if (season != null) params.season = season
     if (alvo.tipo === 'time' && alvo.leagueId != null) params.league_id = alvo.leagueId
     if (alvo.tipo === 'jogador' && alvo.mando) params.mando = alvo.mando
+    if (alvo.tipo === 'jogador' && alvo.leagueId != null) params.league_id = alvo.leagueId
     api.get(url, { params })
       .then(r => {
         setDados(r.data)
@@ -185,6 +188,11 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
               <p className="text-[10px] font-mono text-ink-4">
                 {dados.lidas} de {dados.atuacoes?.length ?? 0} atuações lidas
                 {dados.mando !== 'todos' && ` · ${dados.mando === 'casa' ? 'em casa' : 'fora'}`}
+                {/* Mesmo aviso que a amostra do time dá com multi_competicao:
+                  * média de duas competições não descreve nenhuma das duas. */}
+                {(dados.competicoes?.length ?? 0) > 1 && (
+                  <span className="text-yellow-400"> · {dados.competicoes.length} competições</span>
+                )}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1">
@@ -232,6 +240,9 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
                         {inteiro(a.minutes)}min
                       </span>
                     </div>
+                    {(dados.competicoes?.length ?? 0) > 1 && (
+                      <p className="pl-11 text-[10px] text-ink-4 truncate">{a.liga ?? '·'}</p>
+                    )}
                     <div className="flex flex-wrap gap-x-3 pl-11 mt-0.5 text-[10px] font-mono text-ink-4 tabular-nums">
                       {dados.colunas?.map((c: { chave: string; rotulo: string }) => (
                         <span key={c.chave}>

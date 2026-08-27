@@ -19,8 +19,35 @@ GOLEIRO E' O CASO ESPECIAL, E JA' ERA
 goleiros ja' usava, com a mesma justificativa: sem saber por qual time o
 goleiro joga, nao da' pra escolher de qual adversario pegar o volume ofensivo,
 e usar o lado errado INVERTE a previsao.
+
+A COMPETICAO E' RECORTE, NAO DETALHE (2026-08-27)
+-------------------------------------------------
+Ate' aqui `carregar()` lia as 15 ultimas atuacoes do jogador em QUALQUER
+competicao e QUALQUER temporada. O mesmo atacante entrava na conta com jogo de
+Brasileirao, de Libertadores e da temporada passada, tudo na mesma media.
+
+Isso deixava o motor incoerente DENTRO DO MESMO PICK: `volume_do_adversario`,
+logo abaixo, sempre filtrou por `league_id` e `season` -- com a justificativa,
+escrita la', de que a media misturada nao descreve nem um caso nem o outro. O
+lado do time era recortado e o lado do jogador nao.
+
+E nao e' um recorte novo inventado aqui: e' o MESMO de
+`competition_profile.uses_all_competitions_history`, que o lado dos times ja'
+usa desde sempre e que decide os dois casos:
+
+  · fixture de LIGA        -> historico daquela liga e temporada. Chute em
+                              Brasileirao e chute em Libertadores nao sao a
+                              mesma populacao;
+  · fixture de COPA/SELECAO -> todas as competicoes da temporada, porque a
+                              propria competicao nao acumula jogo suficiente e
+                              travar nela reprova a fixture inteira em silencio.
+
+Chamador que nao passar `league_id` continua lendo tudo, que e' o comportamento
+antigo -- backtest e teste dependem dele.
 """
 from __future__ import annotations
+
+from services.pick_engine import competition_profile
 
 #: Atuacao curta demais nao descreve o regime de titular. 60 minutos e' a
 #: fronteira usual de "jogou o jogo" -- quem entrou no segundo tempo fica de
@@ -35,13 +62,31 @@ LIMITE_ATUACOES = 15
 
 
 def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
-             min_minutos: int = MIN_MINUTOS) -> list[dict]:
+             min_minutos: int = MIN_MINUTOS,
+             league_id: int | None = None, season: int | None = None) -> list[dict]:
     """Atuacoes recentes do jogador com o contador `coluna` publicado.
 
     `coluna` vem do catalogo de metodos (methods.Metodo.coluna), nunca de
     entrada de usuario -- por isso entra por f-string. A mesma convencao de
     utils/data_br.py.
+
+    `league_id`/`season` sao a competicao da PARTIDA DE HOJE, e o recorte que
+    sai deles esta explicado no topo do modulo. Sem `league_id`, le tudo (o
+    comportamento anterior a 27/08).
     """
+    filtros, params = [], [player_id, min_minutos]
+    if league_id is not None:
+        # Temporada sempre entra quando ha' recorte, inclusive no caminho
+        # multi-competicao: "todas as competicoes" e' sobre COMPETICAO, nunca
+        # sobre ANO. Sem isso um jogador com poucos jogos puxaria a temporada
+        # passada -- de outro clube, possivelmente de outro pais.
+        if season is not None:
+            filtros.append("AND season = %s")
+            params.append(season)
+        if not competition_profile.uses_all_competitions_history(league_id):
+            filtros.append("AND league_id = %s")
+            params.append(league_id)
+
     cur.execute(f"""
         SELECT fixture_id, match_date, team_id, team_name, league_id, season,
                minutes, position, {coluna} AS valor
@@ -49,10 +94,30 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
          WHERE player_id = %s
            AND {coluna} IS NOT NULL
            AND COALESCE(minutes, 0) >= %s
+           {" ".join(filtros)}
       ORDER BY match_date DESC
          LIMIT %s
-    """, (player_id, min_minutos, limite))
+    """, tuple(params) + (limite,))
     return [dict(r) if not isinstance(r, dict) else r for r in cur.fetchall()]
+
+
+def composicao(atuacoes: list) -> dict:
+    """De onde vieram as atuacoes desta media · pra gravar junto do pick.
+
+    Mesmo papel que `multi_competicao` tem na amostra do time: sem isso, uma
+    media tirada de duas competicoes e uma tirada de uma so' sao o mesmo numero
+    na tela, e o unico jeito de saber qual e' qual e' reproduzir a consulta.
+    """
+    ligas = [a.get("league_id") for a in (atuacoes or []) if a.get("league_id")]
+    por_liga: dict = {}
+    for liga in ligas:
+        por_liga[liga] = por_liga.get(liga, 0) + 1
+    return {
+        "atuacoes": len(atuacoes or []),
+        "competicoes": sorted(por_liga),
+        "por_competicao": por_liga,
+        "multi_competicao": len(por_liga) > 1,
+    }
 
 
 def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,

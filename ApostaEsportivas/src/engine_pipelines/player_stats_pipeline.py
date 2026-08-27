@@ -138,7 +138,12 @@ def _avaliar_saves(oferta: dict, jogador: dict, fixture: dict, cur,
         cur, adversario_id, "shots_on", mando_adversario,
         fixture["league_id"], fixture["season"])
 
-    proprias = player_history.carregar(cur, jogador["player_id"], cat.SAVES.coluna)
+    # Mesma competicao e temporada que `volume_do_adversario` acabou de usar,
+    # duas linhas acima. Ate' 27/08 os dois lados do MESMO pick liam recortes
+    # diferentes: o time era filtrado por liga e o goleiro nao.
+    proprias = player_history.carregar(
+        cur, jogador["player_id"], cat.SAVES.coluna,
+        league_id=fixture["league_id"], season=fixture["season"])
     valores = [j["valor"] for j in proprias]
     media_propria = count_model.media_ponderada(valores)
 
@@ -166,15 +171,27 @@ def _avaliar_saves(oferta: dict, jogador: dict, fixture: dict, cur,
             "ev": analise.get("ev"),
         },
         "serie": valores,
+        "composicao": player_history.composicao(proprias),
         "adversario": {"media": media_adv, "amostra": n_adv,
                        "mando": mando_adversario, "contador": "chutes no alvo"},
     }
 
 
 def _avaliar_generico(oferta: dict, jogador: dict, metodo: cat.Metodo,
-                      cur, phi: float) -> dict | None:
-    """Metodos sem modelo especifico -- Binomial Negativa sobre o historico."""
-    proprias = player_history.carregar(cur, jogador["player_id"], metodo.coluna)
+                      cur, phi: float, fixture: dict) -> dict | None:
+    """Metodos sem modelo especifico -- Binomial Negativa sobre o historico.
+
+    `fixture` entrou em 2026-08-27 e serve a uma coisa so': dizer de qual
+    COMPETICAO e temporada o historico pode vir (ver player_history.carregar).
+    O efeito colateral esperado e' menos pick, porque um jogador que tinha 12
+    atuacoes somando Brasileirao e Libertadores pode ter 7 no Brasileirao e
+    cair abaixo de `min_atuacoes`. E' o mesmo custo que o lado dos times ja'
+    paga, e pela mesma razao: amostra de outra competicao nao e' amostra maior,
+    e' amostra de outra coisa.
+    """
+    proprias = player_history.carregar(
+        cur, jogador["player_id"], metodo.coluna,
+        league_id=fixture["league_id"], season=fixture["season"])
     if len(proprias) < metodo.min_atuacoes:
         return None
     valores = [j["valor"] for j in proprias]
@@ -183,7 +200,8 @@ def _avaliar_generico(oferta: dict, jogador: dict, metodo: cat.Metodo,
         valores=valores, linha=oferta["n"] - 0.5, phi=phi, odd=oferta["odd"])
     if not analise:
         return None
-    return {"analise": analise, "serie": valores, "adversario": None}
+    return {"analise": analise, "serie": valores, "adversario": None,
+            "composicao": player_history.composicao(proprias)}
 
 
 def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
@@ -222,7 +240,7 @@ def _avaliar_fixture(fixture: dict, cur, odds_service: OddsService,
             if metodo.slug == "saves":
                 avaliado = _avaliar_saves(oferta, jogador, fixture, cur, constantes_saves)
             else:
-                avaliado = _avaliar_generico(oferta, jogador, metodo, cur, phi)
+                avaliado = _avaliar_generico(oferta, jogador, metodo, cur, phi, fixture)
             if not avaliado:
                 continue
 
@@ -282,6 +300,11 @@ def _engine_debug(c: dict) -> str:
             "max_exibidos": 10,
             "atuacoes_lidas": len(c.get("serie") or []),
             "valores": (c.get("serie") or [])[:10],
+            # De QUAL competicao vieram essas atuacoes. Mesmo papel que
+            # `multi_competicao` tem na amostra do time: sem isso, media tirada
+            # de duas competicoes e media tirada de uma sao o mesmo numero na
+            # tela, e so' reproduzindo a consulta da' pra saber qual e' qual.
+            **(c.get("composicao") or {}),
         },
         # De quais constantes saiu esta probabilidade. Sem isto, um pick de
         # hoje e um de dois meses atras com a mesma entrada e saidas
@@ -341,7 +364,8 @@ def _dados_da_auditoria(c: dict, motivo: str | None) -> dict:
         "resumo": explanation.resumo_estruturado(c),
         "conclusao": motivo or explanation.frase(c),
         "amostra": {"atuacoes_lidas": len(c.get("serie") or []),
-                    "valores": (c.get("serie") or [])[:10]},
+                    "valores": (c.get("serie") or [])[:10],
+                    **(c.get("composicao") or {})},
     }
 
 

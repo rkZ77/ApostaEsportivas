@@ -181,6 +181,8 @@ interface Jogadores {
   temporadas: number[]
   mando: string
   ordenar?: string
+  league_id?: number | null
+  ligas: { league_id: number; liga: string | null; atuacoes: number }[]
   total: number
   jogadores: Jogador[]
   min_minutos: number
@@ -265,6 +267,11 @@ export default function AdminDados() {
   const [ordenarJogadores, setOrdenarJogadores] = useState('chutes')
   const [paginaJogadores, setPaginaJogadores] = useState(0)
   const [buscaJogador, setBuscaJogador] = useState('')
+  /* Competição do recorte. Um jogador atua em duas na mesma temporada, e chute
+   * no Brasileirão e chute na Libertadores não são a mesma população · somados
+   * numa linha só, o número não descreve nenhum dos dois. Vazio = todas, e aí a
+   * linha que mistura é marcada em vez de mentir calada. */
+  const [ligaJogadores, setLigaJogadores] = useState<number | ''>('')
 
   /** Alvo do drawer de amostra · time ou árbitro, um por vez. */
   const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
@@ -353,6 +360,7 @@ export default function AdminDados() {
     ordenar = 'chutes',
     pagina = 0,
     busca = '',
+    liga: number | '' = '',
   ) => {
     setPaginaJogadores(pagina)
     api.get('/admin/dados/jogadores', {
@@ -360,6 +368,7 @@ export default function AdminDados() {
         ...(season != null ? { season } : {}),
         mando, ordenar, pagina, por_pagina: POR_PAGINA,
         ...(busca.trim() ? { busca: busca.trim() } : {}),
+        ...(liga !== '' ? { league_id: liga } : {}),
       },
     })
       .then(r => setJogadores(r.data))
@@ -421,7 +430,7 @@ export default function AdminDados() {
     buscarDiagnostico(diagnostico?.meses ?? 12)
     buscarRecoleta()
     buscarArbitros(arbitros?.season, 0, buscaArbitro)
-    buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0, buscaJogador)
+    buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0, buscaJogador, ligaJogadores)
   }
 
   useEffect(buscar, [])
@@ -1303,14 +1312,16 @@ export default function AdminDados() {
                   Média por atuação de cada contador que vira mercado. Só entram atuações de{' '}
                   {jogadores.min_minutos} minutos ou mais, que é o corte do motor · entrada de
                   doze minutos e jogo inteiro não são a mesma observação, e misturar as duas
-                  derruba toda média. Toque no jogador para ver as atuações.
+                  derruba toda média. Sem filtro de competição, o jogador que atuou em duas na
+                  mesma temporada aparece com as duas somadas, e a linha vem marcada em amarelo.
+                  Toque no jogador para ver as atuações.
                 </p>
               </div>
               {jogadores.temporadas?.length > 1 && (
                 <select
                   value={jogadores.season ?? ''}
                   onChange={e => buscarJogadores(Number(e.target.value), mandoJogadores,
-                                                 ordenarJogadores, 0, buscaJogador)}
+                                                 ordenarJogadores, 0, buscaJogador, ligaJogadores)}
                   className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] shrink-0 focus:border-ink-4 focus:outline-none"
                   aria-label="Temporada dos jogadores"
                 >
@@ -1330,7 +1341,7 @@ export default function AdminDados() {
                       type="button"
                       onClick={() => {
                         setMandoJogadores(chave)
-                        buscarJogadores(jogadores.season, chave, ordenarJogadores, 0, buscaJogador)
+                        buscarJogadores(jogadores.season, chave, ordenarJogadores, 0, buscaJogador, ligaJogadores)
                       }}
                       className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[36px] rounded-md border transition-colors duration-1 ${
                         mandoJogadores === chave
@@ -1342,11 +1353,35 @@ export default function AdminDados() {
                   ))}
               </div>
 
+              {/* Competição. É a "estatística separada" · sem ela, a única
+                * saída seria confiar na marca de linha misturada, que avisa mas
+                * não conserta o número. */}
+              {jogadores.ligas.length > 1 && (
+                <select
+                  value={ligaJogadores}
+                  onChange={e => {
+                    const liga = e.target.value === '' ? '' : Number(e.target.value)
+                    setLigaJogadores(liga)
+                    buscarJogadores(jogadores.season, mandoJogadores, ordenarJogadores,
+                                    0, buscaJogador, liga)
+                  }}
+                  className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] max-w-[12rem] focus:border-ink-4 focus:outline-none"
+                  aria-label="Competição"
+                >
+                  <option value="">Todas as competições</option>
+                  {jogadores.ligas.map(l => (
+                    <option key={l.league_id} value={l.league_id}>
+                      {l.liga ?? `liga ${l.league_id}`} · {l.atuacoes}
+                    </option>
+                  ))}
+                </select>
+              )}
+
               <select
                 value={ordenarJogadores}
                 onChange={e => {
                   setOrdenarJogadores(e.target.value)
-                  buscarJogadores(jogadores.season, mandoJogadores, e.target.value, 0, buscaJogador)
+                  buscarJogadores(jogadores.season, mandoJogadores, e.target.value, 0, buscaJogador, ligaJogadores)
                 }}
                 className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
                 aria-label="Ordenar por"
@@ -1361,11 +1396,11 @@ export default function AdminDados() {
                 onChange={e => setBuscaJogador(e.target.value)}
                 onKeyDown={e => {
                   if (e.key === 'Enter') {
-                    buscarJogadores(jogadores.season, mandoJogadores, ordenarJogadores, 0, buscaJogador)
+                    buscarJogadores(jogadores.season, mandoJogadores, ordenarJogadores, 0, buscaJogador, ligaJogadores)
                   }
                 }}
                 onBlur={() => buscarJogadores(jogadores.season, mandoJogadores,
-                                              ordenarJogadores, 0, buscaJogador)}
+                                              ordenarJogadores, 0, buscaJogador, ligaJogadores)}
                 placeholder="Procurar jogador ou time"
                 aria-label="Procurar jogador ou time"
                 className="flex-1 min-w-[8rem] bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
@@ -1393,6 +1428,10 @@ export default function AdminDados() {
                     onClick={() => setAmostra({
                       tipo: 'jogador', playerId: j.player_id, season: jogadores.season,
                       nome: j.nome, mando: mandoJogadores,
+                      // O recorte viaja junto: abrir a amostra "de todas as
+                      // competições" a partir de uma tabela já filtrada daria
+                      // dois números diferentes na mesma tela.
+                      leagueId: ligaJogadores === '' ? null : ligaJogadores,
                     })}
                     className="border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1"
                   >
@@ -1404,7 +1443,15 @@ export default function AdminDados() {
                     </td>
                     <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-2 align-top">
                       {numero(j.atuacoes)}
-                      {j.minutos != null && (
+                      {/* A linha que soma duas competições. Amarelo porque ela
+                        * não está errada, está DESCREVENDO OUTRA COISA: é média
+                        * de duas populações, e não serve pra nenhuma das duas.
+                        * O seletor acima separa. */}
+                      {((j.competicoes as number | null) ?? 1) > 1 ? (
+                        <span className="block text-[10px] text-yellow-400">
+                          {String(j.competicoes)} competições
+                        </span>
+                      ) : j.minutos != null && (
                         <span className="block text-[10px] text-ink-4">{Number(j.minutos)}min</span>
                       )}
                     </td>
@@ -1450,7 +1497,7 @@ export default function AdminDados() {
               total={jogadores.total}
               unit="jogadores"
               onChange={pag => buscarJogadores(jogadores.season, mandoJogadores,
-                                               ordenarJogadores, pag, buscaJogador)}
+                                               ordenarJogadores, pag, buscaJogador, ligaJogadores)}
             />
           )}
         </div>

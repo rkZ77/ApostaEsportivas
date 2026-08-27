@@ -3790,6 +3790,18 @@ def lista_de_arbitros(
 # média misturada não descreve nem um caso nem o outro". Vale igual pro
 # jogador. `player_match_stats` não guarda mando, então ele sai do JOIN com
 # `match_statistics`: casa é o time do jogador ser o home_team_id da partida.
+#
+# A COMPETIÇÃO É O SEGUNDO RECORTE, e pela mesma razão (2026-08-27). Um jogador
+# atua em duas competições na mesma temporada · Brasileirão e Libertadores, por
+# exemplo · e chute no Brasileirão e chute na Libertadores não são a mesma
+# população. Somados numa linha só, o número não descreve nenhum dos dois.
+#
+# Aqui a tela faz as DUAS coisas que o pedido admite: dá um filtro de liga (a
+# estatística separada) e, quando não há filtro, marca a linha que mistura (a
+# diferenciação). O motor foi corrigido junto, em
+# player_stats_engine/player_history.carregar: ele lia as 15 últimas atuações em
+# qualquer competição e qualquer temporada, enquanto o volume do adversário do
+# MESMO pick já era filtrado por liga e temporada.
 
 #: Espelha player_history.MIN_MINUTOS. Importado de lá quando o motor está no
 #: path (é o caso em produção, via _no_path); a constante local é o fallback
@@ -3836,13 +3848,14 @@ _MANDO_SQL = {
 def lista_de_jogadores(
     season: int | None = None,
     mando: str = "todos",
+    league_id: int | None = None,
     ordenar: str = "chutes",
     busca: str | None = None,
     pagina: int = 0,
     por_pagina: int = 15,
     current_user: dict = Depends(require_admin),
 ):
-    """As médias por jogador que o Player Stats lê, com o recorte de mando."""
+    """As médias por jogador que o Player Stats lê, por mando e competição."""
     pagina = max(0, pagina)
     por_pagina = min(max(1, por_pagina), 100)
     mando = mando if mando in _MANDO_SQL else "todos"
@@ -3859,14 +3872,32 @@ def lista_de_jogadores(
             season = temporadas[0] if temporadas else None
         if season is None:
             return {"season": None, "temporadas": [], "jogadores": [], "total": 0,
-                    "mando": mando, "min_minutos": min_minutos,
+                    "mando": mando, "min_minutos": min_minutos, "ligas": [],
                     "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR]}
+
+        # As competições que existem nesta temporada, com quantas atuações
+        # cada uma tem · é o que enche o seletor, e o número ao lado evita
+        # escolher uma liga que tem três jogos.
+        cur.execute("""
+            SELECT p.league_id, l.name AS liga, COUNT(*) AS atuacoes
+              FROM player_match_stats p
+         LEFT JOIN leagues l ON l.league_id = p.league_id
+             WHERE p.season = %s AND COALESCE(p.minutes, 0) >= %s
+          GROUP BY p.league_id, l.name
+          ORDER BY COUNT(*) DESC
+        """, (season, min_minutos))
+        ligas = [dict(r) for r in cur.fetchall()]
 
         filtro_busca, params_busca = "", []
         if busca and busca.strip():
             filtro_busca = "AND (p.player_name ILIKE %s OR p.team_name ILIKE %s)"
             alvo = f"%{busca.strip()}%"
             params_busca = [alvo, alvo]
+
+        filtro_liga, params_liga = "", []
+        if league_id is not None:
+            filtro_liga = "AND p.league_id = %s"
+            params_liga = [league_id]
 
         # O JOIN com match_statistics só é necessário pro mando · sem recorte
         # ele sairia caro à toa numa tabela que cresce por jogador por jogo.
@@ -3887,9 +3918,10 @@ def lista_de_jogadores(
              WHERE p.season = %s
                AND COALESCE(p.minutes, 0) >= %s
                {onde_mando}
+               {filtro_liga}
                {filtro_busca}
         """
-        params = tuple([season, min_minutos] + params_busca)
+        params = tuple([season, min_minutos] + params_liga + params_busca)
 
         cur.execute(f"""
             SELECT COUNT(*) AS n FROM (
@@ -3908,6 +3940,11 @@ def lista_de_jogadores(
                    (ARRAY_AGG(p.team_name ORDER BY p.match_date DESC))[1] AS time,
                    (ARRAY_AGG(p.position  ORDER BY p.match_date DESC))[1] AS posicao,
                    COUNT(*) AS atuacoes,
+                   -- Quantas competições esta linha está somando. Sem filtro
+                   -- de liga, é o que separa "média de 12 jogos" de "média de
+                   -- 12 jogos de duas competições diferentes" · a segunda não
+                   -- descreve nenhuma das duas.
+                   COUNT(DISTINCT p.league_id) AS competicoes,
                    ROUND(AVG(p.minutes)::numeric, 0) AS minutos,
                    MAX(p.match_date)::text AS ultima,
                    {agregados}
@@ -3924,12 +3961,12 @@ def lista_de_jogadores(
         # defeito do painel (mesma razão de _sem_tabela, com outro nome).
         if "player_match_stats" in str(e) and "exist" in str(e).lower():
             return {"season": season, "temporadas": [], "jogadores": [], "total": 0,
-                    "mando": mando, "min_minutos": min_minutos,
+                    "mando": mando, "min_minutos": min_minutos, "ligas": [],
                     "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
                     "erro": "Nenhuma estatística de jogador coletada neste banco ainda."}
         logging.getLogger(__name__).warning("[ADMIN/JOGADORES] lista: %s", e)
         return {"season": season, "temporadas": [], "jogadores": [], "total": 0,
-                "mando": mando, "min_minutos": min_minutos,
+                "mando": mando, "min_minutos": min_minutos, "ligas": [],
                 "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
                 "erro": str(e)[:200]}
     finally:
@@ -3940,6 +3977,8 @@ def lista_de_jogadores(
         "season": season,
         "temporadas": temporadas,
         "mando": mando,
+        "league_id": league_id,
+        "ligas": ligas,
         "ordenar": ordenar,
         "total": total,
         "pagina": pagina,
@@ -3958,6 +3997,7 @@ def amostra_do_jogador(
     player_id: int,
     season: int | None = None,
     mando: str = "todos",
+    league_id: int | None = None,
     current_user: dict = Depends(require_admin),
 ):
     """As atuações que entraram na média deste jogador, uma a uma.
@@ -3994,8 +4034,13 @@ def amostra_do_jogador(
                    (ms.home_team_id = p.team_id) AS em_casa,
                    casa.name AS mandante, fora.name AS visitante,
                    ms.home_goals, ms.away_goals,
+                   -- A competição de CADA atuação. É o que responde "essa
+                   -- média está somando Brasileirão com Libertadores?" sem
+                   -- reproduzir a consulta.
+                   p.league_id, lg.name AS liga,
                    {colunas}
               FROM player_match_stats p
+              LEFT JOIN leagues lg ON lg.league_id = p.league_id
               LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
               LEFT JOIN LATERAL (
                         SELECT name FROM teams
@@ -4009,9 +4054,10 @@ def amostra_do_jogador(
                     ) fora ON TRUE
              WHERE p.player_id = %s AND p.season = %s
                {_MANDO_SQL[mando]}
+               {"AND p.league_id = %s" if league_id is not None else ""}
           ORDER BY p.match_date DESC
              LIMIT 40
-        """, (player_id, season))
+        """, (player_id, season) + ((league_id,) if league_id is not None else ()))
         atuacoes = [dict(r) for r in cur.fetchall()]
     except HTTPException:
         raise
@@ -4045,9 +4091,13 @@ def amostra_do_jogador(
         "season": season,
         "temporadas": temporadas,
         "mando": mando,
+        "league_id": league_id,
         "min_minutos": min_minutos,
         "atuacoes": atuacoes,
         "lidas": len(lidas),
+        # Quantas competições estas atuações somam · a tela avisa quando é mais
+        # de uma, do mesmo jeito que a amostra do time avisa multi_competicao.
+        "competicoes": sorted({a["league_id"] for a in lidas if a.get("league_id")}),
         "medias": medias,
         "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
     }
