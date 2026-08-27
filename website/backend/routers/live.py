@@ -11,7 +11,7 @@ from zoneinfo import ZoneInfo
 from fastapi import APIRouter, Depends
 from database import get_connection
 from auth_utils import get_current_user
-from settlement_bridge import settlement
+from settlement_bridge import settlement, stat_sheet
 import market_form
 
 _BR_TZ = ZoneInfo("America/Sao_Paulo")
@@ -471,26 +471,23 @@ def _parse_stats(raw: list, home_id: int | None = None,
        Visitante, handicap) podia ser liquidado com o numero do adversario.
        Sem os ids, cai na ordem da resposta como antes.
 
-    2. Contador ausente ou null NAO vira 0. A chave simplesmente nao entra no
-       dict, e quem le trata "chave ausente" como desconhecido. Era esse 0
-       fabricado que gradeou o pick de escanteios do Fortaleza x Palmeiras
-       como RED com o jogo tendo 10 escanteios.
+    2. Contador ausente NAO vira 0. A chave simplesmente nao entra no dict, e
+       quem le trata "chave ausente" como desconhecido. Era esse 0 fabricado
+       que gradeou o pick de escanteios do Fortaleza x Palmeiras como RED com
+       o jogo tendo 10 escanteios.
+
+    3. (2026-08-26) Campo VAZIO dentro de folha PUBLICADA e' zero, nao
+       ausencia -- a regra vive em utils/stat_sheet e o backend agora le pela
+       mesma funcao do motor em vez de ter a sua. A API escreve "ninguem foi
+       expulso" como `"Red Cards": null`, e trata-lo como desconhecido deixava
+       TODO mercado de cartao sem liquidar ao vivo: _stat_value soma
+       ("Yellow Cards", "Red Cards") e devolve None se qualquer um faltar.
     """
     parsed: list[dict] = []
     ids: list = []
     for team in raw:
-        d: dict = {}
-        for s in team.get("statistics", []):
-            key = s.get("type")
-            val = s.get("value")
-            if key is None or val is None:
-                continue  # nao publicado -> ausente, nunca zero
-            if isinstance(val, str):
-                val = val.replace("%", "").strip()
-            try:
-                d[key] = int(float(val))
-            except (TypeError, ValueError):
-                continue
+        d = {chave: int(valor) for chave, valor in stat_sheet.ler_folha(
+            team.get("statistics") or []).items()}
         parsed.append(d)
         ids.append((team.get("team") or {}).get("id"))
 

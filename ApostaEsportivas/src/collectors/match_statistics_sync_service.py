@@ -9,6 +9,7 @@ load_dotenv(find_dotenv())
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from utils.db_utils import get_connection
+from utils.stat_sheet import folha_publicada, ler_valor, somar
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
 if not API_KEY:
@@ -30,41 +31,26 @@ def load_leagues_from_db():
     return [{"league_id": r[0], "season": r[1]} for r in rows]
 
 
-def extract_stat(stats, stat_name):
-    """Valor do contador, ou None quando a API ainda nao publicou esse numero.
+def extract_stat(stats, stat_name, publicada=None):
+    """Valor do contador, ou None quando a API nao publicou esse numero.
 
-    Devolvia 0 nos tres casos de ausencia (folha vazia, contador fora da
-    folha, valor null) -- e o banco guardava esse 0 como se fosse a contagem
-    real do jogo. Alem de gradear pick errado, contaminava a taxa historica
-    do motor: hoje ha' 99 jogos FT em match_statistics com escanteios, faltas
-    e chutes todos em 0, sendo que 94 deles tiveram gol (ou seja, aconteceram
-    de verdade). Ver services/settlement.py, invariante 1.
+    A regra mora em utils/stat_sheet -- inclusive a distincao que faltava aqui
+    e' que custou 87% da amostra de cartoes: numa folha PUBLICADA, `value:
+    null` num contador significa ZERO, e "Red Cards" e' o unico tipo que a API
+    escreve assim. Devolver None nesse caso apagava o vermelho de todo jogo em
+    que ninguem foi expulso (agosto/2026: 95 jogos FT, 12 com vermelho no
+    banco, ZERO com vermelho igual a zero).
+
+    Folha ausente continua virando None em tudo -- e' o bug de 2026-07-25, que
+    deixou 99 jogos FT com escanteio, falta e chute todos em 0, e a invariante
+    1 de services/settlement.py.
     """
-    if not stats:
-        return None
-
-    for s in stats:
-        if s.get("type") == stat_name:
-            val = s.get("value")
-
-            if val is None:
-                return None
-
-            if isinstance(val, str):
-                val = val.replace("%", "").strip()
-                try:
-                    return float(val)
-                except ValueError:
-                    return None
-
-            return val
-
-    return None
+    return ler_valor(stats, stat_name, publicada)
 
 
 def _sum_stats(*parts):
     """Total que respeita ausencia: parcela desconhecida -> total desconhecido."""
-    return None if any(p is None for p in parts) else sum(parts)
+    return somar(*parts)
 
 
 class MatchStatisticsSyncService:
@@ -163,6 +149,11 @@ class MatchStatisticsSyncService:
               AND last_updated > match_date + INTERVAL '24 hours'
               AND total_corners IS NOT NULL
               AND total_yellow_cards IS NOT NULL
+              -- VERMELHO entra na definicao de "folha completa" desde
+              -- 2026-08-26. Sem ele, o jogo cuja unica lacuna era o vermelho
+              -- era pulado PRA SEMPRE (a coleta so' volta em folha
+              -- incompleta) -- e essa era a lacuna de 87% dos jogos.
+              AND total_red_cards IS NOT NULL
               AND home_fouls IS NOT NULL
               AND home_total_shots IS NOT NULL
         """)
@@ -292,44 +283,50 @@ class MatchStatisticsSyncService:
         away_goals = fx["away_goals"]
         total_goals = home_goals + away_goals
 
-        home_corners = extract_stat(home_stats, "Corner Kicks")
-        away_corners = extract_stat(away_stats, "Corner Kicks")
+        # A folha e' classificada UMA vez, antes de ler campo nenhum: e' essa
+        # classificacao que separa "a API nao respondeu" (tudo None) de "a API
+        # respondeu e o contador e' zero". Ver utils/stat_sheet.
+        pub_home = folha_publicada(home_stats)
+        pub_away = folha_publicada(away_stats)
 
-        home_yellow = extract_stat(home_stats, "Yellow Cards")
-        away_yellow = extract_stat(away_stats, "Yellow Cards")
+        home_corners = extract_stat(home_stats, "Corner Kicks", pub_home)
+        away_corners = extract_stat(away_stats, "Corner Kicks", pub_away)
 
-        home_red = extract_stat(home_stats, "Red Cards")
-        away_red = extract_stat(away_stats, "Red Cards")
+        home_yellow = extract_stat(home_stats, "Yellow Cards", pub_home)
+        away_yellow = extract_stat(away_stats, "Yellow Cards", pub_away)
 
-        home_shots_on = extract_stat(home_stats, "Shots on Goal")
-        away_shots_on = extract_stat(away_stats, "Shots on Goal")
+        home_red = extract_stat(home_stats, "Red Cards", pub_home)
+        away_red = extract_stat(away_stats, "Red Cards", pub_away)
 
-        home_shots_off = extract_stat(home_stats, "Shots off Goal")
-        away_shots_off = extract_stat(away_stats, "Shots off Goal")
+        home_shots_on = extract_stat(home_stats, "Shots on Goal", pub_home)
+        away_shots_on = extract_stat(away_stats, "Shots on Goal", pub_away)
 
-        home_total_shots = extract_stat(home_stats, "Total Shots")
-        away_total_shots = extract_stat(away_stats, "Total Shots")
+        home_shots_off = extract_stat(home_stats, "Shots off Goal", pub_home)
+        away_shots_off = extract_stat(away_stats, "Shots off Goal", pub_away)
 
-        home_blocked = extract_stat(home_stats, "Blocked Shots")
-        away_blocked = extract_stat(away_stats, "Blocked Shots")
+        home_total_shots = extract_stat(home_stats, "Total Shots", pub_home)
+        away_total_shots = extract_stat(away_stats, "Total Shots", pub_away)
 
-        home_saves = extract_stat(home_stats, "Goalkeeper Saves")
-        away_saves = extract_stat(away_stats, "Goalkeeper Saves")
+        home_blocked = extract_stat(home_stats, "Blocked Shots", pub_home)
+        away_blocked = extract_stat(away_stats, "Blocked Shots", pub_away)
 
-        home_fouls = extract_stat(home_stats, "Fouls")
-        away_fouls = extract_stat(away_stats, "Fouls")
+        home_saves = extract_stat(home_stats, "Goalkeeper Saves", pub_home)
+        away_saves = extract_stat(away_stats, "Goalkeeper Saves", pub_away)
 
-        home_offsides = extract_stat(home_stats, "Offsides")
-        away_offsides = extract_stat(away_stats, "Offsides")
+        home_fouls = extract_stat(home_stats, "Fouls", pub_home)
+        away_fouls = extract_stat(away_stats, "Fouls", pub_away)
 
-        home_possession = extract_stat(home_stats, "Ball Possession")
-        away_possession = extract_stat(away_stats, "Ball Possession")
+        home_offsides = extract_stat(home_stats, "Offsides", pub_home)
+        away_offsides = extract_stat(away_stats, "Offsides", pub_away)
 
-        home_passes = extract_stat(home_stats, "Total passes")
-        away_passes = extract_stat(away_stats, "Total passes")
+        home_possession = extract_stat(home_stats, "Ball Possession", pub_home)
+        away_possession = extract_stat(away_stats, "Ball Possession", pub_away)
 
-        home_pass_acc = extract_stat(home_stats, "Passes %")
-        away_pass_acc = extract_stat(away_stats, "Passes %")
+        home_passes = extract_stat(home_stats, "Total passes", pub_home)
+        away_passes = extract_stat(away_stats, "Total passes", pub_away)
+
+        home_pass_acc = extract_stat(home_stats, "Passes %", pub_home)
+        away_pass_acc = extract_stat(away_stats, "Passes %", pub_away)
 
         self.cur.execute("""
             INSERT INTO match_statistics (
@@ -590,6 +587,7 @@ class MatchStatisticsSyncService:
                 WHERE fixture_id = ANY(%s)
                   AND total_corners IS NOT NULL
                   AND total_yellow_cards IS NOT NULL
+                  AND total_red_cards IS NOT NULL
                   AND home_fouls IS NOT NULL
                   AND home_total_shots IS NOT NULL;
             """, (list(pending_ids),))

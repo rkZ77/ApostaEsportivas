@@ -2,6 +2,8 @@
 import requests
 from dotenv import load_dotenv, find_dotenv
 
+from utils.stat_sheet import folha_publicada, ler_valor, somar
+
 load_dotenv(find_dotenv())
 
 API_KEY = os.getenv("API_FOOTBALL_KEY")
@@ -124,31 +126,29 @@ class HistoricalApiFetcher:
                 else:
                     home_s, away_s = stats_list[1]["statistics"], stats_list[0]["statistics"]
 
-                def get_stat(stats, name):
-                    for s in stats:
-                        if s["type"] == name:
-                            v = s["value"]
-                            if v is None:
-                                return 0
-                            if isinstance(v, str):
-                                try:
-                                    return float(v.replace("%", ""))
-                                except Exception:
-                                    return 0
-                            return v
-                    return 0
+                # Este leitor devolvia 0 em TODOS os casos de ausencia --
+                # folha vazia, tipo fora da folha, valor null -- e alimentava
+                # o motor com jogo inteiro zerado como se fosse contagem real.
+                # E' o mesmo defeito que o coletor principal corrigiu em
+                # 2026-07-25 e que aqui sobreviveu 13 meses. A regra unica
+                # mora em utils/stat_sheet.
+                pub_home = folha_publicada(home_s)
+                pub_away = folha_publicada(away_s)
 
-                match["home_corners"]       = get_stat(home_s, "Corner Kicks")
-                match["away_corners"]       = get_stat(away_s, "Corner Kicks")
-                match["total_corners"]      = match["home_corners"] + match["away_corners"]
-                match["home_yellow_cards"]  = get_stat(home_s, "Yellow Cards")
-                match["away_yellow_cards"]  = get_stat(away_s, "Yellow Cards")
-                match["total_yellow_cards"] = match["home_yellow_cards"] + match["away_yellow_cards"]
-                match["home_red_cards"]     = get_stat(home_s, "Red Cards")
-                match["away_red_cards"]     = get_stat(away_s, "Red Cards")
-                match["total_red_cards"]    = match["home_red_cards"] + match["away_red_cards"]
-                match["home_fouls"]         = get_stat(home_s, "Fouls")
-                match["away_fouls"]         = get_stat(away_s, "Fouls")
+                def get_stat(stats, name, publicada):
+                    return ler_valor(stats, name, publicada)
+
+                match["home_corners"]       = get_stat(home_s, "Corner Kicks", pub_home)
+                match["away_corners"]       = get_stat(away_s, "Corner Kicks", pub_away)
+                match["total_corners"]      = somar(match["home_corners"], match["away_corners"])
+                match["home_yellow_cards"]  = get_stat(home_s, "Yellow Cards", pub_home)
+                match["away_yellow_cards"]  = get_stat(away_s, "Yellow Cards", pub_away)
+                match["total_yellow_cards"] = somar(match["home_yellow_cards"], match["away_yellow_cards"])
+                match["home_red_cards"]     = get_stat(home_s, "Red Cards", pub_home)
+                match["away_red_cards"]     = get_stat(away_s, "Red Cards", pub_away)
+                match["total_red_cards"]    = somar(match["home_red_cards"], match["away_red_cards"])
+                match["home_fouls"]         = get_stat(home_s, "Fouls", pub_home)
+                match["away_fouls"]         = get_stat(away_s, "Fouls", pub_away)
 
             except Exception as e:
                 print(f"[HIST_API] Erro ao buscar stats do fixture {fx_id}: {e}")

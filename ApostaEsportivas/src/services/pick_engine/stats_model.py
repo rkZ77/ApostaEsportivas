@@ -664,9 +664,22 @@ def _tem_folha_de_cartao_completa(m: dict) -> bool:
     e SEMPRE na mesma direcao, pra Under. E' consistente com a calibracao
     medida no mesmo dia -- cartoes anuncia 74,6% e realiza 62,5%.
 
-    Ficou provado que NULL nao significa zero: entre as linhas preenchidas de
-    2026, 66% sao zeros EXPLICITOS. A API publica o zero quando sabe; campo
-    vazio e' lacuna de coleta, nao ausencia de cartao.
+    A LEITURA DE 2026-08-20 ESTAVA ERRADA NA CAUSA (corrigida em 2026-08-26).
+
+    Ela concluiu, dos 66% de zeros explicitos entre as linhas preenchidas, que
+    "campo vazio e' lacuna de coleta". Nao era: aqueles zeros vinham do coletor
+    ANTIGO, que transformava ausencia em 0 -- amostra contaminada. A API na
+    verdade escreve "ninguem foi expulso" como `"Red Cards": null`, e e' o
+    UNICO tipo da folha que ela manda vazio (medido em 2026-08-26: 18 nulls em
+    vermelho contra 0 em qualquer outro contador). Era o coletor que apagava
+    esse zero. Ver utils/stat_sheet.
+
+    Com a leitura corrigida, a cobertura de vermelho em DEV foi de 81,5% pra
+    99,5% (agosto/2026, de 12,6% pra 96,8%), entao esta checagem parou de
+    derrubar quase toda a amostra de cartoes. Ela CONTINUA valendo, porque o
+    caso que ela nasceu pra pegar -- folha que chega pela metade -- continua
+    existindo; o que mudou e' que ele voltou a ser raro, que e' o que ele
+    sempre deveria ter sido.
 
     O jogo sai do pool em vez de ser imputado porque imputar a media seria
     chutar sempre pro mesmo lado, e porque e' a postura que o resto do motor ja'

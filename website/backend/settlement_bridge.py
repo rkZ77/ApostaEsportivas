@@ -1,4 +1,4 @@
-"""Reexporta o modulo de liquidacao do motor pro backend do site.
+"""Reexporta modulos do motor pro backend do site.
 
 `services/settlement.py` vive em ApostaEsportivas/src/ e e' a fonte unica da
 matematica de GREEN/RED/PUSH/HALF-*. O backend precisa da MESMA implementacao
@@ -8,6 +8,11 @@ PUSH de perna virando RED de um lado e PUSH do bilhete inteiro do outro.
 O Dockerfile copia ApostaEsportivas/src/ pra /app/pipeline e exporta
 PIPELINE_SRC_PATH; em desenvolvimento o caminho relativo resolve sozinho.
 Mesma busca de diretorio ja usada por routers/admin.py::_find_pipeline_dir.
+
+`utils/stat_sheet.py` viaja junto pelo mesmo motivo: e' quem decide o que
+`value: null` significa na folha da API-Football. O backend tinha a sua
+propria leitura, e ela discordava do motor exatamente no vermelho -- ver o
+cabecalho daquele modulo.
 
 O import e' obrigatorio de proposito -- sem ele nao existe fallback "meia
 boca" que liquide pick de um jeito diferente; a API sobe com erro claro no
@@ -36,6 +41,7 @@ _DIR = _pipeline_dir()
 if _DIR and _DIR not in sys.path:
     sys.path.insert(0, _DIR)
 
-from services import settlement  # noqa: E402
+from services import settlement          # noqa: E402
+from utils import stat_sheet             # noqa: E402
 
-__all__ = ["settlement"]
+__all__ = ["settlement", "stat_sheet"]

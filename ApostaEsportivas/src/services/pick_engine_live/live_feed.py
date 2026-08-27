@@ -29,6 +29,8 @@ import time
 
 import requests
 
+from utils.stat_sheet import ler_folha
+
 API_BASE = "https://v3.football.api-sports.io"
 
 #: Status que a API-Football usa pra jogo em andamento. Mesmo conjunto de
@@ -173,6 +175,10 @@ def _numero(valor) -> int | None:
     zero fabricado nao produz so' um resultado errado, produz um PICK errado.
     'Zero escanteios aos 40 minutos' e' um sinal fortissimo de Under -- e
     completamente falso quando o que aconteceu foi a folha nao ter chegado.
+
+    O que NAO e' ausencia: campo vazio dentro de folha publicada. Isso e' zero,
+    e quem decide e' `ler_folha` -- ver utils/stat_sheet. Aqui a funcao so'
+    converte, e continua existindo porque routers/live.py tambem a usa.
     """
     if valor is None:
         return None
@@ -193,12 +199,14 @@ def ler_estatisticas(bruto: list, home_id: int | None, away_id: int | None) -> t
     lidos: list[dict] = []
     ids: list = []
     for time_ in bruto or []:
-        d: dict = {}
-        for item in time_.get("statistics", []) or []:
-            chave, valor = item.get("type"), _numero(item.get("value"))
-            if chave is None or valor is None:
-                continue
-            d[chave] = valor
+        # `ler_folha` classifica a folha antes de ler campo: folha ausente ou
+        # so' de nulls devolve {} (tudo desconhecido), folha publicada com
+        # campo vazio devolve 0. Antes desta troca "Red Cards": null -- o jeito
+        # como a API escreve "ninguem foi expulso" -- caia fora do dicionario,
+        # e com isso o motor ao vivo nao tinha total de cartao em ~90% das
+        # partidas.
+        d = {chave: int(valor) for chave, valor in ler_folha(
+            time_.get("statistics") or []).items()}
         lidos.append(d)
         ids.append((time_.get("team") or {}).get("id"))
 
