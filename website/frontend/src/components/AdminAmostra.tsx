@@ -30,6 +30,12 @@ import { Drawer, SpinnerBlock } from './ui'
 export type AlvoAmostra =
   | { tipo: 'time'; teamId: number; leagueId?: number | null; season?: number | null; nome?: string | null }
   | { tipo: 'arbitro'; refereeId: number; season?: number | null; nome?: string | null }
+  /* Jogador (27/08). `mando` viaja junto porque a tabela de trás já estava
+   * filtrada por ele · abrir a amostra "de casa e fora" a partir de uma lista
+   * que mostrava só os jogos em casa daria dois números diferentes na mesma
+   * tela sem explicação. */
+  | { tipo: 'jogador'; playerId: number; season?: number | null; nome?: string | null
+      mando?: 'todos' | 'casa' | 'fora' }
 
 interface JogoTime {
   fixture_id: number
@@ -54,6 +60,21 @@ interface JogoArbitro {
   total_corners: number | null
   total_fouls: number | null
   buracos: string[]
+}
+
+/** Uma linha de `player_match_stats`, do jeito que o endpoint devolve. */
+interface Atuacao {
+  fixture_id: number
+  data: string | null
+  minutes: number | null
+  position: string | null
+  em_casa: boolean | null
+  mandante: string | null
+  visitante: string | null
+  home_goals: number | null
+  away_goals: number | null
+  rating: number | string | null
+  [k: string]: unknown
 }
 
 const diaMes = (iso?: string | null) => {
@@ -99,10 +120,13 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
     setErro('')
     const url = alvo.tipo === 'time'
       ? `/admin/dados/times/${alvo.teamId}/amostra`
-      : `/admin/dados/arbitros/${alvo.refereeId}/amostra`
+      : alvo.tipo === 'arbitro'
+        ? `/admin/dados/arbitros/${alvo.refereeId}/amostra`
+        : `/admin/dados/jogadores/${alvo.playerId}/amostra`
     const params: Record<string, unknown> = {}
     if (season != null) params.season = season
     if (alvo.tipo === 'time' && alvo.leagueId != null) params.league_id = alvo.leagueId
+    if (alvo.tipo === 'jogador' && alvo.mando) params.mando = alvo.mando
     api.get(url, { params })
       .then(r => {
         setDados(r.data)
@@ -115,21 +139,118 @@ export default function AdminAmostra({ alvo, onClose }: { alvo: AlvoAmostra; onC
 
   const titulo = alvo.tipo === 'time'
     ? (dados?.time?.nome ?? alvo.nome ?? 'Time')
-    : (dados?.arbitro?.nome ?? alvo.nome ?? 'Árbitro')
+    : alvo.tipo === 'arbitro'
+      ? (dados?.arbitro?.nome ?? alvo.nome ?? 'Árbitro')
+      : (dados?.jogador?.nome ?? alvo.nome ?? 'Jogador')
+
+  const descricao = alvo.tipo === 'time'
+    ? 'Os jogos que entraram na média deste time, e a média que saiu deles.'
+    : alvo.tipo === 'arbitro'
+      ? 'Os jogos que entraram na média deste árbitro, e a média que saiu deles.'
+      : 'As atuações que entraram na média deste jogador, e a média que saiu delas.'
 
   return (
     <Drawer
       onClose={onClose}
       title={titulo}
-      description={alvo.tipo === 'time'
-        ? 'Os jogos que entraram na média deste time, e a média que saiu deles.'
-        : 'Os jogos que entraram na média deste árbitro, e a média que saiu deles.'}
+      description={descricao}
     >
       {carregando ? (
         <SpinnerBlock className="py-20" />
       ) : erro ? (
         <p className="text-red-400 text-sm py-6">{erro}</p>
-      ) : !dados ? null : (
+      ) : !dados ? null : alvo.tipo === 'jogador' ? (
+        /* Jogador tem forma própria: não são "jogos com estatística de time",
+         * são ATUAÇÕES, e a coluna que importa muda por posição. Reaproveitar o
+         * corpo de baixo exigiria um punhado de ternários dentro de cada linha,
+         * o que já deixou a parte de time/árbitro no limite. */
+        <div className="space-y-5">
+          {dados.temporadas?.length > 1 && (
+            <select
+              value={dados.season ?? ''}
+              onChange={e => setSeason(Number(e.target.value))}
+              className="w-full bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[40px] focus:border-ink-4 focus:outline-none"
+              aria-label="Temporada"
+            >
+              {dados.temporadas.map((s: number) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+
+          <div className="rounded-lg border border-line p-3">
+            <div className="flex flex-wrap items-baseline justify-between gap-2 mb-2">
+              <p className="text-xs font-bold text-ink-1">
+                {dados.jogador?.time ?? 'Time ?'}
+                {dados.jogador?.posicao ? ` · ${dados.jogador.posicao}` : ''}
+              </p>
+              <p className="text-[10px] font-mono text-ink-4">
+                {dados.lidas} de {dados.atuacoes?.length ?? 0} atuações lidas
+                {dados.mando !== 'todos' && ` · ${dados.mando === 'casa' ? 'em casa' : 'fora'}`}
+              </p>
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+              {dados.colunas?.map((c: { chave: string; rotulo: string }) => {
+                const m = dados.medias?.[c.chave]
+                return (
+                  <div key={c.chave} className="flex items-baseline justify-between gap-2 text-[11px]">
+                    <span className="text-ink-3 truncate">{c.rotulo}</span>
+                    <span className="font-mono tabular-nums shrink-0 text-ink-1">
+                      {dec(m?.media)}
+                      {/* A amostra POR CONTADOR, e não a do jogador. Defesa
+                        * aparece em 0,86% das atuações e passe em todas · um
+                        * número único mentiria sobre uma das duas. */}
+                      {m?.n != null && <span className="text-ink-4 ml-1.5">n={m.n}</span>}
+                    </span>
+                  </div>
+                )
+              })}
+            </div>
+            <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
+              A média sai só das atuações de {dados.min_minutos} minutos ou mais, que é o corte
+              do motor · a lista abaixo mostra todas, e a que ficou de fora aparece apagada.
+              Entrada curta e jogo inteiro não são a mesma observação.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-xs font-bold text-ink-1 mb-2">
+              {dados.atuacoes?.length ?? 0} atuação(ões)
+            </p>
+            <div className="rounded-lg border border-line/60 divide-y divide-line/60 overflow-hidden">
+              {dados.atuacoes?.map((a: Atuacao) => {
+                const curta = (a.minutes ?? 0) < (dados.min_minutos ?? 60)
+                return (
+                  <div key={a.fixture_id} className={`px-3 py-2 ${curta ? 'opacity-50' : ''}`}>
+                    <div className="flex items-baseline gap-2">
+                      <span className="font-mono text-[10px] text-ink-4 w-9 shrink-0 tabular-nums">
+                        {diaMes(a.data)}
+                      </span>
+                      <span className="flex-1 min-w-0 text-[12px] text-ink-2 truncate">
+                        {a.em_casa ? 'x ' : '@ '}
+                        {(a.em_casa ? a.visitante : a.mandante) ?? 'Time ?'}
+                      </span>
+                      <span className="font-mono text-[10px] text-ink-4 tabular-nums shrink-0">
+                        {inteiro(a.minutes)}min
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-x-3 pl-11 mt-0.5 text-[10px] font-mono text-ink-4 tabular-nums">
+                      {dados.colunas?.map((c: { chave: string; rotulo: string }) => (
+                        <span key={c.chave}>
+                          {c.rotulo.slice(0, 3).toLowerCase()} {inteiro(a[c.chave] as number | null)}
+                        </span>
+                      ))}
+                    </div>
+                    {curta && (
+                      <p className="pl-11 mt-0.5 text-[10px] text-ink-4">
+                        abaixo do corte · não entra na média
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
         <div className="space-y-5">
           {/* Recorte. Time é por liga E temporada porque é assim que o motor lê:
             * o mesmo time tem uma média no Brasileirão e outra na Sul-Americana,

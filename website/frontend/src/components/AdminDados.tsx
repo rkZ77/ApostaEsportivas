@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
   AlertTriangle, CheckCircle2, Database, Gavel, Pencil, PlayCircle, RefreshCw,
-  Save, ShieldAlert, Users, X,
+  Save, ShieldAlert, User, Users, X,
 } from 'lucide-react'
 import api from '../services/api'
 import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
@@ -83,6 +83,10 @@ interface Historico {
   resumo: Familia[]
   zeradas: number
   partidas: Partida[]
+  /* Ecoados pelo servidor · ele descarta chave desconhecida, e a tela precisa
+   * saber disso pra não desenhar um filtro que não está valendo. */
+  filtro?: string | null
+  meses?: number | null
   erro?: string
 }
 
@@ -156,6 +160,34 @@ interface PlacarFalso {
   erro?: string
 }
 
+/** Uma linha de `player_match_stats` agregada · o que o Player Stats lê. */
+interface Jogador {
+  player_id: number
+  nome: string | null
+  time: string | null
+  posicao: string | null
+  atuacoes: number
+  minutos: number | string | null
+  ultima: string | null
+  /* As médias e as contagens chegam como `<chave>_m` e `<chave>_n`, uma por
+   * coluna · a contagem é por coluna de propósito: defesa aparece em 0,86% das
+   * atuações e passe em todas, então um "12 jogos" único mentiria sobre uma
+   * das duas. */
+  [k: string]: unknown
+}
+
+interface Jogadores {
+  season: number | null
+  temporadas: number[]
+  mando: string
+  ordenar?: string
+  total: number
+  jogadores: Jogador[]
+  min_minutos: number
+  colunas: { chave: string; rotulo: string }[]
+  erro?: string
+}
+
 interface Vermelho {
   disponivel: boolean
   alvo?: number
@@ -198,6 +230,16 @@ export default function AdminDados() {
   const [trocandoPagina, setTrocandoPagina] = useState(false)
   const [aberta, setAberta] = useState<number | null>(null)
 
+  /* O filtro que veio do diagnóstico.
+   *
+   * Ele mora aqui e não dentro do card do diagnóstico porque quem responde é a
+   * lista de partidas, que fica em OUTRA seção · clicar num número da Cobertura
+   * leva pra Partidas já filtrada. É esse pulo que fecha o ciclo "vejo o
+   * buraco, chego na partida, escrevo o número", que era um beco: se a API não
+   * publica a folha daquele jogo, e ela não publica folha velha, não havia como
+   * alcançar a partida pela tela. */
+  const [filtroPartidas, setFiltroPartidas] = useState<{ chave: string; rotulo: string } | null>(null)
+
   const [buracos, setBuracos] = useState<Buraco[] | null>(null)
   const [verBuracos, setVerBuracos] = useState(false)
   const [vermelho, setVermelho] = useState<Vermelho | null>(null)
@@ -211,9 +253,18 @@ export default function AdminDados() {
   const [pedindoLote, setPedindoLote] = useState(false)
 
   const [arbitros, setArbitros] = useState<{
-    season: number | null; temporadas: number[]; arbitros: Arbitro[]; amostra_minima?: number
+    season: number | null; temporadas: number[]; arbitros: Arbitro[]
+    amostra_minima?: number; total?: number
   } | null>(null)
   const [recalculandoArbitros, setRecalculandoArbitros] = useState(false)
+  const [paginaArbitros, setPaginaArbitros] = useState(0)
+  const [buscaArbitro, setBuscaArbitro] = useState('')
+
+  const [jogadores, setJogadores] = useState<Jogadores | null>(null)
+  const [mandoJogadores, setMandoJogadores] = useState<'todos' | 'casa' | 'fora'>('todos')
+  const [ordenarJogadores, setOrdenarJogadores] = useState('chutes')
+  const [paginaJogadores, setPaginaJogadores] = useState(0)
+  const [buscaJogador, setBuscaJogador] = useState('')
 
   /** Alvo do drawer de amostra · time ou árbitro, um por vez. */
   const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
@@ -247,11 +298,16 @@ export default function AdminDados() {
   const [salvando, setSalvando] = useState(false)
   const [erroEdicao, setErroEdicao] = useState('')
 
-  const buscarHistorico = useCallback((p: number) => {
+  const buscarHistorico = useCallback((p: number, filtro?: string | null, meses?: number) => {
     setTrocandoPagina(true)
     setAberta(null)
     setEditando(null)
-    api.get('/admin/dados/partidas', { params: { pagina: p, por_pagina: POR_PAGINA } })
+    api.get('/admin/dados/partidas', {
+      params: {
+        pagina: p, por_pagina: POR_PAGINA,
+        ...(filtro ? { filtro, meses: meses ?? 24 } : {}),
+      },
+    })
       .then(r => setHistorico(r.data))
       .catch(() => setHistorico({
         total: 0, teto: 40, familias: 0, resumo: [], zeradas: 0,
@@ -278,10 +334,36 @@ export default function AdminDados() {
       .catch(() => setDiagnostico(null))
   }, [])
 
-  const buscarArbitros = useCallback((season?: number | null) => {
-    api.get('/admin/dados/arbitros', { params: season != null ? { season } : {} })
+  const buscarArbitros = useCallback((season?: number | null, pagina = 0, busca = '') => {
+    setPaginaArbitros(pagina)
+    api.get('/admin/dados/arbitros', {
+      params: {
+        ...(season != null ? { season } : {}),
+        pagina, por_pagina: POR_PAGINA,
+        ...(busca.trim() ? { busca: busca.trim() } : {}),
+      },
+    })
       .then(r => setArbitros(r.data))
       .catch(() => setArbitros(null))
+  }, [])
+
+  const buscarJogadores = useCallback((
+    season?: number | null,
+    mando: 'todos' | 'casa' | 'fora' = 'todos',
+    ordenar = 'chutes',
+    pagina = 0,
+    busca = '',
+  ) => {
+    setPaginaJogadores(pagina)
+    api.get('/admin/dados/jogadores', {
+      params: {
+        ...(season != null ? { season } : {}),
+        mando, ordenar, pagina, por_pagina: POR_PAGINA,
+        ...(busca.trim() ? { busca: busca.trim() } : {}),
+      },
+    })
+      .then(r => setJogadores(r.data))
+      .catch(() => setJogadores(null))
   }, [])
 
   /* Abre a amostra a partir da PARTIDA. A lista não carrega os ids dos times ·
@@ -310,7 +392,7 @@ export default function AdminDados() {
       const r = await api.post('/admin/dados/arbitros/recalcular', null,
         { params: arbitros?.season != null ? { season: arbitros.season } : {} })
       setAviso({ fixture: -3, texto: r.data?.mensagem ?? 'Recalculado.', ok: true })
-      buscarArbitros(arbitros?.season)
+      buscarArbitros(arbitros?.season, paginaArbitros, buscaArbitro)
     } catch (e) {
       setAviso({ fixture: -3, texto: msgErro(e, 'Não deu pra recalcular.'), ok: false })
     } finally {
@@ -334,11 +416,12 @@ export default function AdminDados() {
     // Volta pra primeira página: "Atualizar" com a página 3 na tela mostraria
     // a terceira dezena de uma lista que acabou de mudar embaixo.
     setPagina(0)
-    buscarHistorico(0)
+    buscarHistorico(0, filtroPartidas?.chave, diagnostico?.meses)
     buscarBuracos()
     buscarDiagnostico(diagnostico?.meses ?? 12)
     buscarRecoleta()
-    buscarArbitros(arbitros?.season)
+    buscarArbitros(arbitros?.season, 0, buscaArbitro)
+    buscarJogadores(jogadores?.season, mandoJogadores, ordenarJogadores, 0, buscaJogador)
   }
 
   useEffect(buscar, [])
@@ -356,7 +439,7 @@ export default function AdminDados() {
           // envelheceu junto.
           if (!r.data?.rodando) {
             api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
-            buscarHistorico(pagina)
+            buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
             buscarBuracos()
             buscarDiagnostico(diagnostico?.meses ?? 12)
           }
@@ -364,7 +447,8 @@ export default function AdminDados() {
         .catch(() => {})
     }, 3000)
     return () => clearInterval(t)
-  }, [recoleta?.rodando, pagina, diagnostico?.meses, buscarHistorico, buscarBuracos, buscarDiagnostico])
+  }, [recoleta?.rodando, pagina, diagnostico?.meses, filtroPartidas?.chave,
+      buscarHistorico, buscarBuracos, buscarDiagnostico])
 
   const dispararRecoleta = async () => {
     setPedindoLote(true)
@@ -383,7 +467,25 @@ export default function AdminDados() {
 
   const irPara = (p: number) => {
     setPagina(p)
-    buscarHistorico(p)
+    buscarHistorico(p, filtroPartidas?.chave, diagnostico?.meses)
+  }
+
+  /* Um número do diagnóstico -> as partidas por trás dele.
+   *
+   * Troca de seção junto de propósito: o botão de conserto mora na lista, e
+   * deixar o usuário filtrando de uma aba e procurando na outra seria o mesmo
+   * beco de antes com um clique a mais. */
+  const abrirFiltro = (chave: string, rotulo: string) => {
+    setFiltroPartidas({ chave, rotulo })
+    setPagina(0)
+    setSecao('partidas')
+    buscarHistorico(0, chave, diagnostico?.meses)
+  }
+
+  const limparFiltro = () => {
+    setFiltroPartidas(null)
+    setPagina(0)
+    buscarHistorico(0)
   }
 
   /* Coleta de UMA partida. `criarSemFolha` é o segundo clique, o que aceita
@@ -400,7 +502,7 @@ export default function AdminDados() {
         // Recarrega tudo: a partida sai da lista de buracos e entra na de
         // coletadas, e as médias das últimas 40 mudam junto.
         api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
-        buscarHistorico(pagina)
+        buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
         buscarBuracos()
       }
     } catch (e) {
@@ -450,7 +552,7 @@ export default function AdminDados() {
       setEditando(null)
       setAviso({ fixture: p.fixture_id, texto: 'Estatística gravada à mão e médias refeitas.', ok: true })
       api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
-      buscarHistorico(pagina)
+      buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
       buscarBuracos()
     } catch (e) {
       setErroEdicao(msgErro(e, 'Não deu pra gravar.'))
@@ -468,7 +570,7 @@ export default function AdminDados() {
         texto: `${r.data?.corrigidas ?? 0} placar(es) reescrito(s) · ${r.data?.medias ?? 0} média(s) de time refeitas.`,
       })
       buscarBuracos()
-      buscarHistorico(pagina)
+      buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
       api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
     } catch (e) {
       setAviso({ fixture: -4, texto: msgErro(e, 'Não deu pra corrigir.'), ok: false })
@@ -486,7 +588,7 @@ export default function AdminDados() {
         fixture: -1, ok: true,
         texto: `${r.data?.corrigidas ?? 0} linha(s) corrigidas · ${r.data?.arbitros ?? 0} média(s) de árbitro refeitas.`,
       })
-      buscarHistorico(pagina)
+      buscarHistorico(pagina, filtroPartidas?.chave, diagnostico?.meses)
       buscarBuracos()
     } catch (e) {
       setAviso({ fixture: -1, texto: msgErro(e, 'Não deu pra corrigir.'), ok: false })
@@ -847,16 +949,29 @@ export default function AdminDados() {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             <StatTile label="Encerradas na janela" value={numero(diagnostico.ft)} />
-            <StatTile label="Folha incompleta" value={numero(diagnostico.incompletas)}
-              tone={diagnostico.incompletas > 0 ? 'red' : 'default'}
-              hint={diagnostico.incompleta_mais_antiga
-                ? `mais antiga em ${diaMes(diagnostico.incompleta_mais_antiga)}`
-                : undefined} />
-            <StatTile label="Sem linha nenhuma" value={numero(diagnostico.sem_linha)}
-              tone={diagnostico.sem_linha > 0 ? 'red' : 'default'} />
-            <StatTile label="Coletadas zeradas" value={numero(diagnostico.zeradas)}
-              tone={diagnostico.zeradas > 0 ? 'red' : 'default'}
-              hint="escanteio, chute e falta em 0 no mesmo jogo" />
+            {/* Os dois números com conserto viram BOTÃO · levam pra lista de
+              * partidas já filtrada, que é onde moram Rodar e Preencher à mão.
+              * "Sem linha nenhuma" fica fora porque ele não é desta tabela: é
+              * partida sem linha, e o cartão dela está em Problemas. */}
+            <button type="button" className="text-left"
+                    onClick={() => abrirFiltro('folha_incompleta', 'folha incompleta')}>
+              <StatTile label="Folha incompleta" value={numero(diagnostico.incompletas)}
+                tone={diagnostico.incompletas > 0 ? 'red' : 'default'}
+                hint={diagnostico.incompleta_mais_antiga
+                  ? `mais antiga em ${diaMes(diagnostico.incompleta_mais_antiga)} · toque para ver`
+                  : 'toque para ver'} />
+            </button>
+            <button type="button" className="text-left" onClick={() => setSecao('problemas')}>
+              <StatTile label="Sem linha nenhuma" value={numero(diagnostico.sem_linha)}
+                tone={diagnostico.sem_linha > 0 ? 'red' : 'default'}
+                hint="essas ficam em Problemas" />
+            </button>
+            <button type="button" className="text-left"
+                    onClick={() => abrirFiltro('zeradas', 'coletadas zeradas')}>
+              <StatTile label="Coletadas zeradas" value={numero(diagnostico.zeradas)}
+                tone={diagnostico.zeradas > 0 ? 'red' : 'default'}
+                hint="escanteio, chute e falta em 0 · toque para ver" />
+            </button>
           </div>
 
           {/* Família por família, com a data do buraco mais antigo. É o que
@@ -878,9 +993,16 @@ export default function AdminDados() {
           </p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {diagnostico.familias.map(f => (
-              <div key={f.chave}
-                   className={`rounded-lg border p-2.5 ${
-                     f.sem_dado > 0 ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-line'}`}>
+              <button
+                key={f.chave}
+                type="button"
+                disabled={f.sem_dado === 0}
+                onClick={() => abrirFiltro(f.chave, f.rotulo.toLowerCase())}
+                className={`text-left rounded-lg border p-2.5 min-h-[64px] transition-colors duration-1 ${
+                  f.sem_dado > 0
+                    ? 'border-yellow-500/40 bg-yellow-500/5 hover:border-yellow-500/70'
+                    : 'border-line cursor-default'}`}
+              >
                 <p className="text-[10px] text-ink-4 leading-tight truncate" title={f.rotulo}>
                   {f.rotulo}
                 </p>
@@ -893,9 +1015,20 @@ export default function AdminDados() {
                     ? `de ${numero(diagnostico.ft)} · desde ${diaMes(f.desde)}`
                     : 'nenhum buraco'}
                 </p>
-              </div>
+              </button>
             ))}
           </div>
+
+          {/* A frase que faltava. O diagnóstico dizia o tamanho do buraco e
+            * parava ali · e a recoleta em lote, logo abaixo, só resolve o caso
+            * em que a API AINDA tem a folha. Folha velha ela não publica, e aí
+            * o único caminho honesto é digitar olhando a súmula. */}
+          <p className="text-[10px] text-ink-4 mt-2 leading-relaxed">
+            Toque em qualquer número acima para ver as partidas por trás dele, com os botões de
+            Rodar e Preencher à mão. Recoletar resolve o caso em que a API ainda publica a folha;
+            quando ela não publica (e folha velha ela não publica), digitar olhando a súmula é o
+            único caminho que sobra · e o motor lê o número da mão igual ao coletado.
+          </p>
 
           {/* Recoleta em lote · o botão Rodar aplicado à lista inteira. */}
           <div className="border-t border-line/60 mt-4 pt-3">
@@ -1026,7 +1159,11 @@ export default function AdminDados() {
 
       {secao === 'partidas' && (<>
 
-      {!!arbitros?.arbitros?.length && (
+      {/* Árbitros. Renderiza mesmo com a página vazia desde 27/08: com busca e
+        * paginação, lista vazia é resultado de filtro, não ausência de dado ·
+        * sumir com o card inteiro esconderia o campo de busca junto e prenderia
+        * quem digitou errado. */}
+      {!!arbitros && !!(arbitros.total ?? arbitros.arbitros.length) && (
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2">
             <div className="min-w-0">
@@ -1044,13 +1181,27 @@ export default function AdminDados() {
               {arbitros.temporadas?.length > 1 && (
                 <select
                   value={arbitros.season ?? ''}
-                  onChange={e => buscarArbitros(Number(e.target.value))}
+                  onChange={e => buscarArbitros(Number(e.target.value), 0, buscaArbitro)}
                   className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
                   aria-label="Temporada dos árbitros"
                 >
                   {arbitros.temporadas.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               )}
+              {/* Procurar pelo nome é o que faz a paginação não atrapalhar:
+                * o árbitro que interessa quase nunca está na primeira página,
+                * e sem busca paginar só troca rolagem por clique. */}
+              <input
+                value={buscaArbitro}
+                onChange={e => setBuscaArbitro(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') buscarArbitros(arbitros.season, 0, buscaArbitro)
+                }}
+                onBlur={() => buscarArbitros(arbitros.season, 0, buscaArbitro)}
+                placeholder="Procurar árbitro"
+                aria-label="Procurar árbitro pelo nome"
+                className="w-32 sm:w-40 bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+              />
               <Button size="sm" variant="ghost" loading={recalculandoArbitros}
                       onClick={recalcularArbitros}>
                 <RefreshCw className="w-3.5 h-3.5" />
@@ -1109,19 +1260,232 @@ export default function AdminDados() {
               </tbody>
             </table>
           </div>
+
+          {!arbitros.arbitros.length && (
+            <p className="px-4 py-6 text-[11px] text-ink-4">
+              Nenhum árbitro com esse nome nesta temporada.
+            </p>
+          )}
+
+          {(arbitros.total ?? 0) > POR_PAGINA && (
+            <Pagination
+              page={paginaArbitros}
+              pageSize={POR_PAGINA}
+              total={arbitros.total ?? 0}
+              unit="árbitros"
+              onChange={pag => buscarArbitros(arbitros.season, pag, buscaArbitro)}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Jogadores · a mesma régua dos times e dos árbitros, aplicada ao
+        * indivíduo.
+        *
+        * `player_match_stats` existe desde 01/08 e alimenta o Player Stats
+        * (chutes, chutes no alvo, faltas, desarmes, passes e defesas), mas
+        * nenhuma tela mostrava o que há dentro dela · conferir a média de um
+        * jogador exigia abrir o banco.
+        *
+        * O MANDO É O RECORTE, e não enfeite: o próprio motor separa casa de
+        * fora ao ler o volume do adversário, com a justificativa de que a média
+        * misturada não descreve nem um caso nem o outro. Vale igual aqui. */}
+      {!!jogadores && !jogadores.erro && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-line">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div className="min-w-0">
+                <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
+                  <User className="w-4 h-4" />
+                  Jogadores · temporada {jogadores.season}
+                </h3>
+                <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                  Média por atuação de cada contador que vira mercado. Só entram atuações de{' '}
+                  {jogadores.min_minutos} minutos ou mais, que é o corte do motor · entrada de
+                  doze minutos e jogo inteiro não são a mesma observação, e misturar as duas
+                  derruba toda média. Toque no jogador para ver as atuações.
+                </p>
+              </div>
+              {jogadores.temporadas?.length > 1 && (
+                <select
+                  value={jogadores.season ?? ''}
+                  onChange={e => buscarJogadores(Number(e.target.value), mandoJogadores,
+                                                 ordenarJogadores, 0, buscaJogador)}
+                  className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] shrink-0 focus:border-ink-4 focus:outline-none"
+                  aria-label="Temporada dos jogadores"
+                >
+                  {jogadores.temporadas.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 mt-2.5">
+              {/* Mando. Três botões e não um select: é o filtro que muda a
+                * leitura da tabela inteira, então ele fica sempre à vista. */}
+              <div className="flex gap-1">
+                {([['todos', 'Casa e fora'], ['casa', 'Em casa'], ['fora', 'Fora']] as const)
+                  .map(([chave, rotulo]) => (
+                    <button
+                      key={chave}
+                      type="button"
+                      onClick={() => {
+                        setMandoJogadores(chave)
+                        buscarJogadores(jogadores.season, chave, ordenarJogadores, 0, buscaJogador)
+                      }}
+                      className={`text-[11px] font-semibold px-2.5 py-1.5 min-h-[36px] rounded-md border transition-colors duration-1 ${
+                        mandoJogadores === chave
+                          ? 'border-line-strong bg-surface-2 text-ink-1'
+                          : 'border-line text-ink-3 hover:text-ink-2'}`}
+                    >
+                      {rotulo}
+                    </button>
+                  ))}
+              </div>
+
+              <select
+                value={ordenarJogadores}
+                onChange={e => {
+                  setOrdenarJogadores(e.target.value)
+                  buscarJogadores(jogadores.season, mandoJogadores, e.target.value, 0, buscaJogador)
+                }}
+                className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+                aria-label="Ordenar por"
+              >
+                {jogadores.colunas.map(c => (
+                  <option key={c.chave} value={c.chave}>Maior média de {c.rotulo.toLowerCase()}</option>
+                ))}
+              </select>
+
+              <input
+                value={buscaJogador}
+                onChange={e => setBuscaJogador(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') {
+                    buscarJogadores(jogadores.season, mandoJogadores, ordenarJogadores, 0, buscaJogador)
+                  }
+                }}
+                onBlur={() => buscarJogadores(jogadores.season, mandoJogadores,
+                                              ordenarJogadores, 0, buscaJogador)}
+                placeholder="Procurar jogador ou time"
+                aria-label="Procurar jogador ou time"
+                className="flex-1 min-w-[8rem] bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+              />
+            </div>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[44rem]">
+              <thead>
+                <tr className="text-ink-4 text-[10px] border-b border-line">
+                  <th className="text-left font-medium px-4 py-2">Jogador</th>
+                  <th className="text-right font-medium px-2 py-2">Atuações</th>
+                  {jogadores.colunas.map(c => (
+                    <th key={c.chave} className="text-right font-medium px-2 py-2 whitespace-nowrap">
+                      {c.rotulo}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {jogadores.jogadores.map(j => (
+                  <tr
+                    key={j.player_id}
+                    onClick={() => setAmostra({
+                      tipo: 'jogador', playerId: j.player_id, season: jogadores.season,
+                      nome: j.nome, mando: mandoJogadores,
+                    })}
+                    className="border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1"
+                  >
+                    <td className="px-4 py-2.5">
+                      <span className="text-ink-2 block truncate max-w-[11rem]">{j.nome ?? '·'}</span>
+                      <span className="text-[10px] text-ink-4 block truncate max-w-[11rem]">
+                        {j.time ?? 'time ?'}{j.posicao ? ` · ${j.posicao}` : ''}
+                      </span>
+                    </td>
+                    <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-2 align-top">
+                      {numero(j.atuacoes)}
+                      {j.minutos != null && (
+                        <span className="block text-[10px] text-ink-4">{Number(j.minutos)}min</span>
+                      )}
+                    </td>
+                    {jogadores.colunas.map(c => {
+                      const media = j[`${c.chave}_m`] as number | string | null
+                      const n = (j[`${c.chave}_n`] as number | null) ?? 0
+                      // A contagem POR COLUNA fica ao lado quando ela é menor
+                      // que o total de atuações · é a diferença entre "média de
+                      // 12 jogos" e "média de 2 dentro de 12", e sem ela defesa
+                      // de goleiro parece ter a mesma amostra que passe.
+                      const parcial = n > 0 && n < j.atuacoes
+                      return (
+                        <td key={c.chave}
+                            className="px-2 py-2.5 text-right font-mono tabular-nums align-top">
+                          <span className={n === 0 ? 'text-ink-4' : 'text-ink-1'}>
+                            {media == null ? '·' : decimal(Number(media))}
+                          </span>
+                          {parcial && (
+                            <span className="block text-[10px] text-yellow-400">de {n}</span>
+                          )}
+                        </td>
+                      )
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {!jogadores.jogadores.length && (
+            <EmptyState
+              compact
+              Icon={User}
+              title="Nenhum jogador neste recorte"
+              description="Sem atuação coletada acima do corte de minutos para esta temporada e mando."
+            />
+          )}
+
+          {jogadores.total > POR_PAGINA && (
+            <Pagination
+              page={paginaJogadores}
+              pageSize={POR_PAGINA}
+              total={jogadores.total}
+              unit="jogadores"
+              onChange={pag => buscarJogadores(jogadores.season, mandoJogadores,
+                                               ordenarJogadores, pag, buscaJogador)}
+            />
+          )}
         </div>
       )}
 
       {/* Partida a partida · o que o motor leu, e o que veio vazio na linha. */}
       <div className="card p-0 overflow-hidden">
         <div className="px-4 py-3 border-b border-line">
-          <h3 className="text-sm font-bold text-ink-1">Últimas partidas coletadas</h3>
+          <h3 className="text-sm font-bold text-ink-1">
+            {filtroPartidas ? `Partidas sem ${filtroPartidas.rotulo}` : 'Últimas partidas coletadas'}
+          </h3>
+          {filtroPartidas ? (
+            <div className="mt-1 flex flex-wrap items-center gap-2">
+              <p className="text-[11px] text-ink-4 leading-relaxed">
+                As {numero(historico?.total)} partidas dos últimos {historico?.meses ?? 24} meses
+                que estão sem esse número, da mais recente pra mais antiga. Aqui o teto de{' '}
+                {historico?.teto ?? 40} não vale · ele existe pra lista sem filtro, e manteria
+                escondida justamente a partida antiga que precisa de conserto.
+              </p>
+              <button
+                type="button"
+                onClick={limparFiltro}
+                className="text-[11px] font-semibold text-ink-2 underline underline-offset-4 hover:text-ink-1"
+              >
+                limpar o filtro
+              </button>
+            </div>
+          ) : (
           <p className="text-[11px] text-ink-4 mt-0.5">
             As {historico?.teto ?? 40} mais recentes que entraram em{' '}
             <span className="font-mono">match_statistics</span>. Toque na partida para ver as{' '}
             {historico?.familias ?? 16} estatísticas que o banco tem dela, coletar de novo ou
             preencher o que faltou.
           </p>
+          )}
         </div>
 
         {/* O jogo coletado vazio é o erro que nenhuma contagem pega: zero não é
@@ -1147,8 +1511,10 @@ export default function AdminDados() {
           <EmptyState
             compact
             Icon={Database}
-            title="Nenhuma partida coletada"
-            description="Sem linha em match_statistics não há baseline de liga, média de time nem confronto direto."
+            title={filtroPartidas ? 'Nenhuma partida neste filtro' : 'Nenhuma partida coletada'}
+            description={filtroPartidas
+              ? `Nenhuma partida dos últimos ${historico?.meses ?? 24} meses está sem ${filtroPartidas.rotulo}. O buraco pode ser mais antigo que a janela do diagnóstico.`
+              : 'Sem linha em match_statistics não há baseline de liga, média de time nem confronto direto.'}
           />
         ) : (
           <>

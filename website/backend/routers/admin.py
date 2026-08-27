@@ -2401,6 +2401,8 @@ AND COALESCE(home_fouls, 0) + COALESCE(away_fouls, 0) = 0
 def partidas_coletadas(
     pagina: int = 0,
     por_pagina: int = 10,
+    filtro: str | None = None,
+    meses: int = 24,
     current_user: dict = Depends(require_admin),
 ):
     """As ultimas partidas que entraram em `match_statistics`, paginadas.
@@ -2409,22 +2411,68 @@ def partidas_coletadas(
     linha na tabela. Jogo adiado ou interrompido que tenha estatistica gravada
     PRECISA aparecer -- ele conta nas medias do motor igual aos outros, e
     esconder da tela justo a linha esquisita e' esconder o problema.
+
+    O `filtro` E' A SAIDA DO DIAGNOSTICO (2026-08-27)
+    ------------------------------------------------
+    Ate' aqui o diagnostico era um beco: ele dizia "45 jogos sem falta" e o
+    unico caminho de conserto -- `Rodar` e `Preencher a mao` -- morava nesta
+    lista, que so' mostra as 40 mais recentes. Se a API nao publica a folha
+    daquele jogo (e ela nao publica folha velha), nao havia NENHUMA forma de
+    chegar naquelas 45 partidas pela tela.
+
+    Com `filtro`, o numero do diagnostico vira a propria lista: cada cartao de
+    familia manda pra ca' com a chave dele, e as partidas que faltam aparecem
+    com os mesmos tres botoes de sempre. E' o que fecha o ciclo
+    "vejo o buraco -> chego na partida -> escrevo o numero".
+
+    Valores aceitos: uma chave de STATS_DA_PARTIDA (a familia que falta),
+    `folha_incompleta`, ou `zeradas`. Sem filtro, o comportamento e' o de antes.
+
+    O TETO DE 40 SO' VALE SEM FILTRO. Ele existe pra a lista "ultimas
+    coletadas" nao virar varredura; filtrando, o teto seria justamente o que
+    esconderia a partida antiga que precisa de conserto -- entao ai' o recorte
+    passa a ser a janela de meses, a mesma do diagnostico.
     """
     pagina     = max(0, pagina)
     por_pagina = min(max(1, por_pagina), HISTORICO_POR_PAGINA_MAX)
     offset     = pagina * por_pagina
     limite     = max(0, min(por_pagina, HISTORICO_TETO - offset))
+    meses      = min(max(1, meses), 60)
+
+    # Traduz o filtro em predicado. Chave desconhecida vira "sem filtro" em vez
+    # de erro: o filtro chega da URL da tela, e um typo nao pode virar 500.
+    por_familia = {chave: (casa, fora) for chave, _r, casa, fora, _m in STATS_DA_PARTIDA}
+    onde_filtro = ""
+    if filtro == "folha_incompleta":
+        onde_filtro = _FOLHA_INCOMPLETA
+    elif filtro == "zeradas":
+        onde_filtro = f"({_SQL_SUSPEITA})"
+    elif filtro in por_familia:
+        casa, fora = por_familia[filtro]
+        onde_filtro = f"({casa} IS NULL OR {fora} IS NULL)"
 
     conn = get_connection()
     cur  = conn.cursor()
     try:
-        # COUNT na tabela inteira seria varredura completa a cada troca de
-        # pagina pra devolver, no maximo, 40. O LIMIT no subselect faz o
-        # Postgres parar de contar no quadragesimo.
-        cur.execute(
-            f"SELECT COUNT(*) AS n FROM (SELECT 1 FROM match_statistics LIMIT {HISTORICO_TETO}) t"
-        )
-        total = (cur.fetchone() or {}).get("n") or 0
+        if onde_filtro:
+            # Filtrando, o universo e' a janela inteira, nao as 40 ultimas ·
+            # ver a docstring. O COUNT aqui e' de verdade, e por isso a janela
+            # existe.
+            cur.execute(f"""
+                SELECT COUNT(*) AS n FROM match_statistics
+                 WHERE {onde_filtro}
+                   AND match_date >= (CURRENT_DATE - (%s || ' months')::interval)
+            """, (meses,))
+            total = (cur.fetchone() or {}).get("n") or 0
+            limite = por_pagina
+        else:
+            # COUNT na tabela inteira seria varredura completa a cada troca de
+            # pagina pra devolver, no maximo, 40. O LIMIT no subselect faz o
+            # Postgres parar de contar no quadragesimo.
+            cur.execute(
+                f"SELECT COUNT(*) AS n FROM (SELECT 1 FROM match_statistics LIMIT {HISTORICO_TETO}) t"
+            )
+            total = (cur.fetchone() or {}).get("n") or 0
 
         # Cobertura e media das MESMAS 40 que a lista pagina, num passe so'.
         #
@@ -2455,6 +2503,13 @@ def partidas_coletadas(
         zeradas = bruto.get("zeradas") or 0
 
         partidas = []
+        # Montado fora da f-string: expressao condicional com aspas dentro de
+        # f-string triplo funciona, mas e' exatamente o tipo de linha que
+        # ninguem revisa direito depois.
+        onde_sql = ""
+        if onde_filtro:
+            onde_sql = (f"WHERE {onde_filtro} AND ms.match_date >= "
+                        "(CURRENT_DATE - (%s || ' months')::interval)")
         if limite:
             colunas = ", ".join(
                 f"ms.{casa}, ms.{fora}" for _k, _r, casa, fora, _m in STATS_DA_PARTIDA
@@ -2489,9 +2544,10 @@ def partidas_coletadas(
                         WHERE team_id = ms.away_team_id
                         ORDER BY season DESC LIMIT 1
                    ) fora ON TRUE
+                 {onde_sql}
               ORDER BY ms.match_date DESC, ms.fixture_id DESC
                  LIMIT %s OFFSET %s
-            """, (limite, offset))
+            """, ((meses,) if onde_filtro else ()) + (limite, offset))
             for r in cur.fetchall():
                 linha = dict(r)
                 # Achatar os 32 campos crus em par por familia: a tela desenha
@@ -2526,6 +2582,11 @@ def partidas_coletadas(
         "resumo": resumo,
         "zeradas": zeradas,
         "partidas": partidas,
+        # Ecoados pra a tela poder desenhar o estado do filtro sem guardar
+        # duas verdades · o servidor descarta chave desconhecida, e a tela
+        # precisa saber disso.
+        "filtro": filtro if onde_filtro else None,
+        "meses": meses if onde_filtro else None,
     }
 
 
@@ -3629,7 +3690,9 @@ def times_da_partida(fixture_id: int, current_user: dict = Depends(require_admin
 @router.get("/dados/arbitros")
 def lista_de_arbitros(
     season: int | None = None,
-    limite: int = 60,
+    busca: str | None = None,
+    pagina: int = 0,
+    por_pagina: int = 15,
     current_user: dict = Depends(require_admin),
 ):
     """Os árbitros com média na temporada, do mais visto pro menos.
@@ -3637,8 +3700,15 @@ def lista_de_arbitros(
     `games` é a amostra que sustenta a média de cartões; `games_total` é quanto
     ele apitou. A distância entre os dois é quanta folha falta coletar daquele
     árbitro · e é ela que explica média estranha sem jogo estranho nenhum.
+
+    PAGINADO desde 27/08. Vinha com `limite=60` e a tela desenhava os 60 de uma
+    vez: numa temporada com 14 ligas isso é uma tabela que não acaba no celular,
+    e o árbitro que interessa quase nunca é um dos primeiros. A busca por nome
+    existe pelo mesmo motivo · paginar sem poder procurar só troca a rolagem
+    por cliques.
     """
-    limite = min(max(1, limite), 200)
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), 100)
     conn = get_connection()
     cur = conn.cursor()
     try:
@@ -3646,12 +3716,25 @@ def lista_de_arbitros(
             cur.execute("SELECT MAX(season) AS s FROM referee_stats")
             season = (cur.fetchone() or {}).get("s")
         if season is None:
-            return {"season": None, "arbitros": [], "temporadas": []}
+            return {"season": None, "arbitros": [], "temporadas": [], "total": 0}
 
         cur.execute("SELECT DISTINCT season FROM referee_stats ORDER BY season DESC")
         temporadas = [r["season"] for r in cur.fetchall()]
 
-        cur.execute("""
+        filtro, params = "", [season]
+        if busca and busca.strip():
+            filtro = "AND r.name ILIKE %s"
+            params.append(f"%{busca.strip()}%")
+
+        cur.execute(f"""
+            SELECT COUNT(*) AS n
+              FROM referee_stats rs
+              JOIN referees r ON r.referee_id = rs.referee_id
+             WHERE rs.season = %s {filtro}
+        """, tuple(params))
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        cur.execute(f"""
             SELECT r.referee_id, r.name, rs.season,
                    rs.games, rs.games_total,
                    rs.avg_yellow, rs.avg_red, rs.avg_fouls,
@@ -3660,24 +3743,314 @@ def lista_de_arbitros(
                    rs.last_updated::text AS atualizado_em
               FROM referee_stats rs
               JOIN referees r ON r.referee_id = rs.referee_id
-             WHERE rs.season = %s
+             WHERE rs.season = %s {filtro}
              ORDER BY rs.games DESC NULLS LAST, r.name
-             LIMIT %s
-        """, (season, limite))
+             LIMIT %s OFFSET %s
+        """, tuple(params) + (por_pagina, pagina * por_pagina))
         arbitros = [dict(r) for r in cur.fetchall()]
     except Exception as e:
         conn.rollback()
         logging.getLogger(__name__).warning("[ADMIN/ARBITROS] lista: %s", e)
-        return {"season": season, "arbitros": [], "temporadas": [], "erro": str(e)[:200]}
+        return {"season": season, "arbitros": [], "temporadas": [], "total": 0,
+                "erro": str(e)[:200]}
     finally:
         cur.close()
         conn.close()
 
     return {"season": season, "temporadas": temporadas, "arbitros": arbitros,
+            "total": total, "pagina": pagina, "por_pagina": por_pagina,
             # O gate de cartões do motor. A tela marca quem está abaixo dele ·
             # árbitro com amostra curta não bloqueia o mercado, cai no fallback
             # da média da liga, e isso é uma decisão diferente.
             "amostra_minima": 3}
+
+
+# ─── Jogadores ──────────────────────────────────────────────────────────────
+#
+# A régua dos times e dos árbitros, aplicada ao jogador. `player_match_stats`
+# existe desde 01/08 e alimenta o Player Stats (chutes, chutes no alvo, faltas,
+# desarmes, passes e defesas de goleiro), mas nenhuma tela mostrava o que há
+# dentro dela · a única forma de conferir a média de um jogador era abrir o
+# banco.
+#
+# DUAS REGRAS SÃO COPIADAS DO MOTOR, E NÃO INVENTADAS AQUI
+# -------------------------------------------------------
+#   1. atuação abaixo de 60 minutos não entra (player_history.MIN_MINUTOS). Uma
+#      entrada de 12 minutos e um jogo inteiro não são a mesma observação, e
+#      misturar as duas subestima todo contador. É a regra principal daquele
+#      módulo, então uma tela que a ignorasse mostraria uma média que o motor
+#      nunca viu;
+#   2. a contagem é POR COLUNA. Defesa aparece em 0.86% das atuações e passe em
+#      todas · dizer "12 jogos" ao lado das seis médias esconderia que uma
+#      delas saiu de dois.
+#
+# O MANDO É O RECORTE QUE O USUÁRIO PEDIU, e ele não é enfeite: `volume_do_
+# adversario` do próprio motor já separa casa de fora com a justificativa de
+# que "mandante e visitante produzem chute no alvo em taxas diferentes, e a
+# média misturada não descreve nem um caso nem o outro". Vale igual pro
+# jogador. `player_match_stats` não guarda mando, então ele sai do JOIN com
+# `match_statistics`: casa é o time do jogador ser o home_team_id da partida.
+
+#: Espelha player_history.MIN_MINUTOS. Importado de lá quando o motor está no
+#: path (é o caso em produção, via _no_path); a constante local é o fallback
+#: pra o site subir sozinho, sem o pipeline montado.
+_MIN_MINUTOS_JOGADOR = 60
+
+
+def _min_minutos_do_motor() -> int:
+    try:
+        _no_path()
+        from services.player_stats_engine.player_history import MIN_MINUTOS
+        return int(MIN_MINUTOS)
+    except Exception:
+        return _MIN_MINUTOS_JOGADOR
+
+
+#: (chave, rótulo, coluna de player_match_stats). A ordem é a da tela.
+#:
+#: São as colunas que viram MERCADO -- as mesmas de
+#: player_stats_engine.methods.METODOS, mais gols, que não é método (o motor
+#: não publica prop de gol de jogador) mas é o número que se procura primeiro
+#: ao olhar um atacante.
+STATS_DO_JOGADOR = [
+    ("chutes",     "Chutes",           "shots_total"),
+    ("chutes_alvo", "Chutes no alvo",  "shots_on"),
+    ("gols",       "Gols",             "goals_total"),
+    ("defesas",    "Defesas",          "saves"),
+    ("faltas",     "Faltas cometidas", "fouls_committed"),
+    ("desarmes",   "Desarmes",         "tackles_total"),
+    ("passes",     "Passes",           "passes_total"),
+    ("amarelos",   "Amarelos",         "cards_yellow"),
+]
+
+#: Mando -> pedaço de SQL que o resolve. O jogador está em casa quando o time
+#: dele é o mandante da partida.
+_MANDO_SQL = {
+    "casa": "AND ms.home_team_id = p.team_id",
+    "fora": "AND ms.away_team_id = p.team_id",
+    "todos": "",
+}
+
+
+@router.get("/dados/jogadores")
+def lista_de_jogadores(
+    season: int | None = None,
+    mando: str = "todos",
+    ordenar: str = "chutes",
+    busca: str | None = None,
+    pagina: int = 0,
+    por_pagina: int = 15,
+    current_user: dict = Depends(require_admin),
+):
+    """As médias por jogador que o Player Stats lê, com o recorte de mando."""
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), 100)
+    mando = mando if mando in _MANDO_SQL else "todos"
+    colunas_validas = {chave: coluna for chave, _rot, coluna in STATS_DO_JOGADOR}
+    ordenar = ordenar if ordenar in colunas_validas else "chutes"
+    min_minutos = _min_minutos_do_motor()
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT DISTINCT season FROM player_match_stats ORDER BY season DESC")
+        temporadas = [r["season"] for r in cur.fetchall() if r["season"] is not None]
+        if season is None:
+            season = temporadas[0] if temporadas else None
+        if season is None:
+            return {"season": None, "temporadas": [], "jogadores": [], "total": 0,
+                    "mando": mando, "min_minutos": min_minutos,
+                    "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR]}
+
+        filtro_busca, params_busca = "", []
+        if busca and busca.strip():
+            filtro_busca = "AND (p.player_name ILIKE %s OR p.team_name ILIKE %s)"
+            alvo = f"%{busca.strip()}%"
+            params_busca = [alvo, alvo]
+
+        # O JOIN com match_statistics só é necessário pro mando · sem recorte
+        # ele sairia caro à toa numa tabela que cresce por jogador por jogo.
+        junta = ("JOIN match_statistics ms ON ms.fixture_id = p.fixture_id"
+                 if mando != "todos" else "")
+        onde_mando = _MANDO_SQL[mando]
+
+        agregados = ",\n                   ".join(
+            # Prefixo `p.` obrigatorio: com mando o JOIN traz `match_statistics`
+            # junto, e coluna sem qualificar num SELECT de duas tabelas e' erro
+            # esperando acontecer na proxima coluna que existir dos dois lados.
+            f"ROUND(AVG(p.{coluna})::numeric, 2) AS {chave}_m, COUNT(p.{coluna}) AS {chave}_n"
+            for chave, _rot, coluna in STATS_DO_JOGADOR
+        )
+        base = f"""
+              FROM player_match_stats p
+              {junta}
+             WHERE p.season = %s
+               AND COALESCE(p.minutes, 0) >= %s
+               {onde_mando}
+               {filtro_busca}
+        """
+        params = tuple([season, min_minutos] + params_busca)
+
+        cur.execute(f"""
+            SELECT COUNT(*) AS n FROM (
+                SELECT p.player_id {base} GROUP BY p.player_id
+            ) t
+        """, params)
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        cur.execute(f"""
+            SELECT p.player_id,
+                   MAX(p.player_name) AS nome,
+                   -- O time e a posição do jogo MAIS RECENTE, não o mais
+                   -- frequente: jogador transferido no meio da temporada só
+                   -- pode representar o time em que está agora. Mesma escolha
+                   -- de player_history.jogadores_dos_times.
+                   (ARRAY_AGG(p.team_name ORDER BY p.match_date DESC))[1] AS time,
+                   (ARRAY_AGG(p.position  ORDER BY p.match_date DESC))[1] AS posicao,
+                   COUNT(*) AS atuacoes,
+                   ROUND(AVG(p.minutes)::numeric, 0) AS minutos,
+                   MAX(p.match_date)::text AS ultima,
+                   {agregados}
+            {base}
+          GROUP BY p.player_id
+          ORDER BY AVG(p.{colunas_validas[ordenar]}) DESC NULLS LAST, COUNT(*) DESC
+             LIMIT %s OFFSET %s
+        """, params + (por_pagina, pagina * por_pagina))
+        jogadores = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        conn.rollback()
+        # `player_match_stats` nasce em `main.py setup`, do motor · banco de
+        # site que nunca rodou o pipeline não tem a tabela, e isso não é
+        # defeito do painel (mesma razão de _sem_tabela, com outro nome).
+        if "player_match_stats" in str(e) and "exist" in str(e).lower():
+            return {"season": season, "temporadas": [], "jogadores": [], "total": 0,
+                    "mando": mando, "min_minutos": min_minutos,
+                    "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
+                    "erro": "Nenhuma estatística de jogador coletada neste banco ainda."}
+        logging.getLogger(__name__).warning("[ADMIN/JOGADORES] lista: %s", e)
+        return {"season": season, "temporadas": [], "jogadores": [], "total": 0,
+                "mando": mando, "min_minutos": min_minutos,
+                "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
+                "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "season": season,
+        "temporadas": temporadas,
+        "mando": mando,
+        "ordenar": ordenar,
+        "total": total,
+        "pagina": pagina,
+        "por_pagina": por_pagina,
+        "jogadores": jogadores,
+        # A tela precisa dizer o corte, senão "12 atuações" vira um número sem
+        # definição · e o corte é a razão de a média não bater com a soma bruta
+        # que alguém faria olhando a folha.
+        "min_minutos": min_minutos,
+        "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
+    }
+
+
+@router.get("/dados/jogadores/{player_id}/amostra")
+def amostra_do_jogador(
+    player_id: int,
+    season: int | None = None,
+    mando: str = "todos",
+    current_user: dict = Depends(require_admin),
+):
+    """As atuações que entraram na média deste jogador, uma a uma.
+
+    Mesma razão da amostra do time e da do árbitro: "média de 2,4 chutes" é
+    indistinguível entre doze jogos parecidos e dois jogos de cinco chutes
+    seguidos de dez sem nenhum. Só a lista separa os dois · e em prop de
+    jogador a diferença entre os dois casos é o produto inteiro.
+    """
+    mando = mando if mando in _MANDO_SQL else "todos"
+    min_minutos = _min_minutos_do_motor()
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT DISTINCT season FROM player_match_stats
+             WHERE player_id = %s AND season IS NOT NULL
+             ORDER BY season DESC
+        """, (player_id,))
+        temporadas = [r["season"] for r in cur.fetchall()]
+        if season is None:
+            season = temporadas[0] if temporadas else None
+        if season is None:
+            raise HTTPException(404, "Jogador sem atuação coletada.")
+
+        colunas = ", ".join(f"p.{coluna} AS {chave}"
+                            for chave, _rot, coluna in STATS_DO_JOGADOR)
+        cur.execute(f"""
+            SELECT p.fixture_id, p.match_date::text AS data, p.minutes, p.position,
+                   -- `AS time` seria alias com nome de tipo do SQL · o
+                   -- resultado sai com outro nome e a resposta o renomeia.
+                   p.player_name AS nome, p.team_name AS time_nome, p.rating,
+                   p.is_substitute,
+                   (ms.home_team_id = p.team_id) AS em_casa,
+                   casa.name AS mandante, fora.name AS visitante,
+                   ms.home_goals, ms.away_goals,
+                   {colunas}
+              FROM player_match_stats p
+              LEFT JOIN match_statistics ms ON ms.fixture_id = p.fixture_id
+              LEFT JOIN LATERAL (
+                        SELECT name FROM teams
+                         WHERE team_id = ms.home_team_id
+                         ORDER BY season DESC LIMIT 1
+                    ) casa ON TRUE
+              LEFT JOIN LATERAL (
+                        SELECT name FROM teams
+                         WHERE team_id = ms.away_team_id
+                         ORDER BY season DESC LIMIT 1
+                    ) fora ON TRUE
+             WHERE p.player_id = %s AND p.season = %s
+               {_MANDO_SQL[mando]}
+          ORDER BY p.match_date DESC
+             LIMIT 40
+        """, (player_id, season))
+        atuacoes = [dict(r) for r in cur.fetchall()]
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/JOGADORES] amostra: %s", e)
+        raise HTTPException(500, f"Não deu pra ler a amostra: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    # A média sai das atuações QUE O MOTOR LERIA (>= min_minutos), e a lista
+    # mostra todas · é essa diferença que explica por que a média não bate com
+    # a conta feita a olho sobre a tabela inteira.
+    lidas = [a for a in atuacoes if (a.get("minutes") or 0) >= min_minutos]
+    medias = {}
+    for chave, _rot, _col in STATS_DO_JOGADOR:
+        valores = [a[chave] for a in lidas if a.get(chave) is not None]
+        medias[chave] = {
+            "media": round(sum(valores) / len(valores), 2) if valores else None,
+            "n": len(valores),
+        }
+
+    return {
+        "jogador": {
+            "player_id": player_id,
+            "nome": atuacoes[0]["nome"] if atuacoes else None,
+            "time": atuacoes[0]["time_nome"] if atuacoes else None,
+            "posicao": atuacoes[0]["position"] if atuacoes else None,
+        },
+        "season": season,
+        "temporadas": temporadas,
+        "mando": mando,
+        "min_minutos": min_minutos,
+        "atuacoes": atuacoes,
+        "lidas": len(lidas),
+        "medias": medias,
+        "colunas": [{"chave": c, "rotulo": r} for c, r, _x in STATS_DO_JOGADOR],
+    }
 
 
 @router.get("/dados/arbitros/{referee_id}/amostra")

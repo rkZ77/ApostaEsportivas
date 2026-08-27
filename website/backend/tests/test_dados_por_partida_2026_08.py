@@ -76,6 +76,9 @@ class _FakeCursor:
         self.params.append(params)
         if "SELECT 1 FROM match_statistics" in sql:
             self._rows = [{"n": self._total}]
+        elif "COUNT(*) AS n FROM match_statistics" in sql:
+            # O COUNT do caminho FILTRADO: de verdade, sem o teto de 40.
+            self._rows = [{"n": self._total}]
         elif "AS zeradas" in sql:
             self._rows = [self._resumo]
         else:
@@ -106,11 +109,11 @@ class _FakeConn:
 
 
 def _rodar(monkeypatch, pagina=0, por_pagina=10, total=40,
-           linhas=None, resumo=None, explode=False):
+           linhas=None, resumo=None, explode=False, filtro=None, meses=24):
     cur = _FakeCursor(total=total, linhas=linhas, resumo=resumo, explode=explode)
     monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
     saida = admin.partidas_coletadas(
-        pagina=pagina, por_pagina=por_pagina,
+        pagina=pagina, por_pagina=por_pagina, filtro=filtro, meses=meses,
         current_user={"id": 1, "plan": "admin"},
     )
     return saida, cur
@@ -328,3 +331,64 @@ def test_dados_diz_quando_a_media_foi_recalculada(monkeypatch):
     monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
     admin.dados_do_banco(current_user={"id": 1, "plan": "admin"})
     assert any("FROM team_statistics" in s for s in cur.sqls)
+
+
+class TestOFiltroDoDiagnostico:
+    """O diagnostico era um beco (2026-08-27).
+
+    Ele dizia "45 jogos sem falta" e o unico caminho de conserto -- `Rodar` e
+    `Preencher a mao` -- morava na lista, que so' mostra as 40 mais recentes.
+    Quando a API nao publica a folha daquele jogo (e ela nao publica folha
+    velha), NAO HAVIA como chegar naquelas 45 partidas pela tela. O filtro liga
+    o numero do diagnostico a lista.
+    """
+
+    def test_familia_filtra_pelas_duas_colunas_dela(self, monkeypatch):
+        _, cur = _rodar(monkeypatch, filtro="faltas", linhas=[_partida()])
+        sql = _sql_das_partidas(cur)
+        assert "home_fouls IS NULL OR away_fouls IS NULL" in sql
+
+    def test_o_teto_de_40_nao_vale_quando_ha_filtro(self, monkeypatch):
+        """E' o ponto inteiro: o teto existe pra lista sem filtro, e manteria
+        escondida justamente a partida antiga que precisa de conserto."""
+        saida, cur = _rodar(monkeypatch, filtro="faltas", pagina=9, por_pagina=10,
+                            total=137, linhas=[_partida()])
+        limite, offset = cur.params[-1][-2:]
+        assert (limite, offset) == (10, 90)
+        assert saida["total"] == 137
+        # E a contagem passa a ser de verdade, nao a que para no quadragesimo.
+        assert not any("SELECT 1 FROM match_statistics" in s for s in cur.sqls)
+
+    def test_a_janela_de_meses_entra_como_parametro(self, monkeypatch):
+        """Filtrando, o recorte deixa de ser "as 40 ultimas" e passa a ser a
+        mesma janela do diagnostico · sem ela seria varredura da tabela."""
+        _, cur = _rodar(monkeypatch, filtro="faltas", meses=6, linhas=[_partida()])
+        sql = _sql_das_partidas(cur)
+        assert "months" in sql
+        assert cur.params[-1][0] == 6
+
+    def test_zeradas_usa_o_mesmo_predicado_do_diagnostico(self, monkeypatch):
+        """Duas definicoes de "coletada zerada" divergindo daria um numero no
+        cartao e outro na lista que ele abre."""
+        _, cur = _rodar(monkeypatch, filtro="zeradas", linhas=[_partida()])
+        sql = _sql_das_partidas(cur)
+        assert admin._SQL_SUSPEITA.strip() in sql
+
+    def test_folha_incompleta_usa_o_mesmo_predicado_do_diagnostico(self, monkeypatch):
+        _, cur = _rodar(monkeypatch, filtro="folha_incompleta", linhas=[_partida()])
+        assert admin._FOLHA_INCOMPLETA in _sql_das_partidas(cur)
+
+    def test_filtro_desconhecido_cai_no_comportamento_de_sempre(self, monkeypatch):
+        """O filtro chega pela URL da tela · um typo nao pode virar 500, nem
+        SQL montado com texto que ninguem validou."""
+        saida, cur = _rodar(monkeypatch, filtro="'; DROP TABLE match_statistics --",
+                            linhas=[_partida()])
+        assert saida["filtro"] is None
+        assert "DROP TABLE" not in _sql_das_partidas(cur)
+        assert any("SELECT 1 FROM match_statistics" in s for s in cur.sqls)
+
+    def test_sem_filtro_nada_muda(self, monkeypatch):
+        saida, cur = _rodar(monkeypatch, linhas=[_partida()])
+        assert saida["filtro"] is None
+        assert saida["meses"] is None
+        assert "months" not in _sql_das_partidas(cur)
