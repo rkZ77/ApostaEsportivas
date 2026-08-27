@@ -1,5 +1,6 @@
 import os
 import threading
+import time
 from contextlib import contextmanager
 from urllib.parse import urlparse
 import psycopg2
@@ -26,21 +27,70 @@ def _env(*keys: str, default: str = "") -> str:
     return default
 
 
-def _parametros() -> dict:
-    """Credenciais resolvidas uma vez, num lugar so."""
+def _da_url(url: str) -> dict:
+    """Parametros a partir de uma URL postgres://. O pooler do Supabase e'
+    entregue nesse formato, com usuario `postgres.<project-ref>`."""
+    parsed = urlparse(url)
+    return dict(
+        host=parsed.hostname,
+        port=parsed.port,
+        dbname=parsed.path.lstrip("/") or "postgres",
+        user=parsed.username,
+        password=parsed.password,
+        sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
+        cursor_factory=psycopg2.extras.RealDictCursor,
+        connect_timeout=10,
+    )
+
+
+def _parametros(sessao: bool = False) -> dict:
+    """Credenciais resolvidas uma vez, num lugar so.
+
+    `sessao=True` devolve o destino das conexoes que precisam de SESSAO
+    propria -- hoje so' `advisory_lock`, via get_direct_connection().
+
+    POR QUE O DESTINO PRECISA PODER SER OUTRO
+    -----------------------------------------
+    `db.<ref>.supabase.co` (a conexao DIRETA do Supabase) tem duas limitacoes
+    que so' aparecem com trafego:
+
+      * resolve SO' em IPv6 -- nao existe registro A. Host sem egress IPv6
+        simplesmente nao conecta, e o sintoma e' "o banco caiu";
+      * `max_connections` = 60 no plano, 3 reservadas. Esse teto e' do PROJETO
+        inteiro: o site, o motor e os scripts dividem as mesmas 57.
+
+    O caminho recomendado pelo proprio Supabase e' o pooler (Supavisor), que
+    tem IPv4 e multiplexa milhares de clientes em poucas conexoes reais:
+
+        porta 6543 = transaction mode -> o site (DATABASE_URL)
+        porta 5432 = session  mode    -> advisory_lock (DATABASE_URL_SESSION)
+
+    E' por isso que os dois destinos sao separaveis por variavel: em
+    transaction mode a sessao e' compartilhada entre requests, e
+    `pg_try_advisory_lock` -- que e' de sessao -- deixaria de proteger o
+    pipeline sem dar erro nenhum. Sem as variaveis de sessao configuradas,
+    tudo cai no destino unico de sempre e nada muda.
+    """
+    if sessao:
+        url_sessao = os.getenv("DATABASE_URL_SESSION")
+        if url_sessao:
+            return _da_url(url_sessao)
+        host_sessao = _env("DB_HOST_SESSION")
+        if host_sessao:
+            return dict(
+                host=host_sessao,
+                port=_env("DB_PORT_SESSION", default="5432"),
+                dbname=_env("DB_NAME_SESSION", "DB_NAME", "DB_NAME_PROD", default="postgres"),
+                user=_env("DB_USER_SESSION", "DB_USER", "DB_USER_PROD", default="postgres"),
+                password=_env("DB_PASS_SESSION", "DB_PASS", "DB_PASS_PROD"),
+                sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
+                cursor_factory=psycopg2.extras.RealDictCursor,
+                connect_timeout=10,
+            )
+
     database_url = os.getenv("DATABASE_URL")
     if database_url:
-        parsed = urlparse(database_url)
-        return dict(
-            host=parsed.hostname,
-            port=parsed.port,
-            dbname=parsed.path.lstrip("/"),
-            user=parsed.username,
-            password=parsed.password,
-            sslmode=_env("DB_SSLMODE", "DB_SSLMODE_PROD", default="require"),
-            cursor_factory=psycopg2.extras.RealDictCursor,
-            connect_timeout=10,
-        )
+        return _da_url(database_url)
     return dict(
         host=_env("DB_HOST", "DB_HOST_PROD"),
         port=_env("DB_PORT", "DB_PORT_PROD", default="5432"),
@@ -64,7 +114,7 @@ def get_direct_connection():
         pipeline roda, o que passa de meia hora -- prender um slot do pool esse
         tempo todo e' tirar capacidade do site pra um job de fundo.
     """
-    return psycopg2.connect(**_parametros())
+    return psycopg2.connect(**_parametros(sessao=True))
 
 
 # ─── Pool ────────────────────────────────────────────────────────────────────
@@ -90,9 +140,21 @@ _POOL_MIN = int(os.getenv("DB_POOL_MIN", "1"))
 # do plano troca lentidao por "too many connections", que e' pior.
 _POOL_MAX = int(os.getenv("DB_POOL_MAX", "10"))
 
+#: Quanto tempo um request espera por um slot do pool antes de considerar
+#: abrir conexao propria. Consulta mediana do site e' curta, entao esta espera
+#: quase sempre termina em alguns milissegundos.
+_ESPERA_POR_SLOT = float(os.getenv("DB_ESPERA_POR_SLOT", "1.5"))
+#: Teto de conexoes ABERTAS FORA DO POOL ao mesmo tempo. Somado a _POOL_MAX,
+#: e' o maximo que este processo pode tirar das ~57 conexoes utilizaveis do
+#: projeto Supabase. Com WEB_CONCURRENCY > 1, multiplique por worker antes de
+#: mexer.
+_FALLBACK_MAX = int(os.getenv("DB_FALLBACK_MAX", "5"))
+
 _pool = None
 _pool_lock = threading.Lock()
-_pool_stats = {"reusos": 0, "aberturas": 0, "fallback": 0}
+_fallback_lock = threading.Lock()
+_pool_stats = {"reusos": 0, "aberturas": 0, "fallback": 0,
+               "fallback_em_uso": 0, "fallback_negado": 0}
 
 
 def _obter_pool():
@@ -155,6 +217,46 @@ class _ConexaoDoPool:
         _devolver(self._conn)
 
 
+class _ConexaoDireta:
+    """Conexao FORA do pool cujo `close()` devolve o orcamento de fallback.
+
+    Sem isto o teto vazaria: cada pico consumiria o orcamento pra sempre e o
+    fallback pararia de existir depois do primeiro dia de movimento.
+    """
+
+    __slots__ = ("_conn", "_fechada")
+
+    def __init__(self, conn):
+        self._conn = conn
+        self._fechada = False
+
+    def __getattr__(self, nome):
+        return getattr(self._conn, nome)
+
+    def __setattr__(self, nome, valor):
+        if nome in _ConexaoDireta.__slots__:
+            object.__setattr__(self, nome, valor)
+        else:
+            setattr(self._conn, nome, valor)
+
+    def __enter__(self):
+        return self._conn.__enter__()
+
+    def __exit__(self, *exc):
+        return self._conn.__exit__(*exc)
+
+    def close(self):
+        if self._fechada:
+            return
+        self._fechada = True
+        try:
+            self._conn.close()
+        finally:
+            with _fallback_lock:
+                _pool_stats["fallback_em_uso"] = max(
+                    0, _pool_stats["fallback_em_uso"] - 1)
+
+
 def _devolver(conn) -> None:
     """Devolve ao pool deixando a sessao limpa.
 
@@ -184,23 +286,62 @@ def _devolver(conn) -> None:
 def get_connection():
     """Conexao do pool. Chame `.close()` normalmente -- ela volta pro pool.
 
-    Pool esgotado NAO vira erro 500: abre uma conexao direta e segue, mais
-    lenta porem viva. Preferir "site lento" a "site fora" num pico e' a
-    escolha obvia, e o contador de fallback deixa o evento visivel em
-    /admin/db-pool em vez de silencioso.
+    Pool esgotado NAO vira erro 500: espera um instante por um slot e, se
+    nenhum vagar, abre uma conexao direta e segue -- mais lenta porem viva.
+    Preferir "site lento" a "site fora" num pico e' a escolha obvia, e o
+    contador de fallback deixa o evento visivel em /admin/db-pool em vez de
+    silencioso.
+
+    O FALLBACK TEM TETO DESDE 2026-08-26, E O MOTIVO E' O OPOSTO DO QUE PARECE
+    --------------------------------------------------------------------------
+    Ilimitado, ele transformava um pico em queda do banco INTEIRO. O Supabase
+    da' `max_connections` = 60 pro projeto todo -- site, motor e scripts na
+    mesma cota. Com o pool em 10, o 11o request simultaneo abria conexao
+    direta, o 12o outra, e assim por diante: em 50 requests concorrentes o
+    banco recusa TODO MUNDO com "too many connections", inclusive quem ja
+    estava sendo atendido e inclusive o motor. Ou seja, o mecanismo que existe
+    pra evitar erro 500 num pico era exatamente o que derrubava tudo.
+
+    Com teto, o excedente ESPERA por um slot do pool (que dura milissegundos:
+    a consulta mediana e' curta) em vez de abrir conexao nova. Fila e' lenta;
+    estouro de conexao e' fora do ar.
     """
-    try:
-        conn = _obter_pool().getconn()
-        _pool_stats["reusos"] += 1
-        return _ConexaoDoPool(conn)
-    except psycopg2.pool.PoolError:
-        _pool_stats["fallback"] += 1
-        return get_direct_connection()
-    except Exception:
-        # Pool indisponivel por qualquer outro motivo (credencial, rede na
-        # criacao): nao pode derrubar o request que teria funcionado sozinho.
-        _pool_stats["fallback"] += 1
-        return get_direct_connection()
+    limite = time.monotonic() + _ESPERA_POR_SLOT
+    while True:
+        try:
+            conn = _obter_pool().getconn()
+            _pool_stats["reusos"] += 1
+            return _ConexaoDoPool(conn)
+        except psycopg2.pool.PoolError:
+            # Pool cheio. Ainda da' tempo de esperar um slot?
+            if time.monotonic() < limite:
+                time.sleep(0.02)
+                continue
+            with _fallback_lock:
+                if _pool_stats["fallback_em_uso"] < _FALLBACK_MAX:
+                    _pool_stats["fallback_em_uso"] += 1
+                    _pool_stats["fallback"] += 1
+                    tem_orcamento = True
+                else:
+                    _pool_stats["fallback_negado"] += 1
+                    tem_orcamento = False
+            if not tem_orcamento:
+                # Sem slot e sem orcamento: continuar esperando e' melhor que
+                # estourar o teto de conexoes do projeto. O timeout do request
+                # resolve o caso patologico.
+                time.sleep(0.05)
+                limite = time.monotonic() + _ESPERA_POR_SLOT
+                continue
+            return _ConexaoDireta(get_direct_connection())
+        except Exception:
+            # Pool indisponivel por qualquer outro motivo (credencial, rede na
+            # criacao): nao pode derrubar o request que teria funcionado
+            # sozinho. Aqui nao ha' pool pra esperar, entao vai direto -- mas
+            # ainda contabilizado.
+            with _fallback_lock:
+                _pool_stats["fallback"] += 1
+                _pool_stats["fallback_em_uso"] += 1
+            return _ConexaoDireta(get_direct_connection())
 
 
 def pool_stats() -> dict:
@@ -210,6 +351,7 @@ def pool_stats() -> dict:
         "ativo": pool is not None,
         "min": _POOL_MIN,
         "max": _POOL_MAX,
+        "fallback_max": _FALLBACK_MAX,
         "conexoes_abertas": len(getattr(pool, "_used", {})) + len(getattr(pool, "_pool", []))
         if pool else 0,
         "em_uso": len(getattr(pool, "_used", {})) if pool else 0,

@@ -145,16 +145,78 @@ def test_devolver_duas_vezes_e_inofensivo(pool):
 # ── Degradacao ────────────────────────────────────────────────────────────
 def test_pool_cheio_abre_conexao_direta_em_vez_de_estourar(pool, monkeypatch):
     """Pico de trafego nao pode virar 500. Site lento e' melhor que site fora."""
-    diretas = []
-    monkeypatch.setattr(database, "get_direct_connection",
-                        lambda: diretas.append(1) or "conexao-direta")
+    monkeypatch.setattr(database, "_ESPERA_POR_SLOT", 0.0)
+    monkeypatch.setattr(database, "get_direct_connection", _ConnFake)
 
     a = _get_connection()
     b = _get_connection()
     c = _get_connection()
 
-    assert c == "conexao-direta"
+    assert isinstance(c, database._ConexaoDireta)
     assert database.pool_stats()["fallback"] >= 1
+    a.close(); b.close(); c.close()
+
+
+def test_espera_por_slot_antes_de_abrir_conexao_propria(pool, monkeypatch):
+    """Slot que vaga em milissegundos nao justifica conexao nova.
+
+    A consulta mediana do site e' curta: esperar quase sempre termina antes de
+    a espera acabar, e cada conexao evitada e' uma a menos nas ~57 do projeto.
+    """
+    monkeypatch.setattr(database, "get_direct_connection",
+                        lambda: pytest.fail("nao devia precisar de conexao direta"))
+    a = _get_connection()
+    b = _get_connection()
+
+    import threading
+    threading.Timer(0.05, a.close).start()
+
+    c = _get_connection()          # espera o slot de `a` vagar
+    assert isinstance(c, database._ConexaoDoPool)
+    b.close(); c.close()
+
+
+def test_fallback_tem_teto(pool, monkeypatch):
+    """SEM TETO, O MECANISMO ANTI-500 DERRUBA O BANCO.
+
+    O Supabase da' max_connections=60 pro projeto INTEIRO -- site, motor e
+    scripts na mesma cota. Fallback ilimitado significa uma conexao nova por
+    request excedente: em algumas dezenas de requests simultaneos o banco
+    recusa todo mundo com "too many connections", inclusive quem ja estava
+    sendo atendido. Fila e' lenta; estouro de conexao e' fora do ar.
+    """
+    monkeypatch.setattr(database, "_ESPERA_POR_SLOT", 0.0)
+    monkeypatch.setattr(database, "_FALLBACK_MAX", 1)
+    monkeypatch.setattr(database, "get_direct_connection", _ConnFake)
+
+    a = _get_connection()
+    b = _get_connection()
+    c = _get_connection()          # consome o unico fallback
+
+    assert isinstance(c, database._ConexaoDireta)
+
+    # o proximo nao pode abrir outra: espera. Libera um slot pra ele sair.
+    import threading
+    threading.Timer(0.05, a.close).start()
+    d = _get_connection()
+    assert isinstance(d, database._ConexaoDoPool)
+
+    b.close(); c.close(); d.close()
+
+
+def test_conexao_direta_devolve_o_orcamento_ao_fechar(pool, monkeypatch):
+    """Sem isto o teto vazaria: o fallback pararia de existir depois do
+    primeiro pico do dia."""
+    monkeypatch.setattr(database, "_ESPERA_POR_SLOT", 0.0)
+    monkeypatch.setattr(database, "get_direct_connection", _ConnFake)
+
+    a = _get_connection(); b = _get_connection()
+    c = _get_connection()
+    assert database.pool_stats()["fallback_em_uso"] == 1
+    c.close()
+    assert database.pool_stats()["fallback_em_uso"] == 0
+    c.close()                                   # idempotente
+    assert database.pool_stats()["fallback_em_uso"] == 0
     a.close(); b.close()
 
 
