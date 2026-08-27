@@ -69,7 +69,13 @@ class CashoutBody(BaseModel):
 # modulo. Um tipo esquecido em qualquer um deles nao da erro: o pick
 # simplesmente some do somatorio (type_map.get devolve {} e o loop faz
 # `continue`), e a banca do usuario fica errada em silencio.
-_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros"}
+# Player Stats entrou em 2026-08-27, e `goleiros` FICA: o motor parou de
+# escrever nela (defesas virou o metodo `saves` do Player Stats), mas quem
+# seguiu um pick de defesa antes disso continua com a aposta na banca. Tirar a
+# chave zeraria o P&L daquele usuario em silencio -- que e' exatamente o modo de
+# falhar descrito no comentario acima.
+_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
+                    "player_stats": "picks_player_stats"}
 
 
 def _mercado_maps(cur, followed: list, colunas: str = "id, result, odd") -> dict:
@@ -164,6 +170,21 @@ def _resolve_pick(cur, pick_id: int, pick_type: str) -> Optional[dict]:
             FROM picks_goleiros pg
             LEFT JOIN fixtures f ON f.fixture_id = pg.fixture_id
             WHERE pg.id = %s
+        """, (pick_id,))
+    elif pick_type == "player_stats":
+        # Prop de jogador, mesmo formato do de goleiro acima: a "linha" ja vem
+        # pronta do pipeline como "<jogador> · N ou mais chutes no alvo", entao
+        # o nome faz parte da aposta e nao pode ficar so' em player_name.
+        cur.execute("""
+            SELECT pp.result, pp.profit, 1 AS stake,
+                   pp.home_team AS home_team_name, pp.away_team AS away_team_name,
+                   COALESCE(pp.home_team_id, f.home_team_id) AS home_team_id,
+                   COALESCE(pp.away_team_id, f.away_team_id) AS away_team_id,
+                   pp.market, pp.line, pp.odd,
+                   f.match_datetime
+            FROM picks_player_stats pp
+            LEFT JOIN fixtures f ON f.fixture_id = pp.fixture_id
+            WHERE pp.id = %s
         """, (pick_id,))
     elif pick_type == "live":
         # Pick Ao Vivo. Ramo ADITIVO: so' e' alcancado por pick_type='live',
@@ -383,7 +404,7 @@ PIPELINES_DA_QUEBRA: tuple = (
     ("vip",       "VIP",       ("vip",)),
     ("free",      "Free",      ("free",)),
     ("multipla",  "Múltipla",  ("multipla", "multiplas")),
-    ("mercados",  "Mercados",  ("faltas", "goleiros")),
+    ("mercados",  "Mercados",  ("faltas", "goleiros", "player_stats")),
     ("live",      "Ao Vivo",   ("live",)),
 )
 
@@ -1042,6 +1063,12 @@ STAKE_LIMITS = {
     # calculada e boa.
     "faltas":     (1, 6),
     "goleiros":   (1, 6),
+    # Player Stats herda o teto dos outros mercados proprios, pelo mesmo
+    # motivo: amostra historica menor que a do VIP, entao a incerteza da
+    # estimativa e' maior mesmo quando a margem calculada e' boa. Sem esta
+    # linha o follow devolvia "Tipo invalido" e o botao Apostar do card
+    # quebrava -- foi o que aconteceu com faltas/goleiros da primeira vez.
+    "player_stats": (1, 6),
     # Ao vivo. Teto mais baixo que qualquer produto pre-jogo, pelo mesmo
     # motivo do cap em pick_engine/staking.py: o motor Live ainda nao tem
     # historico proprio e a odd pode mudar entre a publicacao e a aposta.
@@ -1051,6 +1078,7 @@ STAKE_LIMITS = {
 STAKE_LABELS = {
     "vip": "VIP", "free": "Free", "multipla": "Múltipla",
     "alavancagem": "Alavancagem", "faltas": "de Faltas", "goleiros": "de Defesas",
+    "player_stats": "de Jogador",
     "live": "Ao Vivo",
 }
 
@@ -1928,6 +1956,7 @@ def get_fechamentos_resumo(current_user: dict = Depends(get_current_user)):
         for tipo, tabela, col_odd in (
             ("vip", "picks_vip", "odd"), ("free", "picks_free", "odd"),
             ("faltas", "picks_faltas", "odd"), ("goleiros", "picks_goleiros", "odd"),
+            ("player_stats", "picks_player_stats", "odd"),
         ):
             ids = _ids(tipo)
             m: dict = {}

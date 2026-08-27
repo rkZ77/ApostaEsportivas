@@ -762,7 +762,7 @@ FERRAMENTAS = [
         "title": "Picks publicados hoje",
         "description": (
             "Quantos picks foram publicados hoje, por tipo (vip, free, "
-            "múltiplas, alavancagem, faltas, goleiros). Não inclui o conteúdo "
+            "múltiplas, alavancagem, faltas, jogadores). Não inclui o conteúdo "
             "dos picks de assinante."
         ),
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},

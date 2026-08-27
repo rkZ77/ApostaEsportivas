@@ -890,13 +890,43 @@ def test_ranking_conta_aposta_em_faltas_e_defesas():
 
 
 def test_banca_do_usuario_conta_os_dois_mercados():
-    """Apostar num pick de faltas tem que mexer no saldo, nao so' aparecer na
-    lista."""
-    src = _fonte("routers/banca.py")
-    assert '_TABELAS_MERCADO = {"faltas": "picks_faltas", "goleiros": "picks_goleiros"}' in src
+    """Apostar num pick de mercado proprio tem que mexer no saldo, nao so'
+    aparecer na lista.
+
+    A assercao olha o CONTEUDO do mapa e nao a linha literal: ate' 27/08 ela
+    comparava a string inteira, e acrescentar `player_stats` quebrava o teste
+    por formatacao, nao por comportamento. O que importa e' que toda tabela de
+    mercado proprio esteja la' -- tipo esquecido no mapa nao da erro, o pick
+    some do somatorio e a banca fica errada em silencio (ver o comentario do
+    proprio _TABELAS_MERCADO).
+    """
+    import routers.banca as banca
+
+    assert set(banca._TABELAS_MERCADO) == {"faltas", "goleiros", "player_stats"}
+    assert banca._TABELAS_MERCADO["player_stats"] == "picks_player_stats"
     for fn in ("_compute_bankroll_current", "_compute_month_stats"):
         assert "_mercado_maps(cur, followed)" in _codigo("routers/banca.py", fn), \
             f"{fn} ignora os mercados"
+
+
+def test_seguir_pick_de_jogador_nao_e_recusado():
+    """`follow` valida contra STAKE_LIMITS · tipo fora do mapa devolve "Tipo
+    invalido" e o botao Apostar do card quebra DEPOIS de o usuario confirmar.
+    Ja aconteceu uma vez com faltas/goleiros, esta' escrito no proprio
+    follow_pick."""
+    import routers.banca as banca
+
+    assert "player_stats" in banca.STAKE_LIMITS
+    assert "player_stats" in banca.STAKE_LABELS
+
+
+def test_quebra_por_pipeline_inclui_jogador():
+    """Sem isto a aposta entra no saldo e some da quebra por pipeline · some do
+    diagnostico e nao do dinheiro, que e' o tipo de erro mais dificil de achar."""
+    import routers.banca as banca
+
+    mercados = next(g for chave, _rot, g in banca.PIPELINES_DA_QUEBRA if chave == "mercados")
+    assert "player_stats" in mercados
 
 
 def test_liquidacao_cobre_faltas_e_defesas():

@@ -513,4 +513,26 @@ def run_player_stats_engine(metodos: tuple | None = None):
 
 
 if __name__ == "__main__":
-    run_player_stats_engine()
+    # Metodo por argv, espelhando `main.py playerstats saves`.
+    #
+    # NAO E' CONVENIENCIA: o /admin roda pipeline POR CAMINHO DE SCRIPT, nunca
+    # pelo registro de comandos do main.py. Sem isto, o botao "Gerar Defesas"
+    # nao tinha como pedir so' o metodo `saves` e continuava apontando pro
+    # goleiros_pipeline.py -- o pipeline ANTIGO, que desde 27/08 so' existe no
+    # disco como rollback. O resultado era o botao e a rodada diaria gravando
+    # em tabelas diferentes (picks_goleiros contra picks_player_stats).
+    import sys
+
+    from services.player_stats_engine import methods as _cat
+
+    _pedidos = [a.lower() for a in sys.argv[1:] if a]
+    if not _pedidos:
+        run_player_stats_engine()
+    else:
+        _alvos = tuple(m for m in _cat.METODOS if m.slug in _pedidos)
+        _desconhecidos = [x for x in _pedidos if x not in _cat.POR_SLUG]
+        if _desconhecidos:
+            print(f"[PLAYER_STATS] Metodo(s) desconhecido(s): {', '.join(_desconhecidos)}. "
+                  f"Disponiveis: {', '.join(m.slug for m in _cat.METODOS)}")
+        if _alvos:
+            run_player_stats_engine(_alvos)

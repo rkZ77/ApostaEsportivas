@@ -63,17 +63,21 @@ interface PublicData {
   recent_total: number
 }
 
-/* Os seis pipelines. Faltas e defesas ficavam de fora daqui mesmo o backend
-   ja incluindo os dois no agregado: o filtro nao os oferecia e o badge da
-   lista caia no valor cru ("faltas" em vez de "Faltas"). */
+/* Os pipelines do placar. Faltas e defesas ficavam de fora daqui mesmo o
+   backend ja incluindo os dois no agregado: o filtro nao os oferecia e o badge
+   da lista caia no valor cru ("faltas" em vez de "Faltas"). Player Stats
+   entrou em 27/08 pelo mesmo caminho, e `goleiros` fica: o motor parou de
+   escrever nela, mas o passado dela continua no placar publico. */
 const SRC_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múlt.', alavancagem: 'Alav.',
-  faltas: 'Faltas', goleiros: 'Defesas',
+  faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
 }
-const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas', 'goleiros']
+const SOURCES = ['all', 'vip', 'free', 'multiplas', 'alavancagem', 'faltas',
+                 'player_stats', 'goleiros']
 const SOURCE_LABELS: Record<string, string> = {
   all: 'Todos', vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+  player_stats: 'Jogadores',
 }
 
 /*

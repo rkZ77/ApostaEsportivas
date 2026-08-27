@@ -43,10 +43,14 @@ const COR: Record<string, string> = {
   alavancagem: 'rgb(var(--c-amber-400))',
   faltas:      'rgb(var(--c-rose-400))',
   goleiros:    'rgb(var(--c-teal-400))',
+  /* Mesmo âmbar do selo de Player Stats em utils/resultStyle · a cor é como o
+     produto é reconhecido, e ela tem que ser a mesma em toda tela. */
+  player_stats:'rgb(var(--c-amber-400))',
 }
 const NOME: Record<string, string> = {
   vip: 'VIP', free: 'Free', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+  player_stats: 'Jogadores',
 }
 
 const fmtDia = (s: string) =>

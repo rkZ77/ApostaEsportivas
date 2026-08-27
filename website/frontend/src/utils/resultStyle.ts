@@ -33,6 +33,10 @@ export const PICK_TYPE_LABEL: Record<string, string> = {
   alavancagem: 'Alavancagem',
   faltas: 'Faltas',
   goleiros: 'Defesas',
+  /* Player Stats · o rótulo é "Jogador" e não o método ("Chutes no alvo").
+     Este mapa nomeia o PRODUTO, que é o que o selo do card mostra ao lado do
+     VIP e do Free; o método aparece no próprio card, no lugar do mercado. */
+  player_stats: 'Jogador',
   live: 'Ao Vivo',
 }
 
@@ -44,6 +48,10 @@ export const PICK_TYPE_HEX: Record<string, string> = {
   alavancagem: '#fb923c',
   faltas: '#c084fc',
   goleiros: '#38bdf8',
+  /* Âmbar, e não o azul-claro de goleiros: Player Stats ABSORVEU defesas como
+     um método, mas cobre chutes, faltas, desarmes e passes também · repetir a
+     cor faria o produto novo parecer o antigo com outro nome. */
+  player_stats: '#fbbf24',
   /* Vermelho é a cor de "ao vivo" no site (badge pulsante da barra de abas),
      e por isso é ela que identifica o produto Live nos cards. Não colide com
      o vermelho de RED, que só aparece no selo de resultado. */
@@ -64,6 +72,7 @@ export const PICK_TYPE_BORDER: Record<string, string> = {
   alavancagem: 'border-orange-400/20 hover:border-orange-400/40',
   faltas:      'border-purple-400/20 hover:border-purple-400/40',
   goleiros:    'border-sky-400/20 hover:border-sky-400/40',
+  player_stats:'border-amber-400/20 hover:border-amber-400/40',
   live:        'border-red-400/25 hover:border-red-400/50',
 }
 
@@ -78,5 +87,6 @@ export const PICK_TYPE_CLS: Record<string, string> = {
   // um pick de faltas ser reconhecido pela cor em qualquer tela.
   faltas:      'text-purple-400 bg-purple-400/10 border-purple-400/20',
   goleiros:    'text-sky-400 bg-sky-400/10 border-sky-400/20',
+  player_stats:'text-amber-400 bg-amber-400/10 border-amber-400/20',
   live:        'text-red-300 bg-red-500/10 border-red-400/25',
 }

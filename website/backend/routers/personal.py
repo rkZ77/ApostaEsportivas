@@ -148,6 +148,9 @@ PICK_TABLES = {
     "alavancagem": "picks_alavancagem",
     "faltas":      "picks_faltas",
     "goleiros":    "picks_goleiros",
+    # Player Stats (27/08). Sem esta linha o GREEN de um pick de jogador nao
+    # conta pra conquista · o laco abaixo so' visita o que esta' neste mapa.
+    "player_stats": "picks_player_stats",
 }
 
 

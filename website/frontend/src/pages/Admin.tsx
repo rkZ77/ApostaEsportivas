@@ -95,6 +95,7 @@ interface Liga {
 const PICK_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'Dica do Dia', multiplas: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+  player_stats: 'Jogadores', boost: 'Pick Boost',
 }
 
 // Sub-paginas do /admin.
@@ -233,6 +234,12 @@ export default function Admin() {
     { command: 'gerar_alavancagem',    label: 'Gerar Alavancagem'    },
     { command: 'gerar_faltas',         label: 'Gerar Faltas'         },
     { command: 'gerar_goleiros',       label: 'Gerar Defesas'        },
+    /* Fora do "Rodar Tudo", pelo mesmo critério do main.py: motor sem
+       histórico medido não vira custo fixo da rodada diária. Ficam aqui como
+       botão próprio porque a única forma de rodá-los era pela linha de
+       comando. */
+    { command: 'gerar_playerstats',    label: 'Gerar Jogadores'      },
+    { command: 'gerar_pickboost',      label: 'Gerar Pick Boost'     },
     { command: 'atualizar_resultados', label: 'Atualizar Resultados' },
   ] as const
 
@@ -1243,7 +1250,8 @@ export default function Admin() {
                 <option value="multipla">Múltipla</option>
                 <option value="alavancagem">Alavancagem</option>
                 <option value="faltas">Faltas</option>
-                <option value="goleiros">Defesas</option>
+                <option value="player_stats">Jogadores</option>
+                <option value="goleiros">Defesas (legado)</option>
               </select>
             </div>
             <div className="flex flex-col gap-1">
@@ -1276,6 +1284,7 @@ export default function Admin() {
                   vip: 'text-yellow-400 bg-yellow-400/10', free: 'text-green-400 bg-green-400/10',
                   multipla: 'text-blue-400 bg-blue-400/10', alavancagem: 'text-orange-400 bg-orange-400/10',
                   faltas: 'text-purple-400 bg-purple-400/10', goleiros: 'text-sky-400 bg-sky-400/10',
+                  player_stats: 'text-amber-400 bg-amber-400/10',
                 }
                 const resCls = p.result ? (resultCls[p.result] ?? 'text-ink-2 bg-surface-3/40 border-line-strong/30') : 'text-ink-4 bg-surface-1 border-line'
                 return (

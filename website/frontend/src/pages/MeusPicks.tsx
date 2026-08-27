@@ -21,7 +21,7 @@ import { PAGE_WIDTH } from '../lib/pageWidth'
 
 const SOURCE_LBL: Record<string, string> = {
   vip: 'VIP', free: 'Free', multipla: 'Múlt.', alavancagem: 'Alav.',
-  faltas: 'Faltas', goleiros: 'Defesas',
+  faltas: 'Faltas', goleiros: 'Defesas', player_stats: 'Jogador',
 }
 
 /* Sub-páginas em aba. `apostas` é a lista de sempre; `pipelines` é a leitura

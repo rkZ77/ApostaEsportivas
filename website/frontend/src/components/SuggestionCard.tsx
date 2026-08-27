@@ -89,7 +89,7 @@ interface BancaSummary { bankroll_current: number; unit_value: number }
  * VIP fica de fora de propósito: mantém o teto dinâmico que já tinha.
  */
 const MAX_UNITS_POR_TIPO: Record<string, number> = {
-  free: 6, multipla: 3, faltas: 6, goleiros: 6,
+  free: 6, multipla: 3, faltas: 6, goleiros: 6, player_stats: 6,
 }
 
 /* Memoizado no fim do arquivo · este é o card mais repetido do site (lista VIP,

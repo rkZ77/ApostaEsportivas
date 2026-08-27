@@ -12,7 +12,12 @@
  * filtrar no servidor só somaria ida e volta.
  */
 
-export type MercadoCategoria = 'todos' | 'faltas' | 'goleiros'
+/* `goleiros` continua aqui e não vai sair: o motor parou de escrever nela em
+   27/08 (defesas virou o método `saves` do Player Stats), mas os picks antigos
+   continuam no banco e no placar público · tirar a categoria esconderia o
+   histórico do produto. O que a tela faz é só não desenhar a seção nos dias em
+   que ela vem vazia, que hoje são todos. */
+export type MercadoCategoria = 'todos' | 'faltas' | 'goleiros' | 'player_stats'
 export type MercadoOrdem = 'margem' | 'odd' | 'data'
 export type MercadoEstado = 'todos' | 'pendentes' | 'resolvidos'
 
@@ -27,6 +32,10 @@ export interface Filtravel {
   edge?: number
   match_date: string
   result?: string | null
+  /* Player Stats ordena por `score` (0-100) e não por edge · nele a odd é
+     faixa de sanidade, não critério, então "maior margem" tem que cair no
+     Score quando ele existe. Ver services/player_stats_engine/config.py. */
+  score?: number | null
 }
 
 export interface MercadoFiltro {
@@ -70,6 +79,9 @@ export function aplicarFiltro<T extends Filtravel>(
   return [...out].sort((a, b) => {
     if (f.ordem === 'odd')  return Number(b.odd) - Number(a.odd)
     if (f.ordem === 'data') return a.match_date.localeCompare(b.match_date)
+    // Score primeiro quando os dois têm · comparar o Score de um com o edge
+    // do outro ordenaria por duas réguas diferentes na mesma lista.
+    if (a.score != null && b.score != null) return Number(b.score) - Number(a.score)
     return (Number(b.edge ?? 0)) - (Number(a.edge ?? 0))
   })
 }

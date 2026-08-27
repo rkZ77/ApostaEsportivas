@@ -255,7 +255,19 @@ _PIPELINE_SCRIPTS = {
     # generico do motor: usam modelo proprio (fouls_model / goalkeeper_model),
     # medido contra 946 jogos reais. Ver a docstring de cada pipeline.
     "gerar_faltas":         os.path.join("engine_pipelines", "faltas_pipeline.py"),
-    "gerar_goleiros":       os.path.join("engine_pipelines", "goleiros_pipeline.py"),
+    # DEFESAS APONTAVA PRO PIPELINE ERRADO ate' 2026-08-27. Na arquitetura de
+    # motores, defesa de goleiro deixou de ser motor e virou o metodo `saves`
+    # do Player Stats -- `main.py tudo` ja' chamava o novo, e este botao
+    # continuou no `goleiros_pipeline.py`, que so' existe no disco como
+    # rollback. Os dois gravavam em TABELAS DIFERENTES (picks_goleiros contra
+    # picks_player_stats), entao clicar aqui produzia um pick que a rodada
+    # diaria nao produziria, e vice-versa.
+    "gerar_goleiros":       os.path.join("engine_pipelines", "player_stats_pipeline.py"),
+    # Os outros cinco metodos do Player Stats, e o Pick Boost. Fora do "Rodar
+    # Tudo" pelo mesmo criterio do main.py: motor sem historico medido nao vira
+    # custo fixo da rodada diaria. Botao proprio, sob demanda.
+    "gerar_playerstats":    os.path.join("engine_pipelines", "player_stats_pipeline.py"),
+    "gerar_pickboost":      os.path.join("engine_pipelines", "pick_boost_pipeline.py"),
     "atualizar_resultados": "atualizar_resultados_sugestoes.py",
     # Estatistica por jogador (/fixtures/players). Fora do "Rodar Tudo" de
     # proposito: gasta 1 requisicao da API por fixture e disputa a mesma cota
@@ -275,6 +287,13 @@ _PIPELINE_SCRIPTS = {
     "dev_homolog_dica":        os.path.join("ai", "dica_homologation.py"),
     "dev_homolog_multipla":    os.path.join("ai", "multipla_homologation.py"),
     "dev_homolog_alavancagem": os.path.join("ai", "alavancagem_homologation.py"),
+}
+
+#: Argumentos fixos de alguns passos. O /admin roda script por CAMINHO, entao
+#: e' aqui que "so' o metodo saves" e' dito -- ver o comentario de
+#: gerar_goleiros acima e o __main__ de player_stats_pipeline.py.
+_PIPELINE_ARGS = {
+    "gerar_goleiros": ["saves"],
 }
 
 _DEV_PIPELINE_STEPS = [
@@ -321,6 +340,8 @@ _STEP_LABELS = {
     "gerar_alavancagem":    "Gerando alavancagem",
     "gerar_faltas":         "Gerando picks de faltas",
     "gerar_goleiros":       "Gerando defesas de goleiro",
+    "gerar_playerstats":    "Gerando props de jogador",
+    "gerar_pickboost":      "Escolhendo jogos do Pick Boost",
     "atualizar_resultados": "Atualizando resultados",
 }
 
@@ -457,7 +478,8 @@ async def _run_tudo():
         _pipeline_status["tudo"]["log"] = f"Rodando {cmd}..."
         _pipeline_logs["tudo"].append(
             f"─── [{i}/{total}] {_STEP_LABELS.get(cmd, cmd)} " + "─" * 20)
-        await _run_and_track(cmd, script, espelhar_em="tudo")
+        await _run_and_track(cmd, script, args=_PIPELINE_ARGS.get(cmd),
+                             espelhar_em="tudo")
         if _pipeline_status[cmd]["status"] == "error":
             err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
             _pipeline_status["tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
@@ -535,7 +557,7 @@ async def _run_dev_pipeline():
     for cmd in _DEV_PIPELINE_STEPS:
         script = os.path.join(_PIPELINE_DIR, _PIPELINE_SCRIPTS[cmd])
         _pipeline_status["dev_tudo"]["log"] = f"Rodando {cmd}..."
-        await _run_and_track(cmd, script)
+        await _run_and_track(cmd, script, args=_PIPELINE_ARGS.get(cmd))
         if _pipeline_status[cmd]["status"] == "error":
             err = _pipeline_status[cmd].get("error") or _pipeline_status[cmd].get("log") or ""
             _pipeline_status["dev_tudo"] = {"status": "error", "started_at": started, "finished_at": now(), "returncode": -1, "error": f"Falhou em '{cmd}': {err[:300]}"}
@@ -629,6 +651,7 @@ def ai_review_status(current_user: dict = Depends(require_admin)):
 _PIPELINE_POR_PICK_TYPE = {
     "vip": "vip", "free": "dica", "multipla": "multipla",
     "alavancagem": "alavancagem", "faltas": "faltas", "goleiros": "goleiros",
+    "player_stats": "player_stats",
 }
 
 #: Nome do mercado em portugues. `market_type` e' a chave estavel do motor
@@ -931,7 +954,8 @@ async def run_pipeline(body: PipelineCommandBody, current_user: dict = Depends(r
     if not os.path.exists(script):
         raise HTTPException(500, detail=f"Script não encontrado: {script}")
 
-    asyncio.create_task(_run_and_track(body.command, script))
+    asyncio.create_task(_run_and_track(body.command, script,
+                                       args=_PIPELINE_ARGS.get(body.command)))
     return {"ok": True, "status": "iniciado"}
 
 
@@ -1104,6 +1128,10 @@ _PICK_TABLES = {
     "alavancagem": ("picks_alavancagem", "home_team_1",    "away_team_1"),
     "faltas":      ("picks_faltas",      "home_team",      "away_team"),
     "goleiros":    ("picks_goleiros",    "home_team",      "away_team"),
+    # Player Stats (27/08). Sem a entrada, marcar resultado a mao num pick de
+    # jogador pelo /admin devolvia "tipo invalido" -- e e' justamente o tipo
+    # mais novo, o que mais precisa de correcao manual enquanto e' medido.
+    "player_stats": ("picks_player_stats", "home_team",     "away_team"),
 }
 _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 
@@ -1116,13 +1144,14 @@ _VALID_RESULTS = {"GREEN", "RED", "PUSH", "HALF-WIN", "HALF-LOSS", None}
 #: existir uma terceira vez.
 _ODD_COL = {
     "vip": "odd", "free": "odd", "faltas": "odd", "goleiros": "odd",
+    "player_stats": "odd",
     "multipla": "total_odd", "alavancagem": "odd_combined",
 }
 
 
 #: Tabelas com UMA fixture por pick · só nelas dá pra cruzar com
 #: match_statistics e dizer se o provedor publicou a folha do jogo.
-_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros")
+_PICK_TABLES_UMA_FIXTURE = ("vip", "free", "faltas", "goleiros", "player_stats")
 
 
 @router.get("/users/engajamento")

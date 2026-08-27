@@ -1410,10 +1410,32 @@ function AlavancagemCardBase({ pick, onClick, userBankroll, onConfigureBanca, is
 }
 
 // Seção header
-// ─── Mercados com modelo proprio: faltas e defesas de goleiro ───────────────
-// Os dois ficam numa aba so' em vez de duas: a barra ja tem 6 abas e rola
-// horizontalmente no celular -- somar duas empurraria as ultimas pra fora da
+// ─── Mercados com modelo proprio: faltas, Player Stats e o legado de goleiros ─
+// Ficam todos numa aba so' em vez de uma cada: a barra ja tem 6 abas e rola
+// horizontalmente no celular -- somar mais empurraria as ultimas pra fora da
 // primeira tela em qualquer aparelho.
+
+/** Os mercados de modelo proprio que a aba desenha. */
+type TipoMercado = 'faltas' | 'goleiros' | 'player_stats'
+
+/* Rotulo em PT de cada metodo do Player Stats.
+ *
+ * FONTE DE VERDADE: services/player_stats_engine/methods.py (Metodo.label).
+ * Esta copia existe porque o `market` que o pipeline grava e' o nome do
+ * mercado NA CASA, que vem em ingles ("Player Shots on Target") -- imprimir
+ * aquilo no card seria pior que duplicar seis palavras aqui.
+ *
+ * Metodo novo cai no proprio slug em vez de sumir, e ha' teste no backend
+ * lendo os dois arquivos pra a lista nao se abrir em duas. */
+const LABEL_DO_METODO: Record<string, string> = {
+  saves:     'Defesas',
+  shots_on:  'Chutes no alvo',
+  shots:     'Chutes',
+  fouls:     'Faltas do jogador',
+  tackles:   'Desarmes',
+  passes:    'Passes',
+}
+
 interface MercadoPick {
   id: number
   fixture_id?: number
@@ -1426,6 +1448,9 @@ interface MercadoPick {
   market: string; market_type?: string; line: string
   odd: number; bet_house?: string
   prob_real?: number; edge?: number
+  /* Só Player Stats · nele a odd é faixa de sanidade e quem ordena é o Score
+     estatístico de 0 a 100. */
+  method?: string; score?: number | null
   reasoning?: string
   stake_units?: number
   result?: string | null
@@ -1452,7 +1477,7 @@ interface MercadoPick {
  * outros tipos (picks_vip.ev = 0.3203 para 32%) · manter a mesma escala é o
  * que garante que os dois cards mostrem o mesmo número.
  */
-function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
+function mercadoParaSuggestion(p: MercadoPick, tipo: TipoMercado) {
   return {
     id: p.id,
     fixture_id: p.fixture_id,
@@ -1462,7 +1487,13 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
     away_team_id: p.away_team_id,
     league_id: p.league_id,
     league_name: p.league_name,
-    market: p.market,
+    /* Player Stats mostra o MÉTODO no lugar do mercado. `p.market` guarda o
+       nome do mercado na casa de aposta, em inglês, e o card imprimiria
+       "Player Shots on Target" para o assinante. O nome do jogador não se
+       perde: ele já vem dentro de `line` ("Fulano · 2 ou mais chutes"). */
+    market: tipo === 'player_stats'
+      ? (LABEL_DO_METODO[p.method ?? ''] ?? p.method ?? p.market)
+      : p.market,
     line: p.line,
     odd: Number(p.odd),
     bet_house: p.bet_house ?? '',
@@ -1494,7 +1525,7 @@ function mercadoParaSuggestion(p: MercadoPick, tipo: 'faltas' | 'goleiros') {
 }
 
 function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca }: {
-  tipo: 'faltas' | 'goleiros'
+  tipo: TipoMercado
   titulo: string; cor: string; explicacao: string
   picks: MercadoPick[] | null; carregando: boolean
   banca?: { bankroll_current: number; unit_value: number } | null
@@ -1528,7 +1559,9 @@ function MercadoSecao({ tipo, titulo, cor, explicacao, picks, carregando, banca 
           Sem pick de {titulo.toLowerCase()} hoje.{' '}
           {tipo === 'goleiros'
             ? 'É um mercado raro, aparece em menos de 1% dos jogos.'
-            : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
+            : tipo === 'player_stats'
+              ? 'Depende de a casa cotar o mercado do jogador e de ele ter atuações suficientes na competição.'
+              : 'Aparece quando algum jogo do dia tiver margem suficiente no modelo.'}
         </p>
       ) : (
         <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -1984,8 +2017,20 @@ export default function Picks() {
    */
   const faltas   = (today?.faltas   ?? null) as MercadoPick[] | null
   const goleiros = (today?.goleiros ?? null) as MercadoPick[] | null
+  /* Player Stats · o backend devolve a chave desde 27/08 e a tela nunca leu.
+     Chave própria e não misturada com `goleiros` de propósito: o card precisa
+     dizer o MÉTODO, e "Chutes no alvo" dentro de um bloco chamado "Defesas"
+     seria pior que duas listas. */
+  const playerStats = (today?.player_stats ?? null) as MercadoPick[] | null
   const faltasFiltradas   = useMemo(() => aplicarFiltro(faltas ?? [], mercadoFiltro), [faltas, mercadoFiltro])
   const goleirosFiltrados = useMemo(() => aplicarFiltro(goleiros ?? [], mercadoFiltro), [goleiros, mercadoFiltro])
+  const playerStatsFiltrados = useMemo(
+    () => aplicarFiltro(playerStats ?? [], mercadoFiltro), [playerStats, mercadoFiltro])
+  /* Defesas parou de crescer em 27/08 (virou o método `saves` do Player
+     Stats). A seção continua existindo pro dia antigo, mas desenhar todo dia
+     um bloco que nunca mais vai ter pick é ruído · ela só aparece quando tem
+     conteúdo. Mesma regra da pill do filtro, logo abaixo. */
+  const temGoleiros = (goleiros?.length ?? 0) > 0
   const [alavLoading,  setAlavLoading]  = useState(false)
   const [alavLoaded,   setAlavLoaded]   = useState(false)
   const [alavError,    setAlavError]    = useState(false)
@@ -2099,6 +2144,15 @@ export default function Picks() {
       if (today.alavancagem.fixture_id_1) ids.add(today.alavancagem.fixture_id_1)
       if (today.alavancagem.fixture_id_2) ids.add(today.alavancagem.fixture_id_2)
     }
+    /* Mercados de modelo próprio ficavam de fora daqui: o pick de faltas ou de
+       jogador continuava dizendo "Pendente" com a bola rolando, enquanto o VIP
+       do mesmo jogo já mostrava "Ao Vivo". A rota aceita os ids em lote, então
+       incluir os três não custa requisição nenhuma a mais. */
+    for (const lista of [today.faltas, today.goleiros, today.player_stats]) {
+      for (const p of lista ?? []) {
+        if (!p.result && p.fixture_id) ids.add(p.fixture_id)
+      }
+    }
     if (ids.size === 0) { setLiveFixtures(new Set()); return }
     api.get('/live/is-live', { params: { fixture_ids: Array.from(ids).join(',') } })
       .then(r => setLiveFixtures(new Set(Object.entries(r.data).filter(([, v]) => v).map(([k]) => Number(k)))))
@@ -2119,6 +2173,11 @@ export default function Picks() {
   const goleirosCards = useMemo<Array<{ id: number; s: any }>>(
     () => (today?.goleiros ?? []).map((p: MercadoPick) => ({ id: p.id, s: mercadoParaSuggestion(p, 'goleiros') })),
     [today?.goleiros],
+  )
+  const playerStatsCards = useMemo<Array<{ id: number; s: any }>>(
+    () => (today?.player_stats ?? []).map(
+      (p: MercadoPick) => ({ id: p.id, s: mercadoParaSuggestion(p, 'player_stats') })),
+    [today?.player_stats],
   )
 
   useEffect(() => {
@@ -2597,7 +2656,8 @@ export default function Picks() {
               {/* Mercados do dia. So' renderiza quando ha' pick -- ao
                   contrario da aba Mercados, aqui um card de "nada hoje" por
                   mercado so' empurraria o conteudo util pra baixo. */}
-              {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0) && (
+              {canSeeVip && (today?.faltas?.length > 0 || today?.goleiros?.length > 0
+                             || today?.player_stats?.length > 0) && (
                 <section>
                   <SectionHeader color="bg-purple-400" label="Mercados de hoje" badge="VIP" />
                   <div className="lista-longa grid gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
@@ -2610,6 +2670,13 @@ export default function Picks() {
                     {faltasCards.map(c => (
                       <SuggestionCard
                         key={`f-${c.id}`}
+                        s={c.s}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                      />
+                    ))}
+                    {playerStatsCards.map(c => (
+                      <SuggestionCard
+                        key={`p-${c.id}`}
                         s={c.s}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
@@ -3330,15 +3397,19 @@ export default function Picks() {
                   busca={{
                     value: mercadoFiltro.busca,
                     onChange: v => setMercadoFiltro({ ...mercadoFiltro, busca: v }),
-                    placeholder: 'Buscar time, goleiro ou linha',
+                    placeholder: 'Buscar time, jogador ou linha',
                   }}
                   groups={[
                     {
                       key: 'categoria', label: 'Mercado',
                       options: [
-                        { value: 'todos',    label: `Todos (${(faltas?.length ?? 0) + (goleiros?.length ?? 0)})` },
-                        { value: 'faltas',   label: `Faltas (${faltas?.length ?? 0})` },
-                        { value: 'goleiros', label: `Defesas (${goleiros?.length ?? 0})` },
+                        { value: 'todos', label: `Todos (${(faltas?.length ?? 0) + (goleiros?.length ?? 0) + (playerStats?.length ?? 0)})` },
+                        { value: 'faltas', label: `Faltas (${faltas?.length ?? 0})` },
+                        { value: 'player_stats', label: `Jogadores (${playerStats?.length ?? 0})` },
+                        // Só enquanto houver pick antigo · ver `temGoleiros`.
+                        ...(temGoleiros
+                          ? [{ value: 'goleiros', label: `Defesas (${goleiros?.length ?? 0})` }]
+                          : []),
                       ],
                       value: mercadoFiltro.categoria,
                       onChange: v => setMercadoFiltro({ ...mercadoFiltro, categoria: v as MercadoFiltro['categoria'] }),
@@ -3363,13 +3434,15 @@ export default function Picks() {
                     value: mercadoFiltro.ordem,
                     onChange: v => setMercadoFiltro({ ...mercadoFiltro, ordem: v as MercadoFiltro['ordem'] }),
                   }}
-                  resultado={faltasFiltradas.length + goleirosFiltrados.length}
+                  resultado={faltasFiltradas.length + goleirosFiltrados.length + playerStatsFiltrados.length}
                 />
 
                 {/* Nada bateu o filtro. Sem isso as duas seções apareciam com o
                     vazio genérico de "nenhum pick ainda", que é outra coisa:
                     ali não existe pick, aqui existe e o filtro escondeu. */}
-                {faltasFiltradas.length === 0 && goleirosFiltrados.length === 0 && !todayLoading && (faltas?.length || goleiros?.length) ? (
+                {faltasFiltradas.length === 0 && goleirosFiltrados.length === 0
+                  && playerStatsFiltrados.length === 0 && !todayLoading
+                  && (faltas?.length || goleiros?.length || playerStats?.length) ? (
                   <EmptyState
                     Icon={SearchX}
                     title="Nenhum mercado com esses filtros"
@@ -3379,7 +3452,7 @@ export default function Picks() {
                   />
                 ) : (
                   <>
-                    {mercadoFiltro.categoria !== 'goleiros' && (
+                    {['todos', 'faltas'].includes(mercadoFiltro.categoria) && (
                       <MercadoSecao
                         tipo="faltas"
                         titulo="Faltas"
@@ -3390,12 +3463,23 @@ export default function Picks() {
                         banca={bancaSummary?.has_banca ? bancaSummary : null}
                       />
                     )}
-                    {mercadoFiltro.categoria !== 'faltas' && (
+                    {['todos', 'player_stats'].includes(mercadoFiltro.categoria) && (
+                      <MercadoSecao
+                        tipo="player_stats"
+                        titulo="Jogadores"
+                        cor="bg-amber-400"
+                        explicacao="Estatística de um jogador específico: chutes, chutes no alvo, faltas, desarmes, passes e defesas. A média sai das atuações dele na mesma competição, só contando jogo em que ele foi titular efetivo, e a probabilidade vem de uma Binomial Negativa com a dispersão medida na própria base."
+                        picks={playerStats === null ? null : playerStatsFiltrados}
+                        carregando={todayLoading}
+                        banca={bancaSummary?.has_banca ? bancaSummary : null}
+                      />
+                    )}
+                    {temGoleiros && ['todos', 'goleiros'].includes(mercadoFiltro.categoria) && (
                       <MercadoSecao
                         tipo="goleiros"
                         titulo="Defesas de goleiro"
                         cor="bg-sky-400"
-                        explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir."
+                        explicacao="Quantas defesas um goleiro específico faz no jogo. O sinal principal é o volume de chutes no alvo que o adversário costuma produzir. Este mercado passou a sair pelo Player Stats, na seção Jogadores."
                         picks={goleiros === null ? null : goleirosFiltrados}
                         carregando={todayLoading}
                         banca={bancaSummary?.has_banca ? bancaSummary : null}

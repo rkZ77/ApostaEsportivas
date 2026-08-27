@@ -31,6 +31,7 @@ interface Recorte {
 const TIPO_LABEL: Record<string, string> = {
   vip: 'VIP', free: 'Dica do Dia', multipla: 'Múltiplas',
   alavancagem: 'Alavancagem', faltas: 'Faltas', goleiros: 'Defesas',
+  player_stats: 'Jogadores',
 }
 
 /** Uma linha de recorte · mesma forma pra tipo e pra liga. */

@@ -561,7 +561,8 @@ def public_results(
                 COUNT(*) FILTER (WHERE source = 'multipla')   AS multipla_total,
                 COUNT(*) FILTER (WHERE source = 'alavancagem') AS alavancagem_total,
                 COUNT(*) FILTER (WHERE source = 'faltas')     AS faltas_total,
-                COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total
+                COUNT(*) FILTER (WHERE source = 'goleiros')   AS goleiros_total,
+                COUNT(*) FILTER (WHERE source = 'player_stats') AS player_stats_total
             FROM (
                 SELECT 'vip'        AS source FROM picks_vip        WHERE result IS NOT NULL
                 UNION ALL
@@ -574,6 +575,8 @@ def public_results(
                 SELECT 'faltas'     AS source FROM picks_faltas     WHERE result IS NOT NULL
                 UNION ALL
                 SELECT 'goleiros'   AS source FROM picks_goleiros   WHERE result IS NOT NULL
+                UNION ALL
+                SELECT 'player_stats' AS source FROM picks_player_stats WHERE result IS NOT NULL
             ) AS t
         """)
 
@@ -1062,6 +1065,7 @@ def public_leaderboard():
                         WHEN 'alavancagem' THEN pa.result
                         WHEN 'faltas'      THEN pfa.result
                         WHEN 'goleiros'    THEN pg.result
+                        WHEN 'player_stats' THEN pps.result
                     END AS result,
                     CASE uf.pick_type
                         WHEN 'vip'         THEN COALESCE(pv.profit, 0)
@@ -1070,6 +1074,7 @@ def public_leaderboard():
                         WHEN 'alavancagem' THEN COALESCE(pa.profit, 0)
                         WHEN 'faltas'      THEN COALESCE(pfa.profit, 0)
                         WHEN 'goleiros'    THEN COALESCE(pg.profit, 0)
+                        WHEN 'player_stats' THEN COALESCE(pps.profit, 0)
                         ELSE 0
                     END AS profit
                 FROM user_followed_picks uf
@@ -1084,6 +1089,10 @@ def public_leaderboard():
                 -- dois nem aparecia na lista.
                 LEFT JOIN picks_faltas pfa     ON pfa.id = uf.pick_id AND uf.pick_type = 'faltas'
                 LEFT JOIN picks_goleiros pg    ON pg.id = uf.pick_id AND uf.pick_type = 'goleiros'
+                -- Player Stats (27/08). Mesma armadilha das duas linhas acima:
+                -- sem o JOIN e o CASE, a aposta do usuario num pick de jogador
+                -- conta na banca dele e some do ranking publico.
+                LEFT JOIN picks_player_stats pps ON pps.id = uf.pick_id AND uf.pick_type = 'player_stats'
             ),
             user_stats AS (
                 SELECT
