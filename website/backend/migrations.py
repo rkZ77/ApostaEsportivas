@@ -136,6 +136,14 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMP;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS home_goals_ht INTEGER;")
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS away_goals_ht INTEGER;")
+        # PROCEDENCIA do numero digitado a mao no /admin (aba Dados).
+        #
+        # Numero preenchido a mao fica indistinguivel do coletado assim que
+        # entra na coluna, e o motor le as duas do mesmo jeito. Como a regra da
+        # casa e que zero fabricado vira pick errado (invariante 1 de
+        # services/settlement.py), a linha precisa dizer QUAL valor veio de
+        # gente: {"escanteios": {"casa": 5, "fora": 3, "por": "...", "em": "..."}}.
+        cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS manual_stats JSONB;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash VARCHAR(100);")
         # Marca "esta pessoa foi pro MercadoPago". Sem isso nao da pra saber em
         # quem vale a pena gastar consulta a API no login: e' o que permite

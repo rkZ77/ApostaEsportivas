@@ -601,78 +601,118 @@ class MatchStatisticsSyncService:
 
         print(f"[MATCH_STATS] {len(pending_ids)} fixture(s) sem stats · buscando na API...")
 
-        FINISHED = {"FT", "AET", "PEN"}
         referee_batch = set()
 
         for fixture_id in pending_ids:
             try:
-                r = requests.get(FIXTURES_URL, headers=HEADERS, params={"id": fixture_id}, timeout=15)
-                r.raise_for_status()
-                response = r.json().get("response", [])
-
-                if not response:
-                    print(f"[MATCH_STATS] fixture_id={fixture_id} não encontrado na API.")
-                    continue
-
-                item = response[0]
-                fixture_info = item["fixture"]
-                status = fixture_info["status"]["short"]
-
-                if status not in FINISHED:
-                    print(f"[MATCH_STATS] fixture_id={fixture_id} status={status} · jogo ainda não finalizado.")
-                    continue
-
-                league_id = item["league"]["id"]
-                season = item["league"]["season"]
-                home_id = item["teams"]["home"]["id"]
-                away_id = item["teams"]["away"]["id"]
-                goals = item["goals"]
-                match_date = datetime.fromisoformat(fixture_info["date"].replace("Z", "+00:00"))
-
-                score = item.get("score", {}) or {}
-                ht = score.get("halftime") or {}
-                ft90 = score.get("fulltime") or {}
-                fx = {
-                    "fixture_id": fixture_id,
-                    "league_id": league_id,
-                    "season": season,
-                    "home_id": home_id,
-                    "away_id": away_id,
-                    "match_date": match_date,
-                    "status": status,
-                    "home_goals": goals["home"] or 0,
-                    "away_goals": goals["away"] or 0,
-                    "home_goals_ht": ht.get("home"),
-                    "away_goals_ht": ht.get("away"),
-                    "home_goals_90": ft90.get("home"),
-                    "away_goals_90": ft90.get("away"),
-                    "referee": fixture_info.get("referee"),
-                }
-
-                stats = self._fetch_match_stats(fixture_id)
-
-                if not stats or len(stats) < 2:
-                    print(f"[MATCH_STATS] fixture_id={fixture_id} sem stats de jogo na API.")
-                    continue
-
-                if stats[0]["team"]["id"] == home_id:
-                    home_stats = stats[0]["statistics"]
-                    away_stats = stats[1]["statistics"]
-                else:
-                    home_stats = stats[1]["statistics"]
-                    away_stats = stats[0]["statistics"]
-
-                self._save_stats(fx, home_stats, away_stats)
-
-                if fx.get("referee"):
-                    referee_batch.add((fx["referee"], fx["season"]))
-
+                self._sync_uma_fixture(fixture_id, referee_batch)
             except Exception as e:
                 print(f"[MATCH_STATS] Erro ao processar fixture_id={fixture_id}: {e}")
 
         self._sync_referee_stats(referee_batch)
         self._close()
         print("[MATCH_STATS] Sync de pendentes concluído.")
+
+    # ---------------------------------------------------------
+    # UMA PARTIDA
+    # ---------------------------------------------------------
+    #: Estados possiveis de uma coleta unitaria. Sao devolvidos em vez de
+    #: impressos porque o /admin mostra o motivo na tela -- "nao coletou" sem
+    #: motivo e' o tipo de resposta que faz alguem clicar cinco vezes.
+    FINISHED = {"FT", "AET", "PEN"}
+
+    def _sync_uma_fixture(self, fixture_id: int, referee_batch: set,
+                          criar_sem_folha: bool = False) -> str:
+        """Busca /fixtures + /fixtures/statistics de UMA partida e grava.
+
+        Extraido de `sync_pending_fixtures` pra que o botao "Rodar" do /admin
+        (routers/admin.py::coletar_partida) colete uma partida avulsa pelo
+        MESMO caminho do lote. Ter um segundo jeito de escrever em
+        `match_statistics` e' o que ja' produziu duas leituras divergentes da
+        folha -- ver o cabecalho de utils/stat_sheet.
+
+        Custa 2 requisicoes. Requer a conexao ja' aberta (`self._open()`).
+        """
+        r = requests.get(FIXTURES_URL, headers=HEADERS, params={"id": fixture_id}, timeout=15)
+        r.raise_for_status()
+        response = r.json().get("response", [])
+
+        if not response:
+            print(f"[MATCH_STATS] fixture_id={fixture_id} não encontrado na API.")
+            return "nao_encontrada"
+
+        item = response[0]
+        fixture_info = item["fixture"]
+        status = fixture_info["status"]["short"]
+
+        if status not in self.FINISHED:
+            print(f"[MATCH_STATS] fixture_id={fixture_id} status={status} · jogo ainda não finalizado.")
+            return "nao_finalizada"
+
+        goals = item["goals"]
+        score = item.get("score", {}) or {}
+        ht = score.get("halftime") or {}
+        ft90 = score.get("fulltime") or {}
+        home_id = item["teams"]["home"]["id"]
+        fx = {
+            "fixture_id": fixture_id,
+            "league_id": item["league"]["id"],
+            "season": item["league"]["season"],
+            "home_id": home_id,
+            "away_id": item["teams"]["away"]["id"],
+            "match_date": datetime.fromisoformat(fixture_info["date"].replace("Z", "+00:00")),
+            "status": status,
+            "home_goals": goals["home"] or 0,
+            "away_goals": goals["away"] or 0,
+            "home_goals_ht": ht.get("home"),
+            "away_goals_ht": ht.get("away"),
+            "home_goals_90": ft90.get("home"),
+            "away_goals_90": ft90.get("away"),
+            "referee": fixture_info.get("referee"),
+        }
+
+        stats = self._fetch_match_stats(fixture_id)
+
+        if not stats or len(stats) < 2:
+            # Nao grava linha vazia de proposito: `match_statistics` sem folha
+            # e' pior que a ausencia da linha -- a varredura procura jogo
+            # ENCERRADO SEM LINHA, entao a linha oca esconderia a partida dela
+            # pra sempre.
+            #
+            # `criar_sem_folha` e' a excecao, e ela so' chega por clique
+            # explicito no /admin: e' o jogo que a API nunca vai publicar, e a
+            # linha oca e' o que permite digitar os numeros a mao depois. O
+            # placar, o status e o arbitro ai' vem de /fixtures, que responde
+            # mesmo quando a folha nao existe -- so' os contadores ficam NULL.
+            print(f"[MATCH_STATS] fixture_id={fixture_id} sem stats de jogo na API.")
+            if not criar_sem_folha:
+                return "sem_folha"
+            self._save_stats(fx, [], [])
+            if fx.get("referee"):
+                referee_batch.add((fx["referee"], fx["season"]))
+            return "linha_sem_folha"
+
+        if stats[0]["team"]["id"] == home_id:
+            home_stats, away_stats = stats[0]["statistics"], stats[1]["statistics"]
+        else:
+            home_stats, away_stats = stats[1]["statistics"], stats[0]["statistics"]
+
+        self._save_stats(fx, home_stats, away_stats)
+
+        if fx.get("referee"):
+            referee_batch.add((fx["referee"], fx["season"]))
+        return "gravada"
+
+    def sync_one_fixture(self, fixture_id: int, criar_sem_folha: bool = False) -> dict:
+        """`_sync_uma_fixture` com conexao propria · o que o /admin chama."""
+        self._open()
+        referee_batch: set = set()
+        try:
+            situacao = self._sync_uma_fixture(fixture_id, referee_batch, criar_sem_folha)
+            self._sync_referee_stats(referee_batch)
+            return {"fixture_id": fixture_id, "situacao": situacao}
+        finally:
+            self._close()
 
     # ---------------------------------------------------------
     # MAIN

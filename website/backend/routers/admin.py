@@ -3,6 +3,7 @@ import sys
 import asyncio
 import json
 import logging
+import threading
 from collections import deque
 from datetime import datetime, timezone
 
@@ -2463,6 +2464,10 @@ def partidas_coletadas(
                        ms.status,
                        ms.referee,
                        ms.last_updated::text                AS coletada_em,
+                       -- Quais numeros desta linha foram digitados a mao, e
+                       -- por quem. Numero manual e' indistinguivel do coletado
+                       -- depois que entra na coluna; a tela marca a diferenca.
+                       ms.manual_stats,
                        l.name                               AS liga,
                        casa.name                            AS mandante,
                        fora.name                            AS visitante,
@@ -2518,6 +2523,968 @@ def partidas_coletadas(
         "zeradas": zeradas,
         "partidas": partidas,
     }
+
+
+
+# ─── O buraco de estatistica, e as tres saidas dele ─────────────────────────
+#
+# A aba Dados mostrava o buraco e parava ai'. "12 partidas encerradas sem
+# estatistica" sem nada pra clicar e' um alarme sem botao: ate' aqui a unica
+# saida era esperar a varredura automatica -- que so' enxerga 3 dias e so' roda
+# em producao -- ou rodar o pipeline inteiro por causa de uma partida.
+#
+# Sao tres saidas, em ordem de preferencia:
+#
+#   1. RODAR       repergunta a folha pra API. Resolve o caso normal (a coleta
+#                  passou antes de a API publicar) e custa 2 requisicoes.
+#   2. LINHA OCA   a API respondeu sem folha e nao vai mudar de ideia (jogo
+#                  antigo, liga sem cobertura de estatistica). Cria a linha com
+#                  placar/status/arbitro vindos de /fixtures e os contadores em
+#                  NULL, pra o passo 3 ter onde escrever.
+#   3. A MAO       digitar o numero olhando a sumula. Fica marcado em
+#                  `manual_stats`, com quem digitou e quando.
+#
+# A ordem importa: numero digitado a mao e' o ultimo recurso, nao o primeiro.
+# Ele entra na mesma coluna que o coletado e o motor le' os dois igual.
+
+#: chave da familia -> (coluna casa, coluna fora, modo). Mesma fonte que a tela
+#: e o resumo usam -- adicionar familia continua sendo mexer so' em
+#: STATS_DA_PARTIDA.
+_STATS_POR_CHAVE = {
+    chave: (casa, fora, modo) for chave, _rot, casa, fora, modo in STATS_DA_PARTIDA
+}
+
+#: Familias que TAMBEM tem coluna de total no banco. Gravar o lado sem refazer
+#: o total deixa a linha incoerente consigo mesma, e o motor le' as duas: o
+#: pool de cartoes sai de `total_yellow_cards`, a media de escanteio da liga
+#: sai de `total_corners`.
+_TOTAL_DA_FAMILIA = {
+    "gols":       "total_goals",
+    "escanteios": "total_corners",
+    "amarelos":   "total_yellow_cards",
+    "vermelhos":  "total_red_cards",
+}
+
+#: Teto por familia. Nao e' regra de futebol, e' peneira de digito trocado --
+#: 55 escanteios num jogo e' tecla presa, e numero torto no banco nao para na
+#: partida: vira baseline torto da liga inteira, media torta do time e do
+#: arbitro, e o sintoma aparece semanas depois como "o motor nao pega mais
+#: escanteio nessa liga".
+_TETO_DA_FAMILIA = {"posse": 100, "precisao": 100, "passes": 1500, "gols": 30}
+_TETO_PADRAO = 60
+
+
+class EstatisticaManualBody(BaseModel):
+    """{"valores": {"escanteios": [7, 4], "faltas": [12, 15]}}
+
+    O par e' [casa, fora], na mesma forma que /dados/partidas devolve. `null`
+    num lado apaga o numero de volta pra ausencia -- que e' a forma de desfazer
+    um valor digitado errado sem inventar zero no lugar.
+    """
+    valores: dict[str, list[Optional[float]]]
+
+    @field_validator("valores")
+    @classmethod
+    def validar_valores(cls, v):
+        if not v:
+            raise ValueError("Nenhum valor enviado.")
+        for chave, par in v.items():
+            if chave not in _STATS_POR_CHAVE:
+                raise ValueError(f"Estatistica desconhecida: {chave}")
+            if not isinstance(par, list) or len(par) != 2:
+                raise ValueError(f"{chave}: esperado [casa, fora].")
+            teto = _TETO_DA_FAMILIA.get(chave, _TETO_PADRAO)
+            for lado in par:
+                if lado is None:
+                    continue
+                if lado < 0 or lado > teto:
+                    raise ValueError(f"{chave}: fora da faixa 0 a {teto}.")
+        return v
+
+
+def _no_path() -> None:
+    """Poe o motor no sys.path · mesmo caminho que o settlement_bridge usa."""
+    if _PIPELINE_DIR and _PIPELINE_DIR not in sys.path:
+        sys.path.insert(0, _PIPELINE_DIR)
+
+
+def _recalcular_medias(home_team_id, away_team_id, league_id, season) -> bool:
+    """`team_statistics` dos dois times da partida.
+
+    Escrever em `match_statistics` e nao refazer a media deixa o motor lendo a
+    media de ontem sobre um historico de hoje -- o pior dos dois mundos, porque
+    parece atualizado. E' a mesma razao pela qual a varredura automatica chama
+    o agregador na mesma passada (stats_sweep._coletar).
+
+    Best-effort de proposito: a estatistica ja' esta gravada quando isto roda,
+    e falhar aqui nao pode desfazer a gravacao. O proximo pipeline recalcula.
+    """
+    try:
+        _no_path()
+        from services.team_stats_aggregator_service import TeamStatsAggregatorService
+        agregador = TeamStatsAggregatorService()
+        for team_id in (home_team_id, away_team_id):
+            if team_id and league_id and season:
+                agregador.process_single_team(team_id, league_id, season)
+        return True
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] recalculo de medias: %s", e)
+        return False
+
+
+def _linha_da_partida(fixture_id: int) -> dict | None:
+    """A linha de `match_statistics` na mesma forma que a lista da tela usa."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        colunas = ", ".join(f"{casa}, {fora}" for _k, _r, casa, fora, _m in STATS_DA_PARTIDA)
+        cur.execute(f"""
+            SELECT fixture_id, match_date::text AS data, status, referee,
+                   last_updated::text AS coletada_em, manual_stats,
+                   home_team_id, away_team_id, league_id, season,
+                   {colunas}
+              FROM match_statistics WHERE fixture_id = %s
+        """, (fixture_id,))
+        linha = cur.fetchone()
+        if not linha:
+            return None
+        linha = dict(linha)
+        stats = {
+            chave: [linha.pop(casa, None), linha.pop(fora, None)]
+            for chave, _rot, casa, fora, _modo in STATS_DA_PARTIDA
+        }
+        linha["stats"] = stats
+        linha["completas"] = sum(
+            1 for par in stats.values() if par[0] is not None and par[1] is not None
+        )
+        return linha
+    finally:
+        cur.close()
+        conn.close()
+
+
+@router.get("/dados/buracos")
+def buracos_de_estatistica(limite: int = 30, current_user: dict = Depends(require_admin)):
+    """As partidas que o painel CONTA em "encerradas sem estatistica", nomeadas.
+
+    O numero sozinho nao da' pra agir: pra ir atras de uma delas era preciso
+    abrir o banco. Aqui elas viram linha com nome de time e botao.
+
+    Le' `fixtures.home_team`/`away_team` (texto, gravado pelo coletor) em vez de
+    juntar com `teams`: a partida orfa e' justamente a que pode ter time nao
+    cadastrado, e o LEFT JOIN devolveria "Time ?" bem no caso que interessa.
+    """
+    limite = min(max(1, limite), 100)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT f.fixture_id,
+                   f.match_datetime::text AS data,
+                   f.status,
+                   f.home_team            AS mandante,
+                   f.away_team            AS visitante,
+                   l.name                 AS liga
+              FROM fixtures f
+         LEFT JOIN match_statistics ms ON ms.fixture_id = f.fixture_id
+         LEFT JOIN leagues l           ON l.league_id  = f.league_id
+             WHERE f.status IN ('FT','AET','PEN')
+               AND ms.fixture_id IS NULL
+          ORDER BY f.match_datetime DESC
+             LIMIT %s
+        """, (limite,))
+        partidas = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] buracos: %s", e)
+        conn.rollback()
+        return {"partidas": [], "limite": limite, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+    return {"partidas": partidas, "limite": limite}
+
+
+@router.post("/dados/partidas/{fixture_id}/coletar")
+async def coletar_partida(
+    fixture_id: int,
+    criar_sem_folha: bool = False,
+    current_user: dict = Depends(require_admin),
+):
+    """Repergunta a folha desta partida pra API-Football, agora.
+
+    Reusa `MatchStatisticsSyncService.sync_one_fixture`, que e' o MESMO caminho
+    do lote -- nao existe um segundo jeito de escrever em `match_statistics`.
+    Custa 2 requisicoes (a partida e a folha), entao roda em qualquer ambiente:
+    o freio de cota que existe na varredura automatica esta' la' porque ela
+    dispara sozinha, e este botao so' dispara por clique.
+
+    `criar_sem_folha=true` e' a segunda saida: grava a linha com placar e
+    arbitro de /fixtures e os contadores em NULL, pra a partida que a API nunca
+    vai publicar poder ser preenchida a mao. So' por clique explicito -- linha
+    oca criada sozinha esconderia a partida da varredura pra sempre.
+
+    Sincrono de proposito, ao contrario de /leagues/{id}/coletar: sao duas
+    requisicoes e a tela precisa do resultado pra dizer o que fazer em seguida.
+    """
+    def _rodar():
+        _no_path()
+        from collectors.match_statistics_sync_service import MatchStatisticsSyncService
+        return MatchStatisticsSyncService().sync_one_fixture(
+            fixture_id, criar_sem_folha=criar_sem_folha)
+
+    try:
+        saida = await run_in_threadpool(_rodar)
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] coletar %s: %s", fixture_id, e)
+        raise HTTPException(502, f"A coleta falhou: {str(e)[:200]}")
+
+    situacao = saida.get("situacao")
+    mensagem = {
+        "gravada":         "Folha coletada e gravada.",
+        "linha_sem_folha": "A API não tem a folha desta partida. A linha foi criada com o "
+                           "placar · os contadores ficam para preencher à mão.",
+        "sem_folha":       "A API respondeu sem folha de estatística para esta partida.",
+        "nao_encontrada":  "A API não conhece esta partida.",
+        "nao_finalizada":  "A partida ainda não terminou para a API · nada a coletar.",
+    }.get(situacao, "Coleta concluída.")
+
+    partida = None
+    medias = False
+    if situacao in ("gravada", "linha_sem_folha"):
+        partida = await run_in_threadpool(_linha_da_partida, fixture_id)
+        if partida:
+            medias = await run_in_threadpool(
+                _recalcular_medias, partida["home_team_id"], partida["away_team_id"],
+                partida["league_id"], partida["season"])
+
+    return {"ok": situacao in ("gravada", "linha_sem_folha"),
+            "situacao": situacao, "mensagem": mensagem,
+            "medias_recalculadas": medias, "partida": partida,
+            "familias": len(STATS_DA_PARTIDA)}
+
+
+@router.put("/dados/partidas/{fixture_id}/estatisticas")
+def editar_estatistica_manual(
+    fixture_id: int,
+    body: EstatisticaManualBody,
+    current_user: dict = Depends(require_admin),
+):
+    """Preenche a mao a estatistica que a API nao entregou.
+
+    So' edita linha que ja' existe: criar a linha e' trabalho do botao Rodar,
+    porque placar, status, arbitro e ids de time tem que vir de /fixtures. Sem
+    isso a linha nasceria com placar inventado, e placar inventado liquida pick.
+
+    Tres coisas acontecem juntas, e as tres sao necessarias:
+      · o par casa/fora vai pra coluna
+      · o total da familia e' refeito (NULL se faltar um lado -- parcela
+        desconhecida, total desconhecido, igual ao `_sum_stats` do coletor)
+      · `manual_stats` guarda o que foi digitado, por quem e quando
+
+    `last_updated` sobe junto, e isso e' proposital: e' o que faz o coletor
+    parar de voltar nesta partida (ver o predicado de "estabilizado" em
+    _load_fixtures). Se a folha for completada a mao, a proxima coleta em lote
+    nao gasta requisicao com ela. O botao Rodar continua passando por cima --
+    numero da API vence numero digitado, sempre.
+    """
+    valores = body.valores
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT home_team_id, away_team_id, league_id, season
+              FROM match_statistics WHERE fixture_id = %s
+        """, (fixture_id,))
+        linha = cur.fetchone()
+        if not linha:
+            raise HTTPException(
+                404, "Esta partida não tem linha em match_statistics. Use o botão "
+                     "Rodar primeiro · o placar e os times precisam vir da API.")
+        linha = dict(linha)
+
+        agora = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        quem = current_user.get("email") or current_user.get("name") or "admin"
+
+        sets, params, marca = [], [], {}
+        for chave, par in valores.items():
+            casa_col, fora_col, _modo = _STATS_POR_CHAVE[chave]
+            casa, fora = par
+            sets += [f"{casa_col} = %s", f"{fora_col} = %s"]
+            params += [casa, fora]
+
+            total_col = _TOTAL_DA_FAMILIA.get(chave)
+            if total_col:
+                sets.append(f"{total_col} = %s")
+                params.append(None if casa is None or fora is None else casa + fora)
+
+            marca[chave] = {"casa": casa, "fora": fora, "por": quem, "em": agora}
+
+        sets.append("manual_stats = COALESCE(manual_stats, '{}'::jsonb) || %s::jsonb")
+        params.append(json.dumps(marca))
+        sets.append("last_updated = NOW()")
+        params.append(fixture_id)
+
+        cur.execute(
+            f"UPDATE match_statistics SET {', '.join(sets)} WHERE fixture_id = %s",
+            tuple(params))
+        conn.commit()
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] editar %s: %s", fixture_id, e)
+        raise HTTPException(500, f"Não deu pra gravar: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    medias = _recalcular_medias(linha["home_team_id"], linha["away_team_id"],
+                                linha["league_id"], linha["season"])
+    return {"ok": True, "gravadas": sorted(valores), "medias_recalculadas": medias,
+            "partida": _linha_da_partida(fixture_id),
+            "familias": len(STATS_DA_PARTIDA)}
+
+
+# ─── Cartao vermelho que a API mandou vazio ────────────────────────────────
+#
+# A API-Football publica zero explicito em todo contador da folha, MENOS em
+# "Red Cards": esse ela manda `null` no caso normal, quando ninguem foi expulso.
+# Entre 2026-07-25 e 2026-08-26 o coletor leu esse null como ausencia e gravou
+# NULL -- ver o cabecalho de utils/stat_sheet.py, com a medicao.
+#
+# O estrago nao para no vermelho. `stats_model` derruba do pool de cartoes todo
+# jogo sem os dois contadores, entao 87% da amostra evaporou; e a media de
+# vermelho do arbitro saia tirada SO' dos jogos com expulsao (AVG ignora NULL),
+# o que da' 1,00 pra quem tem 1 expulsao em 10 jogos.
+#
+# O coletor ja' foi corrigido, mas coletor corrigido nao mexe no passado: a
+# coleta so' volta em folha incompleta, e a janela e' de dias. O conserto do
+# historico e' este, e ele mora aqui porque e' operacao de painel -- o script
+# de linha de comando continua sendo a fonte da regra.
+
+
+def _alvo_vermelho() -> str:
+    """O predicado do backfill, importado do script · nao copiado.
+
+    A regra e' estreita: so' entra a linha com a folha COMPLETA no resto e o
+    buraco unicamente no vermelho. Essa combinacao so' pode ter sido produzida
+    pelo coletor lendo uma folha publicada -- ou seja, a API respondeu e disse
+    que nao houve expulsao. Folha de fato incompleta nao e' tocada: continua
+    NULL, e a coleta volta nela sozinha.
+    """
+    _no_path()
+    from scripts.backfill_cartao_vermelho import _ALVO
+    return _ALVO
+
+
+@router.get("/dados/vermelho-legado")
+def vermelho_legado(current_user: dict = Depends(require_admin)):
+    """Quantas linhas ainda tem o vermelho apagado pelo bug · so' leitura."""
+    try:
+        alvo_sql = _alvo_vermelho()
+    except Exception as e:
+        return {"disponivel": False, "erro": str(e)[:200]}
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT COUNT(*) AS n FROM match_statistics WHERE {alvo_sql}")
+        alvo = (cur.fetchone() or {}).get("n") or 0
+        cur.execute("""
+            SELECT COUNT(*) AS n FROM match_statistics
+             WHERE status IN ('FT','AET','PEN')
+               AND (home_red_cards IS NULL OR away_red_cards IS NULL
+                    OR total_red_cards IS NULL)
+        """)
+        sem_vermelho = (cur.fetchone() or {}).get("n") or 0
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] vermelho: %s", e)
+        return {"disponivel": False, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "disponivel": True,
+        "alvo": alvo,
+        "sem_vermelho": sem_vermelho,
+        # A diferenca e' a folha de fato incompleta: nao entra no conserto, e
+        # mostrar as duas juntas e' o que evita a leitura de que o backfill
+        # "deixou linha pra tras".
+        "folha_incompleta": max(0, sem_vermelho - alvo),
+    }
+
+
+@router.post("/dados/vermelho-legado")
+def corrigir_vermelho_legado(current_user: dict = Depends(require_admin)):
+    """Grava 0 no vermelho das linhas-alvo e refaz a media dos arbitros.
+
+    Usa `_aplicar` e `_recalcular_arbitros` do proprio script: e' um UPDATE de
+    predicado estreito, e a media do arbitro TEM que ser refeita na mesma
+    transacao -- corrigir o vermelho e deixar `referee_stats.avg_red` inflado
+    trocaria um numero errado por outro.
+    """
+    try:
+        _no_path()
+        from scripts.backfill_cartao_vermelho import _aplicar, _recalcular_arbitros
+    except Exception as e:
+        raise HTTPException(500, f"Script de backfill indisponível: {str(e)[:200]}")
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        corrigidas = _aplicar(cur)
+        arbitros = _recalcular_arbitros(cur)
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] backfill vermelho: %s", e)
+        raise HTTPException(500, f"Não deu pra corrigir: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"ok": True, "corrigidas": corrigidas, "arbitros": arbitros}
+
+
+
+
+# ─── Diagnóstico da folha inteira, e a recoleta em lote ─────────────────────
+#
+# O bloco do vermelho conserta UM defeito conhecido, e ele é a exceção da casa:
+# vermelho é o único contador em que `null` numa folha publicada significa zero,
+# então é o único que dá pra corrigir com SQL, sem perguntar nada pra API. Em
+# qualquer outra família, inventar o número seria fabricar estatística · e zero
+# fabricado vira pick errado (invariante 1 de services/settlement.py).
+#
+# Pras outras só existem dois caminhos honestos: pedir de novo pra API, ou
+# digitar olhando a súmula. O que faltava era enxergar ONDE estão os buracos,
+# porque o resumo da tela olha as últimas 40 partidas e defeito de coleta não
+# mora só ali · e um jeito de rodar a recoleta em cima de todas de uma vez, sem
+# clicar partida por partida.
+#
+# As médias do resumo saem das últimas 40. Este diagnóstico varre a tabela
+# inteira dentro de uma janela de meses. São perguntas diferentes: uma é "o
+# motor está lendo bem AGORA", a outra é "o que o histórico tem de furado".
+
+#: A definição de "folha completa" do projeto, em colunas.
+#:
+#: É a MESMA lista do predicado de "estabilizado" em
+#: collectors/match_statistics_sync_service.py::_load_fixtures e do corte de
+#: sync_pending_fixtures. Repetir a lista aqui é o preço de o coletor guardá-la
+#: dentro de string de SQL, sem constante pra importar · o teste
+#: test_estatistica_a_mao_2026_08 lê o arquivo do coletor e trava as duas
+#: juntas, pra a definição não se abrir em duas.
+#:
+#: Não são as 16 famílias de propósito: defesa de goleiro aparece em menos de
+#: 1% das folhas, e exigir as 16 marcaria a tabela inteira como incompleta e
+#: mandaria recoletar 3.000 partidas pra nada.
+_COLUNAS_DA_FOLHA = ("total_corners", "total_yellow_cards", "total_red_cards",
+                     "home_fouls", "home_total_shots")
+_FOLHA_INCOMPLETA = "(" + " OR ".join(f"{c} IS NULL" for c in _COLUNAS_DA_FOLHA) + ")"
+
+
+@router.get("/dados/diagnostico")
+def diagnostico_da_folha(meses: int = 12, current_user: dict = Depends(require_admin)):
+    """Onde estão os buracos da tabela inteira, família por família.
+
+    A janela existe porque isto é varredura: sem recorte, cada abertura da aba
+    passaria por toda a história de `match_statistics` pra contar coisa que
+    ninguém vai recoletar (jogo de 2023 não volta · a API não guarda folha
+    velha, e recoletar custaria uma requisição por partida pra receber vazio).
+    """
+    meses = min(max(1, meses), 60)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        colunas = []
+        for chave, _rot, casa, fora, _modo in STATS_DA_PARTIDA:
+            colunas.append(f"COUNT({casa} + {fora}) AS {chave}_n")
+            # A data do buraco MAIS ANTIGO da família. É o que separa "defeito
+            # que voltou agora" de "cicatriz de julho": os dois aparecem como
+            # cobertura baixa, e só um deles pede ação.
+            colunas.append(
+                f"MIN(match_date) FILTER (WHERE {casa} IS NULL OR {fora} IS NULL)::text "
+                f"AS {chave}_desde")
+        cur.execute(f"""
+            SELECT COUNT(*)                                        AS ft,
+                   COUNT(*) FILTER (WHERE {_FOLHA_INCOMPLETA})     AS incompletas,
+                   COUNT(*) FILTER (WHERE {_SQL_SUSPEITA})         AS zeradas,
+                   MIN(match_date) FILTER (WHERE {_FOLHA_INCOMPLETA})::text AS incompleta_mais_antiga,
+                   {', '.join(colunas)}
+              FROM match_statistics
+             WHERE status IN ('FT','AET','PEN')
+               AND match_date >= (CURRENT_DATE - (%s || ' months')::interval)
+        """, (meses,))
+        bruto = dict(cur.fetchone() or {})
+
+        ft = bruto.get("ft") or 0
+        familias = [
+            {"chave": chave, "rotulo": rotulo,
+             "com_dado": bruto.get(f"{chave}_n") or 0,
+             "sem_dado": max(0, ft - (bruto.get(f"{chave}_n") or 0)),
+             "desde": bruto.get(f"{chave}_desde")}
+            for chave, rotulo, _c, _f, _m in STATS_DA_PARTIDA
+        ]
+
+        # Partida encerrada que nunca chegou a ter linha. O diagnóstico e a
+        # recoleta tratam as duas coisas juntas de propósito: pra quem opera,
+        # "o motor não viu esse jogo" é o mesmo problema, tenha a linha nascido
+        # incompleta ou não tenha nascido.
+        cur.execute("""
+            SELECT COUNT(*) AS n
+              FROM fixtures f
+         LEFT JOIN match_statistics ms ON ms.fixture_id = f.fixture_id
+             WHERE f.status IN ('FT','AET','PEN') AND ms.fixture_id IS NULL
+        """)
+        sem_linha = (cur.fetchone() or {}).get("n") or 0
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] diagnostico: %s", e)
+        return {"erro": str(e)[:200], "familias": [], "ft": 0,
+                "incompletas": 0, "zeradas": 0, "sem_linha": 0, "meses": meses}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "meses": meses,
+        "ft": ft,
+        "incompletas": bruto.get("incompletas") or 0,
+        "incompleta_mais_antiga": bruto.get("incompleta_mais_antiga"),
+        "zeradas": bruto.get("zeradas") or 0,
+        "sem_linha": sem_linha,
+        "familias": familias,
+        # A tela precisa dizer o que ela considera folha completa · senão
+        # "incompleta" vira um número sem definição.
+        "colunas_da_folha": list(_COLUNAS_DA_FOLHA),
+    }
+
+
+#: Estado da recoleta em lote. Mora na MEMÓRIA do processo, igual ao status do
+#: pipeline: é acompanhamento de execução, não histórico · e um deploy no meio
+#: da recoleta interrompe o trabalho de qualquer jeito.
+_recoleta: dict = {
+    "rodando": False, "total": 0, "feitas": 0, "gravadas": 0, "falhas": 0,
+    "iniciada_em": None, "terminada_em": None, "ultimo": None, "erro": None,
+    "medias": 0,
+}
+_recoleta_lock = threading.Lock()
+
+#: Teto de partidas por lote. Cada uma custa DUAS requisições da API (a partida
+#: e a folha), e a chave é uma conta só pros três ambientes · foi assim que a
+#: cota estourou em 2026-08-01 e o agendador foi removido. 100 partidas são 200
+#: requisições, o suficiente pra doer sem clique nenhum de aviso.
+_RECOLETA_TETO = 100
+
+
+def _ids_para_recoletar(limite: int, meses: int) -> list:
+    """As partidas que valem uma requisição, mais recentes primeiro.
+
+    Duas fontes na mesma lista: linha existente com a folha incompleta, e
+    partida encerrada sem linha nenhuma. Mais recente primeiro porque a API
+    publica folha de jogo velho cada vez menos · gastar as 20 requisições do
+    lote em agosto rende mais que gastá-las em março.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT fixture_id, match_date FROM (
+                SELECT ms.fixture_id, ms.match_date
+                  FROM match_statistics ms
+                 WHERE ms.status IN ('FT','AET','PEN')
+                   AND {_FOLHA_INCOMPLETA}
+                   AND ms.match_date >= (CURRENT_DATE - (%s || ' months')::interval)
+                 UNION
+                SELECT f.fixture_id, f.match_datetime::date
+                  FROM fixtures f
+             LEFT JOIN match_statistics m2 ON m2.fixture_id = f.fixture_id
+                 WHERE f.status IN ('FT','AET','PEN')
+                   AND m2.fixture_id IS NULL
+                   AND f.match_datetime >= (CURRENT_DATE - (%s || ' months')::interval)
+            ) alvo
+             ORDER BY match_date DESC
+             LIMIT %s
+        """, (meses, meses, limite))
+        return [r["fixture_id"] for r in cur.fetchall()]
+    finally:
+        cur.close()
+        conn.close()
+
+
+def _recoletar_em_lote(ids: list) -> None:
+    """Uma partida por vez, pelo mesmo caminho do botão Rodar.
+
+    Sequencial de propósito: paralelizar aqui multiplicaria o consumo de cota
+    por segundo sem reduzir o total, e a API-Football tem limite por minuto.
+    """
+    times = set()
+    try:
+        _no_path()
+        from collectors.match_statistics_sync_service import MatchStatisticsSyncService
+
+        for fixture_id in ids:
+            try:
+                saida = MatchStatisticsSyncService().sync_one_fixture(fixture_id)
+                situacao = saida.get("situacao")
+                with _recoleta_lock:
+                    _recoleta["feitas"] += 1
+                    _recoleta["ultimo"] = {"fixture_id": fixture_id, "situacao": situacao}
+                    if situacao == "gravada":
+                        _recoleta["gravadas"] += 1
+            except Exception as e:
+                logging.getLogger(__name__).warning(
+                    "[ADMIN/RECOLETA] fixture %s: %s", fixture_id, e)
+                with _recoleta_lock:
+                    _recoleta["feitas"] += 1
+                    _recoleta["falhas"] += 1
+                    _recoleta["ultimo"] = {"fixture_id": fixture_id, "situacao": "erro"}
+
+        # As médias no fim, uma vez por time · não a cada partida. Um lote de
+        # 20 jogos costuma tocar menos de 40 times, e recalcular por partida
+        # refaria a mesma média várias vezes contra a tabela inteira.
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT DISTINCT home_team_id, away_team_id, league_id, season
+                  FROM match_statistics WHERE fixture_id = ANY(%s)
+            """, (ids,))
+            for r in cur.fetchall():
+                times.add((r["home_team_id"], r["league_id"], r["season"]))
+                times.add((r["away_team_id"], r["league_id"], r["season"]))
+        finally:
+            cur.close()
+            conn.close()
+
+        from services.team_stats_aggregator_service import TeamStatsAggregatorService
+        agregador = TeamStatsAggregatorService()
+        for team_id, league_id, season in times:
+            if not (team_id and league_id and season):
+                continue
+            try:
+                agregador.process_single_team(team_id, league_id, season)
+                with _recoleta_lock:
+                    _recoleta["medias"] += 1
+            except Exception as e:
+                logging.getLogger(__name__).warning("[ADMIN/RECOLETA] media %s: %s", team_id, e)
+    except Exception as e:
+        logging.getLogger(__name__).error("[ADMIN/RECOLETA] lote: %s", e, exc_info=True)
+        with _recoleta_lock:
+            _recoleta["erro"] = str(e)[:200]
+    finally:
+        with _recoleta_lock:
+            _recoleta["rodando"] = False
+            _recoleta["terminada_em"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+@router.post("/dados/recoletar")
+async def recoletar_em_lote(
+    limite: int = 20,
+    meses: int = 3,
+    current_user: dict = Depends(require_admin),
+):
+    """Roda a coleta em cima de todas as partidas furadas da janela, de uma vez.
+
+    É o botão Rodar aplicado a uma lista · não um caminho novo de gravação. Vai
+    pra thread de fundo porque são duas requisições por partida: um lote de 20
+    leva minutos, e nenhum request HTTP espera isso.
+
+    A janela padrão é curta (3 meses) pelo mesmo motivo que a varredura
+    automática só olha 3 dias: folha que não apareceu há muito tempo quase
+    nunca aparece, e cada tentativa custa cota.
+    """
+    limite = min(max(1, limite), _RECOLETA_TETO)
+    meses = min(max(1, meses), 24)
+
+    with _recoleta_lock:
+        if _recoleta["rodando"]:
+            raise HTTPException(409, "Já há uma recoleta em andamento.")
+
+    ids = await run_in_threadpool(_ids_para_recoletar, limite, meses)
+    if not ids:
+        return {"ok": True, "total": 0,
+                "mensagem": "Nenhuma partida furada na janela · nada a recoletar."}
+
+    with _recoleta_lock:
+        _recoleta.update({
+            "rodando": True, "total": len(ids), "feitas": 0, "gravadas": 0,
+            "falhas": 0, "medias": 0, "erro": None, "ultimo": None,
+            "terminada_em": None,
+            "iniciada_em": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+    threading.Thread(target=_recoletar_em_lote, args=(ids,),
+                     name="admin-recoleta", daemon=True).start()
+
+    return {"ok": True, "total": len(ids),
+            "mensagem": f"{len(ids)} partida(s) na fila · {len(ids) * 2} requisições da API."}
+
+
+@router.get("/dados/recoleta-status")
+def recoleta_status(current_user: dict = Depends(require_admin)):
+    """Só leitura. A tela pesquisa isto enquanto o lote roda."""
+    with _recoleta_lock:
+        return dict(_recoleta)
+
+
+# ─── Motor · o que ele olhou antes de escolher ──────────────────────────────
+#
+# O pick publicado é a ponta. A pergunta que não tinha tela é a de baixo dela:
+# QUE jogos o motor considerou, que mercados ele pontuou em cada um, e por que
+# os outros não venceram.
+#
+# O dado já existe desde 07/08 e nunca foi lido pelo site:
+# `engine_decisions`, gravada por engine_pipelines/decision_log.py. Uma linha
+# por fixture processado, em três formas:
+#
+#   avaliado    o motor rodou · `candidates` traz TODOS os mercados pontuados,
+#               não só o escolhido, com odd, taxa real, amostra, EV e score
+#   descartado  o jogo caiu ANTES do motor · `reason` diz qual das quatro
+#               portas fechou (sem odds, sem histórico, histórico reprovado)
+#   sem_pick    o pipeline terminou o dia sem candidato nenhum, sem fixture
+#
+# Até aqui isso só era legível abrindo o banco. Em produção o arquivo
+# .jsonl nem existe: o Railway não tem volume, então LOGS_DIR some a cada
+# deploy · o Postgres é a única cópia que sobrevive.
+#
+# Nada aqui escreve. É leitura de log, e log de decisão que a tela pode
+# alterar deixa de ser log.
+
+#: Os pipelines que gravam em `engine_decisions`, na ordem em que o painel
+#: pergunta por eles. O nome é o mesmo que o motor escreve na coluna.
+_PIPELINES_DO_MOTOR = [
+    ("VIP_ENGINE",         "VIP"),
+    ("DICA_ENGINE",        "Free"),
+    ("MULTIPLA_ENGINE",    "Múltipla"),
+    ("ALAVANCAGEM_ENGINE", "Alavancagem"),
+    ("FALTAS_ENGINE",      "Faltas"),
+    ("GOLEIROS_ENGINE",    "Goleiros"),
+    ("LIVE_ENGINE",        "Ao vivo"),
+]
+
+#: Onde o pick daquele pipeline foi parar, pra a tela poder dizer "este virou
+#: pick". Só as tabelas que guardam UM fixture por linha: alavancagem tem três
+#: colunas de fixture e múltipla guarda as pernas em JSON · marcar a partida
+#: nessas duas exigiria abrir o bilhete, e o que a tela precisa aqui é do
+#: candidato, não do bilhete.
+_TABELA_DO_PIPELINE = {
+    "VIP_ENGINE":      "picks_vip",
+    "DICA_ENGINE":     "picks_free",
+    "FALTAS_ENGINE":   "picks_faltas",
+    "GOLEIROS_ENGINE": "picks_goleiros",
+}
+
+_DECISOES_POR_PAGINA_MAX = 25
+
+
+def _sem_tabela(e: Exception) -> bool:
+    """`engine_decisions` é criada pelo MOTOR, não pelas migrações do site.
+
+    Ambiente que nunca rodou pipeline não tem a tabela, e isso não é defeito
+    do painel: a aba responde "ainda não há decisão registrada" em vez de
+    devolver 500 e parecer que o site quebrou.
+    """
+    return "engine_decisions" in str(e) and "exist" in str(e).lower()
+
+
+@router.get("/motor/decisoes")
+def motor_decisoes(data: str | None = None, current_user: dict = Depends(require_admin)):
+    """Retrato de um dia: quanto cada pipeline avaliou, e onde os jogos morreram.
+
+    Sem `data`, o dia de Brasília · a mesma data que os pipelines gravam
+    (`HOJE_BR`), não `CURRENT_DATE`, que já virou o dia entre 21h e meia-noite.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        # As datas que existem, pra a tela oferecer só dia com log. Um dia sem
+        # linha nenhuma não é um dia vazio: é um dia em que o pipeline não rodou.
+        cur.execute("""
+            SELECT match_date::text AS dia, COUNT(*) AS n
+              FROM engine_decisions
+             GROUP BY match_date
+             ORDER BY match_date DESC
+             LIMIT 30
+        """)
+        dias = [dict(r) for r in cur.fetchall()]
+
+        dia = data or (dias[0]["dia"] if dias else None)
+        if dia is None:
+            return {"disponivel": True, "data": None, "dias": [], "pipelines": [], "motivos": []}
+
+        cur.execute("""
+            SELECT pipeline,
+                   COUNT(*) FILTER (WHERE status = 'avaliado')    AS avaliados,
+                   COUNT(*) FILTER (WHERE status = 'descartado')  AS descartados,
+                   COUNT(*) FILTER (WHERE status = 'sem_pick')    AS sem_pick,
+                   -- Avaliado com pelo menos um candidato APROVADO. É a
+                   -- distância entre "o motor olhou" e "o motor teve o que
+                   -- escolher", e as duas juntas explicam o dia vazio.
+                   COUNT(*) FILTER (
+                       WHERE status = 'avaliado'
+                         AND EXISTS (SELECT 1 FROM jsonb_array_elements(candidates) c
+                                      WHERE (c->>'eligible')::boolean)
+                   ) AS com_aprovado
+              FROM engine_decisions
+             WHERE match_date = %s
+             GROUP BY pipeline
+        """, (dia,))
+        por_pipeline = {r["pipeline"]: dict(r) for r in cur.fetchall()}
+
+        # Onde os jogos morreram, agrupado. Motivo é texto curto e estável
+        # justamente pra isto (ver as constantes MOTIVO_* do decision_log):
+        # frase escrita à mão em cada pipeline não agruparia.
+        cur.execute("""
+            SELECT pipeline, reason, COUNT(*) AS n
+              FROM engine_decisions
+             WHERE match_date = %s AND status <> 'avaliado' AND reason IS NOT NULL
+             GROUP BY pipeline, reason
+             ORDER BY n DESC
+        """, (dia,))
+        motivos = [dict(r) for r in cur.fetchall()]
+
+        pipelines = []
+        for chave, rotulo in _PIPELINES_DO_MOTOR:
+            linha = por_pipeline.pop(chave, {})
+            pipelines.append({
+                "pipeline": chave, "rotulo": rotulo,
+                "avaliados": linha.get("avaliados") or 0,
+                "descartados": linha.get("descartados") or 0,
+                "sem_pick": linha.get("sem_pick") or 0,
+                "com_aprovado": linha.get("com_aprovado") or 0,
+                "picks": _picks_do_dia(conn, cur, chave, dia),
+            })
+        # Pipeline que o motor gravou e esta lista não conhece ainda: aparece
+        # mesmo assim. Sumir com a linha seria esconder justamente a novidade.
+        for chave, linha in por_pipeline.items():
+            pipelines.append({
+                "pipeline": chave, "rotulo": chave,
+                "avaliados": linha.get("avaliados") or 0,
+                "descartados": linha.get("descartados") or 0,
+                "sem_pick": linha.get("sem_pick") or 0,
+                "com_aprovado": linha.get("com_aprovado") or 0,
+                "picks": None,
+            })
+    except Exception as e:
+        conn.rollback()
+        if _sem_tabela(e):
+            return {"disponivel": False, "data": data, "dias": [], "pipelines": [],
+                    "motivos": [], "erro": "Nenhum pipeline gravou decisão neste banco ainda."}
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] decisoes: %s", e)
+        return {"disponivel": False, "data": data, "dias": [], "pipelines": [],
+                "motivos": [], "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"disponivel": True, "data": dia, "dias": dias,
+            "pipelines": pipelines, "motivos": motivos}
+
+
+def _picks_do_dia(conn, cur, pipeline: str, dia: str) -> int | None:
+    """Quantos picks daquele pipeline foram publicados naquele dia.
+
+    É o fecho da conta: avaliados, com candidato aprovado, e quantos viraram
+    pick de verdade. Sem esta terceira coluna, "12 avaliados e 4 com aprovado"
+    ainda não diz se saiu alguma coisa.
+    """
+    tabela = _TABELA_DO_PIPELINE.get(pipeline)
+    if pipeline == "ALAVANCAGEM_ENGINE":
+        tabela = "picks_alavancagem"
+    if not tabela:
+        return None
+    try:
+        cur.execute(f"SELECT COUNT(*) AS n FROM {tabela} WHERE match_date = %s", (dia,))
+        return (cur.fetchone() or {}).get("n") or 0
+    except Exception:
+        # Tabela ausente neste ambiente não pode derrubar o resumo inteiro. O
+        # rollback é obrigatório: no Postgres, erro deixa a transação abortada
+        # e a PRÓXIMA consulta falharia junto, arrastando o resumo inteiro
+        # por causa de uma tabela que nem existe aqui.
+        conn.rollback()
+        return None
+
+
+@router.get("/motor/decisoes/linhas")
+def motor_decisoes_linhas(
+    pipeline: str,
+    data: str | None = None,
+    status: str | None = None,
+    pagina: int = 0,
+    por_pagina: int = 10,
+    current_user: dict = Depends(require_admin),
+):
+    """Partida a partida: o que o motor viu naquele jogo, e o que pontuou.
+
+    `candidates` vem inteiro, porque é ele que responde a pergunta. O peso da
+    resposta é a razão de isto ser paginado curto: são até 16 mercados por
+    partida, cada um com odd, taxa real, amostra, EV, edge e os scores
+    parciais · trazer o dia inteiro de uma vez seria alguns MB de JSON pra ler
+    uma partida.
+    """
+    pagina = max(0, pagina)
+    por_pagina = min(max(1, por_pagina), _DECISOES_POR_PAGINA_MAX)
+
+    filtros = ["pipeline = %s"]
+    params: list = [pipeline]
+    if data:
+        filtros.append("match_date = %s")
+        params.append(data)
+    if status:
+        filtros.append("status = %s")
+        params.append(status)
+    onde = " AND ".join(filtros)
+
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"SELECT COUNT(*) AS n FROM engine_decisions WHERE {onde}", tuple(params))
+        total = (cur.fetchone() or {}).get("n") or 0
+
+        cur.execute(f"""
+            SELECT id, match_date::text AS dia, pipeline, fixture_id,
+                   home_team, away_team, status, reason,
+                   candidates, matchup, context,
+                   created_at::text AS gravada_em
+              FROM engine_decisions
+             WHERE {onde}
+             -- Avaliado primeiro: é a linha que tem conteúdo. Descarte é
+             -- contexto, e ler 30 descartes antes do primeiro jogo avaliado
+             -- é o mesmo que não ter a tela.
+             ORDER BY (status = 'avaliado') DESC, id DESC
+             LIMIT %s OFFSET %s
+        """, tuple(params) + (por_pagina, pagina * por_pagina))
+        linhas = [dict(r) for r in cur.fetchall()]
+
+        # Quais dessas partidas viraram pick de verdade. O candidato aprovado
+        # não é o pick: ele ainda passa pelo gate de IA, pela exclusividade de
+        # partida e pelo teto do dia.
+        virou_pick: list = []
+        tabela = _TABELA_DO_PIPELINE.get(pipeline)
+        ids = [l["fixture_id"] for l in linhas if l.get("fixture_id")]
+        if tabela and ids:
+            try:
+                cur.execute(
+                    f"SELECT DISTINCT fixture_id FROM {tabela} WHERE fixture_id = ANY(%s)",
+                    (ids,))
+                virou_pick = [r["fixture_id"] for r in cur.fetchall()]
+            except Exception:
+                conn.rollback()
+    except Exception as e:
+        conn.rollback()
+        if _sem_tabela(e):
+            return {"total": 0, "linhas": [], "virou_pick": [],
+                    "erro": "Nenhum pipeline gravou decisão neste banco ainda."}
+        logging.getLogger(__name__).warning("[ADMIN/MOTOR] linhas: %s", e)
+        return {"total": 0, "linhas": [], "virou_pick": [], "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"total": total, "pagina": pagina, "por_pagina": por_pagina,
+            "linhas": linhas, "virou_pick": virou_pick}
 
 
 @router.get("/bookmakers")

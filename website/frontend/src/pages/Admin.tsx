@@ -10,6 +10,7 @@ import AdminShareResults from '../components/AdminShareResults'
 import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminDados from '../components/AdminDados'
+import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminEngajamento from '../components/AdminEngajamento'
 import { fmtBRL } from '../utils/format'
@@ -119,6 +120,9 @@ const ABAS = [
   // Depois de Ligas de proposito: a pergunta "o motor esta enxergando?" quase
   // sempre termina em "qual liga nao coletou", que e' a aba ao lado.
   { key: 'dados',      label: 'Dados'       },
+  // E ao lado de Dados pelo mesmo motivo: "por que nao saiu pick" quase
+  // sempre termina em "o motor nem viu o jogo", que e' a aba anterior.
+  { key: 'motor',      label: 'Motor'       },
   { key: 'casas',      label: 'Casas'       },
 ] as const
 type AdminAba = typeof ABAS[number]['key']
@@ -789,6 +793,8 @@ export default function Admin() {
         {aba === 'live' && <AdminMotorLive />}
 
         {aba === 'dados' && <AdminDados />}
+
+        {aba === 'motor' && <AdminMotorDecisoes />}
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 
