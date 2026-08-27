@@ -204,6 +204,36 @@ def test_fallback_tem_teto(pool, monkeypatch):
     b.close(); c.close(); d.close()
 
 
+def test_teto_estourado_nao_pendura_o_request(pool, monkeypatch):
+    """O TETO NAO PODE VIRAR LACO INFINITO.
+
+    Com o pool cheio, o orcamento gasto e nenhum slot vagando, a versao
+    anterior reiniciava o prazo e esperava pra sempre: o request nunca saia.
+    Isso troca "site lento", que degrada e volta sozinho, por "site
+    pendurado", que nao volta -- o oposto do motivo deste codigo existir.
+
+    Passado o prazo maximo, abre conexao propria mesmo acima do teto. Teto e'
+    politica de capacidade; pendurar quem esta usando o site nao e' politica.
+    """
+    monkeypatch.setattr(database, "_ESPERA_POR_SLOT", 0.0)
+    monkeypatch.setattr(database, "_PRAZO_MAXIMO", 0.2)
+    monkeypatch.setattr(database, "_FALLBACK_MAX", 0)      # nenhum orcamento
+    monkeypatch.setattr(database, "get_direct_connection", _ConnFake)
+
+    a = _get_connection()
+    b = _get_connection()
+
+    import time
+    t0 = time.monotonic()
+    c = _get_connection()                                   # nao pode pendurar
+    decorrido = time.monotonic() - t0
+
+    assert isinstance(c, database._ConexaoDireta)
+    assert decorrido < 5, f"demorou {decorrido:.1f}s -- pendurou"
+    assert database.pool_stats()["fallback_acima_do_teto"] >= 1
+    a.close(); b.close(); c.close()
+
+
 def test_conexao_direta_devolve_o_orcamento_ao_fechar(pool, monkeypatch):
     """Sem isto o teto vazaria: o fallback pararia de existir depois do
     primeiro pico do dia."""

@@ -149,12 +149,17 @@ _ESPERA_POR_SLOT = float(os.getenv("DB_ESPERA_POR_SLOT", "1.5"))
 #: projeto Supabase. Com WEB_CONCURRENCY > 1, multiplique por worker antes de
 #: mexer.
 _FALLBACK_MAX = int(os.getenv("DB_FALLBACK_MAX", "5"))
+#: Prazo TOTAL que um request pode passar aqui dentro. Depois dele, abre
+#: conexao propria mesmo estourando o teto: e' o que garante que esta funcao
+#: sempre termina. Sem ele o teto vira laco infinito quando o pool nao vaga.
+_PRAZO_MAXIMO = float(os.getenv("DB_PRAZO_MAXIMO", "8"))
 
 _pool = None
 _pool_lock = threading.Lock()
 _fallback_lock = threading.Lock()
 _pool_stats = {"reusos": 0, "aberturas": 0, "fallback": 0,
-               "fallback_em_uso": 0, "fallback_negado": 0}
+               "fallback_em_uso": 0, "fallback_negado": 0,
+               "fallback_acima_do_teto": 0}
 
 
 def _obter_pool():
@@ -305,8 +310,16 @@ def get_connection():
     Com teto, o excedente ESPERA por um slot do pool (que dura milissegundos:
     a consulta mediana e' curta) em vez de abrir conexao nova. Fila e' lenta;
     estouro de conexao e' fora do ar.
+
+    MAS A ESPERA TEM PRAZO (_PRAZO_MAXIMO), E ISSO NAO E' DETALHE. Estourado o
+    prazo, esta funcao abre conexao propria mesmo passando do teto. O teto e'
+    politica de capacidade; pendurar quem esta tentando usar o site nao e'
+    politica nenhuma. Uma versao anterior reiniciava o prazo e podia esperar
+    pra sempre -- trocava "site lento", que degrada e volta, por "site
+    pendurado", que nao volta sozinho.
     """
     limite = time.monotonic() + _ESPERA_POR_SLOT
+    prazo_maximo = time.monotonic() + _PRAZO_MAXIMO
     while True:
         try:
             conn = _obter_pool().getconn()
@@ -326,12 +339,27 @@ def get_connection():
                     _pool_stats["fallback_negado"] += 1
                     tem_orcamento = False
             if not tem_orcamento:
-                # Sem slot e sem orcamento: continuar esperando e' melhor que
-                # estourar o teto de conexoes do projeto. O timeout do request
-                # resolve o caso patologico.
-                time.sleep(0.05)
-                limite = time.monotonic() + _ESPERA_POR_SLOT
-                continue
+                # SEM SLOT E SEM ORCAMENTO. Esperar mais um pouco e' melhor que
+                # estourar o teto de conexoes do projeto -- mas so' ATE' o
+                # prazo maximo. Antes daqui existia um `continue` que reiniciava
+                # o prazo, e isso e' um laco infinito: com o pool cheio e o
+                # orcamento gasto, o request nunca saia. Trocava um problema
+                # que degrada (site lento) por um que nao volta sozinho (site
+                # pendurado), que e' exatamente o oposto do motivo deste codigo
+                # existir.
+                if time.monotonic() < prazo_maximo:
+                    time.sleep(0.05)
+                    limite = time.monotonic() + _ESPERA_POR_SLOT
+                    continue
+                # Estourou o prazo: abre conexao propria mesmo passando do
+                # teto. O teto e' uma politica de capacidade, nao uma promessa
+                # -- e nenhuma politica de capacidade justifica pendurar quem
+                # esta tentando usar o site.
+                with _fallback_lock:
+                    _pool_stats["fallback"] += 1
+                    _pool_stats["fallback_em_uso"] += 1
+                    _pool_stats["fallback_acima_do_teto"] += 1
+                return _ConexaoDireta(get_direct_connection())
             return _ConexaoDireta(get_direct_connection())
         except Exception:
             # Pool indisponivel por qualquer outro motivo (credencial, rede na
