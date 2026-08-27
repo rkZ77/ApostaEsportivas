@@ -226,6 +226,12 @@ _SUB_BUILDERS = {
     "alavancagem":_sub_alav,
     "faltas":     _sub_mercado("picks_faltas",   "faltas",   "Faltas"),
     "goleiros":   _sub_mercado("picks_goleiros", "goleiros", "Defesas"),
+    # Player Stats (27/08) -- sucessor de picks_goleiros como destino de prop
+    # de jogador. As duas ficam: goleiros parou de crescer, e apagar a fonte
+    # apagaria o historico do produto do placar publico.
+    #
+    # Pick Boost NAO entra: fase 1 e' so' Admin (peso 0 em stake_plan.py).
+    "player_stats": _sub_mercado("picks_player_stats", "player_stats", "Player Stats"),
 }
 
 def _build_union(date_cond: str, source: Optional[str]) -> str:
@@ -606,7 +612,8 @@ def _mask_first(full_name: str) -> str:
 @router.get("/pick/{pick_type}/{pick_id}")
 def public_pick(pick_type: str, pick_id: int):
     """Teaser público de pick para compartilhamento. Nao expoe market/reasoning."""
-    valid = {"vip", "free", "multipla", "alavancagem", "faltas", "goleiros"}
+    valid = {"vip", "free", "multipla", "alavancagem", "faltas", "goleiros",
+             "player_stats"}
     if pick_type not in valid:
         raise HTTPException(400, "Tipo inválido")
 
@@ -645,10 +652,11 @@ def public_pick(pick_type: str, pick_id: int):
                 SELECT id, match_date, games, total_odd AS odd, result, profit
                 FROM picks_multiplas WHERE id = %s
             """, (pick_id,))
-        elif pick_type in ("faltas", "goleiros"):
+        elif pick_type in ("faltas", "goleiros", "player_stats"):
             # Mesmo contrato dos outros: teaser sem market nem reasoning, que
             # e o que o link compartilhado pode mostrar sem entregar a analise.
-            tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"
+            tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
+                      "player_stats": "picks_player_stats"}[pick_type]
             cur.execute(f"""
                 SELECT id, match_date,
                        home_team AS home_team_name, away_team AS away_team_name,
@@ -705,6 +713,7 @@ def public_today_summary():
                 COUNT(*) FILTER (WHERE t.source = 'alavancagem') AS alavancagem,
                 COUNT(*) FILTER (WHERE t.source = 'faltas')      AS faltas,
                 COUNT(*) FILTER (WHERE t.source = 'goleiros')    AS goleiros,
+                COUNT(*) FILTER (WHERE t.source = 'player_stats') AS player_stats,
                 COUNT(*)                                         AS total
             FROM (
                 SELECT 'vip'         AS source FROM picks_vip         WHERE match_date = {HOJE_BR}
@@ -718,10 +727,13 @@ def public_today_summary():
                 SELECT 'faltas'      AS source FROM picks_faltas      WHERE match_date = {HOJE_BR}
                 UNION ALL
                 SELECT 'goleiros'    AS source FROM picks_goleiros    WHERE match_date = {HOJE_BR}
+                UNION ALL
+                SELECT 'player_stats' AS source FROM picks_player_stats WHERE match_date = {HOJE_BR}
             ) t
         """)
         return dict(row) if row else {"vip": 0, "free": 0, "multiplas": 0,
-                                      "alavancagem": 0, "faltas": 0, "goleiros": 0, "total": 0}
+                                      "alavancagem": 0, "faltas": 0, "goleiros": 0,
+                                      "player_stats": 0, "total": 0}
     finally:
         cur.close()
         conn.close()

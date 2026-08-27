@@ -408,14 +408,20 @@ def test_por_jogo_conta_as_pernas_do_proprio_union():
     assert "n_legs = 1 if source" not in corpo, "contagem escrita a mao voltou"
 
 
-def test_por_jogo_cobre_os_seis_pipelines():
+def test_por_jogo_cobre_todos_os_pipelines():
     """Faltas e defesas contavam no ROI publico desde 01/08 e nesta aba nao
-    existiam: um pick de faltas resolvido nao aparecia em lugar nenhum dela."""
+    existiam: um pick de faltas resolvido nao aparecia em lugar nenhum dela.
+
+    `player_stats` entrou em 27/08 pelo mesmo motivo -- ele e' publicado e
+    liquidado como os outros. `boost` NAO entra: fase 1 dele e' so' Admin.
+    """
     from routers.suggestions import FONTES_POR_JOGO
 
     assert set(FONTES_POR_JOGO) == {
         "vip", "free", "multipla", "alavancagem", "faltas", "goleiros",
+        "player_stats",
     }
+    assert "boost" not in FONTES_POR_JOGO
 
 
 def test_abas_de_resultados_tem_indicadores():

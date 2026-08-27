@@ -126,14 +126,20 @@ def test_detalhe_le_da_tabela_certa_pros_mercados():
     """Sem este ramo o pick caia no else e consultava picks_vip, devolvendo o
     pick VIP de mesmo id."""
     src = _fonte("routers/suggestions.py")
-    assert 'if pick_type in ("faltas", "goleiros"):' in src
-    assert 'tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"' in src
+    # `player_stats` entrou em 27/08 como sucessor de goleiros -- o ramo passou
+    # de um `if/else` de duas tabelas pra um mapa, porque com tres opcoes o
+    # ternario deixa de ser legivel e passa a esconder o caso do meio.
+    assert 'if pick_type in ("faltas", "goleiros", "player_stats"):' in src
+    for tabela in ("picks_faltas", "picks_goleiros", "picks_player_stats"):
+        assert f'"{tabela}"' in src
 
 
 def test_link_publico_aceita_mercados():
     """Link compartilhado de pick de faltas abria erro 400."""
     src = _fonte("routers/public.py")
-    assert '"faltas", "goleiros"' in src[src.index("def public_pick"):][:400]
+    trecho = src[src.index("def public_pick"):][:500]
+    assert '"faltas", "goleiros"' in trecho
+    assert '"player_stats"' in trecho
 
 
 def test_resultados_publicos_somam_os_seis_pipelines():

@@ -17,11 +17,16 @@ ARQUITETURA DE MOTORES (2026-08-27) -- quatro motores, nao sete pipelines:
     PICK_BOOST    pickboost
     PLAYER_STATS  playerstats (saves, shots_on, shots, fouls, tackles, passes)
 
-`goleiros` saiu do registro: virou o metodo `saves` do Player Stats, com o
-mesmo goalkeeper_model. O arquivo goleiros_pipeline.py fica no disco pra
-rollback. `player_stats` (o comando) e' o COLETOR de estatistica de jogador na
-API, e continua sendo outra coisa que `playerstats` (o motor) -- os nomes sao
-proximos demais, e a diferenca e' que um gasta cota e o outro gera pick.
+`goleiros` CONTINUA no registro e continua sendo etapa do `tudo` -- o que mudou
+foi por dentro: ele agora chama o metodo `saves` do Player Stats, com o mesmo
+goalkeeper_model de sempre. Tirar o comando seria uma regressao de produto
+disfarcada de reorganizacao. O goleiros_pipeline.py fica no disco como
+rollback, sem ser chamado.
+
+CUIDADO COM DOIS NOMES PARECIDOS: `player_stats` (com underline) e' o COLETOR
+que busca estatistica de jogador na API e gasta cota; `playerstats` e' o MOTOR
+que gera pick a partir do que ja' esta' no banco. Um custa requisicao, o outro
+nao.
 """
 
 import sys
@@ -801,16 +806,15 @@ COMANDOS: tuple = (
     # docstring dele), e o rotulo aqui reflete a taxonomia nova.
     Comando("faltas", "Pré Live · mercado de faltas",
             "Gera picks de faltas (método do Pré Live)",
-            lambda *a: cmd_faltas(), etapa="PRÉ LIVE · FALTAS"),
-    Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
-            "Escolhe os melhores JOGOS do dia para a combinação fixa",
-            lambda *a: cmd_pick_boost(), etapa="PICK BOOST"),
-    Comando("playerstats", "Player Stats · props de jogador",
-            "Gera props de jogador (saves, chutes, faltas, desarmes, passes)",
-            lambda *a: cmd_playerstats(*a), etapa="PLAYER STATS",
-            uso="playerstats [metodo ...]",
-            detalhe="playerstats             roda os seis métodos\n"
-                    "playerstats saves       roda só defesas de goleiro"),
+            lambda *a: cmd_faltas(), etapa="FALTAS"),
+    # `goleiros` continua no `tudo` e continua com este nome: e' o gerador de
+    # picks de defesa, e a promessa do teste de escopo e' que nenhum tipo de
+    # pick saia do pipeline diario por esquecimento. O que mudou em 27/08 foi
+    # POR DENTRO -- ele passou a ser o metodo `saves` do Player Stats, e o
+    # goleiros_pipeline antigo ficou no disco como rollback.
+    Comando("goleiros", "Player Stats · defesas de goleiro",
+            "Gera picks de defesas por goleiro (método `saves` do Player Stats)",
+            lambda *a: cmd_playerstats("saves"), etapa="DEFESAS DE GOLEIRO"),
     Comando("resultados", "Atualizar resultados (VIP+Free+Mult+Alav)",
             "Atualiza resultados de todos os picks",
             lambda *a: cmd_resultados(), etapa="RESULTADOS"),
@@ -824,6 +828,27 @@ COMANDOS: tuple = (
             uso="tudo [full]"),
 
     # --- Fora do pipeline diário (sem `etapa`) ------------------------------
+    #
+    # PICK BOOST E PLAYER STATS (completo) ficam FORA do `tudo`, e nao por
+    # esquecimento -- e' o mesmo criterio que ja' mantem o `live` de fora:
+    # motor sem historico medido nao vira custo fixo da rodada diaria. Pick
+    # Boost nasceu so' no Admin (fase 1) e os outros cinco metodos do Player
+    # Stats nunca geraram um pick real.
+    #
+    # A excecao e' `goleiros`, que segue como etapa la' em cima: aquele metodo
+    # JA' rodava em producao todo dia, e tira-lo do `tudo` seria uma regressao
+    # de produto disfarcada de reorganizacao.
+    #
+    # Entram no `tudo` quando tiverem resultado medido. Ate' la', na mao.
+    Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
+            "Escolhe os melhores JOGOS do dia para a combinação fixa (fase 1: só Admin)",
+            lambda *a: cmd_pick_boost()),
+    Comando("playerstats", "Player Stats · props de jogador",
+            "Gera props de jogador (saves, chutes, faltas, desarmes, passes)",
+            lambda *a: cmd_playerstats(*a),
+            uso="playerstats [metodo ...]",
+            detalhe="playerstats             roda os seis métodos\n"
+                    "playerstats saves       roda só defesas de goleiro"),
     Comando("shadow", "Modo sombra (log IA vs motor)",
             "Motor de picks em modo sombra (só log, não afeta picks)",
             lambda *a: cmd_shadow(), ambientes=("dev",)),

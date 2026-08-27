@@ -11,6 +11,7 @@ import AdminIAPerformance from '../components/AdminIAPerformance'
 import AdminMotorLive from '../components/AdminMotorLive'
 import AdminDados from '../components/AdminDados'
 import AdminMotorDecisoes from '../components/AdminMotorDecisoes'
+import AdminAuditoriaMotores from '../components/AdminAuditoriaMotores'
 import AdminPendencias from '../components/AdminPendencias'
 import AdminEngajamento from '../components/AdminEngajamento'
 import { fmtBRL } from '../utils/format'
@@ -122,6 +123,12 @@ const ABAS = [
   { key: 'dados',      label: 'Dados'       },
   // E ao lado de Dados pelo mesmo motivo: "por que nao saiu pick" quase
   // sempre termina em "o motor nem viu o jogo", que e' a aba anterior.
+  //
+  // A aba passou a ter DUAS camadas em 27/08, nesta ordem: as execucoes em
+  // cima (que motor rodou, em que versao, com que desfecho) e o retrato do dia
+  // embaixo (que jogos o motor olhou). A ordem importa -- a pergunta comeca em
+  // "o motor rodou?" e so' depois desce pra "o que ele viu?"; invertida, a
+  // tela responde a segunda antes de a primeira ter resposta.
   { key: 'motor',      label: 'Motor'       },
   { key: 'casas',      label: 'Casas'       },
 ] as const
@@ -794,7 +801,12 @@ export default function Admin() {
 
         {aba === 'dados' && <AdminDados />}
 
-        {aba === 'motor' && <AdminMotorDecisoes />}
+        {aba === 'motor' && (
+          <div className="space-y-8">
+            <AdminAuditoriaMotores />
+            <AdminMotorDecisoes />
+          </div>
+        )}
 
         {aba === 'ia' && <AdminIAPerformance status={aiReviewStatus} />}
 

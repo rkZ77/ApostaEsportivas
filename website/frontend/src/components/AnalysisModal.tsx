@@ -3,6 +3,7 @@ import Modal from './ui/Modal'
 import { Badge } from './ui'
 import { explainMarket, regraDoMercado, translateLine, translateMarket } from '../utils/marketTranslate'
 import MarketForm from './MarketForm'
+import AmostraDoMotor from './AmostraDoMotor'
 
 /*
  * "Entenda esta análise".
@@ -291,6 +292,18 @@ export default function AnalysisModal({
         {/* O que aconteceu de verdade, antes do que a IA escreveu. */}
         {data.pickId != null && data.pickType && (
           <MarketForm pickId={data.pickId} pickType={data.pickType} />
+        )}
+
+        {/* A amostra que DECIDIU · e o contexto do confronto.
+          *
+          * Vem depois do MarketForm de propósito. O MarketForm responde "esse
+          * mercado vem batendo?" com barra verde e vermelha, que é a leitura
+          * rápida. Este responde "de onde saiu esse número?", que é a leitura
+          * de quem não se convenceu com a primeira · e traz o que nenhuma das
+          * outras seções trazia: se é clássico, se é jogo de volta e o que
+          * aconteceu na ida. */}
+        {data.pickId != null && data.pickType && (
+          <AmostraDoMotor pickId={data.pickId} pickType={data.pickType} />
         )}
 
         {/* Texto do motor */}

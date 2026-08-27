@@ -2106,9 +2106,9 @@ def resolve_all_pending(max_age_days: int | None = None) -> dict:
     cur  = conn.cursor()
     resolved: dict = {"vip": 0, "free": 0, "multipla": 0, "alavancagem": 0,
                       "faltas": 0, "goleiros": 0,
-                      # Motores de 27/08. `goleiros` continua no dicionario
-                      # porque picks_goleiros ainda tem pendencia historica pra
-                      # resolver -- a tabela parou de CRESCER, nao de existir.
+                      # Motores de 27/08. A chave `goleiros` continua acima
+                      # porque a tabela antiga ainda tem pendencia historica a
+                      # resolver -- ela parou de CRESCER, nao de existir.
                       "player_stats": 0, "boost": 0}
     today_br = datetime.now(_BR_TZ).date()
     agora_br = datetime.now(_BR_TZ).replace(tzinfo=None)

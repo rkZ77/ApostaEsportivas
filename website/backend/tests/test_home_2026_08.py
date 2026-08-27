@@ -843,11 +843,23 @@ def _uniao_de_picks(sql: str) -> set:
     return set(re.findall(r"FROM (picks_\w+)", sql))
 
 
-_SEIS = {"picks_vip", "picks_free", "picks_multiplas", "picks_alavancagem",
-         "picks_faltas", "picks_goleiros"}
+# As fontes que o placar geral soma. Eram seis ate' 27/08; `picks_player_stats`
+# entrou com a arquitetura de motores, como sucessor de picks_goleiros -- e as
+# DUAS ficam, porque goleiros parou de crescer e nao de existir: apagar a fonte
+# apagaria o passado do produto do numero que a tela estampa.
+#
+# picks_boost NAO esta' aqui de proposito: o Pick Boost nasceu so' no Admin
+# (fase 1), com peso 0 em stake_plan.py. No dia em que ele for publicado, esta
+# constante e o peso mudam juntos -- se so' um mudar, este teste quebra, que e'
+# exatamente o servico dele.
+_FONTES_DO_PLACAR = {"picks_vip", "picks_free", "picks_multiplas",
+                     "picks_alavancagem", "picks_faltas", "picks_goleiros",
+                     "picks_player_stats"}
+#: Nome antigo, mantido pra nao reescrever as asserts uma a uma.
+_SEIS = _FONTES_DO_PLACAR
 
 
-def test_performance_da_ia_conta_os_seis_pipelines():
+def test_performance_da_ia_conta_todos_os_pipelines():
     """E' o numero que a tela de Picks estampa como "Performance da IA · Geral".
 
     Faltas e goleiros ficavam de fora: o site publicava os dois, liquidava os
@@ -856,7 +868,7 @@ def test_performance_da_ia_conta_os_seis_pipelines():
     produto vendido logo abaixo dele.
     """
     corpo = _codigo("routers/suggestions.py", "get_quick_stats")
-    assert _uniao_de_picks(corpo) == _SEIS, "stats/quick nao soma os seis"
+    assert _uniao_de_picks(corpo) == _SEIS, "stats/quick nao soma todas as fontes do placar"
 
 
 def test_sequencia_atual_usa_a_mesma_base_do_total():

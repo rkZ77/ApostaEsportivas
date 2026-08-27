@@ -517,6 +517,29 @@ def get_today_suggestions(
                 WHERE {_merc_where.replace('match_date', 'pg.match_date').replace('result IS NULL', 'pg.result IS NULL')}
                 ORDER BY pg.edge DESC NULLS LAST
             """, _d)]
+
+            # PLAYER STATS (27/08) -- o sucessor de picks_goleiros. Chave
+            # propria e nao mistura com `goleiros`: o card precisa saber o
+            # METODO ("Chutes no alvo" nao e' "Defesas"), e um bloco unico
+            # rotulado "Defesas" com pick de desarme dentro seria pior que
+            # duas listas.
+            result["player_stats"] = [dict(r) for r in _safe_query(cur, f"""
+                SELECT pp.id, pp.fixture_id, pp.match_date,
+                       pp.home_team, pp.away_team, pp.home_team_id, pp.away_team_id,
+                       pp.league_id, pp.player_id, pp.player_name,
+                       pp.team_id, pp.team_name, pp.method, pp.stat_column,
+                       pp.market, pp.market_type, pp.line, pp.line_value, pp.odd,
+                       pp.bet_house, pp.confidence, pp.prob_real,
+                       pp.prob_real AS probability, pp.edge, pp.score,
+                       pp.reasoning, pp.stake_pct, pp.stake_units,
+                       pp.result, pp.profit, pp.created_at,
+                       f.match_datetime, l.name AS league_name
+                FROM picks_player_stats pp
+                LEFT JOIN fixtures f ON f.fixture_id = pp.fixture_id
+                LEFT JOIN leagues  l ON l.league_id  = pp.league_id
+                WHERE {_merc_where.replace('match_date', 'pp.match_date').replace('result IS NULL', 'pp.result IS NULL')}
+                ORDER BY pp.score DESC NULLS LAST
+            """, _d)]
         else:
             row = _safe_query_one(cur, _picks_free_sql, _d)
             result["dica_do_dia"] = dict(row) if row else None
@@ -524,6 +547,7 @@ def get_today_suggestions(
             # precisar checar `undefined` antes de iterar.
             result["faltas"] = []
             result["goleiros"] = []
+            result["player_stats"] = []
 
             # ── Vitrine do que esta' trancado ──────────────────────────────
             #
@@ -582,7 +606,9 @@ def get_today_suggestions(
             # sujeito da analise ("defesas do goleiro X"), nao o jogo. Entra o
             # mesmo conjunto de campos dos outros teasers, nem um a mais.
             teaser_mercados = []
-            for tipo, tabela in (("faltas", "picks_faltas"), ("goleiros", "picks_goleiros")):
+            for tipo, tabela in (("faltas", "picks_faltas"),
+                                 ("goleiros", "picks_goleiros"),
+                                 ("player_stats", "picks_player_stats")):
                 teaser_mercados += [
                     {**dict(r), "pick_type": tipo}
                     for r in _safe_query(cur, f"""
@@ -634,6 +660,7 @@ def get_today_suggestions(
         _alvo("multipla",    result.get("multiplas") or [])
         _alvo("faltas",      result.get("faltas") or [])
         _alvo("goleiros",    result.get("goleiros") or [])
+        _alvo("player_stats", result.get("player_stats") or [])
         _alvo("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
         _alvo("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
 
@@ -665,6 +692,7 @@ def get_today_suggestions(
         _marcar("multipla",    result.get("multiplas") or [])
         _marcar("faltas",      result.get("faltas") or [])
         _marcar("goleiros",    result.get("goleiros") or [])
+        _marcar("player_stats", result.get("player_stats") or [])
         _marcar("free",        [result["dica_do_dia"]] if result.get("dica_do_dia") else [])
         _marcar("alavancagem", [result["alavancagem"]] if result.get("alavancagem") else [])
 
@@ -1045,8 +1073,9 @@ def get_suggestion_detail(
         # picks_vip: abrir a analise de um pick de faltas devolvia o pick VIP
         # de mesmo id, ou 404. Os dois mercados sao pipeline proprio e
         # precisam ler da sua tabela, igual multipla e alavancagem.
-        if pick_type in ("faltas", "goleiros"):
-            tabela = "picks_faltas" if pick_type == "faltas" else "picks_goleiros"
+        if pick_type in ("faltas", "goleiros", "player_stats"):
+            tabela = {"faltas": "picks_faltas", "goleiros": "picks_goleiros",
+                      "player_stats": "picks_player_stats"}[pick_type]
             cur.execute(f"""
                 SELECT p.id, p.match_date, p.home_team, p.away_team,
                        p.home_team_id, p.away_team_id,
@@ -1621,6 +1650,12 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 SELECT result, profit * {STAKE_PADRAO['faltas']} AS profit FROM picks_faltas
                 UNION ALL
                 SELECT result, profit * {STAKE_PADRAO['goleiros']} AS profit FROM picks_goleiros
+                UNION ALL
+                -- Player Stats (27/08), sucessor de picks_goleiros. As duas
+                -- entram: goleiros parou de crescer, e o passado dela continua
+                -- valendo no placar. Pick Boost NAO entra -- fase 1 e' so'
+                -- Admin (peso 0 em stake_plan, e ausencia aqui).
+                SELECT result, profit * {STAKE_PADRAO['player_stats']} AS profit FROM picks_player_stats
             ) AS all_picks
             WHERE result IS NOT NULL
         """)
@@ -1647,6 +1682,8 @@ def get_quick_stats(current_user: dict = Depends(get_current_user)):
                 SELECT result, match_date, id FROM picks_faltas
                 UNION ALL
                 SELECT result, match_date, id FROM picks_goleiros
+                UNION ALL
+                SELECT result, match_date, id FROM picks_player_stats
             ) AS todos
             WHERE result IS NOT NULL
             ORDER BY match_date DESC, id DESC
@@ -1822,7 +1859,10 @@ def _source_games_sql(source: str, date_cond: str, result_null_cond: str = "IS N
 # mercado novo passa a mexer numa lista só, e não em dois lugares que precisam
 # concordar. Foi exatamente esta a lição que routers/public.py já tinha
 # aprendido com faltas e goleiros (ver _SUB_BUILDERS).
-FONTES_POR_JOGO = ("vip", "free", "multipla", "alavancagem", "faltas", "goleiros")
+# Pick Boost fica de FORA: fase 1 e' so' Admin (ver stake_plan). Entrar aqui
+# o publicaria na aba "Por Jogo" sem nunca ter passado por decisao.
+FONTES_POR_JOGO = ("vip", "free", "multipla", "alavancagem", "faltas",
+                   "goleiros", "player_stats")
 
 
 def _build_combined_sql(source: str, date_cond: str,
