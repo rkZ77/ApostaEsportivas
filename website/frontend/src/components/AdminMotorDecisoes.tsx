@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Brain, ChevronRight, CircleSlash, RefreshCw, Target } from 'lucide-react'
+import { Brain, ChevronRight, CircleSlash, RefreshCw, Target, Users } from 'lucide-react'
 import api from '../services/api'
+import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import { Button, EmptyState, Pagination, SpinnerBlock } from './ui'
 
 /*
@@ -108,6 +109,9 @@ export default function AdminMotorDecisoes() {
   const [pagina, setPagina] = useState(0)
   const [carregandoLinhas, setCarregandoLinhas] = useState(false)
   const [aberta, setAberta] = useState<number | null>(null)
+  /* O log guarda o NOME do time, não o id · é o que o motor tem à mão quando
+   * grava. O id é resolvido pelo fixture na hora de abrir a amostra. */
+  const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
 
   const buscarResumo = useCallback((quando?: string | null) => {
     setCarregando(true)
@@ -133,6 +137,23 @@ export default function AdminMotorDecisoes() {
       .catch(() => setLinhas({ total: 0, linhas: [], virou_pick: [], erro: 'Não deu pra ler as decisões.' }))
       .finally(() => setCarregandoLinhas(false))
   }, [])
+
+  const abrirAmostra = async (fixtureId: number, lado: 'casa' | 'fora') => {
+    try {
+      const r = await api.get(`/admin/dados/partidas/${fixtureId}/times`)
+      const d = r.data
+      setAmostra({
+        tipo: 'time',
+        teamId: lado === 'casa' ? d.home_team_id : d.away_team_id,
+        leagueId: d.league_id,
+        season: d.season,
+        nome: lado === 'casa' ? d.mandante : d.visitante,
+      })
+    } catch {
+      // Partida sem linha em match_statistics nem em fixtures: nada a abrir.
+      // Silencioso de propósito · é um atalho, não a função da tela.
+    }
+  }
 
   const abrirPipeline = (pipe: string, st = status) => {
     setPipeline(pipe)
@@ -413,6 +434,23 @@ export default function AdminMotorDecisoes() {
                             tendência.
                             {l.gravada_em && ` Gravada em ${l.gravada_em.slice(0, 16).replace('T', ' ')}.`}
                           </p>
+                          {/* De onde vieram esses números: a média do time na
+                            * temporada, e os jogos que a formaram. É a pergunta
+                            * seguinte natural de quem olha uma taxa estranha. */}
+                          {l.fixture_id && (
+                            <div className="flex flex-wrap gap-2 mt-2">
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostra(l.fixture_id!, 'casa')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do {l.home_team ?? 'mandante'}
+                              </Button>
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostra(l.fixture_id!, 'fora')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do {l.away_team ?? 'visitante'}
+                              </Button>
+                            </div>
+                          )}
                         </div>
                       )}
 
@@ -436,6 +474,8 @@ export default function AdminMotorDecisoes() {
           )}
         </div>
       )}
+
+      {amostra && <AdminAmostra alvo={amostra} onClose={() => setAmostra(null)} />}
     </div>
   )
 }

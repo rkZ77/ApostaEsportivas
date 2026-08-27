@@ -474,3 +474,160 @@ class TestDiagnostico:
         for chave, _r, _c, _f, _m in admin.STATS_DA_PARTIDA:
             assert f"AS {chave}_n" in sql
             assert f"AS {chave}_desde" in sql
+
+
+class TestMediaDoArbitro:
+    """A amostra e a media do arbitro tem que sair das MESMAS linhas.
+
+    `games` e' lido como amostra: cards_referee_min_games (config.py) usa esse
+    numero pra liberar o mercado de cartoes. Enquanto ele era COUNT(*) da
+    temporada e a media era AVG (que ignora NULL), arbitro com 5 jogos apitados
+    e 2 folhas passava no gate de 3 com uma media tirada de 2.
+    """
+
+    def _sql(self):
+        caminho = os.path.join(
+            admin._PIPELINE_DIR, "collectors", "match_statistics_sync_service.py")
+        with open(caminho, encoding="utf-8-sig") as fh:
+            fonte = fh.read()
+        inicio = fonte.index("INSERT INTO referee_stats")
+        return " ".join(fonte[inicio:inicio + 2600].split())
+
+    def test_games_conta_so_jogo_com_folha_de_cartao(self):
+        assert "COUNT(*) FILTER (WHERE ms.total_yellow_cards IS NOT NULL)" in self._sql()
+
+    def test_o_total_apitado_nao_se_perde(self):
+        """A distancia entre os dois e' quanta coleta falta pra aquele arbitro ·
+        sem ela, "3 jogos" nao distingue estreante de folha faltando."""
+        sql = self._sql()
+        assert "games_total" in sql
+        assert "games_total = EXCLUDED.games_total" in sql
+
+    def test_filtra_por_status(self):
+        """Jogo adiado ou interrompido com linha gravada entrava na media com o
+        placar parcial · e o backfill de cartao ja' filtrava por status, entao
+        as duas contas do mesmo numero discordavam."""
+        assert "AND ms.status IN %s" in self._sql()
+
+    def test_a_tripla_de_encerrado_e_a_mesma_do_resto(self, monkeypatch):
+        import importlib
+        caminho = os.path.join(
+            admin._PIPELINE_DIR, "collectors", "match_statistics_sync_service.py")
+        with open(caminho, encoding="utf-8-sig") as fh:
+            fonte = fh.read()
+        assert '_REFEREE_FINALIZADOS = ("FT", "AET", "PEN")' in fonte
+
+    def test_recalculo_usa_o_coletor_e_nao_sql_proprio(self, monkeypatch):
+        """A regra da media do arbitro tem que ter um dono so'. Repetir o SQL no
+        painel faria a tela e o pipeline calcularem numeros diferentes com o
+        mesmo nome."""
+        chamadas = {}
+
+        class _Servico:
+            def __init__(self):
+                self.cur = self
+                self.conn = self
+
+            def _open(self):
+                chamadas["open"] = True
+
+            def _close(self):
+                chamadas["close"] = True
+
+            def execute(self, sql, params=None):
+                chamadas["sql"] = sql
+                chamadas["params"] = params
+
+            def fetchall(self):
+                return [("Daronco", 2026), ("Wilton", 2026)]
+
+            def _sync_referee_stats(self, pares):
+                chamadas["pares"] = pares
+
+        import types
+        modulo = types.ModuleType("collectors.match_statistics_sync_service")
+        modulo.MatchStatisticsSyncService = _Servico
+        monkeypatch.setitem(sys.modules, "collectors", types.ModuleType("collectors"))
+        monkeypatch.setitem(sys.modules, "collectors.match_statistics_sync_service", modulo)
+        monkeypatch.setattr(admin, "_no_path", lambda: None)
+
+        saida = asyncio.run(admin.recalcular_arbitros(season=2026, current_user=ADMIN))
+        assert saida["arbitros"] == 2
+        assert chamadas["pares"] == {("Daronco", 2026), ("Wilton", 2026)}
+        assert "status IN ('FT','AET','PEN')" in chamadas["sql"]
+        assert chamadas["params"] == (2026,)
+        assert chamadas["close"] is True
+
+
+class TestAmostraDoTime:
+    def test_a_media_sai_do_servico_do_motor(self, monkeypatch):
+        """Tela feita pra conferir o motor nao pode ter a propria aritmetica:
+        uma segunda implementacao aqui poderia discordar do motor justamente
+        na tela de conferir o motor."""
+        pedidos = []
+
+        class _Servico:
+            def get_team_games_stats_in_season(self, team_id, league_id, season):
+                pedidos.append(("jogos", team_id, league_id, season))
+                return [{"fixture_id": 1, "match_date": "2026-08-20", "status": "FT",
+                         "home_team_id": 10, "away_team_id": 20,
+                         "home_goals": 2, "away_goals": 1,
+                         "home_corners": 7, "away_corners": None}]
+
+            def calculate_team_season_averages(self, team_id, league_id, season):
+                pedidos.append(("media", team_id, league_id, season))
+                return [{"context_type": "HOME", "games_count": 1, "avg_goals_for": 2.0}]
+
+        cur = _FakeCursor(linha=None)
+        monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
+        monkeypatch.setattr(admin, "_servico_de_medias", lambda: _Servico())
+
+        saida = admin.amostra_do_time(10, league_id=71, season=2026, current_user=ADMIN)
+        assert ("media", 10, 71, 2026) in pedidos
+        assert saida["media_do_motor"]["HOME"]["avg_goals_for"] == 2.0
+
+    def test_marca_o_jogo_que_entrou_com_buraco(self, monkeypatch):
+        """O agregador soma o contador ausente como ZERO e conta o jogo do mesmo
+        jeito. Folha furada nao some da media -- ela a encolhe."""
+        class _Servico:
+            def get_team_games_stats_in_season(self, *a):
+                return [{"fixture_id": 1, "match_date": "2026-08-20", "status": "FT",
+                         "home_team_id": 10, "away_team_id": 20,
+                         "home_goals": 2, "away_goals": 1,
+                         "home_corners": 7, "away_corners": None}]
+
+            def calculate_team_season_averages(self, *a):
+                return []
+
+        cur = _FakeCursor(linha=None)
+        monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
+        monkeypatch.setattr(admin, "_servico_de_medias", lambda: _Servico())
+
+        saida = admin.amostra_do_time(10, league_id=71, season=2026, current_user=ADMIN)
+        assert saida["jogos_com_buraco"] == 1
+        assert "escanteios" in saida["jogos"][0]["buracos"]
+        assert saida["nulo_entra_como_zero"] is True
+
+    def test_o_par_vira_a_favor_e_contra(self, monkeypatch):
+        """A media do time e' lida como "pro" e "contra", nao como casa e fora ·
+        o mesmo jogo entra invertido pros dois lados."""
+        class _Servico:
+            def get_team_games_stats_in_season(self, *a):
+                return [{"fixture_id": 1, "match_date": "2026-08-20", "status": "FT",
+                         "home_team_id": 10, "away_team_id": 20,
+                         "home_goals": 2, "away_goals": 1,
+                         "home_corners": 7, "away_corners": 3}]
+
+            def calculate_team_season_averages(self, *a):
+                return []
+
+        cur = _FakeCursor(linha=None)
+        monkeypatch.setattr(admin, "get_connection", lambda: _FakeConn(cur))
+        monkeypatch.setattr(admin, "_servico_de_medias", lambda: _Servico())
+
+        casa = admin.amostra_do_time(10, league_id=71, season=2026, current_user=ADMIN)
+        fora = admin.amostra_do_time(20, league_id=71, season=2026, current_user=ADMIN)
+        assert casa["jogos"][0]["stats"]["escanteios"] == [7, 3]
+        assert fora["jogos"][0]["stats"]["escanteios"] == [3, 7]
+        assert casa["jogos"][0]["em_casa"] is True
+        assert fora["jogos"][0]["em_casa"] is False

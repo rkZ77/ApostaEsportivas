@@ -3229,6 +3229,460 @@ def recoleta_status(current_user: dict = Depends(require_admin)):
         return dict(_recoleta)
 
 
+
+# ─── A amostra por trás da média ────────────────────────────────────────────
+#
+# `team_statistics` é UM número por contexto, e é dele que o motor decide. A
+# pergunta que não tinha tela é a de trás: QUE jogos entraram nessa média.
+#
+# Sem a lista, "média de escanteios 9,4" é indistinguível em três casos que
+# pedem reações opostas:
+#
+#   · 18 jogos coletados inteiros              -> o número é o número
+#   · 3 jogos                                  -> é amostra, não tendência
+#   · 18 jogos, 7 deles com escanteio ausente  -> é média puxada pra baixo por
+#                                                 buraco de coleta
+#
+# O terceiro é o que morde, e ele é invisível em qualquer contagem de
+# cobertura. O agregador soma `g.get(campo) or 0` e incrementa o contador do
+# mesmo jeito (ver services/match_stats_service_media.py::_aggregate_games):
+# jogo com o contador NULL entra na média COMO ZERO. Não é bug do agregador --
+# é o preço de somar em Python -- mas significa que folha furada não some da
+# média, ela a distorce. A tela marca exatamente esses jogos.
+#
+# A média mostrada aqui NÃO é recalculada por conta própria: vem de
+# `calculate_team_season_averages`, o mesmo método que o pipeline chama. Uma
+# segunda implementação aqui poderia discordar do motor justamente na tela
+# feita pra conferir o motor.
+
+
+def _servico_de_medias():
+    """MatchStatsServiceMedia do motor · a fonte da média que o pipeline usa."""
+    _no_path()
+    from services.match_stats_service_media import MatchStatsServiceMedia
+    return MatchStatsServiceMedia()
+
+
+@router.get("/dados/times/{team_id}/amostra")
+def amostra_do_time(
+    team_id: int,
+    league_id: int | None = None,
+    season: int | None = None,
+    current_user: dict = Depends(require_admin),
+):
+    """Os jogos que entraram na média deste time, e a média que saiu deles.
+
+    Sem `league_id`/`season`, o recorte com mais jogos na temporada mais
+    recente · que é o que o motor usa pra decidir o jogo de hoje.
+
+    O recorte é por LIGA e TEMPORADA porque é assim que o motor lê: o mesmo
+    time tem uma média no Brasileirão e outra na Sul-Americana, e misturar as
+    duas é comparar competições diferentes.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT name FROM teams WHERE team_id = %s ORDER BY season DESC LIMIT 1
+        """, (team_id,))
+        nome = (cur.fetchone() or {}).get("name")
+
+        # Onde este time tem amostra. Sem isto a tela não teria como oferecer
+        # a troca de competição, e o recorte errado parece "média estranha".
+        cur.execute("""
+            SELECT ms.league_id, ms.season, l.name AS liga, COUNT(*) AS jogos
+              FROM match_statistics ms
+         LEFT JOIN leagues l ON l.league_id = ms.league_id
+             WHERE ms.status = 'FT'
+               AND (ms.home_team_id = %s OR ms.away_team_id = %s)
+             GROUP BY ms.league_id, ms.season, l.name
+             ORDER BY ms.season DESC, COUNT(*) DESC
+        """, (team_id, team_id))
+        contextos = [dict(r) for r in cur.fetchall()]
+
+        if league_id is None or season is None:
+            if not contextos:
+                return {"time": {"team_id": team_id, "nome": nome}, "contextos": [],
+                        "jogos": [], "media_salva": {}, "media_do_motor": {},
+                        "league_id": None, "season": None, "jogos_com_buraco": 0}
+            league_id = contextos[0]["league_id"]
+            season = contextos[0]["season"]
+
+        # O que está GRAVADO. A distância entre isto e a média recalculada é a
+        # medida de "média velha": `match_statistics` em dia com
+        # `team_statistics` parada não tem sintoma nenhum na tela do site.
+        cur.execute("""
+            SELECT * FROM team_statistics
+             WHERE team_id = %s AND league_id = %s AND season = %s
+        """, (team_id, league_id, season))
+        salvas = {r["context_type"]: dict(r) for r in cur.fetchall()}
+    finally:
+        cur.close()
+        conn.close()
+
+    try:
+        servico = _servico_de_medias()
+        # As duas chamadas públicas do serviço do motor, de propósito: a média
+        # sai do MESMO método que o pipeline chama, não de uma conta feita
+        # aqui. Tela feita pra conferir o motor não pode ter a sua própria
+        # aritmética.
+        jogos_crus = servico.get_team_games_stats_in_season(team_id, league_id, season)
+        do_motor = {m["context_type"]: m
+                    for m in servico.calculate_team_season_averages(team_id, league_id, season)}
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/AMOSTRA] %s", e)
+        return {"time": {"team_id": team_id, "nome": nome}, "contextos": contextos,
+                "league_id": league_id, "season": season, "jogos": [],
+                "media_salva": salvas, "media_do_motor": {}, "jogos_com_buraco": 0,
+                "erro": str(e)[:200]}
+
+    jogos = []
+    com_buraco = 0
+    for g in sorted(jogos_crus, key=lambda x: (str(x.get("match_date")), x.get("fixture_id") or 0),
+                    reverse=True):
+        em_casa = g.get("home_team_id") == team_id
+        pre_favor, pre_contra = ("home", "away") if em_casa else ("away", "home")
+
+        stats, buracos = {}, []
+        for chave, _rot, casa_col, fora_col, _modo in STATS_DA_PARTIDA:
+            # As colunas de STATS_DA_PARTIDA são home_*/away_*; aqui o par vira
+            # "a favor / contra", que é como o agregador lê e como se lê a
+            # média depois.
+            a_favor = g.get(casa_col if em_casa else fora_col)
+            contra = g.get(fora_col if em_casa else casa_col)
+            stats[chave] = [a_favor, contra]
+            if a_favor is None or contra is None:
+                buracos.append(chave)
+        if buracos:
+            com_buraco += 1
+
+        jogos.append({
+            "fixture_id": g.get("fixture_id"),
+            "data": str(g.get("match_date")) if g.get("match_date") else None,
+            "em_casa": em_casa,
+            "adversario_id": g.get("away_team_id") if em_casa else g.get("home_team_id"),
+            "gols_pro": g.get(f"{pre_favor}_goals"),
+            "gols_contra": g.get(f"{pre_contra}_goals"),
+            "status": g.get("status"),
+            "stats": stats,
+            # As famílias que entraram na soma valendo ZERO. É o número que
+            # explica média baixa sem jogo ruim nenhum.
+            "buracos": buracos,
+        })
+
+    # Nome do adversário sem N+1: uma consulta pra todos os ids da lista.
+    ids = {j["adversario_id"] for j in jogos if j["adversario_id"]}
+    nomes: dict = {}
+    if ids:
+        conn = get_connection()
+        cur = conn.cursor()
+        try:
+            cur.execute("""
+                SELECT DISTINCT ON (team_id) team_id, name
+                  FROM teams WHERE team_id = ANY(%s)
+                 ORDER BY team_id, season DESC
+            """, (list(ids),))
+            nomes = {r["team_id"]: r["name"] for r in cur.fetchall()}
+        except Exception:
+            conn.rollback()
+        finally:
+            cur.close()
+            conn.close()
+    for j in jogos:
+        j["adversario"] = nomes.get(j["adversario_id"])
+
+    return {
+        "time": {"team_id": team_id, "nome": nome},
+        "contextos": contextos,
+        "league_id": league_id,
+        "season": season,
+        "jogos": jogos,
+        "jogos_com_buraco": com_buraco,
+        "media_salva": salvas,
+        "media_do_motor": do_motor,
+        # O agregador soma NULL como zero e conta o jogo do mesmo jeito. A tela
+        # precisa dizer isso em algum lugar, senão a coluna "buracos" parece
+        # decoração.
+        "nulo_entra_como_zero": True,
+    }
+
+
+@router.get("/dados/partidas/{fixture_id}/times")
+def times_da_partida(fixture_id: int, current_user: dict = Depends(require_admin)):
+    """Os dois times de uma partida, com liga e temporada · atalho pra amostra.
+
+    A lista de decisões do motor guarda o NOME do time, não o id (o log é do
+    motor, e lá o nome basta). Pra abrir a amostra a partir dela é preciso
+    resolver o id, e o fixture é a única chave que as duas pontas têm.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("""
+            SELECT ms.home_team_id, ms.away_team_id, ms.league_id, ms.season,
+                   casa.name AS mandante, fora.name AS visitante
+              FROM match_statistics ms
+         LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.home_team_id
+                             ORDER BY season DESC LIMIT 1) casa ON TRUE
+         LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.away_team_id
+                             ORDER BY season DESC LIMIT 1) fora ON TRUE
+             WHERE ms.fixture_id = %s
+        """, (fixture_id,))
+        linha = cur.fetchone()
+        if not linha:
+            # Jogo de hoje ainda não tem linha em match_statistics · o registro
+            # dele vive em `fixtures`, que é de onde o motor leu pra decidir.
+            cur.execute("""
+                SELECT home_team_id, away_team_id, league_id, season,
+                       home_team AS mandante, away_team AS visitante
+                  FROM fixtures WHERE fixture_id = %s
+            """, (fixture_id,))
+            linha = cur.fetchone()
+        if not linha:
+            raise HTTPException(404, "Partida não encontrada no banco.")
+        return dict(linha)
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/AMOSTRA] times %s: %s", fixture_id, e)
+        raise HTTPException(500, f"Não deu pra ler a partida: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+
+
+# ─── Árbitro · a mesma régua que os times ───────────────────────────────────
+#
+# A média do árbitro tinha dois defeitos que só apareciam de dentro do SQL:
+#
+#   1. `games` era COUNT(*) da temporada e as médias eram AVG, que ignora NULL.
+#      Os dois números saíam de conjuntos diferentes · árbitro com 5 jogos
+#      apitados e 2 folhas de cartão passava no gate de amostra mínima
+#      (`cards_referee_min_games`, 3) com uma média tirada de 2 jogos.
+#   2. Não havia filtro de status. Jogo adiado ou interrompido com linha
+#      gravada entrava na média com o placar parcial · e o backfill de cartão
+#      já filtrava por status, então as duas contas do mesmo número discordavam.
+#
+# Os dois foram corrigidos no coletor (é lá que a média nasce). O que mora aqui
+# é o resto: enxergar a amostra e poder refazer a conta sem esperar o próximo
+# jogo daquele árbitro.
+#
+# Refazer não custa cota: a média do árbitro sai inteira de `match_statistics`,
+# que já está no banco. É a diferença entre este botão e a recoleta.
+
+
+@router.get("/dados/arbitros")
+def lista_de_arbitros(
+    season: int | None = None,
+    limite: int = 60,
+    current_user: dict = Depends(require_admin),
+):
+    """Os árbitros com média na temporada, do mais visto pro menos.
+
+    `games` é a amostra que sustenta a média de cartões; `games_total` é quanto
+    ele apitou. A distância entre os dois é quanta folha falta coletar daquele
+    árbitro · e é ela que explica média estranha sem jogo estranho nenhum.
+    """
+    limite = min(max(1, limite), 200)
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        if season is None:
+            cur.execute("SELECT MAX(season) AS s FROM referee_stats")
+            season = (cur.fetchone() or {}).get("s")
+        if season is None:
+            return {"season": None, "arbitros": [], "temporadas": []}
+
+        cur.execute("SELECT DISTINCT season FROM referee_stats ORDER BY season DESC")
+        temporadas = [r["season"] for r in cur.fetchall()]
+
+        cur.execute("""
+            SELECT r.referee_id, r.name, rs.season,
+                   rs.games, rs.games_total,
+                   rs.avg_yellow, rs.avg_red, rs.avg_fouls,
+                   rs.avg_corners, rs.avg_goals,
+                   rs.max_yellow, rs.min_yellow,
+                   rs.last_updated::text AS atualizado_em
+              FROM referee_stats rs
+              JOIN referees r ON r.referee_id = rs.referee_id
+             WHERE rs.season = %s
+             ORDER BY rs.games DESC NULLS LAST, r.name
+             LIMIT %s
+        """, (season, limite))
+        arbitros = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/ARBITROS] lista: %s", e)
+        return {"season": season, "arbitros": [], "temporadas": [], "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    return {"season": season, "temporadas": temporadas, "arbitros": arbitros,
+            # O gate de cartões do motor. A tela marca quem está abaixo dele ·
+            # árbitro com amostra curta não bloqueia o mercado, cai no fallback
+            # da média da liga, e isso é uma decisão diferente.
+            "amostra_minima": 3}
+
+
+@router.get("/dados/arbitros/{referee_id}/amostra")
+def amostra_do_arbitro(
+    referee_id: int,
+    season: int | None = None,
+    current_user: dict = Depends(require_admin),
+):
+    """Os jogos que entraram na média deste árbitro, um a um.
+
+    Mesma ideia da amostra do time, e pela mesma razão: "média de 4,8 amarelos"
+    é indistinguível entre 18 jogos coletados inteiros, 3 jogos, e 18 jogos com
+    7 folhas faltando. Só a lista separa os três.
+
+    A diferença pro time é o vínculo: árbitro se liga à partida pelo NOME
+    (`match_statistics.referee`), não por id · é o que a API-Football entrega, e
+    é por isso que `referees` existe só pra dar id a um nome.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute("SELECT name FROM referees WHERE referee_id = %s", (referee_id,))
+        linha = cur.fetchone()
+        if not linha:
+            raise HTTPException(404, "Árbitro não cadastrado.")
+        nome = linha["name"]
+
+        cur.execute("""
+            SELECT DISTINCT season FROM match_statistics
+             WHERE referee = %s AND status IN ('FT','AET','PEN')
+             ORDER BY season DESC
+        """, (nome,))
+        temporadas = [r["season"] for r in cur.fetchall()]
+        if season is None:
+            season = temporadas[0] if temporadas else None
+        if season is None:
+            return {"arbitro": {"referee_id": referee_id, "nome": nome},
+                    "temporadas": [], "season": None, "jogos": [],
+                    "media_salva": None, "jogos_com_buraco": 0}
+
+        cur.execute("""
+            SELECT rs.*, rs.last_updated::text AS atualizado_em
+              FROM referee_stats rs
+             WHERE rs.referee_id = %s AND rs.season = %s
+        """, (referee_id, season))
+        salva = cur.fetchone()
+        salva = dict(salva) if salva else None
+
+        # Os mesmos jogos que a média agrega · mesmo filtro, mesma tabela.
+        cur.execute("""
+            SELECT ms.fixture_id,
+                   ms.match_date::text AS data,
+                   ms.status,
+                   l.name              AS liga,
+                   casa.name           AS mandante,
+                   fora.name           AS visitante,
+                   ms.home_goals, ms.away_goals, ms.total_goals,
+                   ms.total_yellow_cards, ms.total_red_cards,
+                   ms.total_corners,
+                   ms.home_fouls, ms.away_fouls
+              FROM match_statistics ms
+         LEFT JOIN leagues l ON l.league_id = ms.league_id
+         LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.home_team_id
+                             ORDER BY season DESC LIMIT 1) casa ON TRUE
+         LEFT JOIN LATERAL (SELECT name FROM teams WHERE team_id = ms.away_team_id
+                             ORDER BY season DESC LIMIT 1) fora ON TRUE
+             WHERE ms.referee = %s AND ms.season = %s
+               AND ms.status IN ('FT','AET','PEN')
+             ORDER BY ms.match_date DESC, ms.fixture_id DESC
+        """, (nome, season))
+        jogos = []
+        com_buraco = 0
+        for r in cur.fetchall():
+            j = dict(r)
+            faltas = (None if j["home_fouls"] is None or j["away_fouls"] is None
+                      else j["home_fouls"] + j["away_fouls"])
+            j["total_fouls"] = faltas
+            # Um jogo pode faltar em UMA média e entrar em outra: AVG ignora a
+            # linha por coluna, não por jogo. Marcar qual faltou é o que impede
+            # de ler "18 jogos" como 18 jogos em todas as colunas.
+            j["buracos"] = [nome_col for nome_col, valor in (
+                ("amarelos", j["total_yellow_cards"]),
+                ("vermelhos", j["total_red_cards"]),
+                ("escanteios", j["total_corners"]),
+                ("faltas", faltas),
+                ("gols", j["total_goals"]),
+            ) if valor is None]
+            if j["buracos"]:
+                com_buraco += 1
+            jogos.append(j)
+    except HTTPException:
+        raise
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/ARBITROS] amostra %s: %s", referee_id, e)
+        raise HTTPException(500, f"Não deu pra ler a amostra: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    return {
+        "arbitro": {"referee_id": referee_id, "nome": nome},
+        "season": season,
+        "temporadas": temporadas,
+        "jogos": jogos,
+        "jogos_com_buraco": com_buraco,
+        "media_salva": salva,
+    }
+
+
+@router.post("/dados/arbitros/recalcular")
+async def recalcular_arbitros(
+    season: int | None = None,
+    current_user: dict = Depends(require_admin),
+):
+    """Refaz a média de TODO árbitro que apitou na temporada.
+
+    O coletor só recalcula quem apareceu no lote coletado · árbitro cujo último
+    jogo já estava no banco nunca era revisitado, e foi por isso que a correção
+    de `games`/status não chegaria sozinha ao histórico.
+
+    Não gasta cota: sai inteiro de `match_statistics`. E chama
+    `_sync_referee_stats` do próprio coletor em vez de repetir o SQL aqui · a
+    regra da média do árbitro tem que ter um dono só, senão o painel e o
+    pipeline calculam números diferentes com o mesmo nome.
+    """
+    def _rodar():
+        _no_path()
+        from collectors.match_statistics_sync_service import MatchStatisticsSyncService
+
+        servico = MatchStatisticsSyncService()
+        servico._open()
+        try:
+            filtro = "AND season = %s" if season is not None else ""
+            params = (season,) if season is not None else ()
+            servico.cur.execute(f"""
+                SELECT DISTINCT referee, season
+                  FROM match_statistics
+                 WHERE referee IS NOT NULL AND referee <> ''
+                   AND status IN ('FT','AET','PEN')
+                   {filtro}
+            """, params)
+            pares = {(r[0], r[1]) for r in servico.cur.fetchall()}
+            servico._sync_referee_stats(pares)
+            return len(pares)
+        finally:
+            servico._close()
+
+    try:
+        quantos = await run_in_threadpool(_rodar)
+    except Exception as e:
+        logging.getLogger(__name__).warning("[ADMIN/ARBITROS] recalcular: %s", e)
+        raise HTTPException(500, f"Não deu pra recalcular: {str(e)[:200]}")
+
+    return {"ok": True, "arbitros": quantos,
+            "mensagem": f"{quantos} árbitro(s) recalculado(s) · sem custo de API."}
+
+
 # ─── Motor · o que ele olhou antes de escolher ──────────────────────────────
 #
 # O pick publicado é a ponta. A pergunta que não tinha tela é a de baixo dela:

@@ -21,6 +21,12 @@ FIXTURES_URL = "https://v3.football.api-sports.io/fixtures"
 STATS_URL = "https://v3.football.api-sports.io/fixtures/statistics"
 
 
+#: Status que contam como jogo apitado. Mesma tripla que o resto do projeto
+#: usa pra "encerrado" -- ver stats_sweep._FINALIZADOS e o predicado do
+#: backfill de cartao.
+_REFEREE_FINALIZADOS = ("FT", "AET", "PEN")
+
+
 def load_leagues_from_db():
     conn = get_connection()
     cur = conn.cursor()
@@ -93,6 +99,16 @@ class MatchStatisticsSyncService:
         # estatistica nao consegue recortar por rodada.
         self.cur.execute(
             "ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS round TEXT;")
+
+        # JOGOS APITADOS, ao lado dos jogos que sustentam a media (2026-08-27).
+        #
+        # `referee_stats.games` virou "quantos jogos tem folha de cartao",
+        # porque e' esse numero que o gate de cartoes le como amostra. O total
+        # apitado nao podia sumir junto: a distancia entre os dois e' o quanto
+        # de coleta falta pra aquele arbitro, e sem ela "3 jogos" nao distingue
+        # arbitro estreante de arbitro com folha faltando.
+        self.cur.execute(
+            "ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS games_total INTEGER;")
         self.conn.commit()
 
     def _close(self):
@@ -474,13 +490,21 @@ class MatchStatisticsSyncService:
         self.cur.execute("""
             INSERT INTO referee_stats (
                 referee_id, season,
-                games, avg_yellow, avg_red, avg_fouls,
+                games, games_total,
+                avg_yellow, avg_red, avg_fouls,
                 avg_corners, avg_goals,
                 max_yellow, min_yellow,
                 last_updated
             )
             SELECT
                 %s, %s,
+                -- `games` e' lido como AMOSTRA: cards_referee_min_games
+                -- (config.py) usa esse numero pra liberar ou bloquear o
+                -- mercado de cartoes. Enquanto ele era COUNT(*) da temporada
+                -- e a media era AVG (que ignora NULL), os dois saiam de
+                -- conjuntos diferentes -- arbitro com 5 jogos apitados e 2
+                -- folhas passava no gate de 3 com media tirada de 2.
+                COUNT(*) FILTER (WHERE ms.total_yellow_cards IS NOT NULL),
                 COUNT(*),
                 ROUND(AVG(ms.total_yellow_cards)::numeric, 2),
                 ROUND(AVG(ms.total_red_cards)::numeric, 2),
@@ -493,8 +517,15 @@ class MatchStatisticsSyncService:
             FROM match_statistics ms
             WHERE ms.referee = %s
               AND ms.season  = %s
+              -- Status entra desde 2026-08-27. Sem ele, linha de jogo nao
+              -- finalizado (adiado, interrompido) entrava na media do arbitro
+              -- com o placar parcial que estivesse gravado -- e o backfill de
+              -- cartao ja' filtrava por status, entao as duas contas do mesmo
+              -- numero discordavam.
+              AND ms.status IN %s
             ON CONFLICT (referee_id, season) DO UPDATE SET
                 games        = EXCLUDED.games,
+                games_total  = EXCLUDED.games_total,
                 avg_yellow   = EXCLUDED.avg_yellow,
                 avg_red      = EXCLUDED.avg_red,
                 avg_fouls    = EXCLUDED.avg_fouls,
@@ -503,7 +534,7 @@ class MatchStatisticsSyncService:
                 max_yellow   = EXCLUDED.max_yellow,
                 min_yellow   = EXCLUDED.min_yellow,
                 last_updated = NOW();
-        """, (referee_id, season, referee_name, season))
+        """, (referee_id, season, referee_name, season, _REFEREE_FINALIZADOS))
 
     # ---------------------------------------------------------
     # PROCESSA LOTE DE ÁRBITROS AO FINAL DO SYNC

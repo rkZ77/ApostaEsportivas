@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useState } from 'react'
 import {
-  AlertTriangle, CheckCircle2, Database, Pencil, PlayCircle, RefreshCw, Save,
-  ShieldAlert, X,
+  AlertTriangle, CheckCircle2, Database, Gavel, Pencil, PlayCircle, RefreshCw,
+  Save, ShieldAlert, Users, X,
 } from 'lucide-react'
 import api from '../services/api'
+import AdminAmostra, { type AlvoAmostra } from './AdminAmostra'
 import { Button, EmptyState, Pagination, SpinnerBlock, StatTile } from './ui'
 
 /*
@@ -121,6 +122,19 @@ interface Recoleta {
   erro?: string | null
 }
 
+/** Uma linha de `referee_stats`, com a amostra que a sustenta. */
+interface Arbitro {
+  referee_id: number
+  name: string
+  games: number | null
+  games_total: number | null
+  avg_yellow: number | string | null
+  avg_red: number | string | null
+  avg_fouls: number | string | null
+  avg_corners: number | string | null
+  atualizado_em: string | null
+}
+
 interface Vermelho {
   disponivel: boolean
   alvo?: number
@@ -173,6 +187,14 @@ export default function AdminDados() {
   const [lote, setLote] = useState(20)
   const [pedindoLote, setPedindoLote] = useState(false)
 
+  const [arbitros, setArbitros] = useState<{
+    season: number | null; temporadas: number[]; arbitros: Arbitro[]; amostra_minima?: number
+  } | null>(null)
+  const [recalculandoArbitros, setRecalculandoArbitros] = useState(false)
+
+  /** Alvo do drawer de amostra · time ou árbitro, um por vez. */
+  const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
+
   /** fixture_id em coleta. Um por vez: cada clique custa 2 requisições da cota. */
   const [rodando, setRodando] = useState<number | null>(null)
   const [aviso, setAviso] = useState<{ fixture: number; texto: string; ok: boolean } | null>(null)
@@ -211,6 +233,46 @@ export default function AdminDados() {
       .catch(() => setDiagnostico(null))
   }, [])
 
+  const buscarArbitros = useCallback((season?: number | null) => {
+    api.get('/admin/dados/arbitros', { params: season != null ? { season } : {} })
+      .then(r => setArbitros(r.data))
+      .catch(() => setArbitros(null))
+  }, [])
+
+  /* Abre a amostra a partir da PARTIDA. A lista não carrega os ids dos times ·
+   * seriam duas colunas a mais em toda linha pra servir a um clique, então o
+   * id é resolvido na hora, pelo fixture, que é a chave que as duas pontas
+   * têm. O mesmo caminho serve à aba Motor, onde o log guarda só o nome. */
+  const abrirAmostraDaPartida = async (fixtureId: number, lado: 'casa' | 'fora') => {
+    try {
+      const r = await api.get(`/admin/dados/partidas/${fixtureId}/times`)
+      const d = r.data
+      setAmostra({
+        tipo: 'time',
+        teamId: lado === 'casa' ? d.home_team_id : d.away_team_id,
+        leagueId: d.league_id,
+        season: d.season,
+        nome: lado === 'casa' ? d.mandante : d.visitante,
+      })
+    } catch (e) {
+      setAviso({ fixture: fixtureId, texto: msgErro(e, 'Não deu pra abrir a amostra.'), ok: false })
+    }
+  }
+
+  const recalcularArbitros = async () => {
+    setRecalculandoArbitros(true)
+    try {
+      const r = await api.post('/admin/dados/arbitros/recalcular', null,
+        { params: arbitros?.season != null ? { season: arbitros.season } : {} })
+      setAviso({ fixture: -3, texto: r.data?.mensagem ?? 'Recalculado.', ok: true })
+      buscarArbitros(arbitros?.season)
+    } catch (e) {
+      setAviso({ fixture: -3, texto: msgErro(e, 'Não deu pra recalcular.'), ok: false })
+    } finally {
+      setRecalculandoArbitros(false)
+    }
+  }
+
   const buscarRecoleta = useCallback(() => {
     api.get('/admin/dados/recoleta-status')
       .then(r => setRecoleta(r.data))
@@ -231,6 +293,7 @@ export default function AdminDados() {
     buscarBuracos()
     buscarDiagnostico(diagnostico?.meses ?? 12)
     buscarRecoleta()
+    buscarArbitros(arbitros?.season)
   }
 
   useEffect(buscar, [])
@@ -613,13 +676,28 @@ export default function AdminDados() {
             <StatTile label="Sem linha nenhuma" value={numero(diagnostico.sem_linha)}
               tone={diagnostico.sem_linha > 0 ? 'red' : 'default'} />
             <StatTile label="Coletadas zeradas" value={numero(diagnostico.zeradas)}
-              tone={diagnostico.zeradas > 0 ? 'red' : 'default'} />
+              tone={diagnostico.zeradas > 0 ? 'red' : 'default'}
+              hint="escanteio, chute e falta em 0 no mesmo jogo" />
           </div>
 
           {/* Família por família, com a data do buraco mais antigo. É o que
             * separa "defeito que voltou agora" de "cicatriz de julho": os dois
-            * aparecem como cobertura baixa, e só um pede ação. */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mt-3">
+            * aparecem como cobertura baixa, e só um pede ação.
+            *
+            * O número grande é quantos jogos estão SEM aquela estatística ·
+            * não quantos têm. Foi a primeira coisa que a tela não conseguiu
+            * dizer sozinha, então agora ela diz no cabeçalho e em cada
+            * cartão. */}
+          <p className="text-[11px] font-semibold text-ink-2 mt-4 mb-1.5">
+            Jogos <span className="text-yellow-400">sem</span> cada estatística
+          </p>
+          <p className="text-[11px] text-ink-4 mb-2 leading-relaxed">
+            Quanto maior o número, maior o buraco. Estatística que só passou a existir depois
+            aparece alta aqui de propósito: gols do 1º tempo e dos 90 minutos são colunas novas,
+            e jogo coletado antes delas nunca vai ter o número · a data ao lado é a do jogo mais
+            antigo sem ela.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
             {diagnostico.familias.map(f => (
               <div key={f.chave}
                    className={`rounded-lg border p-2.5 ${
@@ -632,7 +710,9 @@ export default function AdminDados() {
                   {numero(f.sem_dado)}
                 </p>
                 <p className="text-[10px] font-mono tabular-nums text-ink-4">
-                  {f.sem_dado > 0 ? `sem dado · desde ${diaMes(f.desde)}` : 'sem buraco'}
+                  {f.sem_dado > 0
+                    ? `de ${numero(diagnostico.ft)} · desde ${diaMes(f.desde)}`
+                    : 'nenhum buraco'}
                 </p>
               </div>
             ))}
@@ -751,6 +831,101 @@ export default function AdminDados() {
             todo jogo. São as duas que servem de aferição: posse média longe de 50 é coleta
             torta, não jogo estranho.
           </p>
+        </div>
+      )}
+
+      {/* Árbitros · a mesma régua dos times, com a amostra à vista.
+        *
+        * A média do árbitro tinha dois defeitos que só apareciam de dentro do
+        * SQL: `games` contava a temporada inteira enquanto as médias saíam de
+        * AVG (que ignora ausência), então os dois números vinham de conjuntos
+        * diferentes; e não havia filtro de status. Os dois foram corrigidos no
+        * coletor, que é onde a média nasce · aqui fica o que faltava, que é
+        * enxergar a amostra e poder refazer a conta sem esperar o próximo jogo
+        * daquele árbitro. Refazer não custa cota: sai tudo do banco. */}
+      {!!arbitros?.arbitros?.length && (
+        <div className="card p-0 overflow-hidden">
+          <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2">
+            <div className="min-w-0">
+              <h3 className="flex items-center gap-2 text-sm font-bold text-ink-1">
+                <Gavel className="w-4 h-4" />
+                Árbitros · temporada {arbitros.season}
+              </h3>
+              <p className="text-[11px] text-ink-4 mt-0.5 leading-relaxed">
+                "Com folha" é a amostra que sustenta a média de cartões · é esse número que o
+                motor lê pra liberar o mercado. Abaixo de {arbitros.amostra_minima ?? 3} ele cai
+                no fallback da média da liga. Toque no árbitro para ver os jogos.
+              </p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {arbitros.temporadas?.length > 1 && (
+                <select
+                  value={arbitros.season ?? ''}
+                  onChange={e => buscarArbitros(Number(e.target.value))}
+                  className="bg-surface-1 border border-line-strong rounded-md text-xs text-ink-2 px-2 py-2 min-h-[36px] focus:border-ink-4 focus:outline-none"
+                  aria-label="Temporada dos árbitros"
+                >
+                  {arbitros.temporadas.map(t => <option key={t} value={t}>{t}</option>)}
+                </select>
+              )}
+              <Button size="sm" variant="ghost" loading={recalculandoArbitros}
+                      onClick={recalcularArbitros}>
+                <RefreshCw className="w-3.5 h-3.5" />
+                Recalcular
+              </Button>
+            </div>
+          </div>
+
+          {aviso?.fixture === -3 && (
+            <p className={`px-4 py-2 text-[11px] ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {aviso.texto}
+            </p>
+          )}
+
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[30rem]">
+              <thead>
+                <tr className="text-ink-4 text-[10px] border-b border-line">
+                  <th className="text-left font-medium px-4 py-2">Árbitro</th>
+                  <th className="text-right font-medium px-2 py-2">Com folha</th>
+                  <th className="text-right font-medium px-2 py-2">Amarelos</th>
+                  <th className="text-right font-medium px-2 py-2">Vermelhos</th>
+                  <th className="text-right font-medium px-4 py-2">Faltas</th>
+                </tr>
+              </thead>
+              <tbody>
+                {arbitros.arbitros.map(a => {
+                  const curto = (a.games ?? 0) < (arbitros.amostra_minima ?? 3)
+                  const faltando = a.games_total != null && a.games != null
+                    && a.games_total > a.games
+                  return (
+                    <tr
+                      key={a.referee_id}
+                      onClick={() => setAmostra({ tipo: 'arbitro', refereeId: a.referee_id,
+                                                  season: arbitros.season, nome: a.name })}
+                      className="border-b border-line/60 cursor-pointer hover:bg-surface-2/60 transition-colors duration-1"
+                    >
+                      <td className="px-4 py-2.5 text-ink-2 truncate max-w-[12rem]">{a.name}</td>
+                      <td className={`px-2 py-2.5 text-right font-mono tabular-nums ${
+                        curto ? 'text-yellow-400' : 'text-ink-2'}`}>
+                        {a.games ?? '·'}
+                        {faltando && <span className="text-ink-4">/{a.games_total}</span>}
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-1">
+                        {decimal(a.avg_yellow == null ? null : Number(a.avg_yellow))}
+                      </td>
+                      <td className="px-2 py-2.5 text-right font-mono tabular-nums text-ink-3">
+                        {decimal(a.avg_red == null ? null : Number(a.avg_red))}
+                      </td>
+                      <td className="px-4 py-2.5 text-right font-mono tabular-nums text-ink-3">
+                        {decimal(a.avg_fouls == null ? null : Number(a.avg_fouls))}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -932,6 +1107,19 @@ export default function AdminDados() {
                                 <Pencil className="w-3.5 h-3.5" />
                                 Preencher à mão
                               </Button>
+                              {/* A média que o motor lê não é a desta partida ·
+                                * é a do time na temporada. Daqui se vê quais
+                                * jogos formaram esse número. */}
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'casa')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do mandante
+                              </Button>
+                              <Button size="sm" variant="ghost"
+                                      onClick={() => abrirAmostraDaPartida(p.fixture_id, 'fora')}>
+                                <Users className="w-3.5 h-3.5" />
+                                Amostra do visitante
+                              </Button>
                             </>
                           )}
                         </div>
@@ -972,6 +1160,8 @@ export default function AdminDados() {
           </>
         )}
       </div>
+
+      {amostra && <AdminAmostra alvo={amostra} onClose={() => setAmostra(null)} />}
     </div>
   )
 }
