@@ -2989,6 +2989,155 @@ _COLUNAS_DA_FOLHA = ("total_corners", "total_yellow_cards", "total_red_cards",
 _FOLHA_INCOMPLETA = "(" + " OR ".join(f"{c} IS NULL" for c in _COLUNAS_DA_FOLHA) + ")"
 
 
+# ─── Placar 0x0 que não aconteceu ───────────────────────────────────────────
+#
+# Até 27/08 os três leitores de /fixtures montavam a linha com
+# `goals["home"] or 0`, e `or 0` não distingue "a API disse zero" de "a API não
+# disse nada". Campo nulo virava jogo terminado 0x0 dentro de
+# `match_statistics`.
+#
+# É o mesmo defeito do cartão vermelho, com dois agravantes: gol é a família
+# que mais mercado gera (baseline de liga, média de time, confronto direto), e
+# zero não é NULL · o 0x0 falso passa por "preenchido" em toda contagem de
+# cobertura desta aba e some da varredura, que procura jogo ENCERRADO SEM
+# LINHA. Foi assim que ele apareceu: um 0-0 na amostra do motor, num jogo que
+# não terminou 0x0.
+#
+# O coletor já foi corrigido (placar ausente agora recusa a linha), mas coletor
+# corrigido não mexe no passado.
+#
+# A DETECÇÃO NÃO É PALPITE. `home_goals_90`/`away_goals_90` (score.fulltime da
+# API) e `home_goals_ht`/`away_goals_ht` são colunas independentes, gravadas na
+# mesma passada e sem o `or 0`. Placar final 0x0 com qualquer uma delas acima
+# de zero é aritmeticamente impossível: gol não se desmarca, e prorrogação só
+# soma. Onde as três concordam em zero, o 0x0 é real e a linha não é tocada.
+_SQL_PLACAR_FALSO = """
+    status IN ('FT','AET','PEN')
+AND COALESCE(home_goals, 0) + COALESCE(away_goals, 0) = 0
+AND (COALESCE(home_goals_90, 0) + COALESCE(away_goals_90, 0) > 0
+     OR COALESCE(home_goals_ht, 0) + COALESCE(away_goals_ht, 0) > 0)
+"""
+
+# O conserto só vale onde a referência RESOLVE o placar, e ela só resolve em
+# FT: aí `score.fulltime` é, por definição, o placar final. Em AET/PEN ele é o
+# placar dos 90 minutos, e o jogo continuou depois -- copiar aquele número
+# gravaria outro placar errado no lugar do primeiro. Esses voltam pela recoleta,
+# que é uma requisição por partida, e ficam contados à parte pra a tela não
+# dizer que sobrou linha por descuido.
+_SQL_PLACAR_CORRIGIVEL = f"""
+    ({_SQL_PLACAR_FALSO})
+AND status = 'FT'
+AND home_goals_90 IS NOT NULL AND away_goals_90 IS NOT NULL
+"""
+
+
+@router.get("/dados/placar-falso")
+def placar_falso(current_user: dict = Depends(require_admin)):
+    """Quantas linhas têm 0x0 gravado num jogo que não terminou 0x0."""
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT COUNT(*) FILTER (WHERE {_SQL_PLACAR_FALSO})     AS total,
+                   COUNT(*) FILTER (WHERE {_SQL_PLACAR_CORRIGIVEL}) AS corrigiveis
+              FROM match_statistics
+        """)
+        bruto = dict(cur.fetchone() or {})
+        total = bruto.get("total") or 0
+
+        partidas = []
+        if total:
+            cur.execute(f"""
+                SELECT ms.fixture_id, ms.match_date::text AS data, ms.status,
+                       ms.home_goals_90, ms.away_goals_90,
+                       ms.home_goals_ht, ms.away_goals_ht,
+                       casa.name AS mandante, fora.name AS visitante,
+                       l.name AS liga
+                  FROM match_statistics ms
+             LEFT JOIN leagues l ON l.league_id = ms.league_id
+             -- Mesmo LATERAL da lista de partidas: `teams` tem uma linha por
+             -- temporada, e um JOIN direto multiplicaria a partida.
+             LEFT JOIN LATERAL (
+                       SELECT name FROM teams
+                        WHERE team_id = ms.home_team_id
+                        ORDER BY season DESC LIMIT 1
+                   ) casa ON TRUE
+             LEFT JOIN LATERAL (
+                       SELECT name FROM teams
+                        WHERE team_id = ms.away_team_id
+                        ORDER BY season DESC LIMIT 1
+                   ) fora ON TRUE
+                 WHERE {_SQL_PLACAR_FALSO}
+              ORDER BY ms.match_date DESC
+                 LIMIT 20
+            """)
+            partidas = [dict(r) for r in cur.fetchall()]
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] placar falso: %s", e)
+        return {"disponivel": False, "erro": str(e)[:200]}
+    finally:
+        cur.close()
+        conn.close()
+
+    corrigiveis = bruto.get("corrigiveis") or 0
+    return {
+        "disponivel": True,
+        "total": total,
+        "corrigiveis": corrigiveis,
+        # A diferença são os AET/PEN: o placar de 90' não responde por eles.
+        "so_recoleta": max(0, total - corrigiveis),
+        "partidas": partidas,
+    }
+
+
+@router.post("/dados/placar-falso")
+def corrigir_placar_falso(current_user: dict = Depends(require_admin)):
+    """Reescreve o placar a partir do de 90 minutos e refaz as médias.
+
+    Não inventa número nenhum: copia uma coluna que já estava no banco, gravada
+    na mesma passada e livre do `or 0`. Refazer `team_statistics` na sequência
+    é obrigatório pelo mesmo motivo do backfill de vermelho -- corrigir o jogo
+    e deixar a média velha troca um número errado por outro, com a agravante de
+    parecer atualizado.
+    """
+    conn = get_connection()
+    cur = conn.cursor()
+    try:
+        cur.execute(f"""
+            SELECT home_team_id, away_team_id, league_id, season
+              FROM match_statistics WHERE {_SQL_PLACAR_CORRIGIVEL}
+        """)
+        afetados = [dict(r) for r in cur.fetchall()]
+
+        cur.execute(f"""
+            UPDATE match_statistics
+               SET home_goals  = home_goals_90,
+                   away_goals  = away_goals_90,
+                   total_goals = home_goals_90 + away_goals_90,
+                   last_updated = NOW()
+             WHERE {_SQL_PLACAR_CORRIGIVEL}
+        """)
+        corrigidas = cur.rowcount or 0
+        conn.commit()
+    except Exception as e:
+        conn.rollback()
+        logging.getLogger(__name__).warning("[ADMIN/DADOS] conserto de placar: %s", e)
+        raise HTTPException(500, f"Não deu pra corrigir: {str(e)[:200]}")
+    finally:
+        cur.close()
+        conn.close()
+
+    # Uma passada por (liga, temporada) distinta em vez de uma por partida: o
+    # agregador lê a temporada inteira do time, então repetir por jogo refaria
+    # a mesma conta N vezes.
+    grupos = {(r["home_team_id"], r["away_team_id"], r["league_id"], r["season"])
+              for r in afetados}
+    medias = sum(1 for g in grupos if _recalcular_medias(*g))
+
+    return {"ok": True, "corrigidas": corrigidas, "medias": medias}
+
+
 @router.get("/dados/diagnostico")
 def diagnostico_da_folha(meses: int = 12, current_user: dict = Depends(require_admin)):
     """Onde estão os buracos da tabela inteira, família por família.

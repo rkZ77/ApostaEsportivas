@@ -315,15 +315,19 @@ class TeamHistoryBackfillService:
             # (ver utils/data_br.py) -- o mesmo que _load_fixtures faz.
             "match_date": datetime.fromisoformat(fixture["date"].replace("Z", "+00:00")),
             "status": fixture["status"]["short"],
-            "home_goals": goals["home"] or 0,
-            "away_goals": goals["away"] or 0,
+            # Sem `or 0`: placar ausente e' None e _save_stats recusa a
+            # linha (ver a docstring dele). O `or 0` daqui gravava 0x0 falso
+            # exatamente como o do sync.
+            "home_goals": goals["home"],
+            "away_goals": goals["away"],
             "home_goals_ht": ht.get("home"),
             "away_goals_ht": ht.get("away"),
             "home_goals_90": ft90.get("home"),
             "away_goals_90": ft90.get("away"),
             "referee": fixture.get("referee"),
         }
-        self.stats_sync._save_stats(fx, home_stats, away_stats)
+        if not self.stats_sync._save_stats(fx, home_stats, away_stats):
+            return False
 
         rodada = liga.get("round")
         if rodada:

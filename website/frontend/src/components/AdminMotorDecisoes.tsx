@@ -57,6 +57,56 @@ interface Candidato {
   eligible?: boolean
   is_best_pick?: boolean
   motivos_reprovacao?: string[]
+  /* Rastro (2026-08-27) · linhas e famílias que o motor viu e não levou.
+   * `origem` ausente = linha gravada antes do rastro existir, e ela sempre
+   * foi o mercado. Ler como 'candidato' mantém o histórico legível. */
+  origem?: 'candidato' | 'rastro'
+  nivel?: 'mercado' | 'linha' | 'familia'
+  rastro_status?: 'avaliada' | 'descartada_sem_calcular' | 'eliminada'
+  market_name?: string | null
+  scope?: string | null
+}
+
+/** Um mercado com todas as linhas que o motor olhou dentro dele. */
+interface Mercado {
+  chave: string
+  rotulo: string
+  vencedor: Candidato | null
+  linhas: Candidato[]
+  eliminada: Candidato | null
+}
+
+/* O motor devolve UM candidato por mercado (a linha que venceu lá dentro), e
+ * era só isso que a tela tinha. Daí a pergunta que abriu esta mudança: "cadê o
+ * mercado de gols, por que só tem Under?" · o Over existia, foi calculado e
+ * perdeu, e nada disso chegava aqui.
+ *
+ * Agora o log traz as três camadas na mesma lista, e a tela remonta a árvore:
+ * mercado -> linhas, com a vencedora em destaque e as outras embaixo, cada
+ * uma com o motivo. Família eliminada antes das linhas (handicap, resultado,
+ * cartões sem árbitro) vira uma linha só, apagada, com o porquê. */
+const agruparPorMercado = (cands: Candidato[]): Mercado[] => {
+  const mapa = new Map<string, Mercado>()
+  const pegar = (c: Candidato) => {
+    const chave = `${c.market_type ?? '?'}${c.scope ? `·${c.scope}` : ''}`
+    let m = mapa.get(chave)
+    if (!m) {
+      m = { chave, rotulo: c.market_type ?? '?', vencedor: null, linhas: [], eliminada: null }
+      mapa.set(chave, m)
+    }
+    return m
+  }
+  for (const c of cands) {
+    const m = pegar(c)
+    if (c.origem === 'rastro' && c.nivel === 'familia') m.eliminada = c
+    else if (c.origem === 'rastro') m.linhas.push(c)
+    else m.vencedor = c
+  }
+  // Mercado com pick escolhido primeiro, depois os que tiveram candidato,
+  // depois os eliminados · é a ordem em que se procura resposta.
+  const peso = (m: Mercado) =>
+    m.vencedor?.is_best_pick ? 0 : m.vencedor?.eligible ? 1 : m.vencedor ? 2 : 3
+  return [...mapa.values()].sort((a, b) => peso(a) - peso(b) || a.rotulo.localeCompare(b.rotulo))
 }
 
 interface Linha {
@@ -335,6 +385,7 @@ export default function AdminMotorDecisoes() {
                 {linhas.linhas.map(l => {
                   const escancarada = aberta === l.id
                   const cands = l.candidates ?? []
+                  const mercados = agruparPorMercado(cands)
                   const aprovados = cands.filter(c => c.eligible).length
                   const virou = l.fixture_id != null && linhas.virou_pick.includes(l.fixture_id)
                   return (
@@ -358,7 +409,10 @@ export default function AdminMotorDecisoes() {
                         <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5 text-[10px] text-ink-4">
                           {l.status === 'avaliado' ? (
                             <>
-                              <span className="font-mono tabular-nums">{cands.length} mercado(s)</span>
+                              {/* Mercados, nao linhas · o log passou a trazer as
+                                * duas coisas e contar tudo junto diria "38
+                                * mercados" num jogo que teve 9. */}
+                              <span className="font-mono tabular-nums">{mercados.length} mercado(s)</span>
                               <span className={`font-mono tabular-nums ${
                                 aprovados > 0 ? 'text-green-400' : 'text-yellow-400'}`}>
                                 {aprovados} aprovado(s)
@@ -372,73 +426,127 @@ export default function AdminMotorDecisoes() {
                       </button>
 
                       {escancarada && cands.length > 0 && (
-                        <div className="px-4 pb-3">
-                          <div className="rounded-lg border border-line/60 overflow-x-auto">
-                            <table className="w-full text-[11px] min-w-[34rem]">
-                              <thead>
-                                <tr className="text-[10px] text-ink-4 border-b border-line/60">
-                                  <th className="text-left font-medium px-3 py-1.5">Mercado</th>
-                                  <th className="text-right font-medium px-2 py-1.5">Odd</th>
-                                  <th className="text-right font-medium px-2 py-1.5">Taxa</th>
-                                  <th className="text-right font-medium px-2 py-1.5">Amostra</th>
-                                  <th className="text-right font-medium px-2 py-1.5">EV</th>
-                                  <th className="text-right font-medium px-3 py-1.5">Score</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {cands.map((c, i) => (
-                                  <tr
-                                    key={i}
-                                    className={`odd:bg-surface-2/40 ${
-                                      c.is_best_pick ? 'bg-green-500/10' : ''}`}
-                                  >
-                                    <td className="px-3 py-1.5">
-                                      <span className={c.eligible ? 'text-ink-1' : 'text-ink-4'}>
-                                        {c.market_type ?? '?'}
-                                        {c.line != null && <span className="text-ink-3 ml-1">{c.line}</span>}
-                                        {c.direcao && <span className="text-ink-4 ml-1">{c.direcao}</span>}
-                                      </span>
-                                      {c.is_best_pick && (
-                                        <span className="text-[9px] font-bold text-green-400 ml-1.5">escolhido</span>
-                                      )}
-                                      {!c.eligible && !!c.motivos_reprovacao?.length && (
-                                        <p className="text-[10px] text-yellow-400/80 mt-0.5">
-                                          {c.motivos_reprovacao.join(' · ')}
-                                        </p>
-                                      )}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-2">
-                                      {num(c.odd)}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-2">
-                                      {pct(c.taxa_real ?? c.probability)}
-                                    </td>
-                                    <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-4">
-                                      {c.amostra ?? '·'}
-                                    </td>
-                                    <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${
-                                      (c.ev ?? 0) > 0 ? 'text-green-400' : 'text-ink-4'}`}>
-                                      {num(c.ev)}
-                                    </td>
-                                    <td className="px-3 py-1.5 text-right font-mono tabular-nums text-ink-1">
-                                      {num(c.final_score ?? c.confidence)}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
-                          <p className="text-[10px] text-ink-4 mt-1.5 leading-relaxed">
-                            Taxa é a frequência histórica do evento, não a odd implícita · edge alto
-                            é alerta, não qualidade. Amostra curta com taxa alta é amostra, não
-                            tendência.
+                        <div className="px-4 pb-3 space-y-2">
+                          {mercados.map(m => {
+                            const v = m.vencedor
+                            const outras = m.linhas
+                            const morto = !v && !!m.eliminada
+                            return (
+                              <div key={m.chave}
+                                   className={`rounded-lg border overflow-hidden ${
+                                     v?.is_best_pick ? 'border-green-500/40' : 'border-line/60'}`}>
+                                <div className={`flex flex-wrap items-baseline justify-between gap-x-3 gap-y-0.5 px-3 py-1.5 ${
+                                  v?.is_best_pick ? 'bg-green-500/10' : 'bg-surface-2/40'}`}>
+                                  <span className={`text-[11px] font-bold ${
+                                    morto ? 'text-ink-4' : 'text-ink-1'}`}>
+                                    {m.rotulo}
+                                    {v?.is_best_pick && (
+                                      <span className="text-[9px] font-bold text-green-400 ml-1.5">escolhido</span>
+                                    )}
+                                  </span>
+                                  <span className="text-[10px] font-mono tabular-nums text-ink-4">
+                                    {morto
+                                      ? 'nem chegou as linhas'
+                                      : `${outras.length + (v ? 1 : 0)} linha(s) olhada(s)`}
+                                  </span>
+                                </div>
+
+                                {/* Familia que morreu antes de qualquer linha ·
+                                  * o motivo e a unica coisa que ela tem pra dizer. */}
+                                {morto && (
+                                  <p className="px-3 py-1.5 text-[10px] text-yellow-400/80 leading-relaxed">
+                                    {m.eliminada?.motivos_reprovacao?.join(' · ')}
+                                  </p>
+                                )}
+
+                                {!morto && (
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full text-[11px] min-w-[34rem]">
+                                      <thead>
+                                        <tr className="text-[10px] text-ink-4 border-b border-line/60">
+                                          <th className="text-left font-medium px-3 py-1.5">Linha</th>
+                                          <th className="text-right font-medium px-2 py-1.5">Odd</th>
+                                          <th className="text-right font-medium px-2 py-1.5">Taxa</th>
+                                          <th className="text-right font-medium px-2 py-1.5">Amostra</th>
+                                          <th className="text-right font-medium px-2 py-1.5">EV</th>
+                                          <th className="text-right font-medium px-3 py-1.5">Score</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {(v ? [v, ...outras] : outras).map((c, i) => {
+                                          const venceu = c === v
+                                          const semConta = c.rastro_status === 'descartada_sem_calcular'
+                                          return (
+                                            <tr key={i}
+                                                className={`odd:bg-surface-2/30 ${
+                                                  venceu ? 'bg-surface-2/60' : ''}`}>
+                                              <td className="px-3 py-1.5">
+                                                <span className={venceu && c.eligible ? 'text-ink-1' : 'text-ink-4'}>
+                                                  {c.line ?? c.market_name ?? '?'}
+                                                  {c.direcao && <span className="text-ink-4 ml-1">{c.direcao}</span>}
+                                                </span>
+                                                {venceu && (
+                                                  <span className="text-[9px] text-ink-3 ml-1.5">
+                                                    linha do mercado
+                                                  </span>
+                                                )}
+                                                {/* "nem calculou" e o ponto: a odd
+                                                  * fora da faixa mata a linha antes
+                                                  * da conta, entao taxa/EV ficam
+                                                  * vazios por construcao, nao por
+                                                  * falha. */}
+                                                {semConta && (
+                                                  <span className="text-[9px] font-mono text-ink-4 ml-1.5">
+                                                    nem calculou
+                                                  </span>
+                                                )}
+                                                {!!c.motivos_reprovacao?.length && (
+                                                  <p className="text-[10px] text-yellow-400/80 mt-0.5 leading-snug">
+                                                    {c.motivos_reprovacao.join(' · ')}
+                                                  </p>
+                                                )}
+                                              </td>
+                                              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-2">
+                                                {num(c.odd)}
+                                              </td>
+                                              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-2">
+                                                {pct(c.taxa_real ?? c.probability)}
+                                              </td>
+                                              <td className="px-2 py-1.5 text-right font-mono tabular-nums text-ink-4">
+                                                {c.amostra ?? '·'}
+                                              </td>
+                                              <td className={`px-2 py-1.5 text-right font-mono tabular-nums ${
+                                                (c.ev ?? 0) > 0 ? 'text-green-400' : 'text-ink-4'}`}>
+                                                {num(c.ev)}
+                                              </td>
+                                              <td className="px-3 py-1.5 text-right font-mono tabular-nums text-ink-1">
+                                                {num(c.final_score ?? c.line_score ?? c.confidence)}
+                                              </td>
+                                            </tr>
+                                          )
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })}
+
+                          <p className="text-[10px] text-ink-4 leading-relaxed">
+                            Cada bloco e um mercado, e dentro dele estao TODAS as linhas que o motor
+                            olhou · a que representou o mercado vem primeiro, as outras embaixo com o
+                            motivo de terem perdido. Linha marcada "nem calculou" tem a odd fora da
+                            faixa do pipeline: ela e descartada antes da conta, porque calcular nao
+                            mudaria o desfecho. Taxa e a frequencia historica do evento, nao a odd
+                            implicita · edge alto e alerta, nao qualidade.
                             {l.gravada_em && ` Gravada em ${l.gravada_em.slice(0, 16).replace('T', ' ')}.`}
                           </p>
-                          {/* De onde vieram esses números: a média do time na
-                            * temporada, e os jogos que a formaram. É a pergunta
+                          {/* De onde vieram esses numeros: a media do time na
+                            * temporada, e os jogos que a formaram. E a pergunta
                             * seguinte natural de quem olha uma taxa estranha. */}
                           {l.fixture_id && (
-                            <div className="flex flex-wrap gap-2 mt-2">
+                            <div className="flex flex-wrap gap-2">
                               <Button size="sm" variant="ghost"
                                       onClick={() => abrirAmostra(l.fixture_id!, 'casa')}>
                                 <Users className="w-3.5 h-3.5" />

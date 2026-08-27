@@ -196,14 +196,56 @@ def _candidate_summary(c: dict) -> dict:
     }
 
 
+def _rastro_summary(item: dict) -> dict:
+    """Uma linha/familia do rastro do motor, no molde de candidato.
+
+    Vai pro MESMO array `candidates` de proposito. A tela do admin ja' sabe
+    desenhar essa lista, e o que faltava nela nao era um bloco novo -- era o
+    resto dos mercados. Cada item traz `nivel` ('linha' | 'familia') e
+    `rastro_status` pra a tela poder separar "morreu antes da conta" de
+    "perdeu depois de calculada".
+    """
+    return {
+        "origem": "rastro",
+        "nivel": item.get("nivel"),
+        "rastro_status": item.get("status"),
+        "market_type": item.get("market_type"),
+        "scope": item.get("scope"),
+        "market_name": item.get("market_name"),
+        "line": item.get("line"),
+        "direcao": item.get("direcao"),
+        "odd": item.get("odd"),
+        "taxa_real": item.get("taxa_real"),
+        "amostra": item.get("amostra"),
+        "ev": item.get("ev"),
+        "edge": item.get("edge"),
+        "line_score": item.get("line_score"),
+        "confidence": None,
+        "final_score": None,
+        "eligible": False,
+        "is_best_pick": False,
+        "motivos_reprovacao": [item["motivo"]] if item.get("motivo") else [],
+    }
+
+
 def log_decision(pipeline: str, fixture: dict, all_candidates: list,
                   eligible_picks: list, matchup: dict | None = None,
-                  context_data: dict | None = None) -> None:
+                  context_data: dict | None = None,
+                  rastro: list | None = None) -> None:
     """Chamar logo depois de analyze_fixture_markets()+rank_market_candidates()
     pra cada fixture. `all_candidates` = saida de analyze_fixture_markets
     (todos os mercados, mesmo os que nao passaram no filtro minimo -- esses
     nao tem 'final_score' calculado, aparecem com eligible=False).
-    `eligible_picks` = saida de rank_market_candidates (so os aprovados)."""
+    `eligible_picks` = saida de rank_market_candidates (so os aprovados).
+
+    `rastro` = a lista que o motor preencheu (orchestrator._rastrear). Sem
+    ela o log guardava UMA linha por familia -- a vencedora -- e a tela do
+    admin mostrava "gols Under 2.5" como se o mercado de gols fosse so'
+    aquilo. Com ela entram tambem as outras linhas do mesmo mercado (o Over
+    que perdeu, a linha vizinha), as que nem foram calculadas (odd fora da
+    faixa do pipeline) e as familias inteiras eliminadas antes -- cada uma
+    com o motivo nomeado.
+    """
     try:
         candidates_summary = []
         for c in all_candidates:
@@ -216,7 +258,15 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
             # proprio, ver _candidate_summary), entao pelo criterio antigo o
             # pick ESCOLHIDO aparecia no log como "REJEITADO".
             summary["eligible"] = matched is not None
+            summary["origem"] = "candidato"
+            summary["nivel"] = "mercado"
             candidates_summary.append(summary)
+        # A linha vencedora de cada mercado ja' entrou acima, como candidato.
+        # Repeti-la aqui faria a tela mostrar o mesmo pick duas vezes.
+        for item in (rastro or []):
+            if item.get("escolhida_do_mercado"):
+                continue
+            candidates_summary.append(_rastro_summary(item))
     except Exception as e:
         print(f"[DECISION_LOG] Aviso: falha ao montar resumo (não afeta o pick): {e}")
         return
@@ -238,7 +288,11 @@ def log_decision(pipeline: str, fixture: dict, all_candidates: list,
     # GRAVAR, e a mensagem generica acima ja' mandou investigar o lugar errado
     # uma vez (ver _candidate_summary).
     try:
-        _print_summary(pipeline, fixture, candidates_summary)
+        # So' os MERCADOS no stdout. O rastro pode ter 40 linhas por partida
+        # (toda linha de todo mercado cotado) -- no banco isso e' o que se
+        # queria, no terminal de uma rodada com 14 jogos e' ilegivel.
+        _print_summary(pipeline, fixture,
+                       [c for c in candidates_summary if c.get("origem") != "rastro"])
     except Exception as e:
         print(f"[DECISION_LOG] Aviso: log gravado, falha só ao imprimir o resumo: {e}")
 

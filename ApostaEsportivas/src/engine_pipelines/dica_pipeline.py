@@ -330,6 +330,11 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
         )
         match_context = context_gate.build_for_fixture(match_stats, fixture, conv_cartoes)
 
+        # Lista que o motor preenche com TODA linha e TODA familia que ele
+        # viu, inclusive as que morreram antes de virar candidato. Vai
+        # inteira pro log de decisao -- e' o que faz a tela do admin
+        # mostrar o mercado que perdeu, e nao so' o que venceu.
+        rastro: list = []
         candidates = analyze_fixture_markets(
             structured_odds, last10_home, last10_away,
             config=DICA_CONFIG, context_data=context_data, matchup_data=matchup,
@@ -340,9 +345,11 @@ def _best_candidate_across_fixtures(fixtures: list, used_groups: set,
             home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
             team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
+            rastro=rastro,
         )
         picks = rank_market_candidates(candidates, config=DICA_CONFIG)
-        log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
+        log_decision("DICA_ENGINE", fixture, candidates, picks, matchup=matchup,
+                      context_data=context_data, rastro=rastro)
         if not picks:
             continue
 

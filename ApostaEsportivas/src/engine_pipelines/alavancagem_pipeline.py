@@ -260,6 +260,11 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             # ALAVANCAGEM_CONFIG e nao a config padrao: o piso de 1.39 do motor
             # tornava a dupla aritmeticamente impossivel (1.39 * 1.39 = 1.93, ja'
             # acima do teto de 1.55 do bilhete). Ver o comentario da constante.
+            # Lista que o motor preenche com TODA linha e TODA familia que ele
+            # viu, inclusive as que morreram antes de virar candidato. Vai
+            # inteira pro log de decisao -- e' o que faz a tela do admin
+            # mostrar o mercado que perdeu, e nao so' o que venceu.
+            rastro: list = []
             candidates = analyze_fixture_markets(
                 structured_odds, last10_home, last10_away,
                 config=ALAVANCAGEM_CONFIG,
@@ -270,9 +275,11 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
                 home_team_id=fixture["home_team_id"], away_team_id=fixture["away_team_id"],
                 team_stats_home=team_stats_home, team_stats_away=team_stats_away,
             league_baseline=league_baseline,
+            rastro=rastro,
             )
             picks = rank_market_candidates(candidates, config=ALAVANCAGEM_CONFIG)
-            log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup, context_data=context_data)
+            log_decision("ALAVANCAGEM_ENGINE", fixture, candidates, picks, matchup=matchup,
+                          context_data=context_data, rastro=rastro)
 
             for p in picks:
                 if not (ODD_INDIVIDUAL_MIN <= p["odd"] <= ODD_INDIVIDUAL_MAX):

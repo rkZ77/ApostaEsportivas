@@ -249,8 +249,17 @@ class MatchStatisticsSyncService:
                     "away_id": away_id,
                     "match_date": match_date,
                     "status": status,
-                    "home_goals": goals["home"] or 0,
-                    "away_goals": goals["away"] or 0,
+                    # SEM `or 0` (2026-08-27). O `or 0` que ficava aqui
+                    # transformava "a API nao publicou o placar" em "o jogo
+                    # terminou 0x0" -- mesmo defeito que o cartao vermelho
+                    # teve ate' 26/08, e mais caro: gol e' a familia mais
+                    # usada do motor, e um 0x0 falso nao aparece em nenhuma
+                    # contagem de cobertura (zero nao e' nulo). Placar
+                    # ausente agora chega None e `_save_stats` recusa a
+                    # linha, entao a partida continua visivel como buraco
+                    # em vez de virar media errada.
+                    "home_goals": goals["home"],
+                    "away_goals": goals["away"],
                     "home_goals_ht": ht.get("home"),
                     "away_goals_ht": ht.get("away"),
                     "home_goals_90": ft90.get("home"),
@@ -293,11 +302,28 @@ class MatchStatisticsSyncService:
     # ---------------------------------------------------------
     # SAVE COMPLETO
     # ---------------------------------------------------------
-    def _save_stats(self, fx, home_stats, away_stats):
+    def _save_stats(self, fx, home_stats, away_stats) -> bool:
+        """Grava a linha da partida. False = nao gravou (placar ausente).
 
+        O PLACAR E' PRE-REQUISITO, NAO UM CAMPO A MAIS (2026-08-27).
+
+        Ate' aqui um `goals` nulo da API virava 0 e a linha era gravada como
+        se o jogo tivesse terminado 0x0. Isso e' pior que nao ter a linha por
+        dois motivos: entra na media de gols como jogo real (e gol e' a
+        familia que mais mercado gera), e some da varredura -- que procura
+        jogo ENCERRADO SEM LINHA e nunca mais volta naquela partida.
+
+        E' a mesma regra que a folha ja' seguia desde 26/08 ("linha oca
+        esconde a partida pra sempre"), agora aplicada ao placar.
+        """
         home_goals = fx["home_goals"]
         away_goals = fx["away_goals"]
-        total_goals = home_goals + away_goals
+        if home_goals is None or away_goals is None:
+            print(f"[MATCH_STATS] fixture_id={fx['fixture_id']} sem placar na API "
+                  f"(status={fx.get('status')}) · linha NAO gravada, a partida "
+                  f"continua na lista de buracos.")
+            return False
+        total_goals = _sum_stats(home_goals, away_goals)
 
         # A folha e' classificada UMA vez, antes de ler campo nenhum: e' essa
         # classificacao que separa "a API nao respondeu" (tudo None) de "a API
@@ -389,9 +415,12 @@ class MatchStatisticsSyncService:
             )
             ON CONFLICT (fixture_id)
             DO UPDATE SET
-                home_goals = EXCLUDED.home_goals,
-                away_goals = EXCLUDED.away_goals,
-                total_goals = EXCLUDED.total_goals,
+                -- COALESCE tambem no placar (2026-08-27), pelo mesmo motivo
+                -- do resto das colunas: recoleta que volte sem placar nao pode
+                -- apagar o que ja' estava certo.
+                home_goals = COALESCE(EXCLUDED.home_goals, match_statistics.home_goals),
+                away_goals = COALESCE(EXCLUDED.away_goals, match_statistics.away_goals),
+                total_goals = COALESCE(EXCLUDED.total_goals, match_statistics.total_goals),
                 home_goals_ht = COALESCE(EXCLUDED.home_goals_ht, match_statistics.home_goals_ht),
                 away_goals_ht = COALESCE(EXCLUDED.away_goals_ht, match_statistics.away_goals_ht),
                 home_goals_90 = COALESCE(EXCLUDED.home_goals_90, match_statistics.home_goals_90),
@@ -468,6 +497,7 @@ class MatchStatisticsSyncService:
 
         self.conn.commit()
         print(f"[OK] {fx['fixture_id']}")
+        return True
 
     # ---------------------------------------------------------
     # UPSERT ÁRBITRO → retorna referee_id (ou None se sem nome)
@@ -693,8 +723,10 @@ class MatchStatisticsSyncService:
             "away_id": item["teams"]["away"]["id"],
             "match_date": datetime.fromisoformat(fixture_info["date"].replace("Z", "+00:00")),
             "status": status,
-            "home_goals": goals["home"] or 0,
-            "away_goals": goals["away"] or 0,
+            # Ver o comentario em _load_fixtures: placar ausente e' None,
+            # nunca 0.
+            "home_goals": goals["home"],
+            "away_goals": goals["away"],
             "home_goals_ht": ht.get("home"),
             "away_goals_ht": ht.get("away"),
             "home_goals_90": ft90.get("home"),
@@ -718,7 +750,8 @@ class MatchStatisticsSyncService:
             print(f"[MATCH_STATS] fixture_id={fixture_id} sem stats de jogo na API.")
             if not criar_sem_folha:
                 return "sem_folha"
-            self._save_stats(fx, [], [])
+            if not self._save_stats(fx, [], []):
+                return "sem_placar"
             if fx.get("referee"):
                 referee_batch.add((fx["referee"], fx["season"]))
             return "linha_sem_folha"
@@ -728,7 +761,8 @@ class MatchStatisticsSyncService:
         else:
             home_stats, away_stats = stats[1]["statistics"], stats[0]["statistics"]
 
-        self._save_stats(fx, home_stats, away_stats)
+        if not self._save_stats(fx, home_stats, away_stats):
+            return "sem_placar"
 
         if fx.get("referee"):
             referee_batch.add((fx["referee"], fx["season"]))
@@ -769,7 +803,8 @@ class MatchStatisticsSyncService:
                 home_stats = stats[1]["statistics"]
                 away_stats = stats[0]["statistics"]
 
-            self._save_stats(fx, home_stats, away_stats)
+            if not self._save_stats(fx, home_stats, away_stats):
+                continue
 
             if fx.get("referee"):
                 referee_batch.add((fx["referee"], fx["season"]))

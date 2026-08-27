@@ -87,6 +87,29 @@ def _find_sibling(entry: dict, entries: list) -> dict | None:
     return None
 
 
+def _rastrear(rastro, **campos) -> None:
+    """Anota uma linha/familia no rastro, quando o chamador pediu um.
+
+    O RASTRO NAO E' O MODO DEBUG (2026-08-27).
+
+    `debug=True` muda o tipo de retorno e existe pra homologacao. O rastro e'
+    o contrario: caro de nao ter e barato de ter -- e' uma lista que o caller
+    passa vazia e o motor preenche com TODA linha e TODA familia que ele viu,
+    inclusive as que morreram antes de virar candidato.
+
+    A razao dele existir: `analyze_fixture_markets` devolve UM candidato por
+    familia (a linha vencedora). O log de decisao gravava exatamente isso, e
+    entao a tela do admin mostrava "goals Under 2.5" e nada mais -- o Over da
+    mesma linha, as outras linhas do mesmo mercado e as familias inteiras que
+    foram eliminadas antes (handicap, resultado, cartoes sem arbitro) nao
+    deixavam rastro nenhum. Quem olhava perguntava "cade o mercado de gols?"
+    sem ter como saber que ele existiu e perdeu.
+    """
+    if rastro is None:
+        return
+    rastro.append(campos)
+
+
 def analyze_fixture_markets(
     structured_odds: list,
     last10_home: list,
@@ -132,6 +155,10 @@ def analyze_fixture_markets(
     # do encolhimento das medias de team_statistics. Sem ela as medias entram
     # cruas, que e' medidamente PIOR que o historico de 15 jogos.
     league_baseline: dict | None = None,
+    # Lista que o caller passa VAZIA pra receber tudo que o motor viu -- linha
+    # por linha, familia por familia, com o motivo de cada morte. Nao muda o
+    # retorno nem nenhuma decisao; ver _rastrear() logo acima.
+    rastro: list | None = None,
     debug: bool = False,
 ) -> list | dict:
     """Calcula taxa/confidence/edge/EV para cada mercado suportado
@@ -220,20 +247,30 @@ def analyze_fixture_markets(
     candidates = []
     for (family, scope), entries in groups.items():
         if family in _RESULT_FAMILIES:
+            motivo = "mercado de resultado excluido por decisao de produto"
+            _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                      status="eliminada", motivo=motivo)
             if debug:
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": family,
-                    "reason": "mercado de resultado excluido por decisao de produto",
+                    "reason": motivo,
                 })
             continue
         if family in _HANDICAP_FAMILIES:
+            motivo = "handicap excluido por decisao de produto"
+            _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                      status="eliminada", motivo=motivo)
             if debug:
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": family,
-                    "reason": "handicap excluido por decisao de produto",
+                    "reason": motivo,
                 })
             continue
         if family in _NEAR_COINFLIP_FAMILIES:
+            _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                      status="eliminada",
+                      motivo="par/impar e' proximo de 50/50 por construcao "
+                             "(paridade Poisson) -- excluido do pool")
             if debug:
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": family,
@@ -245,6 +282,8 @@ def analyze_fixture_markets(
         if family in _CARDS_FAMILIES:
             eligible, reason = referee_model.cards_market_eligible(referee_sig, game_intensity, config)
             if not eligible:
+                _rastrear(rastro, nivel="familia", market_type=family, scope=scope,
+                          status="eliminada", motivo=reason)
                 if debug:
                     eliminated_markets.append({
                         "family": family, "scope": scope, "market_type": family,
@@ -336,7 +375,12 @@ def analyze_fixture_markets(
             # duas coincidem e nada muda em relacao ao comportamento antigo.
             best_odd = float(m.get("best_odd") or 0)
             eval_odd = market_model.evaluation_odd(m, config)
+            rotulo_linha = m.get("value_label") or m.get("line")
             if best_odd <= 1.0 or eval_odd <= 1.0:
+                _rastrear(rastro, nivel="linha", market_type=market_type, scope=scope,
+                          market_name=m.get("market_pt") or m.get("market_name"),
+                          line=rotulo_linha, direcao=m.get("value"),
+                          status="descartada_sem_calcular", motivo="odd invalida ou ausente")
                 if debug:
                     entries_dropped.append({
                         "market_name": m.get("market_pt") or m.get("market_name"),
@@ -344,11 +388,51 @@ def analyze_fixture_markets(
                     })
                 continue
             if m.get("bookmakers_count", 1) < config.min_bookmakers_count:
+                motivo = (f"poucos bookmakers ({m.get('bookmakers_count', 1)} < "
+                          f"{config.min_bookmakers_count})")
+                _rastrear(rastro, nivel="linha", market_type=market_type, scope=scope,
+                          market_name=m.get("market_pt") or m.get("market_name"),
+                          line=rotulo_linha, direcao=m.get("value"), odd=eval_odd,
+                          status="descartada_sem_calcular", motivo=motivo)
                 if debug:
                     entries_dropped.append({
                         "market_name": m.get("market_pt") or m.get("market_name"),
                         "family": family, "scope": scope,
-                        "reason": f"poucos bookmakers ({m.get('bookmakers_count', 1)} < {config.min_bookmakers_count})",
+                        "reason": motivo,
+                    })
+                continue
+
+            # ODD FORA DA FAIXA MORRE AQUI, ANTES DA CONTA (2026-08-27).
+            #
+            # A faixa ja' era filtro duro desde 14/08, mas so' na hora de
+            # aprovar: a linha passava por compute_taxa, encolhimento
+            # bayesiano, Poisson, arbitro e estabilidade -- e entao era
+            # reprovada por um numero que ja' se sabia antes de qualquer uma
+            # dessas contas. Pedido do usuario, e ele esta' certo: "se a odd
+            # esta' fora do padrao ja' descarta, nem calcula, porque nao vai
+            # adiantar calcular".
+            #
+            # NAO MUDA NENHUM PICK. motivo_de_odd_fora() aplica exatamente os
+            # tres gates que ranking.rank_all_candidates() reaplica no fim
+            # (min_odd, max_odd, faixa do pipeline), entao a linha que cai
+            # aqui e' a mesma que morreria la'. O unico caminho que enxergava
+            # essas linhas era o fallback conservador de select_smart_safe_line
+            # -- e o candidato que ele devolvia por esse caminho ja' era
+            # barrado depois, sem nunca poder virar pick.
+            #
+            # O que MUDA e' o rastro: antes a linha sumia dentro de um
+            # candidato reprovado; agora ela aparece nomeada, com a faixa que
+            # a matou.
+            fora = ranking.motivo_de_odd_fora(eval_odd, config)
+            if fora:
+                _rastrear(rastro, nivel="linha", market_type=market_type, scope=scope,
+                          market_name=m.get("market_pt") or m.get("market_name"),
+                          line=rotulo_linha, direcao=m.get("value"), odd=eval_odd,
+                          status="descartada_sem_calcular", motivo=fora)
+                if debug:
+                    entries_dropped.append({
+                        "market_name": m.get("market_pt") or m.get("market_name"),
+                        "family": family, "scope": scope, "reason": fora,
                     })
                 continue
             taxa = stats_model.compute_taxa(
@@ -358,6 +442,11 @@ def analyze_fixture_markets(
                 home_team_id=home_team_id, away_team_id=away_team_id,
             )
             if not taxa or taxa["taxa_ponderada"] is None:
+                _rastrear(rastro, nivel="linha", market_type=market_type, scope=scope,
+                          market_name=m.get("market_pt") or m.get("market_name"),
+                          line=rotulo_linha, direcao=m.get("value"), odd=eval_odd,
+                          status="descartada_sem_calcular",
+                          motivo="sem taxa calculavel (amostra insuficiente)")
                 if debug:
                     entries_dropped.append({
                         "market_name": m.get("market_pt") or m.get("market_name"),
@@ -556,7 +645,41 @@ def analyze_fixture_markets(
             })
 
         best_line = ranking.select_smart_safe_line(line_candidates, config, data_quality_score=data_quality_score)
+
+        # TODAS as linhas que chegaram a ser calculadas, com o motivo de cada
+        # uma -- e nao so' a vencedora. E' a metade do rastro que o descarte
+        # antecipado la' em cima nao cobre: aqui estao as linhas que passaram
+        # na faixa de odd e perderam por edge, EV ou line_score.
+        if rastro is not None and line_candidates:
+            avaliadas = ranking.evaluate_all_lines(line_candidates, config, data_quality_score)
+            escolhida = None
+            if best_line:
+                escolhida = (best_line.get("market_id"), best_line.get("value"),
+                             best_line.get("line"))
+            for a in avaliadas:
+                _rastrear(
+                    rastro, nivel="linha", market_type=market_type, scope=scope,
+                    market_name=a.get("market_name"),
+                    line=a.get("value_label") or a.get("line"), direcao=a.get("value"),
+                    odd=a.get("odd"), taxa_real=a.get("taxa_real"),
+                    amostra=a.get("amostra"), ev=a.get("ev"), edge=a.get("edge"),
+                    line_score=a.get("line_score"),
+                    status="avaliada",
+                    motivo=a.get("reject_reason"),
+                    # A linha que representou o mercado no ranking. Sem isso a
+                    # lista nao diz qual das dez o motor levou adiante.
+                    escolhida_do_mercado=(
+                        escolhida is not None
+                        and (a.get("market_id"), a.get("value"), a.get("line")) == escolhida
+                    ),
+                )
+
         if not best_line:
+            _rastrear(rastro, nivel="familia", market_type=market_type, scope=scope,
+                      status="eliminada",
+                      motivo=("nenhuma linha aprovada (nem via fallback conservador)"
+                              if line_candidates
+                              else "nenhuma linha chegou a ser calculada"))
             if debug and line_candidates:
                 eliminated_markets.append({
                     "family": family, "scope": scope, "market_type": market_type,
@@ -681,6 +804,9 @@ def analyze_fixture_markets(
                 c, match_context, delegar_lados=config.use_tie_effect)
             c["context_gate"] = veredito
             if veredito["bloqueado"]:
+                _rastrear(rastro, nivel="familia", market_type=c.get("market_type"),
+                          scope=c.get("scope"), status="eliminada",
+                          motivo=context_gate.explicar_rejeicao(c, veredito))
                 if debug:
                     eliminated_markets.append({
                         "family": c.get("market_type"), "scope": None,

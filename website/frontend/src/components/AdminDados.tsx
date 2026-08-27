@@ -135,6 +135,27 @@ interface Arbitro {
   atualizado_em: string | null
 }
 
+/** Partida com 0x0 gravado que não terminou 0x0 · ver o cartão lá embaixo. */
+interface PlacarFalso {
+  disponivel: boolean
+  total?: number
+  corrigiveis?: number
+  so_recoleta?: number
+  partidas?: {
+    fixture_id: number
+    data: string | null
+    status: string | null
+    liga: string | null
+    mandante: string | null
+    visitante: string | null
+    home_goals_90: number | null
+    away_goals_90: number | null
+    home_goals_ht: number | null
+    away_goals_ht: number | null
+  }[]
+  erro?: string
+}
+
 interface Vermelho {
   disponivel: boolean
   alvo?: number
@@ -181,6 +202,8 @@ export default function AdminDados() {
   const [verBuracos, setVerBuracos] = useState(false)
   const [vermelho, setVermelho] = useState<Vermelho | null>(null)
   const [corrigindoVermelho, setCorrigindoVermelho] = useState(false)
+  const [placar, setPlacar] = useState<PlacarFalso | null>(null)
+  const [corrigindoPlacar, setCorrigindoPlacar] = useState(false)
 
   const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null)
   const [recoleta, setRecoleta] = useState<Recoleta | null>(null)
@@ -194,6 +217,25 @@ export default function AdminDados() {
 
   /** Alvo do drawer de amostra · time ou árbitro, um por vez. */
   const [amostra, setAmostra] = useState<AlvoAmostra | null>(null)
+
+  /* Em qual das três perguntas a tela está.
+   *
+   * Ela nasceu como uma pilha só, e a pilha cresceu: dois alertas, oito
+   * contadores, o estado da varredura, o diagnóstico do histórico com dezesseis
+   * cartões, as médias das últimas 40, a tabela de árbitros e a lista paginada
+   * de partidas. Num celular isso é meio metro de rolagem em que tudo tem o
+   * mesmo peso visual, e o alerta que pede ação some no meio da estatística que
+   * é só informação.
+   *
+   * O corte não é por assunto, é pela pergunta que cada bloco responde:
+   *
+   *   Problemas   o que está errado AGORA e o que dá pra fazer;
+   *   Cobertura   o que o motor tem pra ler, e onde estão os furos;
+   *   Partidas    jogo a jogo, com árbitro e amostra.
+   *
+   * A contagem de problemas fica no próprio botão, senão trocar de seção
+   * viraria esconder o alerta. */
+  const [secao, setSecao] = useState<'problemas' | 'cobertura' | 'partidas'>('problemas')
 
   /** fixture_id em coleta. Um por vez: cada clique custa 2 requisições da cota. */
   const [rodando, setRodando] = useState<number | null>(null)
@@ -225,6 +267,9 @@ export default function AdminDados() {
     api.get('/admin/dados/vermelho-legado')
       .then(r => setVermelho(r.data))
       .catch(() => setVermelho(null))
+    api.get('/admin/dados/placar-falso')
+      .then(r => setPlacar(r.data))
+      .catch(() => setPlacar(null))
   }, [])
 
   const buscarDiagnostico = useCallback((meses = 12) => {
@@ -414,6 +459,24 @@ export default function AdminDados() {
     }
   }
 
+  const corrigirPlacar = async () => {
+    setCorrigindoPlacar(true)
+    try {
+      const r = await api.post('/admin/dados/placar-falso')
+      setAviso({
+        fixture: -4, ok: true,
+        texto: `${r.data?.corrigidas ?? 0} placar(es) reescrito(s) · ${r.data?.medias ?? 0} média(s) de time refeitas.`,
+      })
+      buscarBuracos()
+      buscarHistorico(pagina)
+      api.get('/admin/dados').then(x => setDados(x.data)).catch(() => {})
+    } catch (e) {
+      setAviso({ fixture: -4, texto: msgErro(e, 'Não deu pra corrigir.'), ok: false })
+    } finally {
+      setCorrigindoPlacar(false)
+    }
+  }
+
   const corrigirVermelho = async () => {
     setCorrigindoVermelho(true)
     try {
@@ -437,6 +500,13 @@ export default function AdminDados() {
   if (!dados) return null
 
   const totalBuracos = dados.buracos?.total ?? 0
+  // Um por CARTÃO de alerta, não por partida · o número no botão responde
+  // "quantas coisas eu preciso olhar", e 300 buracos continuam sendo uma.
+  const abertos = [
+    totalBuracos > 0,
+    !!placar?.disponivel && (placar.total ?? 0) > 0,
+    !!vermelho?.disponivel && (vermelho.alvo ?? 0) > 0,
+  ].filter(Boolean).length
   const v = dados.varredura ?? {}
   const familias = historico?.resumo ?? []
 
@@ -452,6 +522,33 @@ export default function AdminDados() {
           Atualizar
         </Button>
       </div>
+
+      {/* Quantos alertas estão abertos. É o que faz a navegação não esconder
+        * problema: o número vive no botão, não dentro da seção. */}
+      <div className="flex gap-1.5 overflow-x-auto">
+        {([
+          ['problemas', 'Problemas', abertos],
+          ['cobertura', 'Cobertura', 0],
+          ['partidas', 'Partidas', 0],
+        ] as const).map(([chave, rotulo, n]) => (
+          <button
+            key={chave}
+            type="button"
+            onClick={() => setSecao(chave)}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-3 py-2 min-h-[36px] rounded-lg border shrink-0 transition-colors duration-1 ${
+              secao === chave
+                ? 'border-line-strong bg-surface-2 text-ink-1'
+                : 'border-line text-ink-3 hover:text-ink-2'}`}
+          >
+            {rotulo}
+            {n > 0 && (
+              <span className="font-mono text-[10px] tabular-nums text-yellow-400">{n}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {secao === 'problemas' && (<>
 
       {/* O buraco vem primeiro porque é o único número acionável da tela. */}
       <div className={`card p-4 border ${totalBuracos > 0 ? 'border-yellow-500/40 bg-yellow-500/5' : 'border-line'}`}>
@@ -553,6 +650,77 @@ export default function AdminDados() {
         *
         * O coletor já foi corrigido, mas coletor corrigido não mexe no passado:
         * a coleta só volta em folha incompleta, e a janela é de dias. */}
+      {/* Placar 0x0 que não aconteceu.
+        *
+        * Os três leitores de /fixtures montavam a linha com
+        * `goals["home"] or 0`, e `or 0` não separa "a API disse zero" de "a API
+        * não disse nada". Campo nulo virava jogo terminado 0x0 · e gol é a
+        * família que mais mercado gera.
+        *
+        * Zero não é NULL, então esse jogo passa por "preenchido" em TODA
+        * contagem de cobertura desta tela e some da varredura. É por isso que
+        * ele precisa de cartão próprio: nenhum outro número daqui o enxerga.
+        *
+        * A detecção não é palpite: o placar de 90 minutos e o do intervalo são
+        * colunas independentes, gravadas na mesma passada e sem o `or 0`. Final
+        * 0x0 com qualquer uma delas acima de zero é impossível. */}
+      {placar?.disponivel && (placar.total ?? 0) > 0 && (
+        <div className="card p-4 border border-red-500/40 bg-red-500/5">
+          <div className="flex items-start gap-3">
+            <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            <div className="min-w-0 flex-1">
+              <p className="text-sm font-bold text-ink-1">
+                {numero(placar.total)} partida(s) gravadas 0x0 sem terem terminado 0x0
+              </p>
+              <p className="text-[11px] text-ink-3 mt-1 leading-relaxed">
+                O coletor lia placar ausente como zero. Zero não é ausência: essas linhas entram
+                na média de gols como jogo real, e como o campo está "preenchido" elas não
+                aparecem em nenhuma contagem de cobertura nem na varredura automática. O placar
+                de 90 minutos e o do intervalo, que vêm noutras colunas, provam a contradição ·
+                onde os três concordam em zero, o 0x0 é real e a linha não é tocada.
+                {!!placar.so_recoleta && (
+                  <> {numero(placar.so_recoleta)} delas foram para a prorrogação, e aí o placar
+                  de 90 minutos não responde pelo final · essas só voltam pela recoleta.</>
+                )}
+              </p>
+
+              {!!placar.partidas?.length && (
+                <div className="mt-2.5 border-t border-line/60 divide-y divide-line/60">
+                  {placar.partidas.slice(0, 6).map(b => (
+                    <div key={b.fixture_id} className="py-1.5">
+                      <p className="text-[12px] text-ink-2 truncate">
+                        <span className="font-mono text-[10px] text-ink-4 mr-1.5">{diaMes(b.data)}</span>
+                        {b.mandante ?? 'Time ?'} x {b.visitante ?? 'Time ?'}
+                      </p>
+                      <p className="text-[10px] text-ink-4 mt-0.5 font-mono tabular-nums">
+                        gravado 0x0 · 90 minutos {numero(b.home_goals_90)}x{numero(b.away_goals_90)}
+                        {' '}· intervalo {numero(b.home_goals_ht)}x{numero(b.away_goals_ht)}
+                        {' '}· {b.status}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(placar.corrigiveis ?? 0) > 0 && (
+                <Button
+                  size="sm" variant="ghost" className="mt-3"
+                  loading={corrigindoPlacar}
+                  onClick={corrigirPlacar}
+                >
+                  Reescrever {numero(placar.corrigiveis)} placar(es) pelo de 90 minutos e refazer as médias
+                </Button>
+              )}
+              {aviso?.fixture === -4 && (
+                <p className={`text-[11px] mt-2 ${aviso.ok ? 'text-green-400' : 'text-red-400'}`}>
+                  {aviso.texto}
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {vermelho?.disponivel && (vermelho.alvo ?? 0) > 0 && (
         <div className="card p-4 border border-orange-500/40 bg-orange-500/5">
           <div className="flex items-start gap-3">
@@ -588,6 +756,17 @@ export default function AdminDados() {
           </div>
         </div>
       )}
+
+      {!abertos && (
+        <p className="text-[11px] text-ink-4 leading-relaxed">
+          Nada pendente aqui. A cobertura e o histórico ficam nas outras duas seções ·
+          esta só mostra o que pede ação.
+        </p>
+      )}
+
+      </>)}
+
+      {secao === 'cobertura' && (<>
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
         <StatTile label="Jogos coletados"  value={numero(dados.contagem?.fixtures)} />
@@ -843,6 +1022,10 @@ export default function AdminDados() {
         * coletor, que é onde a média nasce · aqui fica o que faltava, que é
         * enxergar a amostra e poder refazer a conta sem esperar o próximo jogo
         * daquele árbitro. Refazer não custa cota: sai tudo do banco. */}
+      </>)}
+
+      {secao === 'partidas' && (<>
+
       {!!arbitros?.arbitros?.length && (
         <div className="card p-0 overflow-hidden">
           <div className="px-4 py-3 border-b border-line flex flex-wrap items-center justify-between gap-2">
@@ -1160,6 +1343,8 @@ export default function AdminDados() {
           </>
         )}
       </div>
+
+      </>)}
 
       {amostra && <AdminAmostra alvo={amostra} onClose={() => setAmostra(null)} />}
     </div>

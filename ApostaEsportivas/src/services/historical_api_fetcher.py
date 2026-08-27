@@ -52,8 +52,14 @@ class HistoricalApiFetcher:
 
             home_id   = teams["home"]["id"]
             away_id   = teams["away"]["id"]
-            home_goals = goals["home"] or 0
-            away_goals = goals["away"] or 0
+            # Placar ausente derruba o jogo em vez de virar 0x0 (2026-08-27).
+            # Este leitor nao passa por _save_stats -- ele alimenta o motor
+            # direto -- entao o descarte precisa ser aqui: um 0x0 inventado no
+            # meio do historico e' media errada sem nenhum rastro.
+            home_goals = goals["home"]
+            away_goals = goals["away"]
+            if home_goals is None or away_goals is None:
+                continue
 
             matches.append({
                 "match_date":   fixture["date"][:10],

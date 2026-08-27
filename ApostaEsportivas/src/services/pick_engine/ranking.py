@@ -92,6 +92,30 @@ def _dentro_da_faixa(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> b
     return config.conservative_odd_low <= odd <= config.conservative_odd_high
 
 
+def motivo_de_odd_fora(odd: float, config: PickEngineConfig = DEFAULT_CONFIG) -> str | None:
+    """Motivo pelo qual esta odd NUNCA vai virar pick neste pipeline, ou None.
+
+    Extraido de evaluate_all_lines em 2026-08-27 pra o orchestrator poder
+    perguntar a MESMA coisa antes de calcular a linha. Os tres testes aqui sao
+    os unicos gates de odd que os dois caminhos de aprovacao aplicam
+    (evaluate_all_lines e rank_all_candidates), entao uma linha que cai aqui
+    esta' morta em qualquer ordem: nem o fallback conservador de
+    select_smart_safe_line a ressuscita como pick, porque rank_all_candidates
+    checa min_odd e _dentro_da_faixa de novo.
+
+    Ter isso numa funcao so' e' o que impede as duas listas de divergirem --
+    era o risco real de o orchestrator repetir os `if` na mao.
+    """
+    if odd < config.min_odd:
+        return f"odd abaixo do minimo ({odd} < {config.min_odd})"
+    if odd > config.max_odd:
+        return f"odd acima do teto de sanidade ({odd} > {config.max_odd})"
+    if not _dentro_da_faixa(odd, config):
+        return (f"odd fora da faixa do pipeline ({odd} nao esta em "
+                f"{config.conservative_odd_low}-{config.conservative_odd_high})")
+    return None
+
+
 def _bookmakers_bonus(bookmakers_count: int, config: PickEngineConfig = DEFAULT_CONFIG) -> float:
     """0-1, satura em bookmakers_bonus_saturation casas -- mais consenso de
     preco = mais confiavel que a odd reflete valor real, nao erro de 1
@@ -184,19 +208,16 @@ def evaluate_all_lines(
 
     evaluated = []
     for c in line_candidates:
-        if c["odd"] < config.min_odd:
-            reason = "odd abaixo do minimo"
-        elif c["odd"] > config.max_odd:
-            reason = "odd acima do teto de sanidade"
-        elif not _dentro_da_faixa(c["odd"], config):
-            reason = (f"odd fora da faixa do pipeline "
-                      f"({config.conservative_odd_low}-{config.conservative_odd_high})")
-        elif c["edge"] < effective_min_edge:
-            reason = "edge abaixo do minimo efetivo"
-        elif c["ev"] <= 0:
-            reason = "EV nao positivo"
-        else:
-            reason = None
+        # Os motivos de ODD saem de motivo_de_odd_fora() -- a mesma funcao que
+        # o orchestrator consulta pra nem calcular a linha (2026-08-27). Os
+        # dois restantes dependem de edge/EV, que so' existem depois da conta,
+        # entao continuam aqui.
+        reason = motivo_de_odd_fora(c["odd"], config)
+        if reason is None:
+            if c["edge"] < effective_min_edge:
+                reason = "edge abaixo do minimo efetivo"
+            elif c["ev"] <= 0:
+                reason = "EV nao positivo"
         evaluated.append({
             **c,
             "line_score": _line_score(c, config),
