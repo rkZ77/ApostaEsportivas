@@ -144,6 +144,14 @@ def run_startup_migrations(logger: logging.Logger) -> bool:
         # services/settlement.py), a linha precisa dizer QUAL valor veio de
         # gente: {"escanteios": {"casa": 5, "fora": 3, "por": "...", "em": "..."}}.
         cur.execute("ALTER TABLE match_statistics ADD COLUMN IF NOT EXISTS manual_stats JSONB;")
+        # JOGOS APITADOS, ao lado dos que sustentam a media do arbitro.
+        #
+        # Quem cria a coluna de verdade e o coletor (_ensure_columns), porque e
+        # ele que escreve nela. Aqui ela e repetida pra a ABA nao depender de
+        # alguem ter rodado uma coleta antes: sem a coluna, a lista de arbitros
+        # do /admin some inteira, com um erro que nao explica que so falta
+        # rodar o motor uma vez.
+        cur.execute("ALTER TABLE referee_stats ADD COLUMN IF NOT EXISTS games_total INTEGER;")
         cur.execute("ALTER TABLE users ADD COLUMN IF NOT EXISTS pending_password_hash VARCHAR(100);")
         # Marca "esta pessoa foi pro MercadoPago". Sem isso nao da pra saber em
         # quem vale a pena gastar consulta a API no login: e' o que permite
