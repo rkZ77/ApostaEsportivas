@@ -1494,8 +1494,22 @@ def admin_search_picks(
             table, home_col, away_col = _PICK_TABLES[pt]
             conds, params = [], []
             if q:
-                conds.append(f"(LOWER({home_col}) LIKE %s OR LOWER({away_col}) LIKE %s)")
-                params += [f"%{q.lower()}%", f"%{q.lower()}%"]
+                # MULTIPLA NAO TEM COLUNA DE TIME (2026-08-27).
+                #
+                # `picks_multiplas` guarda as pernas em `games` (JSONB) e nao
+                # tem `home_team_name`/`away_team_name` -- essas colunas so'
+                # existem em picks_vip. O SELECT abaixo as pedia mesmo assim, a
+                # consulta estourava, o `except` engolia e a MULTIPLA SUMIA da
+                # busca inteira. Ela nunca apareceu no /admin por isso.
+                #
+                # Procurar time numa multipla e' procurar dentro do JSON, que e'
+                # onde os times de fato estao.
+                if pt == "multipla":
+                    conds.append("games::text ILIKE %s")
+                    params.append(f"%{q}%")
+                else:
+                    conds.append(f"(LOWER({home_col}) LIKE %s OR LOWER({away_col}) LIKE %s)")
+                    params += [f"%{q.lower()}%", f"%{q.lower()}%"]
             if date_from:
                 conds.append("match_date >= %s"); params.append(date_from)
             if date_to:
@@ -1510,19 +1524,34 @@ def admin_search_picks(
                 mercado = "market_1 AS market, line_1 AS line, odd_combined AS odd"
             else:
                 mercado = "market, line, odd"
+
+            # As colunas de time, pelo mesmo motivo. A multipla mostra quantas
+            # pernas tem: e' o que identifica o bilhete, ja' que nao ha' UM
+            # confronto pra nomear.
+            if pt == "multipla":
+                times = ("multipla_name AS home_team, "
+                         "(jsonb_array_length(games::jsonb) || ' jogos') AS away_team")
+            else:
+                times = f"{home_col} AS home_team, {away_col} AS away_team"
             try:
                 cur.execute(f"""
-                    SELECT id, {home_col} AS home_team, {away_col} AS away_team,
+                    SELECT id, {times},
                            match_date, result, profit, {mercado}
                     FROM {table}
                     {where}
                     ORDER BY match_date DESC, id DESC
                     LIMIT 50
                 """, params)
-            except Exception:
+            except Exception as e:
                 # Instancia sem a migracao das tabelas novas: pula esse tipo em
                 # vez de derrubar a busca inteira.
+                #
+                # O LOG entrou em 27/08: este `except` escondeu por meses o fato
+                # de a multipla pedir colunas que nao existem. "Pula o tipo" e'
+                # a decisao certa; fazer isso em SILENCIO nao era.
                 conn.rollback()
+                logging.getLogger(__name__).warning(
+                    "[ADMIN/PICKS] busca pulou %s: %s", pt, str(e)[:200])
                 continue
             for r in cur.fetchall():
                 results.append({**dict(r), "pick_type": pt})

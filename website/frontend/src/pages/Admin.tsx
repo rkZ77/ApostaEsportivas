@@ -1159,47 +1159,61 @@ export default function Admin() {
         <div className="card p-4 mb-4">
           <h2 className="text-xs font-semibold text-ink-3 mb-1">Resultados</h2>
           <p className="text-xs text-ink-3 mb-3 leading-relaxed">
-            Nada roda agendado. Resolver marca GREEN/RED nos picks cujo jogo já
-            terminou; reconferir corrige escanteios e cartões que a API revisou
-            depois do apito.
+            Nada roda agendado. Este botão faz as duas coisas, na ordem que elas
+            precisam acontecer: marca GREEN/RED nos picks cujo jogo já terminou e,
+            em seguida, reconfere escanteios e cartões que a API revisou depois do
+            apito. Cobre todos os tipos de pick, inclusive os motores novos.
           </p>
-          <div className="grid gap-2 sm:grid-cols-2">
-            <button
-              className="btn-primary text-sm py-3 disabled:opacity-40"
-              disabled={acaoResultado !== null}
-              onClick={async () => {
-                setAcaoResultado('resolve')
-                try {
-                  const r = await api.post('/admin/resolve-picks')
-                  const res = r.data?.resolved ?? {}
-                  const total = Object.values(res).reduce((a: number, b: any) => a + Number(b || 0), 0)
-                  showToast(total > 0
-                    ? `${total} pick(s) resolvido(s): ${Object.entries(res).filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`).join(', ')}`
-                    : 'Nenhum pick pendente com jogo encerrado.')
-                  carregarOverview()
-                } catch (err: any) {
-                  showToast(err.response?.data?.detail || 'Erro ao resolver picks', false)
-                } finally { setAcaoResultado(null) }
-              }}>
-              {acaoResultado === 'resolve' ? 'Resolvendo...' : 'Resolver picks pendentes'}
-            </button>
-            <button
-              className="btn-ghost text-sm py-3 disabled:opacity-40"
-              disabled={acaoResultado !== null}
-              onClick={async () => {
+          <button
+            className="btn-primary text-sm py-3 w-full disabled:opacity-40"
+            disabled={acaoResultado !== null}
+            onClick={async () => {
+              /* UM BOTÃO, DUAS CHAMADAS (2026-08-27).
+               *
+               * Eram dois botões lado a lado, e a ordem entre eles importava
+               * sem estar escrita em lugar nenhum: reconferir antes de resolver
+               * não corrige nada, porque o pick ainda não tem resultado pra
+               * corrigir. Quem operava tinha que saber disso de cabeça, e
+               * clicar duas vezes toda vez.
+               *
+               * O `reverify` roda mesmo se o `resolve` não achar nada: revisão
+               * tardia do provedor mexe em pick JÁ resolvido, que é o caso que
+               * ele existe pra pegar. */
+              setAcaoResultado('resolve')
+              try {
+                const r = await api.post('/admin/resolve-picks')
+                const res = r.data?.resolved ?? {}
+                const total = Object.values(res).reduce((a: number, b: any) => a + Number(b || 0), 0)
+
                 setAcaoResultado('reverify')
+                let corrigidos = 0
                 try {
-                  const r = await api.post('/admin/reverify-stats-results')
-                  const n = (r.data?.corrected ?? []).length
-                  showToast(n > 0 ? `${n} resultado(s) corrigido(s) após revisão da API.` : 'Nenhuma correção necessária.')
+                  const rev = await api.post('/admin/reverify-stats-results')
+                  corrigidos = (rev.data?.corrected ?? []).length
+                } catch {
+                  // Falhar a reconferência não pode apagar o que o resolve já
+                  // fez · são duas operações independentes no banco.
+                  showToast('Picks resolvidos, mas a reconferência falhou.', false)
                   carregarOverview()
-                } catch (err: any) {
-                  showToast(err.response?.data?.detail || 'Erro ao reconferir', false)
-                } finally { setAcaoResultado(null) }
-              }}>
-              {acaoResultado === 'reverify' ? 'Reconferindo...' : 'Reconferir escanteios e cartões'}
-            </button>
-          </div>
+                  return
+                }
+
+                const partes: string[] = []
+                if (total > 0) {
+                  partes.push(`${total} resolvido(s): ${Object.entries(res)
+                    .filter(([, v]) => Number(v) > 0).map(([k, v]) => `${k} ${v}`).join(', ')}`)
+                }
+                if (corrigidos > 0) partes.push(`${corrigidos} corrigido(s) após revisão da API`)
+                showToast(partes.length ? partes.join(' · ') : 'Nada pendente e nada a corrigir.')
+                carregarOverview()
+              } catch (err: any) {
+                showToast(err.response?.data?.detail || 'Erro ao atualizar resultados', false)
+              } finally { setAcaoResultado(null) }
+            }}>
+            {acaoResultado === 'resolve' ? 'Resolvendo picks...'
+              : acaoResultado === 'reverify' ? 'Reconferindo estatísticas...'
+              : 'Atualizar resultados'}
+          </button>
         </div>
 
         <div className="card p-4 mb-6">
