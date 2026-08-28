@@ -22,7 +22,7 @@ from services.odds_service import OddsService
 from services.team_stats_service import TeamStatsService
 from services.referee_stats_service import RefereeStatsService
 from services.standings_service import StandingsService
-from services.pick_engine import analyze_fixture_markets, rank_market_candidates, explain
+from services.pick_engine import analyze_fixture_markets, explain
 from services.pick_engine.ai_review import review_gate
 from services.pick_engine.staking import calculate_stake
 from services.pick_engine import team_profile_model as tpm
@@ -32,10 +32,11 @@ from services.pick_engine import data_validation as dv
 from services.pick_engine import competition_profile as cp
 from services.pick_engine import context_gate
 from services.pick_engine import stats_model
+from services.pick_engine import ranking
 from services.pick_engine import competition_rules_store
 from engine_pipelines.decision_log import (
     MOTIVO_HISTORICO_REPROVADO, MOTIVO_SEM_HISTORICO, MOTIVO_SEM_ODDS,
-    log_decision, log_run, log_skip,
+    log_decision, log_run, log_skip, registrar_selecao,
 )
 from services.engine_audit import auditar
 
@@ -53,7 +54,15 @@ ODD_TOTAL_MAX = 4.00  # era 3.00 -- achado real (2026-07-21): com poucos jogos
 # chamada unica no fim. Quem segura o custo de combinacao continua sendo
 # MAX_CANDIDATES_FOR_COMBO abaixo (itertools.combinations sobre o pool
 # ordenado), nao o numero de jogos lidos.
-MAX_CANDIDATES_FOR_COMBO = 12  # limita o espaco de busca das combinacoes
+#
+# 12 -> 30 em 2026-08-28. Duas coisas mudaram junto e as duas engordam o pool:
+# cada fixture passou a contribuir com o pool ELEGIVEL inteiro (ate 10 linhas,
+# em vez das 3 que sobreviviam ao corte "1 por familia"), e perna do mesmo
+# jogo deixou de ser proibida. Com o teto antigo o dia inteiro podia caber em
+# duas ou tres partidas e o motor voltaria a escolher dentro de um recorte
+# estreito -- exatamente o que a mudanca queria desfazer.
+# combinations(30, 3) = 4.060 combos, custo irrelevante.
+MAX_CANDIDATES_FOR_COMBO = 30  # limita o espaco de busca das combinacoes
 
 
 def _create_table_if_needed(cur):
@@ -230,11 +239,33 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
             league_baseline=league_baseline,
             rastro=rastro,
             )
-            picks = rank_market_candidates(candidates)
-            log_decision("MULTIPLA_ENGINE", fixture, candidates, picks, matchup=matchup,
+            # Um pool so' pra as duas coisas: o log e as pernas. Antes o log
+            # recebia `rank_market_candidates` (o corte final de 3, 1 por
+            # familia) e as pernas vinham do mesmo lugar, entao os dois
+            # concordavam por acidente. Com o pool alargado eles divergiriam:
+            # log_decision marca `eligible` por presenca nesta lista, e a tela
+            # do admin escreve "REJEITADO (nao passou nos criterios minimos)"
+            # pra tudo que ficou de fora dela -- ou seja, a multipla salvaria
+            # uma perna que o proprio log dela chama de reprovada.
+            elegiveis = ranking.rank_all_candidates(candidates)
+            log_decision("MULTIPLA_ENGINE", fixture, candidates, elegiveis, matchup=matchup,
                           context_data=context_data, rastro=rastro)
 
-            for p in picks:
+            # O LOG continua sendo `picks` (o corte final de 3, 1 por familia)
+            # porque e' o que a tela do admin mostra como "o que este jogo
+            # entregaria sozinho". O POOL DA MULTIPLA, nao: ele leva o elegivel
+            # inteiro (2026-08-28).
+            #
+            # Por que mudou: select_final_picks corta 1 por grupo de correlacao
+            # e para em 3. Esse corte existe pra escolher O pick de um jogo --
+            # VIP e Free entregam uma aposta por partida, e duas linhas da mesma
+            # familia ali seriam a mesma aposta duas vezes. A multipla escolhe
+            # outra coisa: a MELHOR COMBINACAO DO DIA. Aplicar o corte antes da
+            # combinacao jogava fora, sem nunca precificar, a 4a linha de um
+            # jogo forte -- que podia ser melhor que a 1a de um jogo fraco.
+            # Quem protege contra familia repetida no mesmo jogo agora e'
+            # _find_combo, no momento certo: na hora de montar o bilhete.
+            for p in elegiveis:
                 if (fixture["fixture_id"], p["market_type"]) in used_pairs:
                     continue
                 legs.append({**p, "_fixture": fixture, "data_quality_score": quality["score"]})
@@ -249,19 +280,71 @@ def _gather_leg_candidates(fixtures: list, used_pairs: set) -> list:
     return legs
 
 
+def _chave_de_correlacao(perna: dict) -> tuple:
+    """(fixture_id, familia) -- a chave que decide se duas pernas se excluem."""
+    return (perna["_fixture"]["fixture_id"],
+            ranking.correlation_group(perna["market_type"]))
+
+
 def _find_combo(legs: list) -> tuple | None:
-    """Ordena por Score Final e testa combinacoes de 2, depois 3 pernas de
-    FIXTURES DIFERENTES ate a primeira cujo produto real das odds caia em
-    [ODD_TOTAL_MIN, ODD_TOTAL_MAX]. Retorna (legs_escolhidas, score_combo)
-    ou None."""
+    """A MELHOR combinacao do dia dentro da faixa de odd total.
+
+    Retorna (pernas, score_combo, odd_total) ou None.
+
+    O QUE MUDOU EM 2026-08-28, e por que
+    ------------------------------------
+    A versao anterior exigia FIXTURES DIFERENTES e devolvia a melhor dupla
+    assim que existisse uma valida -- so' olhava triplas se nenhuma dupla
+    fechasse a faixa. Somado ao pool cortado em 3 linhas por jogo, o efeito
+    pratico era o que o usuario descreveu: o motor nao escolhia os melhores
+    mercados DO DIA, escolhia um mercado por jogo e depois casava jogo com
+    jogo.
+
+    Tres regras cairam:
+
+    1. FIXTURE DIFERENTE nao e' mais exigida. Duas pernas do mesmo jogo sao
+       um bilhete legitimo -- e' o mesmo formato que a alavancagem entrega
+       desde 2026-08-08. O que substitui a regra e' o veto por
+       (fixture_id, correlation_group), identico ao de la': duas pernas so'
+       se excluem quando falam do MESMO jogo E da MESMA familia. E' esse veto
+       que impede o bilhete contraditorio ("Over 3.5 gols" com "Under 2.5
+       gols" na mesma partida, os dois em `goals`) e tambem o redundante
+       ("Over 1.5" com "Over 2.5", que multiplicava duas odds como se fossem
+       eventos independentes quando uma implica a outra). Familias
+       DIFERENTES no mesmo jogo passam -- gols num mercado e impedimento
+       noutro nao se contradizem.
+
+       Vale lembrar de onde vem a forca desse veto: `correlation_group` ja'
+       colapsa btts/clean_sheet/win_to_nil em `goals` e handicap_/odd_even_
+       na familia raiz (ver _CORRELATION_GROUP_OVERRIDES), entao "Under 2.5 +
+       Ambas Marcam" -- que so' paga em 1-1 -- continua barrado aqui.
+
+    2. NAO ha mais preferencia por tamanho. 2 e 3 pernas concorrem no mesmo
+       ranking; ganha a melhor, nao a menor. Antes uma dupla mediana vencia
+       uma tripla otima por chegar primeiro no laco.
+
+    3. O CRITERIO deixou de ser a media dos final_score das pernas. A media
+       premiava bilhete desequilibrado: uma perna excelente com uma fraca
+       ganhava de duas boas, sendo que o bilhete so' paga se TODAS baterem.
+       Agora ordena por `prob_combinada` -- o produto das probabilidades
+       reais das pernas, a chance de o bilhete pagar -- com a media dos
+       final_score de desempate. Mesmo raciocinio que _find_combo da
+       alavancagem ja' segue, e o mesmo numero que _save_multipla ja' grava.
+
+       NAO ordena por EV: dentro de uma faixa de odd fixa, maximizar EV e'
+       maximizar odd, e odd alta e' alerta, nao qualidade.
+
+    `score_combo` continua sendo gravado como a media dos final_score, pra o
+    historico de picks_multiplas seguir comparavel com o que ja' esta la'.
+    """
     pool = sorted(legs, key=lambda p: p["final_score"], reverse=True)[:MAX_CANDIDATES_FOR_COMBO]
 
+    best = None
     for combo_size in (2, 3):
-        best = None
         for combo in itertools.combinations(pool, combo_size):
-            fixture_ids = {p["_fixture"]["fixture_id"] for p in combo}
-            if len(fixture_ids) != combo_size:
-                continue  # exige fixtures diferentes
+            chaves = [_chave_de_correlacao(p) for p in combo]
+            if len(set(chaves)) != len(chaves):
+                continue
 
             odd_total = round(1.0, 4)
             for p in combo:
@@ -271,14 +354,18 @@ def _find_combo(legs: list) -> tuple | None:
             if not (ODD_TOTAL_MIN <= odd_total <= ODD_TOTAL_MAX):
                 continue
 
+            prob_combinada = 1.0
+            for p in combo:
+                prob_combinada *= float(p["taxa_real"])
             score_combo = round(sum(p["final_score"] for p in combo) / len(combo), 4)
-            if best is None or score_combo > best[1]:
-                best = (combo, score_combo, odd_total)
 
-        if best:
-            return best[0], best[1], best[2]
+            chave_ordem = (round(prob_combinada, 6), score_combo)
+            if best is None or chave_ordem > best[0]:
+                best = (chave_ordem, combo, score_combo, odd_total)
 
-    return None
+    if best is None:
+        return None
+    return best[1], best[2], best[3]
 
 
 def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
@@ -322,11 +409,24 @@ def _save_multipla(cur, legs: tuple, score_combo: float, odd_total: float):
     # a media de um score de ranqueamento que ja' mistura confidence, Q,
     # contexto e perfil.
     #
-    # Assume independencia entre as pernas. _find_combo exige fixtures
-    # DIFERENTES, entao nao ha correlacao dentro do mesmo jogo; sobra a
-    # correlacao fraca de rodada (mesma liga, mesmo dia), que empurra a
-    # probabilidade real um pouco pra cima da estimada -- erro pro lado
-    # conservador.
+    # Assume independencia entre as pernas.
+    #
+    # ATE 2026-08-28 isso era garantido por construcao: _find_combo exigia
+    # fixtures DIFERENTES. Nao exige mais -- duas pernas do mesmo jogo entram,
+    # desde que de familias diferentes. O que sobra de dependencia e' quase
+    # todo pro lado CONSERVADOR: dentro de uma partida, mercados de volume
+    # (gols, escanteio, chute, falta) sao POSITIVAMENTE correlacionados na
+    # direcao "jogo aberto", entao duas pernas de Over ganham juntas com mais
+    # frequencia do que o produto anuncia. Fora do mesmo jogo continua valendo
+    # a correlacao fraca de rodada, tambem conservadora.
+    #
+    # O caso anti-conservador -- duas pernas do mesmo jogo apontando pra lados
+    # OPOSTOS, tipo Over de gol com Under de escanteio -- existe e nao e'
+    # pego pelo veto de familia. Ele ficou de fora de proposito: exigiria
+    # medir a correlacao por PAR de mercado, e o dado pra isso e' o mesmo
+    # que sustentou a medicao de 2026-08-20 (abaixo), que so' cobre pernas de
+    # jogos diferentes. Ate ter medicao propria, e' um risco conhecido e
+    # nomeado, nao um esquecimento.
     #
     # A INDEPENDENCIA FOI MEDIDA EM 2026-08-20, e ela se sustenta.
     #
@@ -447,6 +547,10 @@ def run_multipla_engine():
         f"{p['_fixture']['home_team']} x {p['_fixture']['away_team']} ({p['market_name']} {p['value_label']} @ {p['odd']})"
         for p in combo
     )
+    # As contagens da aba de Auditoria: `contabilizar` ja' somou este jogo
+    # como analisado/descartado quando o decision_log gravou a linha dele;
+    # aqui a pick salva move a contagem pro lado certo.
+    registrar_selecao("MULTIPLA_ENGINE", 1)
     print(f"[MULTIPLA_ENGINE] Salva: {pernas} | odd_total={odd_total} | score_combo={score_combo}")
 
 
