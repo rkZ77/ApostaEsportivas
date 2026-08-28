@@ -74,10 +74,21 @@ def test_vip_rejeita_linha_acima_do_teto_da_faixa():
 
 
 def test_vip_rejeita_linha_abaixo_do_piso_da_faixa():
-    """1.42 passava no min_odd de 1.39 e virava pick. Faixa <1.50 e' a unica
-    com ROI negativo medido em producao (-24% em 15 picks)."""
-    fora = ranking.evaluate_all_lines([_linha(1.42)], VIP_CONFIG)[0]
-    assert "fora da faixa" in fora["reject_reason"]
+    """A faixa corta dos DOIS lados, e o piso e' o lado que so' passou a existir
+    em 14/08 (antes, `min_odd=1.39` era o unico corte de baixo).
+
+    Lido da config e nao cravado: o piso ja' mudou uma vez (1.50 -> 1.30 em
+    28/08), e o teste tem que continuar medindo A REGRA, nao o numero do mes.
+    """
+    abaixo = round(VIP_CONFIG.conservative_odd_low - 0.05, 2)
+    fora = ranking.evaluate_all_lines([_linha(abaixo)], VIP_CONFIG)[0]
+    assert fora["reject_reason"], f"odd {abaixo} devia cair pelo piso"
+    # O motivo pode ser "fora da faixa" OU "odd abaixo do minimo": desde 28/08
+    # os dois cortes coincidem no VIP (min_odd == conservative_odd_low), e essa
+    # coincidencia e' desejada -- e' ela que garante que nao existe faixa entre
+    # os dois gates por onde uma linha escape. O que o teste protege e' que a
+    # linha CAI, e que cai por ODD.
+    assert "odd" in fora["reject_reason"]
 
 
 def test_linha_dentro_da_faixa_passa():
@@ -100,7 +111,14 @@ def test_faixa_desligada_mantem_o_comportamento_antigo():
 
 
 def test_cada_pipeline_tem_a_propria_faixa():
-    assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.50, 1.90)
+    """Os NUMEROS aqui sao decisao de produto e mudam · o que este teste protege
+    e' que cada pipeline tenha a SUA, e nao herde a do vizinho por descuido.
+
+    VIP abriu pra 1.30-1.99 em 28/08 (decisao do usuario). A Dica NAO acompanhou
+    de proposito: pick gratuita continua mais estreita que a VIP, e odd baixa
+    nao e' seguranca, e' retorno que nao cobre o erro do modelo.
+    """
+    assert (VIP_CONFIG.conservative_odd_low, VIP_CONFIG.conservative_odd_high) == (1.30, 1.99)
     assert (DICA_CONFIG.min_odd, DICA_CONFIG.max_odd) == (1.50, 1.90)
     assert DICA_CONFIG.enforce_odd_band
     # Alavancagem e' o produto de perna barata: a faixa dela e' a dela.
@@ -108,21 +126,44 @@ def test_cada_pipeline_tem_a_propria_faixa():
             ALAVANCAGEM_CONFIG.conservative_odd_high) == (1.10, 1.55)
 
 
+def test_o_piso_de_sanidade_acompanha_a_faixa_do_vip():
+    """`min_odd` e' um gate INDEPENDENTE da faixa (ranking.motivo_de_odd_fora
+    testa os dois), entao deixa-lo no default de 1.39 cortaria tudo entre 1.30 e
+    1.39 e a faixa nova valeria pela metade -- em silencio, porque o motivo de
+    rejeicao diria "odd abaixo do minimo" e nao "fora da faixa"."""
+    assert VIP_CONFIG.min_odd <= VIP_CONFIG.conservative_odd_low
+    assert VIP_CONFIG.max_odd >= VIP_CONFIG.conservative_odd_high
+
+
 # ──────────────────── 3. degrau seguro dentro da faixa ──────────────────────
 
 
 def test_dentro_da_faixa_a_linha_mais_barata_e_a_mais_segura():
-    assert ranking._safety_bonus(1.50, VIP_CONFIG) == 1.0
-    assert ranking._safety_bonus(1.90, VIP_CONFIG) == pytest.approx(0.60, abs=1e-4)
-    assert ranking._safety_bonus(1.70, VIP_CONFIG) == pytest.approx(0.80, abs=1e-4)
+    """Lido das BORDAS da config e nao de numeros fixos · a faixa e' decisao de
+    produto e ja' mudou uma vez (1.50-1.90 -> 1.30-1.99 em 28/08). O que nao
+    muda e' a forma: piso vale 1.0, teto vale menos, e o meio fica no meio."""
+    piso = VIP_CONFIG.conservative_odd_low
+    teto = VIP_CONFIG.conservative_odd_high
+    meio = round((piso + teto) / 2, 2)
+
+    assert ranking._safety_bonus(piso, VIP_CONFIG) == 1.0
+    assert ranking._safety_bonus(teto, VIP_CONFIG) == pytest.approx(
+        1.0 - VIP_CONFIG.safety_band_tilt, abs=1e-4)
+    # Monotona: mais cara dentro da faixa nunca vale mais que mais barata.
+    assert (ranking._safety_bonus(piso, VIP_CONFIG)
+            > ranking._safety_bonus(meio, VIP_CONFIG)
+            > ranking._safety_bonus(teto, VIP_CONFIG))
 
 
 def test_a_seguranca_nao_salta_ao_sair_da_faixa():
     """A funcao tem que ser continua nas duas bordas -- se ela pulasse pra
     cima logo acima do teto, a linha cara ganharia pontos justamente por
     estar fora."""
-    assert ranking._safety_bonus(1.91, VIP_CONFIG) < ranking._safety_bonus(1.90, VIP_CONFIG)
-    assert ranking._safety_bonus(1.49, VIP_CONFIG) < ranking._safety_bonus(1.50, VIP_CONFIG)
+    piso = VIP_CONFIG.conservative_odd_low
+    teto = VIP_CONFIG.conservative_odd_high
+
+    assert ranking._safety_bonus(teto + 0.01, VIP_CONFIG) < ranking._safety_bonus(teto, VIP_CONFIG)
+    assert ranking._safety_bonus(piso - 0.01, VIP_CONFIG) < ranking._safety_bonus(piso, VIP_CONFIG)
 
 
 def test_pedido_do_usuario_desce_a_linha_quando_a_estatistica_empata():

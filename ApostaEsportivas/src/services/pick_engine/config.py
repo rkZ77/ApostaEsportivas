@@ -294,7 +294,33 @@ DEFAULT_CONFIG = PickEngineConfig()
 #
 # Custo aceito: ~29% dos picks deixam de existir. Como sao exatamente os das
 # duas pontas, o volume cai sem levar lucro junto.
-VIP_CONFIG = PickEngineConfig(enforce_odd_band=True)
+#
+# FAIXA DO VIP ABERTA PRA 1.30-1.99 (2026-08-28, decisao do usuario).
+#
+# A medicao acima continua valendo e continua registrada: no recorte de 14/08,
+# odd <1.50 foi a UNICA faixa com ROI negativo (8/15 = 53,3%, ROI -24,0%), e no
+# historico inteiro de 223 picks ela dava 60,0% com ROI -14,4%.
+#
+# O que essa medicao NAO diz e' que a faixa nova perde: 15 picks e' amostra
+# curta pra condenar uma regiao inteira, e o motor mudou muito desde entao --
+# entre 14/08 e hoje entraram a janela de historico da liga (de 15 pra 60
+# jogos), a Binomial Negativa nas contagens superdispersas, o gate de contexto
+# de mata-mata e o descarte de partida sem placar. O pick de odd 1.35 que o
+# motor gera hoje nao e' o mesmo que ele gerava naquele recorte.
+#
+# `min_odd` acompanha, e TEM que acompanhar: ele e' um gate independente
+# (ranking.motivo_de_odd_fora testa os dois), entao deixa-lo em 1.39 cortaria
+# tudo entre 1.30 e 1.39 e a faixa nova valeria pela metade, em silencio.
+#
+# O que medir daqui pra frente: hit rate e ROI das duas pontas novas
+# (1.30-1.50 e 1.90-1.99) separados do miolo. A quebra por faixa de odd ja'
+# existe no ledger (attribution.group_by), entao e' consulta, nao instrumento
+# novo.
+VIP_CONFIG = PickEngineConfig(
+    enforce_odd_band=True,
+    min_odd=1.30, max_odd=15.0,
+    conservative_odd_low=1.30, conservative_odd_high=1.99,
+)
 
 # Dica do Dia exige consistencia maior (regra ja existia como constante fixa
 # CONFIDENCE_MIN=0.72 em dica_do_dia_pipeline.py). O teto de 1.90 ja era o da
