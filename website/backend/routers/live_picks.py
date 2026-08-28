@@ -1009,24 +1009,60 @@ def diagnostico(current_user: dict = Depends(require_admin)):
     ligado = os.getenv("LIVE_ENGINE_ENABLED", "").strip().lower() in (
         "1", "true", "on", "yes", "sim")
     em_prod = _rodar_em_prod()
+    # A LISTA MUDOU COM O PRODUTO (2026-08-28).
+    #
+    # Duas checagens tinham parado de corresponder ao que o painel descreve:
+    #
+    #   "credenciais _DEV" aparecia SEMPRE, e ela so' faz sentido quando o motor
+    #   grava no banco de DEV. Num servico com LIVE_ENGINE_ALLOW_PROD ligado ela
+    #   virava um X vermelho permanente em cima de uma condicao que aquele
+    #   ambiente nao precisa satisfazer -- e diagnostico que acusa o que nao
+    #   importa ensina a ignorar diagnostico;
+    #
+    #   "tabela picks_live" dizia "o motor cria na primeira rodada, NO BANCO DE
+    #   DEV". Com o motor autorizado a gravar em producao, a frase apontava pro
+    #   banco errado.
+    #
+    # E faltava a checagem que passou a ser a mais importante: o produto esta'
+    # VISIVEL pro assinante? O motor pode estar redondo e a aba fechada, que era
+    # o estado normal ate' ontem.
+    publico = os.getenv("LIVE_PICKS_PUBLIC", "on").strip().lower() not in (
+        "0", "off", "false", "no", "nao")
+    onde_grava = "producao" if em_prod else "DEV"
+
     checagens = [
         {"item": "motor habilitado", "ok": ligado,
          "detalhe": f"LIVE_ENGINE_ENABLED={os.getenv('LIVE_ENGINE_ENABLED') or 'ausente'}"},
         {"item": "disparo autorizado", "ok": autorizado,
          "detalhe": motivo or "liberado neste ambiente"},
-        {"item": "credenciais _DEV", "ok": not faltando,
-         "detalhe": "todas presentes" if not faltando else f"faltam: {', '.join(faltando)}"},
         {"item": "codigo do motor", "ok": bool(_pipeline_dir()),
          "detalhe": _pipeline_dir() or "PIPELINE_SRC_PATH nao resolve"},
         {"item": "chave da API-Football", "ok": bool(os.getenv("API_FOOTBALL_KEY")),
          "detalhe": "configurada" if os.getenv("API_FOOTBALL_KEY") else "API_FOOTBALL_KEY ausente"},
-        {"item": "tabela picks_live no banco que o site le", "ok": tabela,
+        {"item": f"tabela picks_live no banco que o site le", "ok": tabela,
          "detalhe": "existe" if tabela else
-                    "ausente -- o motor cria na primeira rodada, no banco de DEV"},
+                    f"ausente -- o motor cria na primeira rodada, no banco de {onde_grava}"},
+        # A ponta do produto. Sem ela o painel dizia "pronto pra rodar" sobre um
+        # motor que ninguem ia ver.
+        {"item": "visivel pro assinante", "ok": publico,
+         "detalhe": "aberto (padrao)" if publico else
+                    "LIVE_PICKS_PUBLIC desligado -- so' admin ve' o feed"},
     ]
+
+    # So' entra quando importa: o motor grava em DEV.
+    if not em_prod:
+        checagens.insert(2, {
+            "item": "credenciais _DEV",
+            "ok": not faltando,
+            "detalhe": ("todas presentes" if not faltando
+                        else f"faltam: {', '.join(faltando)}"),
+        })
     return {
         "pronto": all(c["ok"] for c in checagens),
         "checagens": checagens,
+        # `grava_em` ja' existia logo abaixo · manter as duas chaves faria a
+        # segunda sobrescrever a primeira em silencio.
+        "publico": publico,
         "dry_run_padrao": os.getenv("LIVE_ENGINE_DRY_RUN", "true"),
         # O MESMO texto ja' interpretado. O painel precisa do booleano, e nao
         # do texto cru: "off", "0" e "nao" sao valores validos que uma leitura

@@ -42,6 +42,8 @@ interface Diagnostico {
    * `=== 'false'` entenderia ao contrário.
    */
   dry_run_padrao_ativo?: boolean
+  /** O produto está visível pro assinante (LIVE_PICKS_PUBLIC). */
+  publico?: boolean
   /** "produção" | "desenvolvimento" · onde a rodada grava. */
   grava_em?: string
 }
@@ -301,6 +303,20 @@ export default function AdminMotorLive() {
             </span>
           )}
         </div>
+        {/* Onde o motor GRAVA · o painel dizia "rodada concluída" sem nunca
+            dizer em qual banco, e a resposta muda com LIVE_ENGINE_ALLOW_PROD.
+            Num painel que existe pra testar, essa é a primeira pergunta. */}
+        {diag?.grava_em && (
+          <p className="text-[11px] text-ink-4 mb-2">
+            Grava no banco de{' '}
+            <span className={diag.grava_em.startsWith('produ') ? 'text-amber-400 font-bold' : 'text-ink-2 font-bold'}>
+              {diag.grava_em.toUpperCase()}
+            </span>
+            {diag.grava_em.startsWith('produ')
+              ? ' · o pick que sair daqui aparece pro assinante.'
+              : ' · nada daqui chega ao assinante.'}
+          </p>
+        )}
         {/* Lista completa mesmo quando tudo passa: num painel de teste, saber
             QUAL condição está satisfeita vale tanto quanto saber que falta uma. */}
         <ul className="space-y-1.5">
