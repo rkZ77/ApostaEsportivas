@@ -48,6 +48,7 @@ antigo -- backtest e teste dependem dele.
 from __future__ import annotations
 
 from services.pick_engine import competition_profile
+from utils.db_utils import linhas_dict
 
 #: Atuacao curta demais nao descreve o regime de titular. 60 minutos e' a
 #: fronteira usual de "jogou o jogo" -- quem entrou no segundo tempo fica de
@@ -98,7 +99,7 @@ def carregar(cur, player_id: int, coluna: str, *, limite: int = LIMITE_ATUACOES,
       ORDER BY match_date DESC
          LIMIT %s
     """, tuple(params) + (limite,))
-    return [dict(r) if not isinstance(r, dict) else r for r in cur.fetchall()]
+    return linhas_dict(cur)
 
 
 def composicao(atuacoes: list) -> dict:
@@ -162,7 +163,7 @@ def jogadores_dos_times(cur, team_ids: list, *, posicoes=None,
         ) x
         WHERE x.ordem = 1 AND x.atuacoes >= %s
     """, (list(team_ids), MIN_MINUTOS, *params_posicao, min_atuacoes))
-    return [dict(r) if not isinstance(r, dict) else r for r in cur.fetchall()]
+    return linhas_dict(cur)
 
 
 def volume_do_adversario(cur, team_id: int, coluna: str, mando: str,

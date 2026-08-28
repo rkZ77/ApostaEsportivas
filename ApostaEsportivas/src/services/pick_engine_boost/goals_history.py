@@ -21,6 +21,7 @@ tecnico/elenco marcada nao descreve o time de hoje.
 from __future__ import annotations
 
 from services.pick_engine import competition_profile as cp
+from utils.db_utils import linhas_dict
 
 #: Teto de jogos lidos por time. Dez e' o recorte principal que o metodo
 #: declara analisar; catorze da folga pra o corte por mando ainda sobrar
@@ -76,7 +77,7 @@ def carregar(cur, team_id: int, league_id, season, *, since_date=None,
          LIMIT %s
     """, (team_id, *params, limite))
 
-    jogos = [dict(r) if not isinstance(r, dict) else r for r in cur.fetchall()]
+    jogos = linhas_dict(cur)
     # Gol e' o unico contador deste motor: linha sem o placar de FT nao serve
     # pra nada aqui e so' inflaria a contagem de amostra.
     return [j for j in jogos

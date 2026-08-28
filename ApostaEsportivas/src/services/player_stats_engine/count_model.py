@@ -24,6 +24,7 @@ from __future__ import annotations
 
 from services.pick_engine import probability_model as pm
 from services.player_stats_engine import methods as cat
+from utils.db_utils import linha_dict
 
 #: Abaixo disto a variancia medida e' ruido. Um phi estimado com 40 atuacoes
 #: nao e' uma medida, e' uma opiniao com casas decimais.
@@ -52,10 +53,9 @@ def medir_dispersao(cur, metodo: cat.Metodo) -> dict:
              WHERE {metodo.coluna} IS NOT NULL
                AND COALESCE(minutes, 0) >= 60
         """)
-        linha = cur.fetchone()
+        linha = linha_dict(cur)
         if not linha:
             return congelado
-        linha = dict(linha) if not isinstance(linha, dict) else linha
         n = int(linha.get("n") or 0)
         media = float(linha.get("media") or 0)
         variancia = float(linha.get("variancia") or 0)

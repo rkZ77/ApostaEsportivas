@@ -56,3 +56,36 @@ def get_connection(env: str = None):
         password=DB_PASS,
         sslmode=DB_SSLMODE,
     )
+
+
+# ─────────────────────────────────────────────────────────────
+# Linha -> dict
+#
+# Os motores novos (Pick Boost, Player Stats) leem com `linha["coluna"]`, mas
+# os pipelines abrem cursor COMUM -- entao a linha chega como tupla. O
+# `dict(linha)` que estava escrito nesses leitores so' funciona com
+# RealDictCursor: com cursor comum estourava
+# "cannot convert dictionary update sequence element #0 to a sequence" --
+# em silencio, porque cada leitor tinha o proprio try/except.
+#
+# As duas funcoes aceitam os dois tipos de cursor de proposito: quem chama de
+# fora do pipeline (script solto, admin) costuma abrir RealDictCursor.
+# ─────────────────────────────────────────────────────────────
+
+def linhas_dict(cur) -> list:
+    """Todas as linhas do cursor como dicts."""
+    linhas = cur.fetchall()
+    if not linhas:
+        return []
+    colunas = [d[0] for d in cur.description]
+    return [l if isinstance(l, dict) else dict(zip(colunas, l)) for l in linhas]
+
+
+def linha_dict(cur):
+    """A proxima linha do cursor como dict, ou None se nao houver."""
+    linha = cur.fetchone()
+    if linha is None:
+        return None
+    if isinstance(linha, dict):
+        return linha
+    return dict(zip([d[0] for d in cur.description], linha))
