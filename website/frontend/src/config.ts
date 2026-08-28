@@ -5,19 +5,23 @@ export const TURNSTILE_SITE_KEY = import.meta.env.VITE_TURNSTILE_SITE_KEY ?? ''
 /**
  * Aba "Picks Ao Vivo" visível para o assinante.
  *
- * DESLIGADA POR PADRÃO, e o padrão é a decisão: o código do Motor Live sobe
- * junto com o resto porque vive na mesma branch, mas o produto ainda não
- * existe para o usuário. Sem esta flag, todo VIP passaria a ver uma aba que
- * mostra "Nenhuma oportunidade ao vivo agora" para sempre · o motor não roda
- * em produção (exige DB_ENV=dev e LIVE_ENGINE_ALLOW_RUN) e a tabela
- * `picks_live` nem existe lá.
+ * LIGADA POR PADRÃO desde 2026-08-27 · o produto abriu.
  *
- * Ligar é uma variável no Railway, sem deploy de código:
+ * O padrão inverteu, e a inversão é a decisão. Enquanto o Motor Live estava em
+ * validação, o padrão era desligado porque esquecer a variável só custava uma
+ * aba escondida. Agora custa o contrário: esquecer a variável em produção
+ * ESCONDERIA um produto que já existe, e ninguém perceberia · o site não
+ * reclama de uma aba que não aparece.
  *
- *     VITE_LIVE_PICKS_ENABLED=true
+ * É a mesma escolha de `SIDE_EFFECTS` em runtime_env.py e de `STATS_SWEEP` na
+ * varredura: o default é o comportamento certo, e a variável existe para
+ * DESLIGAR quando algo dá errado, sem deploy de código:
  *
- * Esconder a aba é suficiente porque a execução já está travada no backend ·
- * isto aqui é sobre o que o assinante vê, não sobre o motor rodar.
+ *     VITE_LIVE_PICKS_ENABLED=false
+ *
+ * A aba continua sendo `premiumOnly` · "todos" aqui é todo assinante, e quem
+ * não é vê o mesmo cadeado dos outros produtos VIP. E esconder a aba nunca foi
+ * o que protege o dado: quem decide é `require_live_reader` no backend.
  */
 export const LIVE_PICKS_ENABLED =
-  (import.meta.env.VITE_LIVE_PICKS_ENABLED ?? '').toString().toLowerCase() === 'true'
+  (import.meta.env.VITE_LIVE_PICKS_ENABLED ?? 'true').toString().toLowerCase() !== 'false'

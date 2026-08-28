@@ -37,20 +37,63 @@ def _ler(*partes) -> str:
 
 # ── a liberacao ──────────────────────────────────────────────────────────
 class TestLiberacao:
-    def test_o_backend_libera_por_variavel(self):
-        """`LIVE_PICKS_PUBLIC` e' o interruptor do lado do servidor · esconder a
-        aba no front nao basta, qualquer VIP que conheca a rota alcanca /feed."""
+    """O produto ABRIU em 27/08 e o padrao inverteu junto.
+
+    Enquanto o motor estava em validacao, o default era fechado: esquecer a
+    variavel so' custava uma aba escondida. Agora custa o contrario -- esquecer
+    ESCONDERIA um produto que existe, e ninguem percebe: nao ha' quem reclame de
+    uma aba que nao aparece nem de uma rota que responde 403 pra todo mundo.
+
+    E' a mesma escolha de `SIDE_EFFECTS` e de `STATS_SWEEP`: default certo, e a
+    variavel serve pra DESLIGAR sem deploy.
+    """
+
+    def test_o_backend_responde_pro_assinante_SEM_variavel_nenhuma(self, monkeypatch):
+        monkeypatch.delenv("LIVE_PICKS_PUBLIC", raising=False)
+        import routers.live_picks as live
+
+        assinante = {"id": 1, "plan": "vip"}
+        assert live.require_live_reader(assinante) is assinante
+
+    @pytest.mark.parametrize("valor", ["off", "false", "0", "no", "nao", "OFF"])
+    def test_a_variavel_agora_DESLIGA(self, monkeypatch, valor):
+        """Ela deixou de ser liberacao e virou interruptor de emergencia."""
+        monkeypatch.setenv("LIVE_PICKS_PUBLIC", valor)
+        import routers.live_picks as live
+
+        with pytest.raises(Exception):
+            live.require_live_reader({"id": 1, "plan": "vip"})
+
+    def test_admin_atravessa_o_desligamento(self, monkeypatch):
+        """Desligar pro assinante nao pode cegar quem opera · e' justamente
+        quando algo deu errado que o admin precisa olhar a tela."""
+        monkeypatch.setenv("LIVE_PICKS_PUBLIC", "off")
+        import routers.live_picks as live
+
+        admin = {"id": 1, "plan": "admin"}
+        assert live.require_live_reader(admin) is admin
+
+    def test_o_plano_continua_sendo_o_gate(self):
+        """"Aberto pra todos" e' todo ASSINANTE · quem nao e' VIP nunca chega
+        em require_live_reader, porque require_vip barra antes."""
         src = _ler(_BACKEND, "routers", "live_picks.py")
-        assert "LIVE_PICKS_PUBLIC" in src
-        assert "def require_live_reader" in src
+        assert "Depends(require_vip)" in src
 
-    def test_o_front_libera_pela_mesma_ideia(self):
+    def test_o_front_tambem_abre_por_padrao(self):
+        """Sem `VITE_LIVE_PICKS_ENABLED` a aba tem que APARECER · o inverso
+        deixaria o produto invisivel por esquecimento de variavel."""
         src = _ler(_FRONT, "config.ts")
-        assert "VITE_LIVE_PICKS_ENABLED" in src
+        assert "?? 'true'" in src and "!== 'false'" in src, \
+            "o front voltou a exigir a variavel pra mostrar a aba"
 
-    def test_admin_ve_antes_do_produto_abrir(self):
-        """Quem opera precisa ver a MESMA tela que o assinante vai ver, e nao
-        so' o painel de diagnostico do /admin."""
+    def test_a_aba_continua_sendo_premium(self):
+        src = _ler(_FRONT, "pages", "Picks.tsx")
+        trecho = src[src.index("key: 'ao_vivo'"):]
+        assert "premiumOnly: true" in trecho[:400]
+
+    def test_admin_ve_mesmo_com_o_produto_desligado(self):
+        """Quem opera precisa ver a MESMA tela que o assinante ve, e nao so' o
+        painel de diagnostico do /admin."""
         src = _ler(_FRONT, "pages", "Picks.tsx")
         assert "LIVE_PICKS_ENABLED || isAdmin" in src
 

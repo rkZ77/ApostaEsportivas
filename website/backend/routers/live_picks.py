@@ -69,19 +69,25 @@ STATUS_LIQUIDADO = "SETTLED"
 def require_live_reader(user: dict = Depends(require_vip)) -> dict:
     """Quem pode LER o feed/estatistica do Motor Live.
 
-    Enquanto o motor esta em validacao, so' admin. A aba do usuario ja' esta
-    desligada por `VITE_LIVE_PICKS_ENABLED`, mas isso e' o front: qualquer VIP
-    que conheca a rota alcanca `/feed` e `/stats` do mesmo jeito, e `stats`
-    publica taxa de acerto de um motor que ainda nao foi medido. Numero de
-    motor em teste vazando como se fosse produto e' pior do que numero nenhum.
+    ABERTO PRO ASSINANTE desde 2026-08-27 · o produto abriu.
 
-    `LIVE_PICKS_PUBLIC=true` libera pra VIP quando o produto abrir · e' o mesmo
-    interruptor do front, do lado do servidor, e nao depende de rebuild.
+    Ate' aqui era admin-only, com `LIVE_PICKS_PUBLIC=true` como liberacao. O
+    padrao inverteu junto com o do front, e a inversao e' a decisao: esquecer a
+    variavel agora ESCONDERIA um produto que existe, e ninguem perceberia --
+    ninguem reclama de uma rota que responde 403 pra todo mundo.
+
+    E' a mesma escolha de `SIDE_EFFECTS` em runtime_env.py e de `STATS_SWEEP`
+    na varredura: o default e' o comportamento certo, e a variavel existe pra
+    DESLIGAR sem deploy quando algo da' errado.
+
+        LIVE_PICKS_PUBLIC=off    volta a ser so' admin
+
+    `require_vip` continua sendo o gate de plano · "aberto pro assinante" nao e'
+    aberto pra qualquer um, e quem nao e' VIP nunca chegou aqui.
     """
-    if os.getenv("LIVE_PICKS_PUBLIC", "").strip().lower() in ("1", "true", "on", "yes", "sim"):
-        return user
-    if user.get("plan") != "admin":
-        raise HTTPException(403, "Motor Ao Vivo em validação, disponível apenas para admin.")
+    if os.getenv("LIVE_PICKS_PUBLIC", "on").strip().lower() in ("0", "off", "false", "no", "nao"):
+        if user.get("plan") != "admin":
+            raise HTTPException(403, "Motor Ao Vivo indisponível no momento.")
     return user
 
 

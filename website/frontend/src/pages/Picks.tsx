@@ -198,10 +198,10 @@ function TabBar({ tab, setTab, canSeeVip, verAoVivo, counts, liveCount, onPrefet
          ruído numa barra que rola no celular. */
       key: 'ao_vivo' as Tab, label: 'Picks Ao Vivo',
       premiumOnly: true,
-      /* Fora da barra enquanto o Motor Live não roda em produção · ver
-         LIVE_PICKS_ENABLED em config.ts e `podeVerAoVivo` no Picks. Filtrada
-         logo abaixo em vez de removida daqui pra a aba voltar virando uma
-         variável de ambiente, sem mexer no código. */
+      /* NA BARRA por padrão desde 27/08 · o produto abriu. A variável continua
+         existindo, mas virou o contrário do que era: agora ela DESLIGA
+         (`VITE_LIVE_PICKS_ENABLED=false`), sem deploy, se algo der errado.
+         Ver LIVE_PICKS_ENABLED em config.ts e `podeVerAoVivo` aqui. */
       oculta: !verAoVivo,
     },
     {
@@ -1932,15 +1932,18 @@ export default function Picks() {
   /*
    * Quem enxerga a aba "Picks Ao Vivo".
    *
-   * `VITE_LIVE_PICKS_ENABLED` continua sendo o interruptor do PRODUTO: quando
-   * ele abrir pro assinante, é aquela variável que liga a aba pra todo mundo,
-   * sem deploy. O que muda aqui é que admin não precisa esperar por isso ·
-   * enquanto o motor está sendo medido, quem opera precisa ver a mesma tela
-   * que o assinante vai ver, no mesmo lugar dos outros picks, e não só o
-   * painel de diagnóstico do /admin.
+   * O produto abriu em 27/08: `LIVE_PICKS_ENABLED` é `true` por padrão, então
+   * todo assinante enxerga. A variável não sumiu, ela INVERTEU · hoje serve pra
+   * desligar sem deploy (`VITE_LIVE_PICKS_ENABLED=false`) se algo der errado.
    *
-   * O backend já recusa o feed pra quem não pode (LIVE_PICKS_PUBLIC em
-   * live_picks.py), então isto é sobre a aba aparecer, não sobre liberar dado.
+   * O `|| isAdmin` sobrevive à inversão e não é redundante: é justamente
+   * quando o produto está DESLIGADO que quem opera precisa ver a mesma tela
+   * que o assinante veria, no mesmo lugar dos outros picks, e não só o painel
+   * de diagnóstico do /admin.
+   *
+   * Quem decide o DADO continua sendo o backend (`require_live_reader` em
+   * live_picks.py, que também abre por padrão e também deixa admin passar
+   * quando está desligado). Isto aqui é só sobre a aba aparecer.
    */
   const podeVerAoVivo = LIVE_PICKS_ENABLED || isAdmin
   const canSeeVip = isVip || isAdmin
