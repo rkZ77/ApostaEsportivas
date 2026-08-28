@@ -71,6 +71,96 @@ def _num(dado, *caminho):
         return None
 
 
+#: (coluna do banco, caminho no bloco `statistics` da API).
+#:
+#: ERA CODIGO E VIROU DADO (2026-08-28). Os 19 `_num(stats, "grupo", "campo")`
+#: viviam soltos dentro de `_linhas_da_fixture`, na ordem exata das colunas do
+#: INSERT -- entao "conferir o mapeamento" era ler duas listas em paralelo e
+#: torcer. Como tabela, a mesma estrutura serve pra TRES coisas: montar a
+#: linha, imprimir o shape, e CONFERIR contra uma resposta real da API.
+#:
+#: Ordem: a mesma do INSERT, e ha' teste travando isso -- a tupla e' posicional
+#: e uma coluna fora de ordem grava chute no campo de falta em silencio.
+MAPA_DE_CAMPOS: tuple = (
+    ("shots_total",       ("shots", "total")),
+    ("shots_on",          ("shots", "on")),
+    ("goals_total",       ("goals", "total")),
+    ("goals_conceded",    ("goals", "conceded")),
+    ("assists",           ("goals", "assists")),
+    ("saves",             ("goals", "saves")),
+    ("passes_total",      ("passes", "total")),
+    ("passes_key",        ("passes", "key")),
+    ("tackles_total",     ("tackles", "total")),
+    ("blocks",            ("tackles", "blocks")),
+    ("interceptions",     ("tackles", "interceptions")),
+    ("duels_total",       ("duels", "total")),
+    ("duels_won",         ("duels", "won")),
+    ("dribbles_attempts", ("dribbles", "attempts")),
+    ("dribbles_success",  ("dribbles", "success")),
+    ("fouls_drawn",       ("fouls", "drawn")),
+    ("fouls_committed",   ("fouls", "committed")),
+    ("cards_yellow",      ("cards", "yellow")),
+    ("cards_red",         ("cards", "red")),
+)
+
+
+def conferir_mapeamento(stats: dict) -> dict:
+    """O mapeamento bate com ESTA resposta da API? Uma fixture responde.
+
+    POR QUE ISTO EXISTE
+
+    O cabecalho deste arquivo avisa em maiusculas desde 01/08 que o mapeamento
+    nunca foi conferido contra a API -- os nomes de campo vieram da
+    documentacao, porque a cota do dia ja' tinha estourado quando ele foi
+    escrito. "Confirmar na primeira execucao antes de confiar nos numeros",
+    diz a nota. Meses depois, nada confirmou.
+
+    E a falha e' MUDA: `_num()` devolve None em vez de estourar quando o campo
+    nao existe (o que protege a execucao, e por isso fica), entao um grupo
+    renomeado pela API vira coluna NULL em silencio. O motor le' aquilo como
+    "o provedor nao publicou" e simplesmente nao gera pick -- indistinguivel de
+    um dia sem oportunidade.
+
+    Devolve tres listas, e a do meio e' a que importa:
+
+      ok          coluna cujo caminho existe na resposta
+      ausentes    caminho que NAO existe · mapeamento errado ou campo removido
+      ignorados   grupo/campo que a API manda e o coletor NAO le
+
+    `ausentes` com a lista inteira dentro significa que a resposta veio vazia
+    (jogador que nao entrou), e nao que o mapeamento quebrou -- por isso o
+    retorno traz `vazia`.
+    """
+    stats = stats or {}
+    ok, ausentes = [], []
+    for coluna, caminho in MAPA_DE_CAMPOS:
+        atual = stats
+        achou = True
+        for chave in caminho:
+            if not isinstance(atual, dict) or chave not in atual:
+                achou = False
+                break
+            atual = atual[chave]
+        (ok if achou else ausentes).append(f"{coluna} <- {'.'.join(caminho)}")
+
+    lidos = {caminho for _c, caminho in MAPA_DE_CAMPOS}
+    ignorados = []
+    for grupo, conteudo in stats.items():
+        if isinstance(conteudo, dict):
+            for campo in conteudo:
+                if (grupo, campo) not in lidos:
+                    ignorados.append(f"{grupo}.{campo}")
+        elif (grupo,) not in lidos:
+            ignorados.append(str(grupo))
+
+    return {
+        "vazia": not stats,
+        "ok": ok,
+        "ausentes": ausentes,
+        "ignorados": sorted(ignorados),
+    }
+
+
 class PlayerStatsCollectorService:
 
     def __init__(self, debug_shape: bool = True):
@@ -89,16 +179,42 @@ class PlayerStatsCollectorService:
         return corpo.get("response", []) or []
 
     def _mostrar_shape(self, bloco_stats: dict) -> None:
-        """Imprime a estrutura crua uma vez, pra conferir o mapeamento."""
+        """Confere o mapeamento contra a resposta real, uma vez por execucao.
+
+        Antes so' IMPRIMIA os grupos recebidos e deixava a conferencia pra quem
+        estivesse olhando o stdout na hora -- que e' o mesmo que nao conferir.
+        Agora ele compara com MAPA_DE_CAMPOS e diz o que nao bate.
+        """
         if self._ja_mostrou_shape or not self.debug_shape:
             return
+        # Jogador que nao entrou vem com o bloco vazio · conferir contra ele
+        # daria "19 campos ausentes" e o alarme seria falso. Espera o proximo.
+        if not bloco_stats:
+            return
         self._ja_mostrou_shape = True
+
+        laudo = conferir_mapeamento(bloco_stats)
         print("[PLAYER_STATS][DEBUG_SHAPE] grupos recebidos:")
-        for grupo, conteudo in (bloco_stats or {}).items():
+        for grupo, conteudo in bloco_stats.items():
             if isinstance(conteudo, dict):
                 print(f"    {grupo}: {list(conteudo.keys())}")
             else:
                 print(f"    {grupo}: {type(conteudo).__name__}")
+
+        if laudo["ausentes"]:
+            print(f"[PLAYER_STATS][DEBUG_SHAPE] *** {len(laudo['ausentes'])} CAMPO(S) "
+                  f"NAO ENCONTRADO(S) NA RESPOSTA ***")
+            for linha in laudo["ausentes"]:
+                print(f"    FALTA  {linha}")
+            print("    Esses viram NULL em silencio: _num() devolve None em vez "
+                  "de estourar, e o motor le' como 'provedor nao publicou'.")
+        else:
+            print(f"[PLAYER_STATS][DEBUG_SHAPE] mapeamento OK · "
+                  f"{len(laudo['ok'])} campo(s) conferido(s) contra a resposta real.")
+
+        if laudo["ignorados"]:
+            print(f"[PLAYER_STATS][DEBUG_SHAPE] a API manda e o coletor ignora: "
+                  f"{', '.join(laudo['ignorados'])}")
 
     def _linhas_da_fixture(self, fixture: dict, resposta: list) -> list[tuple]:
         linhas = []
@@ -116,16 +232,11 @@ class PlayerStatsCollectorService:
                     _num(stats, "games", "minutes"),
                     _num(stats, "games", "rating"),
                     bool(_get(stats, "games", "substitute")),
-                    _num(stats, "shots", "total"), _num(stats, "shots", "on"),
-                    _num(stats, "goals", "total"), _num(stats, "goals", "conceded"),
-                    _num(stats, "goals", "assists"), _num(stats, "goals", "saves"),
-                    _num(stats, "passes", "total"), _num(stats, "passes", "key"),
-                    _num(stats, "tackles", "total"), _num(stats, "tackles", "blocks"),
-                    _num(stats, "tackles", "interceptions"),
-                    _num(stats, "duels", "total"), _num(stats, "duels", "won"),
-                    _num(stats, "dribbles", "attempts"), _num(stats, "dribbles", "success"),
-                    _num(stats, "fouls", "drawn"), _num(stats, "fouls", "committed"),
-                    _num(stats, "cards", "yellow"), _num(stats, "cards", "red"),
+                    # Montada a partir de MAPA_DE_CAMPOS, na ordem dele · era
+                    # uma lista de 19 chamadas escritas na mao, paralela a lista
+                    # de colunas do INSERT. Duas listas posicionais que
+                    # precisavam concordar e nada garantia que concordassem.
+                    *[_num(stats, *caminho) for _coluna, caminho in MAPA_DE_CAMPOS],
                     json.dumps(stats, ensure_ascii=False),
                 ))
         return linhas
