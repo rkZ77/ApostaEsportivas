@@ -17,11 +17,18 @@ ARQUITETURA DE MOTORES (2026-08-27) -- quatro motores, nao sete pipelines:
     PICK_BOOST    pickboost
     PLAYER_STATS  playerstats (saves, shots_on, shots, fouls, tackles, passes)
 
-`goleiros` CONTINUA no registro e continua sendo etapa do `tudo` -- o que mudou
-foi por dentro: ele agora chama o metodo `saves` do Player Stats, com o mesmo
-goalkeeper_model de sempre. Tirar o comando seria uma regressao de produto
-disfarcada de reorganizacao. O goleiros_pipeline.py fica no disco como
-rollback, sem ser chamado.
+`goleiros` FOI APAGADO em 2026-08-28, por decisao do usuario -- o comando e o
+goleiros_pipeline.py que dormia no disco como rollback.
+
+O PRODUTO NAO SAIU JUNTO, e essa e' a distincao que importa: defesas de goleiro
+continua sendo gerada TODO DIA, como o metodo `saves` do Player Stats, dentro
+da etapa `playerstats-diario`. O que sumiu foi um APELIDO -- `goleiros` era um
+atalho pra rodar aquele unico metodo, e `playerstats saves` faz o mesmo. Dois
+nomes pro mesmo trabalho e' exatamente como esta lista ja' saiu de sincronia
+antes.
+
+`picks_goleiros` tambem fica: a tabela guarda o passado do produto e continua
+entrando no placar publico e na banca de quem apostou.
 
 CUIDADO COM DOIS NOMES PARECIDOS: `player_stats` (com underline) e' o COLETOR
 que busca estatistica de jogador na API e gasta cota; `playerstats` e' o MOTOR
@@ -856,11 +863,6 @@ COMANDOS: tuple = (
     Comando("faltas", "Pré Live · mercado de faltas",
             "Gera picks de faltas (método do Pré Live)",
             lambda *a: cmd_faltas(), etapa="FALTAS"),
-    # `goleiros` continua no `tudo` e continua com este nome: e' o gerador de
-    # picks de defesa, e a promessa do teste de escopo e' que nenhum tipo de
-    # pick saia do pipeline diario por esquecimento. O que mudou em 27/08 foi
-    # POR DENTRO -- ele passou a ser o metodo `saves` do Player Stats, e o
-    # goleiros_pipeline antigo ficou no disco como rollback.
     # A ETAPA DEIXOU DE SER SO' DEFESAS (2026-08-28, decisao do usuario).
     #
     # `goleiros` continuava sendo o unico metodo do Player Stats na rodada
@@ -868,8 +870,12 @@ COMANDOS: tuple = (
     # o Player Stats com os metodos marcados `diario=True` no catalogo: defesas,
     # chutes no alvo e chutes.
     #
-    # O comando `goleiros` NAO sai (logo abaixo, sem etapa): ele e' o nome que
-    # esta' na mao de quem usa, e continua rodando so' o metodo `saves`.
+    # O COMANDO `goleiros` FOI APAGADO no mesmo dia, junto com o
+    # goleiros_pipeline.py. Ele era um atalho pra rodar UM metodo do Player
+    # Stats, e `playerstats saves` ja' faz exatamente isso -- manter os dois
+    # era manter dois nomes pro mesmo trabalho, que e' como a lista de comandos
+    # ja' saiu de sincronia antes. Defesas continua sendo gerada todo dia
+    # dentro de `playerstats-diario`; o que sumiu foi o apelido.
     Comando("playerstats-diario", "Player Stats · os metodos do dia",
             "Gera props de jogador dos métodos que rodam todo dia "
             "(defesas, chutes no alvo, chutes)",
@@ -880,9 +886,6 @@ COMANDOS: tuple = (
     # senao o pick nasce depois da liquidacao e fica pendente ate' o dia
     # seguinte. Ele estava no fim do registro, na secao "fora do pipeline", e
     # so' declarar `etapa` o colocaria DEPOIS de resultados na ordem do `tudo`.
-    Comando("goleiros", "Player Stats · defesas de goleiro",
-            "Gera picks de defesas por goleiro (método `saves` do Player Stats)",
-            lambda *a: cmd_playerstats("saves")),
     Comando("pickboost", "Pick Boost · Over 1.5 FT + Under 2.5 HT",
             "Escolhe os melhores JOGOS do dia para a combinação fixa",
             lambda *a: cmd_pick_boost(), etapa="PICK BOOST"),

@@ -1,11 +1,20 @@
-"""Parsing da oferta e resolucao do goleiro no pipeline de defesas.
+"""Parsing da oferta e resolucao do jogador no motor de props.
 
 Os dois pontos onde uma oferta real morre em silencio: a notacao do value_name
 (as casas escrevem o mesmo produto de formas diferentes) e o casamento de nome
-com `player_match_stats`. Casos tirados de dados reais de 2026-08-05.
+com `player_match_stats`. Casos tirados de dados reais de 2026-08-05, quando
+isto era o goleiros_pipeline.
+
+MUDOU DE ENDERECO EM 2026-08-28, e nao de exigencia. O goleiros_pipeline foi
+apagado; as duas funcoes que estes casos exercitam ja tinham sido promovidas a
+`services/player_stats_engine/name_match.py`, que e' o que o motor de hoje
+chama pra TODO metodo (defesas, chutes, faltas...) -- entao os mesmos casos
+agora protegem seis mercados em vez de um.
 """
-from engine_pipelines.goleiros_pipeline import (
-    _parse_valor, _resolver_goleiro, melhor_por_goleiro,
+from services.player_stats_engine import config as ps_cfg
+from services.player_stats_engine.name_match import (
+    parse_valor as _parse_valor,
+    resolver as _resolver_goleiro,
 )
 
 PALMEIRAS, FORTALEZA, GREMIO = 121, 154, 130
@@ -82,88 +91,38 @@ def test_acento_nao_atrapalha():
 
 
 # --------------------------------------------------------------------------
-# Deduplicacao por goleiro (2026-08-07)
+# Um pick por jogador (2026-08-07, reescrito em 2026-08-28)
 # --------------------------------------------------------------------------
-def _cand(player_id, n_defesas, odd, edge, pick_score=None):
-    """Candidato minimo. `pick_score` default derivado do edge preserva a ordem
-    que estes testes assumiam quando o criterio era so' edge (ate' 2026-08-16);
-    quem precisa exercitar score e preco em desacordo passa o valor na mao."""
-    return {
-        "goleiro": {"player_id": player_id, "player_name": f"gk-{player_id}"},
-        "n_defesas": n_defesas, "odd": odd, "edge": edge,
-        "pick_score": edge if pick_score is None else pick_score,
-    }
+#
+# A REGRA SOBREVIVEU AO PIPELINE QUE A INVENTOU, e a diferenca importa.
+#
+# O `melhor_por_goleiro` do goleiros_pipeline reduzia em DOIS passos: entre
+# casas na mesma linha decidia pelo maior PRECO (porque o score premia odd
+# baixa, e comparar duas casas pelo score escolheria o pior preco pra
+# exatamente a mesma aposta), e entre linhas diferentes decidia pelo SCORE.
+#
+# O Player Stats, que herdou o mercado em 27/08, aplica um passo so': ordena
+# tudo por `pick_score` e fica com o primeiro de cada jogador. Duas casas na
+# mesma linha voltam a ser comparadas por score.
+#
+# Isto esta escrito aqui porque e' uma perda real e conhecida, nao um detalhe
+# esquecido: quem for reintroduzir o desempate por preco vai achar a
+# justificativa neste comentario em vez de redescobri-la num pick ruim.
 
 
-def test_linhas_do_mesmo_goleiro_viram_um_pick_so():
-    """Regressao 2026-08-07: assim que o teto de odd 2.00 saiu, os jogos do dia
-    devolveram QUATRO candidatos do mesmo goleiro (4+ @ 3.75, 5+ @ 7.00, 5+ @
-    5.70 de outra casa e 6+ @ 10.50). Sao a mesma aposta em graus diferentes --
-    6+ implica 5+ implica 4+ -- e publicar os quatro multiplicaria por quatro a
-    exposicao do assinante num goleiro so'."""
-    vagner = 900
-    candidatos = [
-        _cand(vagner, 4, 3.75, 0.1005),
-        _cand(vagner, 5, 7.00, 0.1025),
-        _cand(vagner, 5, 5.70, 0.0699),
-        _cand(vagner, 6, 10.50, 0.0632),
-    ]
-
-    reduzidos = melhor_por_goleiro(candidatos)
-
-    assert len(reduzidos) == 1
-    assert reduzidos[0]["odd"] == 7.00
-    assert reduzidos[0]["n_defesas"] == 5
+def test_um_pick_por_jogador_continua_ligado():
+    """Duas linhas do mesmo jogador sao a mesma aposta em graus diferentes:
+    publicar as duas dobra a exposicao ao mesmo erro."""
+    assert ps_cfg.UM_PICK_POR_JOGADOR is True
 
 
-def test_mesma_linha_em_duas_casas_fica_com_a_odd_maior():
-    """Este pipeline le odd RAW, entao nao tem o 'melhor preco por linha' que o
-    de faltas faz."""
-    reduzidos = melhor_por_goleiro([
-        _cand(900, 5, 5.70, 0.0699),
-        _cand(900, 5, 7.00, 0.1025),
-    ])
+def test_a_reducao_fica_com_a_de_maior_score():
+    """Trava o criterio no codigo que roda hoje. A ordenacao e' por
+    `pick_score` DESC e o primeiro de cada `player_id` e' o que sai."""
+    import inspect
+    from engine_pipelines import player_stats_pipeline
 
-    assert len(reduzidos) == 1
-    assert reduzidos[0]["odd"] == 7.00
-
-
-def test_mesma_linha_ignora_o_score_e_decide_so_pelo_preco():
-    """Regressao 2026-08-16, do dia em que o score entrou.
-
-    O score premia odd baixa (termo de seguranca), entao usa-lo pra comparar
-    duas casas na MESMA linha escolheria o pior preco pra exatamente a mesma
-    aposta. Aqui a odd pior tem score MAIOR de proposito: mesmo assim quem tem
-    que sair e' a de 7.00.
-
-    Entre linhas diferentes o score volta a mandar -- e' o teste seguinte."""
-    reduzidos = melhor_por_goleiro([
-        _cand(900, 5, 5.70, 0.0699, pick_score=0.90),
-        _cand(900, 5, 7.00, 0.1025, pick_score=0.10),
-    ])
-
-    assert len(reduzidos) == 1
-    assert reduzidos[0]["odd"] == 7.00
-
-
-def test_entre_linhas_diferentes_quem_decide_e_o_score():
-    """O contrario do teste acima: linhas diferentes sao apostas diferentes, e
-    ai' o criterio e' o score, nao a odd. A linha de odd menor vence quando o
-    score dela e' melhor -- que e' o ponto inteiro de ter trocado 'maior edge'
-    por 'maior score' (ver market_pick_score)."""
-    reduzidos = melhor_por_goleiro([
-        _cand(900, 1, 1.30, 0.05, pick_score=0.80),
-        _cand(900, 6, 10.50, 0.20, pick_score=0.20),
-    ])
-
-    assert len(reduzidos) == 1
-    assert reduzidos[0]["n_defesas"] == 1
-    assert reduzidos[0]["odd"] == 1.30
-
-
-def test_goleiros_diferentes_continuam_sendo_dois_picks():
-    """A reducao e' por goleiro, nao por jogo: os dois goleiros da partida sao
-    apostas distintas e ambos podem sair."""
-    reduzidos = melhor_por_goleiro([_cand(900, 5, 7.00, 0.10), _cand(901, 3, 2.50, 0.08)])
-
-    assert len(reduzidos) == 2
+    fonte = inspect.getsource(player_stats_pipeline.run_player_stats_engine)
+    assert 'aprovados.sort(key=lambda par: par[0]["pick_score"], reverse=True)' in fonte
+    assert 'chave = c["jogador"]["player_id"]' in fonte
+    assert "cfg.UM_PICK_POR_JOGADOR and chave in vistos" in fonte

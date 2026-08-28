@@ -153,7 +153,7 @@ def test_nenhum_gerador_pre_jogo_aceita_jogo_em_andamento():
     unico que aceitava 'LIVE' e por isso podia sugerir aposta pre-jogo pra
     partida ja em andamento, com odd que ja nao existia mais."""
     for arquivo in ("dica_pipeline.py", "alavancagem_pipeline.py",
-                    "faltas_pipeline.py", "goleiros_pipeline.py"):
+                    "faltas_pipeline.py", "player_stats_pipeline.py"):
         assert "LIVE" not in _status_do_pipeline(arquivo), arquivo
 
 
@@ -169,7 +169,7 @@ def test_todo_gerador_filtra_pelo_dia_em_brasilia():
     """`CURRENT_DATE` e' a data UTC do banco e diverge do Brasil entre 21h e
     meia-noite -- ver utils/data_br. Nenhum pipeline pode voltar a usar isso."""
     for arquivo in ("dica_pipeline.py", "alavancagem_pipeline.py",
-                    "faltas_pipeline.py", "goleiros_pipeline.py"):
+                    "faltas_pipeline.py", "player_stats_pipeline.py"):
         fonte = _fonte(os.path.join("engine_pipelines", arquivo))
         assert "HOJE_BR" in fonte, arquivo
         assert "match_datetime::date = CURRENT_DATE" not in fonte, arquivo
@@ -182,5 +182,5 @@ def test_coletor_de_odds_cobre_os_status_que_os_geradores_pedem():
     m = re.search(r"status\s+IN\s+\(([^)]*)\)", odds)
     aceitos_pela_coleta = set(re.findall(r"'([A-Z]+)'", m.group(1)))
     for arquivo in ("dica_pipeline.py", "alavancagem_pipeline.py",
-                    "faltas_pipeline.py", "goleiros_pipeline.py"):
+                    "faltas_pipeline.py", "player_stats_pipeline.py"):
         assert _status_do_pipeline(arquivo) <= aceitos_pela_coleta, arquivo

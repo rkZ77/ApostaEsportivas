@@ -300,7 +300,6 @@ _PIPELINE_SCRIPTS = {
     # rollback. Os dois gravavam em TABELAS DIFERENTES (picks_goleiros contra
     # picks_player_stats), entao clicar aqui produzia um pick que a rodada
     # diaria nao produziria, e vice-versa.
-    "gerar_goleiros":       os.path.join("engine_pipelines", "player_stats_pipeline.py"),
     # Os outros cinco metodos do Player Stats, e o Pick Boost. Fora do "Rodar
     # Tudo" pelo mesmo criterio do main.py: motor sem historico medido nao vira
     # custo fixo da rodada diaria. Botao proprio, sob demanda.
@@ -350,7 +349,6 @@ def _metodos_diarios_do_motor() -> list:
 
 
 _PIPELINE_ARGS = {
-    "gerar_goleiros": ["saves"],
 }
 # Preenchido DEPOIS do literal, e nao dentro dele: `_PIPELINE_ARGS` e' lido por
 # teste que faz literal_eval no fonte, e uma chamada de funcao dentro do dict
@@ -489,7 +487,6 @@ _STEP_LABELS = {
     "gerar_multipla":       "Gerando múltipla",
     "gerar_alavancagem":    "Gerando alavancagem",
     "gerar_faltas":         "Gerando picks de faltas",
-    "gerar_goleiros":       "Gerando defesas de goleiro",
     "player_stats":         "Coletando estatística de jogador",
     "gerar_playerstats":    "Gerando picks de jogador",
     "gerar_pickboost":      "Escolhendo jogos do Pick Boost",
@@ -743,7 +740,6 @@ _PASSO_LABEL_CURTO = {
     "gerar_multipla":       "Gerar Múltipla",
     "gerar_alavancagem":    "Gerar Alavancagem",
     "gerar_faltas":         "Gerar Faltas",
-    "gerar_goleiros":       "Gerar Defesas",
     "gerar_playerstats":    "Gerar Jogadores",
     "gerar_pickboost":      "Gerar Pick Boost",
     "atualizar_resultados": "Atualizar Resultados",
@@ -753,8 +749,13 @@ _PASSO_LABEL_CURTO = {
 #:
 #: Sao os que o motor deixa sem `etapa` de proposito (motor sem historico
 #: medido nao vira custo fixo da rodada diaria), mas que precisam de botao
-#: porque a unica alternativa era a linha de comando.
-_PASSOS_AVULSOS = ["gerar_goleiros"]
+#: porque a unica alternativa e' a linha de comando.
+#:
+#: VAZIA desde 28/08, quando "Gerar Defesas" foi apagado: aquele botao rodava
+#: UM metodo do Player Stats, e o metodo ja' roda todo dia dentro de "Gerar
+#: Jogadores". A lista fica (e nao o campo some da resposta) porque o painel
+#: ja' sabe desenhar o bloco, e o proximo passo avulso entra aqui sozinho.
+_PASSOS_AVULSOS: list[str] = []
 
 
 @router.get("/pipeline-etapas")
@@ -4289,9 +4290,18 @@ def lista_de_times(
                        MAX(ms.last_updated)     AS gravada_em,
                        MAX(ms.match_date)::text AS ultima_partida
                   FROM match_statistics ms
+                  -- MESMO recorte do recálculo (motor:
+                  -- TeamStatsReader._SQL_ALVOS_DA_MEDIA): liga cadastrada,
+                  -- ativa e na temporada corrente. Sem este JOIN a tela lista
+                  -- time de liga inativa ou não cadastrada como "sem média" e
+                  -- o botão nunca o alcança · backlog que não zera.
+                  JOIN leagues lg ON lg.league_id = ms.league_id
+                                 AND lg.season = ms.season
+                                 AND COALESCE(lg.ativa, TRUE)
                   CROSS JOIN LATERAL (VALUES (ms.home_team_id), (ms.away_team_id))
                        AS lado(team_id)
                  WHERE ms.season = %s
+                   AND ms.status = 'FT'
                    AND lado.team_id IS NOT NULL
                    {filtro_liga}
               GROUP BY lado.team_id, ms.league_id, ms.season

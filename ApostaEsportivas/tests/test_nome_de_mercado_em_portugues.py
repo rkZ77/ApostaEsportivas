@@ -14,7 +14,7 @@ passam por analyze_fixture_markets e montam a oferta a mao -- liam so'
 """
 import pytest
 
-from engine_pipelines import faltas_pipeline, goleiros_pipeline
+from engine_pipelines import faltas_pipeline, player_stats_pipeline
 
 
 def _oferta_de_odd(market_pt, market_name, value_name="Over 24.5", odd=1.75):
@@ -81,15 +81,20 @@ def test_goleiros_sem_nome_nenhum_nao_grava_ingles():
     assert resolvido == "Defesas do goleiro"
 
 
-def test_o_default_de_goleiros_esta_em_portugues():
-    """Trava o literal no codigo: era "Goalkeeper Saves" e o teste existe pra
-    ninguem reintroduzir o ingles como fallback."""
+def test_o_default_dos_mercados_de_jogador_esta_em_portugues():
+    """Trava a REGRA no codigo que roda hoje: PT primeiro, ingles so' como
+    ultimo recurso.
+
+    Era um teste sobre o literal "Defesas do goleiro" no goleiros_pipeline.
+    Aquele arquivo foi apagado em 28/08 e defesas virou um dos metodos do
+    Player Stats, que monta a oferta pros SEIS mercados de jogador · a regra
+    passou a valer pra todos eles, e por isso a assercao agora e' sobre a
+    expressao que escolhe o nome, e nao sobre o nome de um mercado so'.
+    """
     import inspect
-    fonte = inspect.getsource(goleiros_pipeline)
-    assert '"Goalkeeper Saves"' not in fonte.split("_MERCADOS")[0] or \
-        'or "Defesas do goleiro"' in fonte, \
-        "o fallback de nome de mercado tem que ser o PT"
-    assert 'or "Defesas do goleiro"' in fonte
+    fonte = inspect.getsource(player_stats_pipeline._ofertas_do_metodo)
+    assert 'o.get("market_pt") or o.get("market_name")' in fonte,         "o nome gravado tem que preferir o PT"
+
 
 
 def test_o_default_de_faltas_esta_em_portugues():

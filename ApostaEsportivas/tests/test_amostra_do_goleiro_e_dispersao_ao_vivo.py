@@ -75,11 +75,16 @@ def test_amostra_grande_do_goleiro_quase_nao_encolhe():
 
 def test_o_pipeline_passa_a_amostra_do_goleiro():
     """Sem esta linha o parametro existe e ninguem usa -- que era exatamente
-    o estado anterior, so' que sem o parametro."""
+    o estado anterior, so' que sem o parametro.
+
+    Lia o goleiros_pipeline ate' 28/08, quando ele foi apagado. Quem chama
+    `expected_saves` hoje e' `_avaliar_saves` do Player Stats, e a amostra vem
+    do tamanho da serie do proprio goleiro em vez de um campo do dicionario ·
+    mesma grandeza, outro caminho."""
     import inspect
-    from engine_pipelines import goleiros_pipeline
-    fonte = inspect.getsource(goleiros_pipeline)
-    assert 'keeper_sample=info.get("jogos")' in fonte
+    from engine_pipelines import player_stats_pipeline
+    fonte = inspect.getsource(player_stats_pipeline._avaliar_saves)
+    assert "keeper_sample=len(valores)" in fonte
 
 
 def test_as_duas_amostras_sao_de_coisas_diferentes():

@@ -39,7 +39,24 @@ from services.pick_engine import context_gate
 
 
 PIPELINES_COM_GATE = ["vip", "dica", "multipla", "alavancagem"]
-PIPELINES_SO_OVER = ["faltas", "goleiros"]
+# `goleiros` SAIU DESTA LISTA em 2026-08-28, e nao porque o mercado acabou.
+#
+# O goleiros_pipeline foi apagado e defesas passou a ser o metodo `saves` do
+# Player Stats desde 27/08. Ao apontar as assercoes pro sucessor, elas FALHAM:
+# `player_stats_pipeline.py` nao chama `context_gate.build_for_fixture` nem
+# `tie_effect.aplicar_em_analise`.
+#
+# Ou seja: a camada de contexto de competicao que este arquivo protege existe
+# em faltas, existia no pipeline que gerava defesas, e NAO existe no motor que
+# gera defesas hoje. E' uma lacuna real, aberta na migracao de 27/08, que so'
+# ficou visivel quando o arquivo morto saiu do caminho -- o teste vinha
+# passando por ler um pipeline que nao roda mais.
+#
+# Ela fica registrada no xfail logo abaixo em vez de sumir daqui. Ligar a
+# camada no Player Stats e' decisao de motor (o efeito medido do agregado
+# contraria a intuicao em varios contadores) e nao cabe numa limpeza de
+# comando.
+PIPELINES_SO_OVER = ["faltas"]
 
 
 def _fonte(nome: str) -> str:
@@ -72,6 +89,23 @@ def test_pipeline_sem_gate_nao_publica_under(nome):
         f"{nome}_pipeline passou a publicar Under: o gate de contexto precisa "
         f"ser ligado nele (ver context_gate.FAMILIAS_DIRECIONAIS)"
     )
+
+
+@pytest.mark.xfail(strict=True, reason=(
+    "lacuna aberta na migracao de 27/08: defesas virou metodo do Player Stats "
+    "e o motor novo nao herdou a camada de contexto de competicao. Quando "
+    "alguem ligar, este teste passa e o strict avisa pra promove-lo a assercao "
+    "normal e devolver 'player_stats' a PIPELINES_SO_OVER."))
+def test_o_motor_de_jogador_deveria_olhar_o_contexto_da_competicao():
+    """O que faltas faz e o Player Stats nao.
+
+    A media de chutes no alvo do adversario sai dos jogos NORMAIS dele, e uma
+    volta de mata-mata com 5 gols de diferenca no agregado nao pertence aquela
+    distribuicao. Valia pro goleiros_pipeline e vale igual pro sucessor.
+    """
+    fonte = _fonte("player_stats")
+    assert "context_gate.build_for_fixture" in fonte
+    assert "tie_effect.aplicar_em_analise" in fonte
 
 
 def test_gate_e_direcional_e_ignora_over():
